@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -14,6 +14,7 @@ import {
   Settings2,
   Users,
   Filter,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
@@ -45,6 +51,8 @@ import {
   type CriterionOperator,
   type CreateRuleInput,
 } from "@/hooks/useApprovalRules";
+import { useSapUsers } from "@/hooks/useSapUsers";
+import type { SapUser } from "@/lib/cache-repository";
 
 const COMPANY_LABELS: Record<string, string> = {
   SBO_ANAGAMING: "ANA Gaming",
