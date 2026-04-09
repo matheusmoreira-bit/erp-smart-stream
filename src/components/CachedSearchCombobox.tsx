@@ -125,7 +125,7 @@ export function CachedSearchCombobox({
         </div>
       )}
 
-      {isOpen && !isLoading && query.length > 0 && filtered.length === 0 && (
+      {isOpen && !isLoading && filtered.length === 0 && (
         <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md p-3 text-center text-sm text-muted-foreground">
           Nenhum resultado encontrado
         </div>
