@@ -1,6 +1,44 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export type CriterionOperator =
+  | "greater_than"
+  | "less_than"
+  | "between"
+  | "equal"
+  | "not_equal"
+  | "contains"
+  | "not_contains"
+  | "like";
+
+export const OPERATOR_LABELS: Record<CriterionOperator, string> = {
+  greater_than: "Maior que",
+  less_than: "Menor que",
+  between: "No intervalo",
+  equal: "Igual a",
+  not_equal: "Diferente de",
+  contains: "Contém",
+  not_contains: "Não contém",
+  like: "LIKE (wildcard)",
+};
+
+export const FIELD_OPTIONS = [
+  { value: "total_amount", label: "Valor Total" },
+  { value: "cost_center", label: "Centro de Custo" },
+  { value: "project", label: "Projeto" },
+  { value: "requester_name", label: "Solicitante" },
+  { value: "supplier_name", label: "Fornecedor" },
+  { value: "doc_type", label: "Tipo de Documento" },
+  { value: "currency", label: "Moeda" },
+];
+
+export interface RuleCriterion {
+  field: string;
+  operator: CriterionOperator;
+  value: string;
+  value2?: string; // for "between"
+}
+
 export interface ApprovalRuleLevel {
   id?: string;
   level_order: number;
@@ -13,12 +51,7 @@ export interface ApprovalRule {
   name: string;
   is_active: boolean;
   priority: number;
-  min_value?: number | null;
-  max_value?: number | null;
-  cost_center?: string | null;
-  project?: string | null;
-  requester_pattern?: string | null;
-  doc_type?: string | null;
+  criteria: RuleCriterion[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -28,12 +61,7 @@ export interface ApprovalRule {
 export interface CreateRuleInput {
   name: string;
   priority?: number;
-  min_value?: number | null;
-  max_value?: number | null;
-  cost_center?: string | null;
-  project?: string | null;
-  requester_pattern?: string | null;
-  doc_type?: string | null;
+  criteria: RuleCriterion[];
   levels: Omit<ApprovalRuleLevel, "id">[];
 }
 
@@ -71,6 +99,7 @@ export function useApprovalRules() {
       setRules(
         (data || []).map((r: any) => ({
           ...r,
+          criteria: Array.isArray(r.criteria) ? r.criteria : [],
           levels: levelsMap[r.id] || [],
         }))
       );
@@ -88,12 +117,7 @@ export function useApprovalRules() {
         .insert({
           name: input.name,
           priority: input.priority || 0,
-          min_value: input.min_value ?? null,
-          max_value: input.max_value ?? null,
-          cost_center: input.cost_center || null,
-          project: input.project || null,
-          requester_pattern: input.requester_pattern || null,
-          doc_type: input.doc_type || null,
+          criteria: input.criteria as any,
           created_by: createdBy,
         })
         .select()
