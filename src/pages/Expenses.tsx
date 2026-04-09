@@ -192,13 +192,10 @@ function CreateExpenseModal({
   sapSession: any;
 }) {
   const [isCreating, setIsCreating] = useState(false);
-  const [supplierName, setSupplierName] = useState("");
-  const [supplierCode, setSupplierCode] = useState("");
-  const [costCenter, setCostCenter] = useState("");
-  const [project, setProject] = useState("");
+  const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
-  const [items, setItems] = useState<Omit<ExpenseItem, "id">[]>([
-    { description: "", quantity: 1, unit_price: 0, line_total: 0 },
+  const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null })[]>([
+    { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
 
   // File upload + AI
