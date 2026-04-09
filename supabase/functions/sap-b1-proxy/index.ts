@@ -71,7 +71,8 @@ serve(async (req) => {
   }
 
   try {
-    const { action, credentials, endpoint, params, sessionId, routeId, table, database } = await req.json();
+    const reqBody = await req.json();
+    const { action, credentials, endpoint, params, sessionId, routeId, table, database } = reqBody;
 
     // LOGIN
     if (action === "login") {
@@ -347,6 +348,52 @@ serve(async (req) => {
 
     // LOGOUT
     if (action === "logout") {
+      // fall through
+    }
+
+    // SAP ACTION - POST/PATCH to SAP Service Layer
+    if (action === "sapAction") {
+      if (!sessionId || !endpoint) {
+        return new Response(JSON.stringify({ error: "sessionId e endpoint são obrigatórios" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const httpMethod = reqBody.method || "POST";
+      const actionBody = reqBody.body || undefined;
+      const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
+      const fullUrl = `${SAP_BASE_URL}/${endpoint}`;
+
+      const sapResp = await fetch(fullUrl, {
+        method: httpMethod,
+        headers: { "Content-Type": "application/json", Cookie: cookies },
+        body: actionBody ? JSON.stringify(actionBody) : undefined,
+      });
+
+      const respText = await sapResp.text();
+      let respData: unknown;
+      try { respData = JSON.parse(respText); } catch { respData = respText; }
+
+      if (!sapResp.ok) {
+        let errorMsg = "Erro na ação SAP B1";
+        if (respData && typeof respData === "object" && "error" in respData) {
+          errorMsg = (respData as any).error?.message?.value || errorMsg;
+        }
+        return new Response(JSON.stringify({ error: errorMsg }), {
+          status: sapResp.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ data: respData }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // LOGOUT
+    if (action === "logout") {
       if (sessionId) {
         const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
         await fetch(`${SAP_BASE_URL}/Logout`, {
@@ -360,7 +407,7 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Ação inválida. Use: login, query, queryAll, queryView, logout" }), {
+    return new Response(JSON.stringify({ error: "Ação inválida. Use: login, query, queryAll, queryView, sapAction, logout" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
