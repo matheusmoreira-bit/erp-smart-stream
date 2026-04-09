@@ -54,6 +54,7 @@ export type Database = {
           cost_center: string | null
           created_at: string
           created_by: string
+          criteria: Json | null
           doc_type: string | null
           id: string
           is_active: boolean
@@ -69,6 +70,7 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           created_by: string
+          criteria?: Json | null
           doc_type?: string | null
           id?: string
           is_active?: boolean
@@ -84,6 +86,7 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           created_by?: string
+          criteria?: Json | null
           doc_type?: string | null
           id?: string
           is_active?: boolean
