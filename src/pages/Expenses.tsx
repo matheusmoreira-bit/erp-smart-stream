@@ -324,16 +324,17 @@ function CreateExpenseModal({
       if (doc.due_date) setDueDate(doc.due_date);
       if (doc.remarks) setRemarks(doc.remarks);
       if (doc.items && doc.items.length > 0) {
+        const costCenterValue = (doc.cost_center_confidence ?? 0) > 0.95 ? (doc.cost_center_hint || "") : "";
+        const projectValue = (doc.project_confidence ?? 0) > 0.95 ? (doc.project_hint || "") : "";
         setItems(
           doc.items.map((item: any) => ({
             description: item.description || "",
             quantity: item.quantity || 1,
             unit_price: item.unit_price || 0,
             line_total: item.line_total || (item.quantity || 1) * (item.unit_price || 0),
-            cost_center: item.cost_center || doc.cost_center_hint || "",
-            project: item.project || "",
+            cost_center: costCenterValue,
+            project: projectValue,
             item_code: item.item_code_match || "",
-            // Don't pre-select items as validated — only suggest via description
             sapItem: null,
           }))
         );
