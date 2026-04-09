@@ -631,6 +631,8 @@ function CreateExpenseModal({
                       });
                     }}
                     placeholder="Buscar item SAP por nome ou código..."
+                    suggestedQuery={item.description && !item.sapItem ? item.description : undefined}
+                    minChars={1}
                   />
                   <div className="grid grid-cols-12 gap-2">
                     <div className="col-span-6">
