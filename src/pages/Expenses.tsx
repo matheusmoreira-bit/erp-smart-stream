@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -207,11 +207,12 @@ function CreateExpenseModal({
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
 
   // Cached SAP lists
+  const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const { options: costCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
     cacheKey: "cost_centers",
-    endpoint: "CostCenters",
+    endpoint: "ProfitCenters",
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
-    mapRow: (row: any) => ({ code: row.CenterCode, name: row.CenterName }),
+    mapRow: costCenterMapRow,
   });
 
   // File upload + AI
@@ -700,7 +701,7 @@ function CreateExpenseModal({
                     <SapSearchCombobox
                       label="Projeto (Dimensão)"
                       endpoint="Projects"
-                      filterTemplate="contains(Code,'{q}') or contains(Name,'{q}')"
+                      filterTemplate="(contains(Name,'{q}') or startswith(Code,'{q}')) and Active eq 'tYES'"
                       selectFields="Code,Name"
                       mapRow={(row: any) => ({
                         code: row.Code,

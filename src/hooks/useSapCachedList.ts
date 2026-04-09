@@ -27,8 +27,8 @@ export function useSapCachedList({
   const loadedRef = useRef(false);
   const mapRowRef = useRef(mapRow);
   mapRowRef.current = mapRow;
-
-  const paramsKey = JSON.stringify(params || {});
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
 
   const load = useCallback(async () => {
     if (!session || !enabled || loadedRef.current) return;
@@ -46,29 +46,34 @@ export function useSapCachedList({
         .maybeSingle();
 
       if (cached && new Date(cached.expires_at) > new Date()) {
-        const items = (cached.data as any[]).map(mapRowRef.current);
-        setOptions(items);
-        setIsLoading(false);
-        return;
+        const cachedData = cached.data as any[];
+        if (cachedData && cachedData.length > 0) {
+          setOptions(cachedData.map(mapRowRef.current));
+          setIsLoading(false);
+          return;
+        }
+        // Empty cache — don't use it, refetch from SAP
       }
 
       // 2. Fetch from SAP
-      const { data } = await sapQueryAll(session, endpoint, params, false);
+      const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
       const rows = data?.value || [];
 
-      // 3. Store in cache
-      const expiresAt = new Date(Date.now() + CACHE_TTL_MS).toISOString();
-      await supabase
-        .from("sap_cache")
-        .upsert(
-          {
-            cache_key: cacheKey,
-            company_db: companyDB,
-            data: rows as any,
-            expires_at: expiresAt,
-          },
-          { onConflict: "cache_key,company_db" }
-        );
+      // 3. Only cache non-empty results
+      if (rows.length > 0) {
+        const expiresAt = new Date(Date.now() + CACHE_TTL_MS).toISOString();
+        await supabase
+          .from("sap_cache")
+          .upsert(
+            {
+              cache_key: cacheKey,
+              company_db: companyDB,
+              data: rows as any,
+              expires_at: expiresAt,
+            },
+            { onConflict: "cache_key,company_db" }
+          );
+      }
 
       setOptions(rows.map(mapRowRef.current));
     } catch (e) {
@@ -76,11 +81,12 @@ export function useSapCachedList({
     } finally {
       setIsLoading(false);
     }
-  }, [session, enabled, cacheKey, endpoint, paramsKey]);
+  }, [session?.sessionId, enabled, cacheKey, endpoint]);
 
+  // Reset loaded flag when session changes
   useEffect(() => {
-    loadedRef.current = false; // reset when deps change
-  }, [session?.companyDB, cacheKey]);
+    loadedRef.current = false;
+  }, [session?.sessionId, cacheKey]);
 
   useEffect(() => {
     load();
