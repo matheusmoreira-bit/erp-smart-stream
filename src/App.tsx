@@ -10,6 +10,7 @@ import Approvals from "./pages/Approvals.tsx";
 import Expenses from "./pages/Expenses.tsx";
 import ApprovalRules from "./pages/ApprovalRules.tsx";
 import PagCorp from "./pages/PagCorp.tsx";
+import Credentials from "./pages/Credentials.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/approval-rules" element={<ApprovalRules />} />
             <Route path="/pagcorp" element={<PagCorp />} />
+            <Route path="/credentials" element={<Credentials />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
