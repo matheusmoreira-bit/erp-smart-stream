@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 interface AccountMapping {
   id?: string;
@@ -42,15 +43,13 @@ export default function PagCorpMapping() {
   const costCenterCache = useSapCachedList({
     cacheKey: "CostCenters",
     endpoint: "CostCenters",
-    labelField: "CenterName",
-    valueField: "CenterCode",
+    mapRow: (r: any) => ({ code: r.CenterCode, name: r.CenterName, extra: "" }),
   });
 
   const projectCache = useSapCachedList({
     cacheKey: "Projects",
     endpoint: "Projects",
-    labelField: "Name",
-    valueField: "Code",
+    mapRow: (r: any) => ({ code: r.Code, name: r.Name, extra: "" }),
   });
 
   useEffect(() => {
@@ -97,7 +96,6 @@ export default function PagCorpMapping() {
   function removeRow(index: number) {
     const mapping = mappings[index];
     if (mapping.id) {
-      // Mark for deletion
       handleDelete(mapping.id, index);
     } else {
       setMappings((prev) => prev.filter((_, i) => i !== index));
@@ -155,6 +153,11 @@ export default function PagCorpMapping() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function findOption(options: SapSearchOption[], code: string): SapSearchOption | null {
+    if (!code) return null;
+    return options.find((o) => o.code === code) || null;
   }
 
   return (
@@ -243,22 +246,20 @@ export default function PagCorpMapping() {
                       </TableCell>
                       <TableCell>
                         <CachedSearchCombobox
-                          items={costCenterCache.items}
+                          options={costCenterCache.options}
                           isLoading={costCenterCache.isLoading}
-                          value={m.cost_center}
-                          onValueChange={(v) => updateRow(i, "cost_center", v)}
+                          value={findOption(costCenterCache.options, m.cost_center)}
+                          onChange={(opt) => updateRow(i, "cost_center", opt?.code || "")}
                           placeholder="Selecione..."
-                          emptyMessage="Nenhum centro de custo"
                         />
                       </TableCell>
                       <TableCell>
                         <CachedSearchCombobox
-                          items={projectCache.items}
+                          options={projectCache.options}
                           isLoading={projectCache.isLoading}
-                          value={m.project}
-                          onValueChange={(v) => updateRow(i, "project", v)}
+                          value={findOption(projectCache.options, m.project)}
+                          onChange={(opt) => updateRow(i, "project", opt?.code || "")}
                           placeholder="Selecione..."
-                          emptyMessage="Nenhum projeto"
                         />
                       </TableCell>
                       <TableCell>
