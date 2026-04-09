@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQuery, sapQueryAll } from "@/lib/sap-client";
+import { sapQueryView } from "@/lib/sap-client";
 import type { FlowStage } from "@/components/FlowTimeline";
 import type { Insight } from "@/components/InsightsPanel";
 import type { ValidationItem } from "@/components/ValidationTable";
@@ -12,9 +12,6 @@ export interface SapDashboardData {
     openOrders: number;
     validationErrors: number;
     complianceRate: number;
-    prevAvgTotalDays?: number;
-    prevValidationErrors?: number;
-    prevComplianceRate?: number;
   };
   insights: Insight[];
   validations: ValidationItem[];
@@ -23,171 +20,268 @@ export interface SapDashboardData {
   refresh: () => void;
 }
 
-function daysBetween(d1: string, d2: string): number {
-  const a = new Date(d1);
-  const b = new Date(d2);
-  return Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24);
+/* ── View row type ── */
+interface ViewRow {
+  Status_Pagamento: string;
+  Numero_Pagamento_SAP: number;
+  Data_do_Pagamento: string | null;
+  Data_Lancamento_Pedido: string | null;
+  Data_Emissao_NF: string | null;
+  Data_Lancamento_NF: string | null;
+  Data_Vencimento_Pagamento: string | null;
+  Dias_Pedido_Ate_Pagamento: number | null;
+  Dias_Emissao_NF_Ate_Pagamento: number | null;
+  Dias_NF_Ate_Pagamento: number | null;
+  Dias_Vencimento_Ate_Pagamento: number | null;
+  Moeda: string;
+  Valor_Total_Pago: number;
+  Cod_PN: string;
+  Nome_PN: string;
+  Numero_Documento_Origem: number;
+  Num_NF_Referencia: string | null;
+  Valor_Aplicado_Neste_Doc: number;
+  Status_Documento_Origem: string;
+  Numero_Pedido_Compra: number | null;
+  Nome_Solicitante: string;
+  Filial: string;
 }
 
-function avgDaysForDocs(docs: any[], dateField1: string, dateField2?: string): number {
-  if (!docs.length) return 0;
-  if (!dateField2) {
-    // Days from doc date to today
-    const now = new Date().toISOString().split("T")[0];
-    const total = docs.reduce((sum, d) => sum + daysBetween(d[dateField1] || now, now), 0);
-    return Math.round((total / docs.length) * 10) / 10;
-  }
-  const valid = docs.filter((d) => d[dateField1] && d[dateField2]);
-  if (!valid.length) return 0;
-  const total = valid.reduce((sum, d) => sum + daysBetween(d[dateField1], d[dateField2]), 0);
-  return Math.round((total / valid.length) * 10) / 10;
+/* ── Helpers ── */
+const MAX_DAYS_PER_STEP = 5;
+
+function daysBetween(d1: string | null, d2: string | null): number | null {
+  if (!d1 || !d2) return null;
+  const a = new Date(d1).getTime();
+  const b = new Date(d2).getTime();
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.round(Math.abs(b - a) / (1000 * 60 * 60 * 24));
 }
 
-function determineStatus(avg: number, target: number): "ok" | "warning" | "critical" {
-  const ratio = avg / target;
-  if (ratio <= 1) return "ok";
-  if (ratio <= 1.5) return "warning";
+function avg(nums: number[]): number {
+  if (!nums.length) return 0;
+  return Math.round((nums.reduce((s, n) => s + n, 0) / nums.length) * 10) / 10;
+}
+
+function stageStatus(avgDays: number): "ok" | "warning" | "critical" {
+  if (avgDays <= MAX_DAYS_PER_STEP) return "ok";
+  if (avgDays <= MAX_DAYS_PER_STEP * 2) return "warning";
   return "critical";
 }
 
-function generateInsights(stages: FlowStage[]): Insight[] {
+/* ── Build stages from view data ── */
+function buildStages(rows: ViewRow[]): FlowStage[] {
+  const pedidoToNfEmissao: number[] = [];
+  const nfEmissaoToNfLanc: number[] = [];
+  const nfLancToPagamento: number[] = [];
+  const vencimentoToPagamento: number[] = [];
+
+  for (const r of rows) {
+    const d1 = daysBetween(r.Data_Lancamento_Pedido, r.Data_Emissao_NF);
+    if (d1 !== null) pedidoToNfEmissao.push(d1);
+
+    const d2 = daysBetween(r.Data_Emissao_NF, r.Data_Lancamento_NF);
+    if (d2 !== null) nfEmissaoToNfLanc.push(d2);
+
+    const d3 = daysBetween(r.Data_Lancamento_NF, r.Data_do_Pagamento);
+    if (d3 !== null) nfLancToPagamento.push(d3);
+
+    const d4 = daysBetween(r.Data_Vencimento_Pagamento, r.Data_do_Pagamento);
+    if (d4 !== null) vencimentoToPagamento.push(d4);
+  }
+
+  const avgPedidoNf = avg(pedidoToNfEmissao);
+  const avgNfEmissaoLanc = avg(nfEmissaoToNfLanc);
+  const avgNfPag = avg(nfLancToPagamento);
+  const avgVencPag = avg(vencimentoToPagamento);
+
+  return [
+    { id: "pedido", name: "Pedido → NF Emissão", avgDays: avgPedidoNf || 0, targetDays: MAX_DAYS_PER_STEP, status: stageStatus(avgPedidoNf), count: pedidoToNfEmissao.length },
+    { id: "nf_emissao", name: "NF Emissão → Lançamento", avgDays: avgNfEmissaoLanc || 0, targetDays: MAX_DAYS_PER_STEP, status: stageStatus(avgNfEmissaoLanc), count: nfEmissaoToNfLanc.length },
+    { id: "nf_pagamento", name: "Lançamento NF → Pagamento", avgDays: avgNfPag || 0, targetDays: MAX_DAYS_PER_STEP, status: stageStatus(avgNfPag), count: nfLancToPagamento.length },
+    { id: "venc_pagamento", name: "Vencimento → Pagamento", avgDays: avgVencPag || 0, targetDays: MAX_DAYS_PER_STEP, status: stageStatus(avgVencPag), count: vencimentoToPagamento.length },
+  ];
+}
+
+/* ── Build validations ── */
+function buildValidations(rows: ViewRow[]): ValidationItem[] {
+  const items: ValidationItem[] = [];
+  let id = 1;
+
+  for (const r of rows) {
+    const docLabel = r.Numero_Pedido_Compra
+      ? `PC-${r.Numero_Pedido_Compra}`
+      : `PAG-${r.Numero_Pagamento_SAP}`;
+
+    // Rule 1: Late payment (paid after due date)
+    if (
+      r.Dias_Vencimento_Ate_Pagamento !== null &&
+      r.Dias_Vencimento_Ate_Pagamento > 0
+    ) {
+      items.push({
+        id: String(id++),
+        document: docLabel,
+        supplier: r.Nome_PN,
+        stage: "Pagamento",
+        status: "error",
+        message: `Pagamento em atraso: ${r.Dias_Vencimento_Ate_Pagamento} dias após vencimento`,
+        date: r.Data_do_Pagamento || "",
+      });
+      continue;
+    }
+
+    // Rule 2: Canceled payment but NF still active = flow error
+    if (
+      r.Status_Pagamento === "Cancelado" &&
+      r.Status_Documento_Origem?.includes("Ativa")
+    ) {
+      items.push({
+        id: String(id++),
+        document: docLabel,
+        supplier: r.Nome_PN,
+        stage: "Pagamento",
+        status: "error",
+        message: `Pagamento cancelado com NF ainda ativa (Doc ${r.Numero_Documento_Origem})`,
+        date: r.Data_do_Pagamento || "",
+      });
+      continue;
+    }
+
+    // Rule 2b: Canceled payment after NF launched
+    if (
+      r.Status_Pagamento === "Cancelado" &&
+      r.Data_Lancamento_NF
+    ) {
+      items.push({
+        id: String(id++),
+        document: docLabel,
+        supplier: r.Nome_PN,
+        stage: "Pagamento",
+        status: "error",
+        message: `Pagamento cancelado após lançamento da NF — erro de fluxo`,
+        date: r.Data_do_Pagamento || "",
+      });
+      continue;
+    }
+
+    // Rule 3: Any step > 5 days
+    const stepChecks: { stage: string; days: number | null; label: string }[] = [
+      { stage: "Pedido → NF", days: daysBetween(r.Data_Lancamento_Pedido, r.Data_Emissao_NF), label: "Pedido até emissão NF" },
+      { stage: "Emissão → Lançamento NF", days: daysBetween(r.Data_Emissao_NF, r.Data_Lancamento_NF), label: "Emissão até lançamento NF" },
+      { stage: "Lançamento NF → Pagamento", days: daysBetween(r.Data_Lancamento_NF, r.Data_do_Pagamento), label: "Lançamento NF até pagamento" },
+    ];
+
+    const slowStep = stepChecks.find((s) => s.days !== null && s.days > MAX_DAYS_PER_STEP);
+    if (slowStep) {
+      items.push({
+        id: String(id++),
+        document: docLabel,
+        supplier: r.Nome_PN,
+        stage: slowStep.stage,
+        status: "error",
+        message: `${slowStep.label}: ${slowStep.days} dias (máx ${MAX_DAYS_PER_STEP})`,
+        date: r.Data_do_Pagamento || r.Data_Lancamento_NF || "",
+      });
+      continue;
+    }
+
+    // Valid document
+    items.push({
+      id: String(id++),
+      document: docLabel,
+      supplier: r.Nome_PN,
+      stage: "Completo",
+      status: "valid",
+      message: "Fluxo dentro dos parâmetros",
+      date: r.Data_do_Pagamento || "",
+    });
+  }
+
+  return items;
+}
+
+/* ── Generate insights ── */
+function generateInsights(stages: FlowStage[], validations: ValidationItem[]): Insight[] {
   const insights: Insight[] = [];
   let id = 1;
 
-  // Find bottlenecks (critical stages)
-  const criticals = stages.filter((s) => s.status === "critical");
-  for (const s of criticals) {
-    const pctOver = Math.round(((s.avgDays - s.targetDays) / s.targetDays) * 100);
+  // Bottleneck stages
+  for (const s of stages.filter((s) => s.status === "critical")) {
     insights.push({
       id: String(id++),
       type: "bottleneck",
       title: `${s.name} é um gargalo crítico`,
-      description: `A etapa de ${s.name.toLowerCase()} leva em média ${s.avgDays} dias, ${pctOver}% acima da meta de ${s.targetDays} dias. Recomenda-se revisar o processo e identificar causas de atraso.`,
+      description: `Média de ${s.avgDays} dias (meta: ${s.targetDays}d). Revise o processo para reduzir atrasos.`,
       impact: "alto",
     });
   }
 
-  // Warnings
-  const warnings = stages.filter((s) => s.status === "warning");
-  for (const s of warnings) {
+  // Late payments count
+  const latePayments = validations.filter((v) => v.message.includes("atraso"));
+  if (latePayments.length > 0) {
+    insights.push({
+      id: String(id++),
+      type: "alert",
+      title: `${latePayments.length} pagamentos em atraso`,
+      description: "Pagamentos realizados após a data de vencimento indicam falha no controle de prazos.",
+      impact: "alto",
+    });
+  }
+
+  // Canceled flow errors
+  const canceledErrors = validations.filter((v) => v.message.includes("cancelado") || v.message.includes("Cancelado"));
+  if (canceledErrors.length > 0) {
+    insights.push({
+      id: String(id++),
+      type: "alert",
+      title: `${canceledErrors.length} erros de fluxo (cancelamentos)`,
+      description: "Documentos cancelados após lançamento de NF ou pagamento indicam retrabalho e possíveis problemas operacionais.",
+      impact: "alto",
+    });
+  }
+
+  // Slow steps
+  const slowSteps = validations.filter((v) => v.message.includes("máx"));
+  if (slowSteps.length > 0) {
     insights.push({
       id: String(id++),
       type: "improvement",
-      title: `${s.name} acima da meta`,
-      description: `O processo de ${s.name.toLowerCase()} está levando ${s.avgDays} dias em média (meta: ${s.targetDays} dias). Avalie possíveis otimizações.`,
+      title: `${slowSteps.length} documentos com etapas lentas`,
+      description: `Documentos com pelo menos uma etapa acima de ${MAX_DAYS_PER_STEP} dias. Revise SLAs internos.`,
       impact: "médio",
     });
   }
 
-  // Positive
+  // Warning stages
+  for (const s of stages.filter((s) => s.status === "warning")) {
+    insights.push({
+      id: String(id++),
+      type: "improvement",
+      title: `${s.name} acima da meta`,
+      description: `Média de ${s.avgDays} dias (meta: ${s.targetDays}d). Avalie otimizações.`,
+      impact: "médio",
+    });
+  }
+
+  // Positive stages
   const oks = stages.filter((s) => s.status === "ok");
   if (oks.length > 0) {
-    const names = oks.map((s) => s.name).join(", ");
     insights.push({
       id: String(id++),
       type: "positive",
       title: "Etapas dentro da meta",
-      description: `As etapas ${names} estão operando dentro do prazo esperado.`,
+      description: `${oks.map((s) => s.name).join(", ")} operam dentro do prazo.`,
       impact: "baixo",
     });
   }
 
   if (insights.length === 0) {
-    insights.push({
-      id: "0",
-      type: "positive",
-      title: "Fluxo saudável",
-      description: "Todas as etapas estão dentro das metas estabelecidas.",
-      impact: "baixo",
-    });
+    insights.push({ id: "0", type: "positive", title: "Fluxo saudável", description: "Todas as etapas dentro das metas.", impact: "baixo" });
   }
 
   return insights;
 }
 
-function buildValidations(
-  purchaseOrders: any[],
-  purchaseInvoices: any[],
-  purchaseQuotations: any[],
-): ValidationItem[] {
-  const items: ValidationItem[] = [];
-  let id = 1;
-
-  // Check POs without quotation reference
-  for (const po of purchaseOrders.slice(0, 20)) {
-    const docTotal = po.DocTotal || 0;
-    const docNum = po.DocNum || "N/A";
-    const cardName = po.CardName || "N/A";
-    const docDate = po.DocDate || "";
-
-    if (docTotal > 10000 && !po.DocumentReferences?.length) {
-      items.push({
-        id: String(id++),
-        document: `PO-${docNum}`,
-        supplier: cardName,
-        stage: "Pedido de Compra",
-        status: "warning",
-        message: `Pedido de R$${docTotal.toLocaleString("pt-BR")} sem referência a cotação`,
-        date: docDate,
-      });
-    } else if (po.DocumentStatus === "bost_Open") {
-      const daysOpen = daysBetween(docDate, new Date().toISOString().split("T")[0]);
-      if (daysOpen > 30) {
-        items.push({
-          id: String(id++),
-          document: `PO-${docNum}`,
-          supplier: cardName,
-          stage: "Pedido de Compra",
-          status: "error",
-          message: `Pedido aberto há ${Math.round(daysOpen)} dias`,
-          date: docDate,
-        });
-      } else {
-        items.push({
-          id: String(id++),
-          document: `PO-${docNum}`,
-          supplier: cardName,
-          stage: "Pedido de Compra",
-          status: "valid",
-          message: "Pedido dentro do prazo esperado",
-          date: docDate,
-        });
-      }
-    }
-  }
-
-  // Check invoices with price divergence
-  for (const inv of purchaseInvoices.slice(0, 10)) {
-    const docNum = inv.DocNum || "N/A";
-    const cardName = inv.CardName || "N/A";
-    const docDate = inv.DocDate || "";
-
-    if (inv.DocumentStatus === "bost_Open") {
-      items.push({
-        id: String(id++),
-        document: `NF-${docNum}`,
-        supplier: cardName,
-        stage: "NF Entrada",
-        status: "warning",
-        message: "Nota fiscal ainda não conciliada",
-        date: docDate,
-      });
-    } else {
-      items.push({
-        id: String(id++),
-        document: `NF-${docNum}`,
-        supplier: cardName,
-        stage: "NF Entrada",
-        status: "valid",
-        message: "NF processada com sucesso",
-        date: docDate,
-      });
-    }
-  }
-
-  return items.slice(0, 15);
-}
-
+/* ── Hook ── */
 export function useSapDashboard(): SapDashboardData {
   const { session } = useSap();
   const [isLoading, setIsLoading] = useState(true);
@@ -208,85 +302,31 @@ export function useSapDashboard(): SapDashboardData {
     setError(null);
 
     try {
-      // Fetch all endpoints in parallel
-      const [
-        prResult,
-        pqResult,
-        poResult,
-        pdnResult,
-        piResult,
-        opResult,
-      ] = await Promise.allSettled([
-        sapQueryAll(session, "PurchaseRequests", {
-          $select: "DocNum,DocDate,RequriedDate,DocumentStatus,DocTotal,CardName",
-          $orderby: "DocDate desc",
-        }),
-        sapQueryAll(session, "PurchaseQuotations", {
-          $select: "DocNum,DocDate,DocDueDate,DocumentStatus,DocTotal,CardName",
-          $orderby: "DocDate desc",
-        }),
-        sapQueryAll(session, "PurchaseOrders", {
-          $select: "DocNum,DocDate,DocDueDate,DocumentStatus,DocTotal,CardName,CreationDate",
-          $orderby: "DocDate desc",
-        }),
-        sapQueryAll(session, "PurchaseDeliveryNotes", {
-          $select: "DocNum,DocDate,DocumentStatus,DocTotal,CardName",
-          $orderby: "DocDate desc",
-        }),
-        sapQueryAll(session, "PurchaseInvoices", {
-          $select: "DocNum,DocDate,DocDueDate,DocumentStatus,DocTotal,CardName",
-          $orderby: "DocDate desc",
-        }),
-        sapQueryAll(session, "OutgoingPayments", {
-          $select: "DocNum,DocDate,DocTotal,CardName",
-          $orderby: "DocDate desc",
-        }),
-      ]);
+      const result = await sapQueryView<ViewRow>(
+        session,
+        "VW_ANALISE_PAGAMENTOS_DETALHADO",
+      );
 
-      const purchaseRequests = prResult.status === "fulfilled" ? prResult.value.data.value : [];
-      const purchaseQuotations = pqResult.status === "fulfilled" ? pqResult.value.data.value : [];
-      const purchaseOrders = poResult.status === "fulfilled" ? poResult.value.data.value : [];
-      const deliveryNotes = pdnResult.status === "fulfilled" ? pdnResult.value.data.value : [];
-      const purchaseInvoices = piResult.status === "fulfilled" ? piResult.value.data.value : [];
-      const outgoingPayments = opResult.status === "fulfilled" ? opResult.value.data.value : [];
+      const rows = result.data || [];
 
-      // Calculate avg days per stage
-      const prAvg = avgDaysForDocs(purchaseRequests as any[], "DocDate", "RequriedDate");
-      const pqAvg = avgDaysForDocs(purchaseQuotations as any[], "DocDate", "DocDueDate");
-      // Approval: time between PQ due date and PO creation
-      const poAvg = avgDaysForDocs(purchaseOrders as any[], "DocDate", "DocDueDate");
-      const pdnAvg = avgDaysForDocs(deliveryNotes as any[], "DocDate");
-      const piAvg = avgDaysForDocs(purchaseInvoices as any[], "DocDate", "DocDueDate");
-      const opAvg = avgDaysForDocs(outgoingPayments as any[], "DocDate");
-
-      const computedStages: FlowStage[] = [
-        { id: "req", name: "Requisição", avgDays: prAvg || 1, targetDays: 2, status: determineStatus(prAvg || 1, 2), count: (purchaseRequests as any[]).length },
-        { id: "quot", name: "Cotação", avgDays: pqAvg || 1, targetDays: 3, status: determineStatus(pqAvg || 1, 3), count: (purchaseQuotations as any[]).length },
-        { id: "po", name: "Pedido Compra", avgDays: poAvg || 1, targetDays: 3, status: determineStatus(poAvg || 1, 3), count: (purchaseOrders as any[]).length },
-        { id: "receipt", name: "Recebimento", avgDays: pdnAvg || 1, targetDays: 5, status: determineStatus(pdnAvg || 1, 5), count: (deliveryNotes as any[]).length },
-        { id: "invoice", name: "NF Entrada", avgDays: piAvg || 1, targetDays: 2, status: determineStatus(piAvg || 1, 2), count: (purchaseInvoices as any[]).length },
-        { id: "payment", name: "Pagamento", avgDays: opAvg || 1, targetDays: 5, status: determineStatus(opAvg || 1, 5), count: (outgoingPayments as any[]).length },
-      ];
-
-      const totalAvg = computedStages.reduce((sum, s) => sum + s.avgDays, 0);
-      const openPOs = (purchaseOrders as any[]).filter((po: any) => po.DocumentStatus === "bost_Open").length;
-
-      const vals = buildValidations(purchaseOrders as any[], purchaseInvoices as any[], purchaseQuotations as any[]);
+      const computedStages = buildStages(rows);
+      const vals = buildValidations(rows);
       const errorCount = vals.filter((v) => v.status === "error").length;
       const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
+      const totalAvg = computedStages.reduce((sum, s) => sum + s.avgDays, 0);
 
       setStages(computedStages);
       setMetrics({
         avgTotalDays: Math.round(totalAvg * 10) / 10,
-        openOrders: openPOs,
+        openOrders: rows.filter((r) => r.Status_Pagamento !== "Cancelado" && !r.Data_do_Pagamento).length,
         validationErrors: errorCount,
         complianceRate: compliance,
       });
-      setInsights(generateInsights(computedStages));
+      setInsights(generateInsights(computedStages, vals));
       setValidations(vals);
     } catch (e) {
-      console.error("Error fetching SAP data:", e);
-      setError(e instanceof Error ? e.message : "Erro ao buscar dados do SAP");
+      console.error("Error fetching view data:", e);
+      setError(e instanceof Error ? e.message : "Erro ao buscar dados da view");
     } finally {
       setIsLoading(false);
     }
