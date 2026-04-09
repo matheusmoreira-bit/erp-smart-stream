@@ -546,6 +546,7 @@ function CreateExpenseModal({
                 className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
               />
             </div>
+            <div>
               <label className="text-xs text-muted-foreground mb-1 block">Data do Documento *</label>
               <Input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="text-sm h-9" />
             </div>
