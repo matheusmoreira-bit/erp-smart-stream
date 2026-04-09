@@ -51,13 +51,13 @@ export function CachedSearchCombobox({
     ? options.filter((o) => {
         const q = query.toLowerCase();
         return (o.code ?? "").toLowerCase().includes(q) || (o.name ?? "").toLowerCase().includes(q) || ((o.extra ?? "").toLowerCase().includes(q));
-      }).slice(0, 20)
-    : [];
+      }).slice(0, 50)
+    : options.slice(0, 50);
 
   const handleInputChange = (val: string) => {
     setQuery(val);
     if (value) onChange(null);
-    setIsOpen(val.length > 0);
+    setIsOpen(true);
   };
 
   const handleSelect = (opt: SapSearchOption) => {
@@ -88,7 +88,7 @@ export function CachedSearchCombobox({
           value={value ? displayValue : query}
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={() => {
-            if (!value && query.length > 0) setIsOpen(true);
+            if (!value) setIsOpen(true);
           }}
           placeholder={isLoading ? "Carregando..." : placeholder}
           className={`pl-8 pr-8 text-sm h-9 ${value ? "border-green-500/50 bg-green-500/5" : ""}`}
@@ -125,7 +125,7 @@ export function CachedSearchCombobox({
         </div>
       )}
 
-      {isOpen && !isLoading && query.length > 0 && filtered.length === 0 && (
+      {isOpen && !isLoading && filtered.length === 0 && (
         <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md p-3 text-center text-sm text-muted-foreground">
           Nenhum resultado encontrado
         </div>
