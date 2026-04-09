@@ -665,7 +665,7 @@ function CreateExpenseModal({
             </div>
             <div className="flex justify-end mt-3">
               <p className="text-sm font-medium text-foreground">
-                Total: <span className="text-lg font-bold font-mono">{formatCurrency(total)}</span>
+                Total: <span className="text-lg font-bold font-mono">{formatCurrency(total, currency || "BRL")}</span>
               </p>
             </div>
           </div>
