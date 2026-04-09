@@ -207,11 +207,12 @@ function CreateExpenseModal({
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
 
   // Cached SAP lists
+  const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const { options: costCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
     cacheKey: "cost_centers",
-    endpoint: "CostCenters",
+    endpoint: "ProfitCenters",
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
-    mapRow: (row: any) => ({ code: row.CenterCode, name: row.CenterName }),
+    mapRow: costCenterMapRow,
   });
 
   // File upload + AI
