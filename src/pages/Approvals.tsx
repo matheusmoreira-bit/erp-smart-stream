@@ -104,6 +104,97 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
     </motion.div>
   );
 }
+function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
+  const overdue = isOverdue(doc.dueDate);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`glass-card p-5 flex flex-col gap-3 ${overdue ? "border-destructive/40" : ""}`}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+            {doc.docTypeName}
+          </span>
+          <h3 className="text-foreground font-semibold mt-2 font-mono">#{doc.docNum}</h3>
+        </div>
+        <div className="text-right">
+          <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(doc.docTotal, doc.currency)}</p>
+          {overdue && (
+            <span className="text-[10px] font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full uppercase">
+              Vencido
+            </span>
+          )}
+          {doc.daysOpen > 0 && (
+            <span className="text-[10px] text-muted-foreground">{doc.daysOpen}d aberto</span>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2 text-sm">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Building2 className="w-3.5 h-3.5 text-primary/70" />
+          <span className="truncate" title={doc.cardCode}>{doc.cardName}</span>
+        </div>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <User className="w-3.5 h-3.5 text-primary/70" />
+          <span>Aprovador: <span className="text-foreground font-medium">{doc.currentApprover}</span></span>
+        </div>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <FileText className="w-3.5 h-3.5 text-primary/70" />
+          <span>Solicitante: <span className="text-foreground font-medium">{doc.requester}</span></span>
+        </div>
+        {doc.approvalModel && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <FileText className="w-3.5 h-3.5 text-primary/70" />
+            <span className="text-xs truncate" title={doc.approvalModel}>Modelo: {doc.approvalModel}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Calendar className="w-3.5 h-3.5 text-primary/70" />
+            <span>Criado: {formatDate(doc.docDate)}</span>
+          </div>
+          <div className={`flex items-center gap-1 text-xs font-medium ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
+            <Clock className="w-3 h-3" />
+            {formatDate(doc.dueDate)}
+          </div>
+        </div>
+      </div>
+
+      {doc.remarks && (
+        <p className="text-xs text-muted-foreground border-t border-border pt-2 truncate" title={doc.remarks}>
+          {doc.remarks}
+        </p>
+      )}
+
+      {doc.documentLines.length > 0 && (
+        <div className="border-t border-border pt-2 space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Itens</p>
+          {doc.documentLines.map((line, i) => (
+            <div key={i} className="flex justify-between text-xs text-muted-foreground">
+              <span className="truncate flex-1 mr-2" title={`${line.ItemCode} - ${line.Description}`}>
+                {line.Description}
+              </span>
+              <span className="font-mono whitespace-nowrap">{formatCurrency(line.LineTotal)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {doc.attachmentNames && (
+        <div className="border-t border-border pt-2">
+          <p className="text-[10px] text-muted-foreground truncate" title={doc.attachmentNames}>
+            📎 {doc.attachmentNames.split("|")[0]?.trim()}
+            {doc.attachmentNames.includes("|") && ` (+${doc.attachmentNames.split("|").length - 1})`}
+          </p>
+        </div>
+      )}
+    </motion.div>
+  );
+}
 
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
