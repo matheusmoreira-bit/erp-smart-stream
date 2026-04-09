@@ -108,16 +108,15 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
+  const { approvals, isLoading, error, refresh } = useApprovals();
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [search, setSearch] = useState("");
 
   // Redirect to login if no session
   if (!session) {
     navigate("/");
     return null;
   }
-
-  const { approvals, isLoading, error, refresh } = useApprovals();
-  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
-  const [search, setSearch] = useState("");
 
   const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
 
