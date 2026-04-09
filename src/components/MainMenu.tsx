@@ -8,6 +8,7 @@ import {
   ArrowRight,
   Shield,
   CreditCard,
+  Key,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -66,6 +67,15 @@ const modules: ModuleCard[] = [
     path: "/pagcorp",
     color: "text-primary",
     bgGlow: "from-primary/20 to-primary/5",
+    available: true,
+  },
+  {
+    title: "Credenciais",
+    description: "Gerencie conexões com sistemas externos (PagCorp, SAP) de forma segura.",
+    icon: Key,
+    path: "/credentials",
+    color: "text-muted-foreground",
+    bgGlow: "from-muted/20 to-muted/5",
     available: true,
   },
 ];

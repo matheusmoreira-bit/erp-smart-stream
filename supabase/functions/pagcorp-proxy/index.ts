@@ -1,3 +1,5 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -26,31 +28,26 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   return JSON.parse(json);
 }
 
-async function encryptPassword(password: string, ivBase64: string): Promise<string> {
-  const aesKeyBytes = base64ToUint8Array(Deno.env.get("PAGCORP_AES_KEY")!);
-  const hmacKeyBytes = base64ToUint8Array(Deno.env.get("PAGCORP_HMAC_KEY")!);
+async function encryptPassword(password: string, ivBase64: string, aesKeyBase64: string, hmacKeyBase64: string): Promise<string> {
+  const aesKeyBytes = base64ToUint8Array(aesKeyBase64);
+  const hmacKeyBytes = base64ToUint8Array(hmacKeyBase64);
   const iv = base64ToUint8Array(ivBase64);
 
-  // AES-256-GCM encrypt
   const aesKey = await crypto.subtle.importKey("raw", aesKeyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
   const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv, tagLength: 128 }, aesKey, encoder.encode(password));
 
-  // encrypted = ciphertext + tag (last 16 bytes)
   const encryptedArr = new Uint8Array(encrypted);
   const ciphertext = encryptedArr.slice(0, encryptedArr.length - 16);
   const tag = encryptedArr.slice(encryptedArr.length - 16);
 
-  // payload = iv + ciphertext + tag
   const payload = new Uint8Array(iv.length + ciphertext.length + tag.length);
   payload.set(iv, 0);
   payload.set(ciphertext, iv.length);
   payload.set(tag, iv.length + ciphertext.length);
 
-  // HMAC-SHA256
   const hmacKey = await crypto.subtle.importKey("raw", hmacKeyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const hmacValue = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, payload));
 
-  // final = payload + hmac
   const final = new Uint8Array(payload.length + hmacValue.length);
   final.set(payload, 0);
   final.set(hmacValue, payload.length);
@@ -58,18 +55,50 @@ async function encryptPassword(password: string, ivBase64: string): Promise<stri
   return uint8ArrayToBase64(final);
 }
 
-async function getAuthToken(): Promise<string> {
-  const baseUrl = Deno.env.get("PAGCORP_API_BASE_URL")!;
-  const clientKey = Deno.env.get("PAGCORP_CLIENT_KEY")!;
-  const clientSecret = Deno.env.get("PAGCORP_CLIENT_SECRET")!;
-  const loginEmail = Deno.env.get("PAGCORP_LOGIN_EMAIL")!;
-  const loginPassword = Deno.env.get("PAGCORP_LOGIN_PASSWORD")!;
+interface PagCorpCreds {
+  api_base_url: string;
+  client_key: string;
+  client_secret: string;
+  login_email: string;
+  login_password: string;
+  aes_key: string;
+  hmac_key: string;
+  account_id: string;
+}
 
+async function getCredentials(): Promise<PagCorpCreds> {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+
+  const { data, error } = await supabase
+    .from("system_credentials")
+    .select("credential_key, credential_value")
+    .eq("system_name", "pagcorp");
+
+  if (error) throw new Error(`Failed to load credentials: ${error.message}`);
+  if (!data || data.length === 0) throw new Error("PagCorp credentials not configured. Go to Credentials page to set them up.");
+
+  const creds: Record<string, string> = {};
+  for (const row of data) {
+    creds[row.credential_key] = row.credential_value;
+  }
+
+  const required = ["api_base_url", "client_key", "client_secret", "login_email", "login_password", "aes_key", "hmac_key", "account_id"];
+  for (const key of required) {
+    if (!creds[key]) throw new Error(`Missing PagCorp credential: ${key}`);
+  }
+
+  return creds as unknown as PagCorpCreds;
+}
+
+async function getAuthToken(creds: PagCorpCreds): Promise<string> {
   // Step 1: Get access token
-  const tokenRes = await fetch(`${baseUrl}Authentication/Client`, {
+  const tokenRes = await fetch(`${creds.api_base_url}Authentication/Client`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ clientKey, clientSecret }),
+    body: JSON.stringify({ clientKey: creds.client_key, clientSecret: creds.client_secret }),
   });
   if (!tokenRes.ok) throw new Error(`Client auth failed [${tokenRes.status}]`);
   const { token: accessToken } = await tokenRes.json();
@@ -79,25 +108,23 @@ async function getAuthToken(): Promise<string> {
   const iv = jwt.iv as string;
 
   // Step 3: Encrypt password
-  const encryptedPassword = await encryptPassword(loginPassword, iv);
+  const encryptedPassword = await encryptPassword(creds.login_password, iv, creds.aes_key, creds.hmac_key);
 
   // Step 4: Login
-  const loginRes = await fetch(`${baseUrl}Authentication/Login`, {
+  const loginRes = await fetch(`${creds.api_base_url}Authentication/Login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ login: loginEmail, password: encryptedPassword }),
+    body: JSON.stringify({ login: creds.login_email, password: encryptedPassword }),
   });
   if (!loginRes.ok) throw new Error(`Login failed [${loginRes.status}]`);
   const { token: apiToken } = await loginRes.json();
   return apiToken;
 }
 
-async function fetchExpenses(apiToken: string, startDate: string, endDate: string): Promise<unknown[]> {
-  const baseUrl = Deno.env.get("PAGCORP_API_BASE_URL")!;
-  const accountId = Deno.env.get("PAGCORP_ACCOUNT_ID")!;
+async function fetchExpenses(apiToken: string, baseUrl: string, accountId: string, startDate: string, endDate: string): Promise<unknown[]> {
   const allItems: unknown[] = [];
   let page = 1;
 
@@ -128,8 +155,9 @@ Deno.serve(async (req) => {
     const startDate = url.searchParams.get("startDate") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
     const endDate = url.searchParams.get("endDate") || new Date().toISOString().slice(0, 10);
 
-    const apiToken = await getAuthToken();
-    const expenses = await fetchExpenses(apiToken, startDate, endDate);
+    const creds = await getCredentials();
+    const apiToken = await getAuthToken(creds);
+    const expenses = await fetchExpenses(apiToken, creds.api_base_url, creds.account_id, startDate, endDate);
 
     return new Response(JSON.stringify({ items: expenses, startDate, endDate }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
