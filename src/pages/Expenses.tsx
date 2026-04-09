@@ -181,7 +181,7 @@ function CreateExpenseModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (input: CreateExpenseInput) => Promise<void>;
+  onCreate: (input: CreateExpenseInput) => Promise<unknown>;
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [supplierName, setSupplierName] = useState("");
