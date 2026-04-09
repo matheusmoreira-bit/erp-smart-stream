@@ -26,6 +26,8 @@ interface SapSearchComboboxProps {
   label?: string;
   /** Minimum characters before searching (default 2) */
   minChars?: number;
+  /** Pre-fill text from AI without marking as validated. User must pick from SAP results. */
+  suggestedQuery?: string;
 }
 
 export function SapSearchCombobox({
