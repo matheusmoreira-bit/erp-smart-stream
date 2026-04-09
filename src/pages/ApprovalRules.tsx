@@ -11,10 +11,9 @@ import {
   ChevronDown,
   ChevronUp,
   Shield,
-  ToggleLeft,
-  ToggleRight,
   Settings2,
   Users,
+  Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,13 +25,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 import {
   useApprovalRules,
+  OPERATOR_LABELS,
+  FIELD_OPTIONS,
   type ApprovalRule,
   type ApprovalRuleLevel,
+  type RuleCriterion,
+  type CriterionOperator,
   type CreateRuleInput,
 } from "@/hooks/useApprovalRules";
 
@@ -44,6 +54,112 @@ const COMPANY_LABELS: Record<string, string> = {
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+function fieldLabel(field: string): string {
+  return FIELD_OPTIONS.find((f) => f.value === field)?.label || field;
+}
+
+function criterionSummary(c: RuleCriterion): string {
+  const f = fieldLabel(c.field);
+  const op = OPERATOR_LABELS[c.operator];
+  if (c.operator === "between") return `${f} ${op} ${c.value} e ${c.value2}`;
+  return `${f} ${op} ${c.value}`;
+}
+
+/* ─── Criterion Row ─── */
+function CriterionRow({
+  criterion,
+  index,
+  onChange,
+  onRemove,
+}: {
+  criterion: RuleCriterion;
+  index: number;
+  onChange: (index: number, updated: RuleCriterion) => void;
+  onRemove: (index: number) => void;
+}) {
+  const isNumericField = criterion.field === "total_amount";
+  const isBetween = criterion.operator === "between";
+
+  return (
+    <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/20 border border-border">
+      <div className="flex-1 grid grid-cols-12 gap-2">
+        {/* Field */}
+        <div className="col-span-3">
+          {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Campo</label>}
+          <Select
+            value={criterion.field}
+            onValueChange={(v) => onChange(index, { ...criterion, field: v })}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FIELD_OPTIONS.map((f) => (
+                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Operator */}
+        <div className="col-span-3">
+          {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Operador</label>}
+          <Select
+            value={criterion.operator}
+            onValueChange={(v) => onChange(index, { ...criterion, operator: v as CriterionOperator })}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(OPERATOR_LABELS).map(([key, label]) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Value */}
+        <div className={isBetween ? "col-span-3" : "col-span-5"}>
+          {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Valor</label>}
+          <Input
+            type={isNumericField ? "number" : "text"}
+            value={criterion.value}
+            onChange={(e) => onChange(index, { ...criterion, value: e.target.value })}
+            placeholder={criterion.operator === "like" ? "Ex: %gaming%" : "Valor"}
+            className="text-sm h-9"
+          />
+        </div>
+
+        {/* Value2 for between */}
+        {isBetween && (
+          <div className="col-span-2">
+            {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Até</label>}
+            <Input
+              type={isNumericField ? "number" : "text"}
+              value={criterion.value2 || ""}
+              onChange={(e) => onChange(index, { ...criterion, value2: e.target.value })}
+              placeholder="Até"
+              className="text-sm h-9"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className={index === 0 ? "mt-4" : ""}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onRemove(index)}
+          className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /* ─── Create Rule Modal ─── */
@@ -59,15 +175,23 @@ function CreateRuleModal({
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(0);
-  const [minValue, setMinValue] = useState("");
-  const [maxValue, setMaxValue] = useState("");
-  const [costCenter, setCostCenter] = useState("");
-  const [project, setProject] = useState("");
-  const [requesterPattern, setRequesterPattern] = useState("");
-  const [docType, setDocType] = useState("");
-  const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([
-    { level_order: 1, approver_name: "", approver_email: "" },
-  ]);
+  const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
+  const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
+
+  const addCriterion = () => {
+    setCriteria((prev) => [
+      ...prev,
+      { field: "total_amount", operator: "greater_than" as CriterionOperator, value: "" },
+    ]);
+  };
+
+  const updateCriterion = (index: number, updated: RuleCriterion) => {
+    setCriteria((prev) => prev.map((c, i) => (i === index ? updated : c)));
+  };
+
+  const removeCriterion = (index: number) => {
+    setCriteria((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const addLevel = () => {
     setLevels((prev) => [
@@ -77,7 +201,6 @@ function CreateRuleModal({
   };
 
   const removeLevel = (index: number) => {
-    if (levels.length <= 1) return;
     setLevels((prev) =>
       prev.filter((_, i) => i !== index).map((lvl, i) => ({ ...lvl, level_order: i + 1 }))
     );
@@ -94,18 +217,21 @@ function CreateRuleModal({
   const reset = () => {
     setName("");
     setPriority(0);
-    setMinValue("");
-    setMaxValue("");
-    setCostCenter("");
-    setProject("");
-    setRequesterPattern("");
-    setDocType("");
-    setLevels([{ level_order: 1, approver_name: "", approver_email: "" }]);
+    setCriteria([]);
+    setLevels([]);
   };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast.error("Informe o nome da regra");
+      return;
+    }
+    if (criteria.some((c) => !c.value.trim())) {
+      toast.error("Todos os critérios devem ter um valor");
+      return;
+    }
+    if (levels.length === 0) {
+      toast.error("Adicione ao menos um nível de aprovação");
       return;
     }
     if (levels.some((l) => !l.approver_name.trim())) {
@@ -114,17 +240,7 @@ function CreateRuleModal({
     }
     setIsCreating(true);
     try {
-      await onCreate({
-        name,
-        priority,
-        min_value: minValue ? parseFloat(minValue) : null,
-        max_value: maxValue ? parseFloat(maxValue) : null,
-        cost_center: costCenter || null,
-        project: project || null,
-        requester_pattern: requesterPattern || null,
-        doc_type: docType || null,
-        levels,
-      });
+      await onCreate({ name, priority, criteria, levels });
       toast.success("Regra criada com sucesso!");
       reset();
       onClose();
@@ -137,7 +253,7 @@ function CreateRuleModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
@@ -148,95 +264,107 @@ function CreateRuleModal({
         <div className="space-y-5 mt-2">
           {/* Basic info */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
+            <div className="col-span-2 sm:col-span-1">
               <label className="text-xs text-muted-foreground mb-1 block">Nome da Regra *</label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Aprovação acima de R$ 10.000" />
             </div>
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="text-xs text-muted-foreground mb-1 block">Prioridade</label>
               <Input type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} placeholder="0" />
               <p className="text-[10px] text-muted-foreground mt-1">Maior = mais prioritário</p>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Tipo de Documento</label>
-              <Input value={docType} onChange={(e) => setDocType(e.target.value)} placeholder="Ex: Pedido de Compra" />
-            </div>
           </div>
 
-          {/* Criteria */}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Critérios de Correspondência</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Valor Mínimo (R$)</label>
-                <Input type="number" value={minValue} onChange={(e) => setMinValue(e.target.value)} placeholder="0,00" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Valor Máximo (R$)</label>
-                <Input type="number" value={maxValue} onChange={(e) => setMaxValue(e.target.value)} placeholder="Sem limite" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Centro de Custo</label>
-                <Input value={costCenter} onChange={(e) => setCostCenter(e.target.value)} placeholder="Ex: 1.4.1.1" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Projeto</label>
-                <Input value={project} onChange={(e) => setProject(e.target.value)} placeholder="Ex: ANA GAMING" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-muted-foreground mb-1 block">Solicitante (contém)</label>
-                <Input value={requesterPattern} onChange={(e) => setRequesterPattern(e.target.value)} placeholder="Ex: Graciela" />
-                <p className="text-[10px] text-muted-foreground mt-1">Filtra solicitantes que contenham o texto informado</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Levels */}
+          {/* Dynamic Criteria */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Níveis de Aprovação</p>
-              <Button variant="ghost" size="sm" onClick={addLevel} className="gap-1 text-xs h-7">
-                <Plus className="w-3 h-3" /> Adicionar Nível
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Filter className="w-3 h-3" /> Critérios
+              </p>
+              <Button variant="ghost" size="sm" onClick={addCriterion} className="gap-1 text-xs h-7">
+                <Plus className="w-3 h-3" /> Critério
               </Button>
             </div>
-            <div className="space-y-2">
-              {levels.map((lvl, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 text-primary text-sm font-bold shrink-0">
-                    {lvl.level_order}
-                  </div>
-                  <div className="flex-1 grid grid-cols-2 gap-2">
-                    <div>
-                      {i === 0 && <label className="text-[10px] text-muted-foreground">Aprovador *</label>}
-                      <Input
-                        value={lvl.approver_name}
-                        onChange={(e) => updateLevel(i, "approver_name", e.target.value)}
-                        placeholder="Nome do aprovador"
-                        className="text-sm h-9"
-                      />
-                    </div>
-                    <div>
-                      {i === 0 && <label className="text-[10px] text-muted-foreground">Email</label>}
-                      <Input
-                        value={lvl.approver_email || ""}
-                        onChange={(e) => updateLevel(i, "approver_email", e.target.value)}
-                        placeholder="email@empresa.com"
-                        className="text-sm h-9"
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeLevel(i)}
-                    disabled={levels.length <= 1}
-                    className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              ))}
+            {criteria.length === 0 ? (
+              <button
+                onClick={addCriterion}
+                className="w-full py-6 border-2 border-dashed border-border rounded-lg text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar primeiro critério
+              </button>
+            ) : (
+              <div className="space-y-2">
+                {criteria.map((c, i) => (
+                  <CriterionRow
+                    key={i}
+                    criterion={c}
+                    index={i}
+                    onChange={updateCriterion}
+                    onRemove={removeCriterion}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Dynamic Levels */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="w-3 h-3" /> Níveis de Aprovação
+              </p>
+              <Button variant="ghost" size="sm" onClick={addLevel} className="gap-1 text-xs h-7">
+                <Plus className="w-3 h-3" /> Nível
+              </Button>
             </div>
+            {levels.length === 0 ? (
+              <button
+                onClick={addLevel}
+                className="w-full py-6 border-2 border-dashed border-border rounded-lg text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar primeiro nível de aprovação
+              </button>
+            ) : (
+              <div className="space-y-2">
+                {levels.map((lvl, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 text-primary text-sm font-bold shrink-0">
+                      {lvl.level_order}
+                    </div>
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      <div>
+                        {i === 0 && <label className="text-[10px] text-muted-foreground">Aprovador *</label>}
+                        <Input
+                          value={lvl.approver_name}
+                          onChange={(e) => updateLevel(i, "approver_name", e.target.value)}
+                          placeholder="Nome do aprovador"
+                          className="text-sm h-9"
+                        />
+                      </div>
+                      <div>
+                        {i === 0 && <label className="text-[10px] text-muted-foreground">Email</label>}
+                        <Input
+                          value={lvl.approver_email || ""}
+                          onChange={(e) => updateLevel(i, "approver_email", e.target.value)}
+                          placeholder="email@empresa.com"
+                          className="text-sm h-9"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeLevel(i)}
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
@@ -264,13 +392,7 @@ function RuleCard({
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  const criteria: string[] = [];
-  if (rule.min_value != null) criteria.push(`≥ ${formatCurrency(rule.min_value)}`);
-  if (rule.max_value != null) criteria.push(`≤ ${formatCurrency(rule.max_value)}`);
-  if (rule.cost_center) criteria.push(`CC: ${rule.cost_center}`);
-  if (rule.project) criteria.push(`Proj: ${rule.project}`);
-  if (rule.doc_type) criteria.push(`Tipo: ${rule.doc_type}`);
-  if (rule.requester_pattern) criteria.push(`Solic.: ${rule.requester_pattern}`);
+  const criteriaLabels = (rule.criteria || []).map(criterionSummary);
 
   return (
     <motion.div
@@ -292,9 +414,9 @@ function RuleCard({
             )}
           </div>
 
-          {criteria.length > 0 && (
+          {criteriaLabels.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {criteria.map((c, i) => (
+              {criteriaLabels.map((c, i) => (
                 <span key={i} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                   {c}
                 </span>
