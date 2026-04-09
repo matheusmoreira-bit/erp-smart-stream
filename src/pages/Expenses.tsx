@@ -183,10 +183,12 @@ function CreateExpenseModal({
   open,
   onClose,
   onCreate,
+  sapSession,
 }: {
   open: boolean;
   onClose: () => void;
   onCreate: (input: CreateExpenseInput) => Promise<unknown>;
+  sapSession: any;
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [supplierName, setSupplierName] = useState("");
@@ -197,6 +199,85 @@ function CreateExpenseModal({
   const [items, setItems] = useState<Omit<ExpenseItem, "id">[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0 },
   ]);
+
+  // File upload + AI
+  const [files, setFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [aiConfidence, setAiConfidence] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = (newFiles: FileList | File[]) => {
+    const arr = Array.from(newFiles);
+    setFiles((prev) => [...prev, ...arr]);
+    if (aiEnabled && arr.length > 0) {
+      processWithAI([...files, ...arr]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const processWithAI = async (filesToProcess: File[]) => {
+    setIsProcessing(true);
+    setAiConfidence(null);
+    try {
+      const formData = new FormData();
+      filesToProcess.forEach((f) => formData.append("files", f));
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-expense-doc`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || "Erro ao processar");
+      }
+
+      const { result } = await resp.json();
+
+      // Handle single or array result
+      const doc = Array.isArray(result) ? result[0] : result;
+
+      if (doc.supplier_name) setSupplierName(doc.supplier_name);
+      if (doc.supplier_cnpj) setSupplierCode(doc.supplier_cnpj);
+      if (doc.cost_center_hint) setCostCenter(doc.cost_center_hint);
+      if (doc.remarks) setRemarks(doc.remarks);
+      if (doc.items && doc.items.length > 0) {
+        setItems(
+          doc.items.map((item: any) => ({
+            description: item.description || "",
+            quantity: item.quantity || 1,
+            unit_price: item.unit_price || 0,
+            line_total: item.line_total || (item.quantity || 1) * (item.unit_price || 0),
+          }))
+        );
+      }
+      if (doc.confidence) setAiConfidence(doc.confidence);
+
+      toast.success("Documento processado pela IA!");
+    } catch (e) {
+      console.error("AI processing error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao processar com IA");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+  };
 
   const updateItem = (index: number, field: string, value: string | number) => {
     setItems((prev) => {
@@ -241,18 +322,23 @@ function CreateExpenseModal({
       });
       toast.success("Despesa criada com sucesso!");
       onClose();
-      // Reset
-      setSupplierName("");
-      setSupplierCode("");
-      setCostCenter("");
-      setProject("");
-      setRemarks("");
-      setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0 }]);
+      resetForm();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar despesa");
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const resetForm = () => {
+    setSupplierName("");
+    setSupplierCode("");
+    setCostCenter("");
+    setProject("");
+    setRemarks("");
+    setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0 }]);
+    setFiles([]);
+    setAiConfidence(null);
   };
 
   return (
@@ -263,14 +349,111 @@ function CreateExpenseModal({
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
+          {/* AI Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">Processar com IA</span>
+              <span className="text-xs text-muted-foreground">(preenche campos automaticamente)</span>
+            </div>
+            <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
+          </div>
+
+          {/* File Upload — FIRST */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Documentos (NF, Recibos, Boletos)</label>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => inputRef.current?.click()}
+              className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+              }`}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,.xlsx,.xls,.xml"
+                className="hidden"
+                multiple
+                onChange={(e) => e.target.files && handleFiles(e.target.files)}
+              />
+              {isProcessing ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                  <p className="text-sm text-primary font-medium">Processando com IA...</p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Arraste seus arquivos ou <span className="text-primary font-medium">clique para selecionar</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">PDF, Imagens, CSV, Excel, XML</p>
+                </>
+              )}
+            </div>
+
+            {/* File list */}
+            {files.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {files.map((file, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20">
+                    <FileSpreadsheet className="w-4 h-4 text-primary shrink-0" />
+                    <span className="text-xs text-foreground truncate flex-1">{file.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                    <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-muted-foreground hover:text-foreground">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* AI confidence badge */}
+            {aiConfidence !== null && (
+              <div className="mt-2 flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs text-muted-foreground">
+                  IA preencheu os campos com {Math.round(aiConfidence * 100)}% de confiança
+                </span>
+                {!aiEnabled && files.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs text-primary"
+                    onClick={() => processWithAI(files)}
+                    disabled={isProcessing}
+                  >
+                    Reprocessar
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Manual re-process button when AI is enabled but not yet processed */}
+            {aiEnabled && files.length > 0 && aiConfidence === null && !isProcessing && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 gap-1.5 text-xs"
+                onClick={() => processWithAI(files)}
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Processar com IA
+              </Button>
+            )}
+          </div>
+
+          {/* Supplier & fields */}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
               <label className="text-xs text-muted-foreground mb-1 block">Fornecedor *</label>
               <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Nome do fornecedor" />
             </div>
             <div className="col-span-2 sm:col-span-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Código Fornecedor</label>
-              <Input value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="Ex: F000305" />
+              <label className="text-xs text-muted-foreground mb-1 block">Código / CNPJ Fornecedor</label>
+              <Input value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="Ex: F000305 ou CNPJ" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Centro de Custo</label>
@@ -352,7 +535,7 @@ function CreateExpenseModal({
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
             <Button variant="outline" onClick={onClose} disabled={isCreating}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={isCreating} className="gap-1.5">
+            <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="gap-1.5">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               Criar Despesa
             </Button>
