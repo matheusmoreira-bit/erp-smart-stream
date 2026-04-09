@@ -1,4 +1,4 @@
-import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2, ClipboardCheck } from "lucide-react";
+import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { FlowTimeline } from "@/components/FlowTimeline";
 import { MetricCard } from "@/components/MetricCard";
@@ -56,9 +56,8 @@ export function Dashboard() {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Navigation */}
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => navigate("/approvals")} className="border-primary/30 text-primary hover:bg-primary/10">
-            <ClipboardCheck className="w-4 h-4 mr-2" />
-            Aprovações Pendentes
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Menu
           </Button>
         </div>
 
