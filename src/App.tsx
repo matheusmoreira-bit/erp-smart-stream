@@ -8,6 +8,7 @@ import Index from "./pages/Index.tsx";
 import AnalyticsPage from "./pages/Analytics.tsx";
 import Approvals from "./pages/Approvals.tsx";
 import Expenses from "./pages/Expenses.tsx";
+import ApprovalRules from "./pages/ApprovalRules.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/expenses" element={<Expenses />} />
+            <Route path="/approval-rules" element={<ApprovalRules />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

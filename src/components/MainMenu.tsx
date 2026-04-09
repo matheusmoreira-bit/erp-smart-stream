@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   Activity,
   ArrowRight,
+  Shield,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
