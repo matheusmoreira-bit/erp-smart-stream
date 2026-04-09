@@ -17,6 +17,7 @@ const COMPANY_LABELS: Record<string, string> = {
 
 export function Dashboard() {
   const { session, logout } = useSap();
+  const navigate = useNavigate();
   const { stages, metrics, insights, validations, isLoading, error, refresh } = useSapDashboard();
   const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
 
