@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { usePagCorp } from "@/hooks/usePagCorp";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 interface AccountMapping {
@@ -51,6 +52,32 @@ export default function PagCorpMapping() {
     endpoint: "Projects",
     mapRow: (r: any) => ({ code: r.Code, name: r.Name, extra: "" }),
   });
+
+  // Fetch PagCorp transactions from last 30 days for account code suggestions
+  const { transactions: recentTransactions, fetchTransactions } = usePagCorp();
+
+  useEffect(() => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
+    fetchTransactions(thirtyDaysAgo.toISOString().slice(0, 10), today.toISOString().slice(0, 10));
+  }, []);
+
+  // Build unique account code options from recent transactions
+  const accountCodeOptions: SapSearchOption[] = useMemo(() => {
+    const map = new Map<string, string>();
+    recentTransactions.forEach((t) => {
+      const code = t.accountCode || "";
+      const name = t.accountName || "";
+      if (code && !map.has(code)) {
+        map.set(code, name);
+      }
+    });
+    return Array.from(map.entries()).map(([code, name]) => ({
+      code,
+      name,
+      extra: "",
+    }));
+  }, [recentTransactions]);
 
   useEffect(() => {
     loadMappings();
@@ -160,6 +187,12 @@ export default function PagCorpMapping() {
     return options.find((o) => o.code === code) || null;
   }
 
+  // Filter account code options to exclude already-mapped codes
+  const availableAccountCodes = useMemo(() => {
+    const mappedCodes = new Set(mappings.filter((m) => m.id).map((m) => m.account_code));
+    return accountCodeOptions.filter((o) => !mappedCodes.has(o.code));
+  }, [accountCodeOptions, mappings]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-6 py-4">
@@ -217,8 +250,7 @@ export default function PagCorpMapping() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground">Account Code</TableHead>
-                    <TableHead className="text-muted-foreground">Account Name</TableHead>
+                    <TableHead className="text-muted-foreground">Conta PagCorp</TableHead>
                     <TableHead className="text-muted-foreground">Centro de Custo</TableHead>
                     <TableHead className="text-muted-foreground">Projeto</TableHead>
                     <TableHead className="text-muted-foreground w-12"></TableHead>
@@ -228,21 +260,38 @@ export default function PagCorpMapping() {
                   {mappings.map((m, i) => (
                     <TableRow key={m.id || `new-${i}`} className="border-border">
                       <TableCell>
-                        <Input
-                          value={m.account_code}
-                          onChange={(e) => updateRow(i, "account_code", e.target.value)}
-                          placeholder="Ex: 12345"
-                          className="bg-card"
-                          disabled={!!m.id}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          value={m.account_name}
-                          onChange={(e) => updateRow(i, "account_name", e.target.value)}
-                          placeholder="Nome da conta"
-                          className="bg-card"
-                        />
+                        {m.id ? (
+                          <div className="text-sm">
+                            <span className="font-medium text-foreground">{m.account_name || m.account_code}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{m.account_code}</span>
+                          </div>
+                        ) : (
+                          <CachedSearchCombobox
+                            options={availableAccountCodes}
+                            isLoading={false}
+                            value={findOption(accountCodeOptions, m.account_code)}
+                            onChange={(opt) => {
+                              if (opt) {
+                                setMappings((prev) =>
+                                  prev.map((row, idx) =>
+                                    idx === i
+                                      ? { ...row, account_code: opt.code, account_name: opt.name }
+                                      : row
+                                  )
+                                );
+                              } else {
+                                setMappings((prev) =>
+                                  prev.map((row, idx) =>
+                                    idx === i
+                                      ? { ...row, account_code: "", account_name: "" }
+                                      : row
+                                  )
+                                );
+                              }
+                            }}
+                            placeholder="Buscar conta PagCorp..."
+                          />
+                        )}
                       </TableCell>
                       <TableCell>
                         <CachedSearchCombobox
