@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQueryAll, sapQueryView } from "@/lib/sap-client";
+import { sapQueryView } from "@/lib/sap-client";
 
 export interface ApprovalDoc {
   approvalRequestId: number;
@@ -14,35 +14,32 @@ export interface ApprovalDoc {
   cardName: string;
   requester: string;
   currentApprover: string;
+  approverEmail: string;
   currentStage: string;
   status: "pending" | "approved" | "rejected" | "generated";
   docDate: string;
   dueDate: string;
   remarks: string;
+  approvalModel: string;
+  daysOpen: number;
+  attachmentNames: string;
+  documentLines: DocumentLine[];
 }
 
-const DOC_TYPE_NAMES: Record<string, string> = {
-  "540000006": "Pedido de Compra",
-  "17": "Pedido de Compra",
-  "22": "Pedido de Venda",
-  "23": "Devolução",
-  "18": "Nota Fiscal de Entrada",
-  "13": "Nota Fiscal de Saída",
-  "15": "Entrega",
-  "20": "Recebimento de Mercadoria",
-  "1470000113": "Requisição de Compra",
-};
-
-const STATUS_MAP: Record<string, ApprovalDoc["status"]> = {
-  arsPending: "pending",
-  arsApproved: "approved",
-  arsNotApproved: "rejected",
-  arsGenerated: "generated",
-};
+export interface DocumentLine {
+  ItemCode: string;
+  Description: string;
+  Quantity: number;
+  UnitPrice: number;
+  LineTotal: number;
+  CostingCode: string;
+  Project: string;
+}
 
 interface HanaApprovalViewRow {
   Code?: number;
   Aprovador?: string;
+  "Email do aprovador"?: string;
   Solicitante?: string;
   Observações?: string;
   "Tipo de solicitação"?: string;
@@ -51,11 +48,16 @@ interface HanaApprovalViewRow {
   "Código PN/Fornecedor"?: string;
   "Fornecedor / Parceiro"?: string;
   "Código da moeda original"?: string;
+  "Valor do documento na moeda original"?: number | string;
   "Valor total"?: number | string;
   "Data do documento"?: string;
   "Data de criação"?: string;
   "Data de vencimento"?: string;
   "Modelo de aprovação"?: string;
+  "Id do anexo"?: number;
+  "Nome do(s) anexo(s)"?: string;
+  "Dias em aberto"?: number;
+  DocumentLines?: string;
 }
 
 function normalizeCurrency(currency?: string): string {
@@ -65,6 +67,16 @@ function normalizeCurrency(currency?: string): string {
   if (value === "€") return "EUR";
   if (value.length === 3) return value.toUpperCase();
   return "BRL";
+}
+
+function parseDocumentLines(raw?: string): DocumentLine[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
@@ -82,41 +94,16 @@ function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
     cardName: row["Fornecedor / Parceiro"] || "—",
     requester: row.Solicitante || "—",
     currentApprover: row.Aprovador || "—",
+    approverEmail: row["Email do aprovador"] || "",
     currentStage: row["Modelo de aprovação"] || "—",
     status: "pending",
     docDate: row["Data de criação"] || row["Data do documento"] || "",
     dueDate: row["Data de vencimento"] || "",
     remarks: row.Observações || "",
-  };
-}
-
-function mapSapApproval(item: any): ApprovalDoc {
-  const stages = item.ApprovalRequestLines || [];
-  const currentStage =
-    stages.find((stage: any) => stage.Status === "ardPending") ||
-    stages.find((stage: any) => stage.Status === "arsPending");
-  const approverName = currentStage?.UserName || currentStage?.UserID || currentStage?.UserId || "—";
-
-  const objectType = String(item.ObjectType || "");
-  const docTypeName = DOC_TYPE_NAMES[objectType] || `Tipo ${objectType}`;
-
-  return {
-    approvalRequestId: item.Code,
-    docType: objectType,
-    docTypeName,
-    docNum: item.ObjectCode || item.DocNum || item.DraftEntry || item.Code || 0,
-    docEntry: item.ObjectEntry || item.DraftEntry || 0,
-    docTotal: item.DocTotal || 0,
-    currency: item.DocCurrency || "BRL",
-    cardCode: item.CardCode || "",
-    cardName: item.CardName || item.OriginatorName || "—",
-    requester: item.OriginatorName || item.Originator || String(item.OriginatorID || "—"),
-    currentApprover: approverName,
-    currentStage: currentStage?.StageCode ? `Etapa ${currentStage.StageCode}` : "—",
-    status: STATUS_MAP[item.Status] || "pending",
-    docDate: item.CreationDate || "",
-    dueDate: item.DueDate || item.UpdateDate || item.CreationDate || "",
-    remarks: item.Remarks || "",
+    approvalModel: row["Modelo de aprovação"] || "",
+    daysOpen: Number(row["Dias em aberto"] || 0),
+    attachmentNames: row["Nome do(s) anexo(s)"] || "",
+    documentLines: parseDocumentLines(row.DocumentLines),
   };
 }
 
@@ -132,31 +119,16 @@ export function useApprovals() {
     setError(null);
 
     try {
-      try {
-        const detailedView = await sapQueryView<HanaApprovalViewRow>(
-          session,
-          `${session.companyDB}.VW_APROVACOES_DETALHADAS`,
-        );
+      const detailedView = await sapQueryView<HanaApprovalViewRow>(
+        session,
+        `${session.companyDB}.VW_APROVACOES_DETALHADAS`,
+      );
 
-        const detailedDocs = detailedView.data
-          .map(mapHanaApproval)
-          .filter((doc) => doc.approvalRequestId > 0);
+      const docs = detailedView.data
+        .map(mapHanaApproval)
+        .filter((doc) => doc.approvalRequestId > 0);
 
-        if (detailedDocs.length > 0) {
-          setApprovals(detailedDocs);
-          return;
-        }
-      } catch (viewError) {
-        console.warn("Falling back to ApprovalRequests after HANA view error:", viewError);
-      }
-
-      const result = await sapQueryAll(session, "ApprovalRequests", {
-        $filter: "Status eq 'arsPending'",
-        $orderby: "CreationDate desc",
-      });
-
-      const items = (result.data.value as any[]) || [];
-      setApprovals(items.map(mapSapApproval));
+      setApprovals(docs);
     } catch (e) {
       console.error("Error fetching approvals:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar aprovações");
