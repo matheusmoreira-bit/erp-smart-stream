@@ -15,53 +15,25 @@ const COMPANY_LABELS: Record<string, string> = {
   SBO_INSTITUTO_ANA: "Instituto Cactus",
 };
 
-export function Dashboard() {
+interface DashboardProps {
+  embedded?: boolean;
+}
+
+export function Dashboard({ embedded = false }: DashboardProps) {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { stages, metrics, insights, validations, isLoading, error, refresh } = useSapDashboard();
   const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
 
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 glow-primary">
-              <Activity className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
-              <p className="text-xs text-muted-foreground">Validação e análise de fluxo de compras</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-foreground">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground">{session?.userName}</p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
-              Conectado
-            </div>
-            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground">
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </header>
+  const content = (
+    <div className={embedded ? "space-y-8" : "max-w-7xl mx-auto px-6 py-8 space-y-8"}>
+      <div className="flex items-center justify-end">
+        <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground">
+          <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? "animate-spin" : ""}`} /> Atualizar
+        </Button>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        {/* Navigation */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Menu
-          </Button>
-        </div>
-
-        {error && (
+      {error && (
           <div className="glass-card p-4 border-destructive/30 bg-destructive/10 text-sm text-destructive">
             {error}
           </div>
