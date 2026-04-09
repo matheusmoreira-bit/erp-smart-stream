@@ -40,7 +40,14 @@ serve(async (req) => {
       const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name);
 
       if (isPdf || isImage) {
-        const base64 = btoa(String.fromCharCode(...bytes));
+        // Encode in chunks to avoid stack overflow on large files
+        let binaryString = "";
+        const CHUNK = 8192;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          const chunk = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+          binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+        }
+        const base64 = btoa(binaryString);
         const mimeType = isPdf ? "application/pdf" : file.type || "image/jpeg";
         contentParts.push({
           type: "image_url",
