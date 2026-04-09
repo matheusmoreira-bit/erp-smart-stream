@@ -269,10 +269,14 @@ function CreateRuleModal({
   open,
   onClose,
   onCreate,
+  sapUsers,
+  sapUsersLoading,
 }: {
   open: boolean;
   onClose: () => void;
   onCreate: (input: CreateRuleInput) => Promise<void>;
+  sapUsers: SapUser[];
+  sapUsersLoading: boolean;
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState("");
