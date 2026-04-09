@@ -701,7 +701,7 @@ function CreateExpenseModal({
                     <SapSearchCombobox
                       label="Projeto (Dimensão)"
                       endpoint="Projects"
-                      filterTemplate="contains(Code,'{q}') or contains(Name,'{q}')"
+                      filterTemplate="(contains(Name,'{q}') or startswith(Code,'{q}')) and Active eq 'tYES'"
                       selectFields="Code,Name"
                       mapRow={(row: any) => ({
                         code: row.Code,
