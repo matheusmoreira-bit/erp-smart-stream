@@ -242,6 +242,36 @@ export type Database = {
         }
         Relationships: []
       }
+      sap_cache: {
+        Row: {
+          cache_key: string
+          company_db: string
+          created_at: string
+          data: Json
+          expires_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          cache_key: string
+          company_db: string
+          created_at?: string
+          data?: Json
+          expires_at: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          cache_key?: string
+          company_db?: string
+          created_at?: string
+          data?: Json
+          expires_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       system_credentials: {
         Row: {
           created_at: string
