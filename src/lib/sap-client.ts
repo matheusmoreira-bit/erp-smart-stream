@@ -99,8 +99,6 @@ export async function sapQuery(
   return { data: result.data, fromCache: result.fromCache };
 }
 
-export async function sapQueryView<T = unknown>(
-
 export async function sapAction(
   session: SapSession,
   endpoint: string,
