@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 export interface PagCorpTransaction {
   id: string | number;
@@ -29,14 +28,6 @@ export function usePagCorp() {
       if (endDate) params.endDate = endDate;
 
       const queryString = new URLSearchParams(params).toString();
-      const { data, error: err } = await supabase.functions.invoke("pagcorp-proxy", {
-        body: null,
-        method: "GET",
-        headers: {},
-      });
-
-      // supabase.functions.invoke doesn't support query params well, so use fetch directly
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
