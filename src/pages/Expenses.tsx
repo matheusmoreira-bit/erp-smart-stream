@@ -511,21 +511,41 @@ function CreateExpenseModal({
               label="Fornecedor *"
               endpoint="BusinessPartners"
               filterTemplate="contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}')"
-              selectFields="CardCode,CardName,FederalTaxID"
+              selectFields="CardCode,CardName,FederalTaxID,Currency"
               mapRow={(row: any) => ({
                 code: row.CardCode,
                 name: row.CardName,
                 extra: row.FederalTaxID || undefined,
-              })}
+                currency: row.Currency || "",
+              } as SapSearchOption & { currency: string })}
               value={supplier}
-              onChange={setSupplier}
+              onChange={handleSupplierChange}
               placeholder="Digite nome, código ou CNPJ do fornecedor..."
             />
           </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Currency Warning */}
+          {currencyWarning && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+              <span className="text-destructive text-sm">⚠️</span>
+              <p className="text-sm text-destructive">{currencyWarning}</p>
+              <button onClick={() => setCurrencyWarning(null)} className="ml-auto text-destructive/70 hover:text-destructive">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Currency + Dates */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Moeda *</label>
+              <Input
+                value={currency}
+                readOnly
+                placeholder="Definida pelo fornecedor"
+                className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+              />
+            </div>
               <label className="text-xs text-muted-foreground mb-1 block">Data do Documento *</label>
               <Input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="text-sm h-9" />
             </div>
