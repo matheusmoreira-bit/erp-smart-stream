@@ -26,6 +26,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
   Dialog,
   DialogContent,
@@ -203,6 +205,14 @@ function CreateExpenseModal({
   ]);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
+
+  // Cached SAP lists
+  const { options: costCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "CostCenters",
+    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    mapRow: (row: any) => ({ code: row.CenterCode, name: row.CenterName }),
+  });
 
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
@@ -668,15 +678,10 @@ function CreateExpenseModal({
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <SapSearchCombobox
+                    <CachedSearchCombobox
                       label="Centro de Custo (Dimensão)"
-                      endpoint="CostCenters"
-                      filterTemplate="contains(CenterCode,'{q}') or contains(CenterName,'{q}')"
-                      selectFields="CenterCode,CenterName"
-                      mapRow={(row: any) => ({
-                        code: row.CenterCode,
-                        name: row.CenterName,
-                      })}
+                      options={costCenterOptions}
+                      isLoading={costCentersLoading}
                       value={item.sapCostCenter || null}
                       onChange={(val) => {
                         setItems((prev) => {
