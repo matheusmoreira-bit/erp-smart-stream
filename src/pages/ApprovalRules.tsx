@@ -168,11 +168,6 @@ function UserSelect({
     </div>
   );
 }
-  const f = fieldLabel(c.field);
-  const op = OPERATOR_LABELS[c.operator];
-  if (c.operator === "between") return `${f} ${op} ${c.value} e ${c.value2}`;
-  return `${f} ${op} ${c.value}`;
-}
 
 /* ─── Criterion Row ─── */
 function CriterionRow({
