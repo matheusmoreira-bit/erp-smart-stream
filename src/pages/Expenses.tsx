@@ -471,50 +471,97 @@ function CreateExpenseModal({
                 <Plus className="w-3 h-3" /> Adicionar Item
               </Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {items.map((item, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-5">
-                    {i === 0 && <label className="text-[10px] text-muted-foreground">Descrição *</label>}
-                    <Input
-                      value={item.description}
-                      onChange={(e) => updateItem(i, "description", e.target.value)}
-                      placeholder="Descrição"
-                      className="text-sm h-9"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    {i === 0 && <label className="text-[10px] text-muted-foreground">Qtd</label>}
-                    <Input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)}
-                      className="text-sm h-9"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    {i === 0 && <label className="text-[10px] text-muted-foreground">Preço Unit.</label>}
-                    <Input
-                      type="number"
-                      value={item.unit_price}
-                      onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
-                      className="text-sm h-9"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    {i === 0 && <label className="text-[10px] text-muted-foreground">Total</label>}
-                    <Input value={formatCurrency(item.line_total)} readOnly className="text-sm h-9 bg-muted/30 font-mono" />
-                  </div>
-                  <div className="col-span-1 flex justify-center">
+                <div key={i} className="border border-border/50 rounded-lg p-3 space-y-2 bg-muted/10">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Item {i + 1}</span>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => removeItem(i)}
                       disabled={items.length <= 1}
-                      className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </Button>
+                  </div>
+                  {/* Item search from SAP */}
+                  <SapSearchCombobox
+                    endpoint="Items"
+                    filterTemplate="contains(ItemName,'{q}') or contains(ItemCode,'{q}')"
+                    selectFields="ItemCode,ItemName"
+                    mapRow={(row: any) => ({
+                      code: row.ItemCode,
+                      name: row.ItemName,
+                    })}
+                    value={item.sapItem || null}
+                    onChange={(val) => {
+                      setItems((prev) => {
+                        const updated = [...prev];
+                        updated[i] = {
+                          ...updated[i],
+                          sapItem: val,
+                          item_code: val?.code || "",
+                          description: val?.name || updated[i].description,
+                        };
+                        return updated;
+                      });
+                    }}
+                    placeholder="Buscar item SAP por nome ou código..."
+                  />
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-6">
+                      <label className="text-[10px] text-muted-foreground">Descrição *</label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateItem(i, "description", e.target.value)}
+                        placeholder="Descrição do item"
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-muted-foreground">Qtd</label>
+                      <Input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)}
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-muted-foreground">Preço Unit.</label>
+                      <Input
+                        type="number"
+                        value={item.unit_price}
+                        onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-muted-foreground">Total</label>
+                      <Input value={formatCurrency(item.line_total)} readOnly className="text-sm h-8 bg-muted/30 font-mono" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">Centro de Custo (Dimensão)</label>
+                      <Input
+                        value={item.cost_center || ""}
+                        onChange={(e) => updateItem(i, "cost_center", e.target.value)}
+                        placeholder="Ex: 1.4.1.1"
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">Projeto (Dimensão)</label>
+                      <Input
+                        value={item.project || ""}
+                        onChange={(e) => updateItem(i, "project", e.target.value)}
+                        placeholder="Ex: ANA GAMING"
+                        className="text-sm h-8"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
