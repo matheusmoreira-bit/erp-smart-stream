@@ -1,4 +1,5 @@
-import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2 } from "lucide-react";
+import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2, ClipboardCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { FlowTimeline } from "@/components/FlowTimeline";
 import { MetricCard } from "@/components/MetricCard";
 import { InsightsPanel } from "@/components/InsightsPanel";
