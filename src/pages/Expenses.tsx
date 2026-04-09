@@ -193,6 +193,8 @@ function CreateExpenseModal({
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
+  const [currency, setCurrency] = useState("");
+  const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -318,9 +320,31 @@ function CreateExpenseModal({
 
   const total = items.reduce((sum, item) => sum + item.line_total, 0);
 
+  const handleSupplierChange = (val: SapSearchOption | null) => {
+    setSupplier(val);
+    setCurrencyWarning(null);
+    if (val) {
+      // currency comes from the extra2 field we added to mapRow
+      const supplierCurrency = (val as any).currency;
+      if (supplierCurrency) {
+        setCurrency(supplierCurrency);
+      } else {
+        setCurrency("");
+        setCurrencyWarning(`O fornecedor "${val.name}" não possui moeda configurada no cadastro do SAP. O lançamento não poderá ser realizado até que essa inconsistência seja corrigida.`);
+        toast.error("Fornecedor sem moeda cadastrada no SAP. Corrija o cadastro antes de prosseguir.", { duration: 6000 });
+      }
+    } else {
+      setCurrency("");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!supplier) {
       toast.error("Informe o fornecedor");
+      return;
+    }
+    if (!currency) {
+      toast.error("Moeda é obrigatória. Selecione um fornecedor com moeda cadastrada.");
       return;
     }
     if (!docDate) {
@@ -340,6 +364,7 @@ function CreateExpenseModal({
       await onCreate({
         supplier_name: supplier.name,
         supplier_code: supplier.code || undefined,
+        currency: currency || undefined,
         remarks: remarks || undefined,
         items: items.map(({ sapItem, ...rest }) => rest),
       });
@@ -355,6 +380,8 @@ function CreateExpenseModal({
 
   const resetForm = () => {
     setSupplier(null);
+    setCurrency("");
+    setCurrencyWarning(null);
     setDocDate("");
     setDueDate("");
     setRemarks("");
