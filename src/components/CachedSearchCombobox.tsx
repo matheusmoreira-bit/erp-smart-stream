@@ -50,7 +50,7 @@ export function CachedSearchCombobox({
   const filtered = query.length > 0
     ? options.filter((o) => {
         const q = query.toLowerCase();
-        return o.code.toLowerCase().includes(q) || o.name.toLowerCase().includes(q) || (o.extra?.toLowerCase().includes(q) ?? false);
+        return (o.code ?? "").toLowerCase().includes(q) || (o.name ?? "").toLowerCase().includes(q) || ((o.extra ?? "").toLowerCase().includes(q));
       }).slice(0, 20)
     : [];
 
