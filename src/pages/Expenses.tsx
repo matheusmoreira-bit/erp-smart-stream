@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
+import { type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
@@ -208,6 +208,27 @@ function CreateExpenseModal({
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
 
   // Cached SAP lists
+  const supplierMapRow = useCallback((row: any) => ({
+    code: row.CardCode,
+    name: row.CardName,
+    extra: row.FederalTaxID || undefined,
+    currency: row.Currency || "",
+  } as SapSearchOption & { currency: string }), []);
+  const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
+    cacheKey: "suppliers",
+    endpoint: "BusinessPartners",
+    params: { $select: "CardCode,CardName,FederalTaxID,Currency" },
+    mapRow: supplierMapRow,
+  });
+
+  const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
+  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+    cacheKey: "items",
+    endpoint: "Items",
+    params: { $select: "ItemCode,ItemName" },
+    mapRow: itemMapRow,
+  });
+
   const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const { options: costCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
     cacheKey: "cost_centers",
@@ -551,17 +572,10 @@ function CreateExpenseModal({
 
           {/* Supplier */}
           <div>
-            <SapSearchCombobox
+            <CachedSearchCombobox
               label="Fornecedor *"
-              endpoint="BusinessPartners"
-              filterTemplate="contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}')"
-              selectFields="CardCode,CardName,FederalTaxID,Currency"
-              mapRow={(row: any) => ({
-                code: row.CardCode,
-                name: row.CardName,
-                extra: row.FederalTaxID || undefined,
-                currency: row.Currency || "",
-              } as SapSearchOption & { currency: string })}
+              options={supplierOptions}
+              isLoading={suppliersLoading}
               value={supplier}
               onChange={handleSupplierChange}
               placeholder="Digite nome, código ou CNPJ do fornecedor..."
@@ -629,14 +643,9 @@ function CreateExpenseModal({
                     </Button>
                   </div>
                   {/* Item search from SAP */}
-                  <SapSearchCombobox
-                    endpoint="Items"
-                    filterTemplate="contains(ItemName,'{q}') or contains(ItemCode,'{q}')"
-                    selectFields="ItemCode,ItemName"
-                    mapRow={(row: any) => ({
-                      code: row.ItemCode,
-                      name: row.ItemName,
-                    })}
+                  <CachedSearchCombobox
+                    options={itemOptions}
+                    isLoading={itemsLoading}
                     value={item.sapItem || null}
                     onChange={(val) => {
                       setItems((prev) => {
@@ -652,7 +661,6 @@ function CreateExpenseModal({
                     }}
                     placeholder="Buscar item SAP por nome ou código..."
                     suggestedQuery={item.description && !item.sapItem ? item.description : undefined}
-                    minChars={1}
                   />
                   <div className="grid grid-cols-12 gap-2">
                     <div className="col-span-6">
