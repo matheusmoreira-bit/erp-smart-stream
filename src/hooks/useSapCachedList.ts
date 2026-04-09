@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
@@ -24,11 +24,17 @@ export function useSapCachedList({
   const { session } = useSap();
   const [options, setOptions] = useState<SapSearchOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const loadedRef = useRef(false);
+  const mapRowRef = useRef(mapRow);
+  mapRowRef.current = mapRow;
+
+  const paramsKey = JSON.stringify(params || {});
 
   const load = useCallback(async () => {
-    if (!session || !enabled) return;
+    if (!session || !enabled || loadedRef.current) return;
     const companyDB = session.companyDB;
     setIsLoading(true);
+    loadedRef.current = true;
 
     try {
       // 1. Check Supabase cache
@@ -40,7 +46,7 @@ export function useSapCachedList({
         .maybeSingle();
 
       if (cached && new Date(cached.expires_at) > new Date()) {
-        const items = (cached.data as any[]).map(mapRow);
+        const items = (cached.data as any[]).map(mapRowRef.current);
         setOptions(items);
         setIsLoading(false);
         return;
@@ -64,17 +70,26 @@ export function useSapCachedList({
           { onConflict: "cache_key,company_db" }
         );
 
-      setOptions(rows.map(mapRow));
+      setOptions(rows.map(mapRowRef.current));
     } catch (e) {
       console.error(`Failed to load cached list [${cacheKey}]:`, e);
     } finally {
       setIsLoading(false);
     }
-  }, [session, enabled, cacheKey, endpoint, JSON.stringify(params), mapRow]);
+  }, [session, enabled, cacheKey, endpoint, paramsKey]);
+
+  useEffect(() => {
+    loadedRef.current = false; // reset when deps change
+  }, [session?.companyDB, cacheKey]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  return { options, isLoading, reload: load };
+  const reload = useCallback(() => {
+    loadedRef.current = false;
+    load();
+  }, [load]);
+
+  return { options, isLoading, reload };
 }
