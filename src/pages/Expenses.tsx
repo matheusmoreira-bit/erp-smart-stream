@@ -215,6 +215,14 @@ function CreateExpenseModal({
     mapRow: costCenterMapRow,
   });
 
+  const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
+  const { options: projectOptions, isLoading: projectsLoading } = useSapCachedList({
+    cacheKey: "projects",
+    endpoint: "Projects",
+    params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
+    mapRow: projectMapRow,
+  });
+
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
