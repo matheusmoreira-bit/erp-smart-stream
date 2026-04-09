@@ -198,7 +198,7 @@ function CreateExpenseModal({
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null })[]>([
+  const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
