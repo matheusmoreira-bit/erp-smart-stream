@@ -291,7 +291,7 @@ function CreateExpenseModal({
   };
 
   const addItem = () => {
-    setItems((prev) => [...prev, { description: "", quantity: 1, unit_price: 0, line_total: 0 }]);
+    setItems((prev) => [...prev, { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
   };
 
   const removeItem = (index: number) => {
@@ -302,7 +302,7 @@ function CreateExpenseModal({
   const total = items.reduce((sum, item) => sum + item.line_total, 0);
 
   const handleSubmit = async () => {
-    if (!supplierName.trim()) {
+    if (!supplier) {
       toast.error("Informe o fornecedor");
       return;
     }
@@ -313,12 +313,10 @@ function CreateExpenseModal({
     setIsCreating(true);
     try {
       await onCreate({
-        supplier_name: supplierName,
-        supplier_code: supplierCode || undefined,
-        cost_center: costCenter || undefined,
-        project: project || undefined,
+        supplier_name: supplier.name,
+        supplier_code: supplier.code || undefined,
         remarks: remarks || undefined,
-        items,
+        items: items.map(({ sapItem, ...rest }) => rest),
       });
       toast.success("Despesa criada com sucesso!");
       onClose();
@@ -331,12 +329,9 @@ function CreateExpenseModal({
   };
 
   const resetForm = () => {
-    setSupplierName("");
-    setSupplierCode("");
-    setCostCenter("");
-    setProject("");
+    setSupplier(null);
     setRemarks("");
-    setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0 }]);
+    setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
     setFiles([]);
     setAiConfidence(null);
   };
@@ -445,24 +440,22 @@ function CreateExpenseModal({
             )}
           </div>
 
-          {/* Supplier & fields */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Fornecedor *</label>
-              <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Nome do fornecedor" />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Código / CNPJ Fornecedor</label>
-              <Input value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="Ex: F000305 ou CNPJ" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Centro de Custo</label>
-              <Input value={costCenter} onChange={(e) => setCostCenter(e.target.value)} placeholder="Ex: 1.4.1.1" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Projeto</label>
-              <Input value={project} onChange={(e) => setProject(e.target.value)} placeholder="Ex: ANA GAMING" />
-            </div>
+          {/* Supplier */}
+          <div>
+            <SapSearchCombobox
+              label="Fornecedor *"
+              endpoint="BusinessPartners"
+              filterTemplate="contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}')"
+              selectFields="CardCode,CardName,FederalTaxID"
+              mapRow={(row: any) => ({
+                code: row.CardCode,
+                name: row.CardName,
+                extra: row.FederalTaxID || undefined,
+              })}
+              value={supplier}
+              onChange={setSupplier}
+              placeholder="Digite nome, código ou CNPJ do fornecedor..."
+            />
           </div>
 
           <div>
