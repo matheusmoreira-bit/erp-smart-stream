@@ -1,0 +1,172 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Search, X } from "lucide-react";
+import { sapQuery } from "@/lib/sap-client";
+import { useSap } from "@/contexts/SapContext";
+
+export interface SapSearchOption {
+  code: string;
+  name: string;
+  extra?: string; // e.g. CNPJ, group
+}
+
+interface SapSearchComboboxProps {
+  /** SAP Service Layer endpoint, e.g. "BusinessPartners" */
+  endpoint: string;
+  /** OData $filter template — use {q} as placeholder for the search term */
+  filterTemplate: string;
+  /** OData $select fields */
+  selectFields: string;
+  /** Map raw SAP row to our option shape */
+  mapRow: (row: any) => SapSearchOption;
+  /** Currently selected value */
+  value: SapSearchOption | null;
+  onChange: (val: SapSearchOption | null) => void;
+  placeholder?: string;
+  label?: string;
+  /** Minimum characters before searching (default 2) */
+  minChars?: number;
+}
+
+export function SapSearchCombobox({
+  endpoint,
+  filterTemplate,
+  selectFields,
+  mapRow,
+  value,
+  onChange,
+  placeholder = "Buscar...",
+  label,
+  minChars = 2,
+}: SapSearchComboboxProps) {
+  const { session } = useSap();
+  const [query, setQuery] = useState("");
+  const [options, setOptions] = useState<SapSearchOption[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const search = useCallback(
+    async (term: string) => {
+      if (!session || term.length < minChars) {
+        setOptions([]);
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const filter = filterTemplate.replace(/\{q\}/g, term.replace(/'/g, "''"));
+        const { data } = await sapQuery(session, endpoint, {
+          $filter: filter,
+          $select: selectFields,
+          $top: 15,
+        });
+        const rows = (data as any)?.value || [];
+        setOptions(rows.map(mapRow));
+      } catch (e) {
+        console.error("SAP search error:", e);
+        setOptions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [session, endpoint, filterTemplate, selectFields, mapRow, minChars]
+  );
+
+  const handleInputChange = (val: string) => {
+    setQuery(val);
+    if (value) onChange(null); // clear selection when user types
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (val.length >= minChars) {
+      debounceRef.current = setTimeout(() => search(val), 350);
+      setIsOpen(true);
+    } else {
+      setOptions([]);
+      setIsOpen(false);
+    }
+  };
+
+  const handleSelect = (opt: SapSearchOption) => {
+    onChange(opt);
+    setQuery("");
+    setIsOpen(false);
+  };
+
+  const handleClear = () => {
+    onChange(null);
+    setQuery("");
+    setOptions([]);
+  };
+
+  const displayValue = value
+    ? `${value.name} — ${value.code}${value.extra ? ` (${value.extra})` : ""}`
+    : "";
+
+  return (
+    <div ref={containerRef} className="relative">
+      {label && <label className="text-xs text-muted-foreground mb-1 block">{label}</label>}
+      <div className="relative">
+        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={value ? displayValue : query}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onFocus={() => {
+            if (value) {
+              // Allow re-searching
+            } else if (query.length >= minChars) {
+              setIsOpen(true);
+            }
+          }}
+          placeholder={placeholder}
+          className="pl-8 pr-8 text-sm h-9"
+          readOnly={!!value}
+        />
+        {(value || query) && (
+          <button
+            onClick={handleClear}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {isLoading && (
+          <Loader2 className="w-3.5 h-3.5 absolute right-8 top-1/2 -translate-y-1/2 text-primary animate-spin" />
+        )}
+      </div>
+
+      {isOpen && options.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+          {options.map((opt) => (
+            <button
+              key={opt.code}
+              onClick={() => handleSelect(opt)}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex flex-col"
+            >
+              <span className="font-medium text-foreground truncate">{opt.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isOpen && !isLoading && query.length >= minChars && options.length === 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md p-3 text-center text-sm text-muted-foreground">
+          Nenhum resultado encontrado
+        </div>
+      )}
+    </div>
+  );
+}

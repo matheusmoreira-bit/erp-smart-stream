@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
 import {
   Dialog,
   DialogContent,
@@ -191,13 +192,10 @@ function CreateExpenseModal({
   sapSession: any;
 }) {
   const [isCreating, setIsCreating] = useState(false);
-  const [supplierName, setSupplierName] = useState("");
-  const [supplierCode, setSupplierCode] = useState("");
-  const [costCenter, setCostCenter] = useState("");
-  const [project, setProject] = useState("");
+  const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
-  const [items, setItems] = useState<Omit<ExpenseItem, "id">[]>([
-    { description: "", quantity: 1, unit_price: 0, line_total: 0 },
+  const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null })[]>([
+    { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
 
   // File upload + AI
@@ -248,9 +246,9 @@ function CreateExpenseModal({
       // Handle single or array result
       const doc = Array.isArray(result) ? result[0] : result;
 
-      if (doc.supplier_name) setSupplierName(doc.supplier_name);
-      if (doc.supplier_cnpj) setSupplierCode(doc.supplier_cnpj);
-      if (doc.cost_center_hint) setCostCenter(doc.cost_center_hint);
+      if (doc.supplier_name) {
+        setSupplier({ code: doc.supplier_cnpj || "", name: doc.supplier_name, extra: doc.supplier_cnpj });
+      }
       if (doc.remarks) setRemarks(doc.remarks);
       if (doc.items && doc.items.length > 0) {
         setItems(
@@ -259,6 +257,8 @@ function CreateExpenseModal({
             quantity: item.quantity || 1,
             unit_price: item.unit_price || 0,
             line_total: item.line_total || (item.quantity || 1) * (item.unit_price || 0),
+            cost_center: item.cost_center || doc.cost_center_hint || "",
+            project: item.project || "",
           }))
         );
       }
@@ -291,7 +291,7 @@ function CreateExpenseModal({
   };
 
   const addItem = () => {
-    setItems((prev) => [...prev, { description: "", quantity: 1, unit_price: 0, line_total: 0 }]);
+    setItems((prev) => [...prev, { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
   };
 
   const removeItem = (index: number) => {
@@ -302,7 +302,7 @@ function CreateExpenseModal({
   const total = items.reduce((sum, item) => sum + item.line_total, 0);
 
   const handleSubmit = async () => {
-    if (!supplierName.trim()) {
+    if (!supplier) {
       toast.error("Informe o fornecedor");
       return;
     }
@@ -313,12 +313,10 @@ function CreateExpenseModal({
     setIsCreating(true);
     try {
       await onCreate({
-        supplier_name: supplierName,
-        supplier_code: supplierCode || undefined,
-        cost_center: costCenter || undefined,
-        project: project || undefined,
+        supplier_name: supplier.name,
+        supplier_code: supplier.code || undefined,
         remarks: remarks || undefined,
-        items,
+        items: items.map(({ sapItem, ...rest }) => rest),
       });
       toast.success("Despesa criada com sucesso!");
       onClose();
@@ -331,12 +329,9 @@ function CreateExpenseModal({
   };
 
   const resetForm = () => {
-    setSupplierName("");
-    setSupplierCode("");
-    setCostCenter("");
-    setProject("");
+    setSupplier(null);
     setRemarks("");
-    setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0 }]);
+    setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
     setFiles([]);
     setAiConfidence(null);
   };
@@ -445,24 +440,22 @@ function CreateExpenseModal({
             )}
           </div>
 
-          {/* Supplier & fields */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Fornecedor *</label>
-              <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Nome do fornecedor" />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Código / CNPJ Fornecedor</label>
-              <Input value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="Ex: F000305 ou CNPJ" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Centro de Custo</label>
-              <Input value={costCenter} onChange={(e) => setCostCenter(e.target.value)} placeholder="Ex: 1.4.1.1" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Projeto</label>
-              <Input value={project} onChange={(e) => setProject(e.target.value)} placeholder="Ex: ANA GAMING" />
-            </div>
+          {/* Supplier */}
+          <div>
+            <SapSearchCombobox
+              label="Fornecedor *"
+              endpoint="BusinessPartners"
+              filterTemplate="contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}')"
+              selectFields="CardCode,CardName,FederalTaxID"
+              mapRow={(row: any) => ({
+                code: row.CardCode,
+                name: row.CardName,
+                extra: row.FederalTaxID || undefined,
+              })}
+              value={supplier}
+              onChange={setSupplier}
+              placeholder="Digite nome, código ou CNPJ do fornecedor..."
+            />
           </div>
 
           <div>
@@ -478,50 +471,97 @@ function CreateExpenseModal({
                 <Plus className="w-3 h-3" /> Adicionar Item
               </Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {items.map((item, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-5">
-                    {i === 0 && <label className="text-[10px] text-muted-foreground">Descrição *</label>}
-                    <Input
-                      value={item.description}
-                      onChange={(e) => updateItem(i, "description", e.target.value)}
-                      placeholder="Descrição"
-                      className="text-sm h-9"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    {i === 0 && <label className="text-[10px] text-muted-foreground">Qtd</label>}
-                    <Input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)}
-                      className="text-sm h-9"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    {i === 0 && <label className="text-[10px] text-muted-foreground">Preço Unit.</label>}
-                    <Input
-                      type="number"
-                      value={item.unit_price}
-                      onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
-                      className="text-sm h-9"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    {i === 0 && <label className="text-[10px] text-muted-foreground">Total</label>}
-                    <Input value={formatCurrency(item.line_total)} readOnly className="text-sm h-9 bg-muted/30 font-mono" />
-                  </div>
-                  <div className="col-span-1 flex justify-center">
+                <div key={i} className="border border-border/50 rounded-lg p-3 space-y-2 bg-muted/10">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Item {i + 1}</span>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => removeItem(i)}
                       disabled={items.length <= 1}
-                      className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </Button>
+                  </div>
+                  {/* Item search from SAP */}
+                  <SapSearchCombobox
+                    endpoint="Items"
+                    filterTemplate="contains(ItemName,'{q}') or contains(ItemCode,'{q}')"
+                    selectFields="ItemCode,ItemName"
+                    mapRow={(row: any) => ({
+                      code: row.ItemCode,
+                      name: row.ItemName,
+                    })}
+                    value={item.sapItem || null}
+                    onChange={(val) => {
+                      setItems((prev) => {
+                        const updated = [...prev];
+                        updated[i] = {
+                          ...updated[i],
+                          sapItem: val,
+                          item_code: val?.code || "",
+                          description: val?.name || updated[i].description,
+                        };
+                        return updated;
+                      });
+                    }}
+                    placeholder="Buscar item SAP por nome ou código..."
+                  />
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-6">
+                      <label className="text-[10px] text-muted-foreground">Descrição *</label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateItem(i, "description", e.target.value)}
+                        placeholder="Descrição do item"
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-muted-foreground">Qtd</label>
+                      <Input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)}
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-muted-foreground">Preço Unit.</label>
+                      <Input
+                        type="number"
+                        value={item.unit_price}
+                        onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-muted-foreground">Total</label>
+                      <Input value={formatCurrency(item.line_total)} readOnly className="text-sm h-8 bg-muted/30 font-mono" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">Centro de Custo (Dimensão)</label>
+                      <Input
+                        value={item.cost_center || ""}
+                        onChange={(e) => updateItem(i, "cost_center", e.target.value)}
+                        placeholder="Ex: 1.4.1.1"
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">Projeto (Dimensão)</label>
+                      <Input
+                        value={item.project || ""}
+                        onChange={(e) => updateItem(i, "project", e.target.value)}
+                        placeholder="Ex: ANA GAMING"
+                        className="text-sm h-8"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
