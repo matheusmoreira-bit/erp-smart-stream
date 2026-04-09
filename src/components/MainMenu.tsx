@@ -7,6 +7,7 @@ import {
   Activity,
   ArrowRight,
   Shield,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
