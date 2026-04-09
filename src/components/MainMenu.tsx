@@ -31,13 +31,13 @@ const modules: ModuleCard[] = [
     available: true,
   },
   {
-    title: "Fluxo de Compras",
-    description: "Acompanhamento detalhado do pipeline de compras: requisição, cotação, pedido, recebimento, NF e pagamento.",
+    title: "Despesas",
+    description: "Crie e acompanhe solicitações de despesas com fluxo de aprovação e integração SAP.",
     icon: ShoppingCart,
-    path: "/purchase-flow",
+    path: "/expenses",
     color: "text-success",
     bgGlow: "from-success/20 to-success/5",
-    available: false,
+    available: true,
   },
   {
     title: "Aprovações",
