@@ -409,6 +409,7 @@ function CreateExpenseModal({
     setDueDate("");
     setRemarks("");
     setAiWarning(null);
+    setSuggestedSupplierName(undefined);
     setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
     setFiles([]);
     setAiConfidence(null);
