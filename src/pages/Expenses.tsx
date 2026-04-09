@@ -496,8 +496,19 @@ function CreateExpenseModal({
             />
           </div>
 
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Data do Documento *</label>
+              <Input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="text-sm h-9" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Data de Vencimento *</label>
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="text-sm h-9" />
+            </div>
+          </div>
+
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Observações</label>
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
           </div>
 
