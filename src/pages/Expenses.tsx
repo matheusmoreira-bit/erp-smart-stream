@@ -1,0 +1,584 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Plus,
+  RefreshCw,
+  ArrowLeft,
+  Search,
+  Activity,
+  LogOut,
+  Loader2,
+  Building2,
+  User,
+  Calendar,
+  DollarSign,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useNavigate } from "react-router-dom";
+import { useSap } from "@/contexts/SapContext";
+import { toast } from "sonner";
+import {
+  useExpenses,
+  STATUS_LABELS,
+  STATUS_COLORS,
+  type Expense,
+  type ExpenseItem,
+  type CreateExpenseInput,
+} from "@/hooks/useExpenses";
+
+const COMPANY_LABELS: Record<string, string> = {
+  SBO_ANAGAMING: "ANA Gaming",
+  SBO_CACTUS: "Cactus",
+  SBO_INSTITUTO_ANA: "Instituto Cactus",
+};
+
+function formatCurrency(value: number, currency: string = "BRL") {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(value);
+}
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return "—";
+  try {
+    return new Intl.DateTimeFormat("pt-BR").format(new Date(dateStr));
+  } catch {
+    return dateStr;
+  }
+}
+
+/* ─── Detail Modal ─── */
+function ExpenseDetailModal({
+  expense,
+  open,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}: {
+  expense: Expense | null;
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (id: string) => void;
+  isSubmitting: boolean;
+}) {
+  if (!expense) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <span className="text-foreground font-semibold">Despesa</span>
+            <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
+            <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(expense.total_amount, expense.currency)}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Fornecedor</p>
+              <p className="text-foreground font-medium">{expense.supplier_name}</p>
+              {expense.supplier_code && <p className="text-xs text-muted-foreground font-mono">{expense.supplier_code}</p>}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Solicitante</p>
+              <p className="text-foreground font-medium">{expense.requester_name}</p>
+            </div>
+            {expense.cost_center && (
+              <div>
+                <p className="text-xs text-muted-foreground">Centro de Custo</p>
+                <p className="text-foreground">{expense.cost_center}</p>
+              </div>
+            )}
+            {expense.project && (
+              <div>
+                <p className="text-xs text-muted-foreground">Projeto</p>
+                <p className="text-foreground">{expense.project}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground">Data de Criação</p>
+              <p className="text-foreground">{formatDate(expense.created_at)}</p>
+            </div>
+            {expense.current_approver && (
+              <div>
+                <p className="text-xs text-muted-foreground">Aprovador Atual</p>
+                <p className="text-foreground font-medium">{expense.current_approver}</p>
+              </div>
+            )}
+          </div>
+
+          {expense.remarks && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Observações</p>
+              <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{expense.remarks}</p>
+            </div>
+          )}
+
+          {expense.items && expense.items.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Itens</p>
+              <div className="border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border">
+                      <th className="text-left py-2 px-3 text-muted-foreground">Descrição</th>
+                      <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
+                      <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
+                      <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expense.items.map((item, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="py-2 px-3 text-foreground">{item.description}</td>
+                        <td className="py-2 px-3 text-right font-mono">{item.quantity}</td>
+                        <td className="py-2 px-3 text-right font-mono">{formatCurrency(item.unit_price)}</td>
+                        <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(item.line_total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {expense.status === "rascunho" && (
+            <div className="border-t border-border pt-4 flex justify-end gap-3">
+              <Button variant="outline" onClick={onClose}>Fechar</Button>
+              <Button
+                onClick={() => onSubmit(expense.id)}
+                disabled={isSubmitting}
+                className="gap-1.5"
+              >
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Enviar para Aprovação
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Create Expense Modal ─── */
+function CreateExpenseModal({
+  open,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (input: CreateExpenseInput) => Promise<void>;
+}) {
+  const [isCreating, setIsCreating] = useState(false);
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierCode, setSupplierCode] = useState("");
+  const [costCenter, setCostCenter] = useState("");
+  const [project, setProject] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [items, setItems] = useState<Omit<ExpenseItem, "id">[]>([
+    { description: "", quantity: 1, unit_price: 0, line_total: 0 },
+  ]);
+
+  const updateItem = (index: number, field: string, value: string | number) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      (updated[index] as any)[field] = value;
+      if (field === "quantity" || field === "unit_price") {
+        updated[index].line_total = Number(updated[index].quantity) * Number(updated[index].unit_price);
+      }
+      return updated;
+    });
+  };
+
+  const addItem = () => {
+    setItems((prev) => [...prev, { description: "", quantity: 1, unit_price: 0, line_total: 0 }]);
+  };
+
+  const removeItem = (index: number) => {
+    if (items.length <= 1) return;
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const total = items.reduce((sum, item) => sum + item.line_total, 0);
+
+  const handleSubmit = async () => {
+    if (!supplierName.trim()) {
+      toast.error("Informe o fornecedor");
+      return;
+    }
+    if (items.some((i) => !i.description.trim())) {
+      toast.error("Todos os itens devem ter descrição");
+      return;
+    }
+    setIsCreating(true);
+    try {
+      await onCreate({
+        supplier_name: supplierName,
+        supplier_code: supplierCode || undefined,
+        cost_center: costCenter || undefined,
+        project: project || undefined,
+        remarks: remarks || undefined,
+        items,
+      });
+      toast.success("Despesa criada com sucesso!");
+      onClose();
+      // Reset
+      setSupplierName("");
+      setSupplierCode("");
+      setCostCenter("");
+      setProject("");
+      setRemarks("");
+      setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0 }]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar despesa");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Nova Despesa</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-xs text-muted-foreground mb-1 block">Fornecedor *</label>
+              <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Nome do fornecedor" />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-xs text-muted-foreground mb-1 block">Código Fornecedor</label>
+              <Input value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="Ex: F000305" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Centro de Custo</label>
+              <Input value={costCenter} onChange={(e) => setCostCenter(e.target.value)} placeholder="Ex: 1.4.1.1" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Projeto</label>
+              <Input value={project} onChange={(e) => setProject(e.target.value)} placeholder="Ex: ANA GAMING" />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Observações</label>
+            <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
+          </div>
+
+          {/* Items */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Itens</p>
+              <Button variant="ghost" size="sm" onClick={addItem} className="gap-1 text-xs h-7">
+                <Plus className="w-3 h-3" /> Adicionar Item
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {items.map((item, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-5">
+                    {i === 0 && <label className="text-[10px] text-muted-foreground">Descrição *</label>}
+                    <Input
+                      value={item.description}
+                      onChange={(e) => updateItem(i, "description", e.target.value)}
+                      placeholder="Descrição"
+                      className="text-sm h-9"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    {i === 0 && <label className="text-[10px] text-muted-foreground">Qtd</label>}
+                    <Input
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)}
+                      className="text-sm h-9"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    {i === 0 && <label className="text-[10px] text-muted-foreground">Preço Unit.</label>}
+                    <Input
+                      type="number"
+                      value={item.unit_price}
+                      onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
+                      className="text-sm h-9"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    {i === 0 && <label className="text-[10px] text-muted-foreground">Total</label>}
+                    <Input value={formatCurrency(item.line_total)} readOnly className="text-sm h-9 bg-muted/30 font-mono" />
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(i)}
+                      disabled={items.length <= 1}
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end mt-3">
+              <p className="text-sm font-medium text-foreground">
+                Total: <span className="text-lg font-bold font-mono">{formatCurrency(total)}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-4 flex justify-end gap-3">
+            <Button variant="outline" onClick={onClose} disabled={isCreating}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={isCreating} className="gap-1.5">
+              {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Criar Despesa
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Expense Card ─── */
+function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all"
+      onClick={onOpen}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
+        </div>
+        <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
+      </div>
+
+      <div className="space-y-2 text-sm">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Building2 className="w-3.5 h-3.5 text-primary/70" />
+          <span className="truncate">{expense.supplier_name}</span>
+        </div>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <User className="w-3.5 h-3.5 text-primary/70" />
+          <span>Solicitante: <span className="text-foreground font-medium">{expense.requester_name}</span></span>
+        </div>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Calendar className="w-3.5 h-3.5 text-primary/70" />
+          <span>{formatDate(expense.created_at)}</span>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Main Page ─── */
+export default function ExpensesPage() {
+  const { session, logout } = useSap();
+  const navigate = useNavigate();
+  const { expenses, isLoading, error, refresh, createExpense, submitForApproval } = useExpenses();
+  const [search, setSearch] = useState("");
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  if (!session) {
+    navigate("/");
+    return null;
+  }
+
+  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+
+  const filtered = expenses.filter((e) => {
+    if (statusFilter !== "all" && e.status !== statusFilter) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      e.supplier_name.toLowerCase().includes(q) ||
+      e.requester_name.toLowerCase().includes(q) ||
+      (e.remarks || "").toLowerCase().includes(q)
+    );
+  });
+
+  const totalValue = filtered.reduce((sum, e) => sum + e.total_amount, 0);
+
+  const handleSubmitForApproval = async (id: string) => {
+    setIsSubmitting(true);
+    try {
+      await submitForApproval(id);
+      toast.success("Despesa enviada para aprovação!");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao enviar para aprovação");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const statusOptions = [
+    { value: "all", label: "Todos" },
+    { value: "rascunho", label: "Rascunho" },
+    { value: "pendente_aprovacao", label: "Pendente" },
+    { value: "aprovado", label: "Aprovado" },
+    { value: "pc_lancado", label: "PC Lançado" },
+    { value: "finalizado", label: "Finalizado" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10 glow-primary">
+              <Activity className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
+              <p className="text-xs text-muted-foreground">Gestão de Despesas</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm font-medium text-foreground">{companyLabel}</p>
+              <p className="text-xs text-muted-foreground">{session?.userName}</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
+              Conectado
+            </div>
+            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading}>
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={logout}>
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+        {/* Back + actions */}
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
+          </Button>
+          <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+            <Plus className="w-4 h-4" /> Nova Despesa
+          </Button>
+        </div>
+
+        {/* Summary */}
+        <div className="flex flex-wrap gap-4">
+          <div className="glass-card px-4 py-3 flex items-center gap-3">
+            <DollarSign className="w-4 h-4 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-lg font-bold font-mono text-foreground">{formatCurrency(totalValue)}</p>
+            </div>
+          </div>
+          <div className="glass-card px-4 py-3 flex items-center gap-3">
+            <Calendar className="w-4 h-4 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Registros</p>
+              <p className="text-lg font-bold font-mono text-foreground">{filtered.length}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por fornecedor, solicitante..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 bg-muted/30 border-border"
+            />
+          </div>
+          <div className="flex gap-1">
+            {statusOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setStatusFilter(opt.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  statusFilter === opt.value
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <p className="text-destructive mb-4">{error}</p>
+            <Button variant="outline" onClick={refresh}>Tentar novamente</Button>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20">
+            <DollarSign className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+            <p className="text-muted-foreground">Nenhuma despesa encontrada</p>
+            <Button onClick={() => setShowCreate(true)} className="mt-4 gap-1.5">
+              <Plus className="w-4 h-4" /> Criar primeira despesa
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((expense) => (
+              <ExpenseCard
+                key={expense.id}
+                expense={expense}
+                onOpen={() => setSelectedExpense(expense)}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+
+      <ExpenseDetailModal
+        expense={selectedExpense}
+        open={!!selectedExpense}
+        onClose={() => setSelectedExpense(null)}
+        onSubmit={handleSubmitForApproval}
+        isSubmitting={isSubmitting}
+      />
+
+      <CreateExpenseModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreate={createExpense}
+      />
+    </div>
+  );
+}
