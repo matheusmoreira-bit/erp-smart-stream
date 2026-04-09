@@ -91,7 +91,10 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
     }
   ],
   "remarks": "Observações relevantes sobre o documento",
-  "cost_center_hint": "Sugestão de centro de custo baseado no tipo de despesa",
+  "cost_center_hint": "Sugestão de centro de custo baseado no tipo de despesa, somente se tiver alta certeza",
+  "cost_center_confidence": 0.0,
+  "project_hint": "Sugestão de projeto, somente se tiver alta certeza",
+  "project_confidence": 0.0,
   "confidence": 0.95
 }
 
