@@ -53,7 +53,8 @@ const COMPANY_LABELS: Record<string, string> = {
 };
 
 function formatCurrency(value: number, currency: string = "BRL") {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(value);
+  const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: validCode }).format(value);
 }
 
 function formatDate(dateStr: string) {
