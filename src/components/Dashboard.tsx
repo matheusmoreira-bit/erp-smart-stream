@@ -1,11 +1,11 @@
-import { motion } from "framer-motion";
-import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut } from "lucide-react";
-import { FlowTimeline, type FlowStage } from "@/components/FlowTimeline";
+import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2 } from "lucide-react";
+import { FlowTimeline } from "@/components/FlowTimeline";
 import { MetricCard } from "@/components/MetricCard";
-import { InsightsPanel, type Insight } from "@/components/InsightsPanel";
+import { InsightsPanel } from "@/components/InsightsPanel";
 import { DataUpload } from "@/components/DataUpload";
-import { ValidationTable, type ValidationItem } from "@/components/ValidationTable";
+import { ValidationTable } from "@/components/ValidationTable";
 import { useSap } from "@/contexts/SapContext";
+import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { Button } from "@/components/ui/button";
 
 const COMPANY_LABELS: Record<string, string> = {
@@ -14,34 +14,9 @@ const COMPANY_LABELS: Record<string, string> = {
   SBO_INSTITUTO_ANA: "Instituto Cactus",
 };
 
-const mockStages: FlowStage[] = [
-  { id: "req", name: "Requisição", avgDays: 1.2, targetDays: 2, status: "ok", count: 145 },
-  { id: "quot", name: "Cotação", avgDays: 4.8, targetDays: 3, status: "warning", count: 132 },
-  { id: "approval", name: "Aprovação", avgDays: 7.5, targetDays: 3, status: "critical", count: 128 },
-  { id: "po", name: "Pedido", avgDays: 1.5, targetDays: 2, status: "ok", count: 118 },
-  { id: "receipt", name: "Recebimento", avgDays: 3.2, targetDays: 5, status: "ok", count: 110 },
-  { id: "invoice", name: "NF Entrada", avgDays: 2.8, targetDays: 2, status: "warning", count: 105 },
-  { id: "payment", name: "Pagamento", avgDays: 4.1, targetDays: 5, status: "ok", count: 98 },
-];
-
-const mockInsights: Insight[] = [
-  { id: "1", type: "bottleneck", title: "Aprovação é o maior gargalo", description: "A etapa de aprovação leva em média 7.5 dias, 150% acima da meta de 3 dias. Considere implementar aprovação automática para valores abaixo de R$ 5.000.", impact: "alto" },
-  { id: "2", type: "improvement", title: "Cotação acima da meta", description: "O processo de cotação está levando 4.8 dias em média (meta: 3 dias). Sugestão: criar catálogo de fornecedores pré-aprovados.", impact: "médio" },
-  { id: "3", type: "alert", title: "NF Entrada com atrasos pontuais", description: "23% das notas fiscais de entrada ultrapassam 5 dias. Verificar bloqueios ou divergências de quantidade/preço.", impact: "médio" },
-  { id: "4", type: "positive", title: "Requisição e Pedido dentro da meta", description: "As etapas de requisição (1.2d) e criação de pedido (1.5d) estão operando com eficiência.", impact: "baixo" },
-];
-
-const mockValidations: ValidationItem[] = [
-  { id: "1", document: "PC-2024-001", supplier: "ABC Materiais", stage: "Aprovação", status: "error", message: "Pedido sem 3 cotações obrigatórias para valor > R$10.000", date: "2024-03-15" },
-  { id: "2", document: "PC-2024-002", supplier: "Tech Solutions", stage: "NF Entrada", status: "warning", message: "Divergência de 2.3% no preço unitário vs pedido", date: "2024-03-14" },
-  { id: "3", document: "PC-2024-003", supplier: "Log Express", stage: "Recebimento", status: "valid", message: "Lançamento validado com sucesso", date: "2024-03-14" },
-  { id: "4", document: "PC-2024-004", supplier: "Ferro & Aço", stage: "Pagamento", status: "warning", message: "Vencimento em 2 dias, pagamento ainda não agendado", date: "2024-03-13" },
-  { id: "5", document: "PC-2024-005", supplier: "EletroComp", stage: "Cotação", status: "error", message: "Fornecedor sem cadastro atualizado no SAP B1", date: "2024-03-12" },
-  { id: "6", document: "PC-2024-006", supplier: "Plásticos BR", stage: "Pedido", status: "valid", message: "Lançamento validado com sucesso", date: "2024-03-12" },
-];
-
 export function Dashboard() {
   const { session, logout } = useSap();
+  const { stages, metrics, insights, validations, isLoading, error, refresh } = useSapDashboard();
   const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
 
   return (
@@ -66,6 +41,9 @@ export function Dashboard() {
               <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
               Conectado
             </div>
+            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground">
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
             <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
               <LogOut className="w-4 h-4" />
             </Button>
@@ -74,25 +52,40 @@ export function Dashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard title="Tempo Médio Total" value="25.1d" subtitle="Requisição → Pagamento" icon={Clock} trend={{ value: "3.2d", positive: true }} delay={0} />
-          <MetricCard title="Pedidos em Aberto" value="47" subtitle="Em diferentes etapas" icon={Package} delay={0.1} />
-          <MetricCard title="Validações com Erro" value="12" subtitle="Requerem atenção" icon={AlertTriangle} trend={{ value: "4", positive: false }} delay={0.2} />
-          <MetricCard title="Taxa de Conformidade" value="87%" subtitle="Lançamentos válidos" icon={FileCheck} trend={{ value: "2%", positive: true }} delay={0.3} />
-        </div>
-
-        <FlowTimeline stages={mockStages} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <InsightsPanel insights={mockInsights} />
+        {error && (
+          <div className="glass-card p-4 border-destructive/30 bg-destructive/10 text-sm text-destructive">
+            {error}
           </div>
-          <div>
-            <DataUpload />
-          </div>
-        </div>
+        )}
 
-        <ValidationTable items={mockValidations} />
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className="text-sm text-muted-foreground">Carregando dados do SAP B1...</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MetricCard title="Tempo Médio Total" value={`${metrics.avgTotalDays}d`} subtitle="Requisição → Pagamento" icon={Clock} delay={0} />
+              <MetricCard title="Pedidos em Aberto" value={String(metrics.openOrders)} subtitle="Aguardando fechamento" icon={Package} delay={0.1} />
+              <MetricCard title="Validações com Erro" value={String(metrics.validationErrors)} subtitle="Requerem atenção" icon={AlertTriangle} delay={0.2} />
+              <MetricCard title="Taxa de Conformidade" value={`${metrics.complianceRate}%`} subtitle="Lançamentos válidos" icon={FileCheck} delay={0.3} />
+            </div>
+
+            {stages.length > 0 && <FlowTimeline stages={stages} />}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                {insights.length > 0 && <InsightsPanel insights={insights} />}
+              </div>
+              <div>
+                <DataUpload />
+              </div>
+            </div>
+
+            {validations.length > 0 && <ValidationTable items={validations} />}
+          </>
+        )}
       </main>
     </div>
   );
