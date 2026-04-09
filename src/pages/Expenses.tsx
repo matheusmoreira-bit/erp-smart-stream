@@ -766,6 +766,7 @@ export default function ExpensesPage() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreate={createExpense}
+        sapSession={session}
       />
     </div>
   );
