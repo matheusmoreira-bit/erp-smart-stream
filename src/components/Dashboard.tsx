@@ -1,4 +1,5 @@
-import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2 } from "lucide-react";
+import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2, ClipboardCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { FlowTimeline } from "@/components/FlowTimeline";
 import { MetricCard } from "@/components/MetricCard";
 import { InsightsPanel } from "@/components/InsightsPanel";
@@ -16,6 +17,7 @@ const COMPANY_LABELS: Record<string, string> = {
 
 export function Dashboard() {
   const { session, logout } = useSap();
+  const navigate = useNavigate();
   const { stages, metrics, insights, validations, isLoading, error, refresh } = useSapDashboard();
   const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
 
@@ -52,6 +54,14 @@ export function Dashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        {/* Navigation */}
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => navigate("/approvals")} className="border-primary/30 text-primary hover:bg-primary/10">
+            <ClipboardCheck className="w-4 h-4 mr-2" />
+            Aprovações Pendentes
+          </Button>
+        </div>
+
         {error && (
           <div className="glass-card p-4 border-destructive/30 bg-destructive/10 text-sm text-destructive">
             {error}
