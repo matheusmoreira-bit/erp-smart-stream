@@ -108,6 +108,13 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
+
+  // Redirect to login if no session
+  if (!session) {
+    navigate("/");
+    return null;
+  }
+
   const { approvals, isLoading, error, refresh } = useApprovals();
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
