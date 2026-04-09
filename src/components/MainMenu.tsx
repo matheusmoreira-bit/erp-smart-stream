@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   Activity,
   ArrowRight,
+  Shield,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -46,6 +47,15 @@ const modules: ModuleCard[] = [
     path: "/approvals",
     color: "text-warning",
     bgGlow: "from-warning/20 to-warning/5",
+    available: true,
+  },
+  {
+    title: "Regras de Aprovação",
+    description: "Configure regras de aprovação em N níveis com critérios de valor, centro de custo e tipo de documento.",
+    icon: Shield,
+    path: "/approval-rules",
+    color: "text-destructive",
+    bgGlow: "from-destructive/20 to-destructive/5",
     available: true,
   },
 ];

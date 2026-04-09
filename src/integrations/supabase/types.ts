@@ -14,6 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      approval_rule_levels: {
+        Row: {
+          approver_email: string | null
+          approver_name: string
+          created_at: string
+          id: string
+          level_order: number
+          rule_id: string
+        }
+        Insert: {
+          approver_email?: string | null
+          approver_name: string
+          created_at?: string
+          id?: string
+          level_order: number
+          rule_id: string
+        }
+        Update: {
+          approver_email?: string | null
+          approver_name?: string
+          created_at?: string
+          id?: string
+          level_order?: number
+          rule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_rule_levels_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "approval_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      approval_rules: {
+        Row: {
+          cost_center: string | null
+          created_at: string
+          created_by: string
+          doc_type: string | null
+          id: string
+          is_active: boolean
+          max_value: number | null
+          min_value: number | null
+          name: string
+          priority: number
+          project: string | null
+          requester_pattern: string | null
+          updated_at: string
+        }
+        Insert: {
+          cost_center?: string | null
+          created_at?: string
+          created_by: string
+          doc_type?: string | null
+          id?: string
+          is_active?: boolean
+          max_value?: number | null
+          min_value?: number | null
+          name: string
+          priority?: number
+          project?: string | null
+          requester_pattern?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cost_center?: string | null
+          created_at?: string
+          created_by?: string
+          doc_type?: string | null
+          id?: string
+          is_active?: boolean
+          max_value?: number | null
+          min_value?: number | null
+          name?: string
+          priority?: number
+          project?: string | null
+          requester_pattern?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expense_attachments: {
         Row: {
           created_at: string

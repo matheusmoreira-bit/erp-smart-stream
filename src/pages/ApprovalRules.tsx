@@ -1,0 +1,479 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Plus,
+  RefreshCw,
+  ArrowLeft,
+  Activity,
+  LogOut,
+  Loader2,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+  ToggleLeft,
+  ToggleRight,
+  Settings2,
+  Users,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useNavigate } from "react-router-dom";
+import { useSap } from "@/contexts/SapContext";
+import { toast } from "sonner";
+import {
+  useApprovalRules,
+  type ApprovalRule,
+  type ApprovalRuleLevel,
+  type CreateRuleInput,
+} from "@/hooks/useApprovalRules";
+
+const COMPANY_LABELS: Record<string, string> = {
+  SBO_ANAGAMING: "ANA Gaming",
+  SBO_CACTUS: "Cactus",
+  SBO_INSTITUTO_ANA: "Instituto Cactus",
+};
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+/* ─── Create Rule Modal ─── */
+function CreateRuleModal({
+  open,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (input: CreateRuleInput) => Promise<void>;
+}) {
+  const [isCreating, setIsCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [priority, setPriority] = useState(0);
+  const [minValue, setMinValue] = useState("");
+  const [maxValue, setMaxValue] = useState("");
+  const [costCenter, setCostCenter] = useState("");
+  const [project, setProject] = useState("");
+  const [requesterPattern, setRequesterPattern] = useState("");
+  const [docType, setDocType] = useState("");
+  const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([
+    { level_order: 1, approver_name: "", approver_email: "" },
+  ]);
+
+  const addLevel = () => {
+    setLevels((prev) => [
+      ...prev,
+      { level_order: prev.length + 1, approver_name: "", approver_email: "" },
+    ]);
+  };
+
+  const removeLevel = (index: number) => {
+    if (levels.length <= 1) return;
+    setLevels((prev) =>
+      prev.filter((_, i) => i !== index).map((lvl, i) => ({ ...lvl, level_order: i + 1 }))
+    );
+  };
+
+  const updateLevel = (index: number, field: string, value: string) => {
+    setLevels((prev) => {
+      const updated = [...prev];
+      (updated[index] as any)[field] = value;
+      return updated;
+    });
+  };
+
+  const reset = () => {
+    setName("");
+    setPriority(0);
+    setMinValue("");
+    setMaxValue("");
+    setCostCenter("");
+    setProject("");
+    setRequesterPattern("");
+    setDocType("");
+    setLevels([{ level_order: 1, approver_name: "", approver_email: "" }]);
+  };
+
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      toast.error("Informe o nome da regra");
+      return;
+    }
+    if (levels.some((l) => !l.approver_name.trim())) {
+      toast.error("Todos os níveis devem ter um aprovador");
+      return;
+    }
+    setIsCreating(true);
+    try {
+      await onCreate({
+        name,
+        priority,
+        min_value: minValue ? parseFloat(minValue) : null,
+        max_value: maxValue ? parseFloat(maxValue) : null,
+        cost_center: costCenter || null,
+        project: project || null,
+        requester_pattern: requesterPattern || null,
+        doc_type: docType || null,
+        levels,
+      });
+      toast.success("Regra criada com sucesso!");
+      reset();
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar regra");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            Nova Regra de Aprovação
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5 mt-2">
+          {/* Basic info */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground mb-1 block">Nome da Regra *</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Aprovação acima de R$ 10.000" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Prioridade</label>
+              <Input type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} placeholder="0" />
+              <p className="text-[10px] text-muted-foreground mt-1">Maior = mais prioritário</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Tipo de Documento</label>
+              <Input value={docType} onChange={(e) => setDocType(e.target.value)} placeholder="Ex: Pedido de Compra" />
+            </div>
+          </div>
+
+          {/* Criteria */}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Critérios de Correspondência</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Valor Mínimo (R$)</label>
+                <Input type="number" value={minValue} onChange={(e) => setMinValue(e.target.value)} placeholder="0,00" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Valor Máximo (R$)</label>
+                <Input type="number" value={maxValue} onChange={(e) => setMaxValue(e.target.value)} placeholder="Sem limite" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Centro de Custo</label>
+                <Input value={costCenter} onChange={(e) => setCostCenter(e.target.value)} placeholder="Ex: 1.4.1.1" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Projeto</label>
+                <Input value={project} onChange={(e) => setProject(e.target.value)} placeholder="Ex: ANA GAMING" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground mb-1 block">Solicitante (contém)</label>
+                <Input value={requesterPattern} onChange={(e) => setRequesterPattern(e.target.value)} placeholder="Ex: Graciela" />
+                <p className="text-[10px] text-muted-foreground mt-1">Filtra solicitantes que contenham o texto informado</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Levels */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Níveis de Aprovação</p>
+              <Button variant="ghost" size="sm" onClick={addLevel} className="gap-1 text-xs h-7">
+                <Plus className="w-3 h-3" /> Adicionar Nível
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {levels.map((lvl, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 text-primary text-sm font-bold shrink-0">
+                    {lvl.level_order}
+                  </div>
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <div>
+                      {i === 0 && <label className="text-[10px] text-muted-foreground">Aprovador *</label>}
+                      <Input
+                        value={lvl.approver_name}
+                        onChange={(e) => updateLevel(i, "approver_name", e.target.value)}
+                        placeholder="Nome do aprovador"
+                        className="text-sm h-9"
+                      />
+                    </div>
+                    <div>
+                      {i === 0 && <label className="text-[10px] text-muted-foreground">Email</label>}
+                      <Input
+                        value={lvl.approver_email || ""}
+                        onChange={(e) => updateLevel(i, "approver_email", e.target.value)}
+                        placeholder="email@empresa.com"
+                        className="text-sm h-9"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeLevel(i)}
+                    disabled={levels.length <= 1}
+                    className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-4 flex justify-end gap-3">
+            <Button variant="outline" onClick={onClose} disabled={isCreating}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={isCreating} className="gap-1.5">
+              {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Criar Regra
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Rule Card ─── */
+function RuleCard({
+  rule,
+  onToggle,
+  onDelete,
+}: {
+  rule: ApprovalRule;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const criteria: string[] = [];
+  if (rule.min_value != null) criteria.push(`≥ ${formatCurrency(rule.min_value)}`);
+  if (rule.max_value != null) criteria.push(`≤ ${formatCurrency(rule.max_value)}`);
+  if (rule.cost_center) criteria.push(`CC: ${rule.cost_center}`);
+  if (rule.project) criteria.push(`Proj: ${rule.project}`);
+  if (rule.doc_type) criteria.push(`Tipo: ${rule.doc_type}`);
+  if (rule.requester_pattern) criteria.push(`Solic.: ${rule.requester_pattern}`);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`glass-card p-5 transition-all ${!rule.is_active ? "opacity-60" : ""}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-foreground font-semibold truncate">{rule.name}</h3>
+            <Badge className={rule.is_active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}>
+              {rule.is_active ? "Ativa" : "Inativa"}
+            </Badge>
+            {rule.priority > 0 && (
+              <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                P{rule.priority}
+              </span>
+            )}
+          </div>
+
+          {criteria.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {criteria.map((c, i) => (
+                <span key={i} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  {c}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Users className="w-3 h-3" />
+            {rule.levels.length} nível(is) de aprovação
+            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+
+          {expanded && (
+            <div className="mt-3 space-y-1.5 pl-2 border-l-2 border-primary/20">
+              {rule.levels.map((lvl) => (
+                <div key={lvl.id || lvl.level_order} className="flex items-center gap-2 text-sm">
+                  <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                    {lvl.level_order}
+                  </span>
+                  <span className="text-foreground font-medium">{lvl.approver_name}</span>
+                  {lvl.approver_email && (
+                    <span className="text-xs text-muted-foreground">{lvl.approver_email}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Switch checked={rule.is_active} onCheckedChange={onToggle} />
+          <Button variant="ghost" size="icon" onClick={onDelete} className="h-8 w-8 text-muted-foreground hover:text-destructive">
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Main Page ─── */
+export default function ApprovalRulesPage() {
+  const { session, logout } = useSap();
+  const navigate = useNavigate();
+  const { rules, isLoading, error, refresh, createRule, toggleRule, deleteRule } = useApprovalRules();
+  const [showCreate, setShowCreate] = useState(false);
+
+  if (!session) {
+    navigate("/");
+    return null;
+  }
+
+  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+
+  const handleCreate = async (input: CreateRuleInput) => {
+    await createRule(input, session.userName);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta regra?")) return;
+    try {
+      await deleteRule(id);
+      toast.success("Regra excluída");
+    } catch (e) {
+      toast.error("Erro ao excluir regra");
+    }
+  };
+
+  const handleToggle = async (id: string, current: boolean) => {
+    try {
+      await toggleRule(id, !current);
+      toast.success(!current ? "Regra ativada" : "Regra desativada");
+    } catch (e) {
+      toast.error("Erro ao atualizar regra");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10 glow-primary">
+              <Activity className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
+              <p className="text-xs text-muted-foreground">Regras de Aprovação</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm font-medium text-foreground">{companyLabel}</p>
+              <p className="text-xs text-muted-foreground">{session?.userName}</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
+              Conectado
+            </div>
+            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading}>
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={logout}>
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
+          </Button>
+          <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+            <Plus className="w-4 h-4" /> Nova Regra
+          </Button>
+        </div>
+
+        {/* Summary */}
+        <div className="flex flex-wrap gap-4">
+          <div className="glass-card px-4 py-3 flex items-center gap-3">
+            <Settings2 className="w-4 h-4 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Total de Regras</p>
+              <p className="text-lg font-bold font-mono text-foreground">{rules.length}</p>
+            </div>
+          </div>
+          <div className="glass-card px-4 py-3 flex items-center gap-3">
+            <Shield className="w-4 h-4 text-success" />
+            <div>
+              <p className="text-xs text-muted-foreground">Ativas</p>
+              <p className="text-lg font-bold font-mono text-success">{rules.filter((r) => r.is_active).length}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <p className="text-destructive mb-4">{error}</p>
+            <Button variant="outline" onClick={refresh}>Tentar novamente</Button>
+          </div>
+        ) : rules.length === 0 ? (
+          <div className="text-center py-20">
+            <Shield className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+            <p className="text-muted-foreground mb-2">Nenhuma regra de aprovação configurada</p>
+            <p className="text-xs text-muted-foreground mb-4">Crie regras para definir a cadeia de aprovadores com base em critérios</p>
+            <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+              <Plus className="w-4 h-4" /> Criar primeira regra
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {rules.map((rule) => (
+              <RuleCard
+                key={rule.id}
+                rule={rule}
+                onToggle={() => handleToggle(rule.id, rule.is_active)}
+                onDelete={() => handleDelete(rule.id)}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+
+      <CreateRuleModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreate={handleCreate}
+      />
+    </div>
+  );
+}
