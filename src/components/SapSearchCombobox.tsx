@@ -26,6 +26,8 @@ interface SapSearchComboboxProps {
   label?: string;
   /** Minimum characters before searching (default 2) */
   minChars?: number;
+  /** Pre-fill text from AI without marking as validated. User must pick from SAP results. */
+  suggestedQuery?: string;
 }
 
 export function SapSearchCombobox({
@@ -38,6 +40,7 @@ export function SapSearchCombobox({
   placeholder = "Buscar...",
   label,
   minChars = 2,
+  suggestedQuery,
 }: SapSearchComboboxProps) {
   const { session } = useSap();
   const [query, setQuery] = useState("");
@@ -46,6 +49,20 @@ export function SapSearchCombobox({
   const [isOpen, setIsOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
+  const appliedSuggestionRef = useRef<string | null>(null);
+
+  // Apply suggestedQuery when it changes (AI pre-fill)
+  useEffect(() => {
+    if (suggestedQuery && suggestedQuery !== appliedSuggestionRef.current && !value) {
+      appliedSuggestionRef.current = suggestedQuery;
+      setQuery(suggestedQuery);
+      // Auto-trigger search so user sees results
+      if (suggestedQuery.length >= minChars) {
+        search(suggestedQuery);
+        setIsOpen(true);
+      }
+    }
+  }, [suggestedQuery, value, minChars]);
 
   // Close dropdown on outside click
   useEffect(() => {
