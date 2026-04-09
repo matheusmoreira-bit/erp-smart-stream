@@ -348,7 +348,17 @@ serve(async (req) => {
 
     // LOGOUT
     if (action === "logout") {
-      // fall through
+      if (sessionId) {
+        const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
+        await fetch(`${SAP_BASE_URL}/Logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: cookies },
+        }).catch(() => {});
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // SAP ACTION - POST/PATCH to SAP Service Layer
@@ -387,21 +397,6 @@ serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ data: respData }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // LOGOUT
-    if (action === "logout") {
-      if (sessionId) {
-        const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
-        await fetch(`${SAP_BASE_URL}/Logout`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: cookies },
-        }).catch(() => {});
-      }
-      return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
