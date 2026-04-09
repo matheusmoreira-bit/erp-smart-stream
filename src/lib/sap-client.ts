@@ -100,6 +100,25 @@ export async function sapQuery(
 }
 
 export async function sapQueryView<T = unknown>(
+
+export async function sapAction(
+  session: SapSession,
+  endpoint: string,
+  method: "POST" | "PATCH" = "POST",
+  body?: Record<string, unknown>,
+): Promise<{ data: unknown }> {
+  const result = await callProxy({
+    action: "sapAction",
+    sessionId: session.sessionId,
+    routeId: session.routeId,
+    endpoint,
+    method,
+    body,
+  });
+  return { data: result.data };
+}
+
+export async function sapQueryView<T = unknown>(
   session: SapSession,
   table: string,
   params?: Record<string, string | number>,
