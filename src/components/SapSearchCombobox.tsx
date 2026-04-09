@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, X } from "lucide-react";
+import { Loader2, Search, X, CheckCircle2 } from "lucide-react";
 import { sapQuery } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 
@@ -117,7 +117,11 @@ export function SapSearchCombobox({
     <div ref={containerRef} className="relative">
       {label && <label className="text-xs text-muted-foreground mb-1 block">{label}</label>}
       <div className="relative">
-        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        {value ? (
+          <CheckCircle2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-green-500" />
+        ) : (
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        )}
         <Input
           value={value ? displayValue : query}
           onChange={(e) => handleInputChange(e.target.value)}
@@ -129,7 +133,7 @@ export function SapSearchCombobox({
             }
           }}
           placeholder={placeholder}
-          className="pl-8 pr-8 text-sm h-9"
+          className={`pl-8 pr-8 text-sm h-9 ${value ? "border-green-500/50 bg-green-500/5" : ""}`}
           readOnly={!!value}
         />
         {(value || query) && (

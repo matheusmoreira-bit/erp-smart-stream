@@ -193,6 +193,8 @@ function CreateExpenseModal({
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
+  const [currency, setCurrency] = useState("");
+  const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -318,9 +320,31 @@ function CreateExpenseModal({
 
   const total = items.reduce((sum, item) => sum + item.line_total, 0);
 
+  const handleSupplierChange = (val: SapSearchOption | null) => {
+    setSupplier(val);
+    setCurrencyWarning(null);
+    if (val) {
+      // currency comes from the extra2 field we added to mapRow
+      const supplierCurrency = (val as any).currency;
+      if (supplierCurrency) {
+        setCurrency(supplierCurrency);
+      } else {
+        setCurrency("");
+        setCurrencyWarning(`O fornecedor "${val.name}" não possui moeda configurada no cadastro do SAP. O lançamento não poderá ser realizado até que essa inconsistência seja corrigida.`);
+        toast.error("Fornecedor sem moeda cadastrada no SAP. Corrija o cadastro antes de prosseguir.", { duration: 6000 });
+      }
+    } else {
+      setCurrency("");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!supplier) {
       toast.error("Informe o fornecedor");
+      return;
+    }
+    if (!currency) {
+      toast.error("Moeda é obrigatória. Selecione um fornecedor com moeda cadastrada.");
       return;
     }
     if (!docDate) {
@@ -340,6 +364,7 @@ function CreateExpenseModal({
       await onCreate({
         supplier_name: supplier.name,
         supplier_code: supplier.code || undefined,
+        currency: currency || undefined,
         remarks: remarks || undefined,
         items: items.map(({ sapItem, ...rest }) => rest),
       });
@@ -355,6 +380,8 @@ function CreateExpenseModal({
 
   const resetForm = () => {
     setSupplier(null);
+    setCurrency("");
+    setCurrencyWarning(null);
     setDocDate("");
     setDueDate("");
     setRemarks("");
@@ -484,20 +511,41 @@ function CreateExpenseModal({
               label="Fornecedor *"
               endpoint="BusinessPartners"
               filterTemplate="contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}')"
-              selectFields="CardCode,CardName,FederalTaxID"
+              selectFields="CardCode,CardName,FederalTaxID,Currency"
               mapRow={(row: any) => ({
                 code: row.CardCode,
                 name: row.CardName,
                 extra: row.FederalTaxID || undefined,
-              })}
+                currency: row.Currency || "",
+              } as SapSearchOption & { currency: string })}
               value={supplier}
-              onChange={setSupplier}
+              onChange={handleSupplierChange}
               placeholder="Digite nome, código ou CNPJ do fornecedor..."
             />
           </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Currency Warning */}
+          {currencyWarning && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+              <span className="text-destructive text-sm">⚠️</span>
+              <p className="text-sm text-destructive">{currencyWarning}</p>
+              <button onClick={() => setCurrencyWarning(null)} className="ml-auto text-destructive/70 hover:text-destructive">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Currency + Dates */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Moeda *</label>
+              <Input
+                value={currency}
+                readOnly
+                placeholder="Definida pelo fornecedor"
+                className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+              />
+            </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Data do Documento *</label>
               <Input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="text-sm h-9" />
@@ -617,7 +665,7 @@ function CreateExpenseModal({
             </div>
             <div className="flex justify-end mt-3">
               <p className="text-sm font-medium text-foreground">
-                Total: <span className="text-lg font-bold font-mono">{formatCurrency(total)}</span>
+                Total: <span className="text-lg font-bold font-mono">{formatCurrency(total, currency || "BRL")}</span>
               </p>
             </div>
           </div>
