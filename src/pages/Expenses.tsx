@@ -467,6 +467,16 @@ function CreateExpenseModal({
               </Button>
             )}
           </div>
+          {/* AI Warning */}
+          {aiWarning && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+              <span className="text-destructive text-sm">⚠️</span>
+              <p className="text-sm text-destructive">{aiWarning}</p>
+              <button onClick={() => setAiWarning(null)} className="ml-auto text-destructive/70 hover:text-destructive">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Supplier */}
           <div>
