@@ -5,12 +5,14 @@ export interface PagCorpTransaction {
   date: string;
   description: string;
   amount: number;
-  cardHolder?: string;
+  currency?: string;
+  accountCode?: string;
+  accountName?: string;
   cardLastDigits?: string;
-  category?: string;
   status?: string;
-  merchantName?: string;
   hasAccountability?: boolean;
+  accountabilityId?: string | number | null;
+  attachments?: unknown[];
   [key: string]: unknown;
 }
 
@@ -47,15 +49,17 @@ export function usePagCorp() {
       const result = await res.json();
       const items: PagCorpTransaction[] = (result.items || []).map((item: any, index: number) => ({
         id: item.id || item.expenseId || index,
-        date: item.date || item.expenseDate || item.createdAt || "",
-        description: item.description || item.expenseDescription || item.merchantName || "—",
+        date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
+        description: item.description || item.expenseDescription || "—",
         amount: item.amount || item.value || item.expenseValue || 0,
-        cardHolder: item.cardHolderName || item.userName || item.cardHolder || "",
+        currency: item.currencyCode || item.currency || "BRL",
+        accountCode: item.accountCode || "",
+        accountName: item.accountName || "",
         cardLastDigits: item.cardLastDigits || item.lastDigits || "",
-        category: item.category || item.expenseCategory || "",
         status: item.status || "",
-        merchantName: item.merchantName || item.establishment || "",
         hasAccountability: item.hasAccountability ?? item.accountabilityId != null,
+        accountabilityId: item.accountabilityId || null,
+        attachments: item.attachments || [],
         ...item,
       }));
 

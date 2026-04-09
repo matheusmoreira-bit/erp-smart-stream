@@ -8,12 +8,12 @@ import {
   Activity,
   LogOut,
   Loader2,
-  Calendar,
-  Filter,
   DollarSign,
-  User,
   CheckCircle2,
   XCircle,
+  MapPin,
+  Sparkles,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,12 +33,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
+import { toast } from "sonner";
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+function formatCurrency(value: number, currency: string = "BRL") {
+  const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
+  try {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: validCode }).format(value);
+  } catch {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  }
 }
 
 function formatDate(dateStr: string) {
@@ -65,6 +79,11 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [accountabilityFilter, setAccountabilityFilter] = useState<"all" | "yes" | "no">("all");
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; transaction: PagCorpTransaction | null }>({
+    open: false,
+    transaction: null,
+  });
+  const [integrating, setIntegrating] = useState<string | number | null>(null);
 
   useEffect(() => {
     fetchTransactions(startDate, endDate);
@@ -86,19 +105,43 @@ export default function PagCorp() {
       list = list.filter(
         (t) =>
           t.description.toLowerCase().includes(q) ||
-          (t.cardHolder || "").toLowerCase().includes(q) ||
-          (t.merchantName || "").toLowerCase().includes(q) ||
-          (t.category || "").toLowerCase().includes(q)
+          (t.accountName || "").toLowerCase().includes(q)
       );
     }
 
     return list;
   }, [transactions, search, accountabilityFilter]);
 
-  const totalAmount = useMemo(
-    () => filteredTransactions.reduce((sum, t) => sum + (t.amount || 0), 0),
-    [filteredTransactions]
-  );
+  // Group totals by currency
+  const totalsByCurrency = useMemo(() => {
+    const map: Record<string, number> = {};
+    filteredTransactions.forEach((t) => {
+      const cur = t.currency || "BRL";
+      map[cur] = (map[cur] || 0) + (t.amount || 0);
+    });
+    return map;
+  }, [filteredTransactions]);
+
+  const handleValidateAndIntegrate = async (t: PagCorpTransaction) => {
+    setIntegrating(t.id);
+    // TODO: Call AI validation edge function with attachments, then integrate to SAP
+    toast.info("Validação com IA e integração SAP em desenvolvimento.");
+    setIntegrating(null);
+  };
+
+  const handleIntegrateGeneric = (t: PagCorpTransaction) => {
+    setConfirmDialog({ open: true, transaction: t });
+  };
+
+  const confirmGenericIntegration = async () => {
+    const t = confirmDialog.transaction;
+    if (!t) return;
+    setIntegrating(t.id);
+    setConfirmDialog({ open: false, transaction: null });
+    // TODO: Call SAP integration with generic item
+    toast.info("Integração SAP com item genérico em desenvolvimento.");
+    setIntegrating(null);
+  };
 
   const COMPANY_LABELS: Record<string, string> = {
     SBO_ANAGAMING: "ANA Gaming",
@@ -127,6 +170,9 @@ export default function PagCorp() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/mapping")} className="gap-2">
+              <MapPin className="w-4 h-4" /> Mapeamento
+            </Button>
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{companyLabel}</p>
               <p className="text-xs text-muted-foreground">{session?.userName}</p>
@@ -171,7 +217,7 @@ export default function PagCorp() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Descrição, portador, estabelecimento..."
+                placeholder="Descrição, portador..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 bg-card"
@@ -203,7 +249,14 @@ export default function PagCorp() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Valor Total</p>
-              <p className="text-xl font-bold text-foreground">{formatCurrency(totalAmount)}</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(totalsByCurrency).map(([cur, total]) => (
+                  <p key={cur} className="text-lg font-bold text-foreground">{formatCurrency(total, cur)}</p>
+                ))}
+                {Object.keys(totalsByCurrency).length === 0 && (
+                  <p className="text-lg font-bold text-foreground">{formatCurrency(0)}</p>
+                )}
+              </div>
             </div>
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-4 flex items-center gap-3">
@@ -245,53 +298,101 @@ export default function PagCorp() {
                     <TableHead className="text-muted-foreground">Data</TableHead>
                     <TableHead className="text-muted-foreground">Descrição</TableHead>
                     <TableHead className="text-muted-foreground">Portador</TableHead>
-                    <TableHead className="text-muted-foreground">Estabelecimento</TableHead>
-                    <TableHead className="text-muted-foreground">Categoria</TableHead>
                     <TableHead className="text-muted-foreground text-right">Valor</TableHead>
                     <TableHead className="text-muted-foreground text-center">Prestação</TableHead>
+                    <TableHead className="text-muted-foreground text-center">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((t) => (
-                    <TableRow key={t.id} className="border-border">
-                      <TableCell className="text-sm text-foreground whitespace-nowrap">
-                        {formatDate(t.date)}
-                      </TableCell>
-                      <TableCell className="text-sm text-foreground max-w-[250px] truncate">
-                        {t.description}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {t.cardHolder || "—"}
-                        {t.cardLastDigits && (
-                          <span className="ml-1 text-xs opacity-60">•••{t.cardLastDigits}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{t.merchantName || "—"}</TableCell>
-                      <TableCell>
-                        {t.category ? (
-                          <Badge variant="secondary" className="text-xs">{t.category}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm font-medium text-right text-foreground">
-                        {formatCurrency(t.amount)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {t.hasAccountability ? (
-                          <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-destructive/60 mx-auto" />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredTransactions.map((t) => {
+                    const hasAttachments = t.hasAccountability && Array.isArray(t.attachments) && t.attachments.length > 0;
+
+                    return (
+                      <TableRow key={t.id} className="border-border">
+                        <TableCell className="text-sm text-foreground whitespace-nowrap">
+                          {formatDate(t.date)}
+                        </TableCell>
+                        <TableCell className="text-sm text-foreground max-w-[250px] truncate">
+                          {t.description}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {t.accountName || "—"}
+                          {t.cardLastDigits && (
+                            <span className="ml-1 text-xs opacity-60">•••{t.cardLastDigits}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium text-right text-foreground whitespace-nowrap">
+                          {formatCurrency(t.amount, t.currency)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {t.hasAccountability ? (
+                            <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-destructive/60 mx-auto" />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {integrating === t.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
+                          ) : t.hasAccountability ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs"
+                              onClick={() => handleValidateAndIntegrate(t)}
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              Validar IA + SAP
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs"
+                              onClick={() => handleIntegrateGeneric(t)}
+                            >
+                              <Upload className="w-3 h-3" />
+                              Integrar SAP
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
           )}
         </div>
       </main>
+
+      {/* Confirm Generic Integration Dialog */}
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, transaction: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Integrar ao SAP sem prestação de contas</DialogTitle>
+            <DialogDescription className="space-y-2 pt-2">
+              <p>
+                Esta transação <strong>não possui prestação de contas</strong>. Ao integrar ao SAP:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Será utilizado um <strong>item genérico de despesa de cartão corporativo</strong></li>
+                <li>Fornecedor: <strong>ANA Gaming</strong> (caso não seja identificado um fornecedor melhor)</li>
+                <li>Centro de Custo e Projeto serão atribuídos conforme o <strong>mapeamento de contas</strong> configurado</li>
+              </ul>
+              <p className="text-sm font-medium pt-2">Deseja continuar?</p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDialog({ open: false, transaction: null })}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmGenericIntegration}>
+              Confirmar Integração
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
