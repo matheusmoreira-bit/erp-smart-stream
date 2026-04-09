@@ -678,15 +678,10 @@ function CreateExpenseModal({
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <SapSearchCombobox
+                    <CachedSearchCombobox
                       label="Centro de Custo (Dimensão)"
-                      endpoint="CostCenters"
-                      filterTemplate="contains(CenterCode,'{q}') or contains(CenterName,'{q}')"
-                      selectFields="CenterCode,CenterName"
-                      mapRow={(row: any) => ({
-                        code: row.CenterCode,
-                        name: row.CenterName,
-                      })}
+                      options={costCenterOptions}
+                      isLoading={costCentersLoading}
                       value={item.sapCostCenter || null}
                       onChange={(val) => {
                         setItems((prev) => {
