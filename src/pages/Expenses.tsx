@@ -572,17 +572,10 @@ function CreateExpenseModal({
 
           {/* Supplier */}
           <div>
-            <SapSearchCombobox
+            <CachedSearchCombobox
               label="Fornecedor *"
-              endpoint="BusinessPartners"
-              filterTemplate="contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}')"
-              selectFields="CardCode,CardName,FederalTaxID,Currency"
-              mapRow={(row: any) => ({
-                code: row.CardCode,
-                name: row.CardName,
-                extra: row.FederalTaxID || undefined,
-                currency: row.Currency || "",
-              } as SapSearchOption & { currency: string })}
+              options={supplierOptions}
+              isLoading={suppliersLoading}
               value={supplier}
               onChange={handleSupplierChange}
               placeholder="Digite nome, código ou CNPJ do fornecedor..."
