@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -14,6 +14,7 @@ import {
   Settings2,
   Users,
   Filter,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
@@ -45,6 +51,8 @@ import {
   type CriterionOperator,
   type CreateRuleInput,
 } from "@/hooks/useApprovalRules";
+import { useSapUsers } from "@/hooks/useSapUsers";
+import type { SapUser } from "@/lib/cache-repository";
 
 const COMPANY_LABELS: Record<string, string> = {
   SBO_ANAGAMING: "ANA Gaming",
@@ -65,6 +73,100 @@ function criterionSummary(c: RuleCriterion): string {
   const op = OPERATOR_LABELS[c.operator];
   if (c.operator === "between") return `${f} ${op} ${c.value} e ${c.value2}`;
   return `${f} ${op} ${c.value}`;
+}
+
+/* ─── User Select with search ─── */
+function UserSelect({
+  users,
+  isLoading,
+  value,
+  onSelect,
+  label,
+}: {
+  users: SapUser[];
+  isLoading: boolean;
+  value: string;
+  onSelect: (userName: string, email: string) => void;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search) return users;
+    const q = search.toLowerCase();
+    return users.filter(
+      (u) =>
+        u.UserName.toLowerCase().includes(q) ||
+        u.UserCode.toLowerCase().includes(q) ||
+        (u.eMail || "").toLowerCase().includes(q)
+    );
+  }, [users, search]);
+
+  return (
+    <div>
+      {label && <label className="text-[10px] text-muted-foreground mb-1 block">{label}</label>}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="w-full h-9 justify-start text-sm font-normal px-3"
+          >
+            {isLoading ? (
+              <Loader2 className="w-3 h-3 animate-spin mr-2" />
+            ) : value ? (
+              <span className="truncate">{value}</span>
+            ) : (
+              <span className="text-muted-foreground">Selecionar aprovador...</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0" align="start">
+          <div className="p-2 border-b border-border">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar usuário..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 text-xs pl-8"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="max-h-[200px] overflow-y-auto p-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">Nenhum usuário encontrado</p>
+            ) : (
+              filtered.map((u) => (
+                <button
+                  key={u.InternalKey}
+                  onClick={() => {
+                    onSelect(u.UserName, u.eMail || "");
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-md text-xs hover:bg-muted/50 transition-colors flex items-center justify-between ${
+                    value === u.UserName ? "bg-primary/10 text-primary" : "text-foreground"
+                  }`}
+                >
+                  <div>
+                    <p className="font-medium">{u.UserName}</p>
+                    {u.eMail && <p className="text-[10px] text-muted-foreground">{u.eMail}</p>}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-mono">{u.UserCode}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 }
 
 /* ─── Criterion Row ─── */
@@ -167,10 +269,14 @@ function CreateRuleModal({
   open,
   onClose,
   onCreate,
+  sapUsers,
+  sapUsersLoading,
 }: {
   open: boolean;
   onClose: () => void;
   onCreate: (input: CreateRuleInput) => Promise<void>;
+  sapUsers: SapUser[];
+  sapUsersLoading: boolean;
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState("");
@@ -334,22 +440,23 @@ function CreateRuleModal({
                       {lvl.level_order}
                     </div>
                     <div className="flex-1 grid grid-cols-2 gap-2">
-                      <div>
-                        {i === 0 && <label className="text-[10px] text-muted-foreground">Aprovador *</label>}
-                        <Input
-                          value={lvl.approver_name}
-                          onChange={(e) => updateLevel(i, "approver_name", e.target.value)}
-                          placeholder="Nome do aprovador"
-                          className="text-sm h-9"
-                        />
-                      </div>
+                      <UserSelect
+                        users={sapUsers}
+                        isLoading={sapUsersLoading}
+                        value={lvl.approver_name}
+                        onSelect={(userName, email) => {
+                          updateLevel(i, "approver_name", userName);
+                          updateLevel(i, "approver_email", email);
+                        }}
+                        label={i === 0 ? "Aprovador *" : undefined}
+                      />
                       <div>
                         {i === 0 && <label className="text-[10px] text-muted-foreground">Email</label>}
                         <Input
                           value={lvl.approver_email || ""}
-                          onChange={(e) => updateLevel(i, "approver_email", e.target.value)}
-                          placeholder="email@empresa.com"
-                          className="text-sm h-9"
+                          readOnly
+                          className="text-sm h-9 bg-muted/30 text-muted-foreground"
+                          placeholder="Preenchido automaticamente"
                         />
                       </div>
                     </div>
@@ -466,6 +573,7 @@ export default function ApprovalRulesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { rules, isLoading, error, refresh, createRule, toggleRule, deleteRule } = useApprovalRules();
+  const { users: sapUsers, isLoading: sapUsersLoading } = useSapUsers();
   const [showCreate, setShowCreate] = useState(false);
 
   if (!session) {
@@ -595,6 +703,8 @@ export default function ApprovalRulesPage() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreate={handleCreate}
+        sapUsers={sapUsers}
+        sapUsersLoading={sapUsersLoading}
       />
     </div>
   );
