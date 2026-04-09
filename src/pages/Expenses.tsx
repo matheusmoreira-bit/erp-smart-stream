@@ -643,14 +643,9 @@ function CreateExpenseModal({
                     </Button>
                   </div>
                   {/* Item search from SAP */}
-                  <SapSearchCombobox
-                    endpoint="Items"
-                    filterTemplate="contains(ItemName,'{q}') or contains(ItemCode,'{q}')"
-                    selectFields="ItemCode,ItemName"
-                    mapRow={(row: any) => ({
-                      code: row.ItemCode,
-                      name: row.ItemName,
-                    })}
+                  <CachedSearchCombobox
+                    options={itemOptions}
+                    isLoading={itemsLoading}
                     value={item.sapItem || null}
                     onChange={(val) => {
                       setItems((prev) => {
@@ -666,7 +661,6 @@ function CreateExpenseModal({
                     }}
                     placeholder="Buscar item SAP por nome ou código..."
                     suggestedQuery={item.description && !item.sapItem ? item.description : undefined}
-                    minChars={1}
                   />
                   <div className="grid grid-cols-12 gap-2">
                     <div className="col-span-6">
