@@ -246,9 +246,9 @@ function CreateExpenseModal({
       // Handle single or array result
       const doc = Array.isArray(result) ? result[0] : result;
 
-      if (doc.supplier_name) setSupplierName(doc.supplier_name);
-      if (doc.supplier_cnpj) setSupplierCode(doc.supplier_cnpj);
-      if (doc.cost_center_hint) setCostCenter(doc.cost_center_hint);
+      if (doc.supplier_name) {
+        setSupplier({ code: doc.supplier_cnpj || "", name: doc.supplier_name, extra: doc.supplier_cnpj });
+      }
       if (doc.remarks) setRemarks(doc.remarks);
       if (doc.items && doc.items.length > 0) {
         setItems(
@@ -257,6 +257,8 @@ function CreateExpenseModal({
             quantity: item.quantity || 1,
             unit_price: item.unit_price || 0,
             line_total: item.line_total || (item.quantity || 1) * (item.unit_price || 0),
+            cost_center: item.cost_center || doc.cost_center_hint || "",
+            project: item.project || "",
           }))
         );
       }
