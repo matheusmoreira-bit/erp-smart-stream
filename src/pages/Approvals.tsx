@@ -16,10 +16,19 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useApprovals, type ApprovalDoc } from "@/hooks/useApprovals";
+import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { useNavigate } from "react-router-dom";
-import { Activity, LogOut } from "lucide-react";
+import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
+import { sapAction, clearClientCache } from "@/lib/sap-client";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 const COMPANY_LABELS: Record<string, string> = {
   SBO_ANAGAMING: "ANA Gaming",
@@ -45,14 +54,15 @@ function isOverdue(dueDate: string): boolean {
   return new Date(dueDate) < new Date();
 }
 
-function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
+function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void }) {
   const overdue = isOverdue(doc.dueDate);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`glass-card p-5 flex flex-col gap-3 ${overdue ? "border-destructive/40" : ""}`}
+      className={`glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all ${overdue ? "border-destructive/40" : ""}`}
+      onClick={onOpen}
     >
       <div className="flex items-start justify-between">
         <div>
@@ -68,16 +78,13 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
               Vencido
             </span>
           )}
-          {doc.daysOpen > 0 && (
-            <span className="text-[10px] text-muted-foreground">{doc.daysOpen}d aberto</span>
-          )}
         </div>
       </div>
 
       <div className="space-y-2 text-sm">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Building2 className="w-3.5 h-3.5 text-primary/70" />
-          <span className="truncate" title={doc.cardCode}>{doc.cardName}</span>
+          <span className="truncate">{doc.cardName}</span>
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="w-3.5 h-3.5 text-primary/70" />
@@ -87,12 +94,6 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
           <FileText className="w-3.5 h-3.5 text-primary/70" />
           <span>Solicitante: <span className="text-foreground font-medium">{doc.requester}</span></span>
         </div>
-        {doc.approvalModel && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <FileText className="w-3.5 h-3.5 text-primary/70" />
-            <span className="text-xs truncate" title={doc.approvalModel}>Modelo: {doc.approvalModel}</span>
-          </div>
-        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="w-3.5 h-3.5 text-primary/70" />
@@ -104,36 +105,183 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
           </div>
         </div>
       </div>
-
-      {doc.remarks && (
-        <p className="text-xs text-muted-foreground border-t border-border pt-2 truncate" title={doc.remarks}>
-          {doc.remarks}
-        </p>
-      )}
-
-      {doc.documentLines.length > 0 && (
-        <div className="border-t border-border pt-2 space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Itens</p>
-          {doc.documentLines.map((line, i) => (
-            <div key={i} className="flex justify-between text-xs text-muted-foreground">
-              <span className="truncate flex-1 mr-2" title={`${line.ItemCode} - ${line.Description}`}>
-                {line.Description}
-              </span>
-              <span className="font-mono whitespace-nowrap">{formatCurrency(line.LineTotal)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {doc.attachmentNames && (
-        <div className="border-t border-border pt-2">
-          <p className="text-[10px] text-muted-foreground truncate" title={doc.attachmentNames}>
-            📎 {doc.attachmentNames.split("|")[0]?.trim()}
-            {doc.attachmentNames.includes("|") && ` (+${doc.attachmentNames.split("|").length - 1})`}
-          </p>
-        </div>
-      )}
     </motion.div>
+  );
+}
+
+function ApprovalDetailModal({
+  doc,
+  open,
+  onClose,
+  onAction,
+  isActioning,
+}: {
+  doc: ApprovalDoc | null;
+  open: boolean;
+  onClose: () => void;
+  onAction: (code: number, action: "approve" | "reject", remarks: string) => Promise<void>;
+  isActioning: boolean;
+}) {
+  const [remarks, setRemarks] = useState("");
+
+  if (!doc) return null;
+
+  const overdue = isOverdue(doc.dueDate);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              {doc.docTypeName}
+            </span>
+            <span className="font-mono">#{doc.docNum}</span>
+            <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          {/* Basic Info */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Fornecedor</p>
+              <p className="text-foreground font-medium">{doc.cardName}</p>
+              <p className="text-xs text-muted-foreground font-mono">{doc.cardCode}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Solicitante</p>
+              <p className="text-foreground font-medium">{doc.requester}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Aprovador</p>
+              <p className="text-foreground font-medium">{doc.currentApprover}</p>
+              {doc.approverEmail && (
+                <p className="text-xs text-muted-foreground">{doc.approverEmail}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Modelo de Aprovação</p>
+              <p className="text-foreground text-sm">{doc.approvalModel || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Data de Criação</p>
+              <p className="text-foreground">{formatDate(doc.docDate)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Data de Vencimento</p>
+              <p className={overdue ? "text-destructive font-semibold" : "text-foreground"}>
+                {formatDate(doc.dueDate)}
+                {overdue && " ⚠ Vencido"}
+              </p>
+            </div>
+            {doc.daysOpen > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground">Dias em Aberto</p>
+                <p className="text-foreground font-mono">{doc.daysOpen}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Remarks */}
+          {doc.remarks && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Observações</p>
+              <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{doc.remarks}</p>
+            </div>
+          )}
+
+          {/* Document Lines */}
+          {doc.documentLines.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Itens do Documento</p>
+              <div className="border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border">
+                      <th className="text-left py-2 px-3 text-muted-foreground">Código</th>
+                      <th className="text-left py-2 px-3 text-muted-foreground">Descrição</th>
+                      <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
+                      <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
+                      <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
+                      <th className="text-left py-2 px-3 text-muted-foreground">Projeto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {doc.documentLines.map((line, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="py-2 px-3 font-mono text-muted-foreground">{line.ItemCode}</td>
+                        <td className="py-2 px-3 text-foreground">{line.Description}</td>
+                        <td className="py-2 px-3 text-right font-mono">{line.Quantity}</td>
+                        <td className="py-2 px-3 text-right font-mono">{formatCurrency(line.UnitPrice)}</td>
+                        <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(line.LineTotal)}</td>
+                        <td className="py-2 px-3 text-muted-foreground">{line.Project || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Attachments */}
+          {doc.attachmentNames && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Paperclip className="w-3 h-3" /> Anexos
+              </p>
+              <div className="space-y-1">
+                {doc.attachmentNames.split("|").map((name, i) => (
+                  <p key={i} className="text-xs text-muted-foreground bg-muted/20 px-3 py-1.5 rounded">
+                    {name.trim()}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action area */}
+          <div className="border-t border-border pt-4 space-y-3">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Comentário (opcional)</p>
+              <Textarea
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Adicione um comentário à sua decisão..."
+                className="bg-muted/30 border-border text-sm"
+                rows={2}
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                disabled={isActioning}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => onAction(doc.approvalRequestId, "reject", remarks)}
+                disabled={isActioning}
+                className="gap-1.5"
+              >
+                {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                Rejeitar
+              </Button>
+              <Button
+                onClick={() => onAction(doc.approvalRequestId, "approve", remarks)}
+                disabled={isActioning}
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+              >
+                {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                Aprovar
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -143,6 +291,8 @@ export default function ApprovalsPage() {
   const { approvals, isLoading, error, refresh } = useApprovals();
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
+  const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
+  const [isActioning, setIsActioning] = useState(false);
 
   // Redirect to login if no session
   if (!session) {
@@ -152,7 +302,10 @@ export default function ApprovalsPage() {
 
   const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
 
-  const filtered = approvals.filter((a) => {
+  // Filter: only show approvals where current user is the approver
+  const userApprovals = approvals; // The view already returns only pending approvals for the logged-in user's company
+
+  const filtered = userApprovals.filter((a) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -166,6 +319,31 @@ export default function ApprovalsPage() {
 
   const totalValue = filtered.reduce((sum, a) => sum + a.docTotal, 0);
   const overdueCount = filtered.filter((a) => isOverdue(a.dueDate)).length;
+
+  const handleApprovalAction = async (code: number, action: "approve" | "reject", remarks: string) => {
+    if (!session) return;
+    setIsActioning(true);
+    try {
+      const endpoint = `ApprovalRequests(${code})`;
+      const body: Record<string, unknown> = {
+        ApprovalRequestDecisions: [{
+          Status: action === "approve" ? "ardApproved" : "ardNotApproved",
+          Remarks: remarks || undefined,
+        }],
+      };
+
+      await sapAction(session, endpoint, "PATCH", body);
+      clearClientCache();
+      toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
+      setSelectedDoc(null);
+      refresh();
+    } catch (e) {
+      console.error("Approval action error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao processar ação");
+    } finally {
+      setIsActioning(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -285,7 +463,7 @@ export default function ApprovalsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((doc, i) => (
               <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <ApprovalCard doc={doc} />
+                <ApprovalCard doc={doc} onOpen={() => setSelectedDoc(doc)} />
               </motion.div>
             ))}
           </div>
@@ -301,8 +479,7 @@ export default function ApprovalsPage() {
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Aprovador</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Solicitante</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vencimento</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Modelo</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Obs</th>
+                  <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -328,8 +505,11 @@ export default function ApprovalsPage() {
                         {formatDate(doc.dueDate)}
                         {overdue && <span className="ml-1 text-[10px]">⚠</span>}
                       </td>
-                      <td className="py-3 px-3 text-xs text-muted-foreground truncate max-w-[150px]" title={doc.approvalModel}>{doc.approvalModel || "—"}</td>
-                      <td className="py-3 px-3 text-xs text-muted-foreground truncate max-w-[200px]" title={doc.remarks}>{doc.remarks || "—"}</td>
+                      <td className="py-3 px-3 text-center">
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedDoc(doc)} className="text-primary hover:text-primary/80">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </td>
                     </motion.tr>
                   );
                 })}
@@ -338,6 +518,14 @@ export default function ApprovalsPage() {
           </div>
         )}
       </main>
+
+      <ApprovalDetailModal
+        doc={selectedDoc}
+        open={!!selectedDoc}
+        onClose={() => setSelectedDoc(null)}
+        onAction={handleApprovalAction}
+        isActioning={isActioning}
+      />
     </div>
   );
 }
