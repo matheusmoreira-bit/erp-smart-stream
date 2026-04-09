@@ -1,0 +1,172 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const formData = await req.formData();
+    const files = formData.getAll("files") as File[];
+
+    if (!files || files.length === 0) {
+      return new Response(JSON.stringify({ error: "Nenhum arquivo enviado" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY not configured");
+    }
+
+    // Read file contents as base64 for the AI
+    const fileDescriptions: string[] = [];
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      // For PDFs/images we send a description; for text-based we send content
+      const isPdf = file.name.toLowerCase().endsWith(".pdf");
+      const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name);
+
+      if (isPdf || isImage) {
+        // Convert to base64 for multimodal
+        const base64 = btoa(String.fromCharCode(...bytes));
+        const mimeType = isPdf ? "application/pdf" : file.type || "image/jpeg";
+        fileDescriptions.push(`[FILE: ${file.name}, type: ${mimeType}, base64 attached]`);
+        // We'll use inline_data for Gemini
+      } else {
+        // Text-based file (CSV, XML, etc.)
+        fileDescriptions.push(`[FILE: ${file.name}]\n${text.substring(0, 10000)}`);
+      }
+    }
+
+    // Build messages for AI
+    const systemPrompt = `Você é um assistente especializado em processar documentos fiscais brasileiros (notas fiscais, recibos, boletos, etc.).
+Analise os documentos enviados e extraia as seguintes informações em formato JSON:
+
+{
+  "supplier_name": "Nome do fornecedor/empresa emissora",
+  "supplier_cnpj": "CNPJ do fornecedor se disponível",
+  "total_amount": 0.00,
+  "currency": "BRL",
+  "document_date": "YYYY-MM-DD",
+  "document_number": "Número do documento/NF",
+  "items": [
+    {
+      "description": "Descrição do item/serviço",
+      "quantity": 1,
+      "unit_price": 0.00,
+      "line_total": 0.00
+    }
+  ],
+  "remarks": "Observações relevantes sobre o documento",
+  "cost_center_hint": "Sugestão de centro de custo baseado no tipo de despesa",
+  "confidence": 0.95
+}
+
+Regras:
+- Extraia TODOS os itens listados no documento
+- Se não conseguir identificar um campo, use null
+- O campo confidence indica sua confiança na extração (0 a 1)
+- Se houver múltiplos documentos, retorne um array de objetos
+- Valores monetários devem ser números (não strings)
+- Datas no formato YYYY-MM-DD`;
+
+    // Build content parts
+    const contentParts: any[] = [];
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const isPdf = file.name.toLowerCase().endsWith(".pdf");
+      const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name);
+
+      if (isPdf || isImage) {
+        const base64 = btoa(String.fromCharCode(...bytes));
+        const mimeType = isPdf ? "application/pdf" : file.type || "image/jpeg";
+        contentParts.push({
+          type: "image_url",
+          image_url: { url: `data:${mimeType};base64,${base64}` },
+        });
+      } else {
+        const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+        contentParts.push({
+          type: "text",
+          text: `[Arquivo: ${file.name}]\n${text.substring(0, 15000)}`,
+        });
+      }
+    }
+
+    contentParts.push({
+      type: "text",
+      text: "Analise os documentos acima e extraia as informações conforme solicitado. Responda APENAS com o JSON, sem markdown ou explicações.",
+    });
+
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: contentParts },
+        ],
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      if (aiResponse.status === 429) {
+        return new Response(JSON.stringify({ error: "Limite de requisições excedido, tente novamente em alguns segundos." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (aiResponse.status === 402) {
+        return new Response(JSON.stringify({ error: "Créditos de IA esgotados." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const errText = await aiResponse.text();
+      console.error("AI error:", aiResponse.status, errText);
+      throw new Error("Erro ao processar documento com IA");
+    }
+
+    const aiData = await aiResponse.json();
+    const rawContent = aiData.choices?.[0]?.message?.content || "";
+
+    // Parse the JSON from the AI response
+    let parsed;
+    try {
+      // Remove markdown code blocks if present
+      const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      parsed = JSON.parse(cleaned);
+    } catch {
+      console.error("Failed to parse AI response:", rawContent);
+      return new Response(JSON.stringify({
+        error: "Não foi possível interpretar o documento. Tente novamente.",
+        raw: rawContent,
+      }), {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ result: parsed }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("process-expense-doc error:", e);
+    return new Response(
+      JSON.stringify({ error: e instanceof Error ? e.message : "Erro interno" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
