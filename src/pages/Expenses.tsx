@@ -545,6 +545,7 @@ function CreateExpenseModal({
               value={supplier}
               onChange={handleSupplierChange}
               placeholder="Digite nome, código ou CNPJ do fornecedor..."
+              suggestedQuery={suggestedSupplierName}
             />
           </div>
 
