@@ -440,22 +440,23 @@ function CreateRuleModal({
                       {lvl.level_order}
                     </div>
                     <div className="flex-1 grid grid-cols-2 gap-2">
-                      <div>
-                        {i === 0 && <label className="text-[10px] text-muted-foreground">Aprovador *</label>}
-                        <Input
-                          value={lvl.approver_name}
-                          onChange={(e) => updateLevel(i, "approver_name", e.target.value)}
-                          placeholder="Nome do aprovador"
-                          className="text-sm h-9"
-                        />
-                      </div>
+                      <UserSelect
+                        users={sapUsers}
+                        isLoading={sapUsersLoading}
+                        value={lvl.approver_name}
+                        onSelect={(userName, email) => {
+                          updateLevel(i, "approver_name", userName);
+                          updateLevel(i, "approver_email", email);
+                        }}
+                        label={i === 0 ? "Aprovador *" : undefined}
+                      />
                       <div>
                         {i === 0 && <label className="text-[10px] text-muted-foreground">Email</label>}
                         <Input
                           value={lvl.approver_email || ""}
-                          onChange={(e) => updateLevel(i, "approver_email", e.target.value)}
-                          placeholder="email@empresa.com"
-                          className="text-sm h-9"
+                          readOnly
+                          className="text-sm h-9 bg-muted/30 text-muted-foreground"
+                          placeholder="Preenchido automaticamente"
                         />
                       </div>
                     </div>
