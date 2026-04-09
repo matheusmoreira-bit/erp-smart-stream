@@ -68,13 +68,16 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
               Vencido
             </span>
           )}
+          {doc.daysOpen > 0 && (
+            <span className="text-[10px] text-muted-foreground">{doc.daysOpen}d aberto</span>
+          )}
         </div>
       </div>
 
       <div className="space-y-2 text-sm">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Building2 className="w-3.5 h-3.5 text-primary/70" />
-          <span className="truncate">{doc.cardName}</span>
+          <span className="truncate" title={doc.cardCode}>{doc.cardName}</span>
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="w-3.5 h-3.5 text-primary/70" />
@@ -84,6 +87,12 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
           <FileText className="w-3.5 h-3.5 text-primary/70" />
           <span>Solicitante: <span className="text-foreground font-medium">{doc.requester}</span></span>
         </div>
+        {doc.approvalModel && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <FileText className="w-3.5 h-3.5 text-primary/70" />
+            <span className="text-xs truncate" title={doc.approvalModel}>Modelo: {doc.approvalModel}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="w-3.5 h-3.5 text-primary/70" />
@@ -100,6 +109,29 @@ function ApprovalCard({ doc }: { doc: ApprovalDoc }) {
         <p className="text-xs text-muted-foreground border-t border-border pt-2 truncate" title={doc.remarks}>
           {doc.remarks}
         </p>
+      )}
+
+      {doc.documentLines.length > 0 && (
+        <div className="border-t border-border pt-2 space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Itens</p>
+          {doc.documentLines.map((line, i) => (
+            <div key={i} className="flex justify-between text-xs text-muted-foreground">
+              <span className="truncate flex-1 mr-2" title={`${line.ItemCode} - ${line.Description}`}>
+                {line.Description}
+              </span>
+              <span className="font-mono whitespace-nowrap">{formatCurrency(line.LineTotal)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {doc.attachmentNames && (
+        <div className="border-t border-border pt-2">
+          <p className="text-[10px] text-muted-foreground truncate" title={doc.attachmentNames}>
+            📎 {doc.attachmentNames.split("|")[0]?.trim()}
+            {doc.attachmentNames.includes("|") && ` (+${doc.attachmentNames.split("|").length - 1})`}
+          </p>
+        </div>
       )}
     </motion.div>
   );
@@ -269,6 +301,8 @@ export default function ApprovalsPage() {
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Aprovador</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Solicitante</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vencimento</th>
+                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Modelo</th>
+                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Obs</th>
                 </tr>
               </thead>
               <tbody>
@@ -294,6 +328,8 @@ export default function ApprovalsPage() {
                         {formatDate(doc.dueDate)}
                         {overdue && <span className="ml-1 text-[10px]">⚠</span>}
                       </td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground truncate max-w-[150px]" title={doc.approvalModel}>{doc.approvalModel || "—"}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground truncate max-w-[200px]" title={doc.remarks}>{doc.remarks || "—"}</td>
                     </motion.tr>
                   );
                 })}
