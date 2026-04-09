@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
 import {
   Dialog,
   DialogContent,
