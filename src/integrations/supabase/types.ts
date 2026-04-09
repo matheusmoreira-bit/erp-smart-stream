@@ -242,6 +242,36 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_account_mapping: {
+        Row: {
+          account_code: string
+          account_name: string | null
+          cost_center: string | null
+          created_at: string
+          id: string
+          project: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_code: string
+          account_name?: string | null
+          cost_center?: string | null
+          created_at?: string
+          id?: string
+          project?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_code?: string
+          account_name?: string | null
+          cost_center?: string | null
+          created_at?: string
+          id?: string
+          project?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sap_cache: {
         Row: {
           cache_key: string
