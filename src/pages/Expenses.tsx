@@ -666,24 +666,54 @@ function CreateExpenseModal({
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">Centro de Custo (Dimensão)</label>
-                      <Input
-                        value={item.cost_center || ""}
-                        onChange={(e) => updateItem(i, "cost_center", e.target.value)}
-                        placeholder="Ex: 1.4.1.1"
-                        className="text-sm h-8"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">Projeto (Dimensão)</label>
-                      <Input
-                        value={item.project || ""}
-                        onChange={(e) => updateItem(i, "project", e.target.value)}
-                        placeholder="Ex: ANA GAMING"
-                        className="text-sm h-8"
-                      />
-                    </div>
+                    <SapSearchCombobox
+                      label="Centro de Custo (Dimensão)"
+                      endpoint="CostCenters"
+                      filterTemplate="contains(CenterCode,'{q}') or contains(CenterName,'{q}')"
+                      selectFields="CenterCode,CenterName"
+                      mapRow={(row: any) => ({
+                        code: row.CenterCode,
+                        name: row.CenterName,
+                      })}
+                      value={item.sapCostCenter || null}
+                      onChange={(val) => {
+                        setItems((prev) => {
+                          const updated = [...prev];
+                          updated[i] = {
+                            ...updated[i],
+                            sapCostCenter: val,
+                            cost_center: val?.code || "",
+                          };
+                          return updated;
+                        });
+                      }}
+                      placeholder="Buscar centro de custo..."
+                      suggestedQuery={item.cost_center && !item.sapCostCenter ? item.cost_center : undefined}
+                    />
+                    <SapSearchCombobox
+                      label="Projeto (Dimensão)"
+                      endpoint="Projects"
+                      filterTemplate="contains(Code,'{q}') or contains(Name,'{q}')"
+                      selectFields="Code,Name"
+                      mapRow={(row: any) => ({
+                        code: row.Code,
+                        name: row.Name,
+                      })}
+                      value={item.sapProject || null}
+                      onChange={(val) => {
+                        setItems((prev) => {
+                          const updated = [...prev];
+                          updated[i] = {
+                            ...updated[i],
+                            sapProject: val,
+                            project: val?.code || "",
+                          };
+                          return updated;
+                        });
+                      }}
+                      placeholder="Buscar projeto..."
+                      suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
+                    />
                   </div>
                 </div>
               ))}
