@@ -1,0 +1,148 @@
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import {
+  BarChart3,
+  ShoppingCart,
+  ClipboardCheck,
+  Activity,
+  ArrowRight,
+  type LucideIcon,
+} from "lucide-react";
+import { useSap } from "@/contexts/SapContext";
+
+interface ModuleCard {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  path: string;
+  color: string;
+  bgGlow: string;
+  available: boolean;
+}
+
+const modules: ModuleCard[] = [
+  {
+    title: "Analytics",
+    description: "Visão geral de métricas, tempos por etapa e insights de performance do fluxo de compras.",
+    icon: BarChart3,
+    path: "/analytics",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    available: true,
+  },
+  {
+    title: "Fluxo de Compras",
+    description: "Acompanhamento detalhado do pipeline de compras: requisição, cotação, pedido, recebimento, NF e pagamento.",
+    icon: ShoppingCart,
+    path: "/purchase-flow",
+    color: "text-success",
+    bgGlow: "from-success/20 to-success/5",
+    available: false,
+  },
+  {
+    title: "Aprovações",
+    description: "Documentos pendentes de aprovação com detalhes de valor, fornecedor, aprovador e vencimento.",
+    icon: ClipboardCheck,
+    path: "/approvals",
+    color: "text-warning",
+    bgGlow: "from-warning/20 to-warning/5",
+    available: true,
+  },
+];
+
+function ModuleCardItem({ mod, index }: { mod: ModuleCard; index: number }) {
+  const navigate = useNavigate();
+  const Icon = mod.icon;
+
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1 }}
+      onClick={() => mod.available && navigate(mod.path)}
+      disabled={!mod.available}
+      className={`glass-card p-6 text-left transition-all group relative overflow-hidden ${
+        mod.available
+          ? "hover:border-primary/40 cursor-pointer hover:scale-[1.02]"
+          : "opacity-50 cursor-not-allowed"
+      }`}
+    >
+      {/* Glow background */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
+
+      <div className="relative z-10">
+        <div className="flex items-start justify-between mb-4">
+          <div className={`p-3 rounded-xl bg-card border border-border ${mod.color}`}>
+            <Icon className="w-6 h-6" />
+          </div>
+          {mod.available ? (
+            <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+          ) : (
+            <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full uppercase">Em breve</span>
+          )}
+        </div>
+        <h3 className="text-lg font-bold text-foreground mb-2">{mod.title}</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed">{mod.description}</p>
+      </div>
+    </motion.button>
+  );
+}
+
+export function MainMenu() {
+  const { session, logout } = useSap();
+
+  const COMPANY_LABELS: Record<string, string> = {
+    SBO_ANAGAMING: "ANA Gaming",
+    SBO_CACTUS: "Cactus",
+    SBO_INSTITUTO_ANA: "Instituto Cactus",
+  };
+  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <header className="border-b border-border px-6 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10 glow-primary">
+              <Activity className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
+              <p className="text-xs text-muted-foreground">Painel de gestão</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm font-medium text-foreground">{companyLabel}</p>
+              <p className="text-xs text-muted-foreground">{session?.userName}</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
+              Conectado
+            </div>
+            <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              Sair
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="max-w-5xl w-full">
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-foreground">Módulos</h2>
+            <p className="text-muted-foreground mt-2">Selecione um módulo para começar</p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {modules.map((mod, i) => (
+              <ModuleCardItem key={mod.title} mod={mod} index={i} />
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
