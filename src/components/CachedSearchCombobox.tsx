@@ -88,7 +88,7 @@ export function CachedSearchCombobox({
           value={value ? displayValue : query}
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={() => {
-            if (!value && query.length > 0) setIsOpen(true);
+            if (!value) setIsOpen(true);
           }}
           placeholder={isLoading ? "Carregando..." : placeholder}
           className={`pl-8 pr-8 text-sm h-9 ${value ? "border-green-500/50 bg-green-500/5" : ""}`}
