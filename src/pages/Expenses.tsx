@@ -553,7 +553,7 @@ function CreateExpenseModal({
             <SapSearchCombobox
               label="Fornecedor *"
               endpoint="BusinessPartners"
-              filterTemplate="contains(tolower(CardName),tolower('{q}')) or contains(tolower(CardCode),tolower('{q}')) or contains(tolower(FederalTaxID),tolower('{q}'))"
+              filterTemplate="contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}')"
               selectFields="CardCode,CardName,FederalTaxID,Currency"
               mapRow={(row: any) => ({
                 code: row.CardCode,
