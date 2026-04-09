@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 const SAP_BASE_URL = "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v1";
+const HANA_VIEWS_URL = "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
 // In-memory cache with TTL
 const cache = new Map<string, { data: unknown; expiry: number }>();
@@ -25,13 +26,52 @@ function setCache(key: string, data: unknown) {
   cache.set(key, { data, expiry: Date.now() + CACHE_TTL });
 }
 
+async function parseResponseBody(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function extractViewRows(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) {
+    const wrapped = payload.find((item) => {
+      return !!item && typeof item === "object" && Array.isArray((item as { data?: unknown[] }).data);
+    }) as { data?: unknown[] } | undefined;
+
+    if (wrapped?.data) {
+      return wrapped.data;
+    }
+
+    return payload;
+  }
+
+  if (payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown[] }).data)) {
+    return (payload as { data: unknown[] }).data;
+  }
+
+  return [];
+}
+
+function buildViewTableAttempts(database: string, table: string): string[] {
+  const trimmedTable = table.trim();
+  const shortTable = trimmedTable.includes(".") ? trimmedTable.split(".").pop() || trimmedTable : trimmedTable;
+  const qualifiedTable = trimmedTable.includes(".") ? trimmedTable : `${database}.${trimmedTable}`;
+
+  return Array.from(new Set([qualifiedTable, shortTable].filter(Boolean)));
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { action, credentials, endpoint, params, sessionId, routeId } = await req.json();
+    const { action, credentials, endpoint, params, sessionId, routeId, table, database } = await req.json();
 
     // LOGIN
     if (action === "login") {
@@ -216,6 +256,95 @@ serve(async (req) => {
       });
     }
 
+    // QUERY VIEW - fetch processed HANA views through external API
+    if (action === "queryView") {
+      if (!sessionId || !database || !table) {
+        return new Response(JSON.stringify({ error: "sessionId, database e table são obrigatórios" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const tableAttempts = buildViewTableAttempts(database, table);
+      let lastPayload: unknown = null;
+      let lastError: { status: number; message: string } | null = null;
+
+      for (const tableName of tableAttempts) {
+        const cacheKey = `${sessionId}:view:${database}:${tableName}:${JSON.stringify(params || {})}`;
+        const cached = getCached(cacheKey);
+        if (cached) {
+          return new Response(JSON.stringify({ data: cached, fromCache: true }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const queryParams = new URLSearchParams({
+          SessionId: sessionId,
+          DB: database,
+          Table: tableName,
+          _t: String(Date.now()),
+        });
+
+        if (params) {
+          for (const [key, value] of Object.entries(params)) {
+            if (
+              value !== undefined &&
+              value !== null &&
+              key !== "SessionId" &&
+              key !== "DB" &&
+              key !== "Table"
+            ) {
+              queryParams.set(key, String(value));
+            }
+          }
+        }
+
+        const viewResp = await fetch(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const payload = await parseResponseBody(viewResp);
+        lastPayload = payload;
+
+        if (!viewResp.ok) {
+          const message =
+            payload && typeof payload === "object" && "message" in payload
+              ? String((payload as { message?: string }).message || "Erro na consulta da view HANA")
+              : typeof payload === "string"
+                ? payload
+                : "Erro na consulta da view HANA";
+
+          console.error("HANA view query error:", viewResp.status, payload);
+          lastError = { status: viewResp.status, message };
+          continue;
+        }
+
+        const rows = extractViewRows(payload);
+        if (rows.length > 0) {
+          setCache(cacheKey, rows);
+
+          return new Response(JSON.stringify({ data: rows, fromCache: false }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      if (lastPayload !== null) {
+        return new Response(JSON.stringify({ data: extractViewRows(lastPayload), fromCache: false }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: lastError?.message || "Erro na consulta da view HANA" }), {
+        status: lastError?.status || 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // LOGOUT
     if (action === "logout") {
       if (sessionId) {
@@ -231,7 +360,7 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Ação inválida. Use: login, query, queryAll, logout" }), {
+    return new Response(JSON.stringify({ error: "Ação inválida. Use: login, query, queryAll, queryView, logout" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

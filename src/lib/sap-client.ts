@@ -99,6 +99,35 @@ export async function sapQuery(
   return { data: result.data, fromCache: result.fromCache };
 }
 
+export async function sapQueryView<T = unknown>(
+  session: SapSession,
+  table: string,
+  params?: Record<string, string | number>,
+  useCache = true,
+): Promise<{ data: T[]; fromCache: boolean }> {
+  const cacheKey = `view:${session.companyDB}:${table}:${JSON.stringify(params || {})}`;
+
+  if (useCache) {
+    const cached = getClientCache(cacheKey);
+    if (cached) return { data: cached as T[], fromCache: true };
+  }
+
+  const result = await callProxy({
+    action: "queryView",
+    sessionId: session.sessionId,
+    routeId: session.routeId,
+    database: session.companyDB,
+    table,
+    params,
+  });
+
+  if (useCache) {
+    setClientCache(cacheKey, result.data);
+  }
+
+  return { data: result.data as T[], fromCache: result.fromCache };
+}
+
 export async function sapQueryAll(
   session: SapSession,
   endpoint: string,
