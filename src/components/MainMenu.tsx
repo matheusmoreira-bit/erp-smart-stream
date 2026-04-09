@@ -59,6 +59,15 @@ const modules: ModuleCard[] = [
     bgGlow: "from-destructive/20 to-destructive/5",
     available: true,
   },
+  {
+    title: "PagCorp",
+    description: "Transações de cartões corporativos com filtro de prestação de conta e lançamento no SAP.",
+    icon: CreditCard,
+    path: "/pagcorp",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    available: true,
+  },
 ];
 
 function ModuleCardItem({ mod, index }: { mod: ModuleCard; index: number }) {
