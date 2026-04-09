@@ -34,10 +34,10 @@ const DOC_TYPE_NAMES: Record<string, string> = {
 };
 
 const STATUS_MAP: Record<string, ApprovalDoc["status"]> = {
-  artPending: "pending",
-  artApproved: "approved",
-  artNotApproved: "rejected",
-  artGenerated: "generated",
+  arsPending: "pending",
+  arsApproved: "approved",
+  arsNotApproved: "rejected",
+  arsGenerated: "generated",
 };
 
 export function useApprovals() {
@@ -54,7 +54,7 @@ export function useApprovals() {
     try {
       // Fetch approval requests - filter for pending
       const result = await sapQueryAll(session, "ApprovalRequests", {
-        $filter: "Status eq 'artPending'",
+        $filter: "Status eq 'arsPending'",
         $orderby: "CreationDate desc",
       });
 
@@ -62,7 +62,7 @@ export function useApprovals() {
 
       const docs: ApprovalDoc[] = items.map((item: any) => {
         const stages = item.ApprovalRequestLines || [];
-        const currentStage = stages.find((s: any) => s.Status === "artPending");
+        const currentStage = stages.find((s: any) => s.Status === "arsPending");
         const approverName = currentStage?.UserName || currentStage?.UserId || "—";
 
         const objectType = String(item.ObjectType || "");
