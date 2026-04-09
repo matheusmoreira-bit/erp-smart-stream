@@ -553,7 +553,7 @@ function CreateExpenseModal({
             <SapSearchCombobox
               label="Fornecedor *"
               endpoint="BusinessPartners"
-              filterTemplate="contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}')"
+              filterTemplate="contains(tolower(CardName),tolower('{q}')) or contains(tolower(CardCode),tolower('{q}')) or contains(tolower(FederalTaxID),tolower('{q}'))"
               selectFields="CardCode,CardName,FederalTaxID,Currency"
               mapRow={(row: any) => ({
                 code: row.CardCode,
@@ -706,15 +706,10 @@ function CreateExpenseModal({
                       placeholder="Buscar centro de custo..."
                       suggestedQuery={item.cost_center && !item.sapCostCenter ? item.cost_center : undefined}
                     />
-                    <SapSearchCombobox
+                    <CachedSearchCombobox
                       label="Projeto (Dimensão)"
-                      endpoint="Projects"
-                      filterTemplate="(contains(Name,'{q}') or startswith(Code,'{q}')) and Active eq 'tYES'"
-                      selectFields="Code,Name"
-                      mapRow={(row: any) => ({
-                        code: row.Code,
-                        name: row.Name,
-                      })}
+                      options={projectOptions}
+                      isLoading={projectsLoading}
                       value={item.sapProject || null}
                       onChange={(val) => {
                         setItems((prev) => {
