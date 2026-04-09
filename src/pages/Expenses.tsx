@@ -206,6 +206,14 @@ function CreateExpenseModal({
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
 
+  // Cached SAP lists
+  const { options: costCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "CostCenters",
+    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    mapRow: (row: any) => ({ code: row.CenterCode, name: row.CenterName }),
+  });
+
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
