@@ -208,6 +208,27 @@ function CreateExpenseModal({
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
 
   // Cached SAP lists
+  const supplierMapRow = useCallback((row: any) => ({
+    code: row.CardCode,
+    name: row.CardName,
+    extra: row.FederalTaxID || undefined,
+    currency: row.Currency || "",
+  } as SapSearchOption & { currency: string }), []);
+  const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
+    cacheKey: "suppliers",
+    endpoint: "BusinessPartners",
+    params: { $select: "CardCode,CardName,FederalTaxID,Currency" },
+    mapRow: supplierMapRow,
+  });
+
+  const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
+  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+    cacheKey: "items",
+    endpoint: "Items",
+    params: { $select: "ItemCode,ItemName" },
+    mapRow: itemMapRow,
+  });
+
   const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const { options: costCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
     cacheKey: "cost_centers",
