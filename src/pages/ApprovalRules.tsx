@@ -573,6 +573,7 @@ export default function ApprovalRulesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { rules, isLoading, error, refresh, createRule, toggleRule, deleteRule } = useApprovalRules();
+  const { users: sapUsers, isLoading: sapUsersLoading } = useSapUsers();
   const [showCreate, setShowCreate] = useState(false);
 
   if (!session) {
@@ -702,6 +703,8 @@ export default function ApprovalRulesPage() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreate={handleCreate}
+        sapUsers={sapUsers}
+        sapUsersLoading={sapUsersLoading}
       />
     </div>
   );
