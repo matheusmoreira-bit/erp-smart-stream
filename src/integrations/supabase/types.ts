@@ -14,7 +14,148 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      expense_attachments: {
+        Row: {
+          created_at: string
+          expense_id: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+        }
+        Insert: {
+          created_at?: string
+          expense_id: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+        }
+        Update: {
+          created_at?: string
+          expense_id?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_attachments_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_items: {
+        Row: {
+          cost_center: string | null
+          created_at: string
+          description: string
+          expense_id: string
+          id: string
+          item_code: string | null
+          line_total: number
+          project: string | null
+          quantity: number
+          unit_price: number
+        }
+        Insert: {
+          cost_center?: string | null
+          created_at?: string
+          description: string
+          expense_id: string
+          id?: string
+          item_code?: string | null
+          line_total?: number
+          project?: string | null
+          quantity?: number
+          unit_price?: number
+        }
+        Update: {
+          cost_center?: string | null
+          created_at?: string
+          description?: string
+          expense_id?: string
+          id?: string
+          item_code?: string | null
+          line_total?: number
+          project?: string | null
+          quantity?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_items_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          cost_center: string | null
+          created_at: string
+          currency: string
+          current_approver: string | null
+          id: string
+          project: string | null
+          remarks: string | null
+          requester_email: string | null
+          requester_name: string
+          sap_doc_entry: number | null
+          sap_doc_num: number | null
+          status: Database["public"]["Enums"]["expense_status"]
+          supplier_code: string | null
+          supplier_name: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          cost_center?: string | null
+          created_at?: string
+          currency?: string
+          current_approver?: string | null
+          id?: string
+          project?: string | null
+          remarks?: string | null
+          requester_email?: string | null
+          requester_name: string
+          sap_doc_entry?: number | null
+          sap_doc_num?: number | null
+          status?: Database["public"]["Enums"]["expense_status"]
+          supplier_code?: string | null
+          supplier_name: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          cost_center?: string | null
+          created_at?: string
+          currency?: string
+          current_approver?: string | null
+          id?: string
+          project?: string | null
+          remarks?: string | null
+          requester_email?: string | null
+          requester_name?: string
+          sap_doc_entry?: number | null
+          sap_doc_num?: number | null
+          status?: Database["public"]["Enums"]["expense_status"]
+          supplier_code?: string | null
+          supplier_name?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +164,15 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      expense_status:
+        | "rascunho"
+        | "pendente_aprovacao"
+        | "aprovado"
+        | "rejeitado"
+        | "pc_lancado"
+        | "nf_entrada"
+        | "pagamento"
+        | "finalizado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +299,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      expense_status: [
+        "rascunho",
+        "pendente_aprovacao",
+        "aprovado",
+        "rejeitado",
+        "pc_lancado",
+        "nf_entrada",
+        "pagamento",
+        "finalizado",
+      ],
+    },
   },
 } as const
