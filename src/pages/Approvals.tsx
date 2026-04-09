@@ -301,6 +301,8 @@ export default function ApprovalsPage() {
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Aprovador</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Solicitante</th>
                   <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vencimento</th>
+                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Modelo</th>
+                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Obs</th>
                 </tr>
               </thead>
               <tbody>
@@ -326,6 +328,8 @@ export default function ApprovalsPage() {
                         {formatDate(doc.dueDate)}
                         {overdue && <span className="ml-1 text-[10px]">⚠</span>}
                       </td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground truncate max-w-[150px]" title={doc.approvalModel}>{doc.approvalModel || "—"}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground truncate max-w-[200px]" title={doc.remarks}>{doc.remarks || "—"}</td>
                     </motion.tr>
                   );
                 })}
