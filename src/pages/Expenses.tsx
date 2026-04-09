@@ -252,11 +252,32 @@ function CreateExpenseModal({
       const { result } = await resp.json();
 
       // Handle single or array result
-      const doc = Array.isArray(result) ? result[0] : result;
+      const docs = Array.isArray(result) ? result : [result];
 
-      // Only set supplier if AI found a match with high confidence
-      if (doc.supplier_name && doc.supplier_match_confidence && doc.supplier_match_confidence >= 0.8) {
-        setSupplier({ code: doc.supplier_cnpj || "", name: doc.supplier_name, extra: doc.supplier_cnpj });
+      // Validate multi-attachment: all documents must be from the same supplier
+      if (docs.length > 1) {
+        const supplierNames = docs
+          .map((d: any) => d.supplier_name?.trim().toLowerCase())
+          .filter(Boolean);
+        const uniqueSuppliers = [...new Set(supplierNames)];
+        if (uniqueSuppliers.length > 1) {
+          const names = docs.map((d: any) => d.supplier_name).filter(Boolean);
+          toast.error(
+            `Os documentos são de fornecedores diferentes (${names.join(", ")}). Cada despesa deve conter documentos de um único fornecedor.`,
+            { duration: 8000 }
+          );
+          setAiWarning(`Fornecedores diferentes detectados: ${names.join(", ")}. Remova os documentos inconsistentes.`);
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      const doc = docs[0];
+
+      // AI suggests supplier name — user must validate by selecting from SAP search results
+      // Never mark supplier as "selected" (green check) from AI alone
+      if (doc.supplier_name) {
+        setSuggestedSupplierName(doc.supplier_name);
       }
       if (doc.document_date) setDocDate(doc.document_date);
       if (doc.due_date) setDueDate(doc.due_date);
@@ -271,7 +292,8 @@ function CreateExpenseModal({
             cost_center: item.cost_center || doc.cost_center_hint || "",
             project: item.project || "",
             item_code: item.item_code_match || "",
-            sapItem: item.item_code_match ? { code: item.item_code_match, name: item.description } : null,
+            // Don't pre-select items as validated — only suggest via description
+            sapItem: null,
           }))
         );
       }
@@ -284,7 +306,7 @@ function CreateExpenseModal({
         toast.warning(doc.client_warning, { duration: 8000 });
       }
 
-      toast.success("Documento processado pela IA!");
+      toast.success("Documento processado pela IA! Valide o fornecedor e os itens nos campos abaixo.");
     } catch (e) {
       console.error("AI processing error:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao processar com IA");
