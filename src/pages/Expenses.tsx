@@ -202,6 +202,7 @@ function CreateExpenseModal({
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
+  const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
 
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
