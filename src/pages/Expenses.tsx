@@ -193,10 +193,13 @@ function CreateExpenseModal({
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
+  const [docDate, setDocDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
+  const [aiWarning, setAiWarning] = useState<string | null>(null);
 
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
@@ -224,6 +227,8 @@ function CreateExpenseModal({
     try {
       const formData = new FormData();
       filesToProcess.forEach((f) => formData.append("files", f));
+      // Send company info for validation
+      formData.append("company_db", sapSession?.companyDB || "");
 
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-expense-doc`,
@@ -246,9 +251,12 @@ function CreateExpenseModal({
       // Handle single or array result
       const doc = Array.isArray(result) ? result[0] : result;
 
-      if (doc.supplier_name) {
+      // Only set supplier if AI found a match with high confidence
+      if (doc.supplier_name && doc.supplier_match_confidence && doc.supplier_match_confidence >= 0.8) {
         setSupplier({ code: doc.supplier_cnpj || "", name: doc.supplier_name, extra: doc.supplier_cnpj });
       }
+      if (doc.document_date) setDocDate(doc.document_date);
+      if (doc.due_date) setDueDate(doc.due_date);
       if (doc.remarks) setRemarks(doc.remarks);
       if (doc.items && doc.items.length > 0) {
         setItems(
@@ -259,10 +267,19 @@ function CreateExpenseModal({
             line_total: item.line_total || (item.quantity || 1) * (item.unit_price || 0),
             cost_center: item.cost_center || doc.cost_center_hint || "",
             project: item.project || "",
+            item_code: item.item_code_match || "",
+            sapItem: item.item_code_match ? { code: item.item_code_match, name: item.description } : null,
           }))
         );
       }
       if (doc.confidence) setAiConfidence(doc.confidence);
+
+      // Check if document client differs from logged company
+      setAiWarning(null);
+      if (doc.client_warning) {
+        setAiWarning(doc.client_warning);
+        toast.warning(doc.client_warning, { duration: 8000 });
+      }
 
       toast.success("Documento processado pela IA!");
     } catch (e) {
@@ -306,6 +323,14 @@ function CreateExpenseModal({
       toast.error("Informe o fornecedor");
       return;
     }
+    if (!docDate) {
+      toast.error("Informe a data do documento");
+      return;
+    }
+    if (!dueDate) {
+      toast.error("Informe a data de vencimento");
+      return;
+    }
     if (items.some((i) => !i.description.trim())) {
       toast.error("Todos os itens devem ter descrição");
       return;
@@ -330,7 +355,10 @@ function CreateExpenseModal({
 
   const resetForm = () => {
     setSupplier(null);
+    setDocDate("");
+    setDueDate("");
     setRemarks("");
+    setAiWarning(null);
     setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
     setFiles([]);
     setAiConfidence(null);
