@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Activity, Lock, User, Database, LogIn, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 
@@ -60,23 +61,21 @@ export function SapLoginForm() {
               <Database className="w-4 h-4 text-primary" />
               Base de Dados
             </label>
-            <div className="grid grid-cols-1 gap-2">
-              {DATABASES.map((db) => (
-                <button
-                  key={db.value}
-                  type="button"
-                  onClick={() => setCompanyDB(db.value)}
-                  className={`p-3 rounded-lg border text-left text-sm font-medium transition-all ${
-                    companyDB === db.value
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-muted/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                  }`}
-                >
-                  <span className="block">{db.label}</span>
-                  <span className="text-xs opacity-60 font-mono">{db.value}</span>
-                </button>
-              ))}
-            </div>
+            <Select value={companyDB} onValueChange={setCompanyDB}>
+              <SelectTrigger className="bg-muted/30 border-border">
+                <div className="flex items-center gap-2">
+                  <SelectValue placeholder="Selecione a base de dados" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {DATABASES.map((db) => (
+                  <SelectItem key={db.value} value={db.value}>
+                    <span className="font-medium">{db.label}</span>
+                    <span className="text-xs text-muted-foreground ml-2 font-mono">{db.value}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Username */}
