@@ -25,7 +25,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
 
       // Audit login
       const { logAuditAction } = await import("@/hooks/useAuditLog");
-      await logAuditAction({ action: "sap_login", entity_type: "sap_session", actor_email: userName, details: { companyDB } });
+      await logAuditAction({ action: "sap_login", entity_type: "sap_session", actor_email: userName, company_db: companyDB, details: { companyDB } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao conectar");
       throw e;
