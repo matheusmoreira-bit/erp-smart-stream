@@ -88,7 +88,10 @@ serve(async (req) => {
 
   try {
     const reqBody = await req.json();
-    const { action, credentials, endpoint, params, sessionId, routeId, table, database } = reqBody;
+    const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
+
+    // Resolve the SAP Service Layer base URL dynamically per company
+    const SAP_BASE_URL = await getSapBaseUrl(companyDB || credentials?.CompanyDB);
 
     // LOGIN
     if (action === "login") {
