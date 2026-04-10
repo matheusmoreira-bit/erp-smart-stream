@@ -33,6 +33,7 @@ const App = () => (
             <Route path="/approval-rules" element={<ApprovalRules />} />
             <Route path="/pagcorp" element={<PagCorp />} />
             <Route path="/pagcorp/mapping" element={<PagCorpMapping />} />
+            <Route path="/pagcorp/history" element={<IntegrationHistory />} />
             <Route path="/credentials" element={<Credentials />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="*" element={<NotFound />} />

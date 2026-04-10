@@ -219,6 +219,9 @@ export default function PagCorp() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/history")} className="gap-2">
+              <History className="w-4 h-4" /> Histórico
+            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/mapping")} className="gap-2">
               <MapPin className="w-4 h-4" /> Mapeamento
             </Button>
