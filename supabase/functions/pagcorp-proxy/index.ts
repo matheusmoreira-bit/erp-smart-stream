@@ -66,19 +66,25 @@ interface PagCorpCreds {
   account_id: string;
 }
 
-async function getCredentials(): Promise<PagCorpCreds> {
+async function getCredentials(companyDb?: string): Promise<PagCorpCreds> {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("system_credentials")
     .select("credential_key, credential_value")
     .eq("system_name", "pagcorp");
 
+  if (companyDb) {
+    query = query.eq("company_db", companyDb);
+  }
+
+  const { data, error } = await query;
+
   if (error) throw new Error(`Failed to load credentials: ${error.message}`);
-  if (!data || data.length === 0) throw new Error("PagCorp credentials not configured. Go to Credentials page to set them up.");
+  if (!data || data.length === 0) throw new Error(companyDb ? `Credenciais PagCorp não configuradas para a empresa ${companyDb}.` : "PagCorp credentials not configured.");
 
   const creds: Record<string, string> = {};
   for (const row of data) {
@@ -154,8 +160,9 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const startDate = url.searchParams.get("startDate") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
     const endDate = url.searchParams.get("endDate") || new Date().toISOString().slice(0, 10);
+    const companyDb = url.searchParams.get("companyDb") || undefined;
 
-    const creds = await getCredentials();
+    const creds = await getCredentials(companyDb);
     const apiToken = await getAuthToken(creds);
     const expenses = await fetchExpenses(apiToken, creds.api_base_url, creds.account_id, startDate, endDate);
 

@@ -28,13 +28,14 @@ export function usePagCorp() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTransactions = useCallback(async (startDate?: string, endDate?: string) => {
+  const fetchTransactions = useCallback(async (startDate?: string, endDate?: string, companyDb?: string) => {
     setIsLoading(true);
     setError(null);
     try {
       const params: Record<string, string> = {};
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+      if (companyDb) params.companyDb = companyDb;
 
       const queryString = new URLSearchParams(params).toString();
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;

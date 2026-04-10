@@ -141,10 +141,10 @@ export default function PagCorp() {
   };
 
   useEffect(() => {
-    fetchTransactions(startDate, endDate);
+    fetchTransactions(startDate, endDate, session?.companyDB);
   }, []);
 
-  const handleRefresh = () => fetchTransactions(startDate, endDate);
+  const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
 
   const filteredTransactions = useMemo(() => {
     let list = transactions;
