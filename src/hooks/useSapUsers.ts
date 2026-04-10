@@ -131,7 +131,11 @@ export function useSapUsers() {
   const refresh = useCallback(() => fetchUsers(true), [fetchUsers]);
 
   useEffect(() => {
-    fetchUsers();
+    const controller = new AbortController();
+    fetchUsers(false, controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, [fetchUsers]);
 
   return { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword };
