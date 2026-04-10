@@ -90,7 +90,7 @@ export default function MonthlyLoginChart({ records, filtered }: Props) {
         "Média Histórica": avg,
       };
     });
-  }, [records]);
+  }, [records, filtered]);
 
   const monthLabel = new Date().toLocaleDateString("pt-BR", {
     month: "long",
