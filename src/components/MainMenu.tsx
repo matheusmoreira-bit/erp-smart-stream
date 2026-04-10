@@ -10,6 +10,7 @@ import {
   CreditCard,
   Key,
   Users,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -77,6 +78,15 @@ const modules: ModuleCard[] = [
     path: "/users",
     color: "text-warning",
     bgGlow: "from-warning/20 to-warning/5",
+    available: true,
+  },
+  {
+    title: "Synapse",
+    description: "Central de automações e integrações entre sistemas (JumpCloud, SAP, IdP).",
+    icon: Zap,
+    path: "/synapse",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
     available: true,
   },
   {
