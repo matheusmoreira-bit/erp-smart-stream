@@ -17,6 +17,7 @@ import UsersPage from "./pages/Users.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
 import IdpSync from "./pages/IdpSync.tsx";
 import Synapse from "./pages/Synapse.tsx";
+import AuditLog from "./pages/AuditLog.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminLogin from "./pages/AdminLogin.tsx";
 import Admin from "./pages/Admin.tsx";
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/users/activity" element={<UserActivity />} />
             <Route path="/users/idp-sync" element={<IdpSync />} />
             <Route path="/synapse" element={<Synapse />} />
+            <Route path="/audit-log" element={<AuditLog />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

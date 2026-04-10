@@ -12,6 +12,7 @@ import {
   Key,
   Users,
   Zap,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -97,6 +98,15 @@ const modules: ModuleCard[] = [
     path: "/credentials",
     color: "text-muted-foreground",
     bgGlow: "from-muted/20 to-muted/5",
+    available: true,
+  },
+  {
+    title: "Logs de Auditoria",
+    description: "Registro completo de todas as ações realizadas no sistema para análise e auditoria.",
+    icon: ScrollText,
+    path: "/audit-log",
+    color: "text-violet-400",
+    bgGlow: "from-violet-500/20 to-violet-500/5",
     available: true,
   },
 ];

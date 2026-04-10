@@ -151,6 +151,16 @@ export function usePagCorp() {
       .single();
 
     if (error) throw error;
+
+    // Audit
+    const { logAuditAction } = await import("@/hooks/useAuditLog");
+    await logAuditAction({
+      action: "integrate",
+      entity_type: "pagcorp_transaction",
+      entity_id: String(transaction.id),
+      details: { integrationType, status, companyDb, sapDocEntry, sapDocNum, amount: transaction.amount, description: transaction.description },
+    });
+
     return data;
   }, []);
 
