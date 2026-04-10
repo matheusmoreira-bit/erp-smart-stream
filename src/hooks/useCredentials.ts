@@ -5,6 +5,7 @@ interface CredentialMeta {
   system_name: string;
   credential_key: string;
   updated_at: string;
+  company_db: string | null;
 }
 
 export function useCredentials() {
@@ -15,12 +16,15 @@ export function useCredentials() {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-  const fetchCredentials = useCallback(async (system?: string) => {
+  const fetchCredentials = useCallback(async (companyDb?: string, system?: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const params = system ? `?system=${encodeURIComponent(system)}` : "";
-      const res = await fetch(`${supabaseUrl}/functions/v1/credentials${params}`, {
+      const params = new URLSearchParams();
+      if (system) params.set("system", system);
+      if (companyDb) params.set("company_db", companyDb);
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetch(`${supabaseUrl}/functions/v1/credentials${qs}`, {
         headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey },
       });
       if (!res.ok) throw new Error(`Erro ${res.status}`);
@@ -33,7 +37,7 @@ export function useCredentials() {
     }
   }, [supabaseUrl, anonKey]);
 
-  const saveCredentials = useCallback(async (systemName: string, creds: { key: string; value: string }[]) => {
+  const saveCredentials = useCallback(async (systemName: string, creds: { key: string; value: string }[], companyDb?: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -44,13 +48,13 @@ export function useCredentials() {
           apikey: anonKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ system_name: systemName, credentials: creds }),
+        body: JSON.stringify({ system_name: systemName, credentials: creds, company_db: companyDb }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Erro ${res.status}`);
       }
-      await fetchCredentials();
+      await fetchCredentials(companyDb);
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao salvar credenciais");
@@ -60,7 +64,7 @@ export function useCredentials() {
     }
   }, [supabaseUrl, anonKey, fetchCredentials]);
 
-  const deleteCredentials = useCallback(async (systemName: string) => {
+  const deleteCredentials = useCallback(async (systemName: string, companyDb?: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -71,10 +75,10 @@ export function useCredentials() {
           apikey: anonKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ system_name: systemName }),
+        body: JSON.stringify({ system_name: systemName, company_db: companyDb }),
       });
       if (!res.ok) throw new Error(`Erro ${res.status}`);
-      await fetchCredentials();
+      await fetchCredentials(companyDb);
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao remover credenciais");

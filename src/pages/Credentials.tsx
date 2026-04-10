@@ -1,20 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft,
-  Key,
-  CreditCard,
-  Server,
-  Save,
-  Trash2,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  Eye,
-  EyeOff,
-  Shield,
-  Settings2,
-  Users,
+  ArrowLeft, Key, CreditCard, Server, Save, Trash2, Loader2,
+  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,15 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { useCredentials } from "@/hooks/useCredentials";
+import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 
 interface SystemField {
@@ -95,11 +80,13 @@ function CredentialModal({
   existingKeys,
   open,
   onOpenChange,
+  companyDb,
 }: {
   system: SystemConfig;
   existingKeys: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  companyDb?: string;
 }) {
   const { saveCredentials, deleteCredentials, isLoading } = useCredentials();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -116,7 +103,7 @@ function CredentialModal({
       return;
     }
 
-    const ok = await saveCredentials(system.name, creds);
+    const ok = await saveCredentials(system.name, creds, companyDb);
     if (ok) {
       toast.success(`Credenciais do ${system.label} salvas com sucesso`);
       setValues({});
@@ -126,7 +113,7 @@ function CredentialModal({
 
   const handleDelete = async () => {
     if (!confirm(`Remover todas as credenciais do ${system.label}?`)) return;
-    const ok = await deleteCredentials(system.name);
+    const ok = await deleteCredentials(system.name, companyDb);
     if (ok) {
       toast.success(`Credenciais do ${system.label} removidas`);
       onOpenChange(false);
@@ -214,15 +201,16 @@ function CredentialModal({
 
 export default function Credentials() {
   const navigate = useNavigate();
+  const { session } = useSap();
+  const companyDb = session?.companyDB;
   const { credentials, fetchCredentials, isLoading } = useCredentials();
   const [selectedSystem, setSelectedSystem] = useState<SystemConfig | null>(null);
   const [enabledSystems, setEnabledSystems] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    fetchCredentials();
-  }, [fetchCredentials]);
+    fetchCredentials(companyDb);
+  }, [fetchCredentials, companyDb]);
 
-  // Auto-enable systems that have credentials
   useEffect(() => {
     const enabled: Record<string, boolean> = { ...enabledSystems };
     SYSTEMS.forEach((s) => {
@@ -265,7 +253,9 @@ export default function Credentials() {
               Credenciais <span className="text-gradient">do Sistema</span>
             </h1>
             <p className="text-xs text-muted-foreground">
-              Gerencie as conexões com sistemas externos de forma segura
+              {companyDb
+                ? `Credenciais para a empresa ${companyDb}`
+                : "Gerencie as conexões com sistemas externos de forma segura"}
             </p>
           </div>
         </div>
@@ -319,10 +309,7 @@ export default function Credentials() {
                               <p className="text-xs text-muted-foreground">{system.description}</p>
                             </div>
                           </div>
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="pt-1"
-                          >
+                          <div onClick={(e) => e.stopPropagation()} className="pt-1">
                             <Switch
                               checked={isEnabled}
                               onCheckedChange={(checked) => toggleSystem(system.name, checked)}
@@ -370,10 +357,11 @@ export default function Credentials() {
           system={selectedSystem}
           existingKeys={getKeysForSystem(selectedSystem.name)}
           open={!!selectedSystem}
+          companyDb={companyDb}
           onOpenChange={(open) => {
             if (!open) {
               setSelectedSystem(null);
-              fetchCredentials();
+              fetchCredentials(companyDb);
             }
           }}
         />
