@@ -65,6 +65,33 @@ export function Dashboard({ embedded = false }: DashboardProps) {
 
           {stages.length > 0 && <FlowTimeline stages={stages} />}
 
+          {approverStats.length > 0 && (
+            <div className="glass-card p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <UserCheck className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">Tempo Médio de Aprovação por Aprovador</h2>
+                <span className="text-xs text-muted-foreground ml-auto">{approverStats.reduce((s, a) => s + a.count, 0)} aprovações</span>
+              </div>
+              <svg width="0" height="0"><defs><linearGradient id="approverGradH" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.6} /><stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} /></linearGradient></defs></svg>
+              <ResponsiveContainer width="100%" height={Math.max(300, approverStats.length * 40)}>
+                <BarChart data={approverStats} layout="vertical" margin={{ left: 20, right: 30, top: 5, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                  <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} unit="d" />
+                  <YAxis type="category" dataKey="name" width={160} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
+                    formatter={(value: number, _: string, entry: any) => [`${value}d (${entry.payload.count} docs)`, "Média"]}
+                  />
+                  <Bar dataKey="avgDays" fill="url(#approverGradH)" radius={[0, 6, 6, 0]} barSize={20}>
+                    {approverStats.map((entry, i) => (
+                      <Cell key={i} fillOpacity={entry.avgDays > 3 ? 1 : 0.7} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               {insights.length > 0 && <InsightsPanel insights={insights} />}
