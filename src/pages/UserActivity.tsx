@@ -84,7 +84,7 @@ export default function UserActivityPage() {
       );
     }
     return list;
-  }, [records, search, actionFilter, daysFilter]);
+  }, [records, search, actionFilter, daysFilter, userTypeFilter]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -158,6 +158,16 @@ export default function UserActivityPage() {
               <SelectItem value="C">Mudança Senha</SelectItem>
               <SelectItem value="K">Bloqueio</SelectItem>
               <SelectItem value="U">Desbloqueio</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={userTypeFilter} onValueChange={setUserTypeFilter}>
+            <SelectTrigger className="w-[180px] bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="no_api">Sem API/Workflow</SelectItem>
+              <SelectItem value="only_api">Apenas API/Workflow</SelectItem>
+              <SelectItem value="all">Todos usuários</SelectItem>
             </SelectContent>
           </Select>
           <Select value={daysFilter} onValueChange={setDaysFilter}>
