@@ -159,9 +159,16 @@ export default function PagCorp() {
 
   const handleValidateAndIntegrate = async (t: PagCorpTransaction) => {
     setIntegrating(t.id);
-    // TODO: Call AI validation edge function with attachments, then integrate to SAP
-    toast.info("Validação com IA e integração SAP em desenvolvimento.");
-    setIntegrating(null);
+    try {
+      // TODO: Call AI validation edge function with attachments, then integrate to SAP
+      await logIntegration(t, "accountability", "pending", session?.companyDB, session?.userName);
+      toast.info("Validação com IA e integração SAP em desenvolvimento.");
+      await fetchTransactions(startDate, endDate);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao registrar integração");
+    } finally {
+      setIntegrating(null);
+    }
   };
 
   const handleIntegrateGeneric = (t: PagCorpTransaction) => {
@@ -173,9 +180,16 @@ export default function PagCorp() {
     if (!t) return;
     setIntegrating(t.id);
     setConfirmDialog({ open: false, transaction: null });
-    // TODO: Call SAP integration with generic item
-    toast.info("Integração SAP com item genérico em desenvolvimento.");
-    setIntegrating(null);
+    try {
+      // TODO: Call SAP integration with generic item
+      await logIntegration(t, "generic", "pending", session?.companyDB, session?.userName);
+      toast.info("Integração SAP com item genérico em desenvolvimento.");
+      await fetchTransactions(startDate, endDate);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao registrar integração");
+    } finally {
+      setIntegrating(null);
+    }
   };
 
   const COMPANY_LABELS: Record<string, string> = {
