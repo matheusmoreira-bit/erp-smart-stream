@@ -31,7 +31,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
     ? undefined
     : { from: period.range.from, to: period.range.to };
 
-  const { stages, metrics, insights, validations, isLoading, error, refresh } = useSapDashboard(dateFilter);
+  const { stages, metrics, insights, validations, approverStats, isLoading, error, refresh } = useSapDashboard(dateFilter);
   const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
 
   const content = (
