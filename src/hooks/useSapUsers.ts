@@ -3,6 +3,38 @@ import { useSap } from "@/contexts/SapContext";
 import { sapQueryView, sapAction, clearClientCache } from "@/lib/sap-client";
 import { sapUsersCache, type SapUser } from "@/lib/cache-repository";
 
+function pickString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (value == null) continue;
+    const normalized = String(value).trim();
+    if (normalized) return normalized;
+  }
+  return undefined;
+}
+
+function normalizeLockedValue(value: unknown): SapUser["Locked"] {
+  if (value === "tYES" || value === "Y" || value === true || value === 1 || value === "1") {
+    return "tYES";
+  }
+  return "tNO";
+}
+
+function normalizeSapUser(row: Record<string, unknown>): SapUser {
+  return {
+    InternalKey: Number(row.InternalKey ?? row.userid ?? row.USERID ?? 0),
+    UserName: pickString(row.UserName, row.u_name, row.U_NAME) ?? "",
+    UserCode: pickString(row.UserCode, row.user_code, row.USER_CODE) ?? "",
+    eMail: pickString(row.eMail, row.E_Mail, row.EMAIL),
+    Locked: normalizeLockedValue(row.Locked),
+    LastLoginDate: pickString(row.LastLoginDate, row.lastLogin, row.LASTLOGIN),
+    LastLoginTime: pickString(row.LastLoginTime, row.lastLoginTime, row.LASTLOGINTIME),
+  };
+}
+
+function hasDisplayData(user: SapUser): boolean {
+  return Boolean(user.UserName || user.UserCode || user.eMail || user.LastLoginDate);
+}
+
 export function useSapUsers() {
   const { session } = useSap();
   const [users, setUsers] = useState<SapUser[]>([]);
@@ -10,36 +42,42 @@ export function useSapUsers() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-  const fetchUsers = useCallback(async () => {
-    if (!session) return;
+  const fetchUsers = useCallback(async (forceRefresh = false) => {
+    if (!session) {
+      setUsers([]);
+      return;
+    }
 
     const cacheKey = `users:${session.companyDB}`;
-    const cached = sapUsersCache.get(cacheKey);
-    if (cached) {
-      setUsers(cached);
-      return;
+
+    if (!forceRefresh) {
+      const cached = sapUsersCache.get(cacheKey);
+      if (cached) {
+        const normalizedCached = cached.map((user) => normalizeSapUser(user as unknown as Record<string, unknown>));
+        if (normalizedCached.some(hasDisplayData)) {
+          setUsers(normalizedCached);
+          return;
+        }
+        sapUsersCache.invalidate(cacheKey);
+      }
     }
 
     setIsLoading(true);
     setError(null);
     try {
+      if (forceRefresh) {
+        sapUsersCache.invalidate(cacheKey);
+        clearClientCache();
+      }
+
       const result = await sapQueryView<Record<string, unknown>>(
         session,
         "VW_USERS",
+        undefined,
+        !forceRefresh,
       );
 
-      console.log("[useSapUsers] raw result sample:", JSON.stringify(result.data?.[0]));
-      console.log("[useSapUsers] raw result keys:", result.data?.[0] ? Object.keys(result.data[0]) : "empty");
-
-      const userList: SapUser[] = result.data.map((row) => ({
-        InternalKey: Number(row.userid ?? 0),
-        UserName: String(row.u_name ?? ""),
-        UserCode: String(row.user_code ?? ""),
-        eMail: row.E_Mail != null ? String(row.E_Mail) : undefined,
-        Locked: row.Locked === "Y" ? "tYES" : "tNO",
-        LastLoginDate: row.lastLogin != null ? String(row.lastLogin) : undefined,
-        LastLoginTime: undefined,
-      }));
+      const userList = result.data.map((row) => normalizeSapUser(row));
 
       sapUsersCache.set(cacheKey, userList);
       setUsers(userList);
@@ -61,7 +99,7 @@ export function useSapUsers() {
       });
       sapUsersCache.clear();
       clearClientCache();
-      await fetchUsers();
+      await fetchUsers(true);
     } catch (e) {
       console.error("Error toggling user lock:", e);
       throw e;
@@ -85,9 +123,11 @@ export function useSapUsers() {
     }
   }, [session]);
 
+  const refresh = useCallback(() => fetchUsers(true), [fetchUsers]);
+
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  return { users, isLoading, error, actionLoading, refresh: fetchUsers, toggleLock, resetPassword };
+  return { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword };
 }
