@@ -5,12 +5,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>) {
-  const { data, error } = await supabase
+async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>, companyDb?: string) {
+  let query = supabase
     .from("system_credentials")
     .select("credential_key, credential_value")
     .eq("system_name", "jumpcloud");
+  if (companyDb) query = query.eq("company_db", companyDb);
 
+  const { data, error } = await query;
   if (error) throw new Error(`Erro ao buscar credenciais JumpCloud: ${error.message}`);
   if (!data || data.length === 0) throw new Error("Credenciais JumpCloud não configuradas");
 
@@ -20,12 +22,14 @@ async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>
   return creds;
 }
 
-async function getSapCredentials(supabase: ReturnType<typeof createClient>) {
-  const { data, error } = await supabase
+async function getSapCredentials(supabase: ReturnType<typeof createClient>, companyDb?: string) {
+  let query = supabase
     .from("system_credentials")
     .select("credential_key, credential_value")
-    .eq("system_name", "sap_b1");
+    .eq("system_name", "sap");
+  if (companyDb) query = query.eq("company_db", companyDb);
 
+  const { data, error } = await query;
   if (error) throw new Error(`Erro ao buscar credenciais SAP: ${error.message}`);
   if (!data || data.length === 0) throw new Error("Credenciais SAP B1 não configuradas");
 
