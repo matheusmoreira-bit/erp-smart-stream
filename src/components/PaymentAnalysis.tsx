@@ -299,6 +299,23 @@ export function PaymentAnalysis() {
       </div>
 
       <TabsContent value="dashboard" className="space-y-6 mt-0">
+        {/* Shared SVG gradient defs */}
+        <svg width={0} height={0} className="absolute">
+          <defs>
+            <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.9} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+            </linearGradient>
+            <linearGradient id="barGradientH" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.9} />
+            </linearGradient>
+            <linearGradient id="lineGlow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={0.15} />
+              <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+        </svg>
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
