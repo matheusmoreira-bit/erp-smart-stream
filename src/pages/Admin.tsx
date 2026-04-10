@@ -342,6 +342,7 @@ export default function Admin() {
           display_name: companyForm.display_name,
           service_layer_url: companyForm.service_layer_url || null,
           is_active: companyForm.is_active,
+          targets: companyForm.targets,
         })
         .eq("id", editingCompany.id);
       if (error) toast.error("Erro ao atualizar");
@@ -352,6 +353,7 @@ export default function Admin() {
         display_name: companyForm.display_name,
         service_layer_url: companyForm.service_layer_url || null,
         is_active: companyForm.is_active,
+        targets: companyForm.targets,
       });
       if (error) toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar");
       else toast.success("Empresa criada");
