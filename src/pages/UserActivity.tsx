@@ -183,33 +183,15 @@ export default function UserActivityPage() {
               <MetricCard title="Duração Média" value={formatDuration(metrics.avgDuration)} icon={Timer} delay={0.2} />
             </div>
 
-            {/* Charts */}
+            {/* Monthly Login Chart + Pie */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Bar chart */}
-              <div className="lg:col-span-2 rounded-xl border border-border bg-card p-5">
-                <h3 className="text-sm font-semibold text-foreground mb-4">Logins por Dia</h3>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={dailyChart}>
-                    <XAxis dataKey="day" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 8,
-                        color: "hsl(var(--foreground))",
-                      }}
-                    />
-                    <Bar dataKey="Logins" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Falhas" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="lg:col-span-2">
+                <MonthlyLoginChart records={records} />
               </div>
-
               {/* Pie chart */}
               <div className="rounded-xl border border-border bg-card p-5">
                 <h3 className="text-sm font-semibold text-foreground mb-4">Tipos de Ação</h3>
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={280}>
                   <PieChart>
                     <Pie data={actionsPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={false}>
                       {actionsPie.map((_, i) => (
@@ -223,49 +205,8 @@ export default function UserActivityPage() {
               </div>
             </div>
 
-            {/* Top Users */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="px-6 py-3 border-b border-border bg-muted/30">
-                <h3 className="text-sm font-semibold text-foreground">Top Usuários por Login</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                      <th className="px-6 py-3 text-left">Usuário</th>
-                      <th className="px-4 py-3 text-center">Logins</th>
-                      <th className="px-4 py-3 text-center">Falhas</th>
-                      <th className="px-4 py-3 text-center">Duração Média</th>
-                      <th className="px-4 py-3 text-center">Último Acesso</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topUsers.map((u) => (
-                      <tr key={u.user} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
-                        <td className="px-6 py-3 font-medium text-foreground">{u.user}</td>
-                        <td className="px-4 py-3 text-center">
-                          <Badge variant="secondary" className="bg-primary/15 text-primary font-mono">{u.logins}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {u.failures > 0 ? (
-                            <Badge variant="destructive" className="font-mono">{u.failures}</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">0</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center text-muted-foreground">{formatDuration(u.avgDuration)}</td>
-                        <td className="px-4 py-3 text-center text-muted-foreground">{formatDate(u.lastDate)}</td>
-                      </tr>
-                    ))}
-                    {topUsers.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="text-center text-muted-foreground py-8">Nenhum dado encontrado</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* Rankings */}
+            <UserActivityRankings records={filtered} />
 
             {/* Recent Activity Log */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
