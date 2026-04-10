@@ -1,17 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, Database, LogIn, Loader2 } from "lucide-react";
+import { Activity, Lock, User, Database, LogIn, Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSap } from "@/contexts/SapContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
-const DATABASES = [
-  { label: "ANA Gaming", value: "SBO_ANAGAMING" },
-  { label: "Cactus", value: "SBO_CACTUS" },
-  { label: "Instituto Cactus", value: "SBO_INSTITUTO_ANA" },
-];
 
 export function SapLoginForm() {
   const { login, isLoading } = useSap();
