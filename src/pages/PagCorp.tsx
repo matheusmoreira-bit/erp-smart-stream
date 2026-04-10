@@ -79,9 +79,9 @@ export default function PagCorp() {
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
 
-  useEffect(() => { fetchCredentials("sap"); }, [fetchCredentials]);
+  useEffect(() => { fetchCredentials(session?.companyDB, "sap"); }, [fetchCredentials, session?.companyDB]);
 
-  const hasSapCredentials = credentials.some((c) => c.system_name === "sap");
+  const hasSapCredentials = credentials.some((c) => c.system_name === "sap" && c.company_db === session?.companyDB);
 
   const checkSapCredentials = (): boolean => {
     if (!hasSapCredentials) {
