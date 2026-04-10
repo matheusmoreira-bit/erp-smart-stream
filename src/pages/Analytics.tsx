@@ -11,12 +11,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { usePaymentAnalysis } from "@/hooks/usePaymentAnalysis";
 import { useCompanies } from "@/hooks/useCompanies";
+import { useModuleAccess } from "@/hooks/usePermissions";
 
 export default function AnalyticsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { getLabel } = useCompanies(true);
+  const { hasAccess: hasPaymentsAccess } = useModuleAccess("analytics_payments");
 
   if (!session) return <SapLoginForm />;
 
@@ -65,10 +67,12 @@ export default function AnalyticsPage() {
               <GitBranch className="w-4 h-4" />
               Fluxo de Compras
             </TabsTrigger>
-            <TabsTrigger value="pagamentos" className="gap-1.5">
-              <CreditCard className="w-4 h-4" />
-              Análise de Pagamentos
-            </TabsTrigger>
+            {hasPaymentsAccess && (
+              <TabsTrigger value="pagamentos" className="gap-1.5">
+                <CreditCard className="w-4 h-4" />
+                Análise de Pagamentos
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="fluxo" className="mt-6">

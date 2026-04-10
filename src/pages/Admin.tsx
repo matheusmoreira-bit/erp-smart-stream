@@ -20,6 +20,7 @@ import {
   XCircle,
   ScrollText,
   RefreshCw,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import AuditLogTable from "@/components/AuditLogTable";
+import PermissionManager from "@/components/PermissionManager";
 import {
   Select,
   SelectContent,
@@ -231,7 +233,7 @@ export default function Admin() {
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   // Audit log
-  const [activeTab, setActiveTab] = useState<"companies" | "audit">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "audit" | "permissions">("companies");
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
   const auditCompanyDb = auditCompanyFilter === "all" ? undefined : auditCompanyFilter;
   const { entries: auditEntries, isLoading: auditLoading, refresh: auditRefresh } = useAuditLog(auditCompanyDb);
@@ -419,6 +421,17 @@ export default function Admin() {
             Empresas
           </button>
           <button
+            onClick={() => setActiveTab("permissions")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "permissions"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Users className="w-4 h-4 inline mr-1.5" />
+            Permissões
+          </button>
+          <button
             onClick={() => setActiveTab("audit")}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "audit"
@@ -545,6 +558,8 @@ export default function Admin() {
             )}
           </>
         )}
+
+        {activeTab === "permissions" && <PermissionManager />}
 
         {activeTab === "audit" && (
           <>

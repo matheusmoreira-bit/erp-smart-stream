@@ -428,6 +428,59 @@ export type Database = {
         }
         Relationships: []
       }
+      permission_group_modules: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          module_key: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          module_key: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          module_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permission_group_modules_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "permission_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permission_groups: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sap_cache: {
         Row: {
           cache_key: string
@@ -562,6 +615,35 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      user_group_assignments: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          sap_email: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          sap_email: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          sap_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_group_assignments_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "permission_groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
