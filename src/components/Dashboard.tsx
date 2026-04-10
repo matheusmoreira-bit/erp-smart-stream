@@ -101,7 +101,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
                       return item ? `${label} (${item.countApproved + item.countRejected} docs)` : label;
                     }}
                   />
-                  <ReferenceLine y={1} stroke="hsl(var(--warning))" strokeDasharray="6 4" strokeWidth={2} label={{ value: "Meta 1d", position: "right", fill: "hsl(var(--warning))", fontSize: 11 }} />
+                  <ReferenceLine y={companyTargets.aprovador} stroke="hsl(var(--warning))" strokeDasharray="6 4" strokeWidth={2} label={{ value: `Meta ${companyTargets.aprovador}d`, position: "right", fill: "hsl(var(--warning))", fontSize: 11 }} />
                   <Bar dataKey="avgDaysApproved" stackId="a" fill="url(#approvedGrad)" radius={[0, 0, 0, 0]} barSize={28} />
                   <Bar dataKey="avgDaysRejected" stackId="a" fill="url(#rejectedGrad)" radius={[4, 4, 0, 0]} barSize={28} />
                 </BarChart>
