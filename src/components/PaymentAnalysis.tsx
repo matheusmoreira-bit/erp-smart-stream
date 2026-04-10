@@ -339,7 +339,15 @@ export function PaymentAnalysis() {
                 <defs>
                   <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.9} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                  </linearGradient>
+                  <linearGradient id="barGradientH" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.9} />
+                  </linearGradient>
+                  <linearGradient id="lineGlow" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.15} vertical={false} />
@@ -348,7 +356,8 @@ export function PaymentAnalysis() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="total" name="Valor pago" fill="url(#barGradient)" radius={[4, 4, 0, 0]} />
-                <Line dataKey="media" name="Média histórica" type="monotone" stroke="hsl(var(--destructive))" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
+                <Area dataKey="media" name="Média histórica (área)" type="monotone" fill="url(#lineGlow)" stroke="none" />
+                <Line dataKey="media" name="Média histórica" type="monotone" stroke="hsl(var(--destructive))" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "hsl(var(--destructive))" }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
