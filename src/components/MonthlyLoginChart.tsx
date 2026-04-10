@@ -13,7 +13,8 @@ import { isFailedLogin } from "@/hooks/useUserActivity";
 import type { Usr5Record } from "@/hooks/useUserActivity";
 
 interface Props {
-  records: Usr5Record[]; // all records (unfiltered by date) for historical avg
+  records: Usr5Record[]; // all records for historical avg
+  filtered: Usr5Record[]; // filtered records for current month bars
 }
 
 function daysInMonth(year: number, month: number): number {

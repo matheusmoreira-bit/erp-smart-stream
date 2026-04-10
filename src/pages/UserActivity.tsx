@@ -208,7 +208,7 @@ export default function UserActivityPage() {
             {/* Monthly Login Chart + Pie */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
-                <MonthlyLoginChart records={records} />
+                <MonthlyLoginChart records={records} filtered={filtered} />
               </div>
               {/* Pie chart */}
               <div className="rounded-xl border border-border bg-card p-5">
