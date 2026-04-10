@@ -74,7 +74,14 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
       .select("service_layer_url")
       .eq("company_db", companyDB)
       .maybeSingle();
-    if (data?.service_layer_url) return data.service_layer_url.replace(/\/+$/, "");
+    if (data?.service_layer_url) {
+      let url = data.service_layer_url.replace(/\/+$/, "");
+      // Ensure the URL includes the /b1s/v1 path
+      if (!url.includes("/b1s/v1")) {
+        url = `${url}/b1s/v1`;
+      }
+      return url;
+    }
   } catch (e) {
     console.error("Failed to fetch service_layer_url:", e);
   }
