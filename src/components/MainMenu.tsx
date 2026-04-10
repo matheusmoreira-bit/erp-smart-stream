@@ -9,6 +9,7 @@ import {
   Shield,
   CreditCard,
   Key,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -67,6 +68,15 @@ const modules: ModuleCard[] = [
     path: "/pagcorp",
     color: "text-primary",
     bgGlow: "from-primary/20 to-primary/5",
+    available: true,
+  },
+  {
+    title: "Usuários",
+    description: "Gerencie usuários SAP: bloqueio, desbloqueio e redefinição de senhas.",
+    icon: Users,
+    path: "/users",
+    color: "text-warning",
+    bgGlow: "from-warning/20 to-warning/5",
     available: true,
   },
   {

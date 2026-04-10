@@ -56,4 +56,6 @@ export interface SapUser {
   Department?: number;
   Branch?: number;
   Locked: string;
+  LastLoginDate?: string;
+  LastLoginTime?: string;
 }
