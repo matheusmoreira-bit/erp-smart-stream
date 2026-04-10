@@ -393,13 +393,19 @@ export default function PagCorp() {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          {integrating === t.id ? (
+                          {t.integrated ? (
+                            <Badge variant="secondary" className="bg-success/20 text-success border-success/30 font-semibold text-xs">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Integrado
+                            </Badge>
+                          ) : integrating === t.id ? (
                             <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
                           ) : t.hasAccountability ? (
                             <Button
                               variant="outline"
                               size="sm"
                               className="gap-1 text-xs"
+                              disabled={shouldDisableIntegrate}
                               onClick={() => handleValidateAndIntegrate(t)}
                             >
                               <Sparkles className="w-3 h-3" />
