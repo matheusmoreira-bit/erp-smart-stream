@@ -11,12 +11,7 @@ import { PeriodFilter, DEFAULT_PERIOD, type PeriodFilterValue } from "@/componen
 import { useSap } from "@/contexts/SapContext";
 import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { Button } from "@/components/ui/button";
-
-const COMPANY_LABELS: Record<string, string> = {
-  SBO_ANAGAMING: "ANA Gaming",
-  SBO_CACTUS: "Cactus",
-  SBO_INSTITUTO_ANA: "Instituto Cactus",
-};
+import { useCompanies } from "@/hooks/useCompanies";
 
 interface DashboardProps {
   embedded?: boolean;
@@ -25,6 +20,7 @@ interface DashboardProps {
 export function Dashboard({ embedded = false }: DashboardProps) {
   const { session, logout } = useSap();
   const navigate = useNavigate();
+  const { getLabel } = useCompanies(true);
   const [period, setPeriod] = useState<PeriodFilterValue>(DEFAULT_PERIOD);
 
   const dateFilter = period.preset === "all"
@@ -32,7 +28,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
     : { from: period.range.from, to: period.range.to };
 
   const { stages, metrics, insights, validations, approverStats, isLoading, error, refresh } = useSapDashboard(dateFilter);
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const companyLabel = getLabel(session?.companyDB || "");
 
   const content = (
     <div className={embedded ? "space-y-8" : "max-w-7xl mx-auto px-6 py-8 space-y-8"}>

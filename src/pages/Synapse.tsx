@@ -34,17 +34,14 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-const COMPANY_LABELS: Record<string, string> = {
-  SBO_ANAGAMING: "ANA Gaming",
-  SBO_CACTUS: "Cactus",
-  SBO_INSTITUTO_ANA: "Instituto Cactus",
-};
+import { useCompanies } from "@/hooks/useCompanies";
 
 export default function SynapsePage() {
   const navigate = useNavigate();
   const { session } = useSap();
+  const { getLabel } = useCompanies(true);
   const companyDB = session?.companyDB || "";
-  const companyLabel = COMPANY_LABELS[companyDB] || companyDB;
+  const companyLabel = getLabel(companyDB);
 
   const {
     integrations,
@@ -274,7 +271,7 @@ export default function SynapsePage() {
               Configure os parâmetros desta integração
               {selectedIntegration?.company_db && (
                 <span className="ml-1">
-                  — {COMPANY_LABELS[selectedIntegration.company_db] || selectedIntegration.company_db}
+                  — {getLabel(selectedIntegration.company_db)}
                 </span>
               )}
             </DialogDescription>

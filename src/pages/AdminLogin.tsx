@@ -1,30 +1,46 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Shield, Lock, LogIn, Loader2, ArrowLeft } from "lucide-react";
+import { Shield, Lock, LogIn, Loader2, ArrowLeft, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-
-const ADMIN_PASSWORD = "admin@2025";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
+  const { signIn, signUp } = useAuth();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<"login" | "signup">("login");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !password) {
+      toast.error("Preencha email e senha");
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
-      if (password === ADMIN_PASSWORD) {
-        localStorage.setItem("admin_authenticated", "true");
-        navigate("/admin");
+
+    if (mode === "login") {
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast.error(error.message === "Invalid login credentials"
+          ? "Email ou senha incorretos"
+          : error.message);
       } else {
-        toast.error("Senha incorreta");
+        navigate("/admin");
       }
-      setLoading(false);
-    }, 500);
+    } else {
+      const { error } = await signUp(email, password);
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Verifique seu email para confirmar o cadastro");
+      }
+    }
+    setLoading(false);
   };
 
   return (
@@ -40,15 +56,27 @@ export default function AdminLogin() {
           </div>
           <h1 className="text-2xl font-bold text-foreground">Administração</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Acesso restrito
+            {mode === "login" ? "Acesso restrito" : "Criar conta de administrador"}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-5">
           <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Email</label>
+            <Input
+              type="email"
+              placeholder="admin@empresa.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="bg-muted/30 border-border"
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-2">
             <label className="text-sm font-medium text-foreground flex items-center gap-2">
               <Lock className="w-4 h-4 text-primary" />
-              Senha de administração
+              Senha
             </label>
             <Input
               type="password"
@@ -56,18 +84,29 @@ export default function AdminLogin() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="bg-muted/30 border-border"
-              autoFocus
             />
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
+            ) : mode === "login" ? (
               <LogIn className="w-4 h-4 mr-2" />
+            ) : (
+              <UserPlus className="w-4 h-4 mr-2" />
             )}
-            Entrar
+            {mode === "login" ? "Entrar" : "Criar conta"}
           </Button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setMode(mode === "login" ? "signup" : "login")}
+            >
+              {mode === "login" ? "Criar conta de administrador" : "Já tenho conta — fazer login"}
+            </button>
+          </div>
         </form>
 
         <div className="text-center mt-4">

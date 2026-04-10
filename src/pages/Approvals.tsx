@@ -29,12 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-
-const COMPANY_LABELS: Record<string, string> = {
-  SBO_ANAGAMING: "ANA Gaming",
-  SBO_CACTUS: "Cactus",
-  SBO_INSTITUTO_ANA: "Instituto Cactus",
-};
+import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(value);
@@ -289,6 +284,7 @@ export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { approvals, isLoading, error, refresh } = useApprovals();
+  const { getLabel } = useCompanies(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
@@ -300,7 +296,7 @@ export default function ApprovalsPage() {
     return null;
   }
 
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const companyLabel = getLabel(session?.companyDB || "");
 
   // Filter: only show approvals where current user is the approver
   const userApprovals = approvals; // The view already returns only pending approvals for the logged-in user's company

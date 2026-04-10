@@ -10,22 +10,18 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { usePaymentAnalysis } from "@/hooks/usePaymentAnalysis";
-
-const COMPANY_LABELS: Record<string, string> = {
-  SBO_ANAGAMING: "ANA Gaming",
-  SBO_CACTUS: "Cactus",
-  SBO_INSTITUTO_ANA: "Instituto Cactus",
-};
+import { useCompanies } from "@/hooks/useCompanies";
 
 export default function AnalyticsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { getLabel } = useCompanies(true);
 
   if (!session) return <SapLoginForm />;
 
   const activeTab = searchParams.get("tab") || "fluxo";
-  const companyLabel = COMPANY_LABELS[session.companyDB] || session.companyDB;
+  const companyLabel = getLabel(session.companyDB);
 
   const handleTabChange = (value: string) => {
     setSearchParams({ tab: value });

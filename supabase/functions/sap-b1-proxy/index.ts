@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sap-session, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SAP_BASE_URL = "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v1";
+const DEFAULT_SAP_BASE_URL = "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v1";
 const HANA_VIEWS_URL = "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
 // In-memory cache with TTL
@@ -59,8 +60,25 @@ function extractViewRows(payload: unknown): unknown[] {
 
 function extractTableName(table: string): string {
   const trimmed = table.trim();
-  // If table contains a dot (e.g. "SBO_ANAGAMING.VW_TODAS_APROVACOES"), use only the part after the dot
   return trimmed.includes(".") ? trimmed.split(".").pop() || trimmed : trimmed;
+}
+
+async function getSapBaseUrl(companyDB?: string): Promise<string> {
+  if (!companyDB) return DEFAULT_SAP_BASE_URL;
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(supabaseUrl, serviceRoleKey);
+    const { data } = await sb
+      .from("companies")
+      .select("service_layer_url")
+      .eq("company_db", companyDB)
+      .maybeSingle();
+    if (data?.service_layer_url) return data.service_layer_url.replace(/\/+$/, "");
+  } catch (e) {
+    console.error("Failed to fetch service_layer_url:", e);
+  }
+  return DEFAULT_SAP_BASE_URL;
 }
 
 serve(async (req) => {
@@ -70,7 +88,10 @@ serve(async (req) => {
 
   try {
     const reqBody = await req.json();
-    const { action, credentials, endpoint, params, sessionId, routeId, table, database } = reqBody;
+    const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
+
+    // Resolve the SAP Service Layer base URL dynamically per company
+    const SAP_BASE_URL = await getSapBaseUrl(companyDB || credentials?.CompanyDB);
 
     // LOGIN
     if (action === "login") {

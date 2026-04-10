@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft, Key, CreditCard, Server, Save, Trash2, Loader2,
-  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2, Users,
+  ArrowLeft, Key, Save, Trash2, Loader2,
+  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,62 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { useCredentials } from "@/hooks/useCredentials";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
-
-interface SystemField {
-  key: string;
-  label: string;
-  type?: string;
-  placeholder?: string;
-}
-
-interface SystemConfig {
-  name: string;
-  label: string;
-  description: string;
-  icon: typeof Key;
-  fields: SystemField[];
-}
-
-const SYSTEMS: SystemConfig[] = [
-  {
-    name: "pagcorp",
-    label: "PagCorp",
-    description: "Gateway de pagamentos corporativos",
-    icon: CreditCard,
-    fields: [
-      { key: "api_base_url", label: "URL Base da API", placeholder: "https://bifrost.acgsa.com.br/kraken/v1/" },
-      { key: "client_key", label: "Client Key", placeholder: "UUID do client" },
-      { key: "client_secret", label: "Client Secret", type: "password", placeholder: "UUID do secret" },
-      { key: "login_email", label: "Login / Email", placeholder: "usuario_login" },
-      { key: "login_password", label: "Senha", type: "password", placeholder: "Senha de acesso" },
-      { key: "aes_key", label: "Chave AES (Base64)", type: "password", placeholder: "Chave AES-256 em Base64" },
-      { key: "hmac_key", label: "Chave HMAC (Base64)", type: "password", placeholder: "Chave HMAC-SHA256 em Base64" },
-      { key: "account_id", label: "Account ID", placeholder: "ID da conta PagCorp" },
-    ],
-  },
-  {
-    name: "sap",
-    label: "SAP Business One",
-    description: "Credencial usada exclusivamente para integrações automáticas (ex: PagCorp → SAP). Não é utilizada para carregamento de dados em tela.",
-    icon: Server,
-    fields: [
-      { key: "service_layer_url", label: "URL do Service Layer", placeholder: "https://servidor:50000/b1s/v1/" },
-      { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
-      { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
-      { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário de integração" },
-    ],
-  },
-  {
-    name: "jumpcloud",
-    label: "JumpCloud",
-    description: "Gestão de identidades e diretório de usuários",
-    icon: Users,
-    fields: [
-      { key: "api_key", label: "API Key", type: "password", placeholder: "Chave de API do JumpCloud" },
-      { key: "org_id", label: "Organization ID", placeholder: "ID da organização" },
-    ],
-  },
-];
+import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
 
 function CredentialModal({
   system,

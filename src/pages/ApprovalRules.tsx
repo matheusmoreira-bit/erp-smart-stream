@@ -54,11 +54,7 @@ import {
 import { useSapUsers } from "@/hooks/useSapUsers";
 import type { SapUser } from "@/lib/cache-repository";
 
-const COMPANY_LABELS: Record<string, string> = {
-  SBO_ANAGAMING: "ANA Gaming",
-  SBO_CACTUS: "Cactus",
-  SBO_INSTITUTO_ANA: "Instituto Cactus",
-};
+import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -574,6 +570,7 @@ export default function ApprovalRulesPage() {
   const navigate = useNavigate();
   const { rules, isLoading, error, refresh, createRule, toggleRule, deleteRule } = useApprovalRules();
   const { users: sapUsers, isLoading: sapUsersLoading } = useSapUsers();
+  const { getLabel } = useCompanies(true);
   const [showCreate, setShowCreate] = useState(false);
 
   if (!session) {
@@ -581,7 +578,7 @@ export default function ApprovalRulesPage() {
     return null;
   }
 
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const companyLabel = getLabel(session?.companyDB || "");
 
   const handleCreate = async (input: CreateRuleInput) => {
     await createRule(input, session.userName);

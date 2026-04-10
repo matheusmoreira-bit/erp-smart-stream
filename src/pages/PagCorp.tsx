@@ -48,6 +48,7 @@ import { useSap } from "@/contexts/SapContext";
 import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
 import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
+import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -76,6 +77,7 @@ export default function PagCorp() {
   const { session, logout } = useSap();
   const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
   const { credentials, fetchCredentials } = useCredentials();
+  const { getLabel } = useCompanies(true);
 
   useEffect(() => { fetchCredentials("sap"); }, [fetchCredentials]);
 
@@ -212,12 +214,7 @@ export default function PagCorp() {
     }
   };
 
-  const COMPANY_LABELS: Record<string, string> = {
-    SBO_ANAGAMING: "ANA Gaming",
-    SBO_CACTUS: "Cactus",
-    SBO_INSTITUTO_ANA: "Instituto Cactus",
-  };
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const companyLabel = getLabel(session?.companyDB || "");
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
