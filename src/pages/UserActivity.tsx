@@ -284,6 +284,7 @@ export default function UserActivityPage() {
                       <th className="px-6 py-3 text-left">Usuário</th>
                       <th className="px-4 py-3 text-center">Logins</th>
                       <th className="px-4 py-3 text-center">Falhas</th>
+                      <th className="px-4 py-3 text-center">Duração Média</th>
                       <th className="px-4 py-3 text-center">Último Acesso</th>
                     </tr>
                   </thead>
@@ -301,12 +302,13 @@ export default function UserActivityPage() {
                             <span className="text-muted-foreground">0</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-center text-muted-foreground">{formatDuration(u.avgDuration)}</td>
                         <td className="px-4 py-3 text-center text-muted-foreground">{formatDate(u.lastDate)}</td>
                       </tr>
                     ))}
                     {topUsers.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="text-center text-muted-foreground py-8">Nenhum dado encontrado</td>
+                        <td colSpan={5} className="text-center text-muted-foreground py-8">Nenhum dado encontrado</td>
                       </tr>
                     )}
                   </tbody>
@@ -327,9 +329,10 @@ export default function UserActivityPage() {
                       <th className="px-4 py-3 text-left">Data/Hora</th>
                       <th className="px-4 py-3 text-left">Usuário</th>
                       <th className="px-4 py-3 text-left">Ação</th>
+                      <th className="px-4 py-3 text-left">Origem</th>
                       <th className="px-4 py-3 text-left">IP</th>
                       <th className="px-4 py-3 text-left">Máquina</th>
-                      <th className="px-4 py-3 text-left">Motivo</th>
+                      <th className="px-4 py-3 text-left">Duração</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -344,21 +347,27 @@ export default function UserActivityPage() {
                         <td className="px-4 py-2 font-medium text-foreground">{r.UserCode}</td>
                         <td className="px-4 py-2">
                           <Badge
-                            variant={r.Action === "F" || r.Action === "K" ? "destructive" : "secondary"}
+                            variant={isFailedLogin(r) || r.Action === "K" ? "destructive" : "secondary"}
                             className={
-                              r.Action === "L" || r.Action === "W"
-                                ? "bg-primary/15 text-primary"
+                              r.Action === "I" || r.Action === "W"
+                                ? isFailedLogin(r) ? "" : "bg-primary/15 text-primary"
                                 : r.Action === "O"
                                 ? "bg-muted text-muted-foreground"
                                 : ""
                             }
                           >
-                            {getActionLabel(r.Action)}
+                            {isFailedLogin(r) ? "Falha de Login" : getActionLabel(r.Action)}
                           </Badge>
+                        </td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs">
+                          <span className="flex items-center gap-1">
+                            <Monitor className="w-3 h-3" />
+                            {getSourceLabel(r.Source)}
+                          </span>
                         </td>
                         <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{r.ClientIP || "—"}</td>
                         <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[150px]">{r.ClientName || "—"}</td>
-                        <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[200px]">{r.ReasonDesc || "—"}</td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs">{formatDuration(r.AliveDurtn)}</td>
                       </tr>
                     ))}
                     {filtered.length === 0 && (
