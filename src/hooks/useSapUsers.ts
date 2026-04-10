@@ -28,6 +28,9 @@ export function useSapUsers() {
         "VW_USERS",
       );
 
+      console.log("[useSapUsers] raw result sample:", JSON.stringify(result.data?.[0]));
+      console.log("[useSapUsers] raw result keys:", result.data?.[0] ? Object.keys(result.data[0]) : "empty");
+
       const userList: SapUser[] = result.data.map((row) => ({
         InternalKey: Number(row.userid ?? 0),
         UserName: String(row.u_name ?? ""),
