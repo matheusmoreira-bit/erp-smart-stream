@@ -363,7 +363,6 @@ export type Database = {
           cost_center: string | null
           created_at: string
           id: string
-          item_code: string | null
           project: string | null
           updated_at: string
         }
@@ -373,7 +372,6 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           id?: string
-          item_code?: string | null
           project?: string | null
           updated_at?: string
         }
@@ -383,7 +381,6 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           id?: string
-          item_code?: string | null
           project?: string | null
           updated_at?: string
         }
@@ -430,6 +427,36 @@ export type Database = {
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
           status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pagcorp_item_mapping: {
+        Row: {
+          account_code: string | null
+          account_name: string | null
+          created_at: string
+          id: string
+          is_fallback: boolean
+          item_code: string
+          updated_at: string
+        }
+        Insert: {
+          account_code?: string | null
+          account_name?: string | null
+          created_at?: string
+          id?: string
+          is_fallback?: boolean
+          item_code: string
+          updated_at?: string
+        }
+        Update: {
+          account_code?: string | null
+          account_name?: string | null
+          created_at?: string
+          id?: string
+          is_fallback?: boolean
+          item_code?: string
           updated_at?: string
         }
         Relationships: []
