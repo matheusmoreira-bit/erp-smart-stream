@@ -1,16 +1,9 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapUser } from "@/lib/cache-repository";
+import { jumpCloudUsersCache, type JumpCloudCacheEntry } from "@/lib/cache-repository";
 
-export interface JumpCloudUser {
-  _id: string;
-  email: string;
-  username: string;
-  displayname?: string;
-  firstname?: string;
-  lastname?: string;
-  suspended?: boolean;
-}
+export type JumpCloudUser = JumpCloudCacheEntry;
 
 export interface IdpMapping {
   id: string;
@@ -29,17 +22,25 @@ export interface IdpMapping {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const JC_CACHE_KEY = "jumpcloud:all";
 
 export function useIdpSync() {
   const [jcUsers, setJcUsers] = useState<JumpCloudUser[]>([]);
   const [mappings, setMappings] = useState<IdpMapping[]>([]);
   const [isLoadingJc, setIsLoadingJc] = useState(false);
   const [isLoadingMappings, setIsLoadingMappings] = useState(false);
-  const [searchResults, setSearchResults] = useState<JumpCloudUser[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchJumpCloudUsers = useCallback(async () => {
+  const fetchJumpCloudUsers = useCallback(async (forceRefresh = false) => {
+    // Check cache first
+    if (!forceRefresh) {
+      const cached = jumpCloudUsersCache.get(JC_CACHE_KEY);
+      if (cached) {
+        setJcUsers(cached);
+        return cached;
+      }
+    }
+
     setIsLoadingJc(true);
     setError(null);
     try {
@@ -51,8 +52,10 @@ export function useIdpSync() {
         throw new Error(err.error || `Erro ${res.status}`);
       }
       const data = await res.json();
-      setJcUsers(data.users || []);
-      return data.users || [];
+      const users: JumpCloudUser[] = data.users || [];
+      jumpCloudUsersCache.set(JC_CACHE_KEY, users);
+      setJcUsers(users);
+      return users;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao buscar usuários JumpCloud");
       return [];
@@ -83,7 +86,6 @@ export function useIdpSync() {
       const jumpCloudUsers = jcList || jcUsers;
       if (jumpCloudUsers.length === 0) return;
 
-      // Build email lookup (lowercase)
       const jcByEmail = new Map<string, JumpCloudUser>();
       for (const jc of jumpCloudUsers) {
         if (jc.email) jcByEmail.set(jc.email.toLowerCase(), jc);
@@ -110,7 +112,6 @@ export function useIdpSync() {
         });
       }
 
-      // Batch upsert
       const { error: err } = await supabase
         .from("idp_user_mapping")
         .upsert(upserts as any[], { onConflict: "sap_user_code,idp_provider" });
@@ -163,47 +164,16 @@ export function useIdpSync() {
     [fetchMappings]
   );
 
-  const searchJumpCloud = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    setIsSearching(true);
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/jumpcloud-proxy`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${ANON_KEY}`,
-          apikey: ANON_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action: "searchUsers", query }),
-      });
-      if (!res.ok) throw new Error(`Erro ${res.status}`);
-      const data = await res.json();
-      setSearchResults(data.users || []);
-    } catch (e) {
-      console.error("Search error:", e);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  }, []);
-
   return {
     jcUsers,
     mappings,
     isLoadingJc,
     isLoadingMappings,
-    isSearching,
-    searchResults,
     error,
     fetchJumpCloudUsers,
     fetchMappings,
     autoSync,
     linkManually,
     unlinkUser,
-    searchJumpCloud,
-    setSearchResults,
   };
 }

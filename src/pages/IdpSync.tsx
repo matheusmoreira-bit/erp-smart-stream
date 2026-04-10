@@ -1,69 +1,70 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   RefreshCw,
   Loader2,
   Search,
-  Link2,
   Unlink,
   CheckCircle2,
   AlertCircle,
-  Users,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import { useIdpSync, type JumpCloudUser } from "@/hooks/useIdpSync";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { toast } from "sonner";
+
+function jcToOption(jc: JumpCloudUser): SapSearchOption {
+  const name = jc.displayname || `${jc.firstname || ""} ${jc.lastname || ""}`.trim() || jc.username;
+  return {
+    code: jc._id,
+    name,
+    extra: jc.email,
+  };
+}
 
 export default function IdpSyncPage() {
   const navigate = useNavigate();
   const { users: sapUsers, isLoading: sapLoading } = useSapUsers();
   const {
+    jcUsers,
     mappings,
     isLoadingJc,
     isLoadingMappings,
-    isSearching,
-    searchResults,
     error,
     fetchJumpCloudUsers,
     fetchMappings,
     autoSync,
     linkManually,
     unlinkUser,
-    searchJumpCloud,
-    setSearchResults,
   } = useIdpSync();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "linked" | "pending">("all");
   const [syncing, setSyncing] = useState(false);
-  const [linkDialog, setLinkDialog] = useState<{ open: boolean; sapUserCode: string; sapUserName: string } | null>(null);
-  const [jcSearch, setJcSearch] = useState("");
+  const [linkingUser, setLinkingUser] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMappings();
-  }, [fetchMappings]);
+    fetchJumpCloudUsers(); // loads from 6h cache or fetches
+  }, [fetchMappings, fetchJumpCloudUsers]);
+
+  const jcOptions = useMemo(() => jcUsers.map(jcToOption), [jcUsers]);
 
   const handleAutoSync = async () => {
     setSyncing(true);
     try {
-      const jcList = await fetchJumpCloudUsers();
+      const jcList = await fetchJumpCloudUsers(true); // force refresh
       if (jcList.length === 0) {
         toast.error("Nenhum usuário JumpCloud encontrado. Verifique as credenciais.");
         return;
       }
-      await autoSync(sapUsers, jcList);
+      const activeUsers = sapUsers.filter((u) => u.Locked !== "tYES");
+      await autoSync(activeUsers, jcList);
       toast.success(`Sincronização concluída! ${jcList.length} usuários JumpCloud processados.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro na sincronização");
@@ -72,18 +73,28 @@ export default function IdpSyncPage() {
     }
   };
 
-  const handleManualLink = async (jcUser: JumpCloudUser) => {
-    if (!linkDialog) return;
-    try {
-      await linkManually(linkDialog.sapUserCode, jcUser);
-      toast.success(`${linkDialog.sapUserName} vinculado a ${jcUser.email}`);
-      setLinkDialog(null);
-      setSearchResults([]);
-      setJcSearch("");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao vincular");
-    }
+  const handleRefreshJc = async () => {
+    await fetchJumpCloudUsers(true);
+    toast.success("Lista JumpCloud atualizada");
   };
+
+  const handleComboSelect = useCallback(
+    async (sapUserCode: string, option: SapSearchOption | null) => {
+      if (!option) return;
+      const jcUser = jcUsers.find((j) => j._id === option.code);
+      if (!jcUser) return;
+      setLinkingUser(sapUserCode);
+      try {
+        await linkManually(sapUserCode, jcUser);
+        toast.success(`Vinculado a ${jcUser.email}`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Erro ao vincular");
+      } finally {
+        setLinkingUser(null);
+      }
+    },
+    [jcUsers, linkManually]
+  );
 
   const handleUnlink = async (sapUserCode: string) => {
     try {
@@ -94,19 +105,16 @@ export default function IdpSyncPage() {
     }
   };
 
-  const handleJcSearch = (value: string) => {
-    setJcSearch(value);
-    if (value.length >= 2) {
-      searchJumpCloud(value);
-    } else {
-      setSearchResults([]);
-    }
-  };
+  // Only active SAP users
+  const activeUsers = useMemo(
+    () => sapUsers.filter((u) => u.Locked !== "tYES"),
+    [sapUsers]
+  );
 
   // Merge SAP users with mappings
   const mergedList = useMemo(() => {
     const mappingMap = new Map(mappings.map((m) => [m.sap_user_code, m]));
-    return sapUsers.map((sap) => {
+    return activeUsers.map((sap) => {
       const mapping = mappingMap.get(sap.UserCode);
       return {
         sapUser: sap,
@@ -114,7 +122,7 @@ export default function IdpSyncPage() {
         status: mapping?.status || "not_synced",
       };
     });
-  }, [sapUsers, mappings]);
+  }, [activeUsers, mappings]);
 
   const filtered = useMemo(() => {
     let list = mergedList;
@@ -159,11 +167,26 @@ export default function IdpSyncPage() {
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-foreground">IdP Sync</h1>
               <p className="text-sm text-muted-foreground">
-                Vinculação de usuários SAP ↔ JumpCloud
+                Vinculação de usuários SAP (ativos) ↔ JumpCloud
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefreshJc}
+              disabled={isLoadingJc}
+              className="gap-2"
+              title="Atualizar cache JumpCloud"
+            >
+              {isLoadingJc ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              JumpCloud
+            </Button>
             <Button
               variant="default"
               size="sm"
@@ -193,14 +216,14 @@ export default function IdpSyncPage() {
         <div className="grid grid-cols-3 gap-4">
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-            <p className="text-xs text-muted-foreground">Total de Usuários</p>
+            <p className="text-xs text-muted-foreground">Usuários Ativos</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
-            <p className="text-2xl font-bold text-success">{stats.linked}</p>
+            <p className="text-2xl font-bold text-green-500">{stats.linked}</p>
             <p className="text-xs text-muted-foreground">Vinculados</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
-            <p className="text-2xl font-bold text-warning">{stats.pending}</p>
+            <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p>
             <p className="text-xs text-muted-foreground">Pendentes</p>
           </div>
         </div>
@@ -241,14 +264,14 @@ export default function IdpSyncPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="grid grid-cols-[1fr_1fr_auto] items-center px-6 py-3 border-b border-border bg-muted/30">
+            <div className="grid grid-cols-[1fr_1.2fr_auto] items-center px-6 py-3 border-b border-border bg-muted/30">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Usuário SAP
               </span>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 JumpCloud
               </span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-28 text-right">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-24 text-right">
                 Ações
               </span>
             </div>
@@ -259,7 +282,7 @@ export default function IdpSyncPage() {
               filtered.map((row) => (
                 <div
                   key={row.sapUser.UserCode}
-                  className="grid grid-cols-[1fr_1fr_auto] items-center px-6 py-3 border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors"
+                  className="grid grid-cols-[1fr_1.2fr_auto] items-center px-6 py-3 border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors"
                 >
                   {/* SAP User */}
                   <div className="min-w-0">
@@ -271,11 +294,11 @@ export default function IdpSyncPage() {
                     </p>
                   </div>
 
-                  {/* JumpCloud */}
-                  <div className="min-w-0">
+                  {/* JumpCloud - combobox or linked info */}
+                  <div className="min-w-0 pr-2">
                     {row.status === "linked" && row.mapping ? (
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm text-foreground truncate">
                             {row.mapping.idp_display_name}
@@ -286,40 +309,28 @@ export default function IdpSyncPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <AlertCircle className="w-4 h-4 text-warning flex-shrink-0" />
-                        <span className="text-sm">Não vinculado</span>
-                      </div>
+                      <CachedSearchCombobox
+                        options={jcOptions}
+                        isLoading={isLoadingJc}
+                        value={null}
+                        onChange={(opt) => handleComboSelect(row.sapUser.UserCode, opt)}
+                        placeholder="Buscar usuário JumpCloud..."
+                        suggestedQuery={row.sapUser.eMail || undefined}
+                      />
                     )}
                   </div>
 
                   {/* Actions */}
-                  <div className="w-28 flex justify-end gap-1">
-                    {row.status === "linked" ? (
+                  <div className="w-24 flex justify-end">
+                    {row.status === "linked" && (
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="text-xs gap-1 text-muted-foreground hover:text-destructive"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive h-8 w-8"
                         onClick={() => handleUnlink(row.sapUser.UserCode)}
+                        title="Desvincular"
                       >
-                        <Unlink className="w-3 h-3" />
-                        Desvincular
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs gap-1"
-                        onClick={() =>
-                          setLinkDialog({
-                            open: true,
-                            sapUserCode: row.sapUser.UserCode,
-                            sapUserName: row.sapUser.UserName || row.sapUser.UserCode,
-                          })
-                        }
-                      >
-                        <Link2 className="w-3 h-3" />
-                        Vincular
+                        <Unlink className="w-4 h-4" />
                       </Button>
                     )}
                   </div>
@@ -329,74 +340,6 @@ export default function IdpSyncPage() {
           </div>
         )}
       </main>
-
-      {/* Manual Link Dialog */}
-      <Dialog
-        open={!!linkDialog?.open}
-        onOpenChange={(open) => {
-          if (!open) {
-            setLinkDialog(null);
-            setJcSearch("");
-            setSearchResults([]);
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Vincular Usuário JumpCloud</DialogTitle>
-            <DialogDescription>
-              Busque um usuário JumpCloud para vincular a{" "}
-              <strong>{linkDialog?.sapUserName}</strong>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome ou e-mail no JumpCloud..."
-                value={jcSearch}
-                onChange={(e) => handleJcSearch(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-
-            {isSearching && (
-              <div className="flex justify-center py-4">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            )}
-
-            {searchResults.length > 0 && (
-              <div className="max-h-[300px] overflow-y-auto divide-y divide-border rounded-lg border border-border">
-                {searchResults.map((jc) => (
-                  <div
-                    key={jc._id}
-                    className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
-                    onClick={() => handleManualLink(jc)}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {jc.displayname || `${jc.firstname || ""} ${jc.lastname || ""}`.trim() || jc.username}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">{jc.email}</p>
-                    </div>
-                    <Badge variant="secondary" className="text-xs flex-shrink-0">
-                      {jc.suspended ? "Suspenso" : "Ativo"}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {jcSearch.length >= 2 && !isSearching && searchResults.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Nenhum usuário encontrado
-              </p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
