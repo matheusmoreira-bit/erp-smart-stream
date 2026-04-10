@@ -369,11 +369,11 @@ export function PaymentAnalysis() {
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analytics.topSuppliers} layout="vertical" margin={{ left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={fmt} />
-                  <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} width={130} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.15} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={fmt} axisLine={false} tickLine={false} />
+                  <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} width={130} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="total" name="Total pago" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="total" name="Total pago" fill="url(#barGradientH)" radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -390,11 +390,14 @@ export function PaymentAnalysis() {
                     nameKey="range"
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={3}
+                    innerRadius={65}
+                    outerRadius={105}
+                    paddingAngle={4}
+                    cornerRadius={6}
                     label={({ range, count }) => `${range}: ${count}`}
                     labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }}
+                    stroke="hsl(var(--background))"
+                    strokeWidth={2}
                   >
                     {analytics.lateDistribution.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -413,11 +416,11 @@ export function PaymentAnalysis() {
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analytics.topRequesters} layout="vertical" margin={{ left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={fmt} />
-                  <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} width={120} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.15} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={fmt} axisLine={false} tickLine={false} />
+                  <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} width={120} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="total" name="Total pago" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="total" name="Total pago" radius={[0, 6, 6, 0]}>
                     {analytics.topRequesters.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
@@ -438,11 +441,14 @@ export function PaymentAnalysis() {
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={3}
+                    innerRadius={65}
+                    outerRadius={105}
+                    paddingAngle={4}
+                    cornerRadius={6}
                     label={({ name, count }) => `${name}: ${count}`}
                     labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }}
+                    stroke="hsl(var(--background))"
+                    strokeWidth={2}
                   >
                     {analytics.statusDistribution.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -461,11 +467,11 @@ export function PaymentAnalysis() {
             <div className="h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analytics.branchDistribution}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={fmt} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.15} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={fmt} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="total" name="Total pago" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="total" name="Total pago" fill="url(#barGradient)" radius={[6, 6, 0, 0]}>
                     {analytics.branchDistribution.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
