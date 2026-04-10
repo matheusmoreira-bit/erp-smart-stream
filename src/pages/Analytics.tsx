@@ -1,11 +1,15 @@
+import { useMemo } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { SapLoginForm } from "@/components/SapLoginForm";
 import { Dashboard } from "@/components/Dashboard";
 import { PaymentAnalysis } from "@/components/PaymentAnalysis";
-import { Activity, ArrowLeft, LogOut, RefreshCw, CreditCard, GitBranch } from "lucide-react";
+import { ReportAiChat } from "@/components/ReportAiChat";
+import { Activity, ArrowLeft, LogOut, CreditCard, GitBranch } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSapDashboard } from "@/hooks/useSapDashboard";
+import { usePaymentAnalysis } from "@/hooks/usePaymentAnalysis";
 
 const COMPANY_LABELS: Record<string, string> = {
   SBO_ANAGAMING: "ANA Gaming",
@@ -80,6 +84,62 @@ export default function AnalyticsPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <AnalyticsAiChat activeTab={activeTab} />
     </div>
   );
+}
+
+/** Wrapper that builds report context for the AI based on active tab */
+function AnalyticsAiChat({ activeTab }: { activeTab: string }) {
+  const dashboard = useSapDashboard();
+  const payments = usePaymentAnalysis();
+
+  const reportContext = useMemo(() => {
+    if (activeTab === "fluxo") {
+      const { stages, metrics, validations } = dashboard;
+      const stagesSummary = stages
+        .map((s) => `${s.name}: média ${s.avgDays}d (meta: ${s.targetDays}d) - ${s.count} docs - status: ${s.status}`)
+        .join("\n");
+      const errorItems = validations
+        .filter((v) => v.status === "error")
+        .slice(0, 20)
+        .map((v) => `• ${v.document} (${v.supplier}): ${v.message}`)
+        .join("\n");
+
+      return `RELATÓRIO: Fluxo de Compras
+Métricas:
+- Tempo médio total: ${metrics.avgTotalDays} dias
+- Pedidos em aberto: ${metrics.openOrders}
+- Validações com erro: ${metrics.validationErrors}
+- Taxa de conformidade: ${metrics.complianceRate}%
+
+Etapas do fluxo:
+${stagesSummary}
+
+Principais erros (até 20):
+${errorItems || "Nenhum erro encontrado"}
+
+Total de validações: ${validations.length}`;
+    }
+
+    // Pagamentos tab
+    const { rows } = payments;
+    if (!rows.length) return "RELATÓRIO: Análise de Pagamentos\nNenhum dado disponível.";
+
+    const totalRows = rows.length;
+    const columns = Object.keys(rows[0]);
+    const sample = rows.slice(0, 5).map((r) =>
+      columns.map((c) => `${c}: ${r[c] ?? "—"}`).join(", ")
+    ).join("\n");
+
+    return `RELATÓRIO: Análise de Pagamentos
+Total de registros: ${totalRows}
+Colunas: ${columns.join(", ")}
+
+Amostra (primeiros 5 registros):
+${sample}`;
+  }, [activeTab, dashboard, payments]);
+
+  return <ReportAiChat reportContext={reportContext} />;
 }
