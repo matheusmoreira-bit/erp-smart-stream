@@ -20,14 +20,15 @@ interface DashboardProps {
 export function Dashboard({ embedded = false }: DashboardProps) {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { getLabel } = useCompanies(true);
+  const { companies, getLabel } = useCompanies(true);
   const [period, setPeriod] = useState<PeriodFilterValue>(DEFAULT_PERIOD);
 
   const dateFilter = period.preset === "all"
     ? undefined
     : { from: period.range.from, to: period.range.to };
 
-  const { stages, metrics, insights, validations, approverStats, isLoading, error, refresh } = useSapDashboard(dateFilter);
+  const companyTargets = companies.find((c) => c.company_db === session?.companyDB)?.targets || DEFAULT_TARGETS;
+  const { stages, metrics, insights, validations, approverStats, isLoading, error, refresh } = useSapDashboard(dateFilter, companyTargets);
   const companyLabel = getLabel(session?.companyDB || "");
 
   const content = (
