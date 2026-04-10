@@ -604,6 +604,8 @@ export default function ApprovalsPage() {
         onClose={() => setSelectedDoc(null)}
         onAction={handleApprovalAction}
         isActioning={isActioning}
+        isSuperUser={isSuperUser}
+        currentUserName={session.userName}
       />
     </div>
   );
