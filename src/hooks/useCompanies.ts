@@ -24,8 +24,9 @@ export function useCompanies(onlyActive = false) {
 
   useEffect(() => {
     fetchCompanies();
+    const channelName = `companies-sync-${Date.now()}`;
     const channel = supabase
-      .channel("companies-sync")
+      .channel(channelName)
       .on("postgres_changes", { event: "*", schema: "public", table: "companies" }, () => fetchCompanies())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
