@@ -5,6 +5,12 @@ import type { FlowStage } from "@/components/FlowTimeline";
 import type { Insight } from "@/components/InsightsPanel";
 import type { ValidationItem } from "@/components/ValidationTable";
 
+export interface ApproverStats {
+  name: string;
+  avgDays: number;
+  count: number;
+}
+
 export interface SapDashboardData {
   stages: FlowStage[];
   metrics: {
@@ -15,6 +21,7 @@ export interface SapDashboardData {
   };
   insights: Insight[];
   validations: ValidationItem[];
+  approverStats: ApproverStats[];
   isLoading: boolean;
   error: string | null;
   refresh: () => void;
