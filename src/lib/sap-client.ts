@@ -88,6 +88,7 @@ export async function sapQuery(
     action: "query",
     sessionId: session.sessionId,
     routeId: session.routeId,
+    companyDB: session.companyDB,
     endpoint,
     params,
   });
@@ -109,6 +110,7 @@ export async function sapAction(
     action: "sapAction",
     sessionId: session.sessionId,
     routeId: session.routeId,
+    companyDB: session.companyDB,
     endpoint,
     method,
     body,
@@ -162,6 +164,7 @@ export async function sapQueryAll(
     action: "queryAll",
     sessionId: session.sessionId,
     routeId: session.routeId,
+    companyDB: session.companyDB,
     endpoint,
     params,
   });
