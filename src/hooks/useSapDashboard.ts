@@ -132,25 +132,7 @@ function buildStages(rows: ViewRow[], approvalDays: number[]): FlowStage[] {
   ];
 }
 
-  const avgPedidoNf = avg(pedidoToNfEmissao);
-  const avgNfEmissaoLanc = avg(nfEmissaoToNfLanc);
-  const avgNfPag = avg(nfLancToPagamento);
 
-  const stageStatusCustom = (avgDays: number, target: number): "ok" | "warning" | "critical" => {
-    if (avgDays <= target) return "ok";
-    if (avgDays <= target * 1.5) return "warning";
-    return "critical";
-  };
-
-  return [
-    { id: "requisicao", name: "REQUISIÇÃO", avgDays: 1, targetDays: 2, status: "ok", count: 0 },
-    { id: "cotacao", name: "COTAÇÃO", avgDays: 1, targetDays: 3, status: "ok", count: 0 },
-    { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoNf || 1, targetDays: 3, status: stageStatusCustom(avgPedidoNf || 1, 3), count: pedidoToNfEmissao.length },
-    { id: "recebimento", name: "RECEBIMENTO", avgDays: 1, targetDays: 5, status: "ok", count: 0 },
-    { id: "nf_entrada", name: "NF ENTRADA", avgDays: avgNfEmissaoLanc || 1, targetDays: 2, status: stageStatusCustom(avgNfEmissaoLanc || 1, 2), count: nfEmissaoToNfLanc.length },
-    { id: "pagamento", name: "PAGAMENTO", avgDays: avgNfPag || 1, targetDays: 5, status: stageStatusCustom(avgNfPag || 1, 5), count: nfLancToPagamento.length },
-  ];
-}
 
 /* ── Build validations ── */
 function buildValidations(rows: ViewRow[]): ValidationItem[] {
