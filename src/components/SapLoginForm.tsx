@@ -9,11 +9,31 @@ import { useSap } from "@/contexts/SapContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+interface CompanyOption {
+  label: string;
+  value: string;
+}
+
 export function SapLoginForm() {
   const { login, isLoading } = useSap();
+  const navigate = useNavigate();
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [companyDB, setCompanyDB] = useState("");
+  const [databases, setDatabases] = useState<CompanyOption[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("companies")
+      .select("company_db, display_name")
+      .eq("is_active", true)
+      .order("display_name")
+      .then(({ data }) => {
+        setDatabases(
+          (data || []).map((c) => ({ label: c.display_name, value: c.company_db }))
+        );
+      });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

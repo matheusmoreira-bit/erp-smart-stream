@@ -18,6 +18,9 @@ import UserActivity from "./pages/UserActivity.tsx";
 import IdpSync from "./pages/IdpSync.tsx";
 import Synapse from "./pages/Synapse.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import AdminLogin from "./pages/AdminLogin.tsx";
+import Admin from "./pages/Admin.tsx";
+import { AdminRoute } from "./components/AdminRoute.tsx";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +33,8 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/expenses" element={<Expenses />} />
