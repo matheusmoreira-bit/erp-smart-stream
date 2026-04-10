@@ -16,7 +16,7 @@ import {
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -369,12 +369,12 @@ export default function PagCorp() {
                         <TableCell className="text-center">
                           {t.hasAccountability ? (
                             t.accountabilityApproved ? (
-                              <CheckCircle2 className="w-4 h-4 text-success mx-auto" title="Aprovada" />
+                              <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
                             ) : (
-                              <Clock className="w-4 h-4 text-warning mx-auto" title="Pendente aprovação" />
+                              <Clock className="w-4 h-4 text-warning mx-auto" />
                             )
                           ) : (
-                            <XCircle className="w-4 h-4 text-destructive/60 mx-auto" title="Sem prestação" />
+                            <XCircle className="w-4 h-4 text-destructive/60 mx-auto" />
                           )}
                         </TableCell>
                         <TableCell className="text-center">
