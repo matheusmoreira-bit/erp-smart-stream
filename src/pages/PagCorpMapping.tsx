@@ -32,6 +32,7 @@ interface AccountMapping {
   account_name: string;
   cost_center: string;
   project: string;
+  item_code: string;
   isNew?: boolean;
 }
 
@@ -51,6 +52,13 @@ export default function PagCorpMapping() {
     cacheKey: "Projects",
     endpoint: "Projects",
     mapRow: (r: any) => ({ code: r.Code, name: r.Name, extra: "" }),
+  });
+
+  const itemCache = useSapCachedList({
+    cacheKey: "items",
+    endpoint: "Items",
+    params: { $select: "ItemCode,ItemName" },
+    mapRow: (r: any) => ({ code: r.ItemCode, name: r.ItemName, extra: "" }),
   });
 
   // Fetch PagCorp transactions from last 30 days for account code suggestions
@@ -101,6 +109,7 @@ export default function PagCorpMapping() {
           account_name: r.account_name || "",
           cost_center: r.cost_center || "",
           project: r.project || "",
+          item_code: r.item_code || "",
         }))
       );
     }
@@ -110,7 +119,7 @@ export default function PagCorpMapping() {
   function addRow() {
     setMappings((prev) => [
       ...prev,
-      { account_code: "", account_name: "", cost_center: "", project: "", isNew: true },
+      { account_code: "", account_name: "", cost_center: "", project: "", item_code: "", isNew: true },
     ]);
   }
 
@@ -155,6 +164,7 @@ export default function PagCorpMapping() {
               account_name: m.account_name,
               cost_center: m.cost_center || null,
               project: m.project || null,
+              item_code: m.item_code || null,
             })
             .eq("id", m.id);
           if (error) throw error;
@@ -167,6 +177,7 @@ export default function PagCorpMapping() {
                 account_name: m.account_name,
                 cost_center: m.cost_center || null,
                 project: m.project || null,
+                item_code: m.item_code || null,
               },
               { onConflict: "account_code" }
             );
@@ -251,6 +262,7 @@ export default function PagCorpMapping() {
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="text-muted-foreground">Conta PagCorp</TableHead>
+                    <TableHead className="text-muted-foreground">Item Genérico</TableHead>
                     <TableHead className="text-muted-foreground">Centro de Custo</TableHead>
                     <TableHead className="text-muted-foreground">Projeto</TableHead>
                     <TableHead className="text-muted-foreground w-12"></TableHead>
@@ -292,6 +304,15 @@ export default function PagCorpMapping() {
                             placeholder="Buscar conta PagCorp..."
                           />
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <CachedSearchCombobox
+                          options={itemCache.options}
+                          isLoading={itemCache.isLoading}
+                          value={findOption(itemCache.options, m.item_code)}
+                          onChange={(opt) => updateRow(i, "item_code", opt?.code || "")}
+                          placeholder="Selecione item..."
+                        />
                       </TableCell>
                       <TableCell>
                         <CachedSearchCombobox
