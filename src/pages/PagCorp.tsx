@@ -72,7 +72,7 @@ function formatDate(dateStr: string) {
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
 
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -159,9 +159,16 @@ export default function PagCorp() {
 
   const handleValidateAndIntegrate = async (t: PagCorpTransaction) => {
     setIntegrating(t.id);
-    // TODO: Call AI validation edge function with attachments, then integrate to SAP
-    toast.info("Validação com IA e integração SAP em desenvolvimento.");
-    setIntegrating(null);
+    try {
+      // TODO: Call AI validation edge function with attachments, then integrate to SAP
+      await logIntegration(t, "accountability", "pending", session?.companyDB, session?.userName);
+      toast.info("Validação com IA e integração SAP em desenvolvimento.");
+      await fetchTransactions(startDate, endDate);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao registrar integração");
+    } finally {
+      setIntegrating(null);
+    }
   };
 
   const handleIntegrateGeneric = (t: PagCorpTransaction) => {
@@ -173,9 +180,16 @@ export default function PagCorp() {
     if (!t) return;
     setIntegrating(t.id);
     setConfirmDialog({ open: false, transaction: null });
-    // TODO: Call SAP integration with generic item
-    toast.info("Integração SAP com item genérico em desenvolvimento.");
-    setIntegrating(null);
+    try {
+      // TODO: Call SAP integration with generic item
+      await logIntegration(t, "generic", "pending", session?.companyDB, session?.userName);
+      toast.info("Integração SAP com item genérico em desenvolvimento.");
+      await fetchTransactions(startDate, endDate);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao registrar integração");
+    } finally {
+      setIntegrating(null);
+    }
   };
 
   const COMPANY_LABELS: Record<string, string> = {
@@ -379,13 +393,19 @@ export default function PagCorp() {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          {integrating === t.id ? (
+                          {t.integrated ? (
+                            <Badge variant="secondary" className="bg-success/20 text-success border-success/30 font-semibold text-xs">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Integrado
+                            </Badge>
+                          ) : integrating === t.id ? (
                             <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
                           ) : t.hasAccountability ? (
                             <Button
                               variant="outline"
                               size="sm"
                               className="gap-1 text-xs"
+                              disabled={shouldDisableIntegrate}
                               onClick={() => handleValidateAndIntegrate(t)}
                             >
                               <Sparkles className="w-3 h-3" />
