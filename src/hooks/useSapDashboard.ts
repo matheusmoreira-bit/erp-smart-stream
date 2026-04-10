@@ -382,6 +382,7 @@ export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
         }
       }
       setApprovalDaysRaw(days);
+      setApprovalRowsRaw(approvalRows);
     } catch (e) {
       console.error("Error fetching view data:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar dados da view");
@@ -394,13 +395,39 @@ export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
     fetchData();
   }, [fetchData]);
 
-  const { stages, metrics, insights, validations } = useMemo(() => {
+  const { stages, metrics, insights, validations, approverStats } = useMemo(() => {
     const rows = filterRowsByDate(rawRows, dateFilter);
     const computedStages = buildStages(rows, approvalDaysRaw);
     const vals = buildValidations(rows);
     const errorCount = vals.filter((v) => v.status === "error").length;
     const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
     const totalAvg = computedStages.reduce((sum, s) => sum + s.avgDays, 0);
+
+    // Approver stats — no outlier removal
+    const approverMap = new Map<string, number[]>();
+    for (const a of approvalRowsRaw) {
+      const name = a.Aprovador;
+      if (!name) continue;
+      let d: number | null = null;
+      if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
+        d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
+        if (d !== null) d = Math.max(d, 1);
+      } else {
+        const raw = Number(a.Dias_Desde_Criacao || 0);
+        if (raw > 0) d = raw;
+      }
+      if (d !== null) {
+        if (!approverMap.has(name)) approverMap.set(name, []);
+        approverMap.get(name)!.push(d);
+      }
+    }
+    const computedApproverStats: ApproverStats[] = Array.from(approverMap.entries())
+      .map(([name, days]) => ({
+        name,
+        avgDays: Math.round((days.reduce((s, n) => s + n, 0) / days.length) * 10) / 10,
+        count: days.length,
+      }))
+      .sort((a, b) => b.avgDays - a.avgDays);
 
     return {
       stages: computedStages,
@@ -412,8 +439,9 @@ export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
       },
       insights: generateInsights(computedStages, vals),
       validations: vals,
+      approverStats: computedApproverStats,
     };
-  }, [rawRows, approvalDaysRaw, dateFilter]);
+  }, [rawRows, approvalDaysRaw, approvalRowsRaw, dateFilter]);
 
-  return { stages, metrics, insights, validations, isLoading, error, refresh: fetchData };
+  return { stages, metrics, insights, validations, approverStats, isLoading, error, refresh: fetchData };
 }
