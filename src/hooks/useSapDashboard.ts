@@ -351,6 +351,7 @@ function filterRowsByDate(rows: ViewRow[], filter?: DateFilter): ViewRow[] {
 
 export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTargets): SapDashboardData {
   const effectiveTargets = targets || DEFAULT_TARGETS;
+  const { session } = useSap();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rawRows, setRawRows] = useState<ViewRow[]>([]);
