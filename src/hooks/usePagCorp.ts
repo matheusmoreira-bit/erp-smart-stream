@@ -76,7 +76,6 @@ export function usePagCorp() {
           ...item,
         };
       });
-      }));
 
       setTransactions(items);
     } catch (e) {
