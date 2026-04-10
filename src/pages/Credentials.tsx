@@ -69,13 +69,13 @@ const SYSTEMS: SystemConfig[] = [
   {
     name: "sap",
     label: "SAP Business One",
-    description: "ERP e Service Layer",
+    description: "Credencial usada exclusivamente para integrações automáticas (ex: PagCorp → SAP). Não é utilizada para carregamento de dados em tela.",
     icon: Server,
     fields: [
       { key: "service_layer_url", label: "URL do Service Layer", placeholder: "https://servidor:50000/b1s/v1/" },
       { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
-      { key: "username", label: "Usuário", placeholder: "manager" },
-      { key: "password", label: "Senha", type: "password", placeholder: "Senha do Service Layer" },
+      { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
+      { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário de integração" },
     ],
   },
   {
