@@ -60,8 +60,25 @@ function extractViewRows(payload: unknown): unknown[] {
 
 function extractTableName(table: string): string {
   const trimmed = table.trim();
-  // If table contains a dot (e.g. "SBO_ANAGAMING.VW_TODAS_APROVACOES"), use only the part after the dot
   return trimmed.includes(".") ? trimmed.split(".").pop() || trimmed : trimmed;
+}
+
+async function getSapBaseUrl(companyDB?: string): Promise<string> {
+  if (!companyDB) return DEFAULT_SAP_BASE_URL;
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(supabaseUrl, serviceRoleKey);
+    const { data } = await sb
+      .from("companies")
+      .select("service_layer_url")
+      .eq("company_db", companyDB)
+      .maybeSingle();
+    if (data?.service_layer_url) return data.service_layer_url.replace(/\/+$/, "");
+  } catch (e) {
+    console.error("Failed to fetch service_layer_url:", e);
+  }
+  return DEFAULT_SAP_BASE_URL;
 }
 
 serve(async (req) => {
