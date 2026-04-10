@@ -346,7 +346,7 @@ export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
     try {
       const [paymentResult, approvalResult] = await Promise.all([
         sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
-        sapQueryView<ApprovalViewRow>(session, `${session.companyDB}.VW_APROVACOES_DETALHADAS`).catch(() => ({ data: [] as ApprovalViewRow[] })),
+        sapQueryView<ApprovalViewRow>(session, "VW_TODAS_APROVACOES").catch(() => ({ data: [] as ApprovalViewRow[] })),
       ]);
 
       setRawRows(paymentResult.data || []);
