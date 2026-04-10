@@ -113,7 +113,7 @@ function stageStatus(avgDays: number): "ok" | "warning" | "critical" {
 }
 
 /* ── Build stages from view data ── */
-function buildStages(rows: ViewRow[], approvalDays: number[]): FlowStage[] {
+function buildStages(rows: ViewRow[], approvalDays: number[], targets: CompanyTargets): FlowStage[] {
   const pedidoToNfEmissao: number[] = [];
   const nfEmissaoToNfLanc: number[] = [];
   const nfLancToPagamento: number[] = [];
@@ -141,13 +141,12 @@ function buildStages(rows: ViewRow[], approvalDays: number[]): FlowStage[] {
   };
 
   return [
-    { id: "requisicao", name: "REQUISIÇÃO", avgDays: 1, targetDays: 2, status: "ok", count: 0 },
-    { id: "cotacao", name: "COTAÇÃO", avgDays: 1, targetDays: 3, status: "ok", count: 0 },
-    { id: "aprovacao", name: "APROVAÇÃO", avgDays: avgApproval || 1, targetDays: 3, status: stageStatusCustom(avgApproval || 1, 3), count: approvalDays.length },
-    { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoNf || 1, targetDays: 3, status: stageStatusCustom(avgPedidoNf || 1, 3), count: pedidoToNfEmissao.length },
-    
-    { id: "nf_entrada", name: "NF ENTRADA", avgDays: avgNfEmissaoLanc || 1, targetDays: 2, status: stageStatusCustom(avgNfEmissaoLanc || 1, 2), count: nfEmissaoToNfLanc.length },
-    { id: "pagamento", name: "PAGAMENTO", avgDays: avgNfPag || 1, targetDays: 5, status: stageStatusCustom(avgNfPag || 1, 5), count: nfLancToPagamento.length },
+    { id: "requisicao", name: "REQUISIÇÃO", avgDays: 1, targetDays: targets.requisicao, status: "ok", count: 0 },
+    { id: "cotacao", name: "COTAÇÃO", avgDays: 1, targetDays: targets.cotacao, status: "ok", count: 0 },
+    { id: "aprovacao", name: "APROVAÇÃO", avgDays: avgApproval || 1, targetDays: targets.aprovacao, status: stageStatusCustom(avgApproval || 1, targets.aprovacao), count: approvalDays.length },
+    { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoNf || 1, targetDays: targets.pedido_compra, status: stageStatusCustom(avgPedidoNf || 1, targets.pedido_compra), count: pedidoToNfEmissao.length },
+    { id: "nf_entrada", name: "NF ENTRADA", avgDays: avgNfEmissaoLanc || 1, targetDays: targets.nf_entrada, status: stageStatusCustom(avgNfEmissaoLanc || 1, targets.nf_entrada), count: nfEmissaoToNfLanc.length },
+    { id: "pagamento", name: "PAGAMENTO", avgDays: avgNfPag || 1, targetDays: targets.pagamento, status: stageStatusCustom(avgNfPag || 1, targets.pagamento), count: nfLancToPagamento.length },
   ];
 }
 
@@ -350,8 +349,8 @@ function filterRowsByDate(rows: ViewRow[], filter?: DateFilter): ViewRow[] {
   });
 }
 
-export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
-  const { session } = useSap();
+export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTargets): SapDashboardData {
+  const effectiveTargets = targets || DEFAULT_TARGETS;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rawRows, setRawRows] = useState<ViewRow[]>([]);
