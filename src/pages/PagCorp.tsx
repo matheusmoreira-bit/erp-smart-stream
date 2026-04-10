@@ -227,11 +227,11 @@ export default function PagCorp() {
         <div className="max-w-7xl mx-auto flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Data Início</label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-40 bg-card" />
+            <Input type="date" value={startDate} onChange={(e) => handleStartDateChange(e.target.value)} className="w-40 bg-card" />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Data Fim</label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-40 bg-card" />
+            <Input type="date" value={endDate} onChange={(e) => handleEndDateChange(e.target.value)} className="w-40 bg-card" />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Prestação de Conta</label>
