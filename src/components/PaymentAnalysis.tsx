@@ -3,6 +3,7 @@ import { Loader2, RefreshCw, DollarSign, AlertTriangle, TrendingUp, Users, Clock
 import { usePaymentAnalysis, type PaymentAnalysisRow } from "@/hooks/usePaymentAnalysis";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/MetricCard";
+import { PeriodFilter, filterByPeriod, DEFAULT_PERIOD, type PeriodFilterValue } from "@/components/PeriodFilter";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -221,8 +222,14 @@ function ChartCard({ title, children, className = "" }: { title: string; childre
 
 /* ── Main component ── */
 export function PaymentAnalysis() {
-  const { rows, isLoading, error, refresh } = usePaymentAnalysis();
+  const { rows: allRows, isLoading, error, refresh } = usePaymentAnalysis();
   const [search, setSearch] = useState("");
+  const [period, setPeriod] = useState<PeriodFilterValue>(DEFAULT_PERIOD);
+
+  const rows = useMemo(
+    () => filterByPeriod(allRows, period, (r) => r.Data_do_Pagamento),
+    [allRows, period]
+  );
   const analytics = usePaymentAnalytics(rows);
 
   if (error) {
@@ -269,11 +276,14 @@ export function PaymentAnalysis() {
 
   return (
     <Tabs defaultValue="dashboard" className="space-y-6">
-      <div className="flex items-center justify-between">
-        <TabsList>
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="tabela">Tabela</TabsTrigger>
-        </TabsList>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <TabsList>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="tabela">Tabela</TabsTrigger>
+          </TabsList>
+          <PeriodFilter value={period} onChange={setPeriod} />
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{rows.length} registros</span>
           <Button variant="ghost" size="sm" onClick={refresh}>
