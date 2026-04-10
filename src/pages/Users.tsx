@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Users as UsersIcon, Search, Clock } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,12 +25,15 @@ function getInitials(name: string): string {
 
 function formatLastLogin(user: SapUser): string {
   if (!user.LastLoginDate) return "Sem registro";
-  try {
-    const date = new Date(user.LastLoginDate);
-    return `${date.toLocaleDateString("pt-BR")}, ${date.toLocaleTimeString("pt-BR")}`;
-  } catch {
-    return user.LastLoginDate;
-  }
+
+  const raw = user.LastLoginDate.trim();
+  const [datePart, timePart] = raw.split("T");
+  const match = datePart?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) return raw;
+
+  const [, year, month, day] = match;
+  return `${day}/${month}/${year}${timePart ? `, ${timePart}` : ""}`;
 }
 
 export default function UsersPage() {
@@ -90,28 +93,24 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border px-6 py-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-2xl font-bold text-foreground">Gestão de Usuários</h1>
               <p className="text-sm text-muted-foreground">Gerencie o acesso e senhas dos usuários do SAP</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Atualizar
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
         </div>
       </header>
 
-      {/* Content */}
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-4">
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
@@ -119,7 +118,6 @@ export default function UsersPage() {
           </div>
         )}
 
-        {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -130,7 +128,6 @@ export default function UsersPage() {
           />
         </div>
 
-        {/* User List */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -138,11 +135,10 @@ export default function UsersPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-border overflow-hidden bg-card">
-            {/* Table Header */}
             <div className="grid grid-cols-[1fr_auto_auto] items-center px-6 py-3 border-b border-border bg-muted/30">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Usuário</span>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-48 text-center">Status</span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-56 text-right">Ações</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-24 text-right">Ações</span>
             </div>
 
             {filteredUsers.length === 0 ? (
@@ -153,30 +149,28 @@ export default function UsersPage() {
               filteredUsers.map((user) => {
                 const isLocked = user.Locked === "tYES";
                 const isActing = actionLoading === user.InternalKey;
-                const initials = getInitials(user.UserName);
+                const initials = getInitials(user.UserName || user.UserCode || "?");
 
                 return (
                   <div
                     key={user.InternalKey}
                     className={`grid grid-cols-[1fr_auto_auto] items-center px-6 py-4 border-b border-border last:border-b-0 transition-colors hover:bg-muted/20 ${isLocked ? "opacity-50" : ""}`}
                   >
-                    {/* User Info */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
                       <div className="flex-shrink-0 w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center">
                         <span className="text-sm font-bold text-primary">{initials}</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-foreground truncate">{user.UserName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Username: <span className="font-medium text-foreground/80">{user.UserCode}</span>
+                        <p className="font-semibold text-foreground truncate">{user.UserName || "Sem nome"}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          Username: <span className="font-medium text-foreground/80">{user.UserCode || "Sem username"}</span>
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground truncate">
                           E-mail: {user.eMail || "Sem e-mail"}
                         </p>
                       </div>
                     </div>
 
-                    {/* Status + Last Login */}
                     <div className="w-48 flex flex-col items-center gap-1">
                       <Badge
                         variant={isLocked ? "destructive" : "secondary"}
@@ -188,21 +182,22 @@ export default function UsersPage() {
                       >
                         {isLocked ? "BLOQUEADO" : "ATIVO"}
                       </Badge>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 text-center">
                         <Clock className="w-3 h-3" />
                         Login: {formatLastLogin(user)}
                       </span>
                     </div>
 
-                    {/* Actions */}
-                    <div className="w-56 flex items-center justify-end gap-2">
+                    <div className="w-24 flex items-center justify-end gap-1">
                       {isActing ? (
                         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                       ) : (
                         <>
                           <Button
-                            size="sm"
-                            variant={isLocked ? "default" : "destructive"}
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={isLocked ? "Desbloquear" : "Bloquear"}
                             onClick={() =>
                               setConfirmAction({
                                 type: isLocked ? "unlock" : "lock",
@@ -211,26 +206,19 @@ export default function UsersPage() {
                             }
                           >
                             {isLocked ? (
-                              <>
-                                <Unlock className="w-4 h-4 mr-1" />
-                                Desbloquear
-                              </>
+                              <Unlock className="w-4 h-4 text-success" />
                             ) : (
-                              <>
-                                <Lock className="w-4 h-4 mr-1" />
-                                Bloquear
-                              </>
+                              <Lock className="w-4 h-4 text-destructive" />
                             )}
                           </Button>
                           <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setConfirmAction({ type: "password", user })
-                            }
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Redefinir senha"
+                            onClick={() => setConfirmAction({ type: "password", user })}
                           >
-                            <KeyRound className="w-4 h-4 mr-1" />
-                            Resetar Senha
+                            <KeyRound className="w-4 h-4 text-warning" />
                           </Button>
                         </>
                       )}
@@ -243,7 +231,6 @@ export default function UsersPage() {
         )}
       </main>
 
-      {/* Confirmation Dialog */}
       <Dialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
         <DialogContent>
           <DialogHeader>
