@@ -57,12 +57,10 @@ function extractViewRows(payload: unknown): unknown[] {
   return [];
 }
 
-function buildViewTableAttempts(database: string, table: string): string[] {
-  const trimmedTable = table.trim();
-  const shortTable = trimmedTable.includes(".") ? trimmedTable.split(".").pop() || trimmedTable : trimmedTable;
-  const qualifiedTable = trimmedTable.includes(".") ? trimmedTable : `${database}.${trimmedTable}`;
-
-  return Array.from(new Set([qualifiedTable, shortTable].filter(Boolean)));
+function extractTableName(table: string): string {
+  const trimmed = table.trim();
+  // If table contains a dot (e.g. "SBO_ANAGAMING.VW_TODAS_APROVACOES"), use only the part after the dot
+  return trimmed.includes(".") ? trimmed.split(".").pop() || trimmed : trimmed;
 }
 
 serve(async (req) => {
