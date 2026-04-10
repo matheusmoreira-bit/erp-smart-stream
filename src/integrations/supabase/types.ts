@@ -272,6 +272,51 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_integration_log: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          integrated_by: string | null
+          integration_type: string
+          pagcorp_data: Json
+          pagcorp_expense_id: number
+          sap_doc_entry: number | null
+          sap_doc_num: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          integrated_by?: string | null
+          integration_type?: string
+          pagcorp_data?: Json
+          pagcorp_expense_id: number
+          sap_doc_entry?: number | null
+          sap_doc_num?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          integrated_by?: string | null
+          integration_type?: string
+          pagcorp_data?: Json
+          pagcorp_expense_id?: number
+          sap_doc_entry?: number | null
+          sap_doc_num?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sap_cache: {
         Row: {
           cache_key: string
