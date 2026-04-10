@@ -391,6 +391,8 @@ export default function PagCorp() {
                               variant="outline"
                               size="sm"
                               className="gap-1 text-xs"
+                              disabled={shouldDisableIntegrate}
+                              title={shouldDisableIntegrate ? (txAgeDays < 15 ? "Transação com menos de 15 dias" : "Faltam 3 dias ou menos para o fim do mês") : undefined}
                               onClick={() => handleIntegrateGeneric(t)}
                             >
                               <Upload className="w-3 h-3" />
