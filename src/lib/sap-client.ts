@@ -55,12 +55,32 @@ export async function sapLogin(userName: string, password: string, companyDB: st
     credentials: { UserName: userName, Password: password, CompanyDB: companyDB },
   });
 
-  return {
+  const session: SapSession = {
     sessionId: result.sessionId,
     routeId: result.routeId || "",
     companyDB,
     userName,
+    isSuperUser: false,
   };
+
+  // Check if user is SAP SuperUser
+  try {
+    const userInfo = await callProxy({
+      action: "query",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      companyDB,
+      endpoint: `Users?$filter=UserCode eq '${userName}'&$select=UserCode,Superuser`,
+    });
+    const users = Array.isArray(userInfo.data) ? userInfo.data : (userInfo.data?.value || []);
+    if (users.length > 0 && users[0].Superuser === "tYES") {
+      session.isSuperUser = true;
+    }
+  } catch (e) {
+    console.warn("Could not fetch SAP user superuser status:", e);
+  }
+
+  return session;
 }
 
 export async function sapLogout(session: SapSession): Promise<void> {
