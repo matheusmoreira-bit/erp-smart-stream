@@ -334,14 +334,29 @@ export function useSapDashboard(): SapDashboardData {
     setError(null);
 
     try {
-      const result = await sapQueryView<ViewRow>(
-        session,
-        "VW_ANALISE_PAGAMENTOS_DETALHADO",
-      );
+      // Fetch both views in parallel
+      const [paymentResult, approvalResult] = await Promise.all([
+        sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
+        sapQueryView<ApprovalViewRow>(session, `${session.companyDB}.VW_APROVACOES_DETALHADAS`).catch(() => ({ data: [] as ApprovalViewRow[] })),
+      ]);
 
-      const rows = result.data || [];
+      const rows = paymentResult.data || [];
+      const approvalRows = approvalResult.data || [];
 
-      const computedStages = buildStages(rows);
+      // Build a map of docNum → approval days for cross-referencing
+      // Calculate approval duration: "Dias em aberto" for pending, or diff between creation and doc date
+      const approvalDays: number[] = [];
+      for (const a of approvalRows) {
+        const daysOpen = Number(a["Dias em aberto"] || 0);
+        if (daysOpen > 0) {
+          approvalDays.push(daysOpen);
+        } else {
+          const d = daysBetween(a["Data de criação"] || null, a["Data do documento"] || null);
+          if (d !== null && d > 0) approvalDays.push(d);
+        }
+      }
+
+      const computedStages = buildStages(rows, approvalDays);
       const vals = buildValidations(rows);
       const errorCount = vals.filter((v) => v.status === "error").length;
       const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
