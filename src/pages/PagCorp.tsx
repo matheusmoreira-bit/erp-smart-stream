@@ -176,6 +176,7 @@ export default function PagCorp() {
   }, [filteredTransactions]);
 
   const handleValidateAndIntegrate = async (t: PagCorpTransaction) => {
+    if (!checkSapCredentials()) return;
     setIntegrating(t.id);
     try {
       // TODO: Call AI validation edge function with attachments, then integrate to SAP
@@ -190,6 +191,7 @@ export default function PagCorp() {
   };
 
   const handleIntegrateGeneric = (t: PagCorpTransaction) => {
+    if (!checkSapCredentials()) return;
     setConfirmDialog({ open: true, transaction: t });
   };
 
