@@ -46,11 +46,7 @@ import {
   type CreateExpenseInput,
 } from "@/hooks/useExpenses";
 
-const COMPANY_LABELS: Record<string, string> = {
-  SBO_ANAGAMING: "ANA Gaming",
-  SBO_CACTUS: "Cactus",
-  SBO_INSTITUTO_ANA: "Instituto Cactus",
-};
+import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -798,6 +794,7 @@ export default function ExpensesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { expenses, isLoading, error, refresh, createExpense, submitForApproval } = useExpenses();
+  const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -809,7 +806,7 @@ export default function ExpensesPage() {
     return null;
   }
 
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const companyLabel = getLabel(session?.companyDB || "");
 
   const filtered = expenses.filter((e) => {
     if (statusFilter !== "all" && e.status !== statusFilter) return false;

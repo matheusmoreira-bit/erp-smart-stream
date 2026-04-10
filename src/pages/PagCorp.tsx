@@ -76,6 +76,7 @@ export default function PagCorp() {
   const { session, logout } = useSap();
   const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
   const { credentials, fetchCredentials } = useCredentials();
+  const { getLabel } = useCompanies(true);
 
   useEffect(() => { fetchCredentials("sap"); }, [fetchCredentials]);
 
@@ -212,12 +213,7 @@ export default function PagCorp() {
     }
   };
 
-  const COMPANY_LABELS: Record<string, string> = {
-    SBO_ANAGAMING: "ANA Gaming",
-    SBO_CACTUS: "Cactus",
-    SBO_INSTITUTO_ANA: "Instituto Cactus",
-  };
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const companyLabel = getLabel(session?.companyDB || "");
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
