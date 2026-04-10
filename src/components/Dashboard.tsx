@@ -28,7 +28,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
     : { from: period.range.from, to: period.range.to };
 
   const { stages, metrics, insights, validations, approverStats, isLoading, error, refresh } = useSapDashboard(dateFilter);
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const companyLabel = getLabel(session?.companyDB || "");
 
   const content = (
     <div className={embedded ? "space-y-8" : "max-w-7xl mx-auto px-6 py-8 space-y-8"}>

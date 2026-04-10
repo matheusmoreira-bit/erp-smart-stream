@@ -10,12 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { usePaymentAnalysis } from "@/hooks/usePaymentAnalysis";
-
-const COMPANY_LABELS: Record<string, string> = {
-  SBO_ANAGAMING: "ANA Gaming",
-  SBO_CACTUS: "Cactus",
-  SBO_INSTITUTO_ANA: "Instituto Cactus",
-};
+import { useCompanies } from "@/hooks/useCompanies";
 
 export default function AnalyticsPage() {
   const { session, logout } = useSap();
