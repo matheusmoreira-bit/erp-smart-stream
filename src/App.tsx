@@ -11,6 +11,7 @@ import Expenses from "./pages/Expenses.tsx";
 import ApprovalRules from "./pages/ApprovalRules.tsx";
 import PagCorp from "./pages/PagCorp.tsx";
 import PagCorpMapping from "./pages/PagCorpMapping.tsx";
+import IntegrationHistory from "./pages/IntegrationHistory.tsx";
 import Credentials from "./pages/Credentials.tsx";
 import UsersPage from "./pages/Users.tsx";
 import NotFound from "./pages/NotFound.tsx";
