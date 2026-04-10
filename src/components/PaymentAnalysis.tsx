@@ -3,6 +3,7 @@ import { Loader2, RefreshCw, DollarSign, AlertTriangle, TrendingUp, Users, Clock
 import { usePaymentAnalysis, type PaymentAnalysisRow } from "@/hooks/usePaymentAnalysis";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/MetricCard";
+import { PeriodFilter, filterByPeriod, DEFAULT_PERIOD, type PeriodFilterValue } from "@/components/PeriodFilter";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
