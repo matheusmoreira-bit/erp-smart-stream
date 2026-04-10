@@ -12,9 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
 import { useUserActivity, getActionLabel, getSourceLabel, isFailedLogin, formatDuration } from "@/hooks/useUserActivity";
 import type { Usr5Record } from "@/hooks/useUserActivity";
+import MonthlyLoginChart from "@/components/MonthlyLoginChart";
+import UserActivityRankings from "@/components/UserActivityRankings";
 
 const PIE_COLORS = [
   "hsl(var(--primary))",
@@ -35,16 +37,6 @@ function formatDate(d: string): string {
   if (!d) return "";
   const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
-}
-
-function last7Days(): string[] {
-  const days: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-  return days;
 }
 
 export default function UserActivityPage() {
@@ -96,55 +88,14 @@ export default function UserActivityPage() {
     return { uniqueUsers, logins, failures, uniqueIPs, avgDuration };
   }, [filtered]);
 
-  // Bar chart: logins per day (last 7 days)
-  const dailyChart = useMemo(() => {
-    const days = last7Days();
-    const map = new Map<string, { logins: number; failures: number }>();
-    days.forEach((d) => map.set(d, { logins: 0, failures: 0 }));
-    filtered.forEach((r) => {
-      const day = r.Date?.slice(0, 10);
-      if (!day || !map.has(day)) return;
-      const entry = map.get(day)!;
-      if (r.Action === "I" || r.Action === "W") entry.logins++;
-      if (isFailedLogin(r)) entry.failures++;
-    });
-    return days.map((d) => ({
-      day: d.slice(5),
-      Logins: map.get(d)?.logins ?? 0,
-      Falhas: map.get(d)?.failures ?? 0,
-    }));
-  }, [filtered]);
-
   // Pie chart: actions breakdown
   const actionsPie = useMemo(() => {
     const map = new Map<string, number>();
     filtered.forEach((r) => {
-      const label = getActionLabel(r.Action);
+      const label = isFailedLogin(r) ? "Falha de Login" : getActionLabel(r.Action);
       map.set(label, (map.get(label) || 0) + 1);
     });
     return Array.from(map, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filtered]);
-
-  // Top users table
-  const topUsers = useMemo(() => {
-    const map = new Map<string, { logins: number; failures: number; lastDate: string; avgDuration: number; totalDuration: number; sessionCount: number }>();
-    filtered.forEach((r) => {
-      const u = r.UserCode;
-      if (!u) return;
-      if (!map.has(u)) map.set(u, { logins: 0, failures: 0, lastDate: "", avgDuration: 0, totalDuration: 0, sessionCount: 0 });
-      const entry = map.get(u)!;
-      if (r.Action === "I" || r.Action === "W") entry.logins++;
-      if (isFailedLogin(r)) entry.failures++;
-      if (r.AliveDurtn > 0) { entry.totalDuration += r.AliveDurtn; entry.sessionCount++; }
-      if (r.Date > entry.lastDate) entry.lastDate = r.Date;
-    });
-    return Array.from(map, ([user, data]) => ({
-      user,
-      ...data,
-      avgDuration: data.sessionCount > 0 ? Math.round(data.totalDuration / data.sessionCount) : 0,
-    }))
-      .sort((a, b) => b.logins - a.logins)
-      .slice(0, 15);
   }, [filtered]);
 
   return (
