@@ -1,23 +1,39 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, Database, LogIn, Loader2 } from "lucide-react";
+import { Activity, Lock, User, Database, LogIn, Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSap } from "@/contexts/SapContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const DATABASES = [
-  { label: "ANA Gaming", value: "SBO_ANAGAMING" },
-  { label: "Cactus", value: "SBO_CACTUS" },
-  { label: "Instituto Cactus", value: "SBO_INSTITUTO_ANA" },
-];
+interface CompanyOption {
+  label: string;
+  value: string;
+}
 
 export function SapLoginForm() {
   const { login, isLoading } = useSap();
+  const navigate = useNavigate();
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [companyDB, setCompanyDB] = useState("");
+  const [databases, setDatabases] = useState<CompanyOption[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("companies")
+      .select("company_db, display_name")
+      .eq("is_active", true)
+      .order("display_name")
+      .then(({ data }) => {
+        setDatabases(
+          (data || []).map((c) => ({ label: c.display_name, value: c.company_db }))
+        );
+      });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +84,7 @@ export function SapLoginForm() {
                 </div>
               </SelectTrigger>
               <SelectContent>
-                {DATABASES.map((db) => (
+                {databases.map((db) => (
                   <SelectItem key={db.value} value={db.value}>
                     <span className="font-medium">{db.label}</span>
                     <span className="text-xs text-muted-foreground ml-2 font-mono">{db.value}</span>
@@ -117,9 +133,15 @@ export function SapLoginForm() {
           </Button>
         </form>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          Conexão segura via Service Layer
-        </p>
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-xs text-muted-foreground">
+            Conexão segura via Service Layer
+          </p>
+          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/admin/login")}>
+            <Settings className="w-3 h-3 mr-1" />
+            Admin
+          </Button>
+        </div>
       </motion.div>
     </div>
   );

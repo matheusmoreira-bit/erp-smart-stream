@@ -100,6 +100,33 @@ export type Database = {
         }
         Relationships: []
       }
+      companies: {
+        Row: {
+          company_db: string
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          display_name: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expense_attachments: {
         Row: {
           created_at: string
