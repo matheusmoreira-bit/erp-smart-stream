@@ -18,6 +18,8 @@ import {
   EyeOff,
   CheckCircle2,
   XCircle,
+  ScrollText,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +38,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuditLog } from "@/hooks/useAuditLog";
+import AuditLogTable from "@/components/AuditLogTable";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 /* ── Types ── */
 
 interface Company {
@@ -219,6 +230,12 @@ export default function Admin() {
   const [selectedSystem, setSelectedSystem] = useState<SystemConfig | null>(null);
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
+  // Audit log
+  const [activeTab, setActiveTab] = useState<"companies" | "audit">("companies");
+  const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
+  const auditCompanyDb = auditCompanyFilter === "all" ? undefined : auditCompanyFilter;
+  const { entries: auditEntries, isLoading: auditLoading, refresh: auditRefresh } = useAuditLog(auditCompanyDb);
+
   const fetchCompanies = async () => {
     const { data, error } = await supabase
       .from("companies")
@@ -388,115 +405,171 @@ export default function Admin() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-foreground">Empresas</h2>
-          <Button onClick={openNewCompany} size="sm">
-            <Plus className="w-4 h-4 mr-1" />
-            Nova Empresa
-          </Button>
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mb-6 border-b border-border">
+          <button
+            onClick={() => setActiveTab("companies")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "companies"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Building2 className="w-4 h-4 inline mr-1.5" />
+            Empresas
+          </button>
+          <button
+            onClick={() => setActiveTab("audit")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "audit"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ScrollText className="w-4 h-4 inline mr-1.5" />
+            Logs de Auditoria
+          </button>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {companies.map((c, i) => (
-              <motion.div
-                key={c.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="glass-card overflow-hidden"
-              >
-                {/* Company row */}
-                <div className="flex items-center gap-4 p-4">
-                  <div className="p-2 rounded-lg bg-muted">
-                    <Building2 className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground">{c.display_name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{c.company_db}</p>
-                  </div>
-                  <Badge variant={c.is_active ? "default" : "secondary"}>
-                    {c.is_active ? "Ativa" : "Inativa"}
-                  </Badge>
-                  <Switch checked={c.is_active} onCheckedChange={() => toggleActive(c)} />
-                  <Button variant="ghost" size="icon" onClick={() => openEditCompany(c)}>
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => deleteCompany(c)}>
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => toggleExpand(c.company_db)}>
-                    {expandedCompany === c.company_db ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
+        {activeTab === "companies" && (
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-foreground">Empresas</h2>
+              <Button onClick={openNewCompany} size="sm">
+                <Plus className="w-4 h-4 mr-1" />
+                Nova Empresa
+              </Button>
+            </div>
 
-                {/* Credentials panel — system cards */}
-                {expandedCompany === c.company_db && (
-                  <div className="border-t border-border bg-muted/20 p-4">
-                    <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-4">
-                      <Key className="w-4 h-4 text-primary" />
-                      Credenciais
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {companies.map((c, i) => (
+                  <motion.div
+                    key={c.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="glass-card overflow-hidden"
+                  >
+                    {/* Company row */}
+                    <div className="flex items-center gap-4 p-4">
+                      <div className="p-2 rounded-lg bg-muted">
+                        <Building2 className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground">{c.display_name}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{c.company_db}</p>
+                      </div>
+                      <Badge variant={c.is_active ? "default" : "secondary"}>
+                        {c.is_active ? "Ativa" : "Inativa"}
+                      </Badge>
+                      <Switch checked={c.is_active} onCheckedChange={() => toggleActive(c)} />
+                      <Button variant="ghost" size="icon" onClick={() => openEditCompany(c)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteCompany(c)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => toggleExpand(c.company_db)}>
+                        {expandedCompany === c.company_db ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                      </Button>
                     </div>
 
-                    {credLoading === c.company_db ? (
-                      <div className="flex justify-center py-4">
-                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {SYSTEMS.map((sys) => {
-                          const keys = getKeysForSystem(c.company_db, sys.name);
-                          const isConfigured = keys.length > 0;
-                          const configuredCount = keys.length;
-                          const totalFields = sys.fields.length;
-                          const Icon = sys.icon;
+                    {/* Credentials panel — system cards */}
+                    {expandedCompany === c.company_db && (
+                      <div className="border-t border-border bg-muted/20 p-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-4">
+                          <Key className="w-4 h-4 text-primary" />
+                          Credenciais
+                        </div>
 
-                          return (
-                            <button
-                              key={sys.name}
-                              onClick={() => {
-                                setSelectedSystem(sys);
-                                setSelectedCompanyDb(c.company_db);
-                              }}
-                              className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:border-primary/40 transition-all text-left"
-                            >
-                              <div className="p-2 rounded-lg bg-primary/10">
-                                <Icon className="w-4 h-4 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground">{sys.label}</p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  {isConfigured ? (
-                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                                      <CheckCircle2 className="w-2.5 h-2.5" />
-                                      {configuredCount}/{totalFields}
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
-                                      <XCircle className="w-2.5 h-2.5" />
-                                      Não configurado
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
+                        {credLoading === c.company_db ? (
+                          <div className="flex justify-center py-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {SYSTEMS.map((sys) => {
+                              const keys = getKeysForSystem(c.company_db, sys.name);
+                              const isConfigured = keys.length > 0;
+                              const configuredCount = keys.length;
+                              const totalFields = sys.fields.length;
+                              const Icon = sys.icon;
+
+                              return (
+                                <button
+                                  key={sys.name}
+                                  onClick={() => {
+                                    setSelectedSystem(sys);
+                                    setSelectedCompanyDb(c.company_db);
+                                  }}
+                                  className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:border-primary/40 transition-all text-left"
+                                >
+                                  <div className="p-2 rounded-lg bg-primary/10">
+                                    <Icon className="w-4 h-4 text-primary" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-foreground">{sys.label}</p>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      {isConfigured ? (
+                                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                                          <CheckCircle2 className="w-2.5 h-2.5" />
+                                          {configuredCount}/{totalFields}
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
+                                          <XCircle className="w-2.5 h-2.5" />
+                                          Não configurado
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
-                )}
-              </motion.div>
-            ))}
-          </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === "audit" && (
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-foreground">Logs de Auditoria</h2>
+                <Select value={auditCompanyFilter} onValueChange={setAuditCompanyFilter}>
+                  <SelectTrigger className="w-[240px] bg-card">
+                    <SelectValue placeholder="Empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as empresas</SelectItem>
+                    {companies.map((c) => (
+                      <SelectItem key={c.company_db} value={c.company_db}>{c.display_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" size="sm" onClick={auditRefresh} disabled={auditLoading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${auditLoading ? "animate-spin" : ""}`} />
+                Atualizar
+              </Button>
+            </div>
+            <AuditLogTable entries={auditEntries} isLoading={auditLoading} showCompanyColumn={auditCompanyFilter === "all"} />
+          </>
         )}
       </main>
 
