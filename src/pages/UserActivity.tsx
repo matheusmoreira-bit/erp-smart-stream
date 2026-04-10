@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Loader2, Search, Users, LogIn, ShieldAlert, Activity, Clock } from "lucide-react";
+import { ArrowLeft, RefreshCw, Loader2, Search, Users, LogIn, ShieldAlert, Activity, Clock, Monitor, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { useUserActivity, getActionLabel } from "@/hooks/useUserActivity";
+import { useUserActivity, getActionLabel, getSourceLabel, isFailedLogin, formatDuration } from "@/hooks/useUserActivity";
 import type { Usr5Record } from "@/hooks/useUserActivity";
 
 const PIE_COLORS = [
