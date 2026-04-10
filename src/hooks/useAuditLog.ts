@@ -8,11 +8,12 @@ export interface AuditLogEntry {
   action: string;
   entity_type: string;
   entity_id: string | null;
+  company_db: string | null;
   details: Record<string, unknown> | null;
   created_at: string;
 }
 
-export function useAuditLog() {
+export function useAuditLog(companyDb?: string) {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,12 +22,17 @@ export function useAuditLog() {
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase
+      let query = supabase
         .from("audit_log")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(1000);
 
+      if (companyDb) {
+        query = query.eq("company_db", companyDb);
+      }
+
+      const { data, error: err } = await query;
       if (err) throw err;
       setEntries((data as AuditLogEntry[]) || []);
     } catch (e: any) {
@@ -34,7 +40,7 @@ export function useAuditLog() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [companyDb]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
