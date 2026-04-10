@@ -72,7 +72,7 @@ function formatDate(dateStr: string) {
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
 
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
