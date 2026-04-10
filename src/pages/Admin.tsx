@@ -353,8 +353,10 @@ export default function Admin() {
     if (!error) fetchCompanies();
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("admin_authenticated");
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
     navigate("/admin/login");
   };
 
