@@ -107,6 +107,7 @@ export type Database = {
           display_name: string
           id: string
           is_active: boolean
+          service_layer_url: string | null
           updated_at: string
         }
         Insert: {
@@ -115,6 +116,7 @@ export type Database = {
           display_name: string
           id?: string
           is_active?: boolean
+          service_layer_url?: string | null
           updated_at?: string
         }
         Update: {
@@ -123,6 +125,7 @@ export type Database = {
           display_name?: string
           id?: string
           is_active?: boolean
+          service_layer_url?: string | null
           updated_at?: string
         }
         Relationships: []
