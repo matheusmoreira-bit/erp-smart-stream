@@ -392,6 +392,78 @@ export type Database = {
         }
         Relationships: []
       }
+      synapse_execution_log: {
+        Row: {
+          affected_count: number | null
+          created_at: string
+          details: Json | null
+          id: string
+          integration_key: string
+          status: string
+        }
+        Insert: {
+          affected_count?: number | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          integration_key: string
+          status?: string
+        }
+        Update: {
+          affected_count?: number | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          integration_key?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      synapse_integrations: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_name: string
+          id: string
+          integration_key: string
+          interval_minutes: number
+          is_active: boolean
+          last_run_at: string | null
+          last_run_message: string | null
+          last_run_status: string | null
+          parameters: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_name: string
+          id?: string
+          integration_key: string
+          interval_minutes?: number
+          is_active?: boolean
+          last_run_at?: string | null
+          last_run_message?: string | null
+          last_run_status?: string | null
+          parameters?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          id?: string
+          integration_key?: string
+          interval_minutes?: number
+          is_active?: boolean
+          last_run_at?: string | null
+          last_run_message?: string | null
+          last_run_status?: string | null
+          parameters?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       system_credentials: {
         Row: {
           created_at: string
