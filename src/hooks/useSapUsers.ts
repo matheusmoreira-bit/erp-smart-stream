@@ -145,12 +145,12 @@ export function useSapUsers() {
         await supabase
           .from("sap_cache")
           .upsert(
-            {
+            [{
               cache_key: "users",
               company_db: companyDB,
               data: userList as unknown as Record<string, unknown>[],
               expires_at: expiresAt,
-            },
+            }],
             { onConflict: "cache_key,company_db" }
           )
           .then(({ error: upsertErr }) => {
