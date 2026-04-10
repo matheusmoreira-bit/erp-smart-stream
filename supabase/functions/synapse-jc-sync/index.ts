@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     }
 
     // 1. Fetch JumpCloud users
-    const jcCreds = await getJumpCloudCredentials(supabase);
+    const jcCreds = await getJumpCloudCredentials(supabase, bodyCompanyDB || undefined);
     const jcUsers = await fetchAllJumpCloudUsers(jcCreds.api_key, jcCreds.org_id);
 
     // 2. Get linked mappings
@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
     }
 
     // 4. Login to SAP and disable users
-    const sapCreds = await getSapCredentials(supabase);
+    const sapCreds = await getSapCredentials(supabase, bodyCompanyDB || undefined);
     const sap = await loginSap(sapCreds);
 
     const results: Array<{ userCode: string; success: boolean; error?: string }> = [];
