@@ -24,7 +24,7 @@ export function FlowTimeline({ stages }: FlowTimelineProps) {
   return (
     <div className="glass-card p-6">
       <h2 className="text-lg font-semibold text-foreground mb-6">Fluxo de Compras — Tempo Médio por Etapa</h2>
-      <div className="flex items-start gap-2 overflow-x-auto pb-4">
+      <div className="flex items-start justify-center gap-2 overflow-x-auto pb-4">
         {stages.map((stage, i) => {
           const config = statusConfig[stage.status];
           const Icon = config.icon;
