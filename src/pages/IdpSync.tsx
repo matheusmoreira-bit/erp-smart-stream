@@ -52,8 +52,31 @@ export default function IdpSyncPage() {
 
   useEffect(() => {
     fetchMappings();
-    fetchJumpCloudUsers(); // loads from 6h cache or fetches
+    fetchJumpCloudUsers();
   }, [fetchMappings, fetchJumpCloudUsers]);
+
+  // Auto-link users by email when SAP users, JC users and mappings are all loaded
+  useEffect(() => {
+    if (sapLoading || isLoadingJc || isLoadingMappings) return;
+    if (sapUsers.length === 0 || jcUsers.length === 0) return;
+
+    const activeUsers = sapUsers.filter((u) => u.Locked !== "tYES");
+    const mappingMap = new Map(mappings.map((m) => [m.sap_user_code, m]));
+
+    // Find users that have an email match but are not yet linked
+    const needsLink = activeUsers.filter((sap) => {
+      const mapping = mappingMap.get(sap.UserCode);
+      if (mapping?.status === "linked") return false;
+      if (!sap.eMail) return false;
+      return jcUsers.some((jc) => jc.email?.toLowerCase() === sap.eMail!.toLowerCase());
+    });
+
+    if (needsLink.length > 0) {
+      autoSync(activeUsers, jcUsers).catch((e) =>
+        console.error("Auto-link error:", e)
+      );
+    }
+  }, [sapUsers, jcUsers, mappings, sapLoading, isLoadingJc, isLoadingMappings, autoSync]);
 
   const jcOptions = useMemo(() => jcUsers.map(jcToOption), [jcUsers]);
 
