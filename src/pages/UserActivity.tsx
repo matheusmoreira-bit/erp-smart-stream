@@ -29,10 +29,9 @@ const PIE_COLORS = [
 
 function formatTime(t: number): string {
   if (t === undefined || t === null) return "";
-  // SAP stores time as HHMM integer (e.g. 1423 = 14:23, 930 = 09:30)
-  const h = Math.floor(t / 100);
-  const m = t % 100;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  // SAP USR5 Time comes as HHMMss integer (e.g. 121542 = 12:15:42, 93005 = 09:30:05)
+  const s = String(t).padStart(6, "0");
+  return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
 }
 
 function parseIsoDate(d: string): Date | null {
