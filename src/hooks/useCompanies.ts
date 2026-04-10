@@ -39,7 +39,12 @@ export function useCompanies(onlyActive = false) {
     let q = supabase.from("companies").select("*").order("display_name");
     if (onlyActive) q = q.eq("is_active", true);
     const { data } = await q;
-    setCompanies(data || []);
+    setCompanies(
+      (data || []).map((c) => ({
+        ...c,
+        targets: { ...DEFAULT_TARGETS, ...(c.targets as Record<string, number>) },
+      })) as Company[]
+    );
     setLoading(false);
   }, [onlyActive]);
 
