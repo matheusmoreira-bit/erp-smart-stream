@@ -135,7 +135,7 @@ function buildStages(rows: ViewRow[], approvalDays: number[]): FlowStage[] {
     { id: "cotacao", name: "COTAÇÃO", avgDays: 1, targetDays: 3, status: "ok", count: 0 },
     { id: "aprovacao", name: "APROVAÇÃO", avgDays: avgApproval || 1, targetDays: 3, status: stageStatusCustom(avgApproval || 1, 3), count: approvalDays.length },
     { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoNf || 1, targetDays: 3, status: stageStatusCustom(avgPedidoNf || 1, 3), count: pedidoToNfEmissao.length },
-    { id: "recebimento", name: "RECEBIMENTO", avgDays: 1, targetDays: 5, status: "ok", count: 0 },
+    
     { id: "nf_entrada", name: "NF ENTRADA", avgDays: avgNfEmissaoLanc || 1, targetDays: 2, status: stageStatusCustom(avgNfEmissaoLanc || 1, 2), count: nfEmissaoToNfLanc.length },
     { id: "pagamento", name: "PAGAMENTO", avgDays: avgNfPag || 1, targetDays: 5, status: stageStatusCustom(avgNfPag || 1, 5), count: nfLancToPagamento.length },
   ];
