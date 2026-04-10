@@ -469,6 +469,7 @@ export type Database = {
       }
       system_credentials: {
         Row: {
+          company_db: string | null
           created_at: string
           credential_key: string
           credential_value: string
@@ -477,6 +478,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_db?: string | null
           created_at?: string
           credential_key: string
           credential_value: string
@@ -485,6 +487,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_db?: string | null
           created_at?: string
           credential_key?: string
           credential_value?: string
