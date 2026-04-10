@@ -13,14 +13,15 @@ import { isFailedLogin } from "@/hooks/useUserActivity";
 import type { Usr5Record } from "@/hooks/useUserActivity";
 
 interface Props {
-  records: Usr5Record[]; // all records (unfiltered by date) for historical avg
+  records: Usr5Record[]; // all records for historical avg
+  filtered: Usr5Record[]; // filtered records for current month bars
 }
 
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
-export default function MonthlyLoginChart({ records }: Props) {
+export default function MonthlyLoginChart({ records, filtered }: Props) {
   const chartData = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -40,29 +41,35 @@ export default function MonthlyLoginChart({ records }: Props) {
       histMap.set(d, { total: 0, months: new Set() });
     }
 
+    // Current month bars use FILTERED data
+    filtered.forEach((r) => {
+      if (r.Action !== "I" && r.Action !== "W") return;
+      const dateStr = r.Date?.slice(0, 10);
+      if (!dateStr) return;
+      const month = dateStr.slice(0, 7);
+      if (month !== currentMonthStr) return;
+      const dayNum = parseInt(dateStr.slice(8, 10));
+      if (isNaN(dayNum)) return;
+      const entry = currentMap.get(dayNum);
+      if (entry) {
+        if (isFailedLogin(r)) entry.failures++;
+        else entry.logins++;
+      }
+    });
+
+    // Historical avg uses ALL records (other months)
     records.forEach((r) => {
       if (r.Action !== "I" && r.Action !== "W") return;
       const dateStr = r.Date?.slice(0, 10);
       if (!dateStr) return;
       const month = dateStr.slice(0, 7);
+      if (month === currentMonthStr) return;
       const dayNum = parseInt(dateStr.slice(8, 10));
-      if (isNaN(dayNum)) return;
-
-      if (month === currentMonthStr) {
-        const entry = currentMap.get(dayNum);
-        if (entry) {
-          if (isFailedLogin(r)) {
-            entry.failures++;
-          } else {
-            entry.logins++;
-          }
-        }
-      } else {
-        const hist = histMap.get(dayNum);
-        if (hist && !isFailedLogin(r)) {
-          hist.total++;
-          hist.months.add(month);
-        }
+      if (isNaN(dayNum) || isFailedLogin(r)) return;
+      const hist = histMap.get(dayNum);
+      if (hist) {
+        hist.total++;
+        hist.months.add(month);
       }
     });
 
@@ -83,7 +90,7 @@ export default function MonthlyLoginChart({ records }: Props) {
         "Média Histórica": avg,
       };
     });
-  }, [records]);
+  }, [records, filtered]);
 
   const monthLabel = new Date().toLocaleDateString("pt-BR", {
     month: "long",
