@@ -31,31 +31,42 @@ export function useSapCachedList({
   paramsRef.current = params;
 
   const load = useCallback(async () => {
-    if (!session || !enabled || loadedRef.current) return;
-    const companyDB = session.companyDB;
+    if (!enabled || loadedRef.current) return;
     setIsLoading(true);
     loadedRef.current = true;
 
     try {
-      // 1. Check Supabase cache
+      // 1. Always try Supabase cache first (works without SAP session)
       const { data: cached } = await supabase
         .from("sap_cache")
         .select("data, expires_at")
         .eq("cache_key", cacheKey)
-        .eq("company_db", companyDB)
+        .order("updated_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (cached && new Date(cached.expires_at) > new Date()) {
+      if (cached) {
         const cachedData = cached.data as any[];
+        const isExpired = new Date(cached.expires_at) <= new Date();
+
         if (cachedData && cachedData.length > 0) {
           setOptions(cachedData.map(mapRowRef.current));
-          setIsLoading(false);
-          return;
+
+          // If cache is still valid or no SAP session to refresh, stop here
+          if (!isExpired || !session) {
+            setIsLoading(false);
+            return;
+          }
         }
-        // Empty cache — don't use it, refetch from SAP
       }
 
-      // 2. Fetch from SAP
+      // 2. If no cache hit (or expired) and we have a SAP session, fetch from SAP
+      if (!session) {
+        setIsLoading(false);
+        return;
+      }
+
+      const companyDB = session.companyDB;
       const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
       const rows = data?.value || [];
 
