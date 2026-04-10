@@ -400,7 +400,7 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
 
   const { stages, metrics, insights, validations, approverStats } = useMemo(() => {
     const rows = filterRowsByDate(rawRows, dateFilter);
-    const computedStages = buildStages(rows, approvalDaysRaw);
+    const computedStages = buildStages(rows, approvalDaysRaw, effectiveTargets);
     const vals = buildValidations(rows);
     const errorCount = vals.filter((v) => v.status === "error").length;
     const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
