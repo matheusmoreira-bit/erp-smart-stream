@@ -1,0 +1,1 @@
+ALTER TABLE public.pagcorp_account_mapping ADD COLUMN item_code text DEFAULT NULL;

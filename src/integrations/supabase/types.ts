@@ -363,6 +363,7 @@ export type Database = {
           cost_center: string | null
           created_at: string
           id: string
+          item_code: string | null
           project: string | null
           updated_at: string
         }
@@ -372,6 +373,7 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           id?: string
+          item_code?: string | null
           project?: string | null
           updated_at?: string
         }
@@ -381,6 +383,7 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           id?: string
+          item_code?: string | null
           project?: string | null
           updated_at?: string
         }
