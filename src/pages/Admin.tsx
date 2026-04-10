@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { Target } from "lucide-react";
 import {
   Building2,
   Plus,
@@ -636,6 +637,41 @@ export default function Admin() {
                 onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
               />
               <span className="text-sm text-foreground">Empresa ativa</span>
+            </div>
+
+            {/* Targets */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Target className="w-4 h-4 text-primary" />
+                Metas do Fluxo de Compras (dias)
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { key: "requisicao", label: "Requisição" },
+                  { key: "cotacao", label: "Cotação" },
+                  { key: "aprovacao", label: "Aprovação" },
+                  { key: "pedido_compra", label: "Pedido Compra" },
+                  { key: "nf_entrada", label: "NF Entrada" },
+                  { key: "pagamento", label: "Pagamento" },
+                  { key: "aprovador", label: "Aprovador" },
+                ] as { key: keyof CompanyTargets; label: string }[]).map(({ key, label }) => (
+                  <div key={key} className="space-y-1">
+                    <label className="text-xs text-muted-foreground">{label}</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={companyForm.targets[key]}
+                      onChange={(e) =>
+                        setCompanyForm((f) => ({
+                          ...f,
+                          targets: { ...f.targets, [key]: Number(e.target.value) || 1 },
+                        }))
+                      }
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>
