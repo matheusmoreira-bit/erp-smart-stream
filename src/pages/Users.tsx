@@ -42,17 +42,33 @@ export default function UsersPage() {
   const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword } = useSapUsers();
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<string>("recorrentes");
 
   const filteredUsers = useMemo(() => {
-    if (!search.trim()) return users;
-    const q = search.toLowerCase();
-    return users.filter(
-      (u) =>
-        u.UserName.toLowerCase().includes(q) ||
-        u.UserCode.toLowerCase().includes(q) ||
-        (u.eMail?.toLowerCase().includes(q) ?? false)
-    );
-  }, [users, search]);
+    let list = users;
+
+    if (viewMode === "recorrentes") {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 30);
+      list = list.filter((u) => {
+        if (!u.LastLoginDate) return true;
+        const loginDate = new Date(u.LastLoginDate);
+        return loginDate >= cutoff;
+      });
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (u) =>
+          u.UserName.toLowerCase().includes(q) ||
+          u.UserCode.toLowerCase().includes(q) ||
+          (u.eMail?.toLowerCase().includes(q) ?? false)
+      );
+    }
+
+    return list;
+  }, [users, search, viewMode]);
 
   const handleConfirm = async () => {
     if (!confirmAction) return;
