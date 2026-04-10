@@ -13,9 +13,12 @@ import {
   LayoutGrid,
   List,
   Search,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X } from "lucide-react";
@@ -28,6 +31,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useCompanies } from "@/hooks/useCompanies";
 
@@ -110,173 +123,230 @@ function ApprovalDetailModal({
   onClose,
   onAction,
   isActioning,
+  isSuperUser,
+  currentUserName,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
   onClose: () => void;
   onAction: (code: number, action: "approve" | "reject", remarks: string) => Promise<void>;
   isActioning: boolean;
+  isSuperUser: boolean;
+  currentUserName: string;
 }) {
   const [remarks, setRemarks] = useState("");
+  const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
 
   if (!doc) return null;
 
   const overdue = isOverdue(doc.dueDate);
+  const isOtherApprover = isSuperUser && doc.currentApprover.toLowerCase() !== currentUserName.toLowerCase();
+
+  const handleAction = (action: "approve" | "reject") => {
+    if (isOtherApprover) {
+      setRiskConfirm({ action });
+    } else {
+      onAction(doc.approvalRequestId, action, remarks);
+    }
+  };
+
+  const confirmRiskAction = () => {
+    if (riskConfirm && doc) {
+      onAction(doc.approvalRequestId, riskConfirm.action, remarks);
+      setRiskConfirm(null);
+    }
+  };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              {doc.docTypeName}
-            </span>
-            <span className="font-mono">#{doc.docNum}</span>
-            <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                {doc.docTypeName}
+              </span>
+              <span className="font-mono">#{doc.docNum}</span>
+              <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4 mt-2">
-          {/* Basic Info */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">Fornecedor</p>
-              <p className="text-foreground font-medium">{doc.cardName}</p>
-              <p className="text-xs text-muted-foreground font-mono">{doc.cardCode}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Solicitante</p>
-              <p className="text-foreground font-medium">{doc.requester}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Aprovador</p>
-              <p className="text-foreground font-medium">{doc.currentApprover}</p>
-              {doc.approverEmail && (
-                <p className="text-xs text-muted-foreground">{doc.approverEmail}</p>
+          <div className="space-y-4 mt-2">
+            {/* Basic Info */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Fornecedor</p>
+                <p className="text-foreground font-medium">{doc.cardName}</p>
+                <p className="text-xs text-muted-foreground font-mono">{doc.cardCode}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Solicitante</p>
+                <p className="text-foreground font-medium">{doc.requester}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Aprovador</p>
+                <p className="text-foreground font-medium">{doc.currentApprover}</p>
+                {doc.approverEmail && (
+                  <p className="text-xs text-muted-foreground">{doc.approverEmail}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Modelo de Aprovação</p>
+                <p className="text-foreground text-sm">{doc.approvalModel || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Data de Criação</p>
+                <p className="text-foreground">{formatDate(doc.docDate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Data de Vencimento</p>
+                <p className={overdue ? "text-destructive font-semibold" : "text-foreground"}>
+                  {formatDate(doc.dueDate)}
+                  {overdue && " ⚠ Vencido"}
+                </p>
+              </div>
+              {doc.daysOpen > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Dias em Aberto</p>
+                  <p className="text-foreground font-mono">{doc.daysOpen}</p>
+                </div>
               )}
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Modelo de Aprovação</p>
-              <p className="text-foreground text-sm">{doc.approvalModel || "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Data de Criação</p>
-              <p className="text-foreground">{formatDate(doc.docDate)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Data de Vencimento</p>
-              <p className={overdue ? "text-destructive font-semibold" : "text-foreground"}>
-                {formatDate(doc.dueDate)}
-                {overdue && " ⚠ Vencido"}
-              </p>
-            </div>
-            {doc.daysOpen > 0 && (
+
+            {/* Remarks */}
+            {doc.remarks && (
               <div>
-                <p className="text-xs text-muted-foreground">Dias em Aberto</p>
-                <p className="text-foreground font-mono">{doc.daysOpen}</p>
+                <p className="text-xs text-muted-foreground mb-1">Observações</p>
+                <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{doc.remarks}</p>
               </div>
             )}
-          </div>
 
-          {/* Remarks */}
-          {doc.remarks && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Observações</p>
-              <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{doc.remarks}</p>
-            </div>
-          )}
-
-          {/* Document Lines */}
-          {doc.documentLines.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Itens do Documento</p>
-              <div className="border border-border rounded-lg overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-muted/30 border-b border-border">
-                      <th className="text-left py-2 px-3 text-muted-foreground">Código</th>
-                      <th className="text-left py-2 px-3 text-muted-foreground">Descrição</th>
-                      <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
-                      <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
-                      <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
-                      <th className="text-left py-2 px-3 text-muted-foreground">Projeto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {doc.documentLines.map((line, i) => (
-                      <tr key={i} className="border-b border-border/50">
-                        <td className="py-2 px-3 font-mono text-muted-foreground">{line.ItemCode}</td>
-                        <td className="py-2 px-3 text-foreground">{line.Description}</td>
-                        <td className="py-2 px-3 text-right font-mono">{line.Quantity}</td>
-                        <td className="py-2 px-3 text-right font-mono">{formatCurrency(line.UnitPrice)}</td>
-                        <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(line.LineTotal)}</td>
-                        <td className="py-2 px-3 text-muted-foreground">{line.Project || "—"}</td>
+            {/* Document Lines */}
+            {doc.documentLines.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Itens do Documento</p>
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-muted/30 border-b border-border">
+                        <th className="text-left py-2 px-3 text-muted-foreground">Código</th>
+                        <th className="text-left py-2 px-3 text-muted-foreground">Descrição</th>
+                        <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
+                        <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
+                        <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
+                        <th className="text-left py-2 px-3 text-muted-foreground">Projeto</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {doc.documentLines.map((line, i) => (
+                        <tr key={i} className="border-b border-border/50">
+                          <td className="py-2 px-3 font-mono text-muted-foreground">{line.ItemCode}</td>
+                          <td className="py-2 px-3 text-foreground">{line.Description}</td>
+                          <td className="py-2 px-3 text-right font-mono">{line.Quantity}</td>
+                          <td className="py-2 px-3 text-right font-mono">{formatCurrency(line.UnitPrice)}</td>
+                          <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(line.LineTotal)}</td>
+                          <td className="py-2 px-3 text-muted-foreground">{line.Project || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Attachments */}
-          {doc.attachmentNames && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
-                <Paperclip className="w-3 h-3" /> Anexos
-              </p>
-              <div className="space-y-1">
-                {doc.attachmentNames.split("|").map((name, i) => (
-                  <p key={i} className="text-xs text-muted-foreground bg-muted/20 px-3 py-1.5 rounded">
-                    {name.trim()}
-                  </p>
-                ))}
+            {/* Attachments */}
+            {doc.attachmentNames && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Paperclip className="w-3 h-3" /> Anexos
+                </p>
+                <div className="space-y-1">
+                  {doc.attachmentNames.split("|").map((name, i) => (
+                    <p key={i} className="text-xs text-muted-foreground bg-muted/20 px-3 py-1.5 rounded">
+                      {name.trim()}
+                    </p>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Action area */}
-          <div className="border-t border-border pt-4 space-y-3">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Comentário (opcional)</p>
-              <Textarea
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Adicione um comentário à sua decisão..."
-                className="bg-muted/30 border-border text-sm"
-                rows={2}
-              />
-            </div>
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={isActioning}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => onAction(doc.approvalRequestId, "reject", remarks)}
-                disabled={isActioning}
-                className="gap-1.5"
-              >
-                {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                Rejeitar
-              </Button>
-              <Button
-                onClick={() => onAction(doc.approvalRequestId, "approve", remarks)}
-                disabled={isActioning}
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-              >
-                {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                Aprovar
-              </Button>
+            {/* Super-user warning */}
+            {isOtherApprover && (
+              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 text-sm text-amber-200">
+                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Você está atuando como super-usuário. O aprovador designado é <strong>{doc.currentApprover}</strong>.</span>
+              </div>
+            )}
+
+            {/* Action area */}
+            <div className="border-t border-border pt-4 space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Comentário (opcional)</p>
+                <Textarea
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Adicione um comentário à sua decisão..."
+                  className="bg-muted/30 border-border text-sm"
+                  rows={2}
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={onClose}
+                  disabled={isActioning}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleAction("reject")}
+                  disabled={isActioning}
+                  className="gap-1.5"
+                >
+                  {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                  Rejeitar
+                </Button>
+                <Button
+                  onClick={() => handleAction("approve")}
+                  disabled={isActioning}
+                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  Aprovar
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Risk confirmation dialog for super-user acting on another's document */}
+      <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v) setRiskConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-amber-400" />
+              Ação em documento de outro aprovador
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Você está prestes a <strong>{riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}</strong> o documento <strong>#{doc?.docNum}</strong> que está atribuído ao aprovador <strong>{doc?.currentApprover}</strong>.
+              <br /><br />
+              Esta ação será registrada como realizada por super-usuário. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRiskAction}
+              className={riskConfirm?.action === "reject" ? "bg-destructive hover:bg-destructive/90" : "bg-emerald-600 hover:bg-emerald-700"}
+            >
+              Sim, {riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -289,6 +359,7 @@ export default function ApprovalsPage() {
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
   const [isActioning, setIsActioning] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   // Redirect to login if no session
   if (!session) {
@@ -296,10 +367,13 @@ export default function ApprovalsPage() {
     return null;
   }
 
+  const isSuperUser = session.isSuperUser;
   const companyLabel = getLabel(session?.companyDB || "");
 
-  // Filter: only show approvals where current user is the approver
-  const userApprovals = approvals; // The view already returns only pending approvals for the logged-in user's company
+  // Filter: non-super-users see only their own approvals; super-users can toggle
+  const userApprovals = (!isSuperUser || !showAll)
+    ? approvals.filter((a) => a.currentApprover.toLowerCase() === session.userName.toLowerCase())
+    : approvals;
 
   const filtered = userApprovals.filter((a) => {
     if (!search) return true;
@@ -412,7 +486,7 @@ export default function ApprovalsPage() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -422,6 +496,15 @@ export default function ApprovalsPage() {
               className="pl-9 bg-muted/30 border-border"
             />
           </div>
+          {isSuperUser && (
+            <div className="flex items-center gap-2 glass-card px-3 py-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <Label htmlFor="show-all" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                Ver todas as aprovações
+              </Label>
+              <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
+            </div>
+          )}
           <div className="flex items-center border border-border rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode("cards")}
@@ -521,6 +604,8 @@ export default function ApprovalsPage() {
         onClose={() => setSelectedDoc(null)}
         onAction={handleApprovalAction}
         isActioning={isActioning}
+        isSuperUser={isSuperUser}
+        currentUserName={session.userName}
       />
     </div>
   );
