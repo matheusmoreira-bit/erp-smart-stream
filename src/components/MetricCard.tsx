@@ -25,7 +25,7 @@ export function MetricCard({ title, value, subtitle, icon: Icon, trend, delay = 
         </div>
       </div>
       <div>
-        <span className="text-3xl font-bold font-mono text-foreground">{value}</span>
+        <span className="text-lg font-bold font-mono text-foreground">{value}</span>
         {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
       </div>
       {trend && (
