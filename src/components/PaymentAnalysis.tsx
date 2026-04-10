@@ -222,8 +222,14 @@ function ChartCard({ title, children, className = "" }: { title: string; childre
 
 /* ── Main component ── */
 export function PaymentAnalysis() {
-  const { rows, isLoading, error, refresh } = usePaymentAnalysis();
+  const { rows: allRows, isLoading, error, refresh } = usePaymentAnalysis();
   const [search, setSearch] = useState("");
+  const [period, setPeriod] = useState<PeriodFilterValue>(DEFAULT_PERIOD);
+
+  const rows = useMemo(
+    () => filterByPeriod(allRows, period, (r) => r.Data_do_Pagamento),
+    [allRows, period]
+  );
   const analytics = usePaymentAnalytics(rows);
 
   if (error) {
