@@ -414,6 +414,7 @@ export default function ApprovalsPage() {
         entity_type: "approval_request",
         entity_id: String(code),
         actor_email: session.userName,
+        company_db: session.companyDB,
         details: {
           docNum: doc?.docNum,
           docType: doc?.docTypeName,
@@ -423,7 +424,6 @@ export default function ApprovalsPage() {
           approver: doc?.currentApprover,
           isSuperUser,
           remarks,
-          companyDB: session.companyDB,
         },
       });
 
