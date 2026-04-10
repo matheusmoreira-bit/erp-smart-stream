@@ -249,7 +249,12 @@ export default function Admin() {
       toast.error("Erro ao carregar empresas");
       return;
     }
-    setCompanies(data || []);
+    setCompanies(
+      (data || []).map((c) => ({
+        ...c,
+        targets: { ...DEFAULT_TARGETS, ...(c.targets as Record<string, number>) },
+      })) as Company[]
+    );
     setLoading(false);
   };
 
