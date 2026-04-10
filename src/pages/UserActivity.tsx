@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Loader2, Search, Users, LogIn, ShieldAlert, Activity, Clock } from "lucide-react";
+import { ArrowLeft, RefreshCw, Loader2, Search, Users, LogIn, ShieldAlert, Activity, Clock, Monitor, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { useUserActivity, getActionLabel } from "@/hooks/useUserActivity";
+import { useUserActivity, getActionLabel, getSourceLabel, isFailedLogin, formatDuration } from "@/hooks/useUserActivity";
 import type { Usr5Record } from "@/hooks/useUserActivity";
 
 const PIE_COLORS = [
@@ -85,10 +85,15 @@ export default function UserActivityPage() {
   // Metrics
   const metrics = useMemo(() => {
     const uniqueUsers = new Set(filtered.map((r) => r.UserCode)).size;
-    const logins = filtered.filter((r) => r.Action === "L" || r.Action === "W").length;
-    const failures = filtered.filter((r) => r.Action === "F").length;
+    const logins = filtered.filter((r) => r.Action === "I" || r.Action === "W").length;
+    const failures = filtered.filter((r) => isFailedLogin(r)).length;
     const uniqueIPs = new Set(filtered.filter((r) => r.ClientIP).map((r) => r.ClientIP)).size;
-    return { uniqueUsers, logins, failures, uniqueIPs };
+    const avgDuration = (() => {
+      const sessions = filtered.filter((r) => r.AliveDurtn > 0);
+      if (sessions.length === 0) return 0;
+      return Math.round(sessions.reduce((s, r) => s + r.AliveDurtn, 0) / sessions.length);
+    })();
+    return { uniqueUsers, logins, failures, uniqueIPs, avgDuration };
   }, [filtered]);
 
   // Bar chart: logins per day (last 7 days)
@@ -100,8 +105,8 @@ export default function UserActivityPage() {
       const day = r.Date?.slice(0, 10);
       if (!day || !map.has(day)) return;
       const entry = map.get(day)!;
-      if (r.Action === "L" || r.Action === "W") entry.logins++;
-      if (r.Action === "F") entry.failures++;
+      if (r.Action === "I" || r.Action === "W") entry.logins++;
+      if (isFailedLogin(r)) entry.failures++;
     });
     return days.map((d) => ({
       day: d.slice(5),
@@ -122,17 +127,22 @@ export default function UserActivityPage() {
 
   // Top users table
   const topUsers = useMemo(() => {
-    const map = new Map<string, { logins: number; failures: number; lastDate: string }>();
+    const map = new Map<string, { logins: number; failures: number; lastDate: string; avgDuration: number; totalDuration: number; sessionCount: number }>();
     filtered.forEach((r) => {
       const u = r.UserCode;
       if (!u) return;
-      if (!map.has(u)) map.set(u, { logins: 0, failures: 0, lastDate: "" });
+      if (!map.has(u)) map.set(u, { logins: 0, failures: 0, lastDate: "", avgDuration: 0, totalDuration: 0, sessionCount: 0 });
       const entry = map.get(u)!;
-      if (r.Action === "L" || r.Action === "W") entry.logins++;
-      if (r.Action === "F") entry.failures++;
+      if (r.Action === "I" || r.Action === "W") entry.logins++;
+      if (isFailedLogin(r)) entry.failures++;
+      if (r.AliveDurtn > 0) { entry.totalDuration += r.AliveDurtn; entry.sessionCount++; }
       if (r.Date > entry.lastDate) entry.lastDate = r.Date;
     });
-    return Array.from(map, ([user, data]) => ({ user, ...data }))
+    return Array.from(map, ([user, data]) => ({
+      user,
+      ...data,
+      avgDuration: data.sessionCount > 0 ? Math.round(data.totalDuration / data.sessionCount) : 0,
+    }))
       .sort((a, b) => b.logins - a.logins)
       .slice(0, 15);
   }, [filtered]);
@@ -179,9 +189,8 @@ export default function UserActivityPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas ações</SelectItem>
-              <SelectItem value="L">Login</SelectItem>
+              <SelectItem value="I">Login</SelectItem>
               <SelectItem value="W">Login Web</SelectItem>
-              <SelectItem value="F">Falha</SelectItem>
               <SelectItem value="O">Logout</SelectItem>
               <SelectItem value="C">Mudança Senha</SelectItem>
               <SelectItem value="K">Bloqueio</SelectItem>
@@ -209,7 +218,7 @@ export default function UserActivityPage() {
         ) : (
           <>
             {/* Metric Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <MetricCard title="Usuários Únicos" value={String(metrics.uniqueUsers)} icon={Users} delay={0} />
               <MetricCard title="Logins" value={String(metrics.logins)} icon={LogIn} delay={0.05} />
               <MetricCard
@@ -220,6 +229,7 @@ export default function UserActivityPage() {
                 trend={metrics.failures > 0 ? { value: String(metrics.failures), positive: false } : undefined}
               />
               <MetricCard title="IPs Únicos" value={String(metrics.uniqueIPs)} icon={Activity} delay={0.15} />
+              <MetricCard title="Duração Média" value={formatDuration(metrics.avgDuration)} icon={Timer} delay={0.2} />
             </div>
 
             {/* Charts */}
@@ -274,6 +284,7 @@ export default function UserActivityPage() {
                       <th className="px-6 py-3 text-left">Usuário</th>
                       <th className="px-4 py-3 text-center">Logins</th>
                       <th className="px-4 py-3 text-center">Falhas</th>
+                      <th className="px-4 py-3 text-center">Duração Média</th>
                       <th className="px-4 py-3 text-center">Último Acesso</th>
                     </tr>
                   </thead>
@@ -291,12 +302,13 @@ export default function UserActivityPage() {
                             <span className="text-muted-foreground">0</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-center text-muted-foreground">{formatDuration(u.avgDuration)}</td>
                         <td className="px-4 py-3 text-center text-muted-foreground">{formatDate(u.lastDate)}</td>
                       </tr>
                     ))}
                     {topUsers.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="text-center text-muted-foreground py-8">Nenhum dado encontrado</td>
+                        <td colSpan={5} className="text-center text-muted-foreground py-8">Nenhum dado encontrado</td>
                       </tr>
                     )}
                   </tbody>
@@ -317,9 +329,10 @@ export default function UserActivityPage() {
                       <th className="px-4 py-3 text-left">Data/Hora</th>
                       <th className="px-4 py-3 text-left">Usuário</th>
                       <th className="px-4 py-3 text-left">Ação</th>
+                      <th className="px-4 py-3 text-left">Origem</th>
                       <th className="px-4 py-3 text-left">IP</th>
                       <th className="px-4 py-3 text-left">Máquina</th>
-                      <th className="px-4 py-3 text-left">Motivo</th>
+                      <th className="px-4 py-3 text-left">Duração</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -334,26 +347,32 @@ export default function UserActivityPage() {
                         <td className="px-4 py-2 font-medium text-foreground">{r.UserCode}</td>
                         <td className="px-4 py-2">
                           <Badge
-                            variant={r.Action === "F" || r.Action === "K" ? "destructive" : "secondary"}
+                            variant={isFailedLogin(r) || r.Action === "K" ? "destructive" : "secondary"}
                             className={
-                              r.Action === "L" || r.Action === "W"
-                                ? "bg-primary/15 text-primary"
+                              r.Action === "I" || r.Action === "W"
+                                ? isFailedLogin(r) ? "" : "bg-primary/15 text-primary"
                                 : r.Action === "O"
                                 ? "bg-muted text-muted-foreground"
                                 : ""
                             }
                           >
-                            {getActionLabel(r.Action)}
+                            {isFailedLogin(r) ? "Falha de Login" : getActionLabel(r.Action)}
                           </Badge>
+                        </td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs">
+                          <span className="flex items-center gap-1">
+                            <Monitor className="w-3 h-3" />
+                            {getSourceLabel(r.Source)}
+                          </span>
                         </td>
                         <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{r.ClientIP || "—"}</td>
                         <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[150px]">{r.ClientName || "—"}</td>
-                        <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[200px]">{r.ReasonDesc || "—"}</td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs">{formatDuration(r.AliveDurtn)}</td>
                       </tr>
                     ))}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="text-center text-muted-foreground py-8">Nenhum registro encontrado</td>
+                        <td colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro encontrado</td>
                       </tr>
                     )}
                   </tbody>

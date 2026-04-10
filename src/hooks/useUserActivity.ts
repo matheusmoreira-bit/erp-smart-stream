@@ -24,14 +24,35 @@ export interface Usr5Record {
 }
 
 const ACTION_LABELS: Record<string, string> = {
-  W: "Login Web",
-  L: "Login",
-  F: "Falha de Login",
+  I: "Login",
   O: "Logout",
+  W: "Login Web",
+  F: "Falha de Login",
   C: "Mudança de Senha",
   U: "Desbloqueio",
   K: "Bloqueio",
 };
+
+const SOURCE_LABELS: Record<string, string> = {
+  SBO_Client: "Desktop",
+  SBO_Web_Client: "Web Client",
+  SBO_DI_API: "Service Layer",
+};
+
+export function getSourceLabel(source: string): string {
+  return SOURCE_LABELS[source] || source || "—";
+}
+
+export function isFailedLogin(record: Usr5Record): boolean {
+  return record.SessionID < 0;
+}
+
+export function formatDuration(minutes: number): string {
+  if (!minutes || minutes <= 0) return "—";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 export function getActionLabel(action: string): string {
   return ACTION_LABELS[action] || action;
