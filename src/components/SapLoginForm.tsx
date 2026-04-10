@@ -84,7 +84,7 @@ export function SapLoginForm() {
                 </div>
               </SelectTrigger>
               <SelectContent>
-                {DATABASES.map((db) => (
+                {databases.map((db) => (
                   <SelectItem key={db.value} value={db.value}>
                     <span className="font-medium">{db.label}</span>
                     <span className="text-xs text-muted-foreground ml-2 font-mono">{db.value}</span>
