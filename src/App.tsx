@@ -12,6 +12,7 @@ import ApprovalRules from "./pages/ApprovalRules.tsx";
 import PagCorp from "./pages/PagCorp.tsx";
 import PagCorpMapping from "./pages/PagCorpMapping.tsx";
 import Credentials from "./pages/Credentials.tsx";
+import UsersPage from "./pages/Users.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/pagcorp" element={<PagCorp />} />
             <Route path="/pagcorp/mapping" element={<PagCorpMapping />} />
             <Route path="/credentials" element={<Credentials />} />
+            <Route path="/users" element={<UsersPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

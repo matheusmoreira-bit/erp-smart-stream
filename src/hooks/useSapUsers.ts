@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQuery } from "@/lib/sap-client";
+import { sapQuery, sapAction, clearClientCache } from "@/lib/sap-client";
 import { sapUsersCache, type SapUser } from "@/lib/cache-repository";
 
 export function useSapUsers() {
@@ -8,6 +8,7 @@ export function useSapUsers() {
   const [users, setUsers] = useState<SapUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
 
   const fetchUsers = useCallback(async () => {
     if (!session) return;
@@ -22,10 +23,8 @@ export function useSapUsers() {
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch users from SAP Service Layer
       const result = await sapQuery(session, "Users", {
-        $select: "InternalKey,UserName,UserCode,eMail,Department,Branch,Locked",
-        $filter: "Locked eq 'tNO'",
+        $select: "InternalKey,UserName,UserCode,eMail,Department,Branch,Locked,LastLoginDate,LastLoginTime",
       }, false);
 
       const data = result.data as any;
@@ -45,9 +44,44 @@ export function useSapUsers() {
     }
   }, [session]);
 
+  const toggleLock = useCallback(async (user: SapUser) => {
+    if (!session) return;
+    setActionLoading(user.InternalKey);
+    try {
+      const newLocked = user.Locked === "tNO" ? "tYES" : "tNO";
+      await sapAction(session, `Users(${user.InternalKey})`, "PATCH", {
+        Locked: newLocked,
+      });
+      // Clear caches and refetch
+      sapUsersCache.clear();
+      clearClientCache();
+      await fetchUsers();
+    } catch (e) {
+      console.error("Error toggling user lock:", e);
+      throw e;
+    } finally {
+      setActionLoading(null);
+    }
+  }, [session, fetchUsers]);
+
+  const resetPassword = useCallback(async (user: SapUser) => {
+    if (!session) return;
+    setActionLoading(user.InternalKey);
+    try {
+      await sapAction(session, `Users(${user.InternalKey})`, "PATCH", {
+        Password: "Sap@2025",
+      });
+    } catch (e) {
+      console.error("Error resetting password:", e);
+      throw e;
+    } finally {
+      setActionLoading(null);
+    }
+  }, [session]);
+
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  return { users, isLoading, error, refresh: fetchUsers };
+  return { users, isLoading, error, actionLoading, refresh: fetchUsers, toggleLock, resetPassword };
 }
