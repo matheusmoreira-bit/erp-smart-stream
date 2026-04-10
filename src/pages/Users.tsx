@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Users as UsersIcon } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Users as UsersIcon, Search, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSapUsers } from "@/hooks/useSapUsers";
@@ -14,10 +14,41 @@ type ConfirmAction = {
   user: SapUser;
 } | null;
 
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function formatLastLogin(user: SapUser): string {
+  if (!user.LastLoginDate) return "Sem registro";
+  try {
+    const date = new Date(user.LastLoginDate);
+    return `${date.toLocaleDateString("pt-BR")}, ${date.toLocaleTimeString("pt-BR")}`;
+  } catch {
+    return user.LastLoginDate;
+  }
+}
+
 export default function UsersPage() {
   const navigate = useNavigate();
   const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword } = useSapUsers();
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+  const [search, setSearch] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    if (!search.trim()) return users;
+    const q = search.toLowerCase();
+    return users.filter(
+      (u) =>
+        u.UserName.toLowerCase().includes(q) ||
+        u.UserCode.toLowerCase().includes(q) ||
+        (u.eMail?.toLowerCase().includes(q) ?? false)
+    );
+  }, [users, search]);
 
   const handleConfirm = async () => {
     if (!confirmAction) return;
@@ -37,16 +68,6 @@ export default function UsersPage() {
       toast.error(e instanceof Error ? e.message : "Erro ao executar ação");
     } finally {
       setConfirmAction(null);
-    }
-  };
-
-  const formatLastLogin = (user: SapUser) => {
-    if (!user.LastLoginDate) return "—";
-    try {
-      const date = new Date(user.LastLoginDate);
-      return date.toLocaleDateString("pt-BR");
-    } catch {
-      return user.LastLoginDate;
     }
   };
 
@@ -70,121 +91,154 @@ export default function UsersPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border px-6 py-4">
+      <header className="border-b border-border px-6 py-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div className="p-2 rounded-lg bg-primary/10">
-              <UsersIcon className="w-5 h-5 text-primary" />
-            </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Usuários SAP</h1>
-              <p className="text-xs text-muted-foreground">Gestão de acessos</p>
+              <h1 className="text-2xl font-bold text-foreground">Gestão de Usuários</h1>
+              <p className="text-sm text-muted-foreground">Gerencie o acesso e senhas dos usuários do SAP</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Atualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Atualizar
+            </Button>
+          </div>
         </div>
       </header>
 
       {/* Content */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="max-w-6xl mx-auto px-6 py-6 space-y-4">
         {error && (
-          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
+          <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
             {error}
           </div>
         )}
 
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por código, nome ou e-mail..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10 bg-card border-border"
+          />
+        </div>
+
+        {/* User List */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             <span className="ml-2 text-muted-foreground">Carregando usuários…</span>
           </div>
         ) : (
-          <div className="glass-card overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Username</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Último Login</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
-                      Nenhum usuário encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  users.map((user) => {
-                    const isLocked = user.Locked === "tYES";
-                    const isActing = actionLoading === user.InternalKey;
+          <div className="rounded-xl border border-border overflow-hidden bg-card">
+            {/* Table Header */}
+            <div className="grid grid-cols-[1fr_auto_auto] items-center px-6 py-3 border-b border-border bg-muted/30">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Usuário</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-48 text-center">Status</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-56 text-right">Ações</span>
+            </div>
 
-                    return (
-                      <TableRow key={user.InternalKey} className={isLocked ? "opacity-60" : ""}>
-                        <TableCell className="font-medium">{user.UserName}</TableCell>
-                        <TableCell className="text-muted-foreground">{user.UserCode}</TableCell>
-                        <TableCell className="text-muted-foreground">{user.eMail || "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">{formatLastLogin(user)}</TableCell>
-                        <TableCell>
-                          <Badge variant={isLocked ? "destructive" : "secondary"} className={!isLocked ? "bg-success/20 text-success border-success/30" : ""}>
-                            {isLocked ? "Bloqueado" : "Ativo"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {isActing ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            {filteredUsers.length === 0 ? (
+              <div className="text-center text-muted-foreground py-16">
+                Nenhum usuário encontrado
+              </div>
+            ) : (
+              filteredUsers.map((user) => {
+                const isLocked = user.Locked === "tYES";
+                const isActing = actionLoading === user.InternalKey;
+                const initials = getInitials(user.UserName);
+
+                return (
+                  <div
+                    key={user.InternalKey}
+                    className={`grid grid-cols-[1fr_auto_auto] items-center px-6 py-4 border-b border-border last:border-b-0 transition-colors hover:bg-muted/20 ${isLocked ? "opacity-50" : ""}`}
+                  >
+                    {/* User Info */}
+                    <div className="flex items-center gap-4">
+                      <div className="flex-shrink-0 w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center">
+                        <span className="text-sm font-bold text-primary">{initials}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{user.UserName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Username: <span className="font-medium text-foreground/80">{user.UserCode}</span>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          E-mail: {user.eMail || "Sem e-mail"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status + Last Login */}
+                    <div className="w-48 flex flex-col items-center gap-1">
+                      <Badge
+                        variant={isLocked ? "destructive" : "secondary"}
+                        className={
+                          !isLocked
+                            ? "bg-success/20 text-success border-success/30 font-semibold"
+                            : "font-semibold"
+                        }
+                      >
+                        {isLocked ? "BLOQUEADO" : "ATIVO"}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Login: {formatLastLogin(user)}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="w-56 flex items-center justify-end gap-2">
+                      {isActing ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            variant={isLocked ? "default" : "destructive"}
+                            onClick={() =>
+                              setConfirmAction({
+                                type: isLocked ? "unlock" : "lock",
+                                user,
+                              })
+                            }
+                          >
+                            {isLocked ? (
+                              <>
+                                <Unlock className="w-4 h-4 mr-1" />
+                                Desbloquear
+                              </>
                             ) : (
                               <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  title={isLocked ? "Desbloquear" : "Bloquear"}
-                                  onClick={() =>
-                                    setConfirmAction({
-                                      type: isLocked ? "unlock" : "lock",
-                                      user,
-                                    })
-                                  }
-                                >
-                                  {isLocked ? (
-                                    <Unlock className="w-4 h-4 text-success" />
-                                  ) : (
-                                    <Lock className="w-4 h-4 text-destructive" />
-                                  )}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  title="Redefinir senha"
-                                  onClick={() =>
-                                    setConfirmAction({ type: "password", user })
-                                  }
-                                >
-                                  <KeyRound className="w-4 h-4 text-warning" />
-                                </Button>
+                                <Lock className="w-4 h-4 mr-1" />
+                                Bloquear
                               </>
                             )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setConfirmAction({ type: "password", user })
+                            }
+                          >
+                            <KeyRound className="w-4 h-4 mr-1" />
+                            Resetar Senha
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
       </main>
