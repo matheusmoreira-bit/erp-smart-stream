@@ -280,7 +280,7 @@ export default function PagCorpMapping() {
                   <Button onClick={addMappingRow} variant="outline" className="mt-4 gap-2"><Plus className="w-4 h-4" /> Adicionar</Button>
                 </div>
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-hidden">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-visible">
                   <Table>
                     <TableHeader>
                       <TableRow className="border-border hover:bg-transparent">
@@ -369,7 +369,7 @@ export default function PagCorpMapping() {
                   </Button>
                 </div>
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-hidden">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-visible">
                   <Table>
                     <TableHeader>
                       <TableRow className="border-border hover:bg-transparent">

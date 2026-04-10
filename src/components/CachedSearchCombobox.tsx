@@ -108,8 +108,8 @@ export function CachedSearchCombobox({
         )}
       </div>
 
-      {isOpen && filtered.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+              {isOpen && filtered.length > 0 && (
+        <div className="absolute z-[9999] mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
           {filtered.map((opt) => (
             <button
               key={opt.code}
@@ -126,7 +126,7 @@ export function CachedSearchCombobox({
       )}
 
       {isOpen && !isLoading && filtered.length === 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md p-3 text-center text-sm text-muted-foreground">
+        <div className="absolute z-[9999] mt-1 w-full rounded-md border border-border bg-popover shadow-md p-3 text-center text-sm text-muted-foreground">
           Nenhum resultado encontrado
         </div>
       )}
