@@ -271,7 +271,7 @@ export default function SynapsePage() {
               Configure os parâmetros desta integração
               {selectedIntegration?.company_db && (
                 <span className="ml-1">
-                  — {COMPANY_LABELS[selectedIntegration.company_db] || selectedIntegration.company_db}
+                  — {getLabel(selectedIntegration.company_db)}
                 </span>
               )}
             </DialogDescription>
