@@ -14,6 +14,7 @@ import {
   EyeOff,
   Shield,
   Settings2,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +76,16 @@ const SYSTEMS: SystemConfig[] = [
       { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
       { key: "username", label: "Usuário", placeholder: "manager" },
       { key: "password", label: "Senha", type: "password", placeholder: "Senha do Service Layer" },
+    ],
+  },
+  {
+    name: "jumpcloud",
+    label: "JumpCloud",
+    description: "Gestão de identidades e diretório de usuários",
+    icon: Users,
+    fields: [
+      { key: "api_key", label: "API Key", type: "password", placeholder: "Chave de API do JumpCloud" },
+      { key: "org_id", label: "Organization ID", placeholder: "ID da organização" },
     ],
   },
 ];
