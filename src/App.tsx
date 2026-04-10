@@ -11,6 +11,7 @@ import Expenses from "./pages/Expenses.tsx";
 import ApprovalRules from "./pages/ApprovalRules.tsx";
 import PagCorp from "./pages/PagCorp.tsx";
 import PagCorpMapping from "./pages/PagCorpMapping.tsx";
+import IntegrationHistory from "./pages/IntegrationHistory.tsx";
 import Credentials from "./pages/Credentials.tsx";
 import UsersPage from "./pages/Users.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/approval-rules" element={<ApprovalRules />} />
             <Route path="/pagcorp" element={<PagCorp />} />
             <Route path="/pagcorp/mapping" element={<PagCorpMapping />} />
+            <Route path="/pagcorp/history" element={<IntegrationHistory />} />
             <Route path="/credentials" element={<Credentials />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="*" element={<NotFound />} />
