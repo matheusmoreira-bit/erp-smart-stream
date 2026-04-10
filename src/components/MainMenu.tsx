@@ -13,9 +13,11 @@ import {
   Users,
   Zap,
   ScrollText,
+  Lock,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
+import { useModuleAccess } from "@/hooks/usePermissions";
 
 interface ModuleCard {
   title: string;
@@ -24,7 +26,7 @@ interface ModuleCard {
   path: string;
   color: string;
   bgGlow: string;
-  available: boolean;
+  moduleKey: string;
 }
 
 const modules: ModuleCard[] = [
@@ -35,7 +37,7 @@ const modules: ModuleCard[] = [
     path: "/analytics",
     color: "text-primary",
     bgGlow: "from-primary/20 to-primary/5",
-    available: true,
+    moduleKey: "analytics",
   },
   {
     title: "Despesas",
@@ -44,7 +46,7 @@ const modules: ModuleCard[] = [
     path: "/expenses",
     color: "text-success",
     bgGlow: "from-success/20 to-success/5",
-    available: true,
+    moduleKey: "expenses",
   },
   {
     title: "Aprovações",
@@ -53,7 +55,7 @@ const modules: ModuleCard[] = [
     path: "/approvals",
     color: "text-warning",
     bgGlow: "from-warning/20 to-warning/5",
-    available: true,
+    moduleKey: "approvals",
   },
   {
     title: "Regras de Aprovação",
@@ -62,7 +64,7 @@ const modules: ModuleCard[] = [
     path: "/approval-rules",
     color: "text-destructive",
     bgGlow: "from-destructive/20 to-destructive/5",
-    available: true,
+    moduleKey: "approval_rules",
   },
   {
     title: "PagCorp",
@@ -71,7 +73,7 @@ const modules: ModuleCard[] = [
     path: "/pagcorp",
     color: "text-primary",
     bgGlow: "from-primary/20 to-primary/5",
-    available: true,
+    moduleKey: "pagcorp",
   },
   {
     title: "Usuários",
@@ -80,7 +82,7 @@ const modules: ModuleCard[] = [
     path: "/users",
     color: "text-warning",
     bgGlow: "from-warning/20 to-warning/5",
-    available: true,
+    moduleKey: "users",
   },
   {
     title: "Synapse",
@@ -89,7 +91,7 @@ const modules: ModuleCard[] = [
     path: "/synapse",
     color: "text-primary",
     bgGlow: "from-primary/20 to-primary/5",
-    available: true,
+    moduleKey: "synapse",
   },
   {
     title: "Credenciais",
@@ -98,7 +100,7 @@ const modules: ModuleCard[] = [
     path: "/credentials",
     color: "text-muted-foreground",
     bgGlow: "from-muted/20 to-muted/5",
-    available: true,
+    moduleKey: "credentials",
   },
   {
     title: "Logs de Auditoria",
@@ -107,11 +109,11 @@ const modules: ModuleCard[] = [
     path: "/audit-log",
     color: "text-violet-400",
     bgGlow: "from-violet-500/20 to-violet-500/5",
-    available: true,
+    moduleKey: "audit_log",
   },
 ];
 
-function ModuleCardItem({ mod, index }: { mod: ModuleCard; index: number }) {
+function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: number; hasAccess: boolean }) {
   const navigate = useNavigate();
   const Icon = mod.icon;
 
@@ -120,10 +122,10 @@ function ModuleCardItem({ mod, index }: { mod: ModuleCard; index: number }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
-      onClick={() => mod.available && navigate(mod.path)}
-      disabled={!mod.available}
+      onClick={() => hasAccess && navigate(mod.path)}
+      disabled={!hasAccess}
       className={`glass-card p-6 text-left transition-all group relative overflow-hidden ${
-        mod.available
+        hasAccess
           ? "hover:border-primary/40 cursor-pointer hover:scale-[1.02]"
           : "opacity-50 cursor-not-allowed"
       }`}
@@ -136,10 +138,10 @@ function ModuleCardItem({ mod, index }: { mod: ModuleCard; index: number }) {
           <div className={`p-3 rounded-xl bg-card border border-border ${mod.color}`}>
             <Icon className="w-6 h-6" />
           </div>
-          {mod.available ? (
+          {hasAccess ? (
             <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           ) : (
-            <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full uppercase">Em breve</span>
+            <Lock className="w-4 h-4 text-muted-foreground" />
           )}
         </div>
         <h3 className="text-lg font-bold text-foreground mb-2">{mod.title}</h3>
@@ -151,6 +153,7 @@ function ModuleCardItem({ mod, index }: { mod: ModuleCard; index: number }) {
 
 export function MainMenu() {
   const { session, logout } = useSap();
+  const { userModules, loading: permLoading } = useModuleAccess();
 
   const { getLabel } = useCompanies(true);
   const companyLabel = getLabel(session?.companyDB || "");
@@ -195,7 +198,12 @@ export function MainMenu() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {modules.map((mod, i) => (
-              <ModuleCardItem key={mod.title} mod={mod} index={i} />
+              <ModuleCardItem
+                key={mod.title}
+                mod={mod}
+                index={i}
+                hasAccess={permLoading || userModules.includes(mod.moduleKey)}
+              />
             ))}
           </div>
         </div>
