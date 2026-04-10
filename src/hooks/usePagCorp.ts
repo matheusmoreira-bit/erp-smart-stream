@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface PagCorpTransaction {
   id: string | number;
@@ -17,6 +18,8 @@ export interface PagCorpTransaction {
   accountabilityId?: string | number | null;
   attachments?: unknown[];
   receipts?: any[];
+  integrated?: boolean;
+  integrationLogId?: string;
   [key: string]: unknown;
 }
 
@@ -73,9 +76,33 @@ export function usePagCorp() {
           accountabilityId: item.accountabilityId || null,
           attachments: item.attachments || [],
           receipts,
+          integrated: false,
           ...item,
         };
       });
+
+      // Check which transactions are already integrated
+      const expenseIds = items.map((t) => Number(t.id)).filter((id) => !isNaN(id));
+      if (expenseIds.length > 0) {
+        const { data: logs } = await supabase
+          .from("pagcorp_integration_log")
+          .select("pagcorp_expense_id, id, status")
+          .in("pagcorp_expense_id", expenseIds)
+          .eq("status", "success");
+
+        const integratedMap = new Map<number, string>();
+        (logs || []).forEach((log: any) => {
+          integratedMap.set(log.pagcorp_expense_id, log.id);
+        });
+
+        items.forEach((t) => {
+          const logId = integratedMap.get(Number(t.id));
+          if (logId) {
+            t.integrated = true;
+            t.integrationLogId = logId;
+          }
+        });
+      }
 
       setTransactions(items);
     } catch (e) {
@@ -86,5 +113,45 @@ export function usePagCorp() {
     }
   }, []);
 
-  return { transactions, isLoading, error, fetchTransactions };
+  const logIntegration = useCallback(async (
+    transaction: PagCorpTransaction,
+    integrationType: "generic" | "accountability",
+    status: "success" | "error" | "pending",
+    companyDb?: string,
+    integratedBy?: string,
+    sapDocEntry?: number,
+    sapDocNum?: number,
+    errorMessage?: string,
+  ) => {
+    const { data, error } = await supabase
+      .from("pagcorp_integration_log")
+      .insert({
+        pagcorp_expense_id: Number(transaction.id),
+        pagcorp_data: {
+          description: transaction.description,
+          amount: transaction.amount,
+          currency: transaction.currency,
+          date: transaction.date,
+          accountAlias: transaction.accountAlias,
+          accountCode: transaction.accountCode,
+          hasAccountability: transaction.hasAccountability,
+          accountabilityApproved: transaction.accountabilityApproved,
+          receipts: transaction.receipts,
+        },
+        integration_type: integrationType,
+        status,
+        company_db: companyDb || null,
+        integrated_by: integratedBy || null,
+        sap_doc_entry: sapDocEntry || null,
+        sap_doc_num: sapDocNum || null,
+        error_message: errorMessage || null,
+      })
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    return data;
+  }, []);
+
+  return { transactions, isLoading, error, fetchTransactions, logIntegration };
 }
