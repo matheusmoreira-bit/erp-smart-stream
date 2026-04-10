@@ -1,0 +1,1 @@
+ALTER TABLE public.companies ADD COLUMN service_layer_url text;

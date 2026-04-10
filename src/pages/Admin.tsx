@@ -103,6 +103,7 @@ interface Company {
   id: string;
   company_db: string;
   display_name: string;
+  service_layer_url: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -272,7 +273,7 @@ export default function Admin() {
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", is_active: true });
+  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true });
   const [saving, setSaving] = useState(false);
 
   // System credential modal
@@ -326,13 +327,13 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", is_active: true });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true });
     setCompanyDialog(true);
   };
 
   const openEditCompany = (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, is_active: c.is_active });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active });
     setCompanyDialog(true);
   };
 
@@ -348,6 +349,7 @@ export default function Admin() {
         .update({
           company_db: companyForm.company_db,
           display_name: companyForm.display_name,
+          service_layer_url: companyForm.service_layer_url || null,
           is_active: companyForm.is_active,
         })
         .eq("id", editingCompany.id);
@@ -357,6 +359,7 @@ export default function Admin() {
       const { error } = await supabase.from("companies").insert({
         company_db: companyForm.company_db,
         display_name: companyForm.display_name,
+        service_layer_url: companyForm.service_layer_url || null,
         is_active: companyForm.is_active,
       });
       if (error) toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar");
@@ -552,6 +555,15 @@ export default function Admin() {
                 onChange={(e) => setCompanyForm((f) => ({ ...f, company_db: e.target.value }))}
                 placeholder="SBO_NOME_EMPRESA"
                 className="font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">URL do Service Layer</label>
+              <Input
+                value={companyForm.service_layer_url}
+                onChange={(e) => setCompanyForm((f) => ({ ...f, service_layer_url: e.target.value }))}
+                placeholder="https://servidor:50000/b1s/v1/"
+                className="font-mono text-sm"
               />
             </div>
             <div className="flex items-center gap-3">
