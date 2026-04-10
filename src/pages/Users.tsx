@@ -4,6 +4,7 @@ import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock } 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import type { SapUser } from "@/lib/cache-repository";
@@ -41,17 +42,33 @@ export default function UsersPage() {
   const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword } = useSapUsers();
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<string>("recorrentes");
 
   const filteredUsers = useMemo(() => {
-    if (!search.trim()) return users;
-    const q = search.toLowerCase();
-    return users.filter(
-      (u) =>
-        u.UserName.toLowerCase().includes(q) ||
-        u.UserCode.toLowerCase().includes(q) ||
-        (u.eMail?.toLowerCase().includes(q) ?? false)
-    );
-  }, [users, search]);
+    let list = users;
+
+    if (viewMode === "recorrentes") {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 30);
+      list = list.filter((u) => {
+        if (!u.LastLoginDate) return true;
+        const loginDate = new Date(u.LastLoginDate);
+        return loginDate >= cutoff;
+      });
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (u) =>
+          u.UserName.toLowerCase().includes(q) ||
+          u.UserCode.toLowerCase().includes(q) ||
+          (u.eMail?.toLowerCase().includes(q) ?? false)
+      );
+    }
+
+    return list;
+  }, [users, search, viewMode]);
 
   const handleConfirm = async () => {
     if (!confirmAction) return;
@@ -118,14 +135,29 @@ export default function UsersPage() {
           </div>
         )}
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por código, nome ou e-mail..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-card border-border"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por código, nome ou e-mail..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 bg-card border-border"
+            />
+          </div>
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => { if (v) setViewMode(v); }}
+            className="border border-border rounded-lg p-0.5 bg-muted/30"
+          >
+            <ToggleGroupItem value="recorrentes" className="text-xs px-3 h-8 rounded-md data-[state=on]:bg-background data-[state=on]:shadow-sm">
+              Recorrentes
+            </ToggleGroupItem>
+            <ToggleGroupItem value="todos" className="text-xs px-3 h-8 rounded-md data-[state=on]:bg-background data-[state=on]:shadow-sm">
+              Todos
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
 
         {isLoading ? (
