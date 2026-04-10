@@ -318,13 +318,13 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, targets: { ...DEFAULT_TARGETS } });
     setCompanyDialog(true);
   };
 
   const openEditCompany = (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, targets: c.targets || { ...DEFAULT_TARGETS } });
     setCompanyDialog(true);
   };
 
