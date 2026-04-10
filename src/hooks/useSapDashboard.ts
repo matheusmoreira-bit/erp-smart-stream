@@ -363,12 +363,12 @@ export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
       const approvalRows = approvalResult.data || [];
       const days: number[] = [];
       for (const a of approvalRows) {
-        const daysOpen = Number(a["Dias em aberto"] || 0);
-        if (daysOpen > 0) {
-          days.push(daysOpen);
+        const d = Number(a.Dias_Desde_Criacao || 0);
+        if (d > 0) {
+          days.push(d);
         } else {
-          const d = daysBetween(a["Data de criação"] || null, a["Data do documento"] || null);
-          if (d !== null && d > 0) days.push(d);
+          const calc = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
+          if (calc !== null && calc > 0) days.push(calc);
         }
       }
       setApprovalDaysRaw(days);
