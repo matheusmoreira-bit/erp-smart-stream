@@ -559,6 +559,8 @@ export default function Admin() {
           </>
         )}
 
+        {activeTab === "permissions" && <PermissionManager />}
+
         {activeTab === "audit" && (
           <>
             <div className="flex items-center justify-between mb-6">
