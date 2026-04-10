@@ -353,6 +353,7 @@ export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
   const [error, setError] = useState<string | null>(null);
   const [rawRows, setRawRows] = useState<ViewRow[]>([]);
   const [approvalDaysRaw, setApprovalDaysRaw] = useState<number[]>([]);
+  const [approvalRowsRaw, setApprovalRowsRaw] = useState<ApprovalViewRow[]>([]);
 
   const fetchData = useCallback(async () => {
     if (!session) return;
