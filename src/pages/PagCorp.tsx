@@ -85,6 +85,40 @@ export default function PagCorp() {
   });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
 
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+    if (value && endDate) {
+      const start = new Date(value);
+      const end = new Date(endDate);
+      const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 30) {
+        const maxEnd = new Date(start);
+        maxEnd.setDate(maxEnd.getDate() + 30);
+        setEndDate(maxEnd.toISOString().slice(0, 10));
+      }
+      if (diffDays < 0) {
+        setEndDate(value);
+      }
+    }
+  };
+
+  const handleEndDateChange = (value: string) => {
+    setEndDate(value);
+    if (value && startDate) {
+      const start = new Date(startDate);
+      const end = new Date(value);
+      const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 30) {
+        const minStart = new Date(end);
+        minStart.setDate(minStart.getDate() - 30);
+        setStartDate(minStart.toISOString().slice(0, 10));
+      }
+      if (diffDays < 0) {
+        setStartDate(value);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchTransactions(startDate, endDate);
   }, []);
@@ -193,11 +227,11 @@ export default function PagCorp() {
         <div className="max-w-7xl mx-auto flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Data Início</label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-40 bg-card" />
+            <Input type="date" value={startDate} onChange={(e) => handleStartDateChange(e.target.value)} className="w-40 bg-card" />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Data Fim</label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-40 bg-card" />
+            <Input type="date" value={endDate} onChange={(e) => handleEndDateChange(e.target.value)} className="w-40 bg-card" />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Prestação de Conta</label>
@@ -307,6 +341,14 @@ export default function PagCorp() {
                   {filteredTransactions.map((t) => {
                     const hasAttachments = t.hasAccountability && Array.isArray(t.attachments) && t.attachments.length > 0;
 
+                    // Disable integrate button logic
+                    const now = new Date();
+                    const txDate = t.date ? new Date(t.date) : null;
+                    const txAgeDays = txDate ? (now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+                    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                    const daysUntilMonthEnd = lastDayOfMonth - now.getDate();
+                    const shouldDisableIntegrate = !t.hasAccountability && (txAgeDays < 15 || daysUntilMonthEnd <= 3);
+
                     return (
                       <TableRow key={t.id} className="border-border">
                         <TableCell className="text-sm text-foreground whitespace-nowrap">
@@ -316,7 +358,7 @@ export default function PagCorp() {
                           {t.description}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {t.accountName || "—"}
+                          {t.cardName || t.accountName || "—"}
                           {t.cardLastDigits && (
                             <span className="ml-1 text-xs opacity-60">•••{t.cardLastDigits}</span>
                           )}
@@ -349,6 +391,8 @@ export default function PagCorp() {
                               variant="outline"
                               size="sm"
                               className="gap-1 text-xs"
+                              disabled={shouldDisableIntegrate}
+                              title={shouldDisableIntegrate ? (txAgeDays < 15 ? "Transação com menos de 15 dias" : "Faltam 3 dias ou menos para o fim do mês") : undefined}
                               onClick={() => handleIntegrateGeneric(t)}
                             >
                               <Upload className="w-3 h-3" />
