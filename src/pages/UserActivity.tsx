@@ -189,9 +189,8 @@ export default function UserActivityPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas ações</SelectItem>
-              <SelectItem value="L">Login</SelectItem>
+              <SelectItem value="I">Login</SelectItem>
               <SelectItem value="W">Login Web</SelectItem>
-              <SelectItem value="F">Falha</SelectItem>
               <SelectItem value="O">Logout</SelectItem>
               <SelectItem value="C">Mudança Senha</SelectItem>
               <SelectItem value="K">Bloqueio</SelectItem>
@@ -219,7 +218,7 @@ export default function UserActivityPage() {
         ) : (
           <>
             {/* Metric Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <MetricCard title="Usuários Únicos" value={String(metrics.uniqueUsers)} icon={Users} delay={0} />
               <MetricCard title="Logins" value={String(metrics.logins)} icon={LogIn} delay={0.05} />
               <MetricCard
@@ -230,6 +229,7 @@ export default function UserActivityPage() {
                 trend={metrics.failures > 0 ? { value: String(metrics.failures), positive: false } : undefined}
               />
               <MetricCard title="IPs Únicos" value={String(metrics.uniqueIPs)} icon={Activity} delay={0.15} />
+              <MetricCard title="Duração Média" value={formatDuration(metrics.avgDuration)} icon={Timer} delay={0.2} />
             </div>
 
             {/* Charts */}
