@@ -350,7 +350,7 @@ export default function PagCorp() {
                           {t.description}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {t.accountName || "—"}
+                          {t.cardName || t.accountName || "—"}
                           {t.cardLastDigits && (
                             <span className="ml-1 text-xs opacity-60">•••{t.cardLastDigits}</span>
                           )}
