@@ -1,6 +1,26 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface CompanyTargets {
+  requisicao: number;
+  cotacao: number;
+  aprovacao: number;
+  pedido_compra: number;
+  nf_entrada: number;
+  pagamento: number;
+  aprovador: number;
+}
+
+export const DEFAULT_TARGETS: CompanyTargets = {
+  requisicao: 2,
+  cotacao: 3,
+  aprovacao: 3,
+  pedido_compra: 3,
+  nf_entrada: 2,
+  pagamento: 5,
+  aprovador: 1,
+};
+
 export interface Company {
   id: string;
   company_db: string;
@@ -8,6 +28,7 @@ export interface Company {
   service_layer_url: string | null;
   is_active: boolean;
   created_at: string;
+  targets: CompanyTargets;
 }
 
 export function useCompanies(onlyActive = false) {

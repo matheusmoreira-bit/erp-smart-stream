@@ -4,6 +4,7 @@ import { sapQueryView } from "@/lib/sap-client";
 import type { FlowStage } from "@/components/FlowTimeline";
 import type { Insight } from "@/components/InsightsPanel";
 import type { ValidationItem } from "@/components/ValidationTable";
+import { type CompanyTargets, DEFAULT_TARGETS } from "@/hooks/useCompanies";
 
 export interface ApproverStats {
   name: string;
