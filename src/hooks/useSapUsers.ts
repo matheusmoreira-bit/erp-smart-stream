@@ -42,7 +42,7 @@ export function useSapUsers() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-  const fetchUsers = useCallback(async (forceRefresh = false) => {
+  const fetchUsers = useCallback(async (forceRefresh = false, signal?: AbortSignal) => {
     if (!session) {
       setUsers([]);
       return;
@@ -77,15 +77,20 @@ export function useSapUsers() {
         !forceRefresh,
       );
 
+      if (signal?.aborted) return;
+
       const userList = result.data.map((row) => normalizeSapUser(row));
 
       sapUsersCache.set(cacheKey, userList);
       setUsers(userList);
     } catch (e) {
+      if (signal?.aborted) return;
       console.error("Error fetching SAP users:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar usuários");
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [session]);
 
@@ -126,7 +131,11 @@ export function useSapUsers() {
   const refresh = useCallback(() => fetchUsers(true), [fetchUsers]);
 
   useEffect(() => {
-    fetchUsers();
+    const controller = new AbortController();
+    fetchUsers(false, controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, [fetchUsers]);
 
   return { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword };
