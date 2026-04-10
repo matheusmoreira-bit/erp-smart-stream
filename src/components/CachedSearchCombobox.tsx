@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2 } from "lucide-react";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
@@ -24,10 +25,17 @@ export function CachedSearchCombobox({
 }: CachedSearchComboboxProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputWrapperRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const appliedSuggestionRef = useRef<string | null>(null);
 
-  // Apply suggestedQuery
   useEffect(() => {
     if (suggestedQuery && suggestedQuery !== appliedSuggestionRef.current && !value) {
       appliedSuggestionRef.current = suggestedQuery;
@@ -36,21 +44,51 @@ export function CachedSearchCombobox({
     }
   }, [suggestedQuery, value]);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = e.target as Node;
+
+      if (containerRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+
+      setIsOpen(false);
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updateDropdownPosition = () => {
+      const rect = inputWrapperRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+
+    updateDropdownPosition();
+
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+    };
+  }, [isOpen, query, value, options.length]);
+
   const filtered = query.length > 0
     ? options.filter((o) => {
         const q = query.toLowerCase();
-        return (o.code ?? "").toLowerCase().includes(q) || (o.name ?? "").toLowerCase().includes(q) || ((o.extra ?? "").toLowerCase().includes(q));
+        return (o.code ?? "").toLowerCase().includes(q)
+          || (o.name ?? "").toLowerCase().includes(q)
+          || (o.extra ?? "").toLowerCase().includes(q);
       }).slice(0, 50)
     : options.slice(0, 50);
 
@@ -69,67 +107,99 @@ export function CachedSearchCombobox({
   const handleClear = () => {
     onChange(null);
     setQuery("");
+    setIsOpen(false);
   };
 
   const displayValue = value
     ? `${value.name} — ${value.code}${value.extra ? ` (${value.extra})` : ""}`
     : "";
 
+  const showResults = isOpen && filtered.length > 0 && dropdownPosition;
+  const showEmptyState = isOpen && !isLoading && filtered.length === 0 && dropdownPosition;
+
   return (
-    <div ref={containerRef} className="relative">
-      {label && <label className="text-xs text-muted-foreground mb-1 block">{label}</label>}
-      <div className="relative">
-        {value ? (
-          <CheckCircle2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-green-500" />
-        ) : (
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        )}
-        <Input
-          value={value ? displayValue : query}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => {
-            if (!value) setIsOpen(true);
-          }}
-          placeholder={isLoading ? "Carregando..." : placeholder}
-          className={`pl-8 pr-8 text-sm h-9 ${value ? "border-green-500/50 bg-green-500/5" : ""}`}
-          readOnly={!!value}
-          disabled={isLoading}
-        />
-        {(value || query) && (
-          <button
-            onClick={handleClear}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
-        {isLoading && (
-          <Loader2 className="w-3.5 h-3.5 absolute right-8 top-1/2 -translate-y-1/2 text-primary animate-spin" />
-        )}
+    <>
+      <div ref={containerRef} className="relative">
+        {label && <label className="mb-1 block text-xs text-muted-foreground">{label}</label>}
+
+        <div ref={inputWrapperRef} className="relative">
+          {value ? (
+            <CheckCircle2 className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-green-500" />
+          ) : (
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          )}
+
+          <Input
+            value={value ? displayValue : query}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onFocus={() => {
+              if (!value) setIsOpen(true);
+            }}
+            placeholder={isLoading ? "Carregando..." : placeholder}
+            className={`h-9 pl-8 pr-8 text-sm ${value ? "border-green-500/50 bg-green-500/5" : ""}`}
+            readOnly={!!value}
+            disabled={isLoading}
+          />
+
+          {(value || query) && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {isLoading && (
+            <Loader2 className="absolute right-8 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-primary" />
+          )}
+        </div>
       </div>
 
-              {isOpen && filtered.length > 0 && (
-        <div className="absolute z-[9999] mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+      {typeof document !== "undefined" && showResults && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: "fixed",
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+          }}
+          className="z-[9999] max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md"
+        >
           {filtered.map((opt) => (
             <button
               key={opt.code}
+              type="button"
               onClick={() => handleSelect(opt)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex flex-col"
+              className="flex w-full flex-col px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
             >
-              <span className="font-medium text-foreground truncate">{opt.name}</span>
+              <span className="truncate font-medium text-foreground">{opt.name}</span>
               <span className="text-xs text-muted-foreground">
                 {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
               </span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {isOpen && !isLoading && filtered.length === 0 && (
-        <div className="absolute z-[9999] mt-1 w-full rounded-md border border-border bg-popover shadow-md p-3 text-center text-sm text-muted-foreground">
+      {typeof document !== "undefined" && showEmptyState && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: "fixed",
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+          }}
+          className="z-[9999] rounded-md border border-border bg-popover p-3 text-center text-sm text-muted-foreground shadow-md"
+        >
           Nenhum resultado encontrado
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
