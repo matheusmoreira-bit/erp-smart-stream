@@ -8,12 +8,15 @@ export interface PagCorpTransaction {
   currency?: string;
   accountCode?: string;
   accountName?: string;
+  accountAlias?: string;
   cardName?: string;
   cardLastDigits?: string;
   status?: string;
   hasAccountability?: boolean;
+  accountabilityApproved?: boolean;
   accountabilityId?: string | number | null;
   attachments?: unknown[];
+  receipts?: any[];
   [key: string]: unknown;
 }
 
