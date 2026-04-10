@@ -295,7 +295,33 @@ export default function Admin() {
 
   useEffect(() => {
     fetchCompanies();
-  }, []);
+
+    // Realtime: sync credentials changes from other sessions
+    const channel = supabase
+      .channel("admin-credentials-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "system_credentials" },
+        () => {
+          // Refresh credentials for the currently expanded company
+          if (expandedCompany) {
+            fetchCredentials(expandedCompany);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "companies" },
+        () => {
+          fetchCompanies();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [expandedCompany]);
 
   const fetchCredentials = async (companyDb: string) => {
     setCredLoading(companyDb);
