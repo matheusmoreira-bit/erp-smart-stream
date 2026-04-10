@@ -45,11 +45,38 @@ export function useSapUsers() {
 
   const fetchUsers = useCallback(async (forceRefresh = false, signal?: AbortSignal) => {
     if (!session) {
+      // No session: try loading from DB cache
+      setIsLoading(true);
+      setError(null);
+      try {
+        const { data: dbCache } = await supabase
+          .from("sap_cache")
+          .select("data, expires_at")
+          .eq("cache_key", "users")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (signal?.aborted) return;
+
+        if (dbCache?.data && Array.isArray(dbCache.data)) {
+          const userList = (dbCache.data as Record<string, unknown>[]).map(normalizeSapUser);
+          if (userList.some(hasDisplayData)) {
+            setUsers(userList);
+            return;
+          }
+        }
+      } catch {
+        // ignore DB cache errors
+      } finally {
+        if (!signal?.aborted) setIsLoading(false);
+      }
       setUsers([]);
       return;
     }
 
-    const cacheKey = `users:${session.companyDB}`;
+    const companyDB = session.companyDB;
+    const cacheKey = `users:${companyDB}`;
 
     if (!forceRefresh) {
       const cached = sapUsersCache.get(cacheKey);
@@ -60,6 +87,33 @@ export function useSapUsers() {
           return;
         }
         sapUsersCache.invalidate(cacheKey);
+      }
+
+      // Try DB cache as fallback
+      try {
+        const { data: dbCache } = await supabase
+          .from("sap_cache")
+          .select("data, expires_at")
+          .eq("cache_key", "users")
+          .eq("company_db", companyDB)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (signal?.aborted) return;
+
+        if (dbCache?.data && Array.isArray(dbCache.data)) {
+          const expired = new Date(dbCache.expires_at) < new Date();
+          const userList = (dbCache.data as Record<string, unknown>[]).map(normalizeSapUser);
+          if (userList.some(hasDisplayData)) {
+            sapUsersCache.set(cacheKey, userList);
+            setUsers(userList);
+            // If not expired, skip live fetch
+            if (!expired) return;
+          }
+        }
+      } catch {
+        // ignore
       }
     }
 
@@ -84,6 +138,25 @@ export function useSapUsers() {
 
       sapUsersCache.set(cacheKey, userList);
       setUsers(userList);
+
+      // Persist to DB cache (30 min TTL)
+      if (userList.length > 0) {
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+        await supabase
+          .from("sap_cache")
+          .upsert(
+            {
+              cache_key: "users",
+              company_db: companyDB,
+              data: userList as unknown as Record<string, unknown>[],
+              expires_at: expiresAt,
+            },
+            { onConflict: "cache_key,company_db" }
+          )
+          .then(({ error: upsertErr }) => {
+            if (upsertErr) console.warn("Failed to persist users cache:", upsertErr.message);
+          });
+      }
     } catch (e) {
       if (signal?.aborted) return;
       console.error("Error fetching SAP users:", e);
