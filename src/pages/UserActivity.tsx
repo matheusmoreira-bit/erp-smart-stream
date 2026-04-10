@@ -45,9 +45,21 @@ export default function UserActivityPage() {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [daysFilter, setDaysFilter] = useState("7");
+  const [userTypeFilter, setUserTypeFilter] = useState("no_api");
 
   const filtered = useMemo(() => {
     let list = records;
+
+    // User type filter (API/Workflow)
+    const isApiOrWorkflow = (code: string) => {
+      const lc = code?.toLowerCase() || "";
+      return lc.includes("api") || lc.includes("workflow");
+    };
+    if (userTypeFilter === "no_api") {
+      list = list.filter((r) => !isApiOrWorkflow(r.UserCode));
+    } else if (userTypeFilter === "only_api") {
+      list = list.filter((r) => isApiOrWorkflow(r.UserCode));
+    }
 
     // Date filter
     const days = parseInt(daysFilter);
