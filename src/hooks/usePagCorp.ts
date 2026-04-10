@@ -8,6 +8,7 @@ export interface PagCorpTransaction {
   currency?: string;
   accountCode?: string;
   accountName?: string;
+  cardName?: string;
   cardLastDigits?: string;
   status?: string;
   hasAccountability?: boolean;
@@ -55,6 +56,7 @@ export function usePagCorp() {
         currency: item.currencyCode || item.currency || "BRL",
         accountCode: item.accountCode || "",
         accountName: item.accountName || "",
+        cardName: item.cardName || item.card_name || "",
         cardLastDigits: item.cardLastDigits || item.lastDigits || "",
         status: item.status || "",
         hasAccountability: item.hasAccountability ?? item.accountabilityId != null,
