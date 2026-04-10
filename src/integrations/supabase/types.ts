@@ -421,6 +421,7 @@ export type Database = {
       }
       synapse_integrations: {
         Row: {
+          company_db: string | null
           created_at: string
           description: string | null
           display_name: string
@@ -435,6 +436,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_db?: string | null
           created_at?: string
           description?: string | null
           display_name: string
@@ -449,6 +451,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_db?: string | null
           created_at?: string
           description?: string | null
           display_name?: string

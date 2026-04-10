@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSap } from "@/contexts/SapContext";
 import {
   ArrowLeft,
   Zap,
@@ -11,6 +12,7 @@ import {
   Clock,
   Power,
   PowerOff,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,12 +31,21 @@ import {
   type SynapseIntegration,
 } from "@/hooks/useSynapseIntegrations";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+const COMPANY_LABELS: Record<string, string> = {
+  SBO_ANAGAMING: "ANA Gaming",
+  SBO_CACTUS: "Cactus",
+  SBO_INSTITUTO_ANA: "Instituto Cactus",
+};
+
 export default function SynapsePage() {
   const navigate = useNavigate();
+  const { session } = useSap();
+  const companyDB = session?.companyDB || "";
+  const companyLabel = COMPANY_LABELS[companyDB] || companyDB;
+
   const {
     integrations,
     logs,
@@ -43,8 +54,9 @@ export default function SynapsePage() {
     fetchIntegrations,
     fetchLogs,
     updateIntegration,
+    ensureIntegration,
     runNow,
-  } = useSynapseIntegrations();
+  } = useSynapseIntegrations(companyDB || undefined);
 
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedIntegration, setSelectedIntegration] = useState<SynapseIntegration | null>(null);
@@ -54,29 +66,10 @@ export default function SynapsePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchIntegrations();
-  }, [fetchIntegrations]);
-
-  // Seed default integration if empty
-  useEffect(() => {
-    if (!isLoading && integrations.length === 0) {
-      supabase
-        .from("synapse_integrations")
-        .upsert(
-          {
-            integration_key: "jumpcloud_sap_sync",
-            display_name: "JumpCloud → SAP B1",
-            description:
-              "Sincroniza status de usuários do JumpCloud com o SAP B1. Usuários desabilitados no JumpCloud são automaticamente bloqueados no SAP.",
-            is_active: false,
-            interval_minutes: 360,
-            parameters: { company_db: "", auto_disable: true },
-          } as any,
-          { onConflict: "integration_key" }
-        )
-        .then(() => fetchIntegrations());
+    if (companyDB) {
+      ensureIntegration(companyDB).then(() => fetchIntegrations());
     }
-  }, [isLoading, integrations.length, fetchIntegrations]);
+  }, [companyDB, ensureIntegration, fetchIntegrations]);
 
   const openConfig = (integration: SynapseIntegration) => {
     setSelectedIntegration(integration);
@@ -117,7 +110,7 @@ export default function SynapsePage() {
 
   const handleRun = async (integration: SynapseIntegration) => {
     try {
-      const result = await runNow(integration.integration_key);
+      const result = await runNow(integration.integration_key, integration.company_db || undefined);
       toast.success(result.message || "Execução concluída");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro na execução");
@@ -146,6 +139,7 @@ export default function SynapsePage() {
                 <h1 className="text-2xl font-bold text-foreground">Synapse</h1>
                 <p className="text-sm text-muted-foreground">
                   Central de automações e integrações
+                  {companyLabel && <span className="ml-1">— {companyLabel}</span>}
                 </p>
               </div>
             </div>
@@ -154,6 +148,19 @@ export default function SynapsePage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+        {!session && (
+          <div className="p-6 rounded-xl border border-border bg-card text-center space-y-2">
+            <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto" />
+            <p className="text-foreground font-medium">Sessão SAP não iniciada</p>
+            <p className="text-sm text-muted-foreground">
+              Faça login no SAP Business One para gerenciar as integrações.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => navigate("/")} className="mt-2">
+              Ir para Login
+            </Button>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -265,6 +272,11 @@ export default function SynapsePage() {
             </DialogTitle>
             <DialogDescription>
               Configure os parâmetros desta integração
+              {selectedIntegration?.company_db && (
+                <span className="ml-1">
+                  — {COMPANY_LABELS[selectedIntegration.company_db] || selectedIntegration.company_db}
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -285,37 +297,39 @@ export default function SynapsePage() {
               />
             </div>
 
-            <div className="border-t border-border pt-4 space-y-3">
-              <p className="text-sm font-medium text-foreground">Parâmetros</p>
-              {Object.entries(formParams).map(([key, value]) => (
-                <div key={key} className="space-y-1">
-                  <Label className="text-xs text-muted-foreground capitalize">
-                    {key.replace(/_/g, " ")}
-                  </Label>
-                  {value === "true" || value === "false" ? (
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={value === "true"}
-                        onCheckedChange={(checked) =>
-                          setFormParams((p) => ({ ...p, [key]: String(checked) }))
+            {Object.keys(formParams).length > 0 && (
+              <div className="border-t border-border pt-4 space-y-3">
+                <p className="text-sm font-medium text-foreground">Parâmetros</p>
+                {Object.entries(formParams).map(([key, value]) => (
+                  <div key={key} className="space-y-1">
+                    <Label className="text-xs text-muted-foreground capitalize">
+                      {key.replace(/_/g, " ")}
+                    </Label>
+                    {value === "true" || value === "false" ? (
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={value === "true"}
+                          onCheckedChange={(checked) =>
+                            setFormParams((p) => ({ ...p, [key]: String(checked) }))
+                          }
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {value === "true" ? "Sim" : "Não"}
+                        </span>
+                      </div>
+                    ) : (
+                      <Input
+                        value={value}
+                        onChange={(e) =>
+                          setFormParams((p) => ({ ...p, [key]: e.target.value }))
                         }
+                        className="bg-card"
                       />
-                      <span className="text-sm text-muted-foreground">
-                        {value === "true" ? "Sim" : "Não"}
-                      </span>
-                    </div>
-                  ) : (
-                    <Input
-                      value={value}
-                      onChange={(e) =>
-                        setFormParams((p) => ({ ...p, [key]: e.target.value }))
-                      }
-                      className="bg-card"
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Recent logs */}
             {logs.length > 0 && (
