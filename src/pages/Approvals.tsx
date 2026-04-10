@@ -486,7 +486,7 @@ export default function ApprovalsPage() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -496,6 +496,15 @@ export default function ApprovalsPage() {
               className="pl-9 bg-muted/30 border-border"
             />
           </div>
+          {isSuperUser && (
+            <div className="flex items-center gap-2 glass-card px-3 py-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <Label htmlFor="show-all" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                Ver todas as aprovações
+              </Label>
+              <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
+            </div>
+          )}
           <div className="flex items-center border border-border rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode("cards")}
