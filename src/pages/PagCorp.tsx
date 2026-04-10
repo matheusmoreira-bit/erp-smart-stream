@@ -14,6 +14,7 @@ import {
   MapPin,
   Sparkles,
   Upload,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -347,7 +348,7 @@ export default function PagCorp() {
                     const txAgeDays = txDate ? (now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
                     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
                     const daysUntilMonthEnd = lastDayOfMonth - now.getDate();
-                    const shouldDisableIntegrate = !t.hasAccountability && (txAgeDays < 15 || daysUntilMonthEnd <= 3);
+                    const shouldDisableIntegrate = (!t.hasAccountability || !t.accountabilityApproved) && (txAgeDays < 15 || daysUntilMonthEnd <= 3);
 
                     return (
                       <TableRow key={t.id} className="border-border">
@@ -358,7 +359,7 @@ export default function PagCorp() {
                           {t.description}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {t.cardName || t.accountName || "—"}
+                          {t.accountAlias || t.accountName || "—"}
                           {t.cardLastDigits && (
                             <span className="ml-1 text-xs opacity-60">•••{t.cardLastDigits}</span>
                           )}
@@ -368,7 +369,11 @@ export default function PagCorp() {
                         </TableCell>
                         <TableCell className="text-center">
                           {t.hasAccountability ? (
-                            <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
+                            t.accountabilityApproved ? (
+                              <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
+                            ) : (
+                              <Clock className="w-4 h-4 text-warning mx-auto" />
+                            )
                           ) : (
                             <XCircle className="w-4 h-4 text-destructive/60 mx-auto" />
                           )}
