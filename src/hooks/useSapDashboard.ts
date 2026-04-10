@@ -57,9 +57,22 @@ function daysBetween(d1: string | null, d2: string | null): number | null {
   return Math.round(Math.abs(b - a) / (1000 * 60 * 60 * 24));
 }
 
+/** Remove outliers using IQR method and return filtered array */
+function removeOutliers(nums: number[]): number[] {
+  if (nums.length < 4) return nums;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const q1 = sorted[Math.floor(sorted.length * 0.25)];
+  const q3 = sorted[Math.floor(sorted.length * 0.75)];
+  const iqr = q3 - q1;
+  const lower = q1 - 1.5 * iqr;
+  const upper = q3 + 1.5 * iqr;
+  return nums.filter((n) => n >= lower && n <= upper);
+}
+
 function avg(nums: number[]): number {
-  if (!nums.length) return 0;
-  return Math.round((nums.reduce((s, n) => s + n, 0) / nums.length) * 10) / 10;
+  const clean = removeOutliers(nums);
+  if (!clean.length) return 0;
+  return Math.round((clean.reduce((s, n) => s + n, 0) / clean.length) * 10) / 10;
 }
 
 function stageStatus(avgDays: number): "ok" | "warning" | "critical" {
