@@ -1,0 +1,1 @@
+ALTER TABLE public.audit_log ADD COLUMN company_db text;

@@ -105,6 +105,7 @@ export type Database = {
           action: string
           actor_email: string | null
           actor_id: string | null
+          company_db: string | null
           created_at: string
           details: Json | null
           entity_id: string | null
@@ -115,6 +116,7 @@ export type Database = {
           action: string
           actor_email?: string | null
           actor_id?: string | null
+          company_db?: string | null
           created_at?: string
           details?: Json | null
           entity_id?: string | null
@@ -125,6 +127,7 @@ export type Database = {
           action?: string
           actor_email?: string | null
           actor_id?: string | null
+          company_db?: string | null
           created_at?: string
           details?: Json | null
           entity_id?: string | null
