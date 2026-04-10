@@ -51,21 +51,31 @@ export function usePagCorp() {
       }
 
       const result = await res.json();
-      const items: PagCorpTransaction[] = (result.items || []).map((item: any, index: number) => ({
-        id: item.id || item.expenseId || index,
-        date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
-        description: item.description || item.expenseDescription || "—",
-        amount: item.amount || item.value || item.expenseValue || 0,
-        currency: item.currencyCode || item.currency || "BRL",
-        accountCode: item.accountCode || "",
-        accountName: item.accountName || "",
-        cardName: item.cardName || item.card_name || "",
-        cardLastDigits: item.cardLastDigits || item.lastDigits || "",
-        status: item.status || "",
-        hasAccountability: item.hasAccountability ?? item.accountabilityId != null,
-        accountabilityId: item.accountabilityId || null,
-        attachments: item.attachments || [],
-        ...item,
+      const items: PagCorpTransaction[] = (result.items || []).map((item: any, index: number) => {
+        const receipts = item.receipts || [];
+        const hasAccountability = receipts.length > 0;
+        const accountabilityApproved = receipts.some((r: any) => r.statusId === 3);
+
+        return {
+          id: item.id || item.expenseId || index,
+          date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
+          description: item.description || item.expenseDescription || "—",
+          amount: item.amount || item.value || item.expenseValue || 0,
+          currency: item.currencyCode || item.currency || "BRL",
+          accountCode: item.accountCode || item.account || "",
+          accountName: item.accountName || "",
+          accountAlias: item.accountAlias || "",
+          cardName: item.cardName || item.card_name || "",
+          cardLastDigits: item.cardLastDigits || item.lastDigits || "",
+          status: item.status || item.statusDescription || "",
+          hasAccountability,
+          accountabilityApproved,
+          accountabilityId: item.accountabilityId || null,
+          attachments: item.attachments || [],
+          receipts,
+          ...item,
+        };
+      });
       }));
 
       setTransactions(items);
