@@ -46,6 +46,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
+import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -74,6 +75,22 @@ export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
   const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
+  const { credentials, fetchCredentials } = useCredentials();
+
+  useEffect(() => { fetchCredentials("sap"); }, [fetchCredentials]);
+
+  const hasSapCredentials = credentials.some((c) => c.system_name === "sap");
+
+  const checkSapCredentials = (): boolean => {
+    if (!hasSapCredentials) {
+      toast.error("Credencial SAP B1 não cadastrada", {
+        description: "Configure as credenciais do SAP Business One na tela de Credenciais antes de integrar.",
+        action: { label: "Configurar", onClick: () => navigate("/credentials") },
+      });
+      return false;
+    }
+    return true;
+  };
 
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -159,6 +176,7 @@ export default function PagCorp() {
   }, [filteredTransactions]);
 
   const handleValidateAndIntegrate = async (t: PagCorpTransaction) => {
+    if (!checkSapCredentials()) return;
     setIntegrating(t.id);
     try {
       // TODO: Call AI validation edge function with attachments, then integrate to SAP
@@ -173,6 +191,7 @@ export default function PagCorp() {
   };
 
   const handleIntegrateGeneric = (t: PagCorpTransaction) => {
+    if (!checkSapCredentials()) return;
     setConfirmDialog({ open: true, transaction: t });
   };
 
