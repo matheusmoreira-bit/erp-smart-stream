@@ -75,6 +75,22 @@ export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
   const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
+  const { credentials, fetchCredentials } = useCredentials();
+
+  useEffect(() => { fetchCredentials("sap"); }, [fetchCredentials]);
+
+  const hasSapCredentials = credentials.some((c) => c.system_name === "sap");
+
+  const checkSapCredentials = (): boolean => {
+    if (!hasSapCredentials) {
+      toast.error("Credencial SAP B1 não cadastrada", {
+        description: "Configure as credenciais do SAP Business One na tela de Credenciais antes de integrar.",
+        action: { label: "Configurar", onClick: () => navigate("/credentials") },
+      });
+      return false;
+    }
+    return true;
+  };
 
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
