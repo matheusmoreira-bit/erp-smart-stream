@@ -85,6 +85,40 @@ export default function PagCorp() {
   });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
 
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+    if (value && endDate) {
+      const start = new Date(value);
+      const end = new Date(endDate);
+      const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 30) {
+        const maxEnd = new Date(start);
+        maxEnd.setDate(maxEnd.getDate() + 30);
+        setEndDate(maxEnd.toISOString().slice(0, 10));
+      }
+      if (diffDays < 0) {
+        setEndDate(value);
+      }
+    }
+  };
+
+  const handleEndDateChange = (value: string) => {
+    setEndDate(value);
+    if (value && startDate) {
+      const start = new Date(startDate);
+      const end = new Date(value);
+      const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 30) {
+        const minStart = new Date(end);
+        minStart.setDate(minStart.getDate() - 30);
+        setStartDate(minStart.toISOString().slice(0, 10));
+      }
+      if (diffDays < 0) {
+        setStartDate(value);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchTransactions(startDate, endDate);
   }, []);
