@@ -9,6 +9,7 @@ export interface SynapseIntegration {
   is_active: boolean;
   interval_minutes: number;
   parameters: Record<string, unknown>;
+  company_db: string | null;
   last_run_at: string | null;
   last_run_status: string | null;
   last_run_message: string | null;
@@ -28,7 +29,7 @@ export interface SynapseLog {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export function useSynapseIntegrations() {
+export function useSynapseIntegrations(companyDB?: string) {
   const [integrations, setIntegrations] = useState<SynapseIntegration[]>([]);
   const [logs, setLogs] = useState<SynapseLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -37,16 +38,18 @@ export function useSynapseIntegrations() {
   const fetchIntegrations = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("synapse_integrations")
         .select("*")
         .order("display_name");
+      if (companyDB) query = query.eq("company_db", companyDB);
+      const { data, error } = await query;
       if (error) throw error;
       setIntegrations((data as unknown as SynapseIntegration[]) || []);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [companyDB]);
 
   const fetchLogs = useCallback(async (integrationKey: string, limit = 20) => {
     const { data, error } = await supabase
@@ -68,7 +71,30 @@ export function useSynapseIntegrations() {
     await fetchIntegrations();
   }, [fetchIntegrations]);
 
-  const runNow = useCallback(async (integrationKey: string) => {
+  const ensureIntegration = useCallback(async (companyDb: string) => {
+    const { data } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "jumpcloud_sap_sync")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!data) {
+      await supabase.from("synapse_integrations").insert({
+        integration_key: "jumpcloud_sap_sync",
+        display_name: "JumpCloud → SAP B1",
+        description:
+          "Sincroniza status de usuários do JumpCloud com o SAP B1. Usuários desabilitados no JumpCloud são automaticamente bloqueados no SAP.",
+        is_active: false,
+        interval_minutes: 360,
+        parameters: { auto_disable: true },
+        company_db: companyDb,
+      } as any);
+      await fetchIntegrations();
+    }
+  }, [fetchIntegrations]);
+
+  const runNow = useCallback(async (integrationKey: string, companyDb?: string) => {
     setIsRunning(true);
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/synapse-jc-sync`, {
@@ -78,6 +104,7 @@ export function useSynapseIntegrations() {
           apikey: ANON_KEY,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({ company_db: companyDb }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
@@ -96,6 +123,7 @@ export function useSynapseIntegrations() {
     fetchIntegrations,
     fetchLogs,
     updateIntegration,
+    ensureIntegration,
     runNow,
   };
 }
