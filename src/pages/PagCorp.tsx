@@ -368,9 +368,13 @@ export default function PagCorp() {
                         </TableCell>
                         <TableCell className="text-center">
                           {t.hasAccountability ? (
-                            <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
+                            t.accountabilityApproved ? (
+                              <CheckCircle2 className="w-4 h-4 text-success mx-auto" title="Aprovada" />
+                            ) : (
+                              <Clock className="w-4 h-4 text-warning mx-auto" title="Pendente aprovação" />
+                            )
                           ) : (
-                            <XCircle className="w-4 h-4 text-destructive/60 mx-auto" />
+                            <XCircle className="w-4 h-4 text-destructive/60 mx-auto" title="Sem prestação" />
                           )}
                         </TableCell>
                         <TableCell className="text-center">
