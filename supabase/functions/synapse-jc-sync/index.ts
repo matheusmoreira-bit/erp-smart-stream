@@ -105,21 +105,26 @@ Deno.serve(async (req) => {
   );
 
   try {
-    // Check if integration is active
-    const { data: config } = await supabase
+    // Get company_db from request body
+    let bodyCompanyDB = "";
+    try {
+      const body = await req.json();
+      bodyCompanyDB = body.company_db || "";
+    } catch { /* no body */ }
+
+    // Check if integration is active for this company
+    let query = supabase
       .from("synapse_integrations")
       .select("*")
-      .eq("integration_key", "jumpcloud_sap_sync")
-      .single();
+      .eq("integration_key", "jumpcloud_sap_sync");
+    if (bodyCompanyDB) query = query.eq("company_db", bodyCompanyDB);
+    const { data: config } = await query.single();
 
     if (!config?.is_active) {
       return new Response(JSON.stringify({ message: "Integration is not active" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const params = (config.parameters || {}) as Record<string, unknown>;
-    const targetCompanyDB = (params.company_db as string) || "";
 
     // 1. Fetch JumpCloud users
     const jcCreds = await getJumpCloudCredentials(supabase);
