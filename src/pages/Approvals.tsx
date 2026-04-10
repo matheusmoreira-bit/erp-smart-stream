@@ -405,6 +405,28 @@ export default function ApprovalsPage() {
       await sapAction(session, endpoint, "PATCH", body);
       clearClientCache();
       toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
+
+      // Audit log
+      const doc = approvals.find((a) => a.approvalRequestId === code);
+      const { logAuditAction } = await import("@/hooks/useAuditLog");
+      await logAuditAction({
+        action: action === "approve" ? "approve" : "reject",
+        entity_type: "approval_request",
+        entity_id: String(code),
+        actor_email: session.userName,
+        details: {
+          docNum: doc?.docNum,
+          docType: doc?.docTypeName,
+          cardName: doc?.cardName,
+          docTotal: doc?.docTotal,
+          currency: doc?.currency,
+          approver: doc?.currentApprover,
+          isSuperUser,
+          remarks,
+          companyDB: session.companyDB,
+        },
+      });
+
       setSelectedDoc(null);
       refresh();
     } catch (e) {
