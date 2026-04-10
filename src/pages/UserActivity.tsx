@@ -85,10 +85,15 @@ export default function UserActivityPage() {
   // Metrics
   const metrics = useMemo(() => {
     const uniqueUsers = new Set(filtered.map((r) => r.UserCode)).size;
-    const logins = filtered.filter((r) => r.Action === "L" || r.Action === "W").length;
-    const failures = filtered.filter((r) => r.Action === "F").length;
+    const logins = filtered.filter((r) => r.Action === "I" || r.Action === "W").length;
+    const failures = filtered.filter((r) => isFailedLogin(r)).length;
     const uniqueIPs = new Set(filtered.filter((r) => r.ClientIP).map((r) => r.ClientIP)).size;
-    return { uniqueUsers, logins, failures, uniqueIPs };
+    const avgDuration = (() => {
+      const sessions = filtered.filter((r) => r.AliveDurtn > 0);
+      if (sessions.length === 0) return 0;
+      return Math.round(sessions.reduce((s, r) => s + r.AliveDurtn, 0) / sessions.length);
+    })();
+    return { uniqueUsers, logins, failures, uniqueIPs, avgDuration };
   }, [filtered]);
 
   // Bar chart: logins per day (last 7 days)
@@ -100,8 +105,8 @@ export default function UserActivityPage() {
       const day = r.Date?.slice(0, 10);
       if (!day || !map.has(day)) return;
       const entry = map.get(day)!;
-      if (r.Action === "L" || r.Action === "W") entry.logins++;
-      if (r.Action === "F") entry.failures++;
+      if (r.Action === "I" || r.Action === "W") entry.logins++;
+      if (isFailedLogin(r)) entry.failures++;
     });
     return days.map((d) => ({
       day: d.slice(5),
@@ -122,17 +127,22 @@ export default function UserActivityPage() {
 
   // Top users table
   const topUsers = useMemo(() => {
-    const map = new Map<string, { logins: number; failures: number; lastDate: string }>();
+    const map = new Map<string, { logins: number; failures: number; lastDate: string; avgDuration: number; totalDuration: number; sessionCount: number }>();
     filtered.forEach((r) => {
       const u = r.UserCode;
       if (!u) return;
-      if (!map.has(u)) map.set(u, { logins: 0, failures: 0, lastDate: "" });
+      if (!map.has(u)) map.set(u, { logins: 0, failures: 0, lastDate: "", avgDuration: 0, totalDuration: 0, sessionCount: 0 });
       const entry = map.get(u)!;
-      if (r.Action === "L" || r.Action === "W") entry.logins++;
-      if (r.Action === "F") entry.failures++;
+      if (r.Action === "I" || r.Action === "W") entry.logins++;
+      if (isFailedLogin(r)) entry.failures++;
+      if (r.AliveDurtn > 0) { entry.totalDuration += r.AliveDurtn; entry.sessionCount++; }
       if (r.Date > entry.lastDate) entry.lastDate = r.Date;
     });
-    return Array.from(map, ([user, data]) => ({ user, ...data }))
+    return Array.from(map, ([user, data]) => ({
+      user,
+      ...data,
+      avgDuration: data.sessionCount > 0 ? Math.round(data.totalDuration / data.sessionCount) : 0,
+    }))
       .sort((a, b) => b.logins - a.logins)
       .slice(0, 15);
   }, [filtered]);
