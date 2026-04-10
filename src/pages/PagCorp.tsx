@@ -48,6 +48,7 @@ import { useSap } from "@/contexts/SapContext";
 import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
 import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
+import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
