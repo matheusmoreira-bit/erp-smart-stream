@@ -7,8 +7,10 @@ import type { ValidationItem } from "@/components/ValidationTable";
 
 export interface ApproverStats {
   name: string;
-  avgDays: number;
-  count: number;
+  avgDaysApproved: number;
+  avgDaysRejected: number;
+  countApproved: number;
+  countRejected: number;
 }
 
 export interface SapDashboardData {
@@ -403,31 +405,29 @@ export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
     const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
     const totalAvg = computedStages.reduce((sum, s) => sum + s.avgDays, 0);
 
-    // Approver stats — no outlier removal
-    const approverMap = new Map<string, number[]>();
+    // Approver stats — with outlier removal
+    const approverMap = new Map<string, { approved: number[]; rejected: number[] }>();
     for (const a of approvalRowsRaw) {
       const name = a.Aprovador;
       if (!name) continue;
-      let d: number | null = null;
-      if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
-        d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
-        if (d !== null) d = Math.max(d, 1);
-      } else {
-        const raw = Number(a.Dias_Desde_Criacao || 0);
-        if (raw > 0) d = raw;
-      }
-      if (d !== null) {
-        if (!approverMap.has(name)) approverMap.set(name, []);
-        approverMap.get(name)!.push(d);
-      }
+      if (a.Status_Aprovacao !== "Aprovado" && a.Status_Aprovacao !== "Rejeitado") continue;
+      const d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
+      if (d === null) continue;
+      const days = Math.max(d, 1);
+      if (!approverMap.has(name)) approverMap.set(name, { approved: [], rejected: [] });
+      const bucket = approverMap.get(name)!;
+      if (a.Status_Aprovacao === "Aprovado") bucket.approved.push(days);
+      else bucket.rejected.push(days);
     }
     const computedApproverStats: ApproverStats[] = Array.from(approverMap.entries())
-      .map(([name, days]) => ({
+      .map(([name, { approved, rejected }]) => ({
         name,
-        avgDays: Math.round((days.reduce((s, n) => s + n, 0) / days.length) * 10) / 10,
-        count: days.length,
+        avgDaysApproved: avg(approved),
+        avgDaysRejected: avg(rejected),
+        countApproved: approved.length,
+        countRejected: rejected.length,
       }))
-      .sort((a, b) => b.avgDays - a.avgDays);
+      .sort((a, b) => (b.avgDaysApproved + b.avgDaysRejected) - (a.avgDaysApproved + a.avgDaysRejected));
 
     return {
       stages: computedStages,
