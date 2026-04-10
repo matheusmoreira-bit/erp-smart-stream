@@ -70,16 +70,22 @@ function usePaymentAnalytics(rows: PaymentAnalysisRow[]) {
 
     // ── Volume por dia (últimos 30 dias) ──
     const dailyMap = new Map<string, { count: number; total: number }>();
-    // Build a map of historical averages by day-of-month
+    // Build a map of historical averages by day-of-month (excluding current month)
     const dayOfMonthTotals = new Map<number, number[]>();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
     for (const r of rows) {
       const d = parseDate(r.Data_do_Pagamento);
       if (!d) continue;
 
-      const dom = d.getDate();
-      if (!dayOfMonthTotals.has(dom)) dayOfMonthTotals.set(dom, []);
-      dayOfMonthTotals.get(dom)!.push(r.Valor_Total_Pago || 0);
+      // Only include past months in historical average
+      const isCurrentMonth = d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      if (!isCurrentMonth) {
+        const dom = d.getDate();
+        if (!dayOfMonthTotals.has(dom)) dayOfMonthTotals.set(dom, []);
+        dayOfMonthTotals.get(dom)!.push(r.Valor_Total_Pago || 0);
+      }
 
       if (d >= thirtyDaysAgo) {
         const key = formatDateShort(d);
@@ -326,17 +332,23 @@ export function PaymentAnalysis() {
         </div>
 
         {/* Volume diário + média comparativa */}
-        <ChartCard title="Volume de Pagamentos — Últimos 30 Dias (valor vs. média histórica do dia)">
-          <div className="h-[300px]">
+        <ChartCard title="Volume de Pagamentos — Últimos 30 Dias vs. Média Histórica">
+          <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={analytics.dailyVolume}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} interval={2} />
-                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={fmt} />
+              <ComposedChart data={analytics.dailyVolume} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.15} vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} interval={2} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={fmt} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="total" name="Valor pago" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} opacity={0.85} />
-                <Line dataKey="media" name="Média histórica" stroke="hsl(var(--destructive))" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                <Bar dataKey="total" name="Valor pago" fill="url(#barGradient)" radius={[4, 4, 0, 0]} />
+                <Line dataKey="media" name="Média histórica" type="monotone" stroke="hsl(var(--destructive))" strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
