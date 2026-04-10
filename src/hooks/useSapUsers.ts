@@ -29,15 +29,13 @@ export function useSapUsers() {
       );
 
       const userList: SapUser[] = result.data.map((row) => ({
-        InternalKey: Number(row.InternalKey ?? row.INTERNAL_KEY ?? row.internalKey ?? 0),
-        UserName: String(row.UserName ?? row.USER_NAME ?? row.userName ?? ""),
-        UserCode: String(row.UserCode ?? row.USER_CODE ?? row.userCode ?? ""),
-        eMail: row.eMail != null ? String(row.eMail) : (row.EMAIL != null ? String(row.EMAIL) : (row.email != null ? String(row.email) : undefined)),
-        Department: row.Department != null ? Number(row.Department) : (row.DEPARTMENT != null ? Number(row.DEPARTMENT) : undefined),
-        Branch: row.Branch != null ? Number(row.Branch) : (row.BRANCH != null ? Number(row.BRANCH) : undefined),
-        Locked: String(row.Locked ?? row.LOCKED ?? row.locked ?? "tNO"),
-        LastLoginDate: row.LastLoginDate != null ? String(row.LastLoginDate) : (row.LAST_LOGIN_DATE != null ? String(row.LAST_LOGIN_DATE) : undefined),
-        LastLoginTime: row.LastLoginTime != null ? String(row.LastLoginTime) : (row.LAST_LOGIN_TIME != null ? String(row.LAST_LOGIN_TIME) : undefined),
+        InternalKey: Number(row.userid ?? 0),
+        UserName: String(row.u_name ?? ""),
+        UserCode: String(row.user_code ?? ""),
+        eMail: row.E_Mail != null ? String(row.E_Mail) : undefined,
+        Locked: row.Locked === "Y" ? "tYES" : "tNO",
+        LastLoginDate: row.lastLogin != null ? String(row.lastLogin) : undefined,
+        LastLoginTime: undefined,
       }));
 
       sapUsersCache.set(cacheKey, userList);
