@@ -148,7 +148,7 @@ export function useSapUsers() {
             [{
               cache_key: "users",
               company_db: companyDB,
-              data: userList as unknown as Record<string, unknown>[],
+              data: JSON.parse(JSON.stringify(userList)),
               expires_at: expiresAt,
             }],
             { onConflict: "cache_key,company_db" }
