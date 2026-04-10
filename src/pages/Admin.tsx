@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
@@ -58,6 +59,7 @@ interface Company {
   service_layer_url: string | null;
   is_active: boolean;
   created_at: string;
+  targets: CompanyTargets;
 }
 
 interface Credential {
@@ -225,7 +227,7 @@ export default function Admin() {
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true });
+  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
 
   // System credential modal
