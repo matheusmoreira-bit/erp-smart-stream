@@ -14,28 +14,90 @@ import {
   Save,
   Loader2,
   LogOut,
+  CreditCard,
+  Server,
+  Users,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+/* ── System definitions (shared with Credentials page) ── */
+
+interface SystemField {
+  key: string;
+  label: string;
+  type?: string;
+  placeholder?: string;
+}
+
+interface SystemConfig {
+  name: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  fields: SystemField[];
+}
+
+const SYSTEMS: SystemConfig[] = [
+  {
+    name: "sap",
+    label: "SAP Business One",
+    description: "Credencial para integrações automáticas",
+    icon: Server,
+    fields: [
+      { key: "service_layer_url", label: "URL do Service Layer", placeholder: "https://servidor:50000/b1s/v1/" },
+      { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
+      { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
+      { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+    ],
+  },
+  {
+    name: "jumpcloud",
+    label: "JumpCloud",
+    description: "Gestão de identidades e diretório de usuários",
+    icon: Users,
+    fields: [
+      { key: "api_key", label: "API Key", type: "password", placeholder: "Chave de API do JumpCloud" },
+      { key: "org_id", label: "Organization ID", placeholder: "ID da organização" },
+    ],
+  },
+  {
+    name: "pagcorp",
+    label: "PagCorp",
+    description: "Gateway de pagamentos corporativos",
+    icon: CreditCard,
+    fields: [
+      { key: "api_base_url", label: "URL Base da API", placeholder: "https://bifrost.acgsa.com.br/kraken/v1/" },
+      { key: "client_key", label: "Client Key", placeholder: "UUID do client" },
+      { key: "client_secret", label: "Client Secret", type: "password", placeholder: "UUID do secret" },
+      { key: "login_email", label: "Login / Email", placeholder: "usuario_login" },
+      { key: "login_password", label: "Senha", type: "password", placeholder: "Senha de acesso" },
+      { key: "aes_key", label: "Chave AES (Base64)", type: "password", placeholder: "Chave AES-256 em Base64" },
+      { key: "hmac_key", label: "Chave HMAC (Base64)", type: "password", placeholder: "Chave HMAC-SHA256 em Base64" },
+      { key: "account_id", label: "Account ID", placeholder: "ID da conta PagCorp" },
+    ],
+  },
+];
+
+/* ── Types ── */
 
 interface Company {
   id: string;
@@ -53,6 +115,152 @@ interface Credential {
   company_db: string | null;
 }
 
+/* ── System Credential Modal ── */
+
+function SystemCredentialModal({
+  system,
+  companyDb,
+  existingKeys,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  system: SystemConfig;
+  companyDb: string;
+  existingKeys: string[];
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSaved: () => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+  const Icon = system.icon;
+
+  const handleSave = async () => {
+    const creds = system.fields
+      .filter((f) => values[f.key]?.trim())
+      .map((f) => ({
+        company_db: companyDb,
+        system_name: system.name,
+        credential_key: f.key,
+        credential_value: values[f.key].trim(),
+      }));
+
+    if (creds.length === 0) {
+      toast.error("Preencha pelo menos um campo");
+      return;
+    }
+
+    setSaving(true);
+    for (const cred of creds) {
+      const { error } = await supabase.from("system_credentials").upsert(cred, {
+        onConflict: "company_db,system_name,credential_key",
+      });
+      if (error) {
+        toast.error(`Erro ao salvar ${cred.credential_key}`);
+        setSaving(false);
+        return;
+      }
+    }
+    toast.success(`Credenciais do ${system.label} salvas`);
+    setSaving(false);
+    setValues({});
+    onSaved();
+    onOpenChange(false);
+  };
+
+  const handleDeleteAll = async () => {
+    if (!confirm(`Remover todas as credenciais do ${system.label}?`)) return;
+    setSaving(true);
+    await supabase
+      .from("system_credentials")
+      .delete()
+      .eq("company_db", companyDb)
+      .eq("system_name", system.name);
+    toast.success(`Credenciais do ${system.label} removidas`);
+    setSaving(false);
+    onSaved();
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Icon className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <DialogTitle>{system.label}</DialogTitle>
+              <DialogDescription>{system.description}</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+          {system.fields.map((field) => {
+            const isConfigured = existingKeys.includes(field.key);
+            const isPassword = field.type === "password";
+            const showPw = showPasswords[field.key];
+
+            return (
+              <div key={field.key} className="space-y-1.5">
+                <Label className="text-sm text-muted-foreground flex items-center gap-2">
+                  {field.label}
+                  {isConfigured && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                </Label>
+                <div className="relative">
+                  <Input
+                    type={isPassword && !showPw ? "password" : "text"}
+                    placeholder={isConfigured ? "••••••• (já configurado)" : field.placeholder}
+                    value={values[field.key] || ""}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    className="bg-card pr-10"
+                  />
+                  {isPassword && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowPasswords((prev) => ({ ...prev, [field.key]: !prev[field.key] }))
+                      }
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          {existingKeys.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleDeleteAll}
+              disabled={saving}
+              className="gap-2 text-destructive hover:text-destructive mr-auto"
+            >
+              <Trash2 className="w-4 h-4" />
+              Remover
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Main Admin Page ── */
+
 export default function Admin() {
   const navigate = useNavigate();
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -67,11 +275,9 @@ export default function Admin() {
   const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", is_active: true });
   const [saving, setSaving] = useState(false);
 
-  // Credential dialog
-  const [credDialog, setCredDialog] = useState(false);
-  const [credCompanyDb, setCredCompanyDb] = useState("");
-  const [credForm, setCredForm] = useState({ system_name: "", credential_key: "", credential_value: "" });
-  const [credSaving, setCredSaving] = useState(false);
+  // System credential modal
+  const [selectedSystem, setSelectedSystem] = useState<SystemConfig | null>(null);
+  const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   const fetchCompanies = async () => {
     const { data, error } = await supabase
@@ -108,11 +314,14 @@ export default function Admin() {
       setExpandedCompany(null);
     } else {
       setExpandedCompany(companyDb);
-      if (!credentials[companyDb]) {
-        fetchCredentials(companyDb);
-      }
+      fetchCredentials(companyDb);
     }
   };
+
+  const getKeysForSystem = (companyDb: string, systemName: string) =>
+    (credentials[companyDb] || [])
+      .filter((c) => c.system_name === systemName)
+      .map((c) => c.credential_key);
 
   // Company CRUD
   const openNewCompany = () => {
@@ -174,46 +383,6 @@ export default function Admin() {
       .update({ is_active: !c.is_active })
       .eq("id", c.id);
     if (!error) fetchCompanies();
-  };
-
-  // Credential CRUD
-  const openNewCredential = (companyDb: string) => {
-    setCredCompanyDb(companyDb);
-    setCredForm({ system_name: "", credential_key: "", credential_value: "" });
-    setCredDialog(true);
-  };
-
-  const saveCredential = async () => {
-    if (!credForm.system_name || !credForm.credential_key || !credForm.credential_value) {
-      toast.error("Preencha todos os campos");
-      return;
-    }
-    setCredSaving(true);
-    const { error } = await supabase.from("system_credentials").upsert(
-      {
-        company_db: credCompanyDb,
-        system_name: credForm.system_name,
-        credential_key: credForm.credential_key,
-        credential_value: credForm.credential_value,
-      },
-      { onConflict: "company_db,system_name,credential_key" }
-    );
-    if (error) toast.error("Erro ao salvar credencial");
-    else {
-      toast.success("Credencial salva");
-      fetchCredentials(credCompanyDb);
-    }
-    setCredSaving(false);
-    setCredDialog(false);
-  };
-
-  const deleteCredential = async (cred: Credential) => {
-    if (!confirm(`Excluir credencial "${cred.credential_key}"?`)) return;
-    const { error } = await supabase.from("system_credentials").delete().eq("id", cred.id);
-    if (!error && cred.company_db) {
-      toast.success("Credencial excluída");
-      fetchCredentials(cred.company_db);
-    }
   };
 
   const handleLogout = () => {
@@ -299,53 +468,59 @@ export default function Admin() {
                   </Button>
                 </div>
 
-                {/* Credentials panel */}
+                {/* Credentials panel — system cards */}
                 {expandedCompany === c.company_db && (
                   <div className="border-t border-border bg-muted/20 p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Key className="w-4 h-4 text-primary" />
-                        Credenciais
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => openNewCredential(c.company_db)}>
-                        <Plus className="w-3 h-3 mr-1" />
-                        Adicionar
-                      </Button>
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-4">
+                      <Key className="w-4 h-4 text-primary" />
+                      Credenciais
                     </div>
 
                     {credLoading === c.company_db ? (
                       <div className="flex justify-center py-4">
                         <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                       </div>
-                    ) : (credentials[c.company_db] || []).length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        Nenhuma credencial configurada
-                      </p>
                     ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Sistema</TableHead>
-                            <TableHead>Chave</TableHead>
-                            <TableHead>Valor</TableHead>
-                            <TableHead className="w-12" />
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {(credentials[c.company_db] || []).map((cred) => (
-                            <TableRow key={cred.id}>
-                              <TableCell className="font-medium">{cred.system_name}</TableCell>
-                              <TableCell className="font-mono text-xs">{cred.credential_key}</TableCell>
-                              <TableCell className="font-mono text-xs">••••••••</TableCell>
-                              <TableCell>
-                                <Button variant="ghost" size="icon" onClick={() => deleteCredential(cred)}>
-                                  <Trash2 className="w-3 h-3 text-destructive" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {SYSTEMS.map((sys) => {
+                          const keys = getKeysForSystem(c.company_db, sys.name);
+                          const isConfigured = keys.length > 0;
+                          const configuredCount = keys.length;
+                          const totalFields = sys.fields.length;
+                          const Icon = sys.icon;
+
+                          return (
+                            <button
+                              key={sys.name}
+                              onClick={() => {
+                                setSelectedSystem(sys);
+                                setSelectedCompanyDb(c.company_db);
+                              }}
+                              className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:border-primary/40 transition-all text-left"
+                            >
+                              <div className="p-2 rounded-lg bg-primary/10">
+                                <Icon className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground">{sys.label}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  {isConfigured ? (
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                                      <CheckCircle2 className="w-2.5 h-2.5" />
+                                      {configuredCount}/{totalFields}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
+                                      <XCircle className="w-2.5 h-2.5" />
+                                      Não configurado
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 )}
@@ -397,49 +572,19 @@ export default function Admin() {
         </DialogContent>
       </Dialog>
 
-      {/* Credential Dialog */}
-      <Dialog open={credDialog} onOpenChange={setCredDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nova Credencial</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Sistema</label>
-              <Input
-                value={credForm.system_name}
-                onChange={(e) => setCredForm((f) => ({ ...f, system_name: e.target.value }))}
-                placeholder="Ex: SAP, JumpCloud, PagCorp"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Chave</label>
-              <Input
-                value={credForm.credential_key}
-                onChange={(e) => setCredForm((f) => ({ ...f, credential_key: e.target.value }))}
-                placeholder="Ex: api_key, password, base_url"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Valor</label>
-              <Input
-                type="password"
-                value={credForm.credential_value}
-                onChange={(e) => setCredForm((f) => ({ ...f, credential_value: e.target.value }))}
-                placeholder="Valor da credencial"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCredDialog(false)}>Cancelar</Button>
-            <Button onClick={saveCredential} disabled={credSaving}>
-              {credSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* System Credential Modal */}
+      {selectedSystem && (
+        <SystemCredentialModal
+          system={selectedSystem}
+          companyDb={selectedCompanyDb}
+          existingKeys={getKeysForSystem(selectedCompanyDb, selectedSystem.name)}
+          open={!!selectedSystem}
+          onOpenChange={(o) => {
+            if (!o) setSelectedSystem(null);
+          }}
+          onSaved={() => fetchCredentials(selectedCompanyDb)}
+        />
+      )}
     </div>
   );
 }
