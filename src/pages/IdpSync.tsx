@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSap } from "@/contexts/SapContext";
 import {
   ArrowLeft,
   RefreshCw,
@@ -29,6 +30,7 @@ function jcToOption(jc: JumpCloudUser): SapSearchOption {
 
 export default function IdpSyncPage() {
   const navigate = useNavigate();
+  const { session } = useSap();
   const { users: sapUsers, isLoading: sapLoading } = useSapUsers();
   const {
     jcUsers,
@@ -206,6 +208,18 @@ export default function IdpSyncPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-4">
+        {!session && (
+          <div className="p-6 rounded-xl border border-border bg-card text-center space-y-2">
+            <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto" />
+            <p className="text-foreground font-medium">Sessão SAP não iniciada</p>
+            <p className="text-sm text-muted-foreground">
+              Faça login no SAP Business One na tela principal para visualizar os usuários.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => navigate("/")} className="mt-2">
+              Ir para Login
+            </Button>
+          </div>
+        )}
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
             {error}
