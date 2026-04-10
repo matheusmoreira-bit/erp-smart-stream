@@ -39,8 +39,9 @@ import { useCompanies } from "@/hooks/useCompanies";
 export default function SynapsePage() {
   const navigate = useNavigate();
   const { session } = useSap();
+  const { getLabel } = useCompanies(true);
   const companyDB = session?.companyDB || "";
-  const companyLabel = COMPANY_LABELS[companyDB] || companyDB;
+  const companyLabel = getLabel(companyDB);
 
   const {
     integrations,
