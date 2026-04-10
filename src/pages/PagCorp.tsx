@@ -46,6 +46,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
+import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 
 function formatCurrency(value: number, currency: string = "BRL") {
