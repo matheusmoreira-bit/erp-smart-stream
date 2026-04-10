@@ -363,14 +363,12 @@ export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
       const approvalRows = approvalResult.data || [];
       const days: number[] = [];
       for (const a of approvalRows) {
-        // For completed approvals, calculate actual approval duration
         if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
           const d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
-          if (d !== null && d >= 0) {
-            days.push(d);
+          if (d !== null) {
+            days.push(Math.max(d, 1)); // same-day approval = 1 day minimum
           }
         } else {
-          // Pending approvals — use days since creation
           const d = Number(a.Dias_Desde_Criacao || 0);
           if (d > 0) days.push(d);
         }
