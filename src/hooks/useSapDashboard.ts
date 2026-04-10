@@ -314,19 +314,29 @@ function generateInsights(stages: FlowStage[], validations: ValidationItem[]): I
 }
 
 /* ── Hook ── */
-export function useSapDashboard(): SapDashboardData {
+export interface DateFilter {
+  from: Date | null;
+  to: Date | null;
+}
+
+function filterRowsByDate(rows: ViewRow[], filter?: DateFilter): ViewRow[] {
+  if (!filter?.from) return rows;
+  const fromTime = filter.from.getTime();
+  const toTime = filter.to ? filter.to.getTime() + 24 * 60 * 60 * 1000 : Date.now();
+  return rows.filter((r) => {
+    const d = r.Data_do_Pagamento || r.Data_Lancamento_Pedido;
+    if (!d) return false;
+    const t = new Date(d).getTime();
+    return !isNaN(t) && t >= fromTime && t <= toTime;
+  });
+}
+
+export function useSapDashboard(dateFilter?: DateFilter): SapDashboardData {
   const { session } = useSap();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stages, setStages] = useState<FlowStage[]>([]);
-  const [metrics, setMetrics] = useState<SapDashboardData["metrics"]>({
-    avgTotalDays: 0,
-    openOrders: 0,
-    validationErrors: 0,
-    complianceRate: 0,
-  });
-  const [insights, setInsights] = useState<Insight[]>([]);
-  const [validations, setValidations] = useState<ValidationItem[]>([]);
+  const [rawRows, setRawRows] = useState<ViewRow[]>([]);
+  const [approvalDaysRaw, setApprovalDaysRaw] = useState<number[]>([]);
 
   const fetchData = useCallback(async () => {
     if (!session) return;
@@ -334,43 +344,25 @@ export function useSapDashboard(): SapDashboardData {
     setError(null);
 
     try {
-      // Fetch both views in parallel
       const [paymentResult, approvalResult] = await Promise.all([
         sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
         sapQueryView<ApprovalViewRow>(session, `${session.companyDB}.VW_APROVACOES_DETALHADAS`).catch(() => ({ data: [] as ApprovalViewRow[] })),
       ]);
 
-      const rows = paymentResult.data || [];
-      const approvalRows = approvalResult.data || [];
+      setRawRows(paymentResult.data || []);
 
-      // Build a map of docNum → approval days for cross-referencing
-      // Calculate approval duration: "Dias em aberto" for pending, or diff between creation and doc date
-      const approvalDays: number[] = [];
+      const approvalRows = approvalResult.data || [];
+      const days: number[] = [];
       for (const a of approvalRows) {
         const daysOpen = Number(a["Dias em aberto"] || 0);
         if (daysOpen > 0) {
-          approvalDays.push(daysOpen);
+          days.push(daysOpen);
         } else {
           const d = daysBetween(a["Data de criação"] || null, a["Data do documento"] || null);
-          if (d !== null && d > 0) approvalDays.push(d);
+          if (d !== null && d > 0) days.push(d);
         }
       }
-
-      const computedStages = buildStages(rows, approvalDays);
-      const vals = buildValidations(rows);
-      const errorCount = vals.filter((v) => v.status === "error").length;
-      const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
-      const totalAvg = computedStages.reduce((sum, s) => sum + s.avgDays, 0);
-
-      setStages(computedStages);
-      setMetrics({
-        avgTotalDays: Math.round(totalAvg * 10) / 10,
-        openOrders: rows.filter((r) => r.Status_Pagamento !== "Cancelado" && !r.Data_do_Pagamento).length,
-        validationErrors: errorCount,
-        complianceRate: compliance,
-      });
-      setInsights(generateInsights(computedStages, vals));
-      setValidations(vals);
+      setApprovalDaysRaw(days);
     } catch (e) {
       console.error("Error fetching view data:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar dados da view");
@@ -382,6 +374,27 @@ export function useSapDashboard(): SapDashboardData {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const { stages, metrics, insights, validations } = useMemo(() => {
+    const rows = filterRowsByDate(rawRows, dateFilter);
+    const computedStages = buildStages(rows, approvalDaysRaw);
+    const vals = buildValidations(rows);
+    const errorCount = vals.filter((v) => v.status === "error").length;
+    const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
+    const totalAvg = computedStages.reduce((sum, s) => sum + s.avgDays, 0);
+
+    return {
+      stages: computedStages,
+      metrics: {
+        avgTotalDays: Math.round(totalAvg * 10) / 10,
+        openOrders: rows.filter((r) => r.Status_Pagamento !== "Cancelado" && !r.Data_do_Pagamento).length,
+        validationErrors: errorCount,
+        complianceRate: compliance,
+      },
+      insights: generateInsights(computedStages, vals),
+      validations: vals,
+    };
+  }, [rawRows, approvalDaysRaw, dateFilter]);
 
   return { stages, metrics, insights, validations, isLoading, error, refresh: fetchData };
 }
