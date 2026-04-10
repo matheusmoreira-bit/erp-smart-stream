@@ -13,9 +13,12 @@ import {
   LayoutGrid,
   List,
   Search,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X } from "lucide-react";
@@ -28,6 +31,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useCompanies } from "@/hooks/useCompanies";
 
