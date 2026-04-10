@@ -284,6 +284,7 @@ export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { approvals, isLoading, error, refresh } = useApprovals();
+  const { getLabel } = useCompanies(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
