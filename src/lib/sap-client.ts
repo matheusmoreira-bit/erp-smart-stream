@@ -7,6 +7,7 @@ export interface SapSession {
   routeId: string;
   companyDB: string;
   userName: string;
+  isSuperUser: boolean;
 }
 
 // Client-side response cache
