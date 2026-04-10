@@ -53,12 +53,12 @@ export default function PagCorpMapping() {
 
   /* ── SAP caches ── */
   const costCenterCache = useSapCachedList({
-    cacheKey: "CostCenters",
+    cacheKey: "cost_centers",
     endpoint: "CostCenters",
     mapRow: (r: any) => ({ code: r.CenterCode, name: r.CenterName, extra: "" }),
   });
   const projectCache = useSapCachedList({
-    cacheKey: "Projects",
+    cacheKey: "projects",
     endpoint: "Projects",
     mapRow: (r: any) => ({ code: r.Code, name: r.Name, extra: "" }),
   });
