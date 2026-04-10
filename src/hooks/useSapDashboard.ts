@@ -46,6 +46,18 @@ interface ViewRow {
   Filial: string;
 }
 
+/* ── Approval view row type ── */
+interface ApprovalViewRow {
+  "Nº do documento"?: number | string;
+  "Data de criação"?: string;
+  "Data do documento"?: string;
+  "Dias em aberto"?: number;
+  Aprovador?: string;
+  Solicitante?: string;
+  "Tipo de solicitação"?: string;
+  [key: string]: unknown;
+}
+
 /* ── Helpers ── */
 const MAX_DAYS_PER_STEP = 5;
 
@@ -82,9 +94,7 @@ function stageStatus(avgDays: number): "ok" | "warning" | "critical" {
 }
 
 /* ── Build stages from view data ── */
-function buildStages(rows: ViewRow[]): FlowStage[] {
-  // Stage durations calculated from view data
-  // Requisição and Cotação don't have dates in the view, so we use fixed 1d
+function buildStages(rows: ViewRow[], approvalDays: number[]): FlowStage[] {
   const pedidoToNfEmissao: number[] = [];
   const nfEmissaoToNfLanc: number[] = [];
   const nfLancToPagamento: number[] = [];
@@ -103,6 +113,7 @@ function buildStages(rows: ViewRow[]): FlowStage[] {
   const avgPedidoNf = avg(pedidoToNfEmissao);
   const avgNfEmissaoLanc = avg(nfEmissaoToNfLanc);
   const avgNfPag = avg(nfLancToPagamento);
+  const avgApproval = avg(approvalDays);
 
   const stageStatusCustom = (avgDays: number, target: number): "ok" | "warning" | "critical" => {
     if (avgDays <= target) return "ok";
@@ -113,12 +124,15 @@ function buildStages(rows: ViewRow[]): FlowStage[] {
   return [
     { id: "requisicao", name: "REQUISIÇÃO", avgDays: 1, targetDays: 2, status: "ok", count: 0 },
     { id: "cotacao", name: "COTAÇÃO", avgDays: 1, targetDays: 3, status: "ok", count: 0 },
+    { id: "aprovacao", name: "APROVAÇÃO", avgDays: avgApproval || 1, targetDays: 3, status: stageStatusCustom(avgApproval || 1, 3), count: approvalDays.length },
     { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoNf || 1, targetDays: 3, status: stageStatusCustom(avgPedidoNf || 1, 3), count: pedidoToNfEmissao.length },
     { id: "recebimento", name: "RECEBIMENTO", avgDays: 1, targetDays: 5, status: "ok", count: 0 },
     { id: "nf_entrada", name: "NF ENTRADA", avgDays: avgNfEmissaoLanc || 1, targetDays: 2, status: stageStatusCustom(avgNfEmissaoLanc || 1, 2), count: nfEmissaoToNfLanc.length },
     { id: "pagamento", name: "PAGAMENTO", avgDays: avgNfPag || 1, targetDays: 5, status: stageStatusCustom(avgNfPag || 1, 5), count: nfLancToPagamento.length },
   ];
 }
+
+
 
 /* ── Build validations ── */
 function buildValidations(rows: ViewRow[]): ValidationItem[] {
@@ -320,14 +334,29 @@ export function useSapDashboard(): SapDashboardData {
     setError(null);
 
     try {
-      const result = await sapQueryView<ViewRow>(
-        session,
-        "VW_ANALISE_PAGAMENTOS_DETALHADO",
-      );
+      // Fetch both views in parallel
+      const [paymentResult, approvalResult] = await Promise.all([
+        sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
+        sapQueryView<ApprovalViewRow>(session, `${session.companyDB}.VW_APROVACOES_DETALHADAS`).catch(() => ({ data: [] as ApprovalViewRow[] })),
+      ]);
 
-      const rows = result.data || [];
+      const rows = paymentResult.data || [];
+      const approvalRows = approvalResult.data || [];
 
-      const computedStages = buildStages(rows);
+      // Build a map of docNum → approval days for cross-referencing
+      // Calculate approval duration: "Dias em aberto" for pending, or diff between creation and doc date
+      const approvalDays: number[] = [];
+      for (const a of approvalRows) {
+        const daysOpen = Number(a["Dias em aberto"] || 0);
+        if (daysOpen > 0) {
+          approvalDays.push(daysOpen);
+        } else {
+          const d = daysBetween(a["Data de criação"] || null, a["Data do documento"] || null);
+          if (d !== null && d > 0) approvalDays.push(d);
+        }
+      }
+
+      const computedStages = buildStages(rows, approvalDays);
       const vals = buildValidations(rows);
       const errorCount = vals.filter((v) => v.status === "error").length;
       const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
