@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQuery, sapAction, clearClientCache } from "@/lib/sap-client";
+import { sapQueryView, sapAction, clearClientCache } from "@/lib/sap-client";
 import { sapUsersCache, type SapUser } from "@/lib/cache-repository";
 
 export function useSapUsers() {
@@ -23,16 +23,22 @@ export function useSapUsers() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await sapQuery(session, "Users", {
-        $select: "InternalKey,UserName,UserCode,eMail,Department,Branch,Locked,LastLoginDate,LastLoginTime",
-      }, false);
+      const result = await sapQueryView<Record<string, unknown>>(
+        session,
+        "VW_USERS",
+      );
 
-      const data = result.data as any;
-      const userList: SapUser[] = Array.isArray(data)
-        ? data
-        : data?.value
-          ? data.value
-          : [];
+      const userList: SapUser[] = result.data.map((row) => ({
+        InternalKey: Number(row.InternalKey ?? row.INTERNAL_KEY ?? row.internalKey ?? 0),
+        UserName: String(row.UserName ?? row.USER_NAME ?? row.userName ?? ""),
+        UserCode: String(row.UserCode ?? row.USER_CODE ?? row.userCode ?? ""),
+        eMail: row.eMail != null ? String(row.eMail) : (row.EMAIL != null ? String(row.EMAIL) : (row.email != null ? String(row.email) : undefined)),
+        Department: row.Department != null ? Number(row.Department) : (row.DEPARTMENT != null ? Number(row.DEPARTMENT) : undefined),
+        Branch: row.Branch != null ? Number(row.Branch) : (row.BRANCH != null ? Number(row.BRANCH) : undefined),
+        Locked: String(row.Locked ?? row.LOCKED ?? row.locked ?? "tNO"),
+        LastLoginDate: row.LastLoginDate != null ? String(row.LastLoginDate) : (row.LAST_LOGIN_DATE != null ? String(row.LAST_LOGIN_DATE) : undefined),
+        LastLoginTime: row.LastLoginTime != null ? String(row.LastLoginTime) : (row.LAST_LOGIN_TIME != null ? String(row.LAST_LOGIN_TIME) : undefined),
+      }));
 
       sapUsersCache.set(cacheKey, userList);
       setUsers(userList);
@@ -52,7 +58,6 @@ export function useSapUsers() {
       await sapAction(session, `Users(${user.InternalKey})`, "PATCH", {
         Locked: newLocked,
       });
-      // Clear caches and refetch
       sapUsersCache.clear();
       clearClientCache();
       await fetchUsers();
