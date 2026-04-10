@@ -46,16 +46,25 @@ interface ViewRow {
   Filial: string;
 }
 
-/* ── Approval view row type ── */
+/* ── Approval view row type (VW_TODAS_APROVACOES) ── */
 interface ApprovalViewRow {
-  "Nº do documento"?: number | string;
-  "Data de criação"?: string;
-  "Data do documento"?: string;
-  "Dias em aberto"?: number;
+  Code?: number;
   Aprovador?: string;
+  Email_Aprovador?: string;
+  Tipo_Solicitacao?: string;
+  Status_Aprovacao?: string;
+  Status_Documento?: string;
+  Num_Documento?: number;
   Solicitante?: string;
-  "Tipo de solicitação"?: string;
-  [key: string]: unknown;
+  Cod_PN?: string;
+  Nome_PN?: string;
+  Moeda?: string;
+  Valor_Total_LC?: number;
+  Data_Documento?: string | null;
+  Data_Lancamento?: string | null;
+  Data_Vencimento?: string | null;
+  Dias_Desde_Criacao?: number;
+  Modelo_Aprovacao?: string;
 }
 
 /* ── Helpers ── */
