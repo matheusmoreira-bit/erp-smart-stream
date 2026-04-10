@@ -149,12 +149,12 @@ export default function UsersPage() {
             type="single"
             value={viewMode}
             onValueChange={(v) => { if (v) setViewMode(v); }}
-            className="border border-border rounded-lg p-0.5 bg-muted/30"
+            className="border border-border rounded-lg p-0.5 bg-muted/50"
           >
-            <ToggleGroupItem value="recorrentes" className="text-xs px-3 h-8 rounded-md data-[state=on]:bg-background data-[state=on]:shadow-sm">
+            <ToggleGroupItem value="recorrentes" className="text-xs px-3 h-8 rounded-md text-muted-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm">
               Recorrentes
             </ToggleGroupItem>
-            <ToggleGroupItem value="todos" className="text-xs px-3 h-8 rounded-md data-[state=on]:bg-background data-[state=on]:shadow-sm">
+            <ToggleGroupItem value="todos" className="text-xs px-3 h-8 rounded-md text-muted-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm">
               Todos
             </ToggleGroupItem>
           </ToggleGroup>
