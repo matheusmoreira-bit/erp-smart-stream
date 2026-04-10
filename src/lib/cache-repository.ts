@@ -48,6 +48,19 @@ export const sapUsersCache = new CacheRepository<SapUser[]>(30);
 export const sapSuppliersCache = new CacheRepository<unknown[]>(30);
 export const sapItemsCache = new CacheRepository<unknown[]>(30);
 
+// JumpCloud users cache (6-hour TTL, refreshed on demand)
+export const jumpCloudUsersCache = new CacheRepository<JumpCloudCacheEntry[]>(360);
+
+export interface JumpCloudCacheEntry {
+  _id: string;
+  email: string;
+  username: string;
+  displayname?: string;
+  firstname?: string;
+  lastname?: string;
+  suspended?: boolean;
+}
+
 export interface SapUser {
   InternalKey: number;
   UserName: string;
