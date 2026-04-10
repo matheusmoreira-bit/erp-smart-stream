@@ -45,9 +45,21 @@ export default function UserActivityPage() {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [daysFilter, setDaysFilter] = useState("7");
+  const [userTypeFilter, setUserTypeFilter] = useState("no_api");
 
   const filtered = useMemo(() => {
     let list = records;
+
+    // User type filter (API/Workflow)
+    const isApiOrWorkflow = (code: string) => {
+      const lc = code?.toLowerCase() || "";
+      return lc.includes("api") || lc.includes("workflow");
+    };
+    if (userTypeFilter === "no_api") {
+      list = list.filter((r) => !isApiOrWorkflow(r.UserCode));
+    } else if (userTypeFilter === "only_api") {
+      list = list.filter((r) => isApiOrWorkflow(r.UserCode));
+    }
 
     // Date filter
     const days = parseInt(daysFilter);
@@ -72,7 +84,7 @@ export default function UserActivityPage() {
       );
     }
     return list;
-  }, [records, search, actionFilter, daysFilter]);
+  }, [records, search, actionFilter, daysFilter, userTypeFilter]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -146,6 +158,16 @@ export default function UserActivityPage() {
               <SelectItem value="C">Mudança Senha</SelectItem>
               <SelectItem value="K">Bloqueio</SelectItem>
               <SelectItem value="U">Desbloqueio</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={userTypeFilter} onValueChange={setUserTypeFilter}>
+            <SelectTrigger className="w-[180px] bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="no_api">Sem API/Workflow</SelectItem>
+              <SelectItem value="only_api">Apenas API/Workflow</SelectItem>
+              <SelectItem value="all">Todos usuários</SelectItem>
             </SelectContent>
           </Select>
           <Select value={daysFilter} onValueChange={setDaysFilter}>
