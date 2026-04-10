@@ -47,6 +47,7 @@ export async function logAuditAction(params: {
   entity_type: string;
   entity_id?: string;
   actor_email?: string;
+  company_db?: string;
   details?: Record<string, unknown>;
 }) {
   try {
@@ -55,6 +56,7 @@ export async function logAuditAction(params: {
       entity_type: params.entity_type,
       entity_id: params.entity_id || null,
       actor_email: params.actor_email || null,
+      company_db: params.company_db || null,
       details: (params.details || {}) as any,
     }]);
   } catch {
