@@ -38,6 +38,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuditLog } from "@/hooks/useAuditLog";
+import AuditLogTable from "@/components/AuditLogTable";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 /* ── Types ── */
 
 interface Company {
