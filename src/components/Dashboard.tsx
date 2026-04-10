@@ -11,7 +11,7 @@ import { PeriodFilter, DEFAULT_PERIOD, type PeriodFilterValue } from "@/componen
 import { useSap } from "@/contexts/SapContext";
 import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { Button } from "@/components/ui/button";
-import { useCompanies } from "@/hooks/useCompanies";
+import { useCompanies, DEFAULT_TARGETS } from "@/hooks/useCompanies";
 
 interface DashboardProps {
   embedded?: boolean;
@@ -20,14 +20,15 @@ interface DashboardProps {
 export function Dashboard({ embedded = false }: DashboardProps) {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { getLabel } = useCompanies(true);
+  const { companies, getLabel } = useCompanies(true);
   const [period, setPeriod] = useState<PeriodFilterValue>(DEFAULT_PERIOD);
 
   const dateFilter = period.preset === "all"
     ? undefined
     : { from: period.range.from, to: period.range.to };
 
-  const { stages, metrics, insights, validations, approverStats, isLoading, error, refresh } = useSapDashboard(dateFilter);
+  const companyTargets = companies.find((c) => c.company_db === session?.companyDB)?.targets || DEFAULT_TARGETS;
+  const { stages, metrics, insights, validations, approverStats, isLoading, error, refresh } = useSapDashboard(dateFilter, companyTargets);
   const companyLabel = getLabel(session?.companyDB || "");
 
   const content = (
@@ -73,7 +74,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
               <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--primary))" }} /> Aprovados</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--destructive))" }} /> Rejeitados</span>
-                <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: "hsl(var(--warning))" }} /> Meta (1d)</span>
+                <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: "hsl(var(--warning))" }} /> Meta ({companyTargets.aprovador}d)</span>
               </div>
               <svg width="0" height="0">
                 <defs>
@@ -100,7 +101,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
                       return item ? `${label} (${item.countApproved + item.countRejected} docs)` : label;
                     }}
                   />
-                  <ReferenceLine y={1} stroke="hsl(var(--warning))" strokeDasharray="6 4" strokeWidth={2} label={{ value: "Meta 1d", position: "right", fill: "hsl(var(--warning))", fontSize: 11 }} />
+                  <ReferenceLine y={companyTargets.aprovador} stroke="hsl(var(--warning))" strokeDasharray="6 4" strokeWidth={2} label={{ value: `Meta ${companyTargets.aprovador}d`, position: "right", fill: "hsl(var(--warning))", fontSize: 11 }} />
                   <Bar dataKey="avgDaysApproved" stackId="a" fill="url(#approvedGrad)" radius={[0, 0, 0, 0]} barSize={28} />
                   <Bar dataKey="avgDaysRejected" stackId="a" fill="url(#rejectedGrad)" radius={[4, 4, 0, 0]} barSize={28} />
                 </BarChart>

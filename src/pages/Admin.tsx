@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { Target } from "lucide-react";
 import {
   Building2,
   Plus,
@@ -58,6 +60,7 @@ interface Company {
   service_layer_url: string | null;
   is_active: boolean;
   created_at: string;
+  targets: CompanyTargets;
 }
 
 interface Credential {
@@ -225,7 +228,7 @@ export default function Admin() {
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true });
+  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
 
   // System credential modal
@@ -247,7 +250,12 @@ export default function Admin() {
       toast.error("Erro ao carregar empresas");
       return;
     }
-    setCompanies(data || []);
+    setCompanies(
+      (data || []).map((c) => ({
+        ...c,
+        targets: { ...DEFAULT_TARGETS, ...(c.targets as Record<string, number>) },
+      })) as Company[]
+    );
     setLoading(false);
   };
 
@@ -311,13 +319,13 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, targets: { ...DEFAULT_TARGETS } });
     setCompanyDialog(true);
   };
 
   const openEditCompany = (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, targets: c.targets || { ...DEFAULT_TARGETS } });
     setCompanyDialog(true);
   };
 
@@ -335,6 +343,7 @@ export default function Admin() {
           display_name: companyForm.display_name,
           service_layer_url: companyForm.service_layer_url || null,
           is_active: companyForm.is_active,
+          targets: companyForm.targets,
         })
         .eq("id", editingCompany.id);
       if (error) toast.error("Erro ao atualizar");
@@ -345,6 +354,7 @@ export default function Admin() {
         display_name: companyForm.display_name,
         service_layer_url: companyForm.service_layer_url || null,
         is_active: companyForm.is_active,
+        targets: companyForm.targets,
       });
       if (error) toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar");
       else toast.success("Empresa criada");
@@ -627,6 +637,41 @@ export default function Admin() {
                 onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
               />
               <span className="text-sm text-foreground">Empresa ativa</span>
+            </div>
+
+            {/* Targets */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Target className="w-4 h-4 text-primary" />
+                Metas do Fluxo de Compras (dias)
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { key: "requisicao", label: "Requisição" },
+                  { key: "cotacao", label: "Cotação" },
+                  { key: "aprovacao", label: "Aprovação" },
+                  { key: "pedido_compra", label: "Pedido Compra" },
+                  { key: "nf_entrada", label: "NF Entrada" },
+                  { key: "pagamento", label: "Pagamento" },
+                  { key: "aprovador", label: "Aprovador" },
+                ] as { key: keyof CompanyTargets; label: string }[]).map(({ key, label }) => (
+                  <div key={key} className="space-y-1">
+                    <label className="text-xs text-muted-foreground">{label}</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={companyForm.targets[key]}
+                      onChange={(e) =>
+                        setCompanyForm((f) => ({
+                          ...f,
+                          targets: { ...f.targets, [key]: Number(e.target.value) || 1 },
+                        }))
+                      }
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>

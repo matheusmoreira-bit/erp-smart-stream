@@ -144,6 +144,7 @@ export type Database = {
           id: string
           is_active: boolean
           service_layer_url: string | null
+          targets: Json
           updated_at: string
         }
         Insert: {
@@ -153,6 +154,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           service_layer_url?: string | null
+          targets?: Json
           updated_at?: string
         }
         Update: {
@@ -162,6 +164,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           service_layer_url?: string | null
+          targets?: Json
           updated_at?: string
         }
         Relationships: []
