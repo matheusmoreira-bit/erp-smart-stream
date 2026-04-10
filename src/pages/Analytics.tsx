@@ -16,11 +16,12 @@ export default function AnalyticsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { getLabel } = useCompanies(true);
 
   if (!session) return <SapLoginForm />;
 
   const activeTab = searchParams.get("tab") || "fluxo";
-  const companyLabel = COMPANY_LABELS[session.companyDB] || session.companyDB;
+  const companyLabel = getLabel(session.companyDB);
 
   const handleTabChange = (value: string) => {
     setSearchParams({ tab: value });

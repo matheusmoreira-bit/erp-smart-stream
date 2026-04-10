@@ -295,7 +295,7 @@ export default function ApprovalsPage() {
     return null;
   }
 
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const companyLabel = getLabel(session?.companyDB || "");
 
   // Filter: only show approvals where current user is the approver
   const userApprovals = approvals; // The view already returns only pending approvals for the logged-in user's company
