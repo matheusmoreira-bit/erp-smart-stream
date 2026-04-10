@@ -12,9 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
 import { useUserActivity, getActionLabel, getSourceLabel, isFailedLogin, formatDuration } from "@/hooks/useUserActivity";
 import type { Usr5Record } from "@/hooks/useUserActivity";
+import MonthlyLoginChart from "@/components/MonthlyLoginChart";
+import UserActivityRankings from "@/components/UserActivityRankings";
 
 const PIE_COLORS = [
   "hsl(var(--primary))",
@@ -35,16 +37,6 @@ function formatDate(d: string): string {
   if (!d) return "";
   const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
-}
-
-function last7Days(): string[] {
-  const days: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-  return days;
 }
 
 export default function UserActivityPage() {
@@ -96,55 +88,14 @@ export default function UserActivityPage() {
     return { uniqueUsers, logins, failures, uniqueIPs, avgDuration };
   }, [filtered]);
 
-  // Bar chart: logins per day (last 7 days)
-  const dailyChart = useMemo(() => {
-    const days = last7Days();
-    const map = new Map<string, { logins: number; failures: number }>();
-    days.forEach((d) => map.set(d, { logins: 0, failures: 0 }));
-    filtered.forEach((r) => {
-      const day = r.Date?.slice(0, 10);
-      if (!day || !map.has(day)) return;
-      const entry = map.get(day)!;
-      if (r.Action === "I" || r.Action === "W") entry.logins++;
-      if (isFailedLogin(r)) entry.failures++;
-    });
-    return days.map((d) => ({
-      day: d.slice(5),
-      Logins: map.get(d)?.logins ?? 0,
-      Falhas: map.get(d)?.failures ?? 0,
-    }));
-  }, [filtered]);
-
   // Pie chart: actions breakdown
   const actionsPie = useMemo(() => {
     const map = new Map<string, number>();
     filtered.forEach((r) => {
-      const label = getActionLabel(r.Action);
+      const label = isFailedLogin(r) ? "Falha de Login" : getActionLabel(r.Action);
       map.set(label, (map.get(label) || 0) + 1);
     });
     return Array.from(map, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filtered]);
-
-  // Top users table
-  const topUsers = useMemo(() => {
-    const map = new Map<string, { logins: number; failures: number; lastDate: string; avgDuration: number; totalDuration: number; sessionCount: number }>();
-    filtered.forEach((r) => {
-      const u = r.UserCode;
-      if (!u) return;
-      if (!map.has(u)) map.set(u, { logins: 0, failures: 0, lastDate: "", avgDuration: 0, totalDuration: 0, sessionCount: 0 });
-      const entry = map.get(u)!;
-      if (r.Action === "I" || r.Action === "W") entry.logins++;
-      if (isFailedLogin(r)) entry.failures++;
-      if (r.AliveDurtn > 0) { entry.totalDuration += r.AliveDurtn; entry.sessionCount++; }
-      if (r.Date > entry.lastDate) entry.lastDate = r.Date;
-    });
-    return Array.from(map, ([user, data]) => ({
-      user,
-      ...data,
-      avgDuration: data.sessionCount > 0 ? Math.round(data.totalDuration / data.sessionCount) : 0,
-    }))
-      .sort((a, b) => b.logins - a.logins)
-      .slice(0, 15);
   }, [filtered]);
 
   return (
@@ -232,33 +183,15 @@ export default function UserActivityPage() {
               <MetricCard title="Duração Média" value={formatDuration(metrics.avgDuration)} icon={Timer} delay={0.2} />
             </div>
 
-            {/* Charts */}
+            {/* Monthly Login Chart + Pie */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Bar chart */}
-              <div className="lg:col-span-2 rounded-xl border border-border bg-card p-5">
-                <h3 className="text-sm font-semibold text-foreground mb-4">Logins por Dia</h3>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={dailyChart}>
-                    <XAxis dataKey="day" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 8,
-                        color: "hsl(var(--foreground))",
-                      }}
-                    />
-                    <Bar dataKey="Logins" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Falhas" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="lg:col-span-2">
+                <MonthlyLoginChart records={records} />
               </div>
-
               {/* Pie chart */}
               <div className="rounded-xl border border-border bg-card p-5">
                 <h3 className="text-sm font-semibold text-foreground mb-4">Tipos de Ação</h3>
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={280}>
                   <PieChart>
                     <Pie data={actionsPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={false}>
                       {actionsPie.map((_, i) => (
@@ -272,49 +205,8 @@ export default function UserActivityPage() {
               </div>
             </div>
 
-            {/* Top Users */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="px-6 py-3 border-b border-border bg-muted/30">
-                <h3 className="text-sm font-semibold text-foreground">Top Usuários por Login</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                      <th className="px-6 py-3 text-left">Usuário</th>
-                      <th className="px-4 py-3 text-center">Logins</th>
-                      <th className="px-4 py-3 text-center">Falhas</th>
-                      <th className="px-4 py-3 text-center">Duração Média</th>
-                      <th className="px-4 py-3 text-center">Último Acesso</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topUsers.map((u) => (
-                      <tr key={u.user} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
-                        <td className="px-6 py-3 font-medium text-foreground">{u.user}</td>
-                        <td className="px-4 py-3 text-center">
-                          <Badge variant="secondary" className="bg-primary/15 text-primary font-mono">{u.logins}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {u.failures > 0 ? (
-                            <Badge variant="destructive" className="font-mono">{u.failures}</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">0</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center text-muted-foreground">{formatDuration(u.avgDuration)}</td>
-                        <td className="px-4 py-3 text-center text-muted-foreground">{formatDate(u.lastDate)}</td>
-                      </tr>
-                    ))}
-                    {topUsers.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="text-center text-muted-foreground py-8">Nenhum dado encontrado</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* Rankings */}
+            <UserActivityRankings records={filtered} />
 
             {/* Recent Activity Log */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
