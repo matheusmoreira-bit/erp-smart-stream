@@ -74,7 +74,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
               <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--primary))" }} /> Aprovados</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--destructive))" }} /> Rejeitados</span>
-                <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: "hsl(var(--warning))" }} /> Meta (1d)</span>
+                <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: "hsl(var(--warning))" }} /> Meta ({companyTargets.aprovador}d)</span>
               </div>
               <svg width="0" height="0">
                 <defs>
