@@ -11,7 +11,7 @@ import { PeriodFilter, DEFAULT_PERIOD, type PeriodFilterValue } from "@/componen
 import { useSap } from "@/contexts/SapContext";
 import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { Button } from "@/components/ui/button";
-import { useCompanies } from "@/hooks/useCompanies";
+import { useCompanies, DEFAULT_TARGETS } from "@/hooks/useCompanies";
 
 interface DashboardProps {
   embedded?: boolean;

@@ -442,7 +442,7 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
       validations: vals,
       approverStats: computedApproverStats,
     };
-  }, [rawRows, approvalDaysRaw, approvalRowsRaw, dateFilter]);
+  }, [rawRows, approvalDaysRaw, approvalRowsRaw, dateFilter, effectiveTargets]);
 
   return { stages, metrics, insights, validations, approverStats, isLoading, error, refresh: fetchData };
 }
