@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { sapQueryView, sapAction, clearClientCache } from "@/lib/sap-client";
 import { sapUsersCache, type SapUser } from "@/lib/cache-repository";
+import { supabase } from "@/integrations/supabase/client";
 
 function pickString(...values: unknown[]): string | undefined {
   for (const value of values) {
