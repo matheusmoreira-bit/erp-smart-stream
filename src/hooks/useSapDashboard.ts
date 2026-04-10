@@ -46,6 +46,18 @@ interface ViewRow {
   Filial: string;
 }
 
+/* ── Approval view row type ── */
+interface ApprovalViewRow {
+  "Nº do documento"?: number | string;
+  "Data de criação"?: string;
+  "Data do documento"?: string;
+  "Dias em aberto"?: number;
+  Aprovador?: string;
+  Solicitante?: string;
+  "Tipo de solicitação"?: string;
+  [key: string]: unknown;
+}
+
 /* ── Helpers ── */
 const MAX_DAYS_PER_STEP = 5;
 
