@@ -28,9 +28,18 @@ const PIE_COLORS = [
 ];
 
 function formatTime(t: number): string {
-  if (!t) return "";
-  const s = String(t).padStart(4, "0");
-  return `${s.slice(0, 2)}:${s.slice(2)}`;
+  if (t === undefined || t === null) return "";
+  // SAP stores time as HHMM integer (e.g. 1423 = 14:23, 930 = 09:30)
+  const h = Math.floor(t / 100);
+  const m = t % 100;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function parseIsoDate(d: string): Date | null {
+  if (!d) return null;
+  const iso = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
+  return null;
 }
 
 function formatDate(d: string): string {
@@ -66,7 +75,10 @@ export default function UserActivityPage() {
     if (days > 0) {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - days);
-      list = list.filter((r) => r.Date && new Date(r.Date) >= cutoff);
+      list = list.filter((r) => {
+        const d = parseIsoDate(r.Date);
+        return d && d >= cutoff;
+      });
     }
 
     if (actionFilter !== "all") {
@@ -83,6 +95,11 @@ export default function UserActivityPage() {
           r.ClientName?.toLowerCase().includes(q)
       );
     }
+    // Sort most recent first
+    list = [...list].sort((a, b) => {
+      if (a.Date !== b.Date) return b.Date.localeCompare(a.Date);
+      return (b.Time || 0) - (a.Time || 0);
+    });
     return list;
   }, [records, search, actionFilter, daysFilter, userTypeFilter]);
 
