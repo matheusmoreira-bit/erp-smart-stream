@@ -347,7 +347,7 @@ export default function PagCorp() {
                     const txAgeDays = txDate ? (now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
                     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
                     const daysUntilMonthEnd = lastDayOfMonth - now.getDate();
-                    const shouldDisableIntegrate = !t.hasAccountability && (txAgeDays < 15 || daysUntilMonthEnd <= 3);
+                    const shouldDisableIntegrate = (!t.hasAccountability || !t.accountabilityApproved) && (txAgeDays < 15 || daysUntilMonthEnd <= 3);
 
                     return (
                       <TableRow key={t.id} className="border-border">
