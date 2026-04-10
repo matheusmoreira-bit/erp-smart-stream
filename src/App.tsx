@@ -15,6 +15,7 @@ import IntegrationHistory from "./pages/IntegrationHistory.tsx";
 import Credentials from "./pages/Credentials.tsx";
 import UsersPage from "./pages/Users.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
+import IdpSync from "./pages/IdpSync.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/credentials" element={<Credentials />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/users/activity" element={<UserActivity />} />
+            <Route path="/users/idp-sync" element={<IdpSync />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

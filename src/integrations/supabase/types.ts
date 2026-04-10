@@ -242,6 +242,51 @@ export type Database = {
         }
         Relationships: []
       }
+      idp_user_mapping: {
+        Row: {
+          created_at: string
+          id: string
+          idp_display_name: string | null
+          idp_email: string | null
+          idp_provider: string
+          idp_user_id: string | null
+          linked_at: string | null
+          sap_email: string | null
+          sap_user_code: string
+          sap_user_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          idp_display_name?: string | null
+          idp_email?: string | null
+          idp_provider?: string
+          idp_user_id?: string | null
+          linked_at?: string | null
+          sap_email?: string | null
+          sap_user_code: string
+          sap_user_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          idp_display_name?: string | null
+          idp_email?: string | null
+          idp_provider?: string
+          idp_user_id?: string | null
+          linked_at?: string | null
+          sap_email?: string | null
+          sap_user_code?: string
+          sap_user_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pagcorp_account_mapping: {
         Row: {
           account_code: string
