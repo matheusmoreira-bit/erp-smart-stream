@@ -264,82 +264,59 @@ serve(async (req) => {
         });
       }
 
-      const tableAttempts = buildViewTableAttempts(database, table);
-      let lastPayload: unknown = null;
-      let lastError: { status: number; message: string } | null = null;
-
-      for (const tableName of tableAttempts) {
-        const cacheKey = `${sessionId}:view:${database}:${tableName}:${JSON.stringify(params || {})}`;
-        const cached = getCached(cacheKey);
-        if (cached) {
-          return new Response(JSON.stringify({ data: cached, fromCache: true }), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        const queryParams = new URLSearchParams({
-          SessionId: sessionId,
-          DB: database,
-          Table: tableName,
-          _t: String(Date.now()),
-        });
-
-        if (params) {
-          for (const [key, value] of Object.entries(params)) {
-            if (
-              value !== undefined &&
-              value !== null &&
-              key !== "SessionId" &&
-              key !== "DB" &&
-              key !== "Table"
-            ) {
-              queryParams.set(key, String(value));
-            }
-          }
-        }
-
-        const viewResp = await fetch(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
-
-        const payload = await parseResponseBody(viewResp);
-        lastPayload = payload;
-
-        if (!viewResp.ok) {
-          const message =
-            payload && typeof payload === "object" && "message" in payload
-              ? String((payload as { message?: string }).message || "Erro na consulta da view HANA")
-              : typeof payload === "string"
-                ? payload
-                : "Erro na consulta da view HANA";
-
-          console.error("HANA view query error:", viewResp.status, payload);
-          lastError = { status: viewResp.status, message };
-          continue;
-        }
-
-        const rows = extractViewRows(payload);
-        if (rows.length > 0) {
-          setCache(cacheKey, rows);
-
-          return new Response(JSON.stringify({ data: rows, fromCache: false }), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-      }
-
-      if (lastPayload !== null) {
-        return new Response(JSON.stringify({ data: extractViewRows(lastPayload), fromCache: false }), {
+      const tableName = extractTableName(table);
+      const cacheKey = `${sessionId}:view:${database}:${tableName}:${JSON.stringify(params || {})}`;
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, fromCache: true }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      return new Response(JSON.stringify({ error: lastError?.message || "Erro na consulta da view HANA" }), {
-        status: lastError?.status || 500,
+      const queryParams = new URLSearchParams({
+        SessionId: sessionId,
+        DB: database,
+        Table: tableName,
+        _t: String(Date.now()),
+      });
+
+      if (params) {
+        for (const [key, value] of Object.entries(params)) {
+          if (value !== undefined && value !== null && key !== "SessionId" && key !== "DB" && key !== "Table") {
+            queryParams.set(key, String(value));
+          }
+        }
+      }
+
+      const viewResp = await fetch(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const payload = await parseResponseBody(viewResp);
+
+      if (!viewResp.ok) {
+        const message =
+          payload && typeof payload === "object" && "message" in payload
+            ? String((payload as { message?: string }).message || "Erro na consulta da view HANA")
+            : typeof payload === "string"
+              ? payload
+              : "Erro na consulta da view HANA";
+        console.error("HANA view query error:", viewResp.status, payload);
+        return new Response(JSON.stringify({ error: message }), {
+          status: viewResp.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const rows = extractViewRows(payload);
+      if (rows.length > 0) {
+        setCache(cacheKey, rows);
+      }
+
+      return new Response(JSON.stringify({ data: rows, fromCache: false }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
