@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2, ArrowLeft, UserCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { FlowTimeline } from "@/components/FlowTimeline";
 import { MetricCard } from "@/components/MetricCard";
 import { InsightsPanel } from "@/components/InsightsPanel";
@@ -70,23 +70,43 @@ export function Dashboard({ embedded = false }: DashboardProps) {
               <div className="flex items-center gap-2 mb-6">
                 <UserCheck className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-semibold text-foreground">Tempo Médio de Aprovação por Aprovador</h2>
-                <span className="text-xs text-muted-foreground ml-auto">{approverStats.reduce((s, a) => s + a.count, 0)} aprovações</span>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {approverStats.reduce((s, a) => s + a.countApproved + a.countRejected, 0)} aprovações
+                </span>
               </div>
-              <svg width="0" height="0"><defs><linearGradient id="approverGradH" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.6} /><stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} /></linearGradient></defs></svg>
-              <ResponsiveContainer width="100%" height={Math.max(300, approverStats.length * 40)}>
-                <BarChart data={approverStats} layout="vertical" margin={{ left: 20, right: 30, top: 5, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} unit="d" />
-                  <YAxis type="category" dataKey="name" width={160} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--primary))" }} /> Aprovados</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--destructive))" }} /> Rejeitados</span>
+                <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: "hsl(var(--warning))" }} /> Meta (1d)</span>
+              </div>
+              <svg width="0" height="0">
+                <defs>
+                  <linearGradient id="approvedGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
+                  </linearGradient>
+                  <linearGradient id="rejectedGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={1} />
+                    <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity={0.6} />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <ResponsiveContainer width="100%" height={350}>
+                <BarChart data={approverStats} margin={{ left: 10, right: 10, top: 10, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0} height={60} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} unit="d" />
                   <Tooltip
                     contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                    formatter={(value: number, _: string, entry: any) => [`${value}d (${entry.payload.count} docs)`, "Média"]}
+                    formatter={(value: number, name: string) => [`${value}d`, name === "avgDaysApproved" ? "Aprovados" : "Rejeitados"]}
+                    labelFormatter={(label) => {
+                      const item = approverStats.find((a) => a.name === label);
+                      return item ? `${label} (${item.countApproved + item.countRejected} docs)` : label;
+                    }}
                   />
-                  <Bar dataKey="avgDays" fill="url(#approverGradH)" radius={[0, 6, 6, 0]} barSize={20}>
-                    {approverStats.map((entry, i) => (
-                      <Cell key={i} fillOpacity={entry.avgDays > 3 ? 1 : 0.7} />
-                    ))}
-                  </Bar>
+                  <ReferenceLine y={1} stroke="hsl(var(--warning))" strokeDasharray="6 4" strokeWidth={2} label={{ value: "Meta 1d", position: "right", fill: "hsl(var(--warning))", fontSize: 11 }} />
+                  <Bar dataKey="avgDaysApproved" stackId="a" fill="url(#approvedGrad)" radius={[0, 0, 0, 0]} barSize={28} />
+                  <Bar dataKey="avgDaysRejected" stackId="a" fill="url(#rejectedGrad)" radius={[4, 4, 0, 0]} barSize={28} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
