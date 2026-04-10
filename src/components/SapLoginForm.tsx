@@ -133,9 +133,15 @@ export function SapLoginForm() {
           </Button>
         </form>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          Conexão segura via Service Layer
-        </p>
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-xs text-muted-foreground">
+            Conexão segura via Service Layer
+          </p>
+          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/admin/login")}>
+            <Settings className="w-3 h-3 mr-1" />
+            Admin
+          </Button>
+        </div>
       </motion.div>
     </div>
   );
