@@ -147,16 +147,21 @@ export function useModuleAccess(moduleKey?: string) {
       return;
     }
 
-    const email = session.userName.toLowerCase();
+    const identifier = session.userName.toLowerCase();
 
     (async () => {
       setLoading(true);
 
       // Get all groups the user belongs to
-      const { data: assignments } = await supabase
+      // Match by exact sap_email OR by username prefix (user logs in as "john" but assignment is "john@company.com")
+      const { data: allAssignments } = await supabase
         .from("user_group_assignments")
-        .select("group_id")
-        .eq("sap_email", email);
+        .select("group_id, sap_email");
+
+      const assignments = (allAssignments || []).filter((a: any) => {
+        const sapEmail = a.sap_email.toLowerCase();
+        return sapEmail === identifier || sapEmail.startsWith(identifier + "@");
+      });
 
       if (!assignments || assignments.length === 0) {
         setUserModules(DEFAULT_MODULES);
