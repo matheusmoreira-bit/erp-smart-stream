@@ -141,12 +141,8 @@ function ModuleCardItem({ mod, index }: { mod: ModuleCard; index: number }) {
 export function MainMenu() {
   const { session, logout } = useSap();
 
-  const COMPANY_LABELS: Record<string, string> = {
-    SBO_ANAGAMING: "ANA Gaming",
-    SBO_CACTUS: "Cactus",
-    SBO_INSTITUTO_ANA: "Instituto Cactus",
-  };
-  const companyLabel = COMPANY_LABELS[session?.companyDB || ""] || session?.companyDB;
+  const { getLabel } = useCompanies(true);
+  const companyLabel = getLabel(session?.companyDB || "");
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
