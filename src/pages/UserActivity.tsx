@@ -372,7 +372,7 @@ export default function UserActivityPage() {
                     ))}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="text-center text-muted-foreground py-8">Nenhum registro encontrado</td>
+                        <td colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro encontrado</td>
                       </tr>
                     )}
                   </tbody>
