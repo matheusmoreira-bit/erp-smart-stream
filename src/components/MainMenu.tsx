@@ -1,3 +1,4 @@
+import { useCompanies } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
