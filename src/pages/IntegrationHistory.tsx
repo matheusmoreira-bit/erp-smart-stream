@@ -82,6 +82,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: typeof CheckCircle2; 
   success: { label: "Sucesso", icon: CheckCircle2, className: "bg-success/20 text-success border-success/30" },
   error: { label: "Erro", icon: XCircle, className: "bg-destructive/20 text-destructive border-destructive/30" },
   pending: { label: "Pendente", icon: Clock, className: "bg-warning/20 text-warning border-warning/30" },
+  cancelled: { label: "Cancelado", icon: Ban, className: "bg-muted text-muted-foreground border-border" },
 };
 
 const TYPE_LABELS: Record<string, string> = {
