@@ -1,31 +1,81 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { sapLogin, sapLogout, type SapSession, clearClientCache } from "@/lib/sap-client";
 
-interface SapContextType {
-  session: SapSession | null;
+export type ErpType = "sap" | "omie";
+
+export interface ErpSession {
+  erpType: ErpType;
+  companyDB: string;
+  userName: string;
+  // SAP-specific
+  sessionId?: string;
+  routeId?: string;
+  isSuperUser?: boolean;
+  // OMIE-specific (stateless — uses app_key/app_secret stored in system_credentials)
+}
+
+interface ErpContextType {
+  session: ErpSession | null;
+  /** @deprecated Use session directly — kept for backward compat */
+  sapSession: SapSession | null;
   isLoading: boolean;
   error: string | null;
-  login: (userName: string, password: string, companyDB: string) => Promise<void>;
+  login: (userName: string, password: string, companyDB: string, erpType?: ErpType) => Promise<void>;
   logout: () => Promise<void>;
 }
 
-const SapContext = createContext<SapContextType | null>(null);
+const ErpContext = createContext<ErpContextType | null>(null);
 
 export function SapProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<SapSession | null>(null);
+  const [session, setSession] = useState<ErpSession | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const login = useCallback(async (userName: string, password: string, companyDB: string) => {
+  const login = useCallback(async (userName: string, password: string, companyDB: string, erpType: ErpType = "sap") => {
     setIsLoading(true);
     setError(null);
     try {
-      const sess = await sapLogin(userName, password, companyDB);
-      setSession(sess);
+      if (erpType === "sap") {
+        const sapSess = await sapLogin(userName, password, companyDB);
+        setSession({
+          erpType: "sap",
+          companyDB,
+          userName,
+          sessionId: sapSess.sessionId,
+          routeId: sapSess.routeId,
+          isSuperUser: sapSess.isSuperUser,
+        });
+      } else if (erpType === "omie") {
+        // OMIE login — validate credentials via edge function
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const res = await fetch(`${supabaseUrl}/functions/v1/omie-proxy`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({ action: "login", company_db: companyDB }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+
+        setSession({
+          erpType: "omie",
+          companyDB,
+          userName: userName || "omie",
+        });
+      }
 
       // Audit login
       const { logAuditAction } = await import("@/hooks/useAuditLog");
-      await logAuditAction({ action: "sap_login", entity_type: "sap_session", actor_email: userName, company_db: companyDB, details: { companyDB } });
+      await logAuditAction({
+        action: `${erpType}_login`,
+        entity_type: "erp_session",
+        actor_email: userName,
+        company_db: companyDB,
+        details: { companyDB, erpType },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao conectar");
       throw e;
@@ -35,22 +85,53 @@ export function SapProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    if (session) {
-      await sapLogout(session);
+    if (session?.erpType === "sap" && session.sessionId) {
+      await sapLogout({
+        sessionId: session.sessionId,
+        routeId: session.routeId || "",
+        companyDB: session.companyDB,
+        userName: session.userName,
+        isSuperUser: session.isSuperUser || false,
+      });
     }
     clearClientCache();
     setSession(null);
   }, [session]);
 
+  // Backward-compatible SAP session shape
+  const sapSession: SapSession | null = session?.erpType === "sap" && session.sessionId
+    ? {
+        sessionId: session.sessionId,
+        routeId: session.routeId || "",
+        companyDB: session.companyDB,
+        userName: session.userName,
+        isSuperUser: session.isSuperUser || false,
+      }
+    : null;
+
   return (
-    <SapContext.Provider value={{ session, isLoading, error, login, logout }}>
+    <ErpContext.Provider value={{ session, sapSession, isLoading, error, login, logout }}>
       {children}
-    </SapContext.Provider>
+    </ErpContext.Provider>
   );
 }
 
 export function useSap() {
-  const ctx = useContext(SapContext);
+  const ctx = useContext(ErpContext);
   if (!ctx) throw new Error("useSap must be used within SapProvider");
+  // Return backward-compatible interface
+  return {
+    session: ctx.sapSession,
+    erpSession: ctx.session,
+    isLoading: ctx.isLoading,
+    error: ctx.error,
+    login: ctx.login,
+    logout: ctx.logout,
+  };
+}
+
+export function useErp() {
+  const ctx = useContext(ErpContext);
+  if (!ctx) throw new Error("useErp must be used within SapProvider");
   return ctx;
 }
