@@ -41,9 +41,10 @@ export function useCompanies(onlyActive = false) {
     if (onlyActive) q = q.eq("is_active", true);
     const { data } = await q;
     setCompanies(
-      (data || []).map((c) => ({
+      (data || []).map((c: any) => ({
         ...c,
         targets: { ...DEFAULT_TARGETS, ...(c.targets as Record<string, number>) },
+        erp_type: c.erp_type || "sap",
       })) as Company[]
     );
     setLoading(false);
