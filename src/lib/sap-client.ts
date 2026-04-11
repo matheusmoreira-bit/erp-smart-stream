@@ -34,11 +34,17 @@ export function clearClientCache() {
 }
 
 async function callProxy(body: Record<string, unknown>) {
+  // Get the user's JWT from the Supabase auth session
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token || SUPABASE_KEY;
+
   const resp = await fetch(FUNCTION_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_KEY}`,
+      Authorization: `Bearer ${token}`,
+      apikey: SUPABASE_KEY,
     },
     body: JSON.stringify(body),
   });
