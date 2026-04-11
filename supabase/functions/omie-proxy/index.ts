@@ -8,14 +8,43 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+async function requireAuth(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) throw new Error("UNAUTHORIZED");
+
+  const supabase = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error("UNAUTHORIZED");
+  return user;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    await requireAuth(req);
+
     const { action, company_db, endpoint, params } = await req.json();
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+    if (!action || typeof action !== "string") {
+      return new Response(
+        JSON.stringify({ error: "action é obrigatório" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!company_db || typeof company_db !== "string" || company_db.length > 100) {
+      return new Response(
+        JSON.stringify({ error: "company_db é obrigatório" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Fetch OMIE credentials from system_credentials
     const { data: creds, error: credErr } = await supabase
@@ -45,7 +74,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === "login") {
-      // Validate credentials by listing empresas
       const omieRes = await fetch("https://app.omie.com.br/api/v1/geral/empresas/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -82,10 +110,17 @@ Deno.serve(async (req) => {
     }
 
     if (action === "call") {
-      // Generic OMIE API call
-      if (!endpoint) {
+      if (!endpoint || typeof endpoint !== "string" || endpoint.length > 500) {
         return new Response(
-          JSON.stringify({ error: "endpoint é obrigatório" }),
+          JSON.stringify({ error: "endpoint é obrigatório e deve ser válido" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate endpoint is a safe relative path
+      if (endpoint.includes("..") || endpoint.startsWith("/") || endpoint.startsWith("http")) {
+        return new Response(
+          JSON.stringify({ error: "endpoint inválido" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -120,9 +155,15 @@ Deno.serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
+    if (e instanceof Error && e.message === "UNAUTHORIZED") {
+      return new Response(
+        JSON.stringify({ error: "Não autenticado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     console.error("omie-proxy error:", e);
     return new Response(
-      JSON.stringify({ error: e.message || "Erro interno" }),
+      JSON.stringify({ error: e instanceof Error ? e.message : "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
