@@ -1,4 +1,4 @@
-import { CreditCard, Server, Users, Box, type LucideIcon } from "lucide-react";
+import { CreditCard, Server, Users, Box, Cloud, Building2, type LucideIcon } from "lucide-react";
 
 export interface SystemField {
   key: string;
@@ -16,6 +16,15 @@ export interface SystemConfig {
   category?: string;
 }
 
+const S4_COMMON_FIELDS: SystemField[] = [
+  { key: "api_url", label: "URL da API (OData)", placeholder: "https://my-system.s4hana.cloud.sap/sap/opu/odata/sap/" },
+  { key: "client_id", label: "Client ID (Communication Arrangement)", placeholder: "COMM_ARRANGEMENT_CLIENT" },
+  { key: "client_secret", label: "Client Secret", type: "password", placeholder: "Segredo do Communication Arrangement" },
+  { key: "username", label: "Usuário Técnico", placeholder: "TECH_USER" },
+  { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário técnico" },
+  { key: "sap_client", label: "SAP Client (Mandante)", placeholder: "100" },
+];
+
 export const SYSTEMS: SystemConfig[] = [
   {
     name: "sap",
@@ -28,6 +37,38 @@ export const SYSTEMS: SystemConfig[] = [
       { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
       { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
       { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+    ],
+  },
+  {
+    name: "s4hana_cloud",
+    label: "SAP S/4HANA Cloud",
+    description: "ERP inteligente em nuvem pública — edição padrão (multi-tenant)",
+    icon: Cloud,
+    category: "erp",
+    fields: S4_COMMON_FIELDS,
+  },
+  {
+    name: "s4hana_cloud_private",
+    label: "SAP S/4HANA Cloud Private Edition",
+    description: "ERP em nuvem privada — infraestrutura dedicada com maior customização",
+    icon: Cloud,
+    category: "erp",
+    fields: [
+      ...S4_COMMON_FIELDS,
+      { key: "token_url", label: "URL de Token OAuth", placeholder: "https://my-system.authentication.sap.hana.ondemand.com/oauth/token" },
+    ],
+  },
+  {
+    name: "s4hana_onprem",
+    label: "SAP S/4HANA On-Premise",
+    description: "ERP instalado localmente — controle total do ambiente e customizações ABAP",
+    icon: Building2,
+    category: "erp",
+    fields: [
+      { key: "api_url", label: "URL da API (OData/Gateway)", placeholder: "https://servidor:443/sap/opu/odata/sap/" },
+      { key: "username", label: "Usuário RFC/Técnico", placeholder: "RFC_USER" },
+      { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário RFC" },
+      { key: "sap_client", label: "SAP Client (Mandante)", placeholder: "100" },
     ],
   },
   {

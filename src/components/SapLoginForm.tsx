@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server } from "lucide-react";
+import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSap } from "@/contexts/SapContext";
+import type { ErpType } from "@/contexts/SapContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -14,6 +15,20 @@ interface CompanyOption {
   label: string;
   value: string;
   erp_type: string;
+}
+
+const ERP_LABELS: Record<string, { label: string; icon: typeof Server; method: string }> = {
+  sap: { label: "SAP Business One", icon: Server, method: "Service Layer" },
+  s4hana_cloud: { label: "SAP S/4HANA Cloud", icon: Cloud, method: "credenciais armazenadas" },
+  s4hana_cloud_private: { label: "SAP S/4HANA Cloud Private", icon: Cloud, method: "credenciais armazenadas" },
+  s4hana_onprem: { label: "SAP S/4HANA On-Premise", icon: Building2, method: "credenciais armazenadas" },
+  omie: { label: "OMIE", icon: Box, method: "API OMIE" },
+};
+
+function getErpBadge(erpType: string): string {
+  if (erpType === "sap") return "SAP B1";
+  if (erpType.startsWith("s4hana")) return "S/4HANA";
+  return erpType.toUpperCase();
 }
 
 export function SapLoginForm() {
@@ -26,7 +41,10 @@ export function SapLoginForm() {
 
   const selectedCompany = databases.find((d) => d.value === companyDB);
   const erpType = selectedCompany?.erp_type || "sap";
-  const isOmie = erpType === "omie";
+  const needsCredentials = erpType === "sap"; // Only SAP B1 requires user/pass at login
+  const isStateless = erpType === "omie" || erpType.startsWith("s4hana");
+  const erpInfo = ERP_LABELS[erpType] || ERP_LABELS.sap;
+  const ErpIcon = erpInfo.icon;
 
   useEffect(() => {
     supabase
@@ -51,13 +69,13 @@ export function SapLoginForm() {
       toast.error("Selecione a empresa");
       return;
     }
-    if (!isOmie && (!userName || !password)) {
+    if (needsCredentials && (!userName || !password)) {
       toast.error("Preencha todos os campos");
       return;
     }
     try {
-      await login(userName, password, companyDB, erpType as "sap" | "omie");
-      toast.success(isOmie ? "Conectado ao OMIE!" : "Conectado ao SAP B1!");
+      await login(userName, password, companyDB, erpType as ErpType);
+      toast.success(`Conectado ao ${erpInfo.label}!`);
     } catch {
       toast.error("Falha no login. Verifique suas credenciais.");
     }
@@ -105,7 +123,7 @@ export function SapLoginForm() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{db.label}</span>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {db.erp_type === "omie" ? "OMIE" : "SAP"}
+                        {getErpBadge(db.erp_type)}
                       </Badge>
                     </div>
                   </SelectItem>
@@ -117,19 +135,15 @@ export function SapLoginForm() {
           {/* ERP indicator */}
           {companyDB && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30 border border-border">
-              {isOmie ? (
-                <Box className="w-4 h-4 text-primary" />
-              ) : (
-                <Server className="w-4 h-4 text-primary" />
-              )}
+              <ErpIcon className="w-4 h-4 text-primary" />
               <span className="text-sm text-muted-foreground">
-                Conexão via <span className="font-semibold text-foreground">{isOmie ? "OMIE" : "SAP Business One"}</span>
+                Conexão via <span className="font-semibold text-foreground">{erpInfo.label}</span>
               </span>
             </div>
           )}
 
-          {/* SAP fields — user/password */}
-          {!isOmie && (
+          {/* SAP B1 fields — user/password */}
+          {needsCredentials && (
             <>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -159,10 +173,10 @@ export function SapLoginForm() {
             </>
           )}
 
-          {/* OMIE info */}
-          {isOmie && (
+          {/* Stateless ERP info */}
+          {isStateless && companyDB && (
             <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/20 border border-border">
-              O login será feito automaticamente usando as credenciais do OMIE configuradas para esta empresa.
+              O login será feito automaticamente usando as credenciais do {erpInfo.label} configuradas para esta empresa.
             </div>
           )}
 
@@ -178,7 +192,7 @@ export function SapLoginForm() {
 
         <div className="flex items-center justify-between mt-4">
           <p className="text-xs text-muted-foreground">
-            Conexão segura via {isOmie ? "API OMIE" : "Service Layer"}
+            Conexão segura via {erpInfo.method}
           </p>
           <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/admin/login")}>
             <Settings className="w-3 h-3 mr-1" />
