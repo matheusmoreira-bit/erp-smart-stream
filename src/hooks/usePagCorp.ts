@@ -148,8 +148,9 @@ export function usePagCorp() {
         sap_doc_entry: sapDocEntry || null,
         sap_doc_num: sapDocNum || null,
         error_message: errorMessage || null,
-      })
-      .select("id")
+        sap_payload: sapPayload || null,
+        sap_response: sapResponse || null,
+      } as any)
       .single();
 
     if (error) throw error;
