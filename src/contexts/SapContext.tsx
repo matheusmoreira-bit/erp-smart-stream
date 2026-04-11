@@ -139,12 +139,12 @@ export function useSap() {
           erpType: "sap",
         }
       : {
-          sessionId: "__omie__",
+          sessionId: `__${ctx.session.erpType}__`,
           routeId: "",
           companyDB: ctx.session.companyDB,
           userName: ctx.session.userName,
           isSuperUser: false,
-          erpType: "omie",
+          erpType: ctx.session.erpType,
         }
     : null;
 
