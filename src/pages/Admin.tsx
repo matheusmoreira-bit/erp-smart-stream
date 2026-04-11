@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers } from "lucide-react";
 import {
   Building2,
   Plus,
@@ -68,16 +68,16 @@ interface Company {
   erp_type: string;
 }
 
-const ERP_TYPE_LABELS: Record<string, string> = {
-  sap: "SAP Business One",
-  omie: "OMIE",
-  s4hana_cloud: "SAP S/4HANA Cloud",
-  s4hana_cloud_private: "SAP S/4HANA Cloud Private",
-  s4hana_onprem: "SAP S/4HANA On-Premise",
-  totvs_protheus: "TOTVS Protheus",
-  totvs_rm: "TOTVS RM",
-  totvs_datasul: "TOTVS Datasul",
-  netsuite: "Oracle NetSuite",
+const ERP_TYPE_LABELS: Record<string, { label: string; icon: typeof Server }> = {
+  sap: { label: "SAP Business One", icon: Server },
+  omie: { label: "OMIE", icon: Box },
+  s4hana_cloud: { label: "SAP S/4HANA Cloud", icon: Cloud },
+  s4hana_cloud_private: { label: "SAP S/4HANA Cloud Private", icon: Cloud },
+  s4hana_onprem: { label: "SAP S/4HANA On-Premise", icon: Building2 },
+  totvs_protheus: { label: "TOTVS Protheus", icon: Layers },
+  totvs_rm: { label: "TOTVS RM", icon: Layers },
+  totvs_datasul: { label: "TOTVS Datasul", icon: Layers },
+  netsuite: { label: "Oracle NetSuite", icon: Cloud },
 };
 
 interface Credential {
