@@ -42,7 +42,9 @@ import { toast } from "sonner";
 import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuditLog } from "@/hooks/useAuditLog";
+import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import AuditLogTable from "@/components/AuditLogTable";
+import IntegrationsTab from "@/components/IntegrationsTab";
 import PermissionManager from "@/components/PermissionManager";
 import {
   Select,
@@ -236,7 +238,7 @@ export default function Admin() {
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   // Audit log
-  const [activeTab, setActiveTab] = useState<"companies" | "audit" | "permissions">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions">("companies");
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
   const auditCompanyDb = auditCompanyFilter === "all" ? undefined : auditCompanyFilter;
   const { entries: auditEntries, isLoading: auditLoading, refresh: auditRefresh } = useAuditLog(auditCompanyDb);
@@ -442,6 +444,17 @@ export default function Admin() {
             Permissões
           </button>
           <button
+            onClick={() => setActiveTab("integrations")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "integrations"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Key className="w-4 h-4 inline mr-1.5" />
+            Integrações
+          </button>
+          <button
             onClick={() => setActiveTab("audit")}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "audit"
@@ -568,6 +581,8 @@ export default function Admin() {
             )}
           </>
         )}
+
+        {activeTab === "integrations" && <IntegrationsTab />}
 
         {activeTab === "permissions" && <PermissionManager />}
 
