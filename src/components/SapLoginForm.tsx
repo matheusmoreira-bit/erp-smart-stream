@@ -61,15 +61,15 @@ export function SapLoginForm() {
       .eq("is_active", true)
       .order("display_name")
       .then(({ data }) => {
-        setDatabases(
-          (data || []).map((c: any) => ({
-            label: c.display_name,
-            value: c.company_db,
-            erp_type: c.erp_type || "sap",
-          }))
-        );
+        const all = (data || []).map((c: any) => ({
+          label: c.display_name,
+          value: c.company_db,
+          erp_type: c.erp_type || "sap",
+        }));
+        // Only show companies whose ERP type is enabled by admin
+        setDatabases(all.filter((d) => enabledNames.includes(d.erp_type)));
       });
-  }, []);
+  }, [enabledNames]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
