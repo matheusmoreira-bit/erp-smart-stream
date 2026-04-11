@@ -151,6 +151,7 @@ export function usePagCorp() {
         sap_payload: sapPayload || null,
         sap_response: sapResponse || null,
       } as any)
+      .select("id")
       .single();
 
     if (error) throw error;
