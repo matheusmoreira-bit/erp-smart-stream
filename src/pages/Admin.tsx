@@ -65,7 +65,20 @@ interface Company {
   is_active: boolean;
   created_at: string;
   targets: CompanyTargets;
+  erp_type: string;
 }
+
+const ERP_TYPE_LABELS: Record<string, string> = {
+  sap: "SAP Business One",
+  omie: "OMIE",
+  s4hana_cloud: "SAP S/4HANA Cloud",
+  s4hana_cloud_private: "SAP S/4HANA Cloud Private",
+  s4hana_onprem: "SAP S/4HANA On-Premise",
+  totvs_protheus: "TOTVS Protheus",
+  totvs_rm: "TOTVS RM",
+  totvs_datasul: "TOTVS Datasul",
+  netsuite: "Oracle NetSuite",
+};
 
 interface Credential {
   id: string;
@@ -228,11 +241,12 @@ export default function Admin() {
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Record<string, Credential[]>>({});
   const [credLoading, setCredLoading] = useState<string | null>(null);
+  const { enabledNames } = useEnabledErpTypes();
 
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, targets: { ...DEFAULT_TARGETS } });
+  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
 
   // System credential modal
@@ -323,13 +337,13 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, targets: { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", targets: { ...DEFAULT_TARGETS } });
     setCompanyDialog(true);
   };
 
   const openEditCompany = (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, targets: c.targets || { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", targets: c.targets || { ...DEFAULT_TARGETS } });
     setCompanyDialog(true);
   };
 
@@ -339,6 +353,7 @@ export default function Admin() {
       return;
     }
     setSaving(true);
+    const isNew = !editingCompany;
     if (editingCompany) {
       const { error } = await supabase
         .from("companies")
@@ -347,6 +362,7 @@ export default function Admin() {
           display_name: companyForm.display_name,
           service_layer_url: companyForm.service_layer_url || null,
           is_active: companyForm.is_active,
+          erp_type: companyForm.erp_type,
           targets: companyForm.targets,
         })
         .eq("id", editingCompany.id);
@@ -358,6 +374,7 @@ export default function Admin() {
         display_name: companyForm.display_name,
         service_layer_url: companyForm.service_layer_url || null,
         is_active: companyForm.is_active,
+        erp_type: companyForm.erp_type,
         targets: companyForm.targets,
       });
       if (error) toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar");
@@ -365,7 +382,12 @@ export default function Admin() {
     }
     setSaving(false);
     setCompanyDialog(false);
-    fetchCompanies();
+    await fetchCompanies();
+    // After creating a new company, auto-expand to show credentials config
+    if (isNew) {
+      setExpandedCompany(companyForm.company_db);
+      fetchCredentials(companyForm.company_db);
+    }
   };
 
   const deleteCompany = async (c: Company) => {
@@ -510,7 +532,12 @@ export default function Admin() {
                         <Building2 className="w-5 h-5 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground">{c.display_name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground">{c.display_name}</p>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                            {ERP_TYPE_LABELS[c.erp_type] || c.erp_type}
+                          </Badge>
+                        </div>
                         <p className="text-xs text-muted-foreground font-mono">{c.company_db}</p>
                       </div>
                       <Badge variant={c.is_active ? "default" : "secondary"}>
@@ -642,6 +669,21 @@ export default function Admin() {
                 onChange={(e) => setCompanyForm((f) => ({ ...f, display_name: e.target.value }))}
                 placeholder="Nome da empresa"
               />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Tipo de ERP</label>
+              <Select value={companyForm.erp_type} onValueChange={(v) => setCompanyForm((f) => ({ ...f, erp_type: v }))}>
+                <SelectTrigger className="bg-card">
+                  <SelectValue placeholder="Selecione o ERP" />
+                </SelectTrigger>
+                <SelectContent>
+                  {enabledNames.map((erpKey) => (
+                    <SelectItem key={erpKey} value={erpKey}>
+                      {ERP_TYPE_LABELS[erpKey] || erpKey}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Código da Base (company_db)</label>
