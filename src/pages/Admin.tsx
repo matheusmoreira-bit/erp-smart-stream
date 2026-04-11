@@ -741,20 +741,18 @@ export default function Admin() {
                 <label className="text-sm font-medium text-foreground">Nome</label>
                 <Input
                   value={companyForm.display_name}
-                  onChange={(e) => setCompanyForm((f) => ({ ...f, display_name: e.target.value }))}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setCompanyForm((f) => ({
+                      ...f,
+                      display_name: name,
+                      // Auto-generate company_db only for new companies
+                      ...(!editingCompany ? { company_db: name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") } : {}),
+                    }));
+                  }}
                   placeholder="Nome da empresa"
                   autoFocus
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Código Interno</label>
-                <Input
-                  value={companyForm.company_db}
-                  onChange={(e) => setCompanyForm((f) => ({ ...f, company_db: e.target.value }))}
-                  placeholder="codigo_empresa"
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">Identificador único da empresa no sistema</p>
               </div>
 
               <div className="flex items-center gap-3">
@@ -867,8 +865,8 @@ export default function Admin() {
             <Button variant="outline" onClick={() => setCompanyDialog(false)}>Cancelar</Button>
             {wizardStep === 2 && (
               <Button onClick={() => {
-                if (!companyForm.display_name || !companyForm.company_db) {
-                  toast.error("Preencha o nome e código interno da empresa");
+                if (!companyForm.display_name) {
+                  toast.error("Preencha o nome da empresa");
                   return;
                 }
                 setWizardStep(3);
