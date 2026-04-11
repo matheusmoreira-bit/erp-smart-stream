@@ -1,4 +1,4 @@
-import { CreditCard, Server, Users, Box, Cloud, Building2, type LucideIcon } from "lucide-react";
+import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, type LucideIcon } from "lucide-react";
 
 export interface SystemField {
   key: string;
@@ -80,6 +80,45 @@ export const SYSTEMS: SystemConfig[] = [
     fields: [
       { key: "app_key", label: "App Key", placeholder: "Chave do aplicativo OMIE" },
       { key: "app_secret", label: "App Secret", type: "password", placeholder: "Segredo do aplicativo OMIE" },
+    ],
+  },
+  {
+    name: "totvs_protheus",
+    label: "TOTVS Protheus",
+    description: "ERP TOTVS Protheus — integração via REST API (TLPP/Advpl)",
+    icon: Layers,
+    category: "erp",
+    fields: [
+      { key: "api_url", label: "URL da API REST", placeholder: "https://servidor:8080/rest/" },
+      { key: "username", label: "Usuário", placeholder: "admin" },
+      { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+      { key: "tenant_id", label: "Tenant ID (Empresa/Filial)", placeholder: "T1D010" },
+    ],
+  },
+  {
+    name: "totvs_rm",
+    label: "TOTVS RM",
+    description: "ERP TOTVS RM — integração via API REST / Web Services",
+    icon: Layers,
+    category: "erp",
+    fields: [
+      { key: "api_url", label: "URL da API", placeholder: "https://servidor/api/framework/v1/" },
+      { key: "username", label: "Usuário", placeholder: "mestre" },
+      { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+      { key: "tenant_id", label: "Tenant / Coligada", placeholder: "1" },
+    ],
+  },
+  {
+    name: "totvs_datasul",
+    label: "TOTVS Datasul",
+    description: "ERP TOTVS Datasul — integração via API REST / UPC",
+    icon: Layers,
+    category: "erp",
+    fields: [
+      { key: "api_url", label: "URL da API", placeholder: "https://servidor/api/v1/" },
+      { key: "username", label: "Usuário", placeholder: "super" },
+      { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+      { key: "company_code", label: "Código da Empresa", placeholder: "001" },
     ],
   },
   {
