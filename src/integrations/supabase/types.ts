@@ -522,6 +522,7 @@ export type Database = {
       }
       permission_groups: {
         Row: {
+          company_db: string | null
           created_at: string
           description: string | null
           id: string
@@ -529,6 +530,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_db?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -536,6 +538,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_db?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -681,18 +684,21 @@ export type Database = {
       }
       user_group_assignments: {
         Row: {
+          company_db: string | null
           created_at: string
           group_id: string
           id: string
           sap_email: string
         }
         Insert: {
+          company_db?: string | null
           created_at?: string
           group_id: string
           id?: string
           sap_email: string
         }
         Update: {
+          company_db?: string | null
           created_at?: string
           group_id?: string
           id?: string
