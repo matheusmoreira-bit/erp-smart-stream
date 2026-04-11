@@ -117,14 +117,15 @@ export function useSap() {
           companyDB: ctx.session.companyDB,
           userName: ctx.session.userName,
           isSuperUser: ctx.session.isSuperUser || false,
+          erpType: "sap",
         }
       : {
-          // OMIE session — provide a compatible shape so pages don't break
           sessionId: "__omie__",
           routeId: "",
           companyDB: ctx.session.companyDB,
           userName: ctx.session.userName,
           isSuperUser: false,
+          erpType: "omie",
         }
     : null;
 
