@@ -123,6 +123,8 @@ export function usePagCorp() {
     sapDocEntry?: number,
     sapDocNum?: number,
     errorMessage?: string,
+    sapPayload?: any,
+    sapResponse?: any,
   ) => {
     const { data, error } = await supabase
       .from("pagcorp_integration_log")
