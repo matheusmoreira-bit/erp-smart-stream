@@ -66,6 +66,9 @@ interface Company {
   created_at: string;
   targets: CompanyTargets;
   erp_type: string;
+  default_currency: string;
+  timezone: string;
+  logo_url: string | null;
 }
 
 const ERP_TYPE_LABELS: Record<string, { label: string; icon: typeof Server }> = {
