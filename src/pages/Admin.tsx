@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon } from "lucide-react";
 import {
   Building2,
   Plus,
@@ -770,6 +770,83 @@ export default function Admin() {
                   onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
                 />
                 <span className="text-sm text-foreground">Empresa ativa</span>
+              </div>
+
+              {/* Currency & Timezone */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-primary" />
+                    Moeda padrão
+                  </label>
+                  <Select value={companyForm.default_currency} onValueChange={(v) => setCompanyForm((f) => ({ ...f, default_currency: v }))}>
+                    <SelectTrigger className="bg-card">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        { value: "BRL", label: "R$ — Real Brasileiro" },
+                        { value: "USD", label: "US$ — Dólar Americano" },
+                        { value: "EUR", label: "€ — Euro" },
+                        { value: "GBP", label: "£ — Libra Esterlina" },
+                        { value: "ARS", label: "ARS — Peso Argentino" },
+                        { value: "CLP", label: "CLP — Peso Chileno" },
+                        { value: "MXN", label: "MXN — Peso Mexicano" },
+                        { value: "COP", label: "COP — Peso Colombiano" },
+                      ].map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-primary" />
+                    Fuso horário
+                  </label>
+                  <Select value={companyForm.timezone} onValueChange={(v) => setCompanyForm((f) => ({ ...f, timezone: v }))}>
+                    <SelectTrigger className="bg-card">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        { value: "America/Sao_Paulo", label: "São Paulo (GMT-3)" },
+                        { value: "America/Manaus", label: "Manaus (GMT-4)" },
+                        { value: "America/Belem", label: "Belém (GMT-3)" },
+                        { value: "America/Cuiaba", label: "Cuiabá (GMT-4)" },
+                        { value: "America/Rio_Branco", label: "Rio Branco (GMT-5)" },
+                        { value: "America/Noronha", label: "Noronha (GMT-2)" },
+                        { value: "America/New_York", label: "New York (GMT-5)" },
+                        { value: "America/Chicago", label: "Chicago (GMT-6)" },
+                        { value: "America/Los_Angeles", label: "Los Angeles (GMT-8)" },
+                        { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
+                        { value: "America/Santiago", label: "Santiago (GMT-4)" },
+                        { value: "America/Mexico_City", label: "Cidade do México (GMT-6)" },
+                        { value: "Europe/London", label: "Londres (GMT+0)" },
+                        { value: "Europe/Berlin", label: "Berlim (GMT+1)" },
+                        { value: "Europe/Lisbon", label: "Lisboa (GMT+0)" },
+                        { value: "Asia/Tokyo", label: "Tóquio (GMT+9)" },
+                      ].map((tz) => (
+                        <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Logo */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-primary" />
+                  Logo da empresa
+                </label>
+                <Input
+                  value={companyForm.logo_url}
+                  onChange={(e) => setCompanyForm((f) => ({ ...f, logo_url: e.target.value }))}
+                  placeholder="https://exemplo.com/logo.png"
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">URL do logo para dashboards e relatórios</p>
               </div>
 
               <div className="space-y-3 pt-2 border-t border-border">
