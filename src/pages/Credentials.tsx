@@ -19,6 +19,7 @@ import { useCredentials } from "@/hooks/useCredentials";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 import { SYSTEMS, CATEGORY_LABELS, type SystemConfig } from "@/lib/system-definitions";
+import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 
 function CredentialModal({
   system,
