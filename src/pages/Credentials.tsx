@@ -18,7 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { useCredentials } from "@/hooks/useCredentials";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
-import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
+import { SYSTEMS, CATEGORY_LABELS, type SystemConfig } from "@/lib/system-definitions";
 
 function CredentialModal({
   system,
@@ -172,11 +172,33 @@ export default function Credentials() {
     credentials.filter((c) => c.system_name === system).map((c) => c.credential_key);
 
   const toggleSystem = (name: string, checked: boolean) => {
-    setEnabledSystems((prev) => ({ ...prev, [name]: checked }));
+    setEnabledSystems((prev) => {
+      const next = { ...prev, [name]: checked };
+      // ERP exclusivity: deactivate other ERPs when activating one
+      if (checked) {
+        const activatedSystem = SYSTEMS.find((s) => s.name === name);
+        if (activatedSystem?.category === "erp") {
+          SYSTEMS.forEach((s) => {
+            if (s.category === "erp" && s.name !== name) {
+              next[s.name] = false;
+            }
+          });
+          const others = SYSTEMS.filter((s) => s.category === "erp" && s.name !== name).map((s) => s.label);
+          if (others.length > 0) {
+            toast.info(`${others.join(", ")} desativado(s) — apenas um ERP pode estar ativo`);
+          }
+        }
+      }
+      return next;
+    });
     if (!checked) {
       toast.info("Integração desativada. As credenciais foram mantidas.");
     }
   };
+
+  // Group systems by category
+  const erpSystems = SYSTEMS.filter((s) => s.category === "erp");
+  const otherSystems = SYSTEMS.filter((s) => !s.category);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -224,74 +246,91 @@ export default function Credentials() {
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {SYSTEMS.map((system) => {
-                const existingKeys = getKeysForSystem(system.name);
-                const isConfigured = existingKeys.length > 0;
-                const isEnabled = enabledSystems[system.name] ?? false;
-                const Icon = system.icon;
+            <div className="space-y-8">
+              {[
+                { label: "ERP", systems: erpSystems },
+                { label: "Integrações", systems: otherSystems },
+              ].map((group) => (
+                <div key={group.label}>
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    {group.label}
+                    {group.label === "ERP" && (
+                      <span className="ml-2 text-xs font-normal normal-case tracking-normal text-muted-foreground/70">
+                        — apenas um ativo por vez
+                      </span>
+                    )}
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {group.systems.map((system) => {
+                      const existingKeys = getKeysForSystem(system.name);
+                      const isConfigured = existingKeys.length > 0;
+                      const isEnabled = enabledSystems[system.name] ?? false;
+                      const Icon = system.icon;
 
-                return (
-                  <motion.div
-                    key={system.name}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    <Card
-                      className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/30 ${
-                        !isEnabled ? "opacity-60" : ""
-                      }`}
-                      onClick={() => setSelectedSystem(system)}
-                    >
-                      <CardContent className="p-5 space-y-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-xl bg-primary/10">
-                              <Icon className="w-6 h-6 text-primary" />
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-foreground">{system.label}</h3>
-                              <p className="text-xs text-muted-foreground">{system.description}</p>
-                            </div>
-                          </div>
-                          <div onClick={(e) => e.stopPropagation()} className="pt-1">
-                            <Switch
-                              checked={isEnabled}
-                              onCheckedChange={(checked) => toggleSystem(system.name, checked)}
-                            />
-                          </div>
-                        </div>
+                      return (
+                        <motion.div
+                          key={system.name}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                        >
+                          <Card
+                            className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/30 ${
+                              !isEnabled ? "opacity-60" : ""
+                            }`}
+                            onClick={() => setSelectedSystem(system)}
+                          >
+                            <CardContent className="p-5 space-y-4">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2.5 rounded-xl bg-primary/10">
+                                    <Icon className="w-6 h-6 text-primary" />
+                                  </div>
+                                  <div>
+                                    <h3 className="font-semibold text-foreground">{system.label}</h3>
+                                    <p className="text-xs text-muted-foreground">{system.description}</p>
+                                  </div>
+                                </div>
+                                <div onClick={(e) => e.stopPropagation()} className="pt-1">
+                                  <Switch
+                                    checked={isEnabled}
+                                    onCheckedChange={(checked) => toggleSystem(system.name, checked)}
+                                  />
+                                </div>
+                              </div>
 
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {isConfigured ? (
-                              <Badge
-                                variant="secondary"
-                                className="gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                              >
-                                <CheckCircle2 className="w-3 h-3" />
-                                Configurado
-                              </Badge>
-                            ) : (
-                              <Badge
-                                variant="secondary"
-                                className="gap-1 bg-muted text-muted-foreground"
-                              >
-                                <XCircle className="w-3 h-3" />
-                                Não configurado
-                              </Badge>
-                            )}
-                          </div>
-                          <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground">
-                            <Settings2 className="w-3.5 h-3.5" />
-                            Configurar
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {isConfigured ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                    >
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      Configurado
+                                    </Badge>
+                                  ) : (
+                                    <Badge
+                                      variant="secondary"
+                                      className="gap-1 bg-muted text-muted-foreground"
+                                    >
+                                      <XCircle className="w-3 h-3" />
+                                      Não configurado
+                                    </Badge>
+                                  )}
+                                </div>
+                                <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground">
+                                  <Settings2 className="w-3.5 h-3.5" />
+                                  Configurar
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -1,4 +1,4 @@
-import { CreditCard, Server, Users, type LucideIcon } from "lucide-react";
+import { CreditCard, Server, Users, Box, type LucideIcon } from "lucide-react";
 
 export interface SystemField {
   key: string;
@@ -13,6 +13,7 @@ export interface SystemConfig {
   description: string;
   icon: LucideIcon;
   fields: SystemField[];
+  category?: string;
 }
 
 export const SYSTEMS: SystemConfig[] = [
@@ -21,11 +22,23 @@ export const SYSTEMS: SystemConfig[] = [
     label: "SAP Business One",
     description: "Credencial usada para integrações automáticas (ex: PagCorp → SAP)",
     icon: Server,
+    category: "erp",
     fields: [
       { key: "service_layer_url", label: "URL do Service Layer", placeholder: "https://servidor:50000/b1s/v1/" },
       { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
       { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
       { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+    ],
+  },
+  {
+    name: "omie",
+    label: "OMIE",
+    description: "ERP em nuvem — gestão financeira, fiscal e operacional",
+    icon: Box,
+    category: "erp",
+    fields: [
+      { key: "app_key", label: "App Key", placeholder: "Chave do aplicativo OMIE" },
+      { key: "app_secret", label: "App Secret", type: "password", placeholder: "Segredo do aplicativo OMIE" },
     ],
   },
   {
@@ -55,3 +68,7 @@ export const SYSTEMS: SystemConfig[] = [
     ],
   },
 ];
+
+export const CATEGORY_LABELS: Record<string, string> = {
+  erp: "ERP",
+};
