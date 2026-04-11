@@ -679,22 +679,31 @@ export default function Admin() {
 
       {/* Company Dialog — Wizard */}
       <Dialog open={companyDialog} onOpenChange={setCompanyDialog}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingCompany ? "Editar Empresa" : "Nova Empresa"}
-              {wizardStep === 2 && companyForm.erp_type && (
+              {wizardStep >= 2 && companyForm.erp_type && (
                 <span className="text-muted-foreground font-normal text-sm ml-2">
                   — {ERP_TYPE_LABELS[companyForm.erp_type]?.label || companyForm.erp_type}
                 </span>
               )}
             </DialogTitle>
             <DialogDescription>
-              {wizardStep === 1 ? "Selecione o tipo de ERP da empresa" : "Preencha os dados da empresa"}
+              {wizardStep === 1 && "Etapa 1 de 3 — Selecione o tipo de ERP"}
+              {wizardStep === 2 && "Etapa 2 de 3 — Dados da empresa"}
+              {wizardStep === 3 && "Etapa 3 de 3 — Configuração do ERP"}
             </DialogDescription>
           </DialogHeader>
 
-          {wizardStep === 1 ? (
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 px-1">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${s <= wizardStep ? "bg-primary" : "bg-muted"}`} />
+            ))}
+          </div>
+
+          {wizardStep === 1 && (
             /* ── Step 1: ERP Selection ── */
             <div className="grid grid-cols-2 gap-3 py-4">
               {enabledNames.map((erpKey) => {
@@ -723,7 +732,9 @@ export default function Admin() {
                 );
               })}
             </div>
-          ) : (
+          )}
+
+          {wizardStep === 2 && (
             /* ── Step 2: Company Form ── */
             <div className="space-y-4 py-2">
               <div className="space-y-2">
@@ -745,7 +756,6 @@ export default function Admin() {
                 />
               </div>
 
-              {/* SAP-specific: Service Layer URL */}
               {companyForm.erp_type === "sap" && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">URL do Service Layer</label>
@@ -766,7 +776,6 @@ export default function Admin() {
                 <span className="text-sm text-foreground">Empresa ativa</span>
               </div>
 
-              {/* Targets */}
               <div className="space-y-3 pt-2 border-t border-border">
                 <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <Target className="w-4 h-4 text-primary" />
@@ -803,15 +812,82 @@ export default function Admin() {
             </div>
           )}
 
+          {wizardStep === 3 && (
+            /* ── Step 3: ERP Credentials ── */
+            <div className="space-y-4 py-2">
+              {(() => {
+                const system = SYSTEMS.find((s) => s.name === companyForm.erp_type);
+                if (!system) return <p className="text-sm text-muted-foreground">Nenhuma configuração disponível para este ERP.</p>;
+                const SysIcon = system.icon;
+                return (
+                  <>
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <SysIcon className="w-4 h-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{system.label}</p>
+                        <p className="text-xs text-muted-foreground">{system.description}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {system.fields.map((field) => {
+                        const isPassword = field.type === "password";
+                        const showPw = showWizardPasswords[field.key];
+                        return (
+                          <div key={field.key} className="space-y-1.5">
+                            <label className="text-sm text-muted-foreground">{field.label}</label>
+                            <div className="relative">
+                              <Input
+                                type={isPassword && !showPw ? "password" : "text"}
+                                placeholder={field.placeholder}
+                                value={wizardCreds[field.key] || ""}
+                                onChange={(e) => setWizardCreds((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                                className="bg-card pr-10"
+                              />
+                              {isPassword && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowWizardPasswords((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Você pode preencher as credenciais agora ou configurar depois na aba de credenciais da empresa.
+                    </p>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
           <DialogFooter className="gap-2 sm:gap-0">
-            {wizardStep === 2 && (
-              <Button variant="outline" onClick={() => setWizardStep(1)} className="mr-auto">
+            {wizardStep > 1 && (
+              <Button variant="outline" onClick={() => setWizardStep((s) => (s - 1) as 1 | 2 | 3)} className="mr-auto">
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Voltar
               </Button>
             )}
             <Button variant="outline" onClick={() => setCompanyDialog(false)}>Cancelar</Button>
             {wizardStep === 2 && (
+              <Button onClick={() => {
+                if (!companyForm.company_db || !companyForm.display_name) {
+                  toast.error("Preencha o nome e código da empresa");
+                  return;
+                }
+                setWizardStep(3);
+              }}>
+                Próximo
+              </Button>
+            )}
+            {wizardStep === 3 && (
               <Button onClick={saveCompany} disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
                 Salvar
