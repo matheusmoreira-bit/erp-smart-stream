@@ -525,6 +525,7 @@ export type Database = {
           company_db: string | null
           created_at: string
           description: string | null
+          erp_type: string | null
           id: string
           name: string
           updated_at: string
@@ -533,6 +534,7 @@ export type Database = {
           company_db?: string | null
           created_at?: string
           description?: string | null
+          erp_type?: string | null
           id?: string
           name: string
           updated_at?: string
@@ -541,6 +543,7 @@ export type Database = {
           company_db?: string | null
           created_at?: string
           description?: string | null
+          erp_type?: string | null
           id?: string
           name?: string
           updated_at?: string
