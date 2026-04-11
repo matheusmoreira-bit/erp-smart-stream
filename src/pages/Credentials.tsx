@@ -172,11 +172,33 @@ export default function Credentials() {
     credentials.filter((c) => c.system_name === system).map((c) => c.credential_key);
 
   const toggleSystem = (name: string, checked: boolean) => {
-    setEnabledSystems((prev) => ({ ...prev, [name]: checked }));
+    setEnabledSystems((prev) => {
+      const next = { ...prev, [name]: checked };
+      // ERP exclusivity: deactivate other ERPs when activating one
+      if (checked) {
+        const activatedSystem = SYSTEMS.find((s) => s.name === name);
+        if (activatedSystem?.category === "erp") {
+          SYSTEMS.forEach((s) => {
+            if (s.category === "erp" && s.name !== name) {
+              next[s.name] = false;
+            }
+          });
+          const others = SYSTEMS.filter((s) => s.category === "erp" && s.name !== name).map((s) => s.label);
+          if (others.length > 0) {
+            toast.info(`${others.join(", ")} desativado(s) — apenas um ERP pode estar ativo`);
+          }
+        }
+      }
+      return next;
+    });
     if (!checked) {
       toast.info("Integração desativada. As credenciais foram mantidas.");
     }
   };
+
+  // Group systems by category
+  const erpSystems = SYSTEMS.filter((s) => s.category === "erp");
+  const otherSystems = SYSTEMS.filter((s) => !s.category);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
