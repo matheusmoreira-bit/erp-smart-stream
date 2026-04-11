@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { useSap } from "@/contexts/SapContext";
 import AuditLogTable from "@/components/AuditLogTable";
