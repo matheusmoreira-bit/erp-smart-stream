@@ -535,7 +535,7 @@ export default function Admin() {
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-foreground">{c.display_name}</p>
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                            {ERP_TYPE_LABELS[c.erp_type] || c.erp_type}
+                            {ERP_TYPE_LABELS[c.erp_type]?.label || c.erp_type}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground font-mono">{c.company_db}</p>
