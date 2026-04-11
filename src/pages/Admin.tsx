@@ -658,103 +658,146 @@ export default function Admin() {
         )}
       </main>
 
-      {/* Company Dialog */}
+      {/* Company Dialog — Wizard */}
       <Dialog open={companyDialog} onOpenChange={setCompanyDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingCompany ? "Editar Empresa" : "Nova Empresa"}</DialogTitle>
+            <DialogTitle>
+              {editingCompany ? "Editar Empresa" : "Nova Empresa"}
+              {wizardStep === 2 && companyForm.erp_type && (
+                <span className="text-muted-foreground font-normal text-sm ml-2">
+                  — {ERP_TYPE_LABELS[companyForm.erp_type]?.label || companyForm.erp_type}
+                </span>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {wizardStep === 1 ? "Selecione o tipo de ERP da empresa" : "Preencha os dados da empresa"}
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Nome</label>
-              <Input
-                value={companyForm.display_name}
-                onChange={(e) => setCompanyForm((f) => ({ ...f, display_name: e.target.value }))}
-                placeholder="Nome da empresa"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Tipo de ERP</label>
-              <Select value={companyForm.erp_type} onValueChange={(v) => setCompanyForm((f) => ({ ...f, erp_type: v }))}>
-                <SelectTrigger className="bg-card">
-                  <SelectValue placeholder="Selecione o ERP" />
-                </SelectTrigger>
-                <SelectContent>
-                  {enabledNames.map((erpKey) => (
-                    <SelectItem key={erpKey} value={erpKey}>
-                      {ERP_TYPE_LABELS[erpKey] || erpKey}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Código da Base (company_db)</label>
-              <Input
-                value={companyForm.company_db}
-                onChange={(e) => setCompanyForm((f) => ({ ...f, company_db: e.target.value }))}
-                placeholder="SBO_NOME_EMPRESA"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">URL do Service Layer</label>
-              <Input
-                value={companyForm.service_layer_url}
-                onChange={(e) => setCompanyForm((f) => ({ ...f, service_layer_url: e.target.value }))}
-                placeholder="https://servidor:50000/b1s/v1/"
-                className="font-mono text-sm"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={companyForm.is_active}
-                onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
-              />
-              <span className="text-sm text-foreground">Empresa ativa</span>
-            </div>
 
-            {/* Targets */}
-            <div className="space-y-3 pt-2 border-t border-border">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Target className="w-4 h-4 text-primary" />
-                Metas do Fluxo de Compras (dias)
+          {wizardStep === 1 ? (
+            /* ── Step 1: ERP Selection ── */
+            <div className="grid grid-cols-2 gap-3 py-4">
+              {enabledNames.map((erpKey) => {
+                const erp = ERP_TYPE_LABELS[erpKey];
+                if (!erp) return null;
+                const ErpIcon = erp.icon;
+                const isSelected = companyForm.erp_type === erpKey;
+                return (
+                  <button
+                    key={erpKey}
+                    onClick={() => {
+                      setCompanyForm((f) => ({ ...f, erp_type: erpKey }));
+                      setWizardStep(2);
+                    }}
+                    className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all text-left hover:border-primary/60 ${
+                      isSelected
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-card hover:bg-muted/30"
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${isSelected ? "bg-primary/10" : "bg-muted"}`}>
+                      <ErpIcon className={`w-5 h-5 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                    </div>
+                    <span className="text-sm font-medium text-foreground">{erp.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            /* ── Step 2: Company Form ── */
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Nome</label>
+                <Input
+                  value={companyForm.display_name}
+                  onChange={(e) => setCompanyForm((f) => ({ ...f, display_name: e.target.value }))}
+                  placeholder="Nome da empresa"
+                  autoFocus
+                />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                {([
-                  { key: "requisicao", label: "Requisição" },
-                  { key: "cotacao", label: "Cotação" },
-                  { key: "aprovacao", label: "Aprovação" },
-                  { key: "pedido_compra", label: "Pedido Compra" },
-                  { key: "nf_entrada", label: "NF Entrada" },
-                  { key: "pagamento", label: "Pagamento" },
-                  { key: "aprovador", label: "Aprovador" },
-                ] as { key: keyof CompanyTargets; label: string }[]).map(({ key, label }) => (
-                  <div key={key} className="space-y-1">
-                    <label className="text-xs text-muted-foreground">{label}</label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={companyForm.targets[key]}
-                      onChange={(e) =>
-                        setCompanyForm((f) => ({
-                          ...f,
-                          targets: { ...f.targets, [key]: Number(e.target.value) || 1 },
-                        }))
-                      }
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Código da Base (company_db)</label>
+                <Input
+                  value={companyForm.company_db}
+                  onChange={(e) => setCompanyForm((f) => ({ ...f, company_db: e.target.value }))}
+                  placeholder="SBO_NOME_EMPRESA"
+                  className="font-mono"
+                />
+              </div>
+
+              {/* SAP-specific: Service Layer URL */}
+              {companyForm.erp_type === "sap" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">URL do Service Layer</label>
+                  <Input
+                    value={companyForm.service_layer_url}
+                    onChange={(e) => setCompanyForm((f) => ({ ...f, service_layer_url: e.target.value }))}
+                    placeholder="https://servidor:50000/b1s/v1/"
+                    className="font-mono text-sm"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={companyForm.is_active}
+                  onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
+                />
+                <span className="text-sm text-foreground">Empresa ativa</span>
+              </div>
+
+              {/* Targets */}
+              <div className="space-y-3 pt-2 border-t border-border">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Target className="w-4 h-4 text-primary" />
+                  Metas do Fluxo de Compras (dias)
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { key: "requisicao", label: "Requisição" },
+                    { key: "cotacao", label: "Cotação" },
+                    { key: "aprovacao", label: "Aprovação" },
+                    { key: "pedido_compra", label: "Pedido Compra" },
+                    { key: "nf_entrada", label: "NF Entrada" },
+                    { key: "pagamento", label: "Pagamento" },
+                    { key: "aprovador", label: "Aprovador" },
+                  ] as { key: keyof CompanyTargets; label: string }[]).map(({ key, label }) => (
+                    <div key={key} className="space-y-1">
+                      <label className="text-xs text-muted-foreground">{label}</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={companyForm.targets[key]}
+                        onChange={(e) =>
+                          setCompanyForm((f) => ({
+                            ...f,
+                            targets: { ...f.targets, [key]: Number(e.target.value) || 1 },
+                          }))
+                        }
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            {wizardStep === 2 && (
+              <Button variant="outline" onClick={() => setWizardStep(1)} className="mr-auto">
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                Voltar
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setCompanyDialog(false)}>Cancelar</Button>
-            <Button onClick={saveCompany} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-              Salvar
-            </Button>
+            {wizardStep === 2 && (
+              <Button onClick={saveCompany} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+                Salvar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
