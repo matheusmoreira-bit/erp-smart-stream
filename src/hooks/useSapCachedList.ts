@@ -61,7 +61,7 @@ export function useSapCachedList({
       }
 
       // 2. If no cache hit (or expired) and we have a SAP session, fetch from SAP
-      if (!session) {
+      if (!session || session.erpType !== "sap") {
         setIsLoading(false);
         return;
       }

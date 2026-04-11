@@ -16,8 +16,6 @@ export interface ErpSession {
 
 interface ErpContextType {
   session: ErpSession | null;
-  /** @deprecated Use session directly — kept for backward compat */
-  sapSession: SapSession | null;
   isLoading: boolean;
   error: string | null;
   login: (userName: string, password: string, companyDB: string, erpType?: ErpType) => Promise<void>;
@@ -98,19 +96,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, [session]);
 
-  // Backward-compatible SAP session shape
-  const sapSession: SapSession | null = session?.erpType === "sap" && session.sessionId
-    ? {
-        sessionId: session.sessionId,
-        routeId: session.routeId || "",
-        companyDB: session.companyDB,
-        userName: session.userName,
-        isSuperUser: session.isSuperUser || false,
-      }
-    : null;
-
   return (
-    <ErpContext.Provider value={{ session, sapSession, isLoading, error, login, logout }}>
+    <ErpContext.Provider value={{ session, isLoading, error, login, logout }}>
       {children}
     </ErpContext.Provider>
   );
@@ -120,8 +107,30 @@ export function useSap() {
   const ctx = useContext(ErpContext);
   if (!ctx) throw new Error("useSap must be used within SapProvider");
   // Return backward-compatible interface
+  // session always exposes companyDB/userName for auth guards and display
+  // SAP-specific fields (sessionId, routeId) are present only for SAP sessions
+  const session: SapSession | null = ctx.session
+    ? ctx.session.erpType === "sap" && ctx.session.sessionId
+      ? {
+          sessionId: ctx.session.sessionId,
+          routeId: ctx.session.routeId || "",
+          companyDB: ctx.session.companyDB,
+          userName: ctx.session.userName,
+          isSuperUser: ctx.session.isSuperUser || false,
+          erpType: "sap",
+        }
+      : {
+          sessionId: "__omie__",
+          routeId: "",
+          companyDB: ctx.session.companyDB,
+          userName: ctx.session.userName,
+          isSuperUser: false,
+          erpType: "omie",
+        }
+    : null;
+
   return {
-    session: ctx.sapSession,
+    session,
     erpSession: ctx.session,
     isLoading: ctx.isLoading,
     error: ctx.error,

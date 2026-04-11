@@ -45,7 +45,7 @@ export function usePaymentAnalysis(): PaymentAnalysisData {
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!session) return;
+    if (!session || session.erpType !== "sap") return;
     setIsLoading(true);
     setError(null);
 

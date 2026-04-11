@@ -65,7 +65,7 @@ export function useUserActivity() {
   const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async (forceRefresh = false, signal?: AbortSignal) => {
-    if (!session) { setRecords([]); return; }
+    if (!session || session.erpType !== "sap") { setRecords([]); return; }
     setIsLoading(true);
     setError(null);
     try {

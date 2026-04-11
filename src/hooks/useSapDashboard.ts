@@ -359,7 +359,7 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
   const [approvalRowsRaw, setApprovalRowsRaw] = useState<ApprovalViewRow[]>([]);
 
   const fetchData = useCallback(async () => {
-    if (!session) return;
+    if (!session || session.erpType !== "sap") return;
     setIsLoading(true);
     setError(null);
 

@@ -168,7 +168,7 @@ export function MainMenu() {
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
+              <h1 className="text-xl font-bold text-foreground">ERP <span className="text-gradient">Analytics</span></h1>
               <p className="text-xs text-muted-foreground">Painel de gestão</p>
             </div>
           </div>

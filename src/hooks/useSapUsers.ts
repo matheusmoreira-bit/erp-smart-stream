@@ -44,7 +44,7 @@ export function useSapUsers() {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
   const fetchUsers = useCallback(async (forceRefresh = false, signal?: AbortSignal) => {
-    if (!session) {
+    if (!session || session.erpType !== "sap") {
       // No session: try loading from DB cache
       setIsLoading(true);
       setError(null);

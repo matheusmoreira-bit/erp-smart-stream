@@ -8,6 +8,7 @@ export interface SapSession {
   companyDB: string;
   userName: string;
   isSuperUser: boolean;
+  erpType?: string;
 }
 
 // Client-side response cache

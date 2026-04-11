@@ -114,7 +114,7 @@ export function useApprovals() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchApprovals = useCallback(async () => {
-    if (!session) return;
+    if (!session || session.erpType !== "sap") return;
     setIsLoading(true);
     setError(null);
 
