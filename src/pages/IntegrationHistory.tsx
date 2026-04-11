@@ -44,6 +44,8 @@ interface IntegrationLog {
   pagcorp_data: any;
   sap_doc_entry: number | null;
   sap_doc_num: number | null;
+  sap_payload: any;
+  sap_response: any;
   status: string;
   error_message: string | null;
   integration_type: string;
