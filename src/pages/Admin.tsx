@@ -746,6 +746,16 @@ export default function Admin() {
                   autoFocus
                 />
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Código Interno</label>
+                <Input
+                  value={companyForm.company_db}
+                  onChange={(e) => setCompanyForm((f) => ({ ...f, company_db: e.target.value }))}
+                  placeholder="codigo_empresa"
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground">Identificador único da empresa no sistema</p>
+              </div>
 
               <div className="flex items-center gap-3">
                 <Switch
