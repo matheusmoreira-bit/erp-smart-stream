@@ -253,6 +253,7 @@ export default function PagCorpMapping() {
             </h1>
             <p className="text-xs text-muted-foreground">Configure centro de custo, projeto e itens genéricos</p>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 

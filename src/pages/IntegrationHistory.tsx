@@ -236,6 +236,7 @@ export default function IntegrationHistory() {
               <p className="text-xs text-muted-foreground">Log de auditoria PagCorp → SAP</p>
             </div>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 
