@@ -46,7 +46,7 @@ export function SapLoginForm() {
   const selectedCompany = databases.find((d) => d.value === companyDB);
   const erpType = selectedCompany?.erp_type || "sap";
   const needsCredentials = erpType === "sap"; // Only SAP B1 requires user/pass at login
-  const isStateless = erpType === "omie" || erpType.startsWith("s4hana");
+  const isStateless = erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs");
   const erpInfo = ERP_LABELS[erpType] || ERP_LABELS.sap;
   const ErpIcon = erpInfo.icon;
 
