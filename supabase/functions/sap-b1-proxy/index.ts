@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
@@ -6,12 +5,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sap-session, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DEFAULT_SAP_BASE_URL = "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v1";
-const HANA_VIEWS_URL = "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+// Use env vars instead of hardcoded URLs
+const DEFAULT_SAP_BASE_URL = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v1";
+const HANA_VIEWS_URL = Deno.env.get("HANA_VIEWS_URL") || "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
 // In-memory cache with TTL
 const cache = new Map<string, { data: unknown; expiry: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
 
 function getCached(key: string): unknown | null {
   const entry = cache.get(key);
@@ -27,10 +27,24 @@ function setCache(key: string, data: unknown) {
   cache.set(key, { data, expiry: Date.now() + CACHE_TTL });
 }
 
+async function requireAuth(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) throw new Error("UNAUTHORIZED");
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error("UNAUTHORIZED");
+  return user;
+}
+
 async function parseResponseBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return null;
-
   try {
     return JSON.parse(text);
   } catch {
@@ -43,18 +57,12 @@ function extractViewRows(payload: unknown): unknown[] {
     const wrapped = payload.find((item) => {
       return !!item && typeof item === "object" && Array.isArray((item as { data?: unknown[] }).data);
     }) as { data?: unknown[] } | undefined;
-
-    if (wrapped?.data) {
-      return wrapped.data;
-    }
-
+    if (wrapped?.data) return wrapped.data;
     return payload;
   }
-
   if (payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown[] }).data)) {
     return (payload as { data: unknown[] }).data;
   }
-
   return [];
 }
 
@@ -63,12 +71,16 @@ function extractTableName(table: string): string {
   return trimmed.includes(".") ? trimmed.split(".").pop() || trimmed : trimmed;
 }
 
+function validateEndpoint(endpoint: string): boolean {
+  if (!endpoint || typeof endpoint !== "string" || endpoint.length > 500) return false;
+  if (endpoint.includes("..") || endpoint.startsWith("http")) return false;
+  return true;
+}
+
 async function getSapBaseUrl(companyDB?: string): Promise<string> {
   if (!companyDB) return DEFAULT_SAP_BASE_URL;
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const sb = createClient(supabaseUrl, serviceRoleKey);
+    const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data } = await sb
       .from("companies")
       .select("service_layer_url")
@@ -76,10 +88,7 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
       .maybeSingle();
     if (data?.service_layer_url) {
       let url = data.service_layer_url.replace(/\/+$/, "");
-      // Ensure the URL includes the /b1s/v1 path
-      if (!url.includes("/b1s/v1")) {
-        url = `${url}/b1s/v1`;
-      }
+      if (!url.includes("/b1s/v1")) url = `${url}/b1s/v1`;
       return url;
     }
   } catch (e) {
@@ -88,24 +97,30 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
   return DEFAULT_SAP_BASE_URL;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    await requireAuth(req);
+
     const reqBody = await req.json();
     const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
 
-    // Resolve the SAP Service Layer base URL dynamically per company
+    if (!action || typeof action !== "string") {
+      return new Response(JSON.stringify({ error: "action é obrigatória" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const SAP_BASE_URL = await getSapBaseUrl(companyDB || credentials?.CompanyDB);
 
     // LOGIN
     if (action === "login") {
       if (!credentials?.UserName || !credentials?.Password || !credentials?.CompanyDB) {
         return new Response(JSON.stringify({ error: "UserName, Password e CompanyDB são obrigatórios" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -128,13 +143,11 @@ serve(async (req) => {
           errorMsg = parsed?.error?.message?.value || errorMsg;
         } catch { /* ignore */ }
         return new Response(JSON.stringify({ error: errorMsg }), {
-          status: loginResp.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: loginResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const loginData = await loginResp.json();
-      // Extract session cookie
       const setCookie = loginResp.headers.get("set-cookie") || "";
       const sessionMatch = setCookie.match(/B1SESSION=([^;]+)/);
       const routeMatch = setCookie.match(/ROUTEID=([^;]+)/);
@@ -144,50 +157,45 @@ serve(async (req) => {
         routeId: routeMatch?.[1] || "",
         sessionTimeout: loginData.SessionTimeout,
       }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // QUERY - proxy SAP B1 requests with pagination and caching
+    // QUERY
     if (action === "query") {
       if (!sessionId || !endpoint) {
         return new Response(JSON.stringify({ error: "sessionId e endpoint são obrigatórios" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!validateEndpoint(endpoint)) {
+        return new Response(JSON.stringify({ error: "endpoint inválido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Build query string
       const queryParams = new URLSearchParams();
       if (params) {
         for (const [key, value] of Object.entries(params)) {
-          if (value !== undefined && value !== null) {
-            queryParams.set(key, String(value));
-          }
+          if (value !== undefined && value !== null) queryParams.set(key, String(value));
         }
       }
 
       const queryString = queryParams.toString();
       const fullUrl = `${SAP_BASE_URL}/${endpoint}${queryString ? `?${queryString}` : ""}`;
 
-      // Check cache
       const cacheKey = `${sessionId}:${fullUrl}`;
       const cached = getCached(cacheKey);
       if (cached) {
         return new Response(JSON.stringify({ data: cached, fromCache: true }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
       const sapResp = await fetch(fullUrl, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: cookies,
-        },
+        headers: { "Content-Type": "application/json", Cookie: cookies },
       });
 
       if (!sapResp.ok) {
@@ -199,8 +207,7 @@ serve(async (req) => {
           errorMsg = parsed?.error?.message?.value || errorMsg;
         } catch { /* ignore */ }
         return new Response(JSON.stringify({ error: errorMsg }), {
-          status: sapResp.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: sapResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -208,17 +215,20 @@ serve(async (req) => {
       setCache(cacheKey, data);
 
       return new Response(JSON.stringify({ data, fromCache: false }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // QUERY ALL - fetch all pages automatically
+    // QUERY ALL
     if (action === "queryAll") {
       if (!sessionId || !endpoint) {
         return new Response(JSON.stringify({ error: "sessionId e endpoint são obrigatórios" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!validateEndpoint(endpoint)) {
+        return new Response(JSON.stringify({ error: "endpoint inválido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -226,8 +236,7 @@ serve(async (req) => {
       const cached = getCached(cacheKey);
       if (cached) {
         return new Response(JSON.stringify({ data: cached, fromCache: true }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -256,8 +265,7 @@ serve(async (req) => {
         });
 
         if (!sapResp.ok) {
-          const errorText = await sapResp.text();
-          console.error("SAP queryAll error:", sapResp.status, errorText);
+          console.error("SAP queryAll error:", sapResp.status, await sapResp.text());
           break;
         }
 
@@ -268,27 +276,28 @@ serve(async (req) => {
         hasMore = !!pageData["odata.nextLink"] || items.length === top;
         skip += top;
 
-        // Safety limit
-        if (allResults.length > 5000) {
-          hasMore = false;
-        }
+        if (allResults.length > 5000) hasMore = false;
       }
 
       const result = { value: allResults, totalCount: allResults.length };
       setCache(cacheKey, result);
 
       return new Response(JSON.stringify({ data: result, fromCache: false }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // QUERY VIEW - fetch processed HANA views through external API
+    // QUERY VIEW
     if (action === "queryView") {
       if (!sessionId || !database || !table) {
         return new Response(JSON.stringify({ error: "sessionId, database e table são obrigatórios" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (typeof database !== "string" || database.length > 200 || typeof table !== "string" || table.length > 200) {
+        return new Response(JSON.stringify({ error: "database ou table inválidos" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -297,8 +306,7 @@ serve(async (req) => {
       const cached = getCached(cacheKey);
       if (cached) {
         return new Response(JSON.stringify({ data: cached, fromCache: true }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -333,19 +341,15 @@ serve(async (req) => {
               : "Erro na consulta da view HANA";
         console.error("HANA view query error:", viewResp.status, payload);
         return new Response(JSON.stringify({ error: message }), {
-          status: viewResp.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: viewResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const rows = extractViewRows(payload);
-      if (rows.length > 0) {
-        setCache(cacheKey, rows);
-      }
+      if (rows.length > 0) setCache(cacheKey, rows);
 
       return new Response(JSON.stringify({ data: rows, fromCache: false }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -359,21 +363,31 @@ serve(async (req) => {
         }).catch(() => {});
       }
       return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // SAP ACTION - POST/PATCH to SAP Service Layer
+    // SAP ACTION
     if (action === "sapAction") {
       if (!sessionId || !endpoint) {
         return new Response(JSON.stringify({ error: "sessionId e endpoint são obrigatórios" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!validateEndpoint(endpoint)) {
+        return new Response(JSON.stringify({ error: "endpoint inválido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const httpMethod = reqBody.method || "POST";
+      const allowedMethods = ["POST", "PATCH", "PUT", "DELETE"];
+      if (!allowedMethods.includes(httpMethod.toUpperCase())) {
+        return new Response(JSON.stringify({ error: "Método HTTP não permitido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const actionBody = reqBody.body || undefined;
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
       const fullUrl = `${SAP_BASE_URL}/${endpoint}`;
@@ -394,26 +408,27 @@ serve(async (req) => {
           errorMsg = (respData as any).error?.message?.value || errorMsg;
         }
         return new Response(JSON.stringify({ error: errorMsg }), {
-          status: sapResp.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: sapResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       return new Response(JSON.stringify({ data: respData }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     return new Response(JSON.stringify({ error: "Ação inválida. Use: login, query, queryAll, queryView, sapAction, logout" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    if (e instanceof Error && e.message === "UNAUTHORIZED") {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     console.error("sap-b1-proxy error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

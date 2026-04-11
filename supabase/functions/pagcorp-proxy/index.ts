@@ -8,6 +8,21 @@ const corsHeaders = {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+async function requireAuth(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) throw new Error("UNAUTHORIZED");
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error("UNAUTHORIZED");
+  return user;
+}
+
 function base64ToUint8Array(b64: string): Uint8Array {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
@@ -100,7 +115,6 @@ async function getCredentials(companyDb?: string): Promise<PagCorpCreds> {
 }
 
 async function getAuthToken(creds: PagCorpCreds): Promise<string> {
-  // Step 1: Get access token
   const tokenRes = await fetch(`${creds.api_base_url}Authentication/Client`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -109,14 +123,11 @@ async function getAuthToken(creds: PagCorpCreds): Promise<string> {
   if (!tokenRes.ok) throw new Error(`Client auth failed [${tokenRes.status}]`);
   const { token: accessToken } = await tokenRes.json();
 
-  // Step 2: Decode JWT to get IV
   const jwt = decodeJwtPayload(accessToken);
   const iv = jwt.iv as string;
 
-  // Step 3: Encrypt password
   const encryptedPassword = await encryptPassword(creds.login_password, iv, creds.aes_key, creds.hmac_key);
 
-  // Step 4: Login
   const loginRes = await fetch(`${creds.api_base_url}Authentication/Login`, {
     method: "POST",
     headers: {
@@ -157,10 +168,20 @@ Deno.serve(async (req) => {
   }
 
   try {
+    await requireAuth(req);
+
     const url = new URL(req.url);
     const startDate = url.searchParams.get("startDate") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
     const endDate = url.searchParams.get("endDate") || new Date().toISOString().slice(0, 10);
     const companyDb = url.searchParams.get("companyDb") || undefined;
+
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      return new Response(JSON.stringify({ error: "Formato de data inválido. Use YYYY-MM-DD." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const creds = await getCredentials(companyDb);
     const apiToken = await getAuthToken(creds);
@@ -170,6 +191,11 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     console.error("PagCorp proxy error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {
