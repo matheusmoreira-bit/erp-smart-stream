@@ -63,24 +63,24 @@ export function SapProvider({ children }: { children: ReactNode }) {
           companyDB,
           userName: userName || "omie",
         });
-      } else if (erpType.startsWith("s4hana")) {
-        // S/4HANA — stateless, credentials stored in system_credentials
-        // Validate that credentials exist for this company
+      } else if (erpType.startsWith("s4hana") || erpType.startsWith("totvs")) {
+        // S/4HANA & TOTVS — stateless, credentials stored in system_credentials
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const res = await fetch(`${supabaseUrl}/functions/v1/credentials?system=${erpType}&company_db=${companyDB}`, {
           headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey },
         });
-        if (!res.ok) throw new Error("Credenciais S/4HANA não configuradas para esta empresa");
+        const erpLabel = erpType.startsWith("s4hana") ? "S/4HANA" : "TOTVS";
+        if (!res.ok) throw new Error(`Credenciais ${erpLabel} não configuradas para esta empresa`);
         const credsData = await res.json();
         if (!credsData.credentials || credsData.credentials.length === 0) {
-          throw new Error("Credenciais S/4HANA não encontradas. Configure na tela de Credenciais.");
+          throw new Error(`Credenciais ${erpLabel} não encontradas. Configure na tela de Credenciais.`);
         }
 
         setSession({
           erpType,
           companyDB,
-          userName: userName || "s4hana",
+          userName: userName || erpType,
         });
       }
 
