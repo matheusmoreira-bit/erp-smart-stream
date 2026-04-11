@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2 } from "lucide-react";
+import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,11 +23,15 @@ const ERP_LABELS: Record<string, { label: string; icon: typeof Server; method: s
   s4hana_cloud_private: { label: "SAP S/4HANA Cloud Private", icon: Cloud, method: "credenciais armazenadas" },
   s4hana_onprem: { label: "SAP S/4HANA On-Premise", icon: Building2, method: "credenciais armazenadas" },
   omie: { label: "OMIE", icon: Box, method: "API OMIE" },
+  totvs_protheus: { label: "TOTVS Protheus", icon: Layers, method: "credenciais armazenadas" },
+  totvs_rm: { label: "TOTVS RM", icon: Layers, method: "credenciais armazenadas" },
+  totvs_datasul: { label: "TOTVS Datasul", icon: Layers, method: "credenciais armazenadas" },
 };
 
 function getErpBadge(erpType: string): string {
   if (erpType === "sap") return "SAP B1";
   if (erpType.startsWith("s4hana")) return "S/4HANA";
+  if (erpType.startsWith("totvs")) return "TOTVS";
   return erpType.toUpperCase();
 }
 
