@@ -443,6 +443,17 @@ export default function Admin() {
             Permissões
           </button>
           <button
+            onClick={() => setActiveTab("integrations")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "integrations"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Key className="w-4 h-4 inline mr-1.5" />
+            Integrações
+          </button>
+          <button
             onClick={() => setActiveTab("audit")}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "audit"
