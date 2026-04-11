@@ -539,7 +539,6 @@ export default function Admin() {
                         </div>
                         <p className="text-xs text-muted-foreground font-mono">{c.company_db}</p>
                       </div>
-                      </div>
                       <Badge variant={c.is_active ? "default" : "secondary"}>
                         {c.is_active ? "Ativa" : "Inativa"}
                       </Badge>
