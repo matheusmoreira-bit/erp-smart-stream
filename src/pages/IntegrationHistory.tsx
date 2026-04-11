@@ -136,6 +136,20 @@ export default function IntegrationHistory() {
     }
   };
 
+  const cancelIntegration = async (log: IntegrationLog) => {
+    try {
+      const { error } = await supabase
+        .from("pagcorp_integration_log")
+        .update({ status: "cancelled" } as any)
+        .eq("id", log.id);
+      if (error) throw error;
+      toast.success("Integração cancelada");
+      fetchLogs();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao cancelar");
+    }
+  };
+
   useEffect(() => {
     fetchLogs();
   }, []);
