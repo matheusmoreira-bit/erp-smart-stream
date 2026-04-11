@@ -97,6 +97,7 @@ export const SYSTEMS: SystemConfig[] = [
     ],
   },
   {
+    name: "totvs_protheus",
     label: "TOTVS Protheus",
     description: "ERP TOTVS Protheus — integração via REST API (TLPP/Advpl)",
     icon: Layers,
