@@ -29,6 +29,7 @@ export interface Company {
   is_active: boolean;
   created_at: string;
   targets: CompanyTargets;
+  erp_type: string;
 }
 
 export function useCompanies(onlyActive = false) {
