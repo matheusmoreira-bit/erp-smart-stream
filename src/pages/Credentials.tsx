@@ -18,7 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { useCredentials } from "@/hooks/useCredentials";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
-import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
+import { SYSTEMS, CATEGORY_LABELS, type SystemConfig } from "@/lib/system-definitions";
 
 function CredentialModal({
   system,
