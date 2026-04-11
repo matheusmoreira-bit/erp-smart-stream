@@ -198,6 +198,7 @@ export default function IdpSyncPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Button
               variant="outline"
               size="sm"

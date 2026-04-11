@@ -142,6 +142,7 @@ export default function SynapsePage() {
               </div>
             </div>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 
