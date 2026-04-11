@@ -140,34 +140,43 @@ export type Database = {
         Row: {
           company_db: string
           created_at: string
+          default_currency: string
           display_name: string
           erp_type: string
           id: string
           is_active: boolean
+          logo_url: string | null
           service_layer_url: string | null
           targets: Json
+          timezone: string
           updated_at: string
         }
         Insert: {
           company_db: string
           created_at?: string
+          default_currency?: string
           display_name: string
           erp_type?: string
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           service_layer_url?: string | null
           targets?: Json
+          timezone?: string
           updated_at?: string
         }
         Update: {
           company_db?: string
           created_at?: string
+          default_currency?: string
           display_name?: string
           erp_type?: string
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           service_layer_url?: string | null
           targets?: Json
+          timezone?: string
           updated_at?: string
         }
         Relationships: []
