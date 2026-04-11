@@ -219,6 +219,7 @@ export default function IntegrationHistory() {
                 <SelectItem value="error">Erro</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
                 <SelectItem value="cancelled">Cancelado</SelectItem>
+              </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-1">
