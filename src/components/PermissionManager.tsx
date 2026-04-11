@@ -271,6 +271,20 @@ export default function PermissionManager() {
 
   const defaultGroup = groups.find((g) => g.name === "Usuário");
 
+  const filteredSortedUsers = sapUsers
+    .filter((u) => {
+      if (!userFilter) return true;
+      const q = userFilter.toLowerCase();
+      return (
+        (u.UserName || "").toLowerCase().includes(q) ||
+        (u.UserCode || "").toLowerCase().includes(q) ||
+        (u.eMail || "").toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) =>
+      (a.UserName || a.UserCode).localeCompare(b.UserName || b.UserCode, "pt-BR", { sensitivity: "base" })
+    );
+
   const getErpBadge = (erp: string) => {
     if (erp === "sap") return "SAP B1";
     if (erp.startsWith("s4hana")) return "S/4HANA";
@@ -391,6 +405,12 @@ export default function PermissionManager() {
                 <Users className="w-5 h-5 text-primary" />
                 <h3 className="text-lg font-semibold text-foreground">Usuários</h3>
               </div>
+              <Input
+                placeholder="Filtrar usuários..."
+                value={userFilter}
+                onChange={(e) => setUserFilter(e.target.value)}
+                className="w-[260px] h-8 text-sm bg-card"
+              />
             </div>
 
             <p className="text-xs text-muted-foreground mb-3">
@@ -413,7 +433,7 @@ export default function PermissionManager() {
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-20 text-right">Ação</span>
                 </div>
 
-                {sapUsers.map((user) => {
+                {filteredSortedUsers.map((user) => {
                   const email = user.eMail || user.UserCode;
                   const currentGroup = getUserGroup(email);
                   const assignment = assignments.find(
