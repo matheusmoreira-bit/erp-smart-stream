@@ -1,6 +1,6 @@
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/sap-b1-proxy`;
+import { authFetch } from "@/lib/auth-fetch";
+
+const FUNCTION_URL = "sap-b1-proxy";
 
 export interface SapSession {
   sessionId: string;
@@ -34,18 +34,9 @@ export function clearClientCache() {
 }
 
 async function callProxy(body: Record<string, unknown>) {
-  // Get the user's JWT from the Supabase auth session
-  const { supabase } = await import("@/integrations/supabase/client");
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token || SUPABASE_KEY;
-
-  const resp = await fetch(FUNCTION_URL, {
+  const resp = await authFetch(FUNCTION_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      apikey: SUPABASE_KEY,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 
