@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon } from "lucide-react";
 import {
   Building2,
   Plus,
@@ -66,6 +66,9 @@ interface Company {
   created_at: string;
   targets: CompanyTargets;
   erp_type: string;
+  default_currency: string;
+  timezone: string;
+  logo_url: string | null;
 }
 
 const ERP_TYPE_LABELS: Record<string, { label: string; icon: typeof Server }> = {
@@ -246,7 +249,7 @@ export default function Admin() {
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", targets: { ...DEFAULT_TARGETS } });
+  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "" as string, targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [wizardCreds, setWizardCreds] = useState<Record<string, string>>({});
@@ -340,7 +343,7 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", targets: { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "", targets: { ...DEFAULT_TARGETS } });
     setWizardStep(1);
     setWizardCreds({});
     setShowWizardPasswords({});
@@ -349,7 +352,7 @@ export default function Admin() {
 
   const openEditCompany = (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", targets: c.targets || { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", default_currency: c.default_currency || "BRL", timezone: c.timezone || "America/Sao_Paulo", logo_url: c.logo_url || "", targets: c.targets || { ...DEFAULT_TARGETS } });
     setWizardStep(1);
     setWizardCreds({});
     setShowWizardPasswords({});
@@ -373,6 +376,9 @@ export default function Admin() {
           service_layer_url: companyForm.service_layer_url || null,
           is_active: companyForm.is_active,
           erp_type: companyForm.erp_type,
+          default_currency: companyForm.default_currency,
+          timezone: companyForm.timezone,
+          logo_url: companyForm.logo_url || null,
           targets: companyForm.targets,
         })
         .eq("id", editingCompany.id);
@@ -384,6 +390,9 @@ export default function Admin() {
         service_layer_url: companyForm.service_layer_url || null,
         is_active: companyForm.is_active,
         erp_type: companyForm.erp_type,
+        default_currency: companyForm.default_currency,
+        timezone: companyForm.timezone,
+        logo_url: companyForm.logo_url || null,
         targets: companyForm.targets,
       });
       if (error) { toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar"); hasError = true; }
@@ -761,6 +770,83 @@ export default function Admin() {
                   onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
                 />
                 <span className="text-sm text-foreground">Empresa ativa</span>
+              </div>
+
+              {/* Currency & Timezone */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-primary" />
+                    Moeda padrão
+                  </label>
+                  <Select value={companyForm.default_currency} onValueChange={(v) => setCompanyForm((f) => ({ ...f, default_currency: v }))}>
+                    <SelectTrigger className="bg-card">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        { value: "BRL", label: "R$ — Real Brasileiro" },
+                        { value: "USD", label: "US$ — Dólar Americano" },
+                        { value: "EUR", label: "€ — Euro" },
+                        { value: "GBP", label: "£ — Libra Esterlina" },
+                        { value: "ARS", label: "ARS — Peso Argentino" },
+                        { value: "CLP", label: "CLP — Peso Chileno" },
+                        { value: "MXN", label: "MXN — Peso Mexicano" },
+                        { value: "COP", label: "COP — Peso Colombiano" },
+                      ].map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-primary" />
+                    Fuso horário
+                  </label>
+                  <Select value={companyForm.timezone} onValueChange={(v) => setCompanyForm((f) => ({ ...f, timezone: v }))}>
+                    <SelectTrigger className="bg-card">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        { value: "America/Sao_Paulo", label: "São Paulo (GMT-3)" },
+                        { value: "America/Manaus", label: "Manaus (GMT-4)" },
+                        { value: "America/Belem", label: "Belém (GMT-3)" },
+                        { value: "America/Cuiaba", label: "Cuiabá (GMT-4)" },
+                        { value: "America/Rio_Branco", label: "Rio Branco (GMT-5)" },
+                        { value: "America/Noronha", label: "Noronha (GMT-2)" },
+                        { value: "America/New_York", label: "New York (GMT-5)" },
+                        { value: "America/Chicago", label: "Chicago (GMT-6)" },
+                        { value: "America/Los_Angeles", label: "Los Angeles (GMT-8)" },
+                        { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
+                        { value: "America/Santiago", label: "Santiago (GMT-4)" },
+                        { value: "America/Mexico_City", label: "Cidade do México (GMT-6)" },
+                        { value: "Europe/London", label: "Londres (GMT+0)" },
+                        { value: "Europe/Berlin", label: "Berlim (GMT+1)" },
+                        { value: "Europe/Lisbon", label: "Lisboa (GMT+0)" },
+                        { value: "Asia/Tokyo", label: "Tóquio (GMT+9)" },
+                      ].map((tz) => (
+                        <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Logo */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-primary" />
+                  Logo da empresa
+                </label>
+                <Input
+                  value={companyForm.logo_url}
+                  onChange={(e) => setCompanyForm((f) => ({ ...f, logo_url: e.target.value }))}
+                  placeholder="https://exemplo.com/logo.png"
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">URL do logo para dashboards e relatórios</p>
               </div>
 
               <div className="space-y-3 pt-2 border-t border-border">
