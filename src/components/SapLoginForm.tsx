@@ -10,6 +10,7 @@ import { useSap } from "@/contexts/SapContext";
 import type { ErpType } from "@/contexts/SapContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 
 interface CompanyOption {
   label: string;
