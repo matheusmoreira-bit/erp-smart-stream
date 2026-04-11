@@ -628,6 +628,7 @@ export default function ApprovalRulesPage() {
             <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </Button>
+            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout}>
               <LogOut className="w-4 h-4" />
             </Button>

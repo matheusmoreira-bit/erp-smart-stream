@@ -12,6 +12,7 @@ import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { usePaymentAnalysis } from "@/hooks/usePaymentAnalysis";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useModuleAccess } from "@/hooks/usePermissions";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function AnalyticsPage() {
   const { session, logout } = useSap();
@@ -47,6 +48,7 @@ export default function AnalyticsPage() {
               <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
               {session.userName}
             </div>
+            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
               <LogOut className="w-4 h-4" />
             </Button>

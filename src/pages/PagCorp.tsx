@@ -250,6 +250,7 @@ export default function PagCorp() {
               <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
               Conectado
             </div>
+            <ThemeToggle />
             <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               <LogOut className="w-4 h-4" />
             </button>
