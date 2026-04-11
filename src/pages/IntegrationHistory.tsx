@@ -308,94 +308,104 @@ export default function IntegrationHistory() {
               <p className="text-sm mt-1">Ajuste os filtros ou clique em Buscar</p>
             </div>
           ) : (
-            {selectedIds.size > 0 && (
-              <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 border-b border-border">
-                <span className="text-sm text-muted-foreground">{selectedIds.size} selecionado(s)</span>
-                <Button variant="destructive" size="sm" className="gap-2" onClick={cancelBatch}>
-                  <Ban className="w-4 h-4" />
-                  Cancelar selecionados
-                </Button>
-              </div>
-            )}
-            <div className="rounded-xl border border-border overflow-hidden bg-card">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-10">
-                      {pendingInView.length > 0 && (
-                        <Checkbox checked={allPendingSelected} onCheckedChange={toggleAll} />
-                      )}
-                    </TableHead>
-                    <TableHead className="text-muted-foreground">Data</TableHead>
-                    <TableHead className="text-muted-foreground">Expense ID</TableHead>
-                    <TableHead className="text-muted-foreground">Descrição</TableHead>
-                    <TableHead className="text-muted-foreground">Portador</TableHead>
-                    <TableHead className="text-muted-foreground text-right">Valor</TableHead>
-                    <TableHead className="text-muted-foreground text-center">Tipo</TableHead>
-                    <TableHead className="text-muted-foreground text-center">Status</TableHead>
-                    <TableHead className="text-muted-foreground">SAP Doc</TableHead>
-                    <TableHead className="text-muted-foreground">Usuário</TableHead>
-                    <TableHead className="text-muted-foreground text-center">Detalhes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredLogs.map((log) => (
-                    <TableRow key={log.id} className="border-border">
-                      <TableCell className="text-sm text-foreground whitespace-nowrap">
-                        {formatDate(log.created_at)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground font-mono">
-                        {log.pagcorp_expense_id}
-                      </TableCell>
-                      <TableCell className="text-sm text-foreground max-w-[200px] truncate">
-                        {log.pagcorp_data?.description || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {log.pagcorp_data?.accountAlias || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm font-medium text-right text-foreground whitespace-nowrap">
-                        {formatCurrency(log.pagcorp_data?.amount || 0, log.pagcorp_data?.currency)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="text-xs">
-                          {TYPE_LABELS[log.integration_type] || log.integration_type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {statusIcon(log.status)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground font-mono">
-                        {log.sap_doc_num ? `#${log.sap_doc_num}` : "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground truncate max-w-[120px]">
-                        {log.integrated_by || "—"}
-                      </TableCell>
-                      <TableCell className="text-center flex items-center justify-center gap-1">
-                        {log.status === "pending" && (
+            <>
+              {selectedIds.size > 0 && (
+                <div className="flex items-center gap-3 px-4 py-2 mb-2 bg-muted/50 rounded-lg border border-border">
+                  <span className="text-sm text-muted-foreground">{selectedIds.size} selecionado(s)</span>
+                  <Button variant="destructive" size="sm" className="gap-2" onClick={cancelBatch}>
+                    <Ban className="w-4 h-4" />
+                    Cancelar selecionados
+                  </Button>
+                </div>
+              )}
+              <div className="rounded-xl border border-border overflow-hidden bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border hover:bg-transparent">
+                      <TableHead className="w-10">
+                        {pendingInView.length > 0 && (
+                          <Checkbox checked={allPendingSelected} onCheckedChange={toggleAll} />
+                        )}
+                      </TableHead>
+                      <TableHead className="text-muted-foreground">Data</TableHead>
+                      <TableHead className="text-muted-foreground">Expense ID</TableHead>
+                      <TableHead className="text-muted-foreground">Descrição</TableHead>
+                      <TableHead className="text-muted-foreground">Portador</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Valor</TableHead>
+                      <TableHead className="text-muted-foreground text-center">Tipo</TableHead>
+                      <TableHead className="text-muted-foreground text-center">Status</TableHead>
+                      <TableHead className="text-muted-foreground">SAP Doc</TableHead>
+                      <TableHead className="text-muted-foreground">Usuário</TableHead>
+                      <TableHead className="text-muted-foreground text-center">Detalhes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLogs.map((log) => (
+                      <TableRow key={log.id} className="border-border">
+                        <TableCell>
+                          {log.status === "pending" ? (
+                            <Checkbox
+                              checked={selectedIds.has(log.id)}
+                              onCheckedChange={() => toggleOne(log.id)}
+                            />
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-sm text-foreground whitespace-nowrap">
+                          {formatDate(log.created_at)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground font-mono">
+                          {log.pagcorp_expense_id}
+                        </TableCell>
+                        <TableCell className="text-sm text-foreground max-w-[200px] truncate">
+                          {log.pagcorp_data?.description || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {log.pagcorp_data?.accountAlias || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium text-right text-foreground whitespace-nowrap">
+                          {formatCurrency(log.pagcorp_data?.amount || 0, log.pagcorp_data?.currency)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className="text-xs">
+                            {TYPE_LABELS[log.integration_type] || log.integration_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {statusIcon(log.status)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground font-mono">
+                          {log.sap_doc_num ? `#${log.sap_doc_num}` : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground truncate max-w-[120px]">
+                          {log.integrated_by || "—"}
+                        </TableCell>
+                        <TableCell className="text-center flex items-center justify-center gap-1">
+                          {log.status === "pending" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => cancelIntegration(log)}
+                              title="Cancelar integração"
+                            >
+                              <Ban className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => cancelIntegration(log)}
-                            title="Cancelar integração"
+                            className="h-8 w-8"
+                            onClick={() => setSelectedLog(log)}
                           >
-                            <Ban className="w-4 h-4" />
+                            <FileText className="w-4 h-4 text-muted-foreground" />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => setSelectedLog(log)}
-                        >
-                          <FileText className="w-4 h-4 text-muted-foreground" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </div>
       </main>
