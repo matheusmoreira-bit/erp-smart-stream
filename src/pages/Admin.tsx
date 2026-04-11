@@ -670,6 +670,21 @@ export default function Admin() {
               />
             </div>
             <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Tipo de ERP</label>
+              <Select value={companyForm.erp_type} onValueChange={(v) => setCompanyForm((f) => ({ ...f, erp_type: v }))}>
+                <SelectTrigger className="bg-card">
+                  <SelectValue placeholder="Selecione o ERP" />
+                </SelectTrigger>
+                <SelectContent>
+                  {enabledNames.map((erpKey) => (
+                    <SelectItem key={erpKey} value={erpKey}>
+                      {ERP_TYPE_LABELS[erpKey] || erpKey}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Código da Base (company_db)</label>
               <Input
                 value={companyForm.company_db}
