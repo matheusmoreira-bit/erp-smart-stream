@@ -376,6 +376,9 @@ export default function Admin() {
           service_layer_url: companyForm.service_layer_url || null,
           is_active: companyForm.is_active,
           erp_type: companyForm.erp_type,
+          default_currency: companyForm.default_currency,
+          timezone: companyForm.timezone,
+          logo_url: companyForm.logo_url || null,
           targets: companyForm.targets,
         })
         .eq("id", editingCompany.id);
@@ -387,6 +390,9 @@ export default function Admin() {
         service_layer_url: companyForm.service_layer_url || null,
         is_active: companyForm.is_active,
         erp_type: companyForm.erp_type,
+        default_currency: companyForm.default_currency,
+        timezone: companyForm.timezone,
+        logo_url: companyForm.logo_url || null,
         targets: companyForm.targets,
       });
       if (error) { toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar"); hasError = true; }
