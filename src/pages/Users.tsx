@@ -40,7 +40,7 @@ function formatLastLogin(user: SapUser): string {
 
 export default function UsersPage() {
   const navigate = useNavigate();
-  const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword } = useSapUsers();
+  const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword, createUser } = useSapUsers();
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<string>("recorrentes");
