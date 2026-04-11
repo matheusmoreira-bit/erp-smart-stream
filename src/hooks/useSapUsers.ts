@@ -1,8 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQueryView, sapAction, clearClientCache } from "@/lib/sap-client";
+import { sapQueryView, sapAction, sapLogin, sapLogout, clearClientCache } from "@/lib/sap-client";
 import { sapUsersCache, type SapUser } from "@/lib/cache-repository";
 import { supabase } from "@/integrations/supabase/client";
+
+export interface UserCreatePayload {
+  UserCode: string;
+  UserName: string;
+  eMail: string;
+  Password: string;
+}
+
+export interface ReplicationResult {
+  companyDB: string;
+  displayName: string;
+  status: "success" | "error";
+  message?: string;
+}
 
 function pickString(...values: unknown[]): string | undefined {
   for (const value of values) {
