@@ -19,8 +19,6 @@ import {
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useSap } from "@/contexts/SapContext";
-import { useModuleAccess } from "@/hooks/usePermissions";
 
 interface ModuleCard {
   title: string;
