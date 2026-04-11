@@ -83,6 +83,20 @@ export const SYSTEMS: SystemConfig[] = [
     ],
   },
   {
+    name: "netsuite",
+    label: "Oracle NetSuite",
+    description: "ERP em nuvem Oracle — financeiro, CRM e e-commerce integrados",
+    icon: Cloud,
+    category: "erp",
+    fields: [
+      { key: "account_id", label: "Account ID", placeholder: "TSTDRV1234567" },
+      { key: "consumer_key", label: "Consumer Key", placeholder: "Chave do consumidor (integração)" },
+      { key: "consumer_secret", label: "Consumer Secret", type: "password", placeholder: "Segredo do consumidor" },
+      { key: "token_id", label: "Token ID", placeholder: "Token de acesso" },
+      { key: "token_secret", label: "Token Secret", type: "password", placeholder: "Segredo do token" },
+    ],
+  },
+  {
     name: "totvs_protheus",
     label: "TOTVS Protheus",
     description: "ERP TOTVS Protheus — integração via REST API (TLPP/Advpl)",

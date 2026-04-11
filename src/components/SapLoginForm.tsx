@@ -26,12 +26,14 @@ const ERP_LABELS: Record<string, { label: string; icon: typeof Server; method: s
   totvs_protheus: { label: "TOTVS Protheus", icon: Layers, method: "credenciais armazenadas" },
   totvs_rm: { label: "TOTVS RM", icon: Layers, method: "credenciais armazenadas" },
   totvs_datasul: { label: "TOTVS Datasul", icon: Layers, method: "credenciais armazenadas" },
+  netsuite: { label: "Oracle NetSuite", icon: Cloud, method: "credenciais armazenadas (TBA)" },
 };
 
 function getErpBadge(erpType: string): string {
   if (erpType === "sap") return "SAP B1";
   if (erpType.startsWith("s4hana")) return "S/4HANA";
   if (erpType.startsWith("totvs")) return "TOTVS";
+  if (erpType === "netsuite") return "NetSuite";
   return erpType.toUpperCase();
 }
 
@@ -46,7 +48,7 @@ export function SapLoginForm() {
   const selectedCompany = databases.find((d) => d.value === companyDB);
   const erpType = selectedCompany?.erp_type || "sap";
   const needsCredentials = erpType === "sap"; // Only SAP B1 requires user/pass at login
-  const isStateless = erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs");
+  const isStateless = erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite";
   const erpInfo = ERP_LABELS[erpType] || ERP_LABELS.sap;
   const ErpIcon = erpInfo.icon;
 

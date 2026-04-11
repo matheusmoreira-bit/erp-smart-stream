@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { sapLogin, sapLogout, type SapSession, clearClientCache } from "@/lib/sap-client";
 
-export type ErpType = "sap" | "omie" | "s4hana_cloud" | "s4hana_cloud_private" | "s4hana_onprem" | "totvs_protheus" | "totvs_rm" | "totvs_datasul";
+export type ErpType = "sap" | "omie" | "s4hana_cloud" | "s4hana_cloud_private" | "s4hana_onprem" | "totvs_protheus" | "totvs_rm" | "totvs_datasul" | "netsuite";
 
 export interface ErpSession {
   erpType: ErpType;
@@ -63,7 +63,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           companyDB,
           userName: userName || "omie",
         });
-      } else if (erpType.startsWith("s4hana") || erpType.startsWith("totvs")) {
+      } else if (erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite") {
         // S/4HANA & TOTVS — stateless, credentials stored in system_credentials
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
