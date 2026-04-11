@@ -251,11 +251,8 @@ export function useSapUsers() {
     for (const company of companies) {
       try {
         // Fetch credentials for this company
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const credsRes = await fetch(`${supabaseUrl}/functions/v1/credentials?system=${erpType}&company_db=${company.company_db}`, {
-          headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey },
-        });
+        const { authFetch } = await import("@/lib/auth-fetch");
+        const credsRes = await authFetch(`credentials?system=${erpType}&company_db=${company.company_db}`);
 
         if (!credsRes.ok) throw new Error("Sem credenciais configuradas");
         const credsData = await credsRes.json();

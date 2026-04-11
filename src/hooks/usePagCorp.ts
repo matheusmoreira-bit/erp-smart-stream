@@ -37,17 +37,10 @@ export function usePagCorp() {
       if (endDate) params.endDate = endDate;
       if (companyDb) params.companyDb = companyDb;
 
+      const { authFetch } = await import("@/lib/auth-fetch");
       const queryString = new URLSearchParams(params).toString();
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const url = `${supabaseUrl}/functions/v1/pagcorp-proxy${queryString ? `?${queryString}` : ""}`;
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${anonKey}`,
-          apikey: anonKey,
-        },
-      });
+      const url = `pagcorp-proxy${queryString ? `?${queryString}` : ""}`;
+      const res = await authFetch(url);
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));

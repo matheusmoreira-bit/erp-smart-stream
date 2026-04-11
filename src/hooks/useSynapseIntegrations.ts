@@ -97,13 +97,10 @@ export function useSynapseIntegrations(companyDB?: string) {
   const runNow = useCallback(async (integrationKey: string, companyDb?: string) => {
     setIsRunning(true);
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/synapse-jc-sync`, {
+      const { authFetch } = await import("@/lib/auth-fetch");
+      const res = await authFetch("synapse-jc-sync", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${ANON_KEY}`,
-          apikey: ANON_KEY,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ company_db: companyDb }),
       });
       const data = await res.json();
