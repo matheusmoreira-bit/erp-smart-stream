@@ -123,6 +123,7 @@ export default function UsersPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <CreateUserDialog onCreateUser={createUser} isLoading={isLoading} />
             <Button variant="outline" size="sm" onClick={() => navigate("/users/activity")}>
               <BarChart3 className="w-4 h-4 mr-2" />
               Atividade
