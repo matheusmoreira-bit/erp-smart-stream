@@ -248,6 +248,7 @@ export default function Admin() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2>(1);
 
   // System credential modal
   const [selectedSystem, setSelectedSystem] = useState<SystemConfig | null>(null);
