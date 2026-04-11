@@ -398,6 +398,8 @@ export type Database = {
           pagcorp_expense_id: number
           sap_doc_entry: number | null
           sap_doc_num: number | null
+          sap_payload: Json | null
+          sap_response: Json | null
           status: string
           updated_at: string
         }
@@ -412,6 +414,8 @@ export type Database = {
           pagcorp_expense_id: number
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
+          sap_payload?: Json | null
+          sap_response?: Json | null
           status?: string
           updated_at?: string
         }
@@ -426,6 +430,8 @@ export type Database = {
           pagcorp_expense_id?: number
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
+          sap_payload?: Json | null
+          sap_response?: Json | null
           status?: string
           updated_at?: string
         }

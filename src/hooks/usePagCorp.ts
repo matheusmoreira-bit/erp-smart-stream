@@ -123,6 +123,8 @@ export function usePagCorp() {
     sapDocEntry?: number,
     sapDocNum?: number,
     errorMessage?: string,
+    sapPayload?: any,
+    sapResponse?: any,
   ) => {
     const { data, error } = await supabase
       .from("pagcorp_integration_log")
@@ -146,7 +148,9 @@ export function usePagCorp() {
         sap_doc_entry: sapDocEntry || null,
         sap_doc_num: sapDocNum || null,
         error_message: errorMessage || null,
-      })
+        sap_payload: sapPayload || null,
+        sap_response: sapResponse || null,
+      } as any)
       .select("id")
       .single();
 
