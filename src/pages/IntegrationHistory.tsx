@@ -99,6 +99,7 @@ export default function IntegrationHistory() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<IntegrationLog | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const today = new Date();
   const thirtyDaysAgo = new Date(today);
