@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers } from "lucide-react";
+import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,7 @@ export function SapLoginForm() {
   const [password, setPassword] = useState("");
   const [companyDB, setCompanyDB] = useState("");
   const [databases, setDatabases] = useState<CompanyOption[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
 
   const selectedCompany = databases.find((d) => d.value === companyDB);
   const erpType = selectedCompany?.erp_type || "sap";
@@ -170,13 +171,22 @@ export function SapLoginForm() {
                   <Lock className="w-4 h-4 text-primary" />
                   Senha
                 </label>
-                <Input
-                  type="password"
-                  placeholder="Sua senha SAP"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-muted/30 border-border"
-                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Sua senha SAP"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="bg-muted/30 border-border pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </>
           )}
