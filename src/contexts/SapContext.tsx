@@ -16,8 +16,6 @@ export interface ErpSession {
 
 interface ErpContextType {
   session: ErpSession | null;
-  /** @deprecated Use session directly — kept for backward compat */
-  sapSession: SapSession | null;
   isLoading: boolean;
   error: string | null;
   login: (userName: string, password: string, companyDB: string, erpType?: ErpType) => Promise<void>;
