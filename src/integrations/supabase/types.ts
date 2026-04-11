@@ -141,6 +141,7 @@ export type Database = {
           company_db: string
           created_at: string
           display_name: string
+          erp_type: string
           id: string
           is_active: boolean
           service_layer_url: string | null
@@ -151,6 +152,7 @@ export type Database = {
           company_db: string
           created_at?: string
           display_name: string
+          erp_type?: string
           id?: string
           is_active?: boolean
           service_layer_url?: string | null
@@ -161,6 +163,7 @@ export type Database = {
           company_db?: string
           created_at?: string
           display_name?: string
+          erp_type?: string
           id?: string
           is_active?: boolean
           service_layer_url?: string | null
