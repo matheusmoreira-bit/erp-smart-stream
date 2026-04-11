@@ -531,8 +531,14 @@ export default function Admin() {
                         <Building2 className="w-5 h-5 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground">{c.display_name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground">{c.display_name}</p>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                            {ERP_TYPE_LABELS[c.erp_type] || c.erp_type}
+                          </Badge>
+                        </div>
                         <p className="text-xs text-muted-foreground font-mono">{c.company_db}</p>
+                      </div>
                       </div>
                       <Badge variant={c.is_active ? "default" : "secondary"}>
                         {c.is_active ? "Ativa" : "Inativa"}
