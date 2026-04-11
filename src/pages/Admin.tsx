@@ -65,7 +65,20 @@ interface Company {
   is_active: boolean;
   created_at: string;
   targets: CompanyTargets;
+  erp_type: string;
 }
+
+const ERP_TYPE_LABELS: Record<string, string> = {
+  sap: "SAP Business One",
+  omie: "OMIE",
+  s4hana_cloud: "SAP S/4HANA Cloud",
+  s4hana_cloud_private: "SAP S/4HANA Cloud Private",
+  s4hana_onprem: "SAP S/4HANA On-Premise",
+  totvs_protheus: "TOTVS Protheus",
+  totvs_rm: "TOTVS RM",
+  totvs_datasul: "TOTVS Datasul",
+  netsuite: "Oracle NetSuite",
+};
 
 interface Credential {
   id: string;
