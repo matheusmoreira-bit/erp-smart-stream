@@ -245,7 +245,7 @@ export default function Admin() {
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, targets: { ...DEFAULT_TARGETS } });
+  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
 
   // System credential modal
@@ -336,13 +336,13 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, targets: { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", targets: { ...DEFAULT_TARGETS } });
     setCompanyDialog(true);
   };
 
   const openEditCompany = (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, targets: c.targets || { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", targets: c.targets || { ...DEFAULT_TARGETS } });
     setCompanyDialog(true);
   };
 
