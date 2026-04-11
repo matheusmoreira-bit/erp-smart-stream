@@ -1,0 +1,1 @@
+CREATE POLICY "Anon can read sap_cache" ON public.sap_cache FOR SELECT TO anon USING (true);
