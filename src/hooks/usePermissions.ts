@@ -8,6 +8,7 @@ export interface PermissionGroup {
   description: string | null;
   created_at: string;
   modules: string[];
+  company_db: string | null;
 }
 
 export interface UserAssignment {
@@ -15,11 +16,12 @@ export interface UserAssignment {
   sap_email: string;
   group_id: string;
   group_name?: string;
+  company_db: string | null;
   created_at: string;
 }
 
-// All available module keys
-export const ALL_MODULES = [
+// Module definitions per ERP type
+export const SAP_MODULES = [
   { key: "analytics", label: "Analytics (Fluxo)" },
   { key: "analytics_payments", label: "Analytics (Pagamentos)" },
   { key: "expenses", label: "Despesas" },
@@ -32,19 +34,62 @@ export const ALL_MODULES = [
   { key: "audit_log", label: "Logs de Auditoria" },
 ] as const;
 
-// Default modules for users with no group
-const DEFAULT_MODULES = ["analytics", "expenses"];
+export const OMIE_MODULES = [
+  { key: "expenses", label: "Despesas" },
+  { key: "approvals", label: "Aprovações" },
+  { key: "credentials", label: "Credenciais" },
+  { key: "audit_log", label: "Logs de Auditoria" },
+] as const;
 
-export function usePermissionGroups() {
+export const S4HANA_MODULES = [
+  { key: "analytics", label: "Analytics" },
+  { key: "expenses", label: "Despesas" },
+  { key: "approvals", label: "Aprovações" },
+  { key: "users", label: "Usuários" },
+  { key: "credentials", label: "Credenciais" },
+  { key: "audit_log", label: "Logs de Auditoria" },
+] as const;
+
+export const TOTVS_MODULES = [
+  { key: "expenses", label: "Despesas" },
+  { key: "approvals", label: "Aprovações" },
+  { key: "credentials", label: "Credenciais" },
+  { key: "audit_log", label: "Logs de Auditoria" },
+] as const;
+
+export const NETSUITE_MODULES = [
+  { key: "expenses", label: "Despesas" },
+  { key: "approvals", label: "Aprovações" },
+  { key: "credentials", label: "Credenciais" },
+  { key: "audit_log", label: "Logs de Auditoria" },
+] as const;
+
+// Legacy compat
+export const ALL_MODULES = SAP_MODULES;
+
+export function getModulesForErp(erpType: string): readonly { key: string; label: string }[] {
+  if (erpType === "sap") return SAP_MODULES;
+  if (erpType === "omie") return OMIE_MODULES;
+  if (erpType.startsWith("s4hana")) return S4HANA_MODULES;
+  if (erpType.startsWith("totvs")) return TOTVS_MODULES;
+  if (erpType === "netsuite") return NETSUITE_MODULES;
+  return SAP_MODULES;
+}
+
+// Default modules for users with no group
+const DEFAULT_MODULES = ["expenses"];
+
+export function usePermissionGroups(companyDb?: string) {
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    const { data: groupsData } = await supabase
-      .from("permission_groups")
-      .select("*")
-      .order("name");
+    let query = supabase.from("permission_groups").select("*").order("name");
+    if (companyDb) {
+      query = query.eq("company_db", companyDb);
+    }
+    const { data: groupsData } = await query;
 
     const { data: modulesData } = await supabase
       .from("permission_group_modules")
@@ -59,15 +104,19 @@ export function usePermissionGroups() {
 
     setGroups(mapped);
     setLoading(false);
-  }, []);
+  }, [companyDb]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const saveGroup = async (name: string, description: string, modules: string[], id?: string) => {
+  const saveGroup = async (name: string, description: string, modules: string[], id?: string, groupCompanyDb?: string) => {
     if (id) {
       await supabase.from("permission_groups").update({ name, description }).eq("id", id);
     } else {
-      const { data } = await supabase.from("permission_groups").insert({ name, description }).select().single();
+      const { data } = await supabase
+        .from("permission_groups")
+        .insert({ name, description, company_db: groupCompanyDb || companyDb || null })
+        .select()
+        .single();
       if (!data) return;
       id = data.id;
     }
@@ -87,19 +136,49 @@ export function usePermissionGroups() {
     await fetch();
   };
 
-  return { groups, loading, refresh: fetch, saveGroup, deleteGroup };
+  const ensureDefaultGroup = async (erpType: string, targetCompanyDb: string) => {
+    // Check if "Usuário" group exists for this company
+    const existing = groups.find(
+      (g) => g.name === "Usuário" && g.company_db === targetCompanyDb
+    );
+    if (existing) return existing;
+
+    // Create default "Usuário" group with only expenses
+    const defaultModules = ["expenses"];
+    const { data } = await supabase
+      .from("permission_groups")
+      .insert({ name: "Usuário", description: "Acesso padrão — apenas despesas", company_db: targetCompanyDb })
+      .select()
+      .single();
+    if (data) {
+      await supabase.from("permission_group_modules").insert(
+        defaultModules.map((m) => ({ group_id: data.id, module_key: m }))
+      );
+      await fetch();
+      return { ...data, modules: defaultModules } as PermissionGroup;
+    }
+    return null;
+  };
+
+  return { groups, loading, refresh: fetch, saveGroup, deleteGroup, ensureDefaultGroup };
 }
 
-export function useUserAssignments() {
+export function useUserAssignments(companyDb?: string) {
   const [assignments, setAssignments] = useState<UserAssignment[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from("user_group_assignments")
       .select("*, permission_groups(name)")
       .order("sap_email");
+
+    if (companyDb) {
+      query = query.eq("company_db", companyDb);
+    }
+
+    const { data } = await query;
 
     setAssignments(
       (data || []).map((d: any) => ({
@@ -107,18 +186,20 @@ export function useUserAssignments() {
         sap_email: d.sap_email,
         group_id: d.group_id,
         group_name: d.permission_groups?.name,
+        company_db: d.company_db,
         created_at: d.created_at,
       }))
     );
     setLoading(false);
-  }, []);
+  }, [companyDb]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const assign = async (sap_email: string, group_id: string) => {
+  const assign = async (sap_email: string, group_id: string, targetCompanyDb?: string) => {
+    const cdb = targetCompanyDb || companyDb || null;
     await supabase.from("user_group_assignments").upsert(
-      { sap_email: sap_email.toLowerCase(), group_id },
-      { onConflict: "sap_email,group_id" }
+      { sap_email: sap_email.toLowerCase(), group_id, company_db: cdb },
+      { onConflict: "sap_email,group_id,company_db" }
     );
     await fetch();
   };
@@ -133,7 +214,6 @@ export function useUserAssignments() {
 
 /**
  * Hook to check if the current SAP user has access to a specific module.
- * Returns { hasAccess, loading, userModules }
  */
 export function useModuleAccess(moduleKey?: string) {
   const { session } = useSap();
@@ -148,15 +228,17 @@ export function useModuleAccess(moduleKey?: string) {
     }
 
     const identifier = session.userName.toLowerCase();
+    const companyDB = session.companyDB;
 
     (async () => {
       setLoading(true);
 
-      // Get all groups the user belongs to
-      // Match by exact sap_email OR by username prefix (user logs in as "john" but assignment is "john@company.com")
-      const { data: allAssignments } = await supabase
+      // Get assignments for this company (or global)
+      let query = supabase
         .from("user_group_assignments")
         .select("group_id, sap_email");
+
+      const { data: allAssignments } = await query;
 
       const assignments = (allAssignments || []).filter((a: any) => {
         const sapEmail = a.sap_email.toLowerCase();
@@ -180,7 +262,7 @@ export function useModuleAccess(moduleKey?: string) {
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
       setLoading(false);
     })();
-  }, [session?.userName]);
+  }, [session?.userName, session?.companyDB]);
 
   const hasAccess = moduleKey ? userModules.includes(moduleKey) : true;
 
