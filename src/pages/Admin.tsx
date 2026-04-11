@@ -747,26 +747,15 @@ export default function Admin() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Código da Base (company_db)</label>
+                <label className="text-sm font-medium text-foreground">Código Interno</label>
                 <Input
                   value={companyForm.company_db}
                   onChange={(e) => setCompanyForm((f) => ({ ...f, company_db: e.target.value }))}
-                  placeholder="SBO_NOME_EMPRESA"
+                  placeholder="codigo_empresa"
                   className="font-mono"
                 />
+                <p className="text-xs text-muted-foreground">Identificador único da empresa no sistema</p>
               </div>
-
-              {companyForm.erp_type === "sap" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">URL do Service Layer</label>
-                  <Input
-                    value={companyForm.service_layer_url}
-                    onChange={(e) => setCompanyForm((f) => ({ ...f, service_layer_url: e.target.value }))}
-                    placeholder="https://servidor:50000/b1s/v1/"
-                    className="font-mono text-sm"
-                  />
-                </div>
-              )}
 
               <div className="flex items-center gap-3">
                 <Switch
@@ -878,8 +867,8 @@ export default function Admin() {
             <Button variant="outline" onClick={() => setCompanyDialog(false)}>Cancelar</Button>
             {wizardStep === 2 && (
               <Button onClick={() => {
-                if (!companyForm.company_db || !companyForm.display_name) {
-                  toast.error("Preencha o nome e código da empresa");
+                if (!companyForm.display_name || !companyForm.company_db) {
+                  toast.error("Preencha o nome e código interno da empresa");
                   return;
                 }
                 setWizardStep(3);
