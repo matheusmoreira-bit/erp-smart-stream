@@ -208,6 +208,7 @@ export default function IntegrationHistory() {
     }
   };
 
+  const statusIcon = (status: string) => {
     const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
     const Icon = cfg.icon;
     return (
