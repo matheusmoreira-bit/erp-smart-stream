@@ -41,6 +41,7 @@ function getErpBadge(erpType: string): string {
 export function SapLoginForm() {
   const { login, isLoading } = useSap();
   const navigate = useNavigate();
+  const { enabledNames } = useEnabledErpTypes();
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [companyDB, setCompanyDB] = useState("");
