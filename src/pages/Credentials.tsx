@@ -228,6 +228,7 @@ export default function Credentials() {
                 : "Gerencie as conexões com sistemas externos de forma segura"}
             </p>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 
