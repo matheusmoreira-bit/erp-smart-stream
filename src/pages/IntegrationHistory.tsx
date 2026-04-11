@@ -152,6 +152,44 @@ export default function IntegrationHistory() {
     }
   };
 
+  const pendingInView = useMemo(() => filteredLogs.filter((l) => l.status === "pending"), [filteredLogs]);
+
+  const allPendingSelected = pendingInView.length > 0 && pendingInView.every((l) => selectedIds.has(l.id));
+
+  const toggleAll = useCallback(() => {
+    if (allPendingSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingInView.map((l) => l.id)));
+    }
+  }, [allPendingSelected, pendingInView]);
+
+  const toggleOne = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const cancelBatch = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      const { error } = await supabase
+        .from("pagcorp_integration_log")
+        .update({ status: "cancelled" } as any)
+        .in("id", ids);
+      if (error) throw error;
+      toast.success(`${ids.length} integração(ões) cancelada(s)`);
+      setSelectedIds(new Set());
+      fetchLogs();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao cancelar em lote");
+    }
+  };
+
   useEffect(() => {
     fetchLogs();
   }, []);
