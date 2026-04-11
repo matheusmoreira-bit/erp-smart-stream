@@ -120,8 +120,29 @@ export function useSap() {
   const ctx = useContext(ErpContext);
   if (!ctx) throw new Error("useSap must be used within SapProvider");
   // Return backward-compatible interface
+  // session always exposes companyDB/userName for auth guards and display
+  // SAP-specific fields (sessionId, routeId) are present only for SAP sessions
+  const session: SapSession | null = ctx.session
+    ? ctx.session.erpType === "sap" && ctx.session.sessionId
+      ? {
+          sessionId: ctx.session.sessionId,
+          routeId: ctx.session.routeId || "",
+          companyDB: ctx.session.companyDB,
+          userName: ctx.session.userName,
+          isSuperUser: ctx.session.isSuperUser || false,
+        }
+      : {
+          // OMIE session — provide a compatible shape so pages don't break
+          sessionId: "__omie__",
+          routeId: "",
+          companyDB: ctx.session.companyDB,
+          userName: ctx.session.userName,
+          isSuperUser: false,
+        }
+    : null;
+
   return {
-    session: ctx.sapSession,
+    session,
     erpSession: ctx.session,
     isLoading: ctx.isLoading,
     error: ctx.error,
