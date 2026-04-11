@@ -363,6 +363,7 @@ export default function Admin() {
     }
     setSaving(true);
     const isNew = !editingCompany;
+    let hasError = false;
     if (editingCompany) {
       const { error } = await supabase
         .from("companies")
@@ -375,8 +376,7 @@ export default function Admin() {
           targets: companyForm.targets,
         })
         .eq("id", editingCompany.id);
-      if (error) toast.error("Erro ao atualizar");
-      else toast.success("Empresa atualizada");
+      if (error) { toast.error("Erro ao atualizar"); hasError = true; }
     } else {
       const { error } = await supabase.from("companies").insert({
         company_db: companyForm.company_db,
@@ -386,13 +386,26 @@ export default function Admin() {
         erp_type: companyForm.erp_type,
         targets: companyForm.targets,
       });
-      if (error) toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar");
-      else toast.success("Empresa criada");
+      if (error) { toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar"); hasError = true; }
     }
+
+    // Save ERP credentials from wizard step 3
+    if (!hasError) {
+      const credEntries = Object.entries(wizardCreds).filter(([, v]) => v.trim());
+      if (credEntries.length > 0) {
+        for (const [key, value] of credEntries) {
+          await supabase.from("system_credentials").upsert(
+            { company_db: companyForm.company_db, system_name: companyForm.erp_type, credential_key: key, credential_value: value.trim() },
+            { onConflict: "company_db,system_name,credential_key" }
+          );
+        }
+      }
+      toast.success(isNew ? "Empresa criada com sucesso" : "Empresa atualizada");
+    }
+
     setSaving(false);
     setCompanyDialog(false);
     await fetchCompanies();
-    // After creating a new company, auto-expand to show credentials config
     if (isNew) {
       setExpandedCompany(companyForm.company_db);
       fetchCredentials(companyForm.company_db);
