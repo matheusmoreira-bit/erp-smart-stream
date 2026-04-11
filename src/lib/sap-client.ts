@@ -1,6 +1,6 @@
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/sap-b1-proxy`;
+import { authFetch } from "@/lib/auth-fetch";
+
+const FUNCTION_URL = "sap-b1-proxy";
 
 export interface SapSession {
   sessionId: string;
@@ -34,12 +34,9 @@ export function clearClientCache() {
 }
 
 async function callProxy(body: Record<string, unknown>) {
-  const resp = await fetch(FUNCTION_URL, {
+  const resp = await authFetch(FUNCTION_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, type SapSession, clearClientCache } from "@/lib/sap-client";
 
 export type ErpType = "sap" | "omie" | "s4hana_cloud" | "s4hana_cloud_private" | "s4hana_onprem" | "totvs_protheus" | "totvs_rm" | "totvs_datasul" | "netsuite";
@@ -47,11 +48,14 @@ export function SapProvider({ children }: { children: ReactNode }) {
         // OMIE login — validate credentials via edge function
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        const authToken = authSession?.access_token || anonKey;
         const res = await fetch(`${supabaseUrl}/functions/v1/omie-proxy`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${anonKey}`,
+            Authorization: `Bearer ${authToken}`,
+            apikey: anonKey,
           },
           body: JSON.stringify({ action: "login", company_db: companyDB }),
         });
@@ -67,8 +71,10 @@ export function SapProvider({ children }: { children: ReactNode }) {
         // S/4HANA & TOTVS — stateless, credentials stored in system_credentials
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const { data: { session: authSession2 } } = await supabase.auth.getSession();
+        const authToken2 = authSession2?.access_token || anonKey;
         const res = await fetch(`${supabaseUrl}/functions/v1/credentials?system=${erpType}&company_db=${companyDB}`, {
-          headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey },
+          headers: { Authorization: `Bearer ${authToken2}`, apikey: anonKey },
         });
         const erpLabel = erpType.startsWith("s4hana") ? "S/4HANA" : "TOTVS";
         if (!res.ok) throw new Error(`Credenciais ${erpLabel} não configuradas para esta empresa`);

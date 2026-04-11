@@ -44,9 +44,8 @@ export function useIdpSync() {
     setIsLoadingJc(true);
     setError(null);
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/jumpcloud-proxy?action=listUsers`, {
-        headers: { Authorization: `Bearer ${ANON_KEY}`, apikey: ANON_KEY },
-      });
+      const { authFetch } = await import("@/lib/auth-fetch");
+      const res = await authFetch(`jumpcloud-proxy?action=listUsers`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Erro ${res.status}`);
