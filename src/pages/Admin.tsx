@@ -342,6 +342,8 @@ export default function Admin() {
     setEditingCompany(null);
     setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", targets: { ...DEFAULT_TARGETS } });
     setWizardStep(1);
+    setWizardCreds({});
+    setShowWizardPasswords({});
     setCompanyDialog(true);
   };
 
@@ -349,6 +351,8 @@ export default function Admin() {
     setEditingCompany(c);
     setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", targets: c.targets || { ...DEFAULT_TARGETS } });
     setWizardStep(1);
+    setWizardCreds({});
+    setShowWizardPasswords({});
     setCompanyDialog(true);
   };
 
