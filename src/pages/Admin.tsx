@@ -352,6 +352,7 @@ export default function Admin() {
       return;
     }
     setSaving(true);
+    const isNew = !editingCompany;
     if (editingCompany) {
       const { error } = await supabase
         .from("companies")
@@ -360,6 +361,7 @@ export default function Admin() {
           display_name: companyForm.display_name,
           service_layer_url: companyForm.service_layer_url || null,
           is_active: companyForm.is_active,
+          erp_type: companyForm.erp_type,
           targets: companyForm.targets,
         })
         .eq("id", editingCompany.id);
@@ -371,6 +373,7 @@ export default function Admin() {
         display_name: companyForm.display_name,
         service_layer_url: companyForm.service_layer_url || null,
         is_active: companyForm.is_active,
+        erp_type: companyForm.erp_type,
         targets: companyForm.targets,
       });
       if (error) toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar");
@@ -378,7 +381,12 @@ export default function Admin() {
     }
     setSaving(false);
     setCompanyDialog(false);
-    fetchCompanies();
+    await fetchCompanies();
+    // After creating a new company, auto-expand to show credentials config
+    if (isNew) {
+      setExpandedCompany(companyForm.company_db);
+      fetchCredentials(companyForm.company_db);
+    }
   };
 
   const deleteCompany = async (c: Company) => {
