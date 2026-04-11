@@ -8,6 +8,7 @@ export interface PermissionGroup {
   description: string | null;
   created_at: string;
   modules: string[];
+  erp_type: string | null;
   company_db: string | null;
 }
 
@@ -79,42 +80,49 @@ export function getModulesForErp(erpType: string): readonly { key: string; label
 // Default modules for users with no group
 const DEFAULT_MODULES = ["expenses"];
 
-export function usePermissionGroups(companyDb?: string) {
+export function usePermissionGroups(erpType?: string) {
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     setLoading(true);
     let query = supabase.from("permission_groups").select("*").order("name");
-    if (companyDb) {
-      query = query.eq("company_db", companyDb);
+    if (erpType) {
+      query = query.eq("erp_type", erpType);
     }
     const { data: groupsData } = await query;
 
-    const { data: modulesData } = await supabase
-      .from("permission_group_modules")
-      .select("*");
+    const groupIds = (groupsData || []).map((g: any) => g.id);
+    let modulesData: any[] = [];
+    if (groupIds.length > 0) {
+      const { data } = await supabase
+        .from("permission_group_modules")
+        .select("*")
+        .in("group_id", groupIds);
+      modulesData = data || [];
+    }
 
     const mapped: PermissionGroup[] = (groupsData || []).map((g: any) => ({
       ...g,
-      modules: (modulesData || [])
+      modules: modulesData
         .filter((m: any) => m.group_id === g.id)
         .map((m: any) => m.module_key),
     }));
 
     setGroups(mapped);
     setLoading(false);
-  }, [companyDb]);
+  }, [erpType]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const saveGroup = async (name: string, description: string, modules: string[], id?: string, groupCompanyDb?: string) => {
+  const saveGroup = async (name: string, description: string, modules: string[], id?: string, targetErpType?: string) => {
+    const erp = targetErpType || erpType || "sap";
     if (id) {
       await supabase.from("permission_groups").update({ name, description }).eq("id", id);
     } else {
       const { data } = await supabase
         .from("permission_groups")
-        .insert({ name, description, company_db: groupCompanyDb || companyDb || null })
+        .insert({ name, description, erp_type: erp })
         .select()
         .single();
       if (!data) return;
@@ -136,10 +144,10 @@ export function usePermissionGroups(companyDb?: string) {
     await fetch();
   };
 
-  const ensureDefaultGroup = async (erpType: string, targetCompanyDb: string) => {
-    // Check if "Usuário" group exists for this company
+  const ensureDefaultGroup = async (targetErpType: string) => {
+    // Check if "Usuário" group exists for this ERP type
     const existing = groups.find(
-      (g) => g.name === "Usuário" && g.company_db === targetCompanyDb
+      (g) => g.name === "Usuário" && g.erp_type === targetErpType
     );
     if (existing) return existing;
 
@@ -147,7 +155,7 @@ export function usePermissionGroups(companyDb?: string) {
     const defaultModules = ["expenses"];
     const { data } = await supabase
       .from("permission_groups")
-      .insert({ name: "Usuário", description: "Acesso padrão — apenas despesas", company_db: targetCompanyDb })
+      .insert({ name: "Usuário", description: "Acesso padrão — apenas despesas", erp_type: targetErpType })
       .select()
       .single();
     if (data) {

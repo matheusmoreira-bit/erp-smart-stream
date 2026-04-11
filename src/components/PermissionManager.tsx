@@ -165,7 +165,7 @@ export default function PermissionManager() {
   const erpType = company?.erp_type || "sap";
 
   const { groups, loading: groupsLoading, saveGroup, deleteGroup, ensureDefaultGroup } =
-    usePermissionGroups(selectedCompany || undefined);
+    usePermissionGroups(erpType || undefined);
   const { assignments, loading: assignLoading, assign, remove } =
     useUserAssignments(selectedCompany || undefined);
 
@@ -228,7 +228,7 @@ export default function PermissionManager() {
 
     // Ensure default group exists
     if (selectedCompany && erpType) {
-      ensureDefaultGroup(erpType, selectedCompany);
+      ensureDefaultGroup(erpType);
     }
   }, [selectedCompany, erpType]);
 
@@ -253,7 +253,7 @@ export default function PermissionManager() {
   };
 
   const handleSaveGroup = async (name: string, desc: string, modules: string[]) => {
-    await saveGroup(name, desc, modules, editingGroup?.id, selectedCompany);
+    await saveGroup(name, desc, modules, editingGroup?.id, erpType);
     toast.success(editingGroup ? "Grupo atualizado" : "Grupo criado");
   };
 
