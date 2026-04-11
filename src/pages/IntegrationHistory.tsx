@@ -308,10 +308,24 @@ export default function IntegrationHistory() {
               <p className="text-sm mt-1">Ajuste os filtros ou clique em Buscar</p>
             </div>
           ) : (
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 border-b border-border">
+                <span className="text-sm text-muted-foreground">{selectedIds.size} selecionado(s)</span>
+                <Button variant="destructive" size="sm" className="gap-2" onClick={cancelBatch}>
+                  <Ban className="w-4 h-4" />
+                  Cancelar selecionados
+                </Button>
+              </div>
+            )}
             <div className="rounded-xl border border-border overflow-hidden bg-card">
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="w-10">
+                      {pendingInView.length > 0 && (
+                        <Checkbox checked={allPendingSelected} onCheckedChange={toggleAll} />
+                      )}
+                    </TableHead>
                     <TableHead className="text-muted-foreground">Data</TableHead>
                     <TableHead className="text-muted-foreground">Expense ID</TableHead>
                     <TableHead className="text-muted-foreground">Descrição</TableHead>
