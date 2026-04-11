@@ -11,6 +11,7 @@ import { PeriodFilter, DEFAULT_PERIOD, type PeriodFilterValue } from "@/componen
 import { useSap } from "@/contexts/SapContext";
 import { useSapDashboard } from "@/hooks/useSapDashboard";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useCompanies, DEFAULT_TARGETS } from "@/hooks/useCompanies";
 
 interface DashboardProps {
