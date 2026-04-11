@@ -152,6 +152,7 @@ export default function Credentials() {
   const { credentials, fetchCredentials, isLoading } = useCredentials();
   const [selectedSystem, setSelectedSystem] = useState<SystemConfig | null>(null);
   const [enabledSystems, setEnabledSystems] = useState<Record<string, boolean>>({});
+  const { enabledNames: enabledErpNames, isLoading: erpTypesLoading } = useEnabledErpTypes();
 
   useEffect(() => {
     fetchCredentials(companyDb);
@@ -197,8 +198,8 @@ export default function Credentials() {
     }
   };
 
-  // Group systems by category
-  const erpSystems = SYSTEMS.filter((s) => s.category === "erp");
+  // Group systems by category, filtering ERPs by admin-enabled list
+  const erpSystems = SYSTEMS.filter((s) => s.category === "erp" && enabledErpNames.includes(s.name));
   const otherSystems = SYSTEMS.filter((s) => !s.category);
 
   return (
