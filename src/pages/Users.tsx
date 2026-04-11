@@ -8,6 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import type { SapUser } from "@/lib/cache-repository";
+import CreateUserDialog from "@/components/CreateUserDialog";
 import { toast } from "sonner";
 
 type ConfirmAction = {
