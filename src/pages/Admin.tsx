@@ -581,6 +581,8 @@ export default function Admin() {
           </>
         )}
 
+        {activeTab === "integrations" && <IntegrationsTab />}
+
         {activeTab === "permissions" && <PermissionManager />}
 
         {activeTab === "audit" && (
