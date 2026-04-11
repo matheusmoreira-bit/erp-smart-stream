@@ -10,6 +10,7 @@ import {
   Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Table,
   TableHeader,
@@ -252,6 +253,7 @@ export default function PagCorpMapping() {
             </h1>
             <p className="text-xs text-muted-foreground">Configure centro de custo, projeto e itens genéricos</p>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 

@@ -5,6 +5,7 @@ import {
   CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -227,6 +228,7 @@ export default function Credentials() {
                 : "Gerencie as conexões com sistemas externos de forma segura"}
             </p>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 

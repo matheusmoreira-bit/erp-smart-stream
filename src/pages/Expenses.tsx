@@ -21,6 +21,7 @@ import {
   Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -869,6 +870,7 @@ export default function ExpensesPage() {
             <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </Button>
+            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout}>
               <LogOut className="w-4 h-4" />
             </Button>

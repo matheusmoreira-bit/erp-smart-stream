@@ -12,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import { useIdpSync, type JumpCloudUser } from "@/hooks/useIdpSync";
@@ -197,6 +198,7 @@ export default function IdpSyncPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Button
               variant="outline"
               size="sm"
