@@ -42,6 +42,7 @@ import { toast } from "sonner";
 import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuditLog } from "@/hooks/useAuditLog";
+import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import AuditLogTable from "@/components/AuditLogTable";
 import PermissionManager from "@/components/PermissionManager";
 import {
@@ -236,7 +237,7 @@ export default function Admin() {
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   // Audit log
-  const [activeTab, setActiveTab] = useState<"companies" | "audit" | "permissions">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions">("companies");
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
   const auditCompanyDb = auditCompanyFilter === "all" ? undefined : auditCompanyFilter;
   const { entries: auditEntries, isLoading: auditLoading, refresh: auditRefresh } = useAuditLog(auditCompanyDb);
