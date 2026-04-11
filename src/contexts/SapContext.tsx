@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { sapLogin, sapLogout, type SapSession, clearClientCache } from "@/lib/sap-client";
 
-export type ErpType = "sap" | "omie";
+export type ErpType = "sap" | "omie" | "s4hana_cloud" | "s4hana_cloud_private" | "s4hana_onprem";
 
 export interface ErpSession {
   erpType: ErpType;
