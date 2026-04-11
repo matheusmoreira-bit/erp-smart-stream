@@ -8,6 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import type { SapUser } from "@/lib/cache-repository";
+import CreateUserDialog from "@/components/CreateUserDialog";
 import { toast } from "sonner";
 
 type ConfirmAction = {
@@ -39,7 +40,7 @@ function formatLastLogin(user: SapUser): string {
 
 export default function UsersPage() {
   const navigate = useNavigate();
-  const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword } = useSapUsers();
+  const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword, createUser } = useSapUsers();
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<string>("recorrentes");
@@ -122,6 +123,7 @@ export default function UsersPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <CreateUserDialog onCreateUser={createUser} isLoading={isLoading} />
             <Button variant="outline" size="sm" onClick={() => navigate("/users/activity")}>
               <BarChart3 className="w-4 h-4 mr-2" />
               Atividade

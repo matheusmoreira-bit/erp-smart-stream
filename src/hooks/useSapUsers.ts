@@ -1,8 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQueryView, sapAction, clearClientCache } from "@/lib/sap-client";
+import { sapQueryView, sapAction, sapLogin, sapLogout, clearClientCache } from "@/lib/sap-client";
 import { sapUsersCache, type SapUser } from "@/lib/cache-repository";
 import { supabase } from "@/integrations/supabase/client";
+
+export interface UserCreatePayload {
+  UserCode: string;
+  UserName: string;
+  eMail: string;
+  Password: string;
+}
+
+export interface ReplicationResult {
+  companyDB: string;
+  displayName: string;
+  status: "success" | "error";
+  message?: string;
+}
 
 function pickString(...values: unknown[]): string | undefined {
   for (const value of values) {
@@ -202,6 +216,99 @@ export function useSapUsers() {
     }
   }, [session]);
 
+  const createUser = useCallback(async (userData: UserCreatePayload): Promise<{ created: boolean; replicationResults: ReplicationResult[] }> => {
+    if (!session) throw new Error("Sem sessão ativa");
+
+    // 1. Create user in current company
+    await sapAction(session, "Users", "POST", {
+      UserCode: userData.UserCode,
+      UserName: userData.UserName,
+      eMail: userData.eMail,
+      Password: userData.Password,
+    });
+
+    // Clear cache and refresh
+    sapUsersCache.clear();
+    clearClientCache();
+    fetchUsers(true);
+
+    // 2. Find other companies with same ERP type
+    const erpType = session.erpType || "sap";
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("company_db, display_name, erp_type")
+      .eq("erp_type", erpType)
+      .eq("is_active", true)
+      .neq("company_db", session.companyDB);
+
+    if (!companies || companies.length === 0) {
+      return { created: true, replicationResults: [] };
+    }
+
+    // 3. Replicate to each company using stored credentials
+    const results: ReplicationResult[] = [];
+
+    for (const company of companies) {
+      try {
+        // Fetch credentials for this company
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const credsRes = await fetch(`${supabaseUrl}/functions/v1/credentials?system=${erpType}&company_db=${company.company_db}`, {
+          headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey },
+        });
+
+        if (!credsRes.ok) throw new Error("Sem credenciais configuradas");
+        const credsData = await credsRes.json();
+        const creds = credsData.credentials || [];
+
+        if (erpType === "sap") {
+          const getCredVal = (key: string) => creds.find((c: { credential_key: string; credential_value?: string }) => c.credential_key === key)?.credential_value;
+          const username = getCredVal("username");
+          const password = getCredVal("password");
+          if (!username || !password) throw new Error("Credenciais SAP incompletas");
+
+          // Login, create user, logout
+          const tempSession = await sapLogin(username, password, company.company_db);
+          try {
+            await sapAction(tempSession, "Users", "POST", {
+              UserCode: userData.UserCode,
+              UserName: userData.UserName,
+              eMail: userData.eMail,
+              Password: userData.Password,
+            });
+            results.push({ companyDB: company.company_db, displayName: company.display_name, status: "success" });
+          } finally {
+            await sapLogout(tempSession).catch(() => {});
+          }
+        } else {
+          // For OMIE or other ERPs — skip replication for now (no user creation API)
+          results.push({ companyDB: company.company_db, displayName: company.display_name, status: "error", message: "Replicação não suportada para este ERP" });
+        }
+      } catch (e) {
+        results.push({
+          companyDB: company.company_db,
+          displayName: company.display_name,
+          status: "error",
+          message: e instanceof Error ? e.message : "Erro desconhecido",
+        });
+      }
+    }
+
+    // Audit
+    try {
+      const { logAuditAction } = await import("@/hooks/useAuditLog");
+      await logAuditAction({
+        action: "create_user",
+        entity_type: "sap_user",
+        entity_id: userData.UserCode,
+        company_db: session.companyDB,
+        details: { userData: { UserCode: userData.UserCode, UserName: userData.UserName, eMail: userData.eMail }, replicationResults: results },
+      });
+    } catch {}
+
+    return { created: true, replicationResults: results };
+  }, [session, fetchUsers]);
+
   const refresh = useCallback(() => fetchUsers(true), [fetchUsers]);
 
   useEffect(() => {
@@ -212,5 +319,5 @@ export function useSapUsers() {
     };
   }, [fetchUsers]);
 
-  return { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword };
+  return { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword, createUser };
 }
