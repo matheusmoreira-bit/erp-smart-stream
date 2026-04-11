@@ -96,19 +96,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, [session]);
 
-  // Backward-compatible SAP session shape
-  const sapSession: SapSession | null = session?.erpType === "sap" && session.sessionId
-    ? {
-        sessionId: session.sessionId,
-        routeId: session.routeId || "",
-        companyDB: session.companyDB,
-        userName: session.userName,
-        isSuperUser: session.isSuperUser || false,
-      }
-    : null;
-
   return (
-    <ErpContext.Provider value={{ session, sapSession, isLoading, error, login, logout }}>
+    <ErpContext.Provider value={{ session, isLoading, error, login, logout }}>
       {children}
     </ErpContext.Provider>
   );
