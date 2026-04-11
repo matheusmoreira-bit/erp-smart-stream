@@ -867,8 +867,8 @@ export default function Admin() {
             <Button variant="outline" onClick={() => setCompanyDialog(false)}>Cancelar</Button>
             {wizardStep === 2 && (
               <Button onClick={() => {
-                if (!companyForm.company_db || !companyForm.display_name) {
-                  toast.error("Preencha o nome e código da empresa");
+                if (!companyForm.display_name || !companyForm.company_db) {
+                  toast.error("Preencha o nome e código interno da empresa");
                   return;
                 }
                 setWizardStep(3);
