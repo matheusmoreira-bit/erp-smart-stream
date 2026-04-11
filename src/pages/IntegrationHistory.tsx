@@ -218,7 +218,7 @@ export default function IntegrationHistory() {
                 <SelectItem value="success">Sucesso</SelectItem>
                 <SelectItem value="error">Erro</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
-              </SelectContent>
+                <SelectItem value="cancelled">Cancelado</SelectItem>
             </Select>
           </div>
           <div className="flex flex-col gap-1">
@@ -314,7 +314,18 @@ export default function IntegrationHistory() {
                       <TableCell className="text-sm text-muted-foreground truncate max-w-[120px]">
                         {log.integrated_by || "—"}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center flex items-center justify-center gap-1">
+                        {log.status === "pending" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => cancelIntegration(log)}
+                            title="Cancelar integração"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -422,8 +433,26 @@ export default function IntegrationHistory() {
                   <div>
                     <p className="text-xs text-muted-foreground">Aprovada</p>
                     <p className="font-medium">{selectedLog.pagcorp_data?.accountabilityApproved ? "Sim" : "Não"}</p>
-                  </div>
+              </div>
+
+              {selectedLog.sap_payload && (
+                <div className="border-t border-border pt-3">
+                  <p className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Payload enviado ao SAP</p>
+                  <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto max-h-48 overflow-y-auto">
+                    {JSON.stringify(selectedLog.sap_payload, null, 2)}
+                  </pre>
                 </div>
+              )}
+
+              {selectedLog.sap_response && (
+                <div className="border-t border-border pt-3">
+                  <p className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Retorno do SAP</p>
+                  <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto max-h-48 overflow-y-auto">
+                    {JSON.stringify(selectedLog.sap_response, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
               </div>
             </div>
           )}
