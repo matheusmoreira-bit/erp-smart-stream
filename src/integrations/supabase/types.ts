@@ -172,6 +172,27 @@ export type Database = {
         }
         Relationships: []
       }
+      enabled_erp_types: {
+        Row: {
+          created_at: string
+          erp_type: string
+          is_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          erp_type: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          erp_type?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expense_attachments: {
         Row: {
           created_at: string
