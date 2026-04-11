@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Shield, Lock, LogIn, Loader2, ArrowLeft, UserPlus } from "lucide-react";
+import { Shield, Lock, LogIn, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -9,11 +9,10 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"login" | "signup">("login");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,22 +22,15 @@ export default function AdminLogin() {
     }
     setLoading(true);
 
-    if (mode === "login") {
-      const { error } = await signIn(email, password);
-      if (error) {
-        toast.error(error.message === "Invalid login credentials"
+    const { error } = await signIn(email, password);
+    if (error) {
+      toast.error(
+        error.message === "Invalid login credentials"
           ? "Email ou senha incorretos"
-          : error.message);
-      } else {
-        navigate("/admin");
-      }
+          : error.message
+      );
     } else {
-      const { error } = await signUp(email, password);
-      if (error) {
-        toast.error(error.message);
-      } else {
-        toast.success("Verifique seu email para confirmar o cadastro");
-      }
+      navigate("/admin");
     }
     setLoading(false);
   };
@@ -55,9 +47,7 @@ export default function AdminLogin() {
             <Shield className="w-8 h-8 text-primary" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">Administração</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === "login" ? "Acesso restrito" : "Criar conta de administrador"}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">Acesso restrito</p>
         </div>
 
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-5">
@@ -90,23 +80,11 @@ export default function AdminLogin() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : mode === "login" ? (
-              <LogIn className="w-4 h-4 mr-2" />
             ) : (
-              <UserPlus className="w-4 h-4 mr-2" />
+              <LogIn className="w-4 h-4 mr-2" />
             )}
-            {mode === "login" ? "Entrar" : "Criar conta"}
+            Entrar
           </Button>
-
-          <div className="text-center">
-            <button
-              type="button"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => setMode(mode === "login" ? "signup" : "login")}
-            >
-              {mode === "login" ? "Criar conta de administrador" : "Já tenho conta — fazer login"}
-            </button>
-          </div>
         </form>
 
         <div className="text-center mt-4">
