@@ -3,6 +3,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { SapProvider } from "@/contexts/SapContext";
 import Index from "./pages/Index.tsx";
 import AnalyticsPage from "./pages/Analytics.tsx";
@@ -26,35 +28,37 @@ import { AdminRoute } from "./components/AdminRoute.tsx";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <SapProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/approvals" element={<Approvals />} />
-            <Route path="/expenses" element={<Expenses />} />
-            <Route path="/approval-rules" element={<ApprovalRules />} />
-            <Route path="/pagcorp" element={<PagCorp />} />
-            <Route path="/pagcorp/mapping" element={<PagCorpMapping />} />
-            <Route path="/pagcorp/history" element={<IntegrationHistory />} />
-            <Route path="/credentials" element={<Credentials />} />
-            <Route path="/users" element={<UsersPage />} />
-            <Route path="/users/activity" element={<UserActivity />} />
-            <Route path="/users/idp-sync" element={<IdpSync />} />
-            <Route path="/synapse" element={<Synapse />} />
-            <Route path="/audit-log" element={<AuditLog />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </SapProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="erp-theme">
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <SapProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/approvals" element={<Approvals />} />
+              <Route path="/expenses" element={<Expenses />} />
+              <Route path="/approval-rules" element={<ApprovalRules />} />
+              <Route path="/pagcorp" element={<PagCorp />} />
+              <Route path="/pagcorp/mapping" element={<PagCorpMapping />} />
+              <Route path="/pagcorp/history" element={<IntegrationHistory />} />
+              <Route path="/credentials" element={<Credentials />} />
+              <Route path="/users" element={<UsersPage />} />
+              <Route path="/users/activity" element={<UserActivity />} />
+              <Route path="/users/idp-sync" element={<IdpSync />} />
+              <Route path="/synapse" element={<Synapse />} />
+              <Route path="/audit-log" element={<AuditLog />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </SapProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;
