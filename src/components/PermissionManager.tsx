@@ -159,6 +159,7 @@ export default function PermissionManager() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [companiesLoading, setCompaniesLoading] = useState(true);
+  const [userFilter, setUserFilter] = useState("");
 
   const company = companies.find((c) => c.company_db === selectedCompany);
   const erpType = company?.erp_type || "sap";
