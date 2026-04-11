@@ -241,6 +241,7 @@ export default function Admin() {
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Record<string, Credential[]>>({});
   const [credLoading, setCredLoading] = useState<string | null>(null);
+  const { enabledNames } = useEnabledErpTypes();
 
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
