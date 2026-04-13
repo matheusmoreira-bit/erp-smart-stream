@@ -111,12 +111,14 @@ export function useSynapseIntegrations(companyDB?: string) {
         interval_minutes: 30,
         parameters: {
           days_back: 30,
-          sap_endpoint: "PurchaseInvoices",
+          sap_endpoint: "PurchaseOrders",
           default_supplier_code: "",
           default_item_code: "",
           default_cost_center: "",
           default_project: "",
-          default_bpl_id: "",
+          default_bpl_id: "1",
+          default_currency: "BRL",
+          default_doc_rate: "1",
         },
         company_db: companyDb,
       } as any);
