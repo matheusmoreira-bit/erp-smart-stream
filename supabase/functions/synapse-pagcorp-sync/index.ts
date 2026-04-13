@@ -418,6 +418,7 @@ Deno.serve(async (req) => {
           CardCode: String(integrationParams.default_supplier_code || ""),
           DocDate: expense.eventDate || expense.date || endDate,
           Comments: `PagCorp #${expenseId} - ${description}`,
+          ...(bplId ? { BPL_IDAssignedToInvoice: bplId } : {}),
           DocumentLines: [
             {
               ItemCode: itemMapping?.item_code || String(integrationParams.default_item_code || ""),
