@@ -117,8 +117,8 @@ export function useSynapseIntegrations(companyDB?: string) {
           default_cost_center: "",
           default_project: "",
           default_bpl_id: "1",
-          default_currency: "BRL",
-          default_doc_rate: "1",
+          default_currency: "",
+          default_doc_rate: "",
         },
         company_db: companyDb,
       } as any);
