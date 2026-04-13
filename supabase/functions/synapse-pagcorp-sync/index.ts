@@ -543,12 +543,22 @@ Deno.serve(async (req) => {
           ? aiResult.document_date
           : expense.eventDate || expense.date || endDate;
 
-        // Build SAP document payload
+        // Build SAP PurchaseOrders payload (based on n8n template)
+        const docCurrency = expense.currency || String(integrationParams.default_currency || "BRL");
+        const docRate = expense.exchangeRate || Number(integrationParams.default_doc_rate) || 1;
+        const employeeName = expense.employeeName || expense.userName || "";
+
         const sapPayload: Record<string, unknown> = {
           CardCode: finalSupplierCode,
           DocDate: finalDocDate,
-          Comments: `PagCorp #${expenseId} - ${description}${aiUsed ? " [IA]" : ""}`,
-          ...(bplId ? { BPL_IDAssignedToInvoice: bplId } : {}),
+          DocDueDate: finalDocDate,
+          TaxDate: finalDocDate,
+          BPL_IDAssignedToInvoice: bplId || 1,
+          U_FGR_RATEIO_CC: "N",
+          U_FGR_CONTRATO: "N",
+          DocCurrency: docCurrency,
+          DocRate: docRate,
+          Comments: `${employeeName} - ${description} - Integração PagCorp${aiUsed ? " [IA]" : ""}`,
           DocumentLines: [
             {
               ItemCode: finalItemCode,
