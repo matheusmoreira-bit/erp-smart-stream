@@ -106,10 +106,9 @@ Deno.serve(async (req) => {
     const reqBody = await req.json();
     const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
 
-    // Allow login without Supabase auth; all other actions require it
-    if (action !== "login") {
-      await requireAuth(req);
-    }
+    // Authentication is handled by SAP session (B1SESSION cookie).
+    // Each action validates its own required params (sessionId, etc.).
+    // Supabase auth is not required since users authenticate via SAP credentials.
 
     if (!action || typeof action !== "string") {
       return new Response(JSON.stringify({ error: "action é obrigatória" }), {
