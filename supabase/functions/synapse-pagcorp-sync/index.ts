@@ -162,6 +162,157 @@ async function fetchApprovedExpenses(apiToken: string, baseUrl: string, accountI
   });
 }
 
+// ── AI: extract document data from receipts ──────────────────────────
+
+interface AIExtractionResult {
+  supplier_code?: string;
+  supplier_name?: string;
+  item_code?: string;
+  item_description?: string;
+  cost_center?: string;
+  project?: string;
+  amount?: number;
+  document_date?: string;
+  document_number?: string;
+  confidence: number;
+}
+
+async function fetchReceiptFile(url: string, token: string): Promise<{ base64: string; mimeType: string } | null> {
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 10 * 1024 * 1024) return null; // skip empty or >10MB
+
+    let binary = "";
+    const CHUNK = 8192;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      const chunk = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    return { base64: btoa(binary), mimeType: contentType.split(";")[0] };
+  } catch {
+    return null;
+  }
+}
+
+async function extractDataWithAI(
+  expense: any,
+  pagToken: string,
+  pagBaseUrl: string,
+  integrationParams: Record<string, unknown>,
+): Promise<AIExtractionResult | null> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    console.warn("LOVABLE_API_KEY não configurada, pulando extração por IA");
+    return null;
+  }
+
+  // Collect receipt file URLs from the expense
+  const receipts = expense.receipts || [];
+  const fileUrls: string[] = [];
+  for (const r of receipts) {
+    // Try common PagCorp receipt file URL patterns
+    if (r.fileUrl) fileUrls.push(r.fileUrl);
+    if (r.receiptUrl) fileUrls.push(r.receiptUrl);
+    if (r.imageUrl) fileUrls.push(r.imageUrl);
+    if (r.file?.url) fileUrls.push(r.file.url);
+    if (r.id && !r.fileUrl && !r.receiptUrl && !r.imageUrl) {
+      // Try fetching receipt detail for file URL
+      fileUrls.push(`${pagBaseUrl}Receipt/${r.id}/File`);
+    }
+  }
+
+  if (fileUrls.length === 0) return null;
+
+  // Download receipt files and build multimodal content
+  const contentParts: any[] = [];
+  for (const url of fileUrls.slice(0, 3)) { // limit to 3 files
+    const file = await fetchReceiptFile(url, pagToken);
+    if (file) {
+      contentParts.push({
+        type: "image_url",
+        image_url: { url: `data:${file.mimeType};base64,${file.base64}` },
+      });
+    }
+  }
+
+  if (contentParts.length === 0) return null;
+
+  // Build context about available defaults and mappings
+  const contextInfo = `
+Contexto da integração:
+- Fornecedor padrão (CardCode): ${integrationParams.default_supplier_code || "não definido"}
+- Item padrão (ItemCode): ${integrationParams.default_item_code || "não definido"}
+- Centro de custo padrão: ${integrationParams.default_cost_center || "não definido"}
+- Projeto padrão: ${integrationParams.default_project || "não definido"}
+- Dados da despesa PagCorp: Valor=${expense.amount || expense.value || 0}, Descrição="${expense.description || ""}", Conta="${expense.accountCode || ""}"
+`;
+
+  contentParts.push({
+    type: "text",
+    text: `${contextInfo}
+
+Analise o(s) documento(s) anexo(s) desta despesa e extraia as informações para lançamento no SAP Business One.
+Responda APENAS com JSON, sem markdown:
+{
+  "supplier_code": "Código do fornecedor no SAP (CardCode) se identificável no documento, ou null",
+  "supplier_name": "Nome do fornecedor/emissor do documento",
+  "item_code": "Código do item SAP se identificável, ou null",
+  "item_description": "Descrição do item/serviço principal",
+  "cost_center": "Centro de custo se identificável no documento, ou null",
+  "project": "Código do projeto se identificável, ou null",
+  "amount": 0.00,
+  "document_date": "YYYY-MM-DD",
+  "document_number": "Número da NF ou documento",
+  "confidence": 0.0
+}
+
+Regras:
+- NÃO invente dados. Se não encontrar um campo, use null.
+- supplier_code deve ser o CardCode SAP (ex: F00001) - só preencha se visível no documento.
+- item_code deve ser o ItemCode SAP - só preencha se visível.
+- cost_center e project só preencha se claramente identificáveis.
+- confidence entre 0 e 1 indica confiança geral na extração.`,
+  });
+
+  try {
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content: "Você é um assistente especializado em processar documentos fiscais brasileiros para integração com SAP Business One. Extraia dados com precisão. Responda apenas com JSON válido.",
+          },
+          { role: "user", content: contentParts },
+        ],
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      console.warn(`AI extraction failed [${aiResponse.status}]`);
+      await aiResponse.text(); // consume body
+      return null;
+    }
+
+    const aiData = await aiResponse.json();
+    const rawContent = aiData.choices?.[0]?.message?.content || "";
+    const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    return parsed as AIExtractionResult;
+  } catch (e) {
+    console.warn("AI extraction error:", e);
+    return null;
+  }
+}
+
 // ── SAP B1 helpers ───────────────────────────────────────────────────
 
 async function loginSap(sapCreds: Record<string, string>) {
@@ -195,7 +346,6 @@ async function loginSap(sapCreds: Record<string, string>) {
 }
 
 async function getItemMapping(supabase: ReturnType<typeof createClient>, accountCode: string) {
-  // Try exact match first
   const { data: exact } = await supabase
     .from("pagcorp_item_mapping")
     .select("item_code, account_code, account_name")
@@ -204,7 +354,6 @@ async function getItemMapping(supabase: ReturnType<typeof createClient>, account
     .maybeSingle();
   if (exact) return exact;
 
-  // Fallback
   const { data: fallback } = await supabase
     .from("pagcorp_item_mapping")
     .select("item_code, account_code, account_name")
@@ -346,7 +495,8 @@ Deno.serve(async (req) => {
     const sap = await loginSap(sapCreds);
 
     // 4. Integrate each pending expense
-    const results: Array<{ expenseId: number; success: boolean; docEntry?: number; docNum?: number; error?: string }> = [];
+    const results: Array<{ expenseId: number; success: boolean; docEntry?: number; docNum?: number; error?: string; aiUsed?: boolean }> = [];
+    const bplId = integrationParams.default_bpl_id ? Number(integrationParams.default_bpl_id) : undefined;
 
     for (const expense of pending) {
       const expenseId = Number(expense.id || expense.expenseId);
@@ -358,21 +508,54 @@ Deno.serve(async (req) => {
         const amount = expense.amount || expense.value || expense.expenseValue || 0;
         const description = expense.description || expense.expenseDescription || "";
 
-        // Build SAP document payload
-        const bplId = integrationParams.default_bpl_id ? Number(integrationParams.default_bpl_id) : undefined;
+        // ── AI extraction: try to get data from receipt documents ──
+        let aiResult: AIExtractionResult | null = null;
+        try {
+          aiResult = await extractDataWithAI(expense, pagToken, pagCreds.api_base_url, integrationParams);
+        } catch (aiErr) {
+          console.warn(`AI extraction failed for expense ${expenseId}:`, aiErr);
+        }
 
+        const aiUsed = aiResult !== null && (aiResult.confidence ?? 0) >= 0.5;
+
+        // Determine final values: AI > mapping > defaults
+        const finalSupplierCode = (aiUsed && aiResult?.supplier_code)
+          ? aiResult.supplier_code
+          : String(integrationParams.default_supplier_code || "");
+
+        const finalItemCode = (aiUsed && aiResult?.item_code)
+          ? aiResult.item_code
+          : itemMapping?.item_code || String(integrationParams.default_item_code || "");
+
+        const finalCostCenter = (aiUsed && aiResult?.cost_center)
+          ? aiResult.cost_center
+          : acctMapping?.cost_center || String(integrationParams.default_cost_center || "");
+
+        const finalProject = (aiUsed && aiResult?.project)
+          ? aiResult.project
+          : acctMapping?.project || String(integrationParams.default_project || "");
+
+        const finalAmount = (aiUsed && aiResult?.amount && aiResult.amount > 0)
+          ? aiResult.amount
+          : amount;
+
+        const finalDocDate = (aiUsed && aiResult?.document_date)
+          ? aiResult.document_date
+          : expense.eventDate || expense.date || endDate;
+
+        // Build SAP document payload
         const sapPayload: Record<string, unknown> = {
-          CardCode: String(integrationParams.default_supplier_code || ""),
-          DocDate: expense.eventDate || expense.date || endDate,
-          Comments: `PagCorp #${expenseId} - ${description}`,
+          CardCode: finalSupplierCode,
+          DocDate: finalDocDate,
+          Comments: `PagCorp #${expenseId} - ${description}${aiUsed ? " [IA]" : ""}`,
           ...(bplId ? { BPL_IDAssignedToInvoice: bplId } : {}),
           DocumentLines: [
             {
-              ItemCode: itemMapping?.item_code || String(integrationParams.default_item_code || ""),
+              ItemCode: finalItemCode,
               Quantity: 1,
-              UnitPrice: amount,
-              CostingCode: acctMapping?.cost_center || String(integrationParams.default_cost_center || "") || undefined,
-              ProjectCode: acctMapping?.project || String(integrationParams.default_project || "") || undefined,
+              UnitPrice: finalAmount,
+              CostingCode: finalCostCenter || undefined,
+              ProjectCode: finalProject || undefined,
             },
           ],
         };
@@ -394,6 +577,7 @@ Deno.serve(async (req) => {
             date: expense.eventDate || expense.date,
             accountCode,
             accountabilityApproved: true,
+            ai_extraction: aiUsed ? aiResult : null,
           },
           integration_type: "accountability",
           status: "success",
@@ -405,7 +589,7 @@ Deno.serve(async (req) => {
           sap_response: sapResult.response,
         } as any);
 
-        results.push({ expenseId, success: true, docEntry: sapResult.docEntry, docNum: sapResult.docNum });
+        results.push({ expenseId, success: true, docEntry: sapResult.docEntry, docNum: sapResult.docNum, aiUsed });
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : "Erro desconhecido";
         const accountCode = expense.accountCode || expense.account || "";
@@ -446,7 +630,8 @@ Deno.serve(async (req) => {
     }
 
     const successCount = results.filter((r) => r.success).length;
-    const msg = `${successCount}/${pending.length} despesas integradas`;
+    const aiCount = results.filter((r) => r.aiUsed).length;
+    const msg = `${successCount}/${pending.length} despesas integradas${aiCount > 0 ? ` (${aiCount} com IA)` : ""}`;
     const finalStatus = successCount === pending.length ? "success" : successCount > 0 ? "partial" : "error";
 
     await logExecution(supabase, finalStatus, { results, startDate, endDate }, successCount);
