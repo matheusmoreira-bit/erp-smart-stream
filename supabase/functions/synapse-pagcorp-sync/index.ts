@@ -544,9 +544,9 @@ Deno.serve(async (req) => {
           : expense.eventDate || expense.date || endDate;
 
         // Build SAP PurchaseOrders payload (based on n8n template)
-        const docCurrency = expense.currency || String(integrationParams.default_currency || "BRL");
-        const docRate = expense.exchangeRate || Number(integrationParams.default_doc_rate) || 1;
         const employeeName = expense.employeeName || expense.userName || "";
+        const docCurrency = String(integrationParams.default_currency || "").trim();
+        const docRate = Number(integrationParams.default_doc_rate) || 0;
 
         const sapPayload: Record<string, unknown> = {
           CardCode: finalSupplierCode,
@@ -556,8 +556,8 @@ Deno.serve(async (req) => {
           BPL_IDAssignedToInvoice: bplId || 1,
           U_FGR_RATEIO_CC: "N",
           U_FGR_CONTRATO: "N",
-          DocCurrency: docCurrency,
-          DocRate: docRate,
+          ...(docCurrency ? { DocCurrency: docCurrency } : {}),
+          ...(docRate > 0 ? { DocRate: docRate } : {}),
           Comments: `${employeeName} - ${description} - Integração PagCorp${aiUsed ? " [IA]" : ""}`,
           DocumentLines: [
             {
@@ -618,8 +618,8 @@ Deno.serve(async (req) => {
           BPL_IDAssignedToInvoice: bplId || 1,
           U_FGR_RATEIO_CC: "N",
           U_FGR_CONTRATO: "N",
-          DocCurrency: expense.currency || String(integrationParams.default_currency || "BRL"),
-          DocRate: expense.exchangeRate || Number(integrationParams.default_doc_rate) || 1,
+          ...(String(integrationParams.default_currency || "").trim() ? { DocCurrency: String(integrationParams.default_currency).trim() } : {}),
+          ...(Number(integrationParams.default_doc_rate) > 0 ? { DocRate: Number(integrationParams.default_doc_rate) } : {}),
           Comments: `${failedEmployeeName} - ${description} - Integração PagCorp`,
           DocumentLines: [
             {
