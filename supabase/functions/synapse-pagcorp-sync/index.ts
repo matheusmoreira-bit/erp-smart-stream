@@ -607,8 +607,10 @@ Deno.serve(async (req) => {
     const sap = await loginSap(sapCreds);
 
     // 4. Integrate each pending expense
-    const results: Array<{ expenseId: number; success: boolean; docEntry?: number; docNum?: number; error?: string; aiUsed?: boolean }> = [];
+    const results: Array<{ expenseId: number; success: boolean; docEntry?: number; docNum?: number; error?: string; aiUsed?: boolean; skipped?: string }> = [];
     const bplId = integrationParams.default_bpl_id ? Number(integrationParams.default_bpl_id) : undefined;
+    const notificationEmail = String(integrationParams.notification_email || "").trim();
+    const validationIssues: ValidationIssue[] = [];
 
     for (const expense of pending) {
       const expenseId = Number(expense.id || expense.expenseId);
