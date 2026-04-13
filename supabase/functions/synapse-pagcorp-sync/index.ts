@@ -395,6 +395,118 @@ async function postSapDocument(
   };
 }
 
+// ── SAP validation helpers ───────────────────────────────────────────
+
+async function sapEntityExists(sapBaseUrl: string, cookies: string, entity: string, code: string): Promise<boolean> {
+  if (!code) return false;
+  try {
+    const res = await fetch(`${sapBaseUrl}/${entity}('${encodeURIComponent(code)}')`, {
+      method: "GET",
+      headers: { Cookie: cookies },
+    });
+    if (res.ok) {
+      await res.text();
+      return true;
+    }
+    await res.text();
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// ── Email notification helper ────────────────────────────────────────
+
+interface ValidationIssue {
+  expenseId: number;
+  description: string;
+  type: "supplier_not_found" | "item_not_found";
+  code: string;
+  employeeName: string;
+  amount: number;
+}
+
+async function sendValidationNotificationEmail(
+  issues: ValidationIssue[],
+  notificationEmail: string,
+  companyDB: string,
+) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!notificationEmail || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn("Notification email not configured or missing env vars, skipping email");
+    return;
+  }
+
+  const supplierIssues = issues.filter((i) => i.type === "supplier_not_found");
+  const itemIssues = issues.filter((i) => i.type === "item_not_found");
+
+  const rows = issues.map((i) => {
+    const typeLabel = i.type === "supplier_not_found" ? "Fornecedor" : "Item";
+    return `<tr>
+      <td style="padding:8px;border:1px solid #ddd">${i.expenseId}</td>
+      <td style="padding:8px;border:1px solid #ddd">${i.employeeName || "-"}</td>
+      <td style="padding:8px;border:1px solid #ddd">${i.description}</td>
+      <td style="padding:8px;border:1px solid #ddd">R$ ${i.amount.toFixed(2)}</td>
+      <td style="padding:8px;border:1px solid #ddd">${typeLabel}</td>
+      <td style="padding:8px;border:1px solid #ddd"><code>${i.code || "vazio"}</code></td>
+    </tr>`;
+  }).join("");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
+      <h2 style="color:#d97706">⚠️ Integração PagCorp → SAP — Itens não integrados</h2>
+      <p>A integração automática do PagCorp encontrou <strong>${issues.length}</strong> despesa(s) que não puderam ser integradas por falta de cadastro no SAP.</p>
+      ${supplierIssues.length > 0 ? `<p>🔴 <strong>${supplierIssues.length}</strong> fornecedor(es) não encontrado(s)</p>` : ""}
+      ${itemIssues.length > 0 ? `<p>🟡 <strong>${itemIssues.length}</strong> item(ns) não encontrado(s)</p>` : ""}
+      <p><strong>Empresa:</strong> ${companyDB}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        <thead>
+          <tr style="background:#f3f4f6">
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">ID Despesa</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Colaborador</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Descrição</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Valor</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Problema</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Código</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="color:#666;font-size:13px">Cadastre os fornecedores/itens no SAP e reexecute a integração para processar essas despesas.</p>
+    </div>
+  `;
+
+  // Try sending via send-transactional-email if available, otherwise log
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    await supabase.functions.invoke("send-transactional-email", {
+      body: {
+        templateName: "__raw_html",
+        recipientEmail: notificationEmail,
+        subject: `⚠️ PagCorp: ${issues.length} despesa(s) não integrada(s) — ${companyDB}`,
+        rawHtml: html,
+        idempotencyKey: `pagcorp-validation-${companyDB}-${new Date().toISOString().slice(0, 10)}`,
+      },
+    });
+    console.log(`Notification email sent to ${notificationEmail}`);
+  } catch (emailErr) {
+    console.warn("Failed to send notification email via transactional, trying direct:", emailErr);
+    // Fallback: log to audit_log for visibility
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await supabase.from("audit_log").insert({
+        action: "pagcorp_validation_issues",
+        entity_type: "synapse_integration",
+        company_db: companyDB,
+        details: { issues, notification_email: notificationEmail, email_failed: true },
+      } as any);
+    } catch {}
+  }
+}
+
 // ── Execution log helper ─────────────────────────────────────────────
 
 async function logExecution(
@@ -495,8 +607,10 @@ Deno.serve(async (req) => {
     const sap = await loginSap(sapCreds);
 
     // 4. Integrate each pending expense
-    const results: Array<{ expenseId: number; success: boolean; docEntry?: number; docNum?: number; error?: string; aiUsed?: boolean }> = [];
+    const results: Array<{ expenseId: number; success: boolean; docEntry?: number; docNum?: number; error?: string; aiUsed?: boolean; skipped?: string }> = [];
     const bplId = integrationParams.default_bpl_id ? Number(integrationParams.default_bpl_id) : undefined;
+    const notificationEmail = String(integrationParams.notification_email || "").trim();
+    const validationIssues: ValidationIssue[] = [];
 
     for (const expense of pending) {
       const expenseId = Number(expense.id || expense.expenseId);
@@ -543,8 +657,86 @@ Deno.serve(async (req) => {
           ? aiResult.document_date
           : expense.eventDate || expense.date || endDate;
 
-        // Build SAP PurchaseOrders payload (based on n8n template)
+        // ── Validate supplier and item in SAP ──
         const employeeName = expense.employeeName || expense.userName || "";
+
+        // Check if supplier exists in SAP
+        if (!finalSupplierCode) {
+          const issue: ValidationIssue = {
+            expenseId, description, type: "supplier_not_found",
+            code: "", employeeName, amount: finalAmount,
+          };
+          validationIssues.push(issue);
+          results.push({ expenseId, success: false, skipped: "Fornecedor não informado" });
+
+          await supabase.from("pagcorp_integration_log").insert({
+            pagcorp_expense_id: expenseId,
+            pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode, ai_extraction: aiUsed ? aiResult : null },
+            integration_type: "accountability", status: "error",
+            company_db: bodyCompanyDB || null, integrated_by: "synapse_auto",
+            error_message: "Fornecedor não informado — despesa não integrada",
+          } as any);
+          continue;
+        }
+
+        const supplierExists = await sapEntityExists(sap.baseUrl, sap.cookies, "BusinessPartners", finalSupplierCode);
+        if (!supplierExists) {
+          const issue: ValidationIssue = {
+            expenseId, description, type: "supplier_not_found",
+            code: finalSupplierCode, employeeName, amount: finalAmount,
+          };
+          validationIssues.push(issue);
+          results.push({ expenseId, success: false, skipped: `Fornecedor '${finalSupplierCode}' não encontrado no SAP` });
+
+          await supabase.from("pagcorp_integration_log").insert({
+            pagcorp_expense_id: expenseId,
+            pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode, ai_extraction: aiUsed ? aiResult : null },
+            integration_type: "accountability", status: "error",
+            company_db: bodyCompanyDB || null, integrated_by: "synapse_auto",
+            error_message: `Fornecedor '${finalSupplierCode}' não encontrado no SAP`,
+          } as any);
+          continue;
+        }
+
+        // Check if item exists in SAP
+        if (!finalItemCode) {
+          const issue: ValidationIssue = {
+            expenseId, description, type: "item_not_found",
+            code: "", employeeName, amount: finalAmount,
+          };
+          validationIssues.push(issue);
+          results.push({ expenseId, success: false, skipped: "Item não informado" });
+
+          await supabase.from("pagcorp_integration_log").insert({
+            pagcorp_expense_id: expenseId,
+            pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode, ai_extraction: aiUsed ? aiResult : null },
+            integration_type: "accountability", status: "error",
+            company_db: bodyCompanyDB || null, integrated_by: "synapse_auto",
+            error_message: "Item não informado — despesa não integrada",
+          } as any);
+          continue;
+        }
+
+        const itemExists = await sapEntityExists(sap.baseUrl, sap.cookies, "Items", finalItemCode);
+        if (!itemExists) {
+          const issue: ValidationIssue = {
+            expenseId, description, type: "item_not_found",
+            code: finalItemCode, employeeName, amount: finalAmount,
+          };
+          validationIssues.push(issue);
+          results.push({ expenseId, success: false, skipped: `Item '${finalItemCode}' não encontrado no SAP` });
+
+          await supabase.from("pagcorp_integration_log").insert({
+            pagcorp_expense_id: expenseId,
+            pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode, ai_extraction: aiUsed ? aiResult : null },
+            integration_type: "accountability", status: "error",
+            company_db: bodyCompanyDB || null, integrated_by: "synapse_auto",
+            error_message: `Item '${finalItemCode}' não encontrado no SAP`,
+          } as any);
+          continue;
+        }
+
+        // Build SAP PurchaseOrders payload (based on n8n template)
         const docCurrency = String(integrationParams.default_currency || "").trim();
         const docRate = Number(integrationParams.default_doc_rate) || 0;
 
@@ -648,16 +840,29 @@ Deno.serve(async (req) => {
     }
 
     const successCount = results.filter((r) => r.success).length;
+    const skippedCount = results.filter((r) => r.skipped).length;
     const aiCount = results.filter((r) => r.aiUsed).length;
-    const msg = `${successCount}/${pending.length} despesas integradas${aiCount > 0 ? ` (${aiCount} com IA)` : ""}`;
+    const msgParts = [`${successCount}/${pending.length} despesas integradas`];
+    if (aiCount > 0) msgParts.push(`${aiCount} com IA`);
+    if (skippedCount > 0) msgParts.push(`${skippedCount} não integrada(s) por falta de cadastro`);
+    const msg = msgParts.join(" | ");
     const finalStatus = successCount === pending.length ? "success" : successCount > 0 ? "partial" : "error";
 
-    await logExecution(supabase, finalStatus, { results, startDate, endDate }, successCount);
+    // Send notification email for validation issues
+    if (validationIssues.length > 0) {
+      try {
+        await sendValidationNotificationEmail(validationIssues, notificationEmail, bodyCompanyDB);
+      } catch (emailErr) {
+        console.warn("Failed to send validation notification email:", emailErr);
+      }
+    }
+
+    await logExecution(supabase, finalStatus, { results, startDate, endDate, validationIssues: validationIssues.length > 0 ? validationIssues : undefined }, successCount);
     await supabase.from("synapse_integrations")
       .update({ last_run_at: now.toISOString(), last_run_status: finalStatus, last_run_message: msg })
       .eq("id", config.id);
 
-    return new Response(JSON.stringify({ message: msg, results }), {
+    return new Response(JSON.stringify({ message: msg, results, validationIssues: validationIssues.length > 0 ? validationIssues : undefined }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
