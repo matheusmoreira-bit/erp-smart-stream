@@ -165,8 +165,9 @@ async function fetchApprovedExpenses(apiToken: string, baseUrl: string, accountI
 // ── SAP B1 helpers ───────────────────────────────────────────────────
 
 async function loginSap(sapCreds: Record<string, string>) {
-  const baseUrl = sapCreds.base_url || sapCreds.url;
+  let baseUrl = (sapCreds.service_layer_url || sapCreds.base_url || sapCreds.url || "").replace(/\/+$/, "");
   if (!baseUrl) throw new Error("URL do SAP B1 não configurada");
+  if (!baseUrl.includes("/b1s/v1")) baseUrl = `${baseUrl}/b1s/v1`;
 
   const companyDB = sapCreds.company_db || sapCreds.CompanyDB;
   const userName = sapCreds.username || sapCreds.UserName;
