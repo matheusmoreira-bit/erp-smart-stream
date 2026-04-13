@@ -19,6 +19,7 @@ import {
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 
 interface ModuleCard {
   title: string;
