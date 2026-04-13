@@ -423,11 +423,12 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
-    await logExecution(supabase, "error", { error: message }, 0).catch(() => {});
-    await supabase.from("synapse_integrations")
-      .update({ last_run_at: new Date().toISOString(), last_run_status: "error", last_run_message: message })
-      .eq("integration_key", "pagcorp_erp_sync")
-      .catch(() => {});
+    try { await logExecution(supabase, "error", { error: message }, 0); } catch {}
+    try {
+      await supabase.from("synapse_integrations")
+        .update({ last_run_at: new Date().toISOString(), last_run_status: "error", last_run_message: message })
+        .eq("integration_key", "pagcorp_erp_sync");
+    } catch {}
 
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
