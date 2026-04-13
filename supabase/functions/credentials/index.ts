@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { adminClient } = await requireAdmin(req);
+    const adminClient = getServiceClient();
 
     const url = new URL(req.url);
     const systemName = url.searchParams.get("system");
