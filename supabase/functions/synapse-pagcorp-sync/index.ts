@@ -395,6 +395,118 @@ async function postSapDocument(
   };
 }
 
+// ── SAP validation helpers ───────────────────────────────────────────
+
+async function sapEntityExists(sapBaseUrl: string, cookies: string, entity: string, code: string): Promise<boolean> {
+  if (!code) return false;
+  try {
+    const res = await fetch(`${sapBaseUrl}/${entity}('${encodeURIComponent(code)}')`, {
+      method: "GET",
+      headers: { Cookie: cookies },
+    });
+    if (res.ok) {
+      await res.text();
+      return true;
+    }
+    await res.text();
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// ── Email notification helper ────────────────────────────────────────
+
+interface ValidationIssue {
+  expenseId: number;
+  description: string;
+  type: "supplier_not_found" | "item_not_found";
+  code: string;
+  employeeName: string;
+  amount: number;
+}
+
+async function sendValidationNotificationEmail(
+  issues: ValidationIssue[],
+  notificationEmail: string,
+  companyDB: string,
+) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!notificationEmail || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn("Notification email not configured or missing env vars, skipping email");
+    return;
+  }
+
+  const supplierIssues = issues.filter((i) => i.type === "supplier_not_found");
+  const itemIssues = issues.filter((i) => i.type === "item_not_found");
+
+  const rows = issues.map((i) => {
+    const typeLabel = i.type === "supplier_not_found" ? "Fornecedor" : "Item";
+    return `<tr>
+      <td style="padding:8px;border:1px solid #ddd">${i.expenseId}</td>
+      <td style="padding:8px;border:1px solid #ddd">${i.employeeName || "-"}</td>
+      <td style="padding:8px;border:1px solid #ddd">${i.description}</td>
+      <td style="padding:8px;border:1px solid #ddd">R$ ${i.amount.toFixed(2)}</td>
+      <td style="padding:8px;border:1px solid #ddd">${typeLabel}</td>
+      <td style="padding:8px;border:1px solid #ddd"><code>${i.code || "vazio"}</code></td>
+    </tr>`;
+  }).join("");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
+      <h2 style="color:#d97706">⚠️ Integração PagCorp → SAP — Itens não integrados</h2>
+      <p>A integração automática do PagCorp encontrou <strong>${issues.length}</strong> despesa(s) que não puderam ser integradas por falta de cadastro no SAP.</p>
+      ${supplierIssues.length > 0 ? `<p>🔴 <strong>${supplierIssues.length}</strong> fornecedor(es) não encontrado(s)</p>` : ""}
+      ${itemIssues.length > 0 ? `<p>🟡 <strong>${itemIssues.length}</strong> item(ns) não encontrado(s)</p>` : ""}
+      <p><strong>Empresa:</strong> ${companyDB}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        <thead>
+          <tr style="background:#f3f4f6">
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">ID Despesa</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Colaborador</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Descrição</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Valor</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Problema</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Código</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="color:#666;font-size:13px">Cadastre os fornecedores/itens no SAP e reexecute a integração para processar essas despesas.</p>
+    </div>
+  `;
+
+  // Try sending via send-transactional-email if available, otherwise log
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    await supabase.functions.invoke("send-transactional-email", {
+      body: {
+        templateName: "__raw_html",
+        recipientEmail: notificationEmail,
+        subject: `⚠️ PagCorp: ${issues.length} despesa(s) não integrada(s) — ${companyDB}`,
+        rawHtml: html,
+        idempotencyKey: `pagcorp-validation-${companyDB}-${new Date().toISOString().slice(0, 10)}`,
+      },
+    });
+    console.log(`Notification email sent to ${notificationEmail}`);
+  } catch (emailErr) {
+    console.warn("Failed to send notification email via transactional, trying direct:", emailErr);
+    // Fallback: log to audit_log for visibility
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await supabase.from("audit_log").insert({
+        action: "pagcorp_validation_issues",
+        entity_type: "synapse_integration",
+        company_db: companyDB,
+        details: { issues, notification_email: notificationEmail, email_failed: true },
+      } as any);
+    } catch {}
+  }
+}
+
 // ── Execution log helper ─────────────────────────────────────────────
 
 async function logExecution(
