@@ -168,7 +168,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireAuth(req);
+    // Authentication is handled by PagCorp's own API (client key + login).
+    // Supabase JWT auth is not required here.
 
     const url = new URL(req.url);
     const startDate = url.searchParams.get("startDate") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
