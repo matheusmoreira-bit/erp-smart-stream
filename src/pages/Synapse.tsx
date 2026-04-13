@@ -13,6 +13,7 @@ import {
   Power,
   PowerOff,
   AlertCircle,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -197,6 +198,17 @@ export default function SynapsePage() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {integration.integration_key === "pagcorp_erp_sync" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => navigate("/pagcorp/history")}
+                      >
+                        <History className="w-4 h-4" />
+                        Histórico
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
