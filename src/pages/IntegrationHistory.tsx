@@ -11,6 +11,7 @@ import {
   RefreshCw,
   FileText,
   Ban,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
