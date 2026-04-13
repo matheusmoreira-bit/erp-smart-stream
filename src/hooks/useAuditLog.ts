@@ -57,14 +57,14 @@ export async function logAuditAction(params: {
   details?: Record<string, unknown>;
 }) {
   try {
-    await supabase.from("audit_log").insert([{
-      action: params.action,
-      entity_type: params.entity_type,
-      entity_id: params.entity_id || null,
-      actor_email: params.actor_email || null,
-      company_db: params.company_db || null,
-      details: (params.details || {}) as any,
-    }]);
+    await supabase.rpc("insert_audit_log", {
+      p_action: params.action,
+      p_entity_type: params.entity_type,
+      p_entity_id: params.entity_id || null,
+      p_actor_email: params.actor_email || null,
+      p_company_db: params.company_db || null,
+      p_details: (params.details || {}) as any,
+    });
   } catch {
     // silent – audit should never block main flow
   }
