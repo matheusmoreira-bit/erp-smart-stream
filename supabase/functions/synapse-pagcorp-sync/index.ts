@@ -173,12 +173,23 @@ async function loginSap(sapCreds: Record<string, string>) {
   const userName = sapCreds.username || sapCreds.UserName;
   const password = sapCreds.password || sapCreds.Password;
 
-  const loginResp = await fetch(`${baseUrl}/Login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ CompanyDB: companyDB, UserName: userName, Password: password }),
-  });
-  if (!loginResp.ok) throw new Error(`SAP Login failed: ${loginResp.status}`);
+  let loginResp: Response;
+  try {
+    loginResp = await fetch(`${baseUrl}/Login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ CompanyDB: companyDB, UserName: userName, Password: password }),
+    });
+  } catch (e) {
+    throw new Error(`SAP Service Layer inacessível (${baseUrl}). Verifique se o servidor permite conexões externas.`);
+  }
+  if (!loginResp.ok) {
+    const body = await loginResp.text().catch(() => "");
+    if (loginResp.status === 502 || loginResp.status === 503) {
+      throw new Error(`SAP Service Layer indisponível (HTTP ${loginResp.status}). O servidor pode estar fora do ar ou bloqueando conexões externas.`);
+    }
+    throw new Error(`SAP Login falhou (HTTP ${loginResp.status}): ${body.slice(0, 200)}`);
+  }
   const cookies = loginResp.headers.get("set-cookie") || "";
   return { baseUrl, cookies, companyDB };
 }
