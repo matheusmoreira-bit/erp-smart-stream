@@ -608,11 +608,19 @@ Deno.serve(async (req) => {
         const amount = expense.amount || expense.value || expense.expenseValue || 0;
         const description = expense.description || expense.expenseDescription || "";
 
+        const failedDocDate = expense.eventDate || expense.date || endDate;
+        const failedEmployeeName = expense.employeeName || expense.userName || "";
         const failedPayload: Record<string, unknown> = {
           CardCode: String(integrationParams.default_supplier_code || ""),
-          DocDate: expense.eventDate || expense.date || endDate,
-          Comments: `PagCorp #${expenseId} - ${description}`,
-          ...(bplId ? { BPL_IDAssignedToInvoice: bplId } : {}),
+          DocDate: failedDocDate,
+          DocDueDate: failedDocDate,
+          TaxDate: failedDocDate,
+          BPL_IDAssignedToInvoice: bplId || 1,
+          U_FGR_RATEIO_CC: "N",
+          U_FGR_CONTRATO: "N",
+          DocCurrency: expense.currency || String(integrationParams.default_currency || "BRL"),
+          DocRate: expense.exchangeRate || Number(integrationParams.default_doc_rate) || 1,
+          Comments: `${failedEmployeeName} - ${description} - Integração PagCorp`,
           DocumentLines: [
             {
               ItemCode: itemMapping?.item_code || String(integrationParams.default_item_code || ""),
