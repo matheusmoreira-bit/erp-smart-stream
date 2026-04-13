@@ -116,6 +116,7 @@ export function useSynapseIntegrations(companyDB?: string) {
           default_item_code: "",
           default_cost_center: "",
           default_project: "",
+          default_bpl_id: "",
         },
         company_db: companyDb,
       } as any);
