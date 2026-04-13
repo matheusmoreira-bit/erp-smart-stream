@@ -5,33 +5,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function requireAdmin(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new Error("UNAUTHORIZED");
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("UNAUTHORIZED");
-
-  // Check admin role using service role client
-  const adminClient = createClient(
+function getServiceClient() {
+  return createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
-  const { data: roleData } = await adminClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-
-  if (!roleData) throw new Error("FORBIDDEN");
-  return { user, adminClient };
 }
 
 Deno.serve(async (req) => {
@@ -40,7 +18,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { adminClient } = await requireAdmin(req);
+    const adminClient = getServiceClient();
 
     const url = new URL(req.url);
     const systemName = url.searchParams.get("system");
