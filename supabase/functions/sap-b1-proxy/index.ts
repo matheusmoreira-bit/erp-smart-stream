@@ -106,21 +106,9 @@ Deno.serve(async (req) => {
     const reqBody = await req.json();
     const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
 
-    // SAP authentication is handled via SAP session cookies (B1SESSION).
-    // Supabase auth is checked only when the user has a real JWT (not anon key).
-    // This allows SAP-only users to operate without Supabase login.
-    const authHeader = req.headers.get("Authorization") || "";
-    const isAnonKey = authHeader.includes(Deno.env.get("SUPABASE_ANON_KEY") || "__none__");
-    if (action !== "login" && !isAnonKey) {
-      // If a real JWT is provided, validate it
-      try {
-        await requireAuth(req);
-      } catch {
-        return new Response(JSON.stringify({ error: "Não autenticado" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
+    // Authentication is handled by SAP session (B1SESSION cookie).
+    // Each action validates its own required params (sessionId, etc.).
+    // Supabase auth is not required since users authenticate via SAP credentials.
 
     if (!action || typeof action !== "string") {
       return new Response(JSON.stringify({ error: "action é obrigatória" }), {
