@@ -235,18 +235,42 @@ export function useModuleAccess(moduleKey?: string) {
       return;
     }
 
+    // If SAP superuser, grant all modules immediately
+    if (session.isSuperUser) {
+      const erpType = session.erpType || "sap";
+      const allKeys = getModulesForErp(erpType).map((m) => m.key);
+      setUserModules(allKeys);
+      setLoading(false);
+      return;
+    }
+
     const identifier = session.userName.toLowerCase();
-    const companyDB = session.companyDB;
 
     (async () => {
       setLoading(true);
 
-      // Get assignments for this company (or global)
-      let query = supabase
+      // Check if Supabase user is admin — if so, grant all modules
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      if (authSession?.user) {
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", authSession.user.id)
+          .eq("role", "admin")
+          .maybeSingle();
+        if (roleData) {
+          const erpType = session.erpType || "sap";
+          const allKeys = getModulesForErp(erpType).map((m) => m.key);
+          setUserModules(allKeys);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Get assignments for this user
+      const { data: allAssignments } = await supabase
         .from("user_group_assignments")
         .select("group_id, sap_email");
-
-      const { data: allAssignments } = await query;
 
       const assignments = (allAssignments || []).filter((a: any) => {
         const sapEmail = a.sap_email.toLowerCase();
@@ -270,7 +294,7 @@ export function useModuleAccess(moduleKey?: string) {
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
       setLoading(false);
     })();
-  }, [session?.userName, session?.companyDB]);
+  }, [session?.userName, session?.companyDB, session?.isSuperUser, session?.erpType]);
 
   const hasAccess = moduleKey ? userModules.includes(moduleKey) : true;
 
