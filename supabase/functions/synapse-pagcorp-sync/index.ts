@@ -657,8 +657,86 @@ Deno.serve(async (req) => {
           ? aiResult.document_date
           : expense.eventDate || expense.date || endDate;
 
-        // Build SAP PurchaseOrders payload (based on n8n template)
+        // ── Validate supplier and item in SAP ──
         const employeeName = expense.employeeName || expense.userName || "";
+
+        // Check if supplier exists in SAP
+        if (!finalSupplierCode) {
+          const issue: ValidationIssue = {
+            expenseId, description, type: "supplier_not_found",
+            code: "", employeeName, amount: finalAmount,
+          };
+          validationIssues.push(issue);
+          results.push({ expenseId, success: false, skipped: "Fornecedor não informado" });
+
+          await supabase.from("pagcorp_integration_log").insert({
+            pagcorp_expense_id: expenseId,
+            pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode, ai_extraction: aiUsed ? aiResult : null },
+            integration_type: "accountability", status: "error",
+            company_db: bodyCompanyDB || null, integrated_by: "synapse_auto",
+            error_message: "Fornecedor não informado — despesa não integrada",
+          } as any);
+          continue;
+        }
+
+        const supplierExists = await sapEntityExists(sap.baseUrl, sap.cookies, "BusinessPartners", finalSupplierCode);
+        if (!supplierExists) {
+          const issue: ValidationIssue = {
+            expenseId, description, type: "supplier_not_found",
+            code: finalSupplierCode, employeeName, amount: finalAmount,
+          };
+          validationIssues.push(issue);
+          results.push({ expenseId, success: false, skipped: `Fornecedor '${finalSupplierCode}' não encontrado no SAP` });
+
+          await supabase.from("pagcorp_integration_log").insert({
+            pagcorp_expense_id: expenseId,
+            pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode, ai_extraction: aiUsed ? aiResult : null },
+            integration_type: "accountability", status: "error",
+            company_db: bodyCompanyDB || null, integrated_by: "synapse_auto",
+            error_message: `Fornecedor '${finalSupplierCode}' não encontrado no SAP`,
+          } as any);
+          continue;
+        }
+
+        // Check if item exists in SAP
+        if (!finalItemCode) {
+          const issue: ValidationIssue = {
+            expenseId, description, type: "item_not_found",
+            code: "", employeeName, amount: finalAmount,
+          };
+          validationIssues.push(issue);
+          results.push({ expenseId, success: false, skipped: "Item não informado" });
+
+          await supabase.from("pagcorp_integration_log").insert({
+            pagcorp_expense_id: expenseId,
+            pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode, ai_extraction: aiUsed ? aiResult : null },
+            integration_type: "accountability", status: "error",
+            company_db: bodyCompanyDB || null, integrated_by: "synapse_auto",
+            error_message: "Item não informado — despesa não integrada",
+          } as any);
+          continue;
+        }
+
+        const itemExists = await sapEntityExists(sap.baseUrl, sap.cookies, "Items", finalItemCode);
+        if (!itemExists) {
+          const issue: ValidationIssue = {
+            expenseId, description, type: "item_not_found",
+            code: finalItemCode, employeeName, amount: finalAmount,
+          };
+          validationIssues.push(issue);
+          results.push({ expenseId, success: false, skipped: `Item '${finalItemCode}' não encontrado no SAP` });
+
+          await supabase.from("pagcorp_integration_log").insert({
+            pagcorp_expense_id: expenseId,
+            pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode, ai_extraction: aiUsed ? aiResult : null },
+            integration_type: "accountability", status: "error",
+            company_db: bodyCompanyDB || null, integrated_by: "synapse_auto",
+            error_message: `Item '${finalItemCode}' não encontrado no SAP`,
+          } as any);
+          continue;
+        }
+
+        // Build SAP PurchaseOrders payload (based on n8n template)
         const docCurrency = String(integrationParams.default_currency || "").trim();
         const docRate = Number(integrationParams.default_doc_rate) || 0;
 
