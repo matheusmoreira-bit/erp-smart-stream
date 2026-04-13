@@ -406,15 +406,37 @@ Deno.serve(async (req) => {
         results.push({ expenseId, success: true, docEntry: sapResult.docEntry, docNum: sapResult.docNum });
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : "Erro desconhecido";
+        const accountCode = expense.accountCode || expense.account || "";
+        const itemMapping = await getItemMapping(supabase, accountCode).catch(() => null);
+        const acctMapping = await getAccountMapping(supabase, accountCode).catch(() => null);
+        const amount = expense.amount || expense.value || expense.expenseValue || 0;
+        const description = expense.description || expense.expenseDescription || "";
+
+        const failedPayload: Record<string, unknown> = {
+          CardCode: String(integrationParams.default_supplier_code || ""),
+          DocDate: expense.eventDate || expense.date || endDate,
+          Comments: `PagCorp #${expenseId} - ${description}`,
+          DocumentLines: [
+            {
+              ItemCode: itemMapping?.item_code || String(integrationParams.default_item_code || ""),
+              Quantity: 1,
+              UnitPrice: amount,
+              AccountCode: itemMapping?.account_code || accountCode || undefined,
+              CostingCode: acctMapping?.cost_center || String(integrationParams.default_cost_center || "") || undefined,
+              ProjectCode: acctMapping?.project || String(integrationParams.default_project || "") || undefined,
+            },
+          ],
+        };
 
         await supabase.from("pagcorp_integration_log").insert({
           pagcorp_expense_id: expenseId,
-          pagcorp_data: { description: expense.description, amount: expense.amount },
+          pagcorp_data: { description, amount, date: expense.eventDate || expense.date, accountCode },
           integration_type: "accountability",
           status: "error",
           company_db: bodyCompanyDB || null,
           integrated_by: "synapse_auto",
           error_message: errMsg,
+          sap_payload: failedPayload,
         } as any);
 
         results.push({ expenseId, success: false, error: errMsg });
