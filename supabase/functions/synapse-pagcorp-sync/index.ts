@@ -840,16 +840,29 @@ Deno.serve(async (req) => {
     }
 
     const successCount = results.filter((r) => r.success).length;
+    const skippedCount = results.filter((r) => r.skipped).length;
     const aiCount = results.filter((r) => r.aiUsed).length;
-    const msg = `${successCount}/${pending.length} despesas integradas${aiCount > 0 ? ` (${aiCount} com IA)` : ""}`;
+    const msgParts = [`${successCount}/${pending.length} despesas integradas`];
+    if (aiCount > 0) msgParts.push(`${aiCount} com IA`);
+    if (skippedCount > 0) msgParts.push(`${skippedCount} não integrada(s) por falta de cadastro`);
+    const msg = msgParts.join(" | ");
     const finalStatus = successCount === pending.length ? "success" : successCount > 0 ? "partial" : "error";
 
-    await logExecution(supabase, finalStatus, { results, startDate, endDate }, successCount);
+    // Send notification email for validation issues
+    if (validationIssues.length > 0) {
+      try {
+        await sendValidationNotificationEmail(validationIssues, notificationEmail, bodyCompanyDB);
+      } catch (emailErr) {
+        console.warn("Failed to send validation notification email:", emailErr);
+      }
+    }
+
+    await logExecution(supabase, finalStatus, { results, startDate, endDate, validationIssues: validationIssues.length > 0 ? validationIssues : undefined }, successCount);
     await supabase.from("synapse_integrations")
       .update({ last_run_at: now.toISOString(), last_run_status: finalStatus, last_run_message: msg })
       .eq("id", config.id);
 
-    return new Response(JSON.stringify({ message: msg, results }), {
+    return new Response(JSON.stringify({ message: msg, results, validationIssues: validationIssues.length > 0 ? validationIssues : undefined }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
