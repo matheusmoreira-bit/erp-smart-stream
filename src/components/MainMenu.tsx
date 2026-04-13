@@ -19,6 +19,7 @@ import {
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 
 interface ModuleCard {
   title: string;
@@ -182,6 +183,7 @@ export function MainMenu() {
               <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
               Conectado
             </div>
+            <ChangePasswordDialog />
             <ThemeToggle />
             <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               Sair
