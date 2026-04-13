@@ -104,10 +104,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireAuth(req);
-
     const reqBody = await req.json();
     const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
+
+    // Allow login without Supabase auth; all other actions require it
+    if (action !== "login") {
+      await requireAuth(req);
+    }
 
     if (!action || typeof action !== "string") {
       return new Response(JSON.stringify({ error: "action é obrigatória" }), {
