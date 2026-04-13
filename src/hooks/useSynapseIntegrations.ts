@@ -72,14 +72,15 @@ export function useSynapseIntegrations(companyDB?: string) {
   }, [fetchIntegrations]);
 
   const ensureIntegration = useCallback(async (companyDb: string) => {
-    const { data } = await supabase
+    // Ensure JumpCloud integration
+    const { data: jcData } = await supabase
       .from("synapse_integrations")
       .select("id")
       .eq("integration_key", "jumpcloud_sap_sync")
       .eq("company_db", companyDb)
       .maybeSingle();
 
-    if (!data) {
+    if (!jcData) {
       await supabase.from("synapse_integrations").insert({
         integration_key: "jumpcloud_sap_sync",
         display_name: "JumpCloud → SAP B1",
@@ -90,15 +91,50 @@ export function useSynapseIntegrations(companyDB?: string) {
         parameters: { auto_disable: true },
         company_db: companyDb,
       } as any);
-      await fetchIntegrations();
     }
+
+    // Ensure PagCorp integration
+    const { data: pcData } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "pagcorp_erp_sync")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!pcData) {
+      await supabase.from("synapse_integrations").insert({
+        integration_key: "pagcorp_erp_sync",
+        display_name: "PagCorp → ERP",
+        description:
+          "Integra despesas com prestação de contas aprovada do PagCorp para o ERP (SAP B1). Executa automaticamente a cada 30 minutos.",
+        is_active: false,
+        interval_minutes: 30,
+        parameters: {
+          days_back: 30,
+          sap_endpoint: "PurchaseInvoices",
+          default_supplier_code: "",
+          default_item_code: "",
+          default_cost_center: "",
+          default_project: "",
+        },
+        company_db: companyDb,
+      } as any);
+    }
+
+    await fetchIntegrations();
   }, [fetchIntegrations]);
 
   const runNow = useCallback(async (integrationKey: string, companyDb?: string) => {
     setIsRunning(true);
     try {
+      const edgeFunctionMap: Record<string, string> = {
+        jumpcloud_sap_sync: "synapse-jc-sync",
+        pagcorp_erp_sync: "synapse-pagcorp-sync",
+      };
+      const functionName = edgeFunctionMap[integrationKey] || "synapse-jc-sync";
+
       const { authFetch } = await import("@/lib/auth-fetch");
-      const res = await authFetch("synapse-jc-sync", {
+      const res = await authFetch(functionName, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ company_db: companyDb }),
