@@ -29,17 +29,18 @@ function setCache(key: string, data: unknown) {
 
 async function requireAuth(req: Request) {
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new Error("UNAUTHORIZED");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) throw new Error("UNAUTHORIZED");
 
+  const token = authHeader.replace("Bearer ", "");
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
     { global: { headers: { Authorization: authHeader } } }
   );
 
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("UNAUTHORIZED");
-  return user;
+  const { data, error } = await supabase.auth.getClaims(token);
+  if (error || !data?.claims?.sub) throw new Error("UNAUTHORIZED");
+  return data.claims;
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {
