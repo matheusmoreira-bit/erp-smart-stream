@@ -166,8 +166,6 @@ function ExpenseDetailModal({
   );
 }
 
-/* CreateExpenseModal is now in src/components/CreateExpenseModal.tsx */
-import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 /* ─── Expense Card ─── */
 function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void }) {
   return (
