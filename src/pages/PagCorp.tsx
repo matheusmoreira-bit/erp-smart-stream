@@ -441,33 +441,15 @@ export default function PagCorp() {
         </div>
       </main>
 
-      {/* Confirm Generic Integration Dialog */}
-      <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, transaction: null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Integrar ao SAP sem prestação de contas</DialogTitle>
-            <DialogDescription className="space-y-2 pt-2">
-              <p>
-                Esta transação <strong>não possui prestação de contas</strong>. Ao integrar ao SAP:
-              </p>
-              <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>Será utilizado um <strong>item genérico de despesa de cartão corporativo</strong></li>
-                <li>Fornecedor: <strong>ANA Gaming</strong> (caso não seja identificado um fornecedor melhor)</li>
-                <li>Centro de Custo e Projeto serão atribuídos conforme o <strong>mapeamento de contas</strong> configurado</li>
-              </ul>
-              <p className="text-sm font-medium pt-2">Deseja continuar?</p>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDialog({ open: false, transaction: null })}>
-              Cancelar
-            </Button>
-            <Button onClick={confirmGenericIntegration}>
-              Confirmar Integração
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Expense Form Modal */}
+      <CreateExpenseModal
+        open={expenseModal.open}
+        onClose={() => setExpenseModal({ open: false })}
+        onCreate={createExpense}
+        sapSession={session}
+        prefill={expenseModal.prefill}
+        title="Integrar Despesa PagCorp"
+      />
     </div>
   );
 }
