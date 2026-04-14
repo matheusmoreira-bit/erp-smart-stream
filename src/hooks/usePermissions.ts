@@ -21,8 +21,8 @@ export interface UserAssignment {
   created_at: string;
 }
 
-// Module definitions per ERP type
-export const SAP_MODULES = [
+// Unified module definitions — same for all ERP types / companies
+export const ALL_MODULES = [
   { key: "analytics", label: "Analytics (Fluxo)" },
   { key: "analytics_payments", label: "Analytics (Pagamentos)" },
   { key: "expenses", label: "Despesas" },
@@ -35,57 +35,22 @@ export const SAP_MODULES = [
   { key: "audit_log", label: "Logs de Auditoria" },
 ] as const;
 
-export const OMIE_MODULES = SAP_MODULES.filter((m) => m.key !== "users");
-
-export const S4HANA_MODULES = [
-  { key: "analytics", label: "Analytics" },
-  { key: "expenses", label: "Despesas" },
-  { key: "approvals", label: "Aprovações" },
-  { key: "users", label: "Usuários" },
-  { key: "credentials", label: "Credenciais" },
-  { key: "audit_log", label: "Logs de Auditoria" },
-] as const;
-
-export const TOTVS_MODULES = [
-  { key: "expenses", label: "Despesas" },
-  { key: "approvals", label: "Aprovações" },
-  { key: "credentials", label: "Credenciais" },
-  { key: "audit_log", label: "Logs de Auditoria" },
-] as const;
-
-export const NETSUITE_MODULES = [
-  { key: "expenses", label: "Despesas" },
-  { key: "approvals", label: "Aprovações" },
-  { key: "credentials", label: "Credenciais" },
-  { key: "audit_log", label: "Logs de Auditoria" },
-] as const;
-
-// Legacy compat
-export const ALL_MODULES = SAP_MODULES;
-
-export function getModulesForErp(erpType: string): readonly { key: string; label: string }[] {
-  if (erpType === "sap") return SAP_MODULES;
-  if (erpType === "omie") return OMIE_MODULES;
-  if (erpType.startsWith("s4hana")) return S4HANA_MODULES;
-  if (erpType.startsWith("totvs")) return TOTVS_MODULES;
-  if (erpType === "netsuite") return NETSUITE_MODULES;
-  return SAP_MODULES;
-}
+// Legacy compat aliases
+export const SAP_MODULES = ALL_MODULES;
 
 // Default modules for users with no group
 const DEFAULT_MODULES = ["expenses"];
 
-export function usePermissionGroups(erpType?: string) {
+export function usePermissionGroups() {
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from("permission_groups").select("*").order("name");
-    if (erpType) {
-      query = query.eq("erp_type", erpType);
-    }
-    const { data: groupsData } = await query;
+    const { data: groupsData } = await supabase
+      .from("permission_groups")
+      .select("*")
+      .order("name");
 
     const groupIds = (groupsData || []).map((g: any) => g.id);
     let modulesData: any[] = [];
@@ -106,18 +71,17 @@ export function usePermissionGroups(erpType?: string) {
 
     setGroups(mapped);
     setLoading(false);
-  }, [erpType]);
+  }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const saveGroup = async (name: string, description: string, modules: string[], id?: string, targetErpType?: string) => {
-    const erp = targetErpType || erpType || "sap";
+  const saveGroup = async (name: string, description: string, modules: string[], id?: string) => {
     if (id) {
       await supabase.from("permission_groups").update({ name, description }).eq("id", id);
     } else {
       const { data } = await supabase
         .from("permission_groups")
-        .insert({ name, description, erp_type: erp })
+        .insert({ name, description })
         .select()
         .single();
       if (!data) return;
@@ -139,18 +103,14 @@ export function usePermissionGroups(erpType?: string) {
     await fetch();
   };
 
-  const ensureDefaultGroup = async (targetErpType: string) => {
-    // Check if "Usuário" group exists for this ERP type
-    const existing = groups.find(
-      (g) => g.name === "Usuário" && g.erp_type === targetErpType
-    );
+  const ensureDefaultGroup = async () => {
+    const existing = groups.find((g) => g.name === "Usuário");
     if (existing) return existing;
 
-    // Create default "Usuário" group with only expenses
     const defaultModules = ["expenses"];
     const { data } = await supabase
       .from("permission_groups")
-      .insert({ name: "Usuário", description: "Acesso padrão — apenas despesas", erp_type: targetErpType })
+      .insert({ name: "Usuário", description: "Acesso padrão — apenas despesas" })
       .select()
       .single();
     if (data) {
@@ -230,30 +190,22 @@ export function useModuleAccess(moduleKey?: string) {
       return;
     }
 
-    const erpType = session.erpType || "sap";
-
-    // OMIE companies: all modules open to everyone by default (no permission control)
-    if (erpType === "omie") {
-      const allKeys = getModulesForErp(erpType).map((m) => m.key);
-      setUserModules(allKeys);
-      setLoading(false);
-      return;
-    }
+    const allKeys = ALL_MODULES.map((m) => m.key);
 
     // If SAP superuser, grant all modules immediately
     if (session.isSuperUser) {
-      const allKeys = getModulesForErp(erpType).map((m) => m.key);
       setUserModules(allKeys);
       setLoading(false);
       return;
     }
 
     const identifier = session.userName.toLowerCase();
+    const companyDB = session.companyDB;
 
     (async () => {
       setLoading(true);
 
-      // Check if Supabase user is admin — if so, grant all modules
+      // Check if Supabase user is admin — if so, grant all modules (admin in all companies)
       const { data: { session: authSession } } = await supabase.auth.getSession();
       if (authSession?.user) {
         const { data: roleData } = await supabase
@@ -263,18 +215,23 @@ export function useModuleAccess(moduleKey?: string) {
           .eq("role", "admin")
           .maybeSingle();
         if (roleData) {
-          const erpType = session.erpType || "sap";
-          const allKeys = getModulesForErp(erpType).map((m) => m.key);
           setUserModules(allKeys);
           setLoading(false);
           return;
         }
       }
 
-      // Get assignments for this user
-      const { data: allAssignments } = await supabase
+      // Get assignments for this user filtered by current company
+      let query = supabase
         .from("user_group_assignments")
-        .select("group_id, sap_email");
+        .select("group_id, sap_email, company_db");
+
+      if (companyDB) {
+        // Get assignments for this specific company OR global (null company_db)
+        query = query.or(`company_db.eq.${companyDB},company_db.is.null`);
+      }
+
+      const { data: allAssignments } = await query;
 
       const assignments = (allAssignments || []).filter((a: any) => {
         const sapEmail = a.sap_email.toLowerCase();
@@ -298,7 +255,7 @@ export function useModuleAccess(moduleKey?: string) {
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
       setLoading(false);
     })();
-  }, [session?.userName, session?.companyDB, session?.isSuperUser, session?.erpType]);
+  }, [session?.userName, session?.companyDB, session?.isSuperUser]);
 
   const hasAccess = moduleKey ? userModules.includes(moduleKey) : true;
 

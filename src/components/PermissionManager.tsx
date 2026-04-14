@@ -33,7 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   usePermissionGroups,
   useUserAssignments,
-  getModulesForErp,
+  ALL_MODULES,
   type PermissionGroup,
 } from "@/hooks/usePermissions";
 
@@ -55,13 +55,11 @@ function GroupDialog({
   open,
   onOpenChange,
   group,
-  erpType,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   group: PermissionGroup | null;
-  erpType: string;
   onSave: (name: string, desc: string, modules: string[]) => Promise<void>;
 }) {
   const [name, setName] = useState(group?.name || "");
@@ -69,7 +67,7 @@ function GroupDialog({
   const [modules, setModules] = useState<string[]>(group?.modules || []);
   const [saving, setSaving] = useState(false);
 
-  const availableModules = getModulesForErp(erpType);
+  const availableModules = ALL_MODULES;
 
   const toggle = (key: string) => {
     setModules((prev) =>
@@ -162,10 +160,9 @@ export default function PermissionManager() {
   const [userFilter, setUserFilter] = useState("");
 
   const company = companies.find((c) => c.company_db === selectedCompany);
-  const erpType = company?.erp_type || "sap";
 
   const { groups, loading: groupsLoading, saveGroup, deleteGroup, ensureDefaultGroup } =
-    usePermissionGroups(erpType || undefined);
+    usePermissionGroups();
   const { assignments, loading: assignLoading, assign, remove } =
     useUserAssignments(selectedCompany || undefined);
 
@@ -227,10 +224,10 @@ export default function PermissionManager() {
       });
 
     // Ensure default group exists
-    if (selectedCompany && erpType) {
-      ensureDefaultGroup(erpType);
+    if (selectedCompany) {
+      ensureDefaultGroup();
     }
-  }, [selectedCompany, erpType]);
+  }, [selectedCompany]);
 
   const openNewGroup = () => {
     setEditingGroup(null);
@@ -253,7 +250,7 @@ export default function PermissionManager() {
   };
 
   const handleSaveGroup = async (name: string, desc: string, modules: string[]) => {
-    await saveGroup(name, desc, modules, editingGroup?.id, erpType);
+    await saveGroup(name, desc, modules, editingGroup?.id);
     toast.success(editingGroup ? "Grupo atualizado" : "Grupo criado");
   };
 
@@ -341,9 +338,6 @@ export default function PermissionManager() {
               <div className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-primary" />
                 <h3 className="text-lg font-semibold text-foreground">Grupos de Permissão</h3>
-                <Badge variant="outline" className="text-[10px]">
-                  {getErpBadge(erpType)}
-                </Badge>
               </div>
               <Button size="sm" onClick={openNewGroup}>
                 <Plus className="w-4 h-4 mr-1" /> Novo Grupo
@@ -357,7 +351,6 @@ export default function PermissionManager() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {groups.map((g) => {
-                  const availableModules = getModulesForErp(erpType);
                   return (
                     <div key={g.id} className="glass-card p-4">
                       <div className="flex items-center gap-3">
@@ -373,7 +366,7 @@ export default function PermissionManager() {
                           )}
                           <div className="flex flex-wrap gap-1 mt-2">
                             {g.modules.map((m) => {
-                              const mod = availableModules.find((am) => am.key === m);
+                              const mod = ALL_MODULES.find((am) => am.key === m);
                               return (
                                 <Badge key={m} variant="secondary" className="text-[10px]">
                                   {mod?.label || m}
@@ -497,7 +490,6 @@ export default function PermissionManager() {
         open={groupDialog}
         onOpenChange={setGroupDialog}
         group={editingGroup}
-        erpType={erpType}
         onSave={handleSaveGroup}
       />
     </div>
