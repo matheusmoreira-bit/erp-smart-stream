@@ -222,7 +222,7 @@ export function CreateExpenseModal({
   }, [pendingPrefill]);
 
 
-    const arr = Array.from(newFiles);
+    const handleFiles = (newFiles: FileList | File[]) => {
     setFiles((prev) => [...prev, ...arr]);
     if (aiEnabled && arr.length > 0) {
       processWithAI([...files, ...arr]);
