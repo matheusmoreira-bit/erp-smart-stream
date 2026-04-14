@@ -12,6 +12,7 @@ interface CachedSearchComboboxProps {
   placeholder?: string;
   label?: string;
   suggestedQuery?: string;
+  portalContainer?: HTMLElement | null;
 }
 
 export function CachedSearchCombobox({
@@ -22,6 +23,7 @@ export function CachedSearchCombobox({
   placeholder = "Buscar...",
   label,
   suggestedQuery,
+  portalContainer,
 }: CachedSearchComboboxProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -172,7 +174,7 @@ export function CachedSearchCombobox({
             <button
               key={opt.code}
               type="button"
-              onClick={() => handleSelect(opt)}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleSelect(opt); }}
               className="flex w-full flex-col px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <span className="truncate font-medium text-foreground">{opt.name}</span>
@@ -182,7 +184,7 @@ export function CachedSearchCombobox({
             </button>
           ))}
         </div>,
-        document.body,
+        portalContainer || document.body,
       )}
 
       {typeof document !== "undefined" && showEmptyState && createPortal(
@@ -198,7 +200,7 @@ export function CachedSearchCombobox({
         >
           Nenhum resultado encontrado
         </div>,
-        document.body,
+        portalContainer || document.body,
       )}
     </>
   );

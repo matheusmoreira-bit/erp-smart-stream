@@ -54,6 +54,7 @@ export function CreateExpenseModal({
   prefill?: PagCorpPrefill;
   title?: string;
 }) {
+  const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [currency, setCurrency] = useState("");
@@ -418,6 +419,7 @@ export function CreateExpenseModal({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent
+        ref={setDialogContainer}
         className="max-w-2xl max-h-[85vh] overflow-y-auto"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
@@ -530,6 +532,7 @@ export function CreateExpenseModal({
               onChange={handleSupplierChange}
               placeholder="Digite nome, código ou CNPJ do fornecedor..."
               suggestedQuery={suggestedSupplierName}
+              portalContainer={dialogContainer}
             />
           </div>
 
@@ -599,6 +602,7 @@ export function CreateExpenseModal({
                     }}
                     placeholder="Buscar item SAP por nome ou código..."
                     suggestedQuery={item.description && !item.sapItem ? item.description : undefined}
+                    portalContainer={dialogContainer}
                   />
                   <div className="grid grid-cols-12 gap-2">
                     <div className="col-span-6">
@@ -633,6 +637,7 @@ export function CreateExpenseModal({
                       }}
                       placeholder="Buscar centro de custo..."
                       suggestedQuery={item.cost_center && !item.sapCostCenter ? item.cost_center : undefined}
+                      portalContainer={dialogContainer}
                     />
                     <CachedSearchCombobox
                       label="Projeto (Dimensão)"
@@ -648,6 +653,7 @@ export function CreateExpenseModal({
                       }}
                       placeholder="Buscar projeto..."
                       suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
+                      portalContainer={dialogContainer}
                     />
                   </div>
                 </div>
