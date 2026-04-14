@@ -235,9 +235,18 @@ export function useModuleAccess(moduleKey?: string) {
       return;
     }
 
+    const erpType = session.erpType || "sap";
+
+    // OMIE companies: all modules open to everyone by default (no permission control)
+    if (erpType === "omie") {
+      const allKeys = getModulesForErp(erpType).map((m) => m.key);
+      setUserModules(allKeys);
+      setLoading(false);
+      return;
+    }
+
     // If SAP superuser, grant all modules immediately
     if (session.isSuperUser) {
-      const erpType = session.erpType || "sap";
       const allKeys = getModulesForErp(erpType).map((m) => m.key);
       setUserModules(allKeys);
       setLoading(false);
