@@ -163,37 +163,56 @@ export function CreateExpenseModal({
     }
   }, [open, initialized]);
 
+  const extractUrlsFromObject = (obj: any): string[] => {
+    const urls: string[] = [];
+    if (!obj || typeof obj !== "object") return urls;
+    const urlPattern = /^https?:\/\/.+/i;
+    const imageExtPattern = /\.(jpg|jpeg|png|webp|gif|pdf|bmp|tiff)(\?|$)/i;
+
+    const walk = (val: any) => {
+      if (typeof val === "string" && urlPattern.test(val) && imageExtPattern.test(val)) {
+        urls.push(val);
+      } else if (Array.isArray(val)) {
+        val.forEach(walk);
+      } else if (val && typeof val === "object") {
+        Object.values(val).forEach(walk);
+      }
+    };
+    walk(obj);
+    return urls;
+  };
+
   const processReceiptsWithAI = async (receipts: any[]) => {
     setIsProcessing(true);
     setAiConfidence(null);
     try {
-      // Collect receipt image URLs
+      // Collect all image/document URLs from receipts recursively
       const imageUrls: string[] = [];
       for (const receipt of receipts) {
-        if (receipt.imageUrl) imageUrls.push(receipt.imageUrl);
-        if (receipt.images && Array.isArray(receipt.images)) {
-          receipt.images.forEach((img: any) => {
-            if (typeof img === "string") imageUrls.push(img);
-            else if (img.url) imageUrls.push(img.url);
-          });
-        }
+        const found = extractUrlsFromObject(receipt);
+        imageUrls.push(...found);
       }
 
-      if (imageUrls.length === 0) {
-        toast.info("Nenhuma imagem encontrada nos comprovantes para processar com IA.");
+      // Deduplicate
+      const uniqueUrls = [...new Set(imageUrls)];
+
+      if (uniqueUrls.length === 0) {
+        // No image URLs found – log receipts structure for debugging
+        console.warn("PagCorp receipts structure (no image URLs found):", JSON.stringify(receipts.slice(0, 2), null, 2));
+        toast.info("Nenhuma imagem encontrada nos comprovantes. Anexe o documento manualmente e clique em processar com IA.");
         setIsProcessing(false);
         return;
       }
 
       // Download images and create files for AI processing
       const downloadedFiles: File[] = [];
-      for (const url of imageUrls) {
+      for (const url of uniqueUrls) {
         try {
           const resp = await fetch(url);
           if (resp.ok) {
             const blob = await resp.blob();
-            const fileName = url.split("/").pop() || "receipt.jpg";
-            downloadedFiles.push(new File([blob], fileName, { type: blob.type }));
+            const fileName = url.split("/").pop()?.split("?")[0] || "receipt.jpg";
+            downloadedFiles.push(new File([blob], fileName, { type: blob.type || "image/jpeg" }));
           }
         } catch {
           console.warn("Failed to download receipt image:", url);
@@ -204,7 +223,7 @@ export function CreateExpenseModal({
         setFiles(downloadedFiles);
         await processWithAI(downloadedFiles);
       } else {
-        toast.info("Não foi possível baixar as imagens dos comprovantes.");
+        toast.info("Não foi possível baixar as imagens dos comprovantes. Anexe manualmente.");
       }
     } catch (e) {
       console.error("Receipt AI processing error:", e);
