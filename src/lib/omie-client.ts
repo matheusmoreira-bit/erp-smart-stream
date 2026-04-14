@@ -1,31 +1,96 @@
 import { authFetch } from "@/lib/auth-fetch";
 
 const FUNCTION_URL = "omie-proxy";
+const OMIE_CACHE_TTL_MS = 60_000;
+
+type OmieCacheEntry = {
+  data: unknown;
+  expiresAt: number;
+};
+
+const omieResponseCache = new Map<string, OmieCacheEntry>();
+const omieInflightRequests = new Map<string, Promise<unknown>>();
+
+function getOmieCacheKey(
+  companyDB: string,
+  endpoint: string,
+  params: Record<string, unknown>,
+) {
+  return JSON.stringify([companyDB, endpoint, params]);
+}
+
+function isOmieRedundantError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Consumo redundante") ||
+    error.message.includes("REDUNDANT")
+  );
+}
+
+interface OmieCallOptions {
+  cacheTtlMs?: number;
+}
 
 /**
  * Generic helper to call the OMIE API via the omie-proxy edge function.
+ * Deduplicates in-flight requests and reuses recent responses to avoid OMIE redundant-consumption errors.
  */
 export async function omieCall<T = unknown>(
   companyDB: string,
   endpoint: string,
   params: Record<string, unknown>,
+  options: OmieCallOptions = {},
 ): Promise<T> {
-  const resp = await authFetch(FUNCTION_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "call",
-      company_db: companyDB,
-      endpoint,
-      params,
-    }),
-  });
+  const cacheTtlMs = options.cacheTtlMs ?? OMIE_CACHE_TTL_MS;
+  const cacheKey = getOmieCacheKey(companyDB, endpoint, params);
+  const cached = omieResponseCache.get(cacheKey);
+  const now = Date.now();
 
-  const json = await resp.json();
-  if (!resp.ok) {
-    throw new Error(json.error || `Erro HTTP ${resp.status}`);
+  if (cached && cached.expiresAt > now) {
+    return cached.data as T;
   }
-  return json.data as T;
+
+  const inFlight = omieInflightRequests.get(cacheKey);
+  if (inFlight) {
+    return inFlight as Promise<T>;
+  }
+
+  const request = (async () => {
+    try {
+      const resp = await authFetch(FUNCTION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "call",
+          company_db: companyDB,
+          endpoint,
+          params,
+        }),
+      });
+
+      const json = await resp.json();
+      if (!resp.ok) {
+        throw new Error(json.error || `Erro HTTP ${resp.status}`);
+      }
+
+      omieResponseCache.set(cacheKey, {
+        data: json.data,
+        expiresAt: Date.now() + cacheTtlMs,
+      });
+
+      return json.data as T;
+    } catch (error) {
+      if (cached && isOmieRedundantError(error)) {
+        return cached.data as T;
+      }
+      throw error;
+    } finally {
+      omieInflightRequests.delete(cacheKey);
+    }
+  })();
+
+  omieInflightRequests.set(cacheKey, request);
+  return request;
 }
 
 /* ── Typed OMIE responses ── */
@@ -96,6 +161,7 @@ export async function omieListarContasPagar(
           apenas_importado_api: "N",
         }],
       },
+      { cacheTtlMs: OMIE_CACHE_TTL_MS },
     );
 
     const items = res.conta_pagar_cadastro || [];

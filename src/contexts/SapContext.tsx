@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, type SapSession, clearClientCache } from "@/lib/sap-client";
 
@@ -131,28 +131,30 @@ export function SapProvider({ children }: { children: ReactNode }) {
 export function useSap() {
   const ctx = useContext(ErpContext);
   if (!ctx) throw new Error("useSap must be used within SapProvider");
-  // Return backward-compatible interface
-  // session always exposes companyDB/userName for auth guards and display
-  // SAP-specific fields (sessionId, routeId) are present only for SAP sessions
-  const session: SapSession | null = ctx.session
-    ? ctx.session.erpType === "sap" && ctx.session.sessionId
-      ? {
-          sessionId: ctx.session.sessionId,
-          routeId: ctx.session.routeId || "",
-          companyDB: ctx.session.companyDB,
-          userName: ctx.session.userName,
-          isSuperUser: ctx.session.isSuperUser || false,
-          erpType: "sap",
-        }
-      : {
-          sessionId: `__${ctx.session.erpType}__`,
-          routeId: "",
-          companyDB: ctx.session.companyDB,
-          userName: ctx.session.userName,
-          isSuperUser: false,
-          erpType: ctx.session.erpType,
-        }
-    : null;
+
+  const session = useMemo<SapSession | null>(() => {
+    if (!ctx.session) return null;
+
+    if (ctx.session.erpType === "sap" && ctx.session.sessionId) {
+      return {
+        sessionId: ctx.session.sessionId,
+        routeId: ctx.session.routeId || "",
+        companyDB: ctx.session.companyDB,
+        userName: ctx.session.userName,
+        isSuperUser: ctx.session.isSuperUser || false,
+        erpType: "sap",
+      };
+    }
+
+    return {
+      sessionId: `__${ctx.session.erpType}__`,
+      routeId: "",
+      companyDB: ctx.session.companyDB,
+      userName: ctx.session.userName,
+      isSuperUser: false,
+      erpType: ctx.session.erpType,
+    };
+  }, [ctx.session]);
 
   return {
     session,
