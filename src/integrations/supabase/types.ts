@@ -389,6 +389,75 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          category: string
+          created_at: string
+          email: boolean
+          id: string
+          in_app: boolean
+          updated_at: string
+          user_identifier: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          email?: boolean
+          id?: string
+          in_app?: boolean
+          updated_at?: string
+          user_identifier: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          email?: boolean
+          id?: string
+          in_app?: boolean
+          updated_at?: string
+          user_identifier?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          category: string
+          company_db: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          link: string | null
+          metadata: Json | null
+          title: string
+          user_identifier: string
+        }
+        Insert: {
+          body?: string | null
+          category?: string
+          company_db?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link?: string | null
+          metadata?: Json | null
+          title: string
+          user_identifier: string
+        }
+        Update: {
+          body?: string | null
+          category?: string
+          company_db?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link?: string | null
+          metadata?: Json | null
+          title?: string
+          user_identifier?: string
+        }
+        Relationships: []
+      }
       pagcorp_account_mapping: {
         Row: {
           account_code: string
