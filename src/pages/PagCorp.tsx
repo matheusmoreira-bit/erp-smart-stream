@@ -5,7 +5,6 @@ import {
   RefreshCw,
   ArrowLeft,
   Search,
-  Activity,
   LogOut,
   Loader2,
   DollarSign,
