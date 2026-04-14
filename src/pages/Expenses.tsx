@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -13,22 +13,11 @@ import {
   Calendar,
   DollarSign,
   Send,
-  Trash2,
-  X,
-  Upload,
-  FileSpreadsheet,
-  Sparkles,
-  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { type SapSearchOption } from "@/components/SapSearchCombobox";
-import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
-import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
   Dialog,
   DialogContent,
@@ -43,10 +32,8 @@ import {
   STATUS_LABELS,
   STATUS_COLORS,
   type Expense,
-  type ExpenseItem,
-  type CreateExpenseInput,
 } from "@/hooks/useExpenses";
-
+import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
