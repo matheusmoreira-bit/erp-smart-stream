@@ -67,6 +67,7 @@ export function CreateExpenseModal({
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
   const [initialized, setInitialized] = useState(false);
+  const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
 
   // Cached SAP lists
   const supplierMapRow = useCallback((row: any) => ({
