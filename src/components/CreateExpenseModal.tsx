@@ -396,20 +396,6 @@ export function CreateExpenseModal({
     }
   };
 
-  const resetForm = () => {
-    setSupplier(null);
-    setCurrency("");
-    setCurrencyWarning(null);
-    setDocDate("");
-    setDueDate("");
-    setRemarks("");
-    setAiWarning(null);
-    setSuggestedSupplierName(undefined);
-    setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
-    setFiles([]);
-    setAiConfidence(null);
-  };
-
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
