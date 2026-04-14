@@ -51,9 +51,9 @@ export default function UsersPage() {
 
     if (viewMode === "recorrentes") {
       const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 30);
+      cutoff.setDate(cutoff.getDate() - 60);
       list = list.filter((u) => {
-        if (!u.LastLoginDate) return true;
+        if (!u.LastLoginDate) return false;
         const loginDate = new Date(u.LastLoginDate);
         return loginDate >= cutoff;
       });
