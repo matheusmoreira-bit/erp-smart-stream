@@ -73,6 +73,7 @@ export default function PagCorp() {
   const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
+  const { createExpense } = useExpenses();
 
   useEffect(() => { fetchCredentials(session?.companyDB, "sap"); }, [fetchCredentials, session?.companyDB]);
 
