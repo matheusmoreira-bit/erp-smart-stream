@@ -213,8 +213,15 @@ export function CreateExpenseModal({
       setIsProcessing(false);
     }
   };
+  // Trigger AI for prefilled receipts after function is defined
+  useEffect(() => {
+    if (pendingPrefill && pendingPrefill.receipts && pendingPrefill.receipts.length > 0) {
+      processReceiptsWithAI(pendingPrefill.receipts);
+      setPendingPrefill(null);
+    }
+  }, [pendingPrefill]);
 
-  const handleFiles = (newFiles: FileList | File[]) => {
+
     const arr = Array.from(newFiles);
     setFiles((prev) => [...prev, ...arr]);
     if (aiEnabled && arr.length > 0) {
