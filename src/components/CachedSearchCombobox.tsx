@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2 } from "lucide-react";
@@ -129,7 +129,7 @@ export function CachedSearchCombobox({
 
   const showResults = isOpen && filtered.length > 0 && dropdownPosition;
   const showEmptyState = isOpen && !isLoading && filtered.length === 0 && dropdownPosition;
-  const dropdownStyle = dropdownPosition
+  const dropdownStyle: CSSProperties | undefined = dropdownPosition
     ? {
         position: portalContainer ? "absolute" : "fixed",
         top: dropdownPosition.top,
