@@ -32,10 +32,15 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
-    await requireAuth(req);
+    const body = await req.json();
+    const { action, company_db, endpoint, params } = body;
 
-    const { action, company_db, endpoint, params } = await req.json();
+    // Login action skips Supabase user auth (credentials validated against OMIE API)
+    // Other actions require authenticated user
+    if (action !== "login") {
+      await requireAuth(req);
+    }
+
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
     if (!action || typeof action !== "string") {
