@@ -116,39 +116,52 @@ export function CreateExpenseModal({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Apply prefill when modal opens
-  if (open && prefill && !initialized) {
-    setInitialized(true);
-    if (prefill.description) {
-      setRemarks(prefill.description);
-      setItems([{
-        description: prefill.description,
-        quantity: 1,
-        unit_price: prefill.amount || 0,
-        line_total: prefill.amount || 0,
-        cost_center: "",
-        project: "",
-      }]);
-    }
-    if (prefill.accountAlias) {
-      setSuggestedSupplierName(prefill.accountAlias);
-    }
-    const today = new Date().toISOString().slice(0, 10);
-    setDocDate(today);
-    setDueDate(today);
+  useEffect(() => {
+    if (open && prefill && !initialized) {
+      setInitialized(true);
+      if (prefill.description) {
+        setRemarks(prefill.description);
+        setItems([{
+          description: prefill.description,
+          quantity: 1,
+          unit_price: prefill.amount || 0,
+          line_total: prefill.amount || 0,
+          cost_center: "",
+          project: "",
+        }]);
+      }
+      if (prefill.accountAlias) {
+        setSuggestedSupplierName(prefill.accountAlias);
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      setDocDate(today);
+      setDueDate(today);
 
-    // If triggerAI and there are receipts, download and process them
-    if (prefill.triggerAI && prefill.receipts && prefill.receipts.length > 0) {
-      setAiEnabled(true);
-      // Process receipts URLs as files
-      processReceiptsWithAI(prefill.receipts);
+      if (prefill.triggerAI && prefill.receipts && prefill.receipts.length > 0) {
+        setAiEnabled(true);
+        setPendingPrefill(prefill);
+      }
     }
-  }
+  }, [open, prefill, initialized]);
 
   // Reset when modal closes
-  if (!open && initialized) {
-    setInitialized(false);
-    resetForm();
-  }
+  useEffect(() => {
+    if (!open && initialized) {
+      setInitialized(false);
+      setSupplier(null);
+      setCurrency("");
+      setCurrencyWarning(null);
+      setDocDate("");
+      setDueDate("");
+      setRemarks("");
+      setAiWarning(null);
+      setSuggestedSupplierName(undefined);
+      setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
+      setFiles([]);
+      setAiConfidence(null);
+      setPendingPrefill(null);
+    }
+  }, [open, initialized]);
 
   const processReceiptsWithAI = async (receipts: any[]) => {
     setIsProcessing(true);
