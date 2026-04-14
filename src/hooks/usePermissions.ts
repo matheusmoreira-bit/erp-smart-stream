@@ -33,6 +33,7 @@ export const ALL_MODULES = [
   { key: "synapse", label: "Synapse" },
   { key: "credentials", label: "Credenciais" },
   { key: "audit_log", label: "Logs de Auditoria" },
+  { key: "notifications", label: "Notificações" },
 ] as const;
 
 // Legacy compat aliases
