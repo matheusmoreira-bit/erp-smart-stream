@@ -170,41 +170,33 @@ export default function PagCorp() {
     return map;
   }, [filteredTransactions]);
 
-  const handleValidateAndIntegrate = async (t: PagCorpTransaction) => {
+  const handleValidateAndIntegrate = (t: PagCorpTransaction) => {
     if (!checkSapCredentials()) return;
-    setIntegrating(t.id);
-    try {
-      // TODO: Call AI validation edge function with attachments, then integrate to SAP
-      await logIntegration(t, "accountability", "pending", session?.companyDB, session?.userName);
-      toast.info("Validação com IA e integração SAP em desenvolvimento.");
-      await fetchTransactions(startDate, endDate);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao registrar integração");
-    } finally {
-      setIntegrating(null);
-    }
+    setExpenseModal({
+      open: true,
+      prefill: {
+        description: t.description,
+        amount: t.amount,
+        currency: t.currency,
+        accountAlias: t.accountAlias || t.accountName || undefined,
+        receipts: t.receipts || [],
+        triggerAI: true,
+      },
+    });
   };
 
   const handleIntegrateGeneric = (t: PagCorpTransaction) => {
     if (!checkSapCredentials()) return;
-    setConfirmDialog({ open: true, transaction: t });
-  };
-
-  const confirmGenericIntegration = async () => {
-    const t = confirmDialog.transaction;
-    if (!t) return;
-    setIntegrating(t.id);
-    setConfirmDialog({ open: false, transaction: null });
-    try {
-      // TODO: Call SAP integration with generic item
-      await logIntegration(t, "generic", "pending", session?.companyDB, session?.userName);
-      toast.info("Integração SAP com item genérico em desenvolvimento.");
-      await fetchTransactions(startDate, endDate);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao registrar integração");
-    } finally {
-      setIntegrating(null);
-    }
+    setExpenseModal({
+      open: true,
+      prefill: {
+        description: t.description,
+        amount: t.amount,
+        currency: t.currency,
+        accountAlias: t.accountAlias || t.accountName || undefined,
+        triggerAI: false,
+      },
+    });
   };
 
   const companyLabel = getLabel(session?.companyDB || "");
