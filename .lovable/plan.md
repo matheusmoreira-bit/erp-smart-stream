@@ -1,103 +1,101 @@
 
 
-## Plano de Melhorias — Segurança, Velocidade e Escalabilidade
+# Sugestões de Novos Módulos e Funcionalidades
+
+Baseado na análise completa do sistema atual, que já possui: Analytics (Fluxo e Pagamentos), Despesas, Aprovações, Regras de Aprovação, PagCorp, Usuários, Synapse, Credenciais e Logs de Auditoria — seguem propostas organizadas por categoria.
 
 ---
 
-### 1. SEGURANÇA
+## A. Novos Módulos
 
-#### 1.1 Edge Functions sem autenticação (CRÍTICO)
-As edge functions `credentials`, `sap-b1-proxy`, `pagcorp-proxy`, `omie-proxy` usam apenas o `anon key` — qualquer pessoa com a chave pública pode chamar esses endpoints. Credenciais sensíveis (senhas SAP, chaves de API) ficam expostas.
+### 1. **Contratos**
+Gestão centralizada de contratos com fornecedores e prestadores de serviço.
+- Cadastro com valor, vigência, renovação automática, alertas de vencimento
+- Vinculação a parceiros de negócio do ERP (SAP/OMIE)
+- Dashboard com contratos vencendo nos próximos 30/60/90 dias
+- Módulo de permissão: `contracts`
 
-**Ação:** Adicionar validação de JWT via `getClaims()` em todas as edge functions. Apenas usuários autenticados com role `admin` devem acessar endpoints de credenciais.
+### 2. **Orçamentos (Budget)**
+Controle orçamentário por centro de custo, projeto ou departamento.
+- Definição de teto por período (mensal/trimestral/anual)
+- Consumo em tempo real cruzando com despesas e contas a pagar do ERP
+- Alertas automáticos ao atingir 80%/100% do orçamento
+- Bloqueio de aprovações quando orçamento estourado
+- Módulo de permissão: `budget`
 
-#### 1.2 Políticas RLS excessivamente permissivas para `anon` (CRÍTICO)
-Várias tabelas permitem `INSERT`, `UPDATE` e `DELETE` para o role `anon`:
-- `pagcorp_account_mapping`, `pagcorp_item_mapping`
-- `permission_groups`, `permission_group_modules`, `user_group_assignments`
-- `synapse_integrations`
+### 3. **Notas Fiscais (NF-e / NFS-e)**
+Consulta e gestão de documentos fiscais de entrada e saída.
+- Importação automática via API do ERP (OMIE já tem endpoints, SAP via DI API)
+- Visualização de XML, DANFE, status de escrituração
+- Conciliação: NF vs pedido de compra vs recebimento
+- Módulo de permissão: `invoices`
 
-**Ação:** Remover políticas `anon` de escrita e restringir a `authenticated` com `has_role('admin')`, mantendo apenas leitura para `anon` onde necessário (ex.: `sap_cache`).
+### 4. **Relatórios e Exportações**
+Módulo dedicado para geração de relatórios customizáveis.
+- Templates pré-configurados (aging de contas a pagar, fluxo de caixa, DRE simplificado)
+- Exportação em PDF/Excel/CSV
+- Agendamento de envio automático por e-mail
+- Integração com o ReportAiChat já existente para perguntas em linguagem natural
+- Módulo de permissão: `reports`
 
-#### 1.3 Validação de input nas Edge Functions
-As functions `credentials` e `sap-b1-proxy` não validam o corpo da requisição com schema. Parâmetros como `endpoint` no proxy SAP podem ser manipulados.
-
-**Ação:** Adicionar validação com Zod em todas as edge functions — tipos, tamanhos máximos e caracteres permitidos.
-
-#### 1.4 URL hardcoded do SAP e N8N no código
-O `sap-b1-proxy` contém URLs de produção hardcoded (`DEFAULT_SAP_BASE_URL`, `HANA_VIEWS_URL`).
-
-**Ação:** Mover para secrets do projeto, referenciáveis via `Deno.env.get()`.
-
----
-
-### 2. VELOCIDADE
-
-#### 2.1 Admin.tsx monolítico (988 linhas)
-O arquivo `Admin.tsx` concentra wizard, listagem, tabs de credenciais, permissões, audit log e integrações em um único componente.
-
-**Ação:** Extrair em componentes dedicados:
-- `CompanyWizardDialog`
-- `CompanyList`  
-- `AdminTabs` (container das tabs)
-
-Isso reduz re-renders desnecessários e melhora o code-splitting.
-
-#### 2.2 Cache SAP duplicado (client + edge function)
-Existe cache em memória tanto no client (`sap-client.ts`, 3 min) quanto na edge function (`sap-b1-proxy`, 5 min), além do `sap_cache` no banco. Três camadas sem invalidação coordenada.
-
-**Ação:** Unificar estratégia: usar `sap_cache` (banco) como source of truth com TTL, `stale-while-revalidate` no client via React Query, e remover cache in-memory da edge function.
-
-#### 2.3 Migrar para React Query / TanStack Query
-Hooks como `useAuditLog`, `useCompanies`, `useExpenses` fazem fetch manual com `useState`/`useEffect`. Não há deduplicação, refetch automático ou cache compartilhado.
-
-**Ação:** Adotar React Query para todos os hooks de dados — ganho imediato em cache, deduplicação, background refetch e loading states.
-
-#### 2.4 Índices no banco de dados
-Tabelas frequentemente filtradas (`audit_log` por `company_db`/`created_at`, `system_credentials` por `company_db`/`system_name`) não possuem índices explícitos.
-
-**Ação:** Criar índices compostos nas colunas mais filtradas.
+### 5. **Central de Notificações**
+Sistema de alertas e notificações em tempo real.
+- Notificações in-app (sino no header) + e-mail configurável
+- Eventos: aprovações pendentes, contratos vencendo, orçamento excedido, falhas de integração
+- Preferências por usuário (quais eventos receber, por qual canal)
+- Módulo de permissão: acessível a todos (sem restrição)
 
 ---
 
-### 3. ESCALABILIDADE
+## B. Funcionalidades de Expansão (módulos existentes)
 
-#### 3.1 Paginação server-side no Audit Log
-O audit log faz `SELECT * ... LIMIT 1000` sem paginação. Com crescimento, isso se torna lento e consome memória.
+### 6. **Dashboard Executivo (Analytics)**
+Painel consolidado multi-empresa para gestão corporativa.
+- Visão comparativa entre empresas (receita, despesas, fluxo)
+- KPIs executivos: burn rate, runway, margem operacional
+- Drill-down por empresa individual
 
-**Ação:** Implementar paginação com cursor (`created_at` + `id`) e infinite scroll ou paginação numérica no frontend.
+### 7. **Workflow de Despesas com OCR (Expenses)**
+Aprimoramento do fluxo de despesas existente.
+- Upload de comprovante com extração automática via IA (já existe `process-expense-doc`)
+- Categorização automática sugerida pelo modelo
+- Detecção de duplicidade
 
-#### 3.2 Tabela `sap_cache` sem limpeza automática
-Entradas expiradas no `sap_cache` ficam no banco indefinidamente.
+### 8. **Conciliação Bancária (PagCorp)**
+Cruzamento de extratos bancários com lançamentos no ERP.
+- Import de OFX/CSV do banco
+- Match automático por valor + data + parceiro
+- Tela de conciliação manual para exceções
 
-**Ação:** Criar um cron job (pg_cron ou edge function scheduled) para limpar registros onde `expires_at < now()`.
+### 9. **Histórico de Alterações em Cadastros (Audit Log)**
+Expandir o audit log para rastrear mudanças em registros do ERP.
+- Diff visual (antes/depois) para alterações em parceiros, itens, contas contábeis
+- Filtro por tipo de entidade e responsável
 
-#### 3.3 Preparar multi-tenant consistente
-O campo `company_db` é usado como tenant key, mas não está presente em todas as tabelas relevantes (ex.: `expenses`, `expense_items` não têm `company_db`).
-
-**Ação:** Adicionar `company_db` às tabelas operacionais e criar RLS policies scoped por empresa, preparando para isolamento real de dados entre empresas.
-
-#### 3.4 Storage de logo via bucket dedicado
-Atualmente o logo da empresa é salvo como URL externa. Isso depende de serviços terceiros e não tem controle de acesso.
-
-**Ação:** Criar bucket `company-logos` no storage e implementar upload direto com preview no wizard.
+### 10. **API Pública / Webhooks**
+Permitir que sistemas externos consumam eventos do backoffice.
+- Webhooks configuráveis por evento (despesa aprovada, pagamento realizado)
+- API REST documentada com Swagger/OpenAPI
+- Autenticação por API Key gerenciada no módulo Credenciais
 
 ---
 
-### Prioridade sugerida
+## Prioridade Sugerida
 
-| Prioridade | Item | Impacto |
-|-----------|------|---------|
-| P0 | 1.1 Auth nas Edge Functions | Dados sensíveis expostos |
-| P0 | 1.2 RLS anon excessivo | Qualquer visitante pode alterar permissões |
-| P1 | 1.3 Validação de input | Prevenção de injection |
-| P1 | 2.3 React Query | Performance geral + DX |
-| P1 | 3.3 Multi-tenant consistente | Isolamento de dados |
-| P2 | 2.1 Refatorar Admin.tsx | Manutenibilidade |
-| P2 | 2.4 Índices no banco | Performance em escala |
-| P2 | 3.1 Paginação audit log | Escalabilidade |
-| P3 | 1.4 URLs em secrets | Higiene de config |
-| P3 | 2.2 Unificar cache SAP | Consistência |
-| P3 | 3.2 Limpeza sap_cache | Manutenção |
-| P3 | 3.4 Bucket de logos | Robustez |
+| Prioridade | Item | Justificativa |
+|-----------|------|---------------|
+| P1 | Orçamentos | Controle financeiro crítico, complementa despesas e aprovações |
+| P1 | Central de Notificações | Melhora UX e reduz tempo de reação |
+| P1 | Dashboard Executivo | Alto valor para gestores |
+| P2 | Notas Fiscais | Compliance fiscal, alta demanda |
+| P2 | Relatórios | Automação de reporting |
+| P2 | OCR em Despesas | Já existe base (process-expense-doc) |
+| P3 | Contratos | Gestão administrativa |
+| P3 | Conciliação Bancária | Complemento financeiro |
+| P3 | Histórico de Cadastros | Governança |
+| P3 | API/Webhooks | Ecossistema e extensibilidade |
+
+---
+
+Selecione quais módulos ou funcionalidades deseja implementar e posso criar o plano detalhado de execução para cada um.
 
