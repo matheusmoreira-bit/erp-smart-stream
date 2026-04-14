@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { sapQueryView } from "@/lib/sap-client";
+import { omieListarContasPagar, type OmieContaPagar } from "@/lib/omie-client";
 import type { FlowStage } from "@/components/FlowTimeline";
 import type { Insight } from "@/components/InsightsPanel";
 import type { ValidationItem } from "@/components/ValidationTable";
