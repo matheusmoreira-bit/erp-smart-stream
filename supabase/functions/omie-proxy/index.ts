@@ -16,9 +16,16 @@ async function requireAuth(req: Request) {
     global: { headers: { Authorization: authHeader } },
   });
 
+  // Try to get authenticated user; if it fails, check if it's a valid anon key
   const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("UNAUTHORIZED");
-  return user;
+  if (user) return user;
+
+  // Allow anon key access (for ERP login before Supabase auth exists)
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const token = authHeader.replace("Bearer ", "");
+  if (token === anonKey) return null;
+
+  throw new Error("UNAUTHORIZED");
 }
 
 Deno.serve(async (req) => {
