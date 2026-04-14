@@ -96,10 +96,7 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [accountabilityFilter, setAccountabilityFilter] = useState<"all" | "yes" | "no">("all");
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; transaction: PagCorpTransaction | null }>({
-    open: false,
-    transaction: null,
-  });
+  const [expenseModal, setExpenseModal] = useState<{ open: boolean; prefill?: PagCorpPrefill }>({ open: false });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
 
   const handleStartDateChange = (value: string) => {
