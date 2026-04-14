@@ -12,6 +12,7 @@ interface CachedSearchComboboxProps {
   placeholder?: string;
   label?: string;
   suggestedQuery?: string;
+  portalContainer?: HTMLElement | null;
 }
 
 export function CachedSearchCombobox({
