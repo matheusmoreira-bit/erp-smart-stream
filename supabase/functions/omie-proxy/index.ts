@@ -13,12 +13,13 @@ async function requireAuth(req: Request) {
   if (!authHeader) throw new Error("UNAUTHORIZED");
 
   const token = authHeader.replace("Bearer ", "");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
 
-  // Allow anon key access (for ERP login before Supabase user auth exists)
-  if (token === anonKey) return null;
+  // Allow anon/publishable key access (for ERP login before Supabase user auth exists)
+  if (token === anonKey || token === publishableKey) return null;
 
-  const supabase = createClient(SUPABASE_URL, anonKey, {
+  const supabase = createClient(SUPABASE_URL, anonKey || publishableKey, {
     global: { headers: { Authorization: authHeader } },
   });
 
@@ -36,11 +37,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
 
-    // Login action skips Supabase user auth (credentials validated against OMIE API)
-    // Other actions require authenticated user
-    if (action !== "login") {
-      await requireAuth(req);
-    }
+    // OMIE proxy handles its own auth via app_key/app_secret from system_credentials.
+    // No Supabase user auth required — credentials are validated per-company below.
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
