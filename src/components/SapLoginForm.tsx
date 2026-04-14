@@ -216,9 +216,9 @@ export function SapLoginForm() {
           <p className="text-xs text-muted-foreground">
             Conexão segura via {erpInfo.method}
           </p>
-          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/admin/login")}>
+          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/backoffice/login")}>
             <Settings className="w-3 h-3 mr-1" />
-            Admin
+            Backoffice
           </Button>
         </div>
       </motion.div>
