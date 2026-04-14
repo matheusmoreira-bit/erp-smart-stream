@@ -54,6 +54,7 @@ export function CreateExpenseModal({
   prefill?: PagCorpPrefill;
   title?: string;
 }) {
+  const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [currency, setCurrency] = useState("");
