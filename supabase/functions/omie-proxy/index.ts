@@ -37,11 +37,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
 
-    // Login action skips Supabase user auth (credentials validated against OMIE API)
-    // Other actions require authenticated user
-    if (action !== "login") {
-      await requireAuth(req);
-    }
+    // OMIE proxy handles its own auth via app_key/app_secret from system_credentials.
+    // No Supabase user auth required — credentials are validated per-company below.
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
