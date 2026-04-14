@@ -637,6 +637,7 @@ export function CreateExpenseModal({
                       }}
                       placeholder="Buscar centro de custo..."
                       suggestedQuery={item.cost_center && !item.sapCostCenter ? item.cost_center : undefined}
+                      portalContainer={dialogContainer}
                     />
                     <CachedSearchCombobox
                       label="Projeto (Dimensão)"
@@ -652,6 +653,7 @@ export function CreateExpenseModal({
                       }}
                       placeholder="Buscar projeto..."
                       suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
+                      portalContainer={dialogContainer}
                     />
                   </div>
                 </div>
