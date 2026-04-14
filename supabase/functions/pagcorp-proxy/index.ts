@@ -87,19 +87,31 @@ async function getCredentials(companyDb?: string): Promise<PagCorpCreds> {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  let query = supabase
-    .from("system_credentials")
-    .select("credential_key, credential_value")
-    .eq("system_name", "pagcorp");
+  let data: { credential_key: string; credential_value: string }[] | null = null;
 
+  // Try company-specific credentials first
   if (companyDb) {
-    query = query.eq("company_db", companyDb);
+    const res = await supabase
+      .from("system_credentials")
+      .select("credential_key, credential_value")
+      .eq("system_name", "pagcorp")
+      .eq("company_db", companyDb);
+    if (res.error) throw new Error(`Failed to load credentials: ${res.error.message}`);
+    if (res.data && res.data.length > 0) data = res.data;
   }
 
-  const { data, error } = await query;
+  // Fallback to global credentials (company_db is null)
+  if (!data || data.length === 0) {
+    const res = await supabase
+      .from("system_credentials")
+      .select("credential_key, credential_value")
+      .eq("system_name", "pagcorp")
+      .is("company_db", null);
+    if (res.error) throw new Error(`Failed to load credentials: ${res.error.message}`);
+    data = res.data;
+  }
 
-  if (error) throw new Error(`Failed to load credentials: ${error.message}`);
-  if (!data || data.length === 0) throw new Error(companyDb ? `Credenciais PagCorp não configuradas para a empresa ${companyDb}.` : "PagCorp credentials not configured.");
+  if (!data || data.length === 0) throw new Error("PagCorp credentials not configured.");
 
   const creds: Record<string, string> = {};
   for (const row of data) {
