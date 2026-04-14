@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  try {
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
 
