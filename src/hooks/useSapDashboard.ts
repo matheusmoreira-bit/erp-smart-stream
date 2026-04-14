@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { sapQueryView } from "@/lib/sap-client";
+import { omieListarContasPagar, type OmieContaPagar } from "@/lib/omie-client";
 import type { FlowStage } from "@/components/FlowTimeline";
 import type { Insight } from "@/components/InsightsPanel";
 import type { ValidationItem } from "@/components/ValidationTable";
@@ -331,6 +332,59 @@ function generateInsights(stages: FlowStage[], validations: ValidationItem[]): I
   return insights;
 }
 
+/* ── Map OMIE contas a pagar → ViewRow ── */
+function mapOmieToViewRows(contas: OmieContaPagar[]): ViewRow[] {
+  return contas.map((c) => {
+    const dataEmissao = c.data_emissao || null;
+    const dataVencimento = c.data_vencimento || null;
+    const dataPagamento = c.status_titulo === "LIQUIDADO" ? (c.data_previsao || c.data_vencimento || null) : null;
+
+    const diasVencAtePag = dataPagamento && dataVencimento
+      ? Math.round((new Date(dataPagamento.split("/").reverse().join("-")).getTime() -
+          new Date(dataVencimento.split("/").reverse().join("-")).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    // Convert dd/mm/yyyy to yyyy-mm-dd for consistency
+    const toIso = (d: string | null) => {
+      if (!d) return null;
+      const parts = d.split("/");
+      return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : d;
+    };
+
+    const statusMap: Record<string, string> = {
+      LIQUIDADO: "Pago",
+      ABERTO: "Em Aberto",
+      CANCELADO: "Cancelado",
+      VENCIDO: "Vencido",
+    };
+
+    return {
+      Status_Pagamento: statusMap[c.status_titulo || ""] || (c.status_titulo || "Desconhecido"),
+      Numero_Pagamento_SAP: c.codigo_lancamento_omie,
+      Data_do_Pagamento: toIso(dataPagamento),
+      Data_Lancamento_Pedido: toIso(dataEmissao),
+      Data_Emissao_NF: toIso(dataEmissao),
+      Data_Lancamento_NF: toIso(dataEmissao),
+      Data_Vencimento_Pagamento: toIso(dataVencimento),
+      Dias_Pedido_Ate_Pagamento: null,
+      Dias_Emissao_NF_Ate_Pagamento: null,
+      Dias_NF_Ate_Pagamento: null,
+      Dias_Vencimento_Ate_Pagamento: diasVencAtePag,
+      Moeda: "BRL",
+      Valor_Total_Pago: c.valor_documento || 0,
+      Cod_PN: String(c.codigo_cliente_fornecedor || ""),
+      Nome_PN: c.nome_cliente_fornecedor || `Fornecedor ${c.codigo_cliente_fornecedor}`,
+      Numero_Documento_Origem: Number(c.numero_documento || 0),
+      Num_NF_Referencia: c.numero_documento_fiscal || null,
+      Valor_Aplicado_Neste_Doc: c.valor_pago || c.valor_documento || 0,
+      Status_Documento_Origem: c.status_titulo || "",
+      Numero_Pedido_Compra: c.numero_pedido ? Number(c.numero_pedido) : null,
+      Nome_Solicitante: c.observacao || "OMIE",
+      Filial: "",
+    };
+  });
+}
+
 /* ── Hook ── */
 export interface DateFilter {
   from: Date | null;
@@ -359,33 +413,47 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
   const [approvalRowsRaw, setApprovalRowsRaw] = useState<ApprovalViewRow[]>([]);
 
   const fetchData = useCallback(async () => {
-    if (!session || session.erpType !== "sap") return;
+    if (!session) return;
     setIsLoading(true);
     setError(null);
 
     try {
-      const [paymentResult, approvalResult] = await Promise.all([
-        sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
-        sapQueryView<ApprovalViewRow>(session, "VW_TODAS_APROVACOES").catch(() => ({ data: [] as ApprovalViewRow[] })),
-      ]);
+      if (session.erpType === "sap") {
+        const [paymentResult, approvalResult] = await Promise.all([
+          sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
+          sapQueryView<ApprovalViewRow>(session, "VW_TODAS_APROVACOES").catch(() => ({ data: [] as ApprovalViewRow[] })),
+        ]);
 
-      setRawRows(paymentResult.data || []);
+        setRawRows(paymentResult.data || []);
 
-      const approvalRows = approvalResult.data || [];
-      const days: number[] = [];
-      for (const a of approvalRows) {
-        if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
-          const d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
-          if (d !== null) {
-            days.push(Math.max(d, 1)); // same-day approval = 1 day minimum
+        const approvalRows = approvalResult.data || [];
+        const days: number[] = [];
+        for (const a of approvalRows) {
+          if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
+            const d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
+            if (d !== null) {
+              days.push(Math.max(d, 1));
+            }
+          } else {
+            const d = Number(a.Dias_Desde_Criacao || 0);
+            if (d > 0) days.push(d);
           }
-        } else {
-          const d = Number(a.Dias_Desde_Criacao || 0);
-          if (d > 0) days.push(d);
         }
+        setApprovalDaysRaw(days);
+        setApprovalRowsRaw(approvalRows);
+      } else if (session.erpType === "omie") {
+        // OMIE: fetch contas a pagar and map to ViewRow structure
+        const contas = await omieListarContasPagar(session.companyDB, 10);
+        const mapped = mapOmieToViewRows(contas);
+        setRawRows(mapped);
+        setApprovalDaysRaw([]);
+        setApprovalRowsRaw([]);
+      } else {
+        // Other ERP types — no data yet
+        setRawRows([]);
+        setApprovalDaysRaw([]);
+        setApprovalRowsRaw([]);
       }
-      setApprovalDaysRaw(days);
-      setApprovalRowsRaw(approvalRows);
     } catch (e) {
       console.error("Error fetching view data:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar dados da view");
