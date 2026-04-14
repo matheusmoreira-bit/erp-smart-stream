@@ -360,33 +360,47 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
   const [approvalRowsRaw, setApprovalRowsRaw] = useState<ApprovalViewRow[]>([]);
 
   const fetchData = useCallback(async () => {
-    if (!session || session.erpType !== "sap") return;
+    if (!session) return;
     setIsLoading(true);
     setError(null);
 
     try {
-      const [paymentResult, approvalResult] = await Promise.all([
-        sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
-        sapQueryView<ApprovalViewRow>(session, "VW_TODAS_APROVACOES").catch(() => ({ data: [] as ApprovalViewRow[] })),
-      ]);
+      if (session.erpType === "sap") {
+        const [paymentResult, approvalResult] = await Promise.all([
+          sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
+          sapQueryView<ApprovalViewRow>(session, "VW_TODAS_APROVACOES").catch(() => ({ data: [] as ApprovalViewRow[] })),
+        ]);
 
-      setRawRows(paymentResult.data || []);
+        setRawRows(paymentResult.data || []);
 
-      const approvalRows = approvalResult.data || [];
-      const days: number[] = [];
-      for (const a of approvalRows) {
-        if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
-          const d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
-          if (d !== null) {
-            days.push(Math.max(d, 1)); // same-day approval = 1 day minimum
+        const approvalRows = approvalResult.data || [];
+        const days: number[] = [];
+        for (const a of approvalRows) {
+          if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
+            const d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
+            if (d !== null) {
+              days.push(Math.max(d, 1));
+            }
+          } else {
+            const d = Number(a.Dias_Desde_Criacao || 0);
+            if (d > 0) days.push(d);
           }
-        } else {
-          const d = Number(a.Dias_Desde_Criacao || 0);
-          if (d > 0) days.push(d);
         }
+        setApprovalDaysRaw(days);
+        setApprovalRowsRaw(approvalRows);
+      } else if (session.erpType === "omie") {
+        // OMIE: fetch contas a pagar and map to ViewRow structure
+        const contas = await omieListarContasPagar(session.companyDB, 10);
+        const mapped = mapOmieToViewRows(contas);
+        setRawRows(mapped);
+        setApprovalDaysRaw([]);
+        setApprovalRowsRaw([]);
+      } else {
+        // Other ERP types — no data yet
+        setRawRows([]);
+        setApprovalDaysRaw([]);
+        setApprovalRowsRaw([]);
       }
-      setApprovalDaysRaw(days);
-      setApprovalRowsRaw(approvalRows);
     } catch (e) {
       console.error("Error fetching view data:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar dados da view");
