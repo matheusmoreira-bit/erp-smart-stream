@@ -13,12 +13,13 @@ async function requireAuth(req: Request) {
   if (!authHeader) throw new Error("UNAUTHORIZED");
 
   const token = authHeader.replace("Bearer ", "");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
 
-  // Allow anon key access (for ERP login before Supabase user auth exists)
-  if (token === anonKey) return null;
+  // Allow anon/publishable key access (for ERP login before Supabase user auth exists)
+  if (token === anonKey || token === publishableKey) return null;
 
-  const supabase = createClient(SUPABASE_URL, anonKey, {
+  const supabase = createClient(SUPABASE_URL, anonKey || publishableKey, {
     global: { headers: { Authorization: authHeader } },
   });
 
