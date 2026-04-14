@@ -417,7 +417,11 @@ export function CreateExpenseModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onPointerDownOutside={(e) => { if ((e.target as HTMLElement)?.closest?.('[class*="z-[9999]"]')) e.preventDefault(); }}>
+      <DialogContent
+        className="max-w-2xl max-h-[85vh] overflow-y-auto"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{title || "Nova Despesa"}</DialogTitle>
         </DialogHeader>
