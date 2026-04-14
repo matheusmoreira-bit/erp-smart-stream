@@ -35,12 +35,7 @@ export const SAP_MODULES = [
   { key: "audit_log", label: "Logs de Auditoria" },
 ] as const;
 
-export const OMIE_MODULES = [
-  { key: "expenses", label: "Despesas" },
-  { key: "approvals", label: "Aprovações" },
-  { key: "credentials", label: "Credenciais" },
-  { key: "audit_log", label: "Logs de Auditoria" },
-] as const;
+export const OMIE_MODULES = SAP_MODULES;
 
 export const S4HANA_MODULES = [
   { key: "analytics", label: "Analytics" },
