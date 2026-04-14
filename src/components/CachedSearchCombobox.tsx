@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2 } from "lucide-react";
@@ -67,6 +67,17 @@ export function CachedSearchCombobox({
       const rect = inputWrapperRef.current?.getBoundingClientRect();
       if (!rect) return;
 
+      if (portalContainer) {
+        const containerRect = portalContainer.getBoundingClientRect();
+
+        setDropdownPosition({
+          top: rect.bottom - containerRect.top + portalContainer.scrollTop + 4,
+          left: rect.left - containerRect.left + portalContainer.scrollLeft,
+          width: rect.width,
+        });
+        return;
+      }
+
       setDropdownPosition({
         top: rect.bottom + 4,
         left: rect.left,
@@ -83,7 +94,7 @@ export function CachedSearchCombobox({
       window.removeEventListener("resize", updateDropdownPosition);
       window.removeEventListener("scroll", updateDropdownPosition, true);
     };
-  }, [isOpen, query, value, options.length]);
+  }, [isOpen, query, value, options.length, portalContainer]);
 
   const filtered = query.length > 0
     ? options.filter((o) => {
@@ -118,6 +129,14 @@ export function CachedSearchCombobox({
 
   const showResults = isOpen && filtered.length > 0 && dropdownPosition;
   const showEmptyState = isOpen && !isLoading && filtered.length === 0 && dropdownPosition;
+  const dropdownStyle: CSSProperties | undefined = dropdownPosition
+    ? {
+        position: portalContainer ? "absolute" : "fixed",
+        top: dropdownPosition.top,
+        left: dropdownPosition.left,
+        width: dropdownPosition.width,
+      }
+    : undefined;
 
   return (
     <>
@@ -162,12 +181,7 @@ export function CachedSearchCombobox({
       {typeof document !== "undefined" && showResults && createPortal(
         <div
           ref={dropdownRef}
-          style={{
-            position: "fixed",
-            top: dropdownPosition.top,
-            left: dropdownPosition.left,
-            width: dropdownPosition.width,
-          }}
+          style={dropdownStyle}
           className="z-[9999] max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md"
         >
           {filtered.map((opt) => (
@@ -190,12 +204,7 @@ export function CachedSearchCombobox({
       {typeof document !== "undefined" && showEmptyState && createPortal(
         <div
           ref={dropdownRef}
-          style={{
-            position: "fixed",
-            top: dropdownPosition.top,
-            left: dropdownPosition.left,
-            width: dropdownPosition.width,
-          }}
+          style={dropdownStyle}
           className="z-[9999] rounded-md border border-border bg-popover p-3 text-center text-sm text-muted-foreground shadow-md"
         >
           Nenhum resultado encontrado
