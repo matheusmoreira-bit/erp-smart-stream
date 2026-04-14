@@ -444,7 +444,7 @@ export default function Admin() {
 
   const handleLogout = async () => {
     await signOut();
-    navigate("/admin/login");
+    navigate("/backoffice/login");
   };
 
   return (
@@ -457,7 +457,7 @@ export default function Admin() {
               <Shield className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Administração</h1>
+              <h1 className="text-xl font-bold text-foreground">Backoffice</h1>
               <p className="text-xs text-muted-foreground">Gerenciamento de empresas e credenciais</p>
             </div>
           </div>
