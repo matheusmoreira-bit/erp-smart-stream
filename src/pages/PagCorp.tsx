@@ -5,7 +5,6 @@ import {
   RefreshCw,
   ArrowLeft,
   Search,
-  Activity,
   LogOut,
   Loader2,
   DollarSign,
@@ -36,20 +35,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
 import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
+import { CreateExpenseModal, type PagCorpPrefill } from "@/components/CreateExpenseModal";
+import { useExpenses } from "@/hooks/useExpenses";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -79,6 +72,7 @@ export default function PagCorp() {
   const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
+  const { createExpense } = useExpenses();
 
   useEffect(() => { fetchCredentials(session?.companyDB, "sap"); }, [fetchCredentials, session?.companyDB]);
 
@@ -101,10 +95,7 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [accountabilityFilter, setAccountabilityFilter] = useState<"all" | "yes" | "no">("all");
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; transaction: PagCorpTransaction | null }>({
-    open: false,
-    transaction: null,
-  });
+  const [expenseModal, setExpenseModal] = useState<{ open: boolean; prefill?: PagCorpPrefill }>({ open: false });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
 
   const handleStartDateChange = (value: string) => {
@@ -178,41 +169,33 @@ export default function PagCorp() {
     return map;
   }, [filteredTransactions]);
 
-  const handleValidateAndIntegrate = async (t: PagCorpTransaction) => {
+  const handleValidateAndIntegrate = (t: PagCorpTransaction) => {
     if (!checkSapCredentials()) return;
-    setIntegrating(t.id);
-    try {
-      // TODO: Call AI validation edge function with attachments, then integrate to SAP
-      await logIntegration(t, "accountability", "pending", session?.companyDB, session?.userName);
-      toast.info("Validação com IA e integração SAP em desenvolvimento.");
-      await fetchTransactions(startDate, endDate);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao registrar integração");
-    } finally {
-      setIntegrating(null);
-    }
+    setExpenseModal({
+      open: true,
+      prefill: {
+        description: t.description,
+        amount: t.amount,
+        currency: t.currency,
+        accountAlias: t.accountAlias || t.accountName || undefined,
+        receipts: t.receipts || [],
+        triggerAI: true,
+      },
+    });
   };
 
   const handleIntegrateGeneric = (t: PagCorpTransaction) => {
     if (!checkSapCredentials()) return;
-    setConfirmDialog({ open: true, transaction: t });
-  };
-
-  const confirmGenericIntegration = async () => {
-    const t = confirmDialog.transaction;
-    if (!t) return;
-    setIntegrating(t.id);
-    setConfirmDialog({ open: false, transaction: null });
-    try {
-      // TODO: Call SAP integration with generic item
-      await logIntegration(t, "generic", "pending", session?.companyDB, session?.userName);
-      toast.info("Integração SAP com item genérico em desenvolvimento.");
-      await fetchTransactions(startDate, endDate);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao registrar integração");
-    } finally {
-      setIntegrating(null);
-    }
+    setExpenseModal({
+      open: true,
+      prefill: {
+        description: t.description,
+        amount: t.amount,
+        currency: t.currency,
+        accountAlias: t.accountAlias || t.accountName || undefined,
+        triggerAI: false,
+      },
+    });
   };
 
   const companyLabel = getLabel(session?.companyDB || "");
@@ -457,33 +440,15 @@ export default function PagCorp() {
         </div>
       </main>
 
-      {/* Confirm Generic Integration Dialog */}
-      <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, transaction: null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Integrar ao SAP sem prestação de contas</DialogTitle>
-            <DialogDescription className="space-y-2 pt-2">
-              <p>
-                Esta transação <strong>não possui prestação de contas</strong>. Ao integrar ao SAP:
-              </p>
-              <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>Será utilizado um <strong>item genérico de despesa de cartão corporativo</strong></li>
-                <li>Fornecedor: <strong>ANA Gaming</strong> (caso não seja identificado um fornecedor melhor)</li>
-                <li>Centro de Custo e Projeto serão atribuídos conforme o <strong>mapeamento de contas</strong> configurado</li>
-              </ul>
-              <p className="text-sm font-medium pt-2">Deseja continuar?</p>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDialog({ open: false, transaction: null })}>
-              Cancelar
-            </Button>
-            <Button onClick={confirmGenericIntegration}>
-              Confirmar Integração
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Expense Form Modal */}
+      <CreateExpenseModal
+        open={expenseModal.open}
+        onClose={() => setExpenseModal({ open: false })}
+        onCreate={createExpense}
+        sapSession={session}
+        prefill={expenseModal.prefill}
+        title="Integrar Despesa PagCorp"
+      />
     </div>
   );
 }
