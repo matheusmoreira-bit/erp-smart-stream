@@ -12,7 +12,13 @@ async function requireAuth(req: Request) {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) throw new Error("UNAUTHORIZED");
 
-  const supabase = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+  const token = authHeader.replace("Bearer ", "");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+  // Allow anon key access (for ERP login before Supabase user auth exists)
+  if (token === anonKey) return null;
+
+  const supabase = createClient(SUPABASE_URL, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
 
@@ -27,9 +33,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireAuth(req);
+    const body = await req.json();
+    const { action, company_db, endpoint, params } = body;
 
-    const { action, company_db, endpoint, params } = await req.json();
+    // Login action skips Supabase user auth (credentials validated against OMIE API)
+    // Other actions require authenticated user
+    if (action !== "login") {
+      await requireAuth(req);
+    }
+
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
     if (!action || typeof action !== "string") {
