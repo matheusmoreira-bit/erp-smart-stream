@@ -23,7 +23,7 @@ interface ErpContextType {
   logout: () => Promise<void>;
 }
 
-const ErpContext = createContext<ErpContextType | null>(null);
+const ErpContext = createContext<ErpContextType | null>(null); // stable ref
 
 export function SapProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<ErpSession | null>(null);
