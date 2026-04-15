@@ -193,8 +193,8 @@ export function useModuleAccess(moduleKey?: string) {
 
     const allKeys = ALL_MODULES.map((m) => m.key);
 
-    // If SAP superuser, grant all modules immediately
-    if (session.isSuperUser) {
+    // If SAP superuser or OMIE company, grant all modules immediately
+    if (session.isSuperUser || session.erpType === "omie") {
       setUserModules(allKeys);
       setLoading(false);
       return;
@@ -256,7 +256,7 @@ export function useModuleAccess(moduleKey?: string) {
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
       setLoading(false);
     })();
-  }, [session?.userName, session?.companyDB, session?.isSuperUser]);
+  }, [session?.userName, session?.companyDB, session?.isSuperUser, session?.erpType]);
 
   const hasAccess = moduleKey ? userModules.includes(moduleKey) : true;
 
