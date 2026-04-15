@@ -162,7 +162,11 @@ async function fetchExpenses(apiToken: string, baseUrl: string, accountId: strin
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${apiToken}` },
     });
-    if (!res.ok) throw new Error(`Fetch expenses failed [${res.status}]`);
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`Fetch expenses failed [${res.status}] URL: ${url} Body: ${errBody}`);
+      throw new Error(`Fetch expenses failed [${res.status}]: ${errBody}`);
+    }
     const data = await res.json();
     const items = data.items || [];
     if (items.length === 0) break;
