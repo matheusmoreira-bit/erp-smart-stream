@@ -256,7 +256,7 @@ export function useModuleAccess(moduleKey?: string) {
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
       setLoading(false);
     })();
-  }, [session?.userName, session?.companyDB, session?.isSuperUser]);
+  }, [session?.userName, session?.companyDB, session?.isSuperUser, session?.erpType]);
 
   const hasAccess = moduleKey ? userModules.includes(moduleKey) : true;
 
