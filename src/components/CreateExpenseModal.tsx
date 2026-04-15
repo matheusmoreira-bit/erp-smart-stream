@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Plus,
   Loader2,
@@ -93,12 +93,16 @@ export function CreateExpenseModal({
   });
 
   const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
-  const { options: costCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
+  const { options: rawCostCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
     cacheKey: "cost_centers",
     endpoint: "ProfitCenters",
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
     mapRow: costCenterMapRow,
   });
+  const costCenterOptions = useMemo(
+    () => rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
+    [rawCostCenterOptions]
+  );
 
   const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
   const { options: projectOptions, isLoading: projectsLoading } = useSapCachedList({
