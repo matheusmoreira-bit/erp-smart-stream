@@ -153,22 +153,50 @@ async function getAuthToken(creds: PagCorpCreds): Promise<string> {
   return apiToken;
 }
 
-async function fetchExpenses(apiToken: string, baseUrl: string, accountId: string, startDate: string, endDate: string): Promise<unknown[]> {
-  const allItems: unknown[] = [];
-  let page = 1;
+function splitDateRange(startDate: string, endDate: string): { start: string; end: string }[] {
+  const chunks: { start: string; end: string }[] = [];
+  let current = new Date(startDate + "T00:00:00Z");
+  const end = new Date(endDate + "T00:00:00Z");
 
-  while (true) {
-    const url = `${baseUrl}Expense/Account/${accountId}?startDate=${startDate}&endDate=${endDate}&page=${page}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${apiToken}` },
+  while (current <= end) {
+    // chunk end = current + 30 days or endDate, whichever is earlier
+    const chunkEnd = new Date(current);
+    chunkEnd.setUTCDate(chunkEnd.getUTCDate() + 27);
+    const actualEnd = chunkEnd > end ? end : chunkEnd;
+    chunks.push({
+      start: current.toISOString().slice(0, 10),
+      end: actualEnd.toISOString().slice(0, 10),
     });
-    if (!res.ok) throw new Error(`Fetch expenses failed [${res.status}]`);
-    const data = await res.json();
-    const items = data.items || [];
-    if (items.length === 0) break;
-    allItems.push(...items);
-    if (data.currentPage >= data.totalPages) break;
-    page++;
+    // next chunk starts day after
+    current = new Date(actualEnd);
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return chunks;
+}
+
+async function fetchExpenses(apiToken: string, baseUrl: string, accountId: string, startDate: string, endDate: string): Promise<unknown[]> {
+  const chunks = splitDateRange(startDate, endDate);
+  const allItems: unknown[] = [];
+
+  for (const chunk of chunks) {
+    let page = 1;
+    while (true) {
+      const url = `${baseUrl}Expense/Account/${accountId}?startDate=${chunk.start}&endDate=${chunk.end}&page=${page}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${apiToken}` },
+      });
+      if (!res.ok) {
+        const errBody = await res.text();
+        console.error(`Fetch expenses failed [${res.status}] URL: ${url} Body: ${errBody}`);
+        throw new Error(`Fetch expenses failed [${res.status}]: ${errBody}`);
+      }
+      const data = await res.json();
+      const items = data.items || [];
+      if (items.length === 0) break;
+      allItems.push(...items);
+      if (data.currentPage >= data.totalPages) break;
+      page++;
+    }
   }
 
   return allItems;
