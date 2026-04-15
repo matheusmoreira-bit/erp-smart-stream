@@ -161,7 +161,7 @@ function splitDateRange(startDate: string, endDate: string): { start: string; en
   while (current <= end) {
     // chunk end = current + 30 days or endDate, whichever is earlier
     const chunkEnd = new Date(current);
-    chunkEnd.setUTCDate(chunkEnd.getUTCDate() + 30);
+    chunkEnd.setUTCDate(chunkEnd.getUTCDate() + 27);
     const actualEnd = chunkEnd > end ? end : chunkEnd;
     chunks.push({
       start: current.toISOString().slice(0, 10),
