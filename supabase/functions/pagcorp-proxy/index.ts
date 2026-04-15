@@ -200,6 +200,7 @@ async function fetchExpenses(apiToken: string, baseUrl: string, accountId: strin
   }
 
   return allItems;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
