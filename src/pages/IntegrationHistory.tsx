@@ -502,6 +502,8 @@ export default function IntegrationHistory() {
                   <div>
                     <p className="text-xs text-muted-foreground">Aprovada</p>
                     <p className="font-medium">{selectedLog.pagcorp_data?.accountabilityApproved ? "Sim" : "Não"}</p>
+                  </div>
+                </div>
               </div>
 
               {selectedLog.sap_payload && (
@@ -534,14 +536,31 @@ export default function IntegrationHistory() {
 
               {selectedLog.sap_response && (
                 <div className="border-t border-border pt-3">
-                  <p className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Retorno do SAP</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Retorno do SAP</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() => {
+                        const blob = new Blob([JSON.stringify(selectedLog.sap_response, null, 2)], { type: "application/json" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `sap_response_${selectedLog.pagcorp_expense_id}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download JSON
+                    </Button>
+                  </div>
                   <pre className="bg-muted/50 rounded-lg p-3 text-xs font-mono overflow-x-auto max-h-48 overflow-y-auto">
                     {JSON.stringify(selectedLog.sap_response, null, 2)}
                   </pre>
                 </div>
               )}
-            </div>
-              </div>
             </div>
           )}
         </DialogContent>
