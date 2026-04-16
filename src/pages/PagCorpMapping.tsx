@@ -315,16 +315,28 @@ export default function PagCorpMapping() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <CachedSearchCombobox options={costCenterCache.options} isLoading={costCenterCache.isLoading}
-                              value={findOption(costCenterCache.options, m.cost_center)}
-                              onChange={(opt) => updateMappingRow(i, "cost_center", opt?.code || "")}
-                              placeholder="Selecione..." />
+                            {m.id ? (
+                              <div className="text-sm font-medium text-foreground">
+                                {m.cost_center || <span className="text-muted-foreground italic">—</span>}
+                              </div>
+                            ) : (
+                              <CachedSearchCombobox options={costCenterCache.options} isLoading={costCenterCache.isLoading}
+                                value={findOption(costCenterCache.options, m.cost_center)}
+                                onChange={(opt) => updateMappingRow(i, "cost_center", opt?.code || "")}
+                                placeholder="Selecione..." />
+                            )}
                           </TableCell>
                           <TableCell>
-                            <CachedSearchCombobox options={projectCache.options} isLoading={projectCache.isLoading}
-                              value={findOption(projectCache.options, m.project)}
-                              onChange={(opt) => updateMappingRow(i, "project", opt?.code || "")}
-                              placeholder="Selecione..." />
+                            {m.id ? (
+                              <div className="text-sm font-medium text-foreground">
+                                {m.project || <span className="text-muted-foreground italic">—</span>}
+                              </div>
+                            ) : (
+                              <CachedSearchCombobox options={projectCache.options} isLoading={projectCache.isLoading}
+                                value={findOption(projectCache.options, m.project)}
+                                onChange={(opt) => updateMappingRow(i, "project", opt?.code || "")}
+                                placeholder="Selecione..." />
+                            )}
                           </TableCell>
                           <TableCell>
                             <Button variant="ghost" size="icon" onClick={() => removeMappingRow(i)} className="text-destructive hover:text-destructive">
@@ -405,10 +417,16 @@ export default function PagCorpMapping() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <CachedSearchCombobox options={itemCache.options} isLoading={itemCache.isLoading}
-                              value={findOption(itemCache.options, m.item_code)}
-                              onChange={(opt) => setItemMappings((p) => p.map((row, idx) => idx === i ? { ...row, item_code: opt?.code || "" } : row))}
-                              placeholder="Selecione item SAP..." />
+                            {m.id ? (
+                              <div className="text-sm font-medium text-foreground">
+                                {m.item_code || <span className="text-muted-foreground italic">—</span>}
+                              </div>
+                            ) : (
+                              <CachedSearchCombobox options={itemCache.options} isLoading={itemCache.isLoading}
+                                value={findOption(itemCache.options, m.item_code)}
+                                onChange={(opt) => setItemMappings((p) => p.map((row, idx) => idx === i ? { ...row, item_code: opt?.code || "" } : row))}
+                                placeholder="Selecione item SAP..." />
+                            )}
                           </TableCell>
                           <TableCell>
                             <Button variant="ghost" size="icon" onClick={() => removeItemRow(i)} className="text-destructive hover:text-destructive">
