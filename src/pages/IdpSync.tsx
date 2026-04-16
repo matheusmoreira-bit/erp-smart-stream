@@ -327,10 +327,16 @@ export default function IdpSyncPage() {
             {filtered.length === 0 ? (
               <div className="text-center text-muted-foreground py-12">Nenhum usuário encontrado</div>
             ) : (
-              filtered.map((row) => (
+              filtered.map((row) => {
+                const isLinked = row.status === "linked" && row.mapping;
+                return (
                 <div
                   key={row.sapUser.UserCode}
-                  className="grid grid-cols-[1fr_1.2fr_auto] items-center px-6 py-3 border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors"
+                  className={`grid grid-cols-[1fr_1.2fr_auto] items-center px-6 py-3 border-b border-border last:border-b-0 transition-colors ${
+                    isLinked
+                      ? "bg-green-500/10 hover:bg-green-500/15 border-l-2 border-l-green-500"
+                      : "hover:bg-muted/20"
+                  }`}
                 >
                   {/* SAP User */}
                   <div className="min-w-0">
@@ -383,7 +389,8 @@ export default function IdpSyncPage() {
                     )}
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
