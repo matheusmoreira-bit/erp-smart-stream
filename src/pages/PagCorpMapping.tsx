@@ -315,16 +315,28 @@ export default function PagCorpMapping() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <CachedSearchCombobox options={costCenterCache.options} isLoading={costCenterCache.isLoading}
-                              value={findOption(costCenterCache.options, m.cost_center)}
-                              onChange={(opt) => updateMappingRow(i, "cost_center", opt?.code || "")}
-                              placeholder="Selecione..." />
+                            {m.id ? (
+                              <div className="text-sm font-medium text-foreground">
+                                {m.cost_center || <span className="text-muted-foreground italic">—</span>}
+                              </div>
+                            ) : (
+                              <CachedSearchCombobox options={costCenterCache.options} isLoading={costCenterCache.isLoading}
+                                value={findOption(costCenterCache.options, m.cost_center)}
+                                onChange={(opt) => updateMappingRow(i, "cost_center", opt?.code || "")}
+                                placeholder="Selecione..." />
+                            )}
                           </TableCell>
                           <TableCell>
-                            <CachedSearchCombobox options={projectCache.options} isLoading={projectCache.isLoading}
-                              value={findOption(projectCache.options, m.project)}
-                              onChange={(opt) => updateMappingRow(i, "project", opt?.code || "")}
-                              placeholder="Selecione..." />
+                            {m.id ? (
+                              <div className="text-sm font-medium text-foreground">
+                                {m.project || <span className="text-muted-foreground italic">—</span>}
+                              </div>
+                            ) : (
+                              <CachedSearchCombobox options={projectCache.options} isLoading={projectCache.isLoading}
+                                value={findOption(projectCache.options, m.project)}
+                                onChange={(opt) => updateMappingRow(i, "project", opt?.code || "")}
+                                placeholder="Selecione..." />
+                            )}
                           </TableCell>
                           <TableCell>
                             <Button variant="ghost" size="icon" onClick={() => removeMappingRow(i)} className="text-destructive hover:text-destructive">
