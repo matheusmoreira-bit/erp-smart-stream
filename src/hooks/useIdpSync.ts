@@ -120,11 +120,16 @@ export function useIdpSync() {
 
       if (upserts.length === 0) return;
 
-      const { error: err } = await supabase
-        .from("idp_user_mapping")
-        .upsert(upserts as any[], { onConflict: "sap_user_code,idp_provider" });
-
-      if (err) throw err;
+      const { authFetch } = await import("@/lib/auth-fetch");
+      const res = await authFetch("idp-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upsertMany", rows: upserts }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ${res.status}`);
+      }
       await fetchMappings();
     },
     [jcUsers, mappings, fetchMappings]
@@ -132,22 +137,24 @@ export function useIdpSync() {
 
   const linkManually = useCallback(
     async (sapUserCode: string, jcUser: JumpCloudUser) => {
-      const { error: err } = await supabase
-        .from("idp_user_mapping")
-        .upsert(
-          {
-            sap_user_code: sapUserCode,
-            idp_provider: "jumpcloud",
-            idp_user_id: jcUser._id,
-            idp_email: jcUser.email,
-            idp_display_name:
-              jcUser.displayname || `${jcUser.firstname || ""} ${jcUser.lastname || ""}`.trim() || jcUser.username,
-            status: "linked",
-            linked_at: new Date().toISOString(),
-          } as any,
-          { onConflict: "sap_user_code,idp_provider" }
-        );
-      if (err) throw err;
+      const { authFetch } = await import("@/lib/auth-fetch");
+      const res = await authFetch("idp-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "link",
+          sap_user_code: sapUserCode,
+          idp_provider: "jumpcloud",
+          idp_user_id: jcUser._id,
+          idp_email: jcUser.email,
+          idp_display_name:
+            jcUser.displayname || `${jcUser.firstname || ""} ${jcUser.lastname || ""}`.trim() || jcUser.username,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ${res.status}`);
+      }
       await fetchMappings();
     },
     [fetchMappings]
@@ -155,18 +162,20 @@ export function useIdpSync() {
 
   const unlinkUser = useCallback(
     async (sapUserCode: string) => {
-      const { error: err } = await supabase
-        .from("idp_user_mapping")
-        .update({
-          idp_user_id: null,
-          idp_email: null,
-          idp_display_name: null,
-          status: "pending",
-          linked_at: null,
-        } as any)
-        .eq("sap_user_code", sapUserCode)
-        .eq("idp_provider", "jumpcloud");
-      if (err) throw err;
+      const { authFetch } = await import("@/lib/auth-fetch");
+      const res = await authFetch("idp-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "unlink",
+          sap_user_code: sapUserCode,
+          idp_provider: "jumpcloud",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ${res.status}`);
+      }
       await fetchMappings();
     },
     [fetchMappings]
