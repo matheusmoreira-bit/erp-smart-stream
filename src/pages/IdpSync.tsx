@@ -56,16 +56,19 @@ export default function IdpSyncPage() {
     fetchJumpCloudUsers();
   }, [fetchMappings, fetchJumpCloudUsers]);
 
-  // Auto-link only users WITHOUT an existing mapping entry.
+  // Auto-link only ONCE per mount, only for users WITHOUT an existing mapping entry.
   // To re-link an already-mapped user, the admin must remove the entry first.
+  const autoLinkDoneRef = useRef(false);
   useEffect(() => {
+    if (autoLinkDoneRef.current) return;
     if (sapLoading || isLoadingJc || isLoadingMappings) return;
     if (sapUsers.length === 0 || jcUsers.length === 0) return;
+
+    autoLinkDoneRef.current = true;
 
     const activeUsers = sapUsers.filter((u) => u.Locked !== "tYES");
     const mappedCodes = new Set(mappings.map((m) => m.sap_user_code));
 
-    // Only consider SAP users with no mapping row at all and an e-mail match
     const unmappedWithMatch = activeUsers.filter((sap) => {
       if (mappedCodes.has(sap.UserCode)) return false;
       if (!sap.eMail) return false;
