@@ -56,24 +56,24 @@ export default function IdpSyncPage() {
     fetchJumpCloudUsers();
   }, [fetchMappings, fetchJumpCloudUsers]);
 
-  // Auto-link users by email when SAP users, JC users and mappings are all loaded
+  // Auto-link only users WITHOUT an existing mapping entry.
+  // To re-link an already-mapped user, the admin must remove the entry first.
   useEffect(() => {
     if (sapLoading || isLoadingJc || isLoadingMappings) return;
     if (sapUsers.length === 0 || jcUsers.length === 0) return;
 
     const activeUsers = sapUsers.filter((u) => u.Locked !== "tYES");
-    const mappingMap = new Map(mappings.map((m) => [m.sap_user_code, m]));
+    const mappedCodes = new Set(mappings.map((m) => m.sap_user_code));
 
-    // Find users that have an email match but are not yet linked
-    const needsLink = activeUsers.filter((sap) => {
-      const mapping = mappingMap.get(sap.UserCode);
-      if (mapping?.status === "linked") return false;
+    // Only consider SAP users with no mapping row at all and an e-mail match
+    const unmappedWithMatch = activeUsers.filter((sap) => {
+      if (mappedCodes.has(sap.UserCode)) return false;
       if (!sap.eMail) return false;
       return jcUsers.some((jc) => jc.email?.toLowerCase() === sap.eMail!.toLowerCase());
     });
 
-    if (needsLink.length > 0) {
-      autoSync(activeUsers, jcUsers).catch((e) =>
+    if (unmappedWithMatch.length > 0) {
+      autoSync(unmappedWithMatch, jcUsers).catch((e) =>
         console.error("Auto-link error:", e)
       );
     }
@@ -90,8 +90,14 @@ export default function IdpSyncPage() {
         return;
       }
       const activeUsers = sapUsers.filter((u) => u.Locked !== "tYES");
-      await autoSync(activeUsers, jcList);
-      toast.success(`Sincronização concluída! ${jcList.length} usuários JumpCloud processados.`);
+      const mappedCodes = new Set(mappings.map((m) => m.sap_user_code));
+      const toSync = activeUsers.filter((u) => !mappedCodes.has(u.UserCode));
+      if (toSync.length === 0) {
+        toast.info("Nenhum usuário pendente. Remova o vínculo atual para re-sincronizar.");
+        return;
+      }
+      await autoSync(toSync, jcList);
+      toast.success(`Sincronização concluída! ${toSync.length} usuário(s) processado(s).`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro na sincronização");
     } finally {
