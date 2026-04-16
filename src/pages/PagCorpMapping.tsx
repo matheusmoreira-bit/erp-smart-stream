@@ -417,10 +417,16 @@ export default function PagCorpMapping() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <CachedSearchCombobox options={itemCache.options} isLoading={itemCache.isLoading}
-                              value={findOption(itemCache.options, m.item_code)}
-                              onChange={(opt) => setItemMappings((p) => p.map((row, idx) => idx === i ? { ...row, item_code: opt?.code || "" } : row))}
-                              placeholder="Selecione item SAP..." />
+                            {m.id ? (
+                              <div className="text-sm font-medium text-foreground">
+                                {m.item_code || <span className="text-muted-foreground italic">—</span>}
+                              </div>
+                            ) : (
+                              <CachedSearchCombobox options={itemCache.options} isLoading={itemCache.isLoading}
+                                value={findOption(itemCache.options, m.item_code)}
+                                onChange={(opt) => setItemMappings((p) => p.map((row, idx) => idx === i ? { ...row, item_code: opt?.code || "" } : row))}
+                                placeholder="Selecione item SAP..." />
+                            )}
                           </TableCell>
                           <TableCell>
                             <Button variant="ghost" size="icon" onClick={() => removeItemRow(i)} className="text-destructive hover:text-destructive">
