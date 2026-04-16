@@ -389,7 +389,8 @@ export default function IdpSyncPage() {
                     )}
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
