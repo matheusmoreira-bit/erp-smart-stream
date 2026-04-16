@@ -85,6 +85,12 @@ export function useIdpSync() {
       const jumpCloudUsers = jcList || jcUsers;
       if (jumpCloudUsers.length === 0) return;
 
+      // Only sync users that don't already have a defined mapping.
+      // To re-link, the user must remove the existing entry first.
+      const existing = new Set(
+        mappings.filter((m) => m.idp_user_id).map((m) => m.sap_user_code)
+      );
+
       const jcByEmail = new Map<string, JumpCloudUser>();
       for (const jc of jumpCloudUsers) {
         if (jc.email) jcByEmail.set(jc.email.toLowerCase(), jc);
@@ -93,6 +99,7 @@ export function useIdpSync() {
       const upserts: Array<Record<string, unknown>> = [];
 
       for (const sap of sapUsers) {
+        if (existing.has(sap.UserCode)) continue; // skip already-linked
         const sapEmail = sap.eMail?.toLowerCase();
         const jcMatch = sapEmail ? jcByEmail.get(sapEmail) : undefined;
 
@@ -111,6 +118,8 @@ export function useIdpSync() {
         });
       }
 
+      if (upserts.length === 0) return;
+
       const { error: err } = await supabase
         .from("idp_user_mapping")
         .upsert(upserts as any[], { onConflict: "sap_user_code,idp_provider" });
@@ -118,7 +127,7 @@ export function useIdpSync() {
       if (err) throw err;
       await fetchMappings();
     },
-    [jcUsers, fetchMappings]
+    [jcUsers, mappings, fetchMappings]
   );
 
   const linkManually = useCallback(
