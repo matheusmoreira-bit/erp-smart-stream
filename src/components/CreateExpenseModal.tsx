@@ -417,6 +417,7 @@ export function CreateExpenseModal({
         remarks: remarks || undefined,
         origin,
         skipRules,
+        branch_id: branchId,
         items: items.map(({ sapItem, sapCostCenter, sapProject, ...rest }) => rest),
       });
       toast.success("Despesa criada com sucesso!");
