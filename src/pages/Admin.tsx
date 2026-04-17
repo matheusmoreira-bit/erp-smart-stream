@@ -42,6 +42,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
+import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
