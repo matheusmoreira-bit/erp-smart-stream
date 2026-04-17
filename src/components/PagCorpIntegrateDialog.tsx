@@ -27,8 +27,6 @@ interface Props {
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
-  /** Whether the pagcorp_payment_account credential is configured for this company. */
-  paymentAccountConfigured: boolean;
   onConfirm: (supplier: SapSearchOption) => Promise<void>;
 }
 
@@ -38,7 +36,6 @@ export function PagCorpIntegrateDialog({
   transaction,
   integrationType,
   companyDb,
-  paymentAccountConfigured,
   onConfirm,
 }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
@@ -115,24 +112,13 @@ export function PagCorpIntegrateDialog({
               placeholder="Buscar fornecedor por nome ou código…"
             />
           </div>
-
-          {!paymentAccountConfigured ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-              Conta de pagamento PagCorp não configurada para esta empresa. Adicione a credencial{" "}
-              <code className="font-mono">pagcorp_payment_account</code> em Credenciais SAP.
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Conta de pagamento PagCorp configurada para esta empresa.
-            </p>
-          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={!supplier || !paymentAccountConfigured || submitting}>
+          <Button onClick={handleSubmit} disabled={!supplier || submitting}>
             {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Integrar agora
           </Button>

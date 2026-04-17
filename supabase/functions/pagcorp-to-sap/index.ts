@@ -173,8 +173,6 @@ Deno.serve(async (req) => {
   const stages: Record<string, "pending" | "success" | "failed" | "skipped"> = {
     attachment_upload: "skipped",
     purchase_order: "pending",
-    ap_invoice: "pending",
-    outgoing_payment: "pending",
   };
   let sapPayloads: Record<string, unknown> = {};
   let sapResponses: Record<string, unknown> = {};
@@ -256,12 +254,7 @@ Deno.serve(async (req) => {
       throw new Error("Nenhum item mapeado encontrado (cadastre um item fallback em Mapeamento PagCorp)");
     }
 
-    const paymentAccount = sapCreds.pagcorp_payment_account;
-    if (!paymentAccount) {
-      throw new Error(
-        "Conta de pagamento PagCorp não configurada. Adicione a credencial 'pagcorp_payment_account' nas Credenciais SAP da empresa.",
-      );
-    }
+    // (Pagamento desabilitado: integração agora cria apenas o Pedido de Compra)
 
     const configuredBranch = Number(sapCreds.default_branch_id || "");
     const branchId = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
@@ -344,64 +337,13 @@ Deno.serve(async (req) => {
       throw e;
     }
 
-    // 7. Create AP Invoice based on PO (BaseEntry/BaseLine/BaseType=22 PO)
-    const invoiceLine: Record<string, unknown> = {
-      ...docLine,
-      BaseType: 22,
-      BaseEntry: poResult.docEntry,
-      BaseLine: 0,
-    };
-    sapPayloads.ap_invoice = {
-      ...baseDoc,
-      DocumentLines: [invoiceLine],
-      ...(attachmentEntry ? { AttachmentEntry: attachmentEntry } : {}),
-    };
-    let invResult;
-    try {
-      invResult = await postSapDocument(sap, sapPayloads.ap_invoice as any, "PurchaseInvoices");
-      stages.ap_invoice = "success";
-      sapResponses.ap_invoice = { DocEntry: invResult.docEntry, DocNum: invResult.docNum };
-    } catch (e) {
-      stages.ap_invoice = "failed";
-      throw e;
-    }
-
-    // 8. Create Outgoing Payment for the AP Invoice
-    sapPayloads.outgoing_payment = {
-      DocType: "rSupplier",
-      CardCode: supplierCode,
-      DocDate: today,
-      TaxDate: today,
-      BPL_IDAssignedToInvoice: branchId,
-      Remarks: description,
-      TransferAccount: paymentAccount,
-      TransferSum: amount,
-      TransferDate: today,
-      PaymentInvoices: [
-        {
-          DocEntry: invResult.docEntry,
-          SumApplied: amount,
-          InvoiceType: "it_PurchaseInvoice",
-        },
-      ],
-    };
-    let payResult;
-    try {
-      payResult = await postSapDocument(sap, sapPayloads.outgoing_payment as any, "VendorPayments");
-      stages.outgoing_payment = "success";
-      sapResponses.outgoing_payment = { DocEntry: payResult.docEntry, DocNum: payResult.docNum };
-    } catch (e) {
-      stages.outgoing_payment = "failed";
-      throw e;
-    }
-
-    // 9. Persist final success log
+    // 7. Persist final success log (apenas Pedido de Compra)
     await supabase
       .from("pagcorp_integration_log")
       .update({
         status: "success",
-        sap_doc_entry: invResult.docEntry,
-        sap_doc_num: invResult.docNum,
+        sap_doc_entry: poResult.docEntry,
+        sap_doc_num: poResult.docNum,
         sap_payload: sapPayloads as any,
         sap_response: { ...sapResponses, supplierCode, supplierName, stages, attachmentEntry } as any,
       } as any)
@@ -417,8 +359,6 @@ Deno.serve(async (req) => {
       p_details: {
         integration_type: integrationType,
         purchase_order: poResult,
-        ap_invoice: invResult,
-        outgoing_payment: payResult,
         stages,
       } as any,
     });
@@ -428,8 +368,6 @@ Deno.serve(async (req) => {
         success: true,
         stages,
         purchaseOrder: { DocEntry: poResult.docEntry, DocNum: poResult.docNum },
-        apInvoice: { DocEntry: invResult.docEntry, DocNum: invResult.docNum },
-        outgoingPayment: { DocEntry: payResult.docEntry, DocNum: payResult.docNum },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
