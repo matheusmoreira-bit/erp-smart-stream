@@ -505,9 +505,12 @@ export default function ExpensesPage() {
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
         onCancel={handleCancel}
+        onRetrySap={handleRetrySap}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
+        canRetrySap={session.erpType === "sap" && (isAdmin || (selectedExpense ? canCancel(selectedExpense) : false))}
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
+        isRetrying={isRetrying}
       />
 
       <CreateExpenseModal
