@@ -94,6 +94,53 @@ export async function savePagCorpSupplierLink(input: {
 }
 
 /**
+ * Imports one PagCorp candidate as a new supplier and persists the link so
+ * future scans skip it. Shared by single-row "Importar" and bulk action.
+ */
+export async function importPagCorpCandidate(
+  c: PagCorpCandidate,
+  session: SapSession | null,
+): Promise<{ card_code: string | null; card_name: string }> {
+  const created = await createSupplier(
+    {
+      company_db: session?.companyDB || null,
+      card_code: null,
+      card_name: c.card_name,
+      card_type: "S",
+      federal_tax_id: c.federal_tax_id,
+      u_fgr_taxid0: c.federal_tax_id,
+      email: c.email || null,
+      phone1: c.phone1 || null,
+      phone2: c.phone2 || null,
+      currency: "BRL",
+      bill_to_street: c.bill_to_street || null,
+      bill_to_zip: c.bill_to_zip || null,
+      bill_to_city: c.bill_to_city || null,
+      bill_to_state: c.bill_to_state || null,
+      bill_to_country: "BR",
+      bill_to_block: c.bill_to_block || null,
+      bill_to_building: c.bill_to_building || null,
+      is_active: true,
+      source: "pagcorp_import",
+    },
+    session,
+  );
+  await savePagCorpSupplierLink({
+    companyDb: session?.companyDB || null,
+    federalTaxId: c.federal_tax_id,
+    cardName: c.card_name,
+    supplierId: created?.id || null,
+    cardCode: created?.card_code || null,
+    resolution: "imported",
+    resolvedBy: session?.userName || null,
+  });
+  return {
+    card_code: created?.card_code || null,
+    card_name: created?.card_name || c.card_name,
+  };
+}
+
+/**
  * Scans the last 30 days of PagCorp transactions that have accountability
  * (receipts), extracts supplier data via AI for each, and classifies them
  * as "new", "already exists" (against the supplier list) or "previously
