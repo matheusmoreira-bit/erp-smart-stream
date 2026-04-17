@@ -180,7 +180,7 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            {(showSubmit || showCancel) && (
+            {(showSubmit || showCancel || showRetrySap) && (
               <div className="border-t border-border pt-4 flex justify-end gap-3">
                 <Button variant="outline" onClick={onClose}>Fechar</Button>
                 {showCancel && (
@@ -192,6 +192,16 @@ function ExpenseDetailModal({
                   >
                     {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XIcon className="w-4 h-4" />}
                     Cancelar Despesa
+                  </Button>
+                )}
+                {showRetrySap && (
+                  <Button
+                    onClick={() => onRetrySap(expense.id)}
+                    disabled={isRetrying}
+                    className="gap-1.5"
+                  >
+                    {isRetrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+                    Reintegrar no SAP
                   </Button>
                 )}
                 {showSubmit && (
