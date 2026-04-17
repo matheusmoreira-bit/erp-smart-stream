@@ -62,6 +62,8 @@ export default function SuppliersImportPagCorp() {
     useImportPagCorpSuppliers(session?.companyDB, suppliers);
 
   const [days, setDays] = useState<string>("30");
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // Auto-scan on mount once suppliers are loaded
   const [scanned, setScanned] = useState(false);
@@ -74,11 +76,87 @@ export default function SuppliersImportPagCorp() {
 
   const handleRescan = () => {
     setCandidates([]);
+    setSelectedKeys(new Set());
     void scan(Number(days));
   };
 
   const updateCandidate = (key: string, patch: Partial<PagCorpCandidate>) => {
     setCandidates((prev) => prev.map((c) => (c.key === key ? { ...c, ...patch } : c)));
+    setSelectedKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  };
+
+  const isSelectable = (c: PagCorpCandidate) =>
+    !c.aiFailed &&
+    !c.existing &&
+    c.savedResolution !== "imported" &&
+    c.savedResolution !== "linked" &&
+    c.savedResolution !== "ignored";
+
+  const selectableCandidates = useMemo(
+    () => candidates.filter(isSelectable),
+    [candidates],
+  );
+
+  const allSelected =
+    selectableCandidates.length > 0 &&
+    selectableCandidates.every((c) => selectedKeys.has(c.key));
+
+  const toggleSelected = (key: string, checked: boolean) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (!checked) {
+      setSelectedKeys(new Set());
+      return;
+    }
+    setSelectedKeys(new Set(selectableCandidates.map((c) => c.key)));
+  };
+
+  const handleBulkImport = async () => {
+    const targets = candidates.filter((c) => selectedKeys.has(c.key) && isSelectable(c));
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    let ok = 0;
+    let fail = 0;
+    for (const c of targets) {
+      try {
+        const created = await importPagCorpCandidate(c, session);
+        updateCandidate(c.key, {
+          savedResolution: "imported",
+          existing: true,
+          existingMatch: {
+            by: "saved_link",
+            card_code: created.card_code,
+            card_name: created.card_name,
+          },
+        });
+        ok++;
+      } catch (e) {
+        fail++;
+        toast.error(`Falha: ${c.card_name}`, {
+          description: e instanceof Error ? e.message : undefined,
+        });
+      }
+    }
+    setBulkBusy(false);
+    setSelectedKeys(new Set());
+    if (ok > 0) {
+      toast.success(`${ok} fornecedor(es) importado(s)`, {
+        description: fail > 0 ? `${fail} falha(s)` : undefined,
+      });
+      void refreshSuppliers();
+    }
   };
 
   const companyLabel = getLabel(session?.companyDB || "");
