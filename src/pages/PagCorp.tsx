@@ -459,7 +459,6 @@ export default function PagCorp() {
         transaction={integrateDialog.tx}
         integrationType={integrateDialog.type}
         companyDb={session?.companyDB}
-        paymentAccountConfigured={hasPagcorpPaymentAccount}
         onConfirm={handleConfirmIntegrate}
       />
     </div>
