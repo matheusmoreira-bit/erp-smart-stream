@@ -86,8 +86,9 @@ export function SapLoginForm() {
     try {
       await login(userName, password, companyDB, erpType as ErpType);
       toast.success(`Conectado ao ${erpInfo.label}!`);
-    } catch {
-      toast.error("Falha no login. Verifique suas credenciais.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha no login. Verifique suas credenciais.";
+      toast.error(message);
     }
   };
 
