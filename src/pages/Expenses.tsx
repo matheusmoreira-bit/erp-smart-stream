@@ -472,13 +472,16 @@ export default function ExpensesPage() {
         open={!!selectedExpense}
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
+        onCancel={handleCancel}
+        canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         isSubmitting={isSubmitting}
+        isCancelling={isCancelling}
       />
 
       <CreateExpenseModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        onCreate={createExpense}
+        onCreate={handleCreate}
         sapSession={session}
       />
     </div>
