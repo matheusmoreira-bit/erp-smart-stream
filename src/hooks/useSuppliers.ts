@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapAction, sapQuery, type SapSession } from "@/lib/sap-client";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
 
 export interface Supplier {
   id: string;
@@ -37,31 +38,114 @@ export type SupplierInput = Omit<
 
 const TABLE = "suppliers" as const;
 
+/**
+ * Loads supplier list combining SAP cache (source of truth) with local table
+ * (which holds is_active toggle, sync status and locally-created records).
+ * SAP data is cached in sap_cache for 1 week via useSapCachedList.
+ */
 export function useSuppliers(companyDb?: string) {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [localRows, setLocalRows] = useState<Supplier[]>([]);
+  const [isLoadingLocal, setIsLoadingLocal] = useState(false);
 
-  const fetchAll = useCallback(async () => {
+  const fetchLocal = useCallback(async () => {
     if (!companyDb) return;
-    setIsLoading(true);
+    setIsLoadingLocal(true);
     try {
       const { data, error } = await (supabase as any)
         .from(TABLE)
         .select("*")
-        .eq("company_db", companyDb)
-        .order("card_name", { ascending: true });
+        .eq("company_db", companyDb);
       if (error) throw error;
-      setSuppliers((data || []) as Supplier[]);
+      setLocalRows((data || []) as Supplier[]);
     } finally {
-      setIsLoading(false);
+      setIsLoadingLocal(false);
     }
   }, [companyDb]);
 
   useEffect(() => {
-    void fetchAll();
-  }, [fetchAll]);
+    void fetchLocal();
+  }, [fetchLocal]);
 
-  return { suppliers, isLoading, refresh: fetchAll };
+  // Pull suppliers from SAP (cached 1 week in sap_cache)
+  const cacheKey = companyDb ? `suppliers:${companyDb}` : "suppliers:none";
+  const { options: sapOptions, isLoading: isLoadingSap, reload: reloadSap } = useSapCachedList({
+    cacheKey,
+    endpoint: "BusinessPartners",
+    params: {
+      $filter: "CardType eq 'cSupplier'",
+      $select: "CardCode,CardName,FederalTaxID,UnifiedFederalTaxID,EmailAddress,Phone1,Phone2,Currency,Frozen",
+      $orderby: "CardName",
+    },
+    mapRow: (row: any) =>
+      ({
+        code: row.CardCode,
+        name: row.CardName,
+        extra: row.UnifiedFederalTaxID || row.FederalTaxID || "",
+        _raw: row,
+      } as any),
+    enabled: !!companyDb,
+  });
+
+  // Merge SAP rows + local table. Local data overrides per CardCode; orphans appended.
+  const suppliers = useMemo<Supplier[]>(() => {
+    const localByCode = new Map<string, Supplier>();
+    const orphans: Supplier[] = [];
+    for (const r of localRows) {
+      if (r.card_code) localByCode.set(r.card_code, r);
+      else orphans.push(r);
+    }
+
+    const merged: Supplier[] = sapOptions.map((opt: any) => {
+      const raw = opt._raw || {};
+      const local = localByCode.get(opt.code);
+      localByCode.delete(opt.code);
+      const frozen = raw.Frozen === "tYES";
+      return {
+        id: local?.id || `sap:${opt.code}`,
+        company_db: companyDb || null,
+        card_code: opt.code,
+        card_name: raw.CardName || opt.name,
+        card_type: "S",
+        federal_tax_id: local?.federal_tax_id ?? (raw.UnifiedFederalTaxID || raw.FederalTaxID || null),
+        u_fgr_taxid0: local?.u_fgr_taxid0 ?? null,
+        email: local?.email ?? (raw.EmailAddress || null),
+        phone1: local?.phone1 ?? (raw.Phone1 || null),
+        phone2: local?.phone2 ?? (raw.Phone2 || null),
+        currency: local?.currency ?? (raw.Currency || "BRL"),
+        bill_to_street: local?.bill_to_street ?? null,
+        bill_to_zip: local?.bill_to_zip ?? null,
+        bill_to_city: local?.bill_to_city ?? null,
+        bill_to_state: local?.bill_to_state ?? null,
+        bill_to_country: local?.bill_to_country ?? "BR",
+        bill_to_block: local?.bill_to_block ?? null,
+        bill_to_building: local?.bill_to_building ?? null,
+        is_active: local ? local.is_active : !frozen,
+        sap_sync_status: local?.sap_sync_status || "synced",
+        sap_sync_error: local?.sap_sync_error || null,
+        sap_last_synced_at: local?.sap_last_synced_at || null,
+        source: local?.source || "sap",
+        created_at: local?.created_at || new Date(0).toISOString(),
+        updated_at: local?.updated_at || new Date(0).toISOString(),
+      };
+    });
+
+    for (const r of localByCode.values()) merged.push(r);
+    for (const r of orphans) merged.push(r);
+
+    merged.sort((a, b) => a.card_name.localeCompare(b.card_name));
+    return merged;
+  }, [sapOptions, localRows, companyDb]);
+
+  const refresh = useCallback(async () => {
+    reloadSap();
+    await fetchLocal();
+  }, [reloadSap, fetchLocal]);
+
+  return {
+    suppliers,
+    isLoading: isLoadingLocal || isLoadingSap,
+    refresh,
+  };
 }
 
 /**
