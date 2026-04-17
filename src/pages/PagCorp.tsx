@@ -268,6 +268,7 @@ export default function PagCorp() {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
     setIntegrating(t.id);
+    programmaticCloseRef.current = true;
     setIntegrateDialog({ open: false, tx: null, type: "generic" });
     try {
       const result = await integrateDirect(
