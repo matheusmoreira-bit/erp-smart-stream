@@ -309,10 +309,36 @@ Deno.serve(async (req) => {
         queryParams.set("$skip", String(skip));
 
         const fullUrl = `${SAP_BASE_URL}/${endpoint}?${queryParams.toString()}`;
-        const sapResp = await fetch(fullUrl, {
-          method: "GET",
-          headers: { "Content-Type": "application/json", Cookie: cookies },
-        });
+
+        // SAP B1 occasionally drops the connection mid-response on long pages
+        // ("connection closed before message completed"). Retry transient
+        // network errors with backoff before giving up on the page.
+        let sapResp: Response | null = null;
+        let lastErr: unknown = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            sapResp = await fetch(fullUrl, {
+              method: "GET",
+              headers: { "Content-Type": "application/json", Cookie: cookies },
+            });
+            break;
+          } catch (e) {
+            lastErr = e;
+            console.warn(
+              `SAP queryAll fetch attempt ${attempt + 1} failed (skip=${skip}):`,
+              e instanceof Error ? e.message : e,
+            );
+            await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+          }
+        }
+
+        if (!sapResp) {
+          console.error(
+            "SAP queryAll: giving up after retries, returning partial results.",
+            lastErr,
+          );
+          break;
+        }
 
         if (!sapResp.ok) {
           console.error("SAP queryAll error:", sapResp.status, await sapResp.text());
