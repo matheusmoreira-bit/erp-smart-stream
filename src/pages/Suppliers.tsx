@@ -48,7 +48,7 @@ function StatusBadge({ s }: { s: Supplier }) {
     return <Badge variant="destructive" className="gap-1"><AlertCircle className="w-3 h-3" />Erro SAP</Badge>;
   }
   if (s.sap_sync_status === "synced") {
-    return <Badge className="gap-1 bg-green-600/20 text-green-500 hover:bg-green-600/30"><CheckCircle2 className="w-3 h-3" />Sincronizado</Badge>;
+    return <Badge className="gap-1 bg-success/20 text-success hover:bg-success/30 border-success/30"><CheckCircle2 className="w-3 h-3" />Sincronizado</Badge>;
   }
   return <Badge variant="outline">Pendente</Badge>;
 }

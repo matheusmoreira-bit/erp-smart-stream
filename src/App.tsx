@@ -16,6 +16,7 @@ import IntegrationHistory from "./pages/IntegrationHistory.tsx";
 import IntegrationsMonitor from "./pages/IntegrationsMonitor.tsx";
 import Credentials from "./pages/Credentials.tsx";
 import UsersPage from "./pages/Users.tsx";
+import Suppliers from "./pages/Suppliers.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
 import IdpSync from "./pages/IdpSync.tsx";
 import Synapse from "./pages/Synapse.tsx";
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/integrations/monitor" element={<IntegrationsMonitor />} />
               <Route path="/credentials" element={<Credentials />} />
               <Route path="/users" element={<UsersPage />} />
+              <Route path="/suppliers" element={<Suppliers />} />
               <Route path="/users/activity" element={<UserActivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />
               <Route path="/synapse" element={<Synapse />} />
