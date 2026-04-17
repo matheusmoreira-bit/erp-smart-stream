@@ -263,12 +263,13 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
 export default function ExpensesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, submitForApproval } = useExpenses();
+  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense } = useExpenses();
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   if (!session) {
@@ -277,6 +278,14 @@ export default function ExpensesPage() {
   }
 
   const companyLabel = getLabel(session?.companyDB || "");
+  const isAdmin = !!session.isSuperUser;
+  const userIdentifier = session.userName.toLowerCase();
+
+  const canCancel = (expense: Expense) => {
+    if (isAdmin) return true;
+    const owner = (expense.created_by_email || expense.requester_email || expense.requester_name || "").toLowerCase();
+    return owner === userIdentifier || owner.startsWith(userIdentifier + "@");
+  };
 
   const filtered = expenses.filter((e) => {
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
@@ -302,6 +311,29 @@ export default function ExpensesPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCancel = async (id: string) => {
+    setIsCancelling(true);
+    try {
+      await cancelExpense(id);
+      toast.success("Despesa cancelada.");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao cancelar");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleCreate = async (input: any) => {
+    const result = await createExpense(input) as any;
+    if (result?.status === "pendente_aprovacao") {
+      toast.info("Despesa enviada para aprovação automaticamente.");
+    } else if (result?.status === "aprovado") {
+      toast.success("Despesa aprovada (nenhuma regra aplicável).");
+    }
+    return result;
   };
 
   const statusOptions = [
