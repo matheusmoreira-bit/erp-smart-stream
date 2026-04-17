@@ -352,10 +352,61 @@ function ApprovalDetailModal({
   );
 }
 
+function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string } {
+  const isPagcorp = e.origin === "pagcorp";
+  return {
+    approvalRequestId: -Math.abs(parseInt(e.id.replace(/\D/g, "").slice(0, 9) || "0", 10) || 1),
+    docType: isPagcorp ? "Despesa PagCorp" : "Despesa Interna",
+    docTypeName: isPagcorp ? "Despesa PagCorp" : "Despesa Interna",
+    docNum: 0,
+    docEntry: 0,
+    docTotal: Number(e.total_amount || 0),
+    currency: e.currency || "BRL",
+    cardCode: e.supplier_code || "",
+    cardName: e.supplier_name || "—",
+    requester: e.requester_name || "—",
+    currentApprover: e.current_approver || "—",
+    approverEmail: "",
+    currentStage: "Aprovação Interna",
+    status: "pending",
+    docDate: e.created_at,
+    dueDate: "",
+    remarks: e.remarks || "",
+    approvalModel: "Regra Interna",
+    daysOpen: Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000),
+    attachmentNames: "",
+    documentLines: (e.items || []).map((it) => ({
+      ItemCode: it.item_code || "",
+      Description: it.description,
+      Quantity: it.quantity,
+      UnitPrice: it.unit_price,
+      LineTotal: it.line_total,
+      CostingCode: it.cost_center || "",
+      Project: it.project || "",
+    })),
+    __internalId: e.id,
+  } as ApprovalDoc & { __internalId?: string };
+}
+
+function approverMatches(approver: string, userName: string): boolean {
+  if (!approver || !userName) return false;
+  const a = approver.toLowerCase().trim();
+  const u = userName.toLowerCase().trim();
+  if (a === u) return true;
+  // try matching by first name / partial: "matheus.moreira" vs "Matheus Moreira"
+  const aTokens = a.replace(/[._-]/g, " ").split(/\s+/).filter(Boolean);
+  const uTokens = u.replace(/[._-]/g, " ").split(/\s+/).filter(Boolean);
+  if (aTokens.length === 0 || uTokens.length === 0) return false;
+  // match if all user tokens appear in approver tokens (or vice-versa)
+  const allIn = (src: string[], tgt: string[]) => src.every((t) => tgt.includes(t));
+  return allIn(uTokens, aTokens) || allIn(aTokens, uTokens);
+}
+
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { approvals, isLoading, error, refresh } = useApprovals();
+  const { expenses, refresh: refreshExpenses, approveExpense, rejectExpense } = useExpenses();
   const { getLabel } = useCompanies(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
@@ -372,12 +423,20 @@ export default function ApprovalsPage() {
   const isSuperUser = session.isSuperUser;
   const companyLabel = getLabel(session?.companyDB || "");
 
-  // Filter: non-super-users see only their own approvals; super-users can toggle
-  const userApprovals = (!isSuperUser || !showAll)
-    ? approvals.filter((a) => a.currentApprover.toLowerCase() === session.userName.toLowerCase())
-    : approvals;
+  // Merge SAP approvals with internal pending expenses
+  const internalPending = (expenses || [])
+    .filter((e) => e.status === "pendente_aprovacao")
+    .map(mapInternalExpense);
+
+  const allApprovals: ApprovalDoc[] = [...internalPending, ...approvals];
+
+  // Filter: by default show only approvals assigned to current user; toggle to view all
+  const userApprovals = showAll
+    ? allApprovals
+    : allApprovals.filter((a) => approverMatches(a.currentApprover, session.userName));
 
   const filtered = userApprovals.filter((a) => {
+
     if (!search) return true;
     const q = search.toLowerCase();
     return (
