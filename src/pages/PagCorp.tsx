@@ -354,6 +354,7 @@ export default function PagCorp() {
       });
       setAccountabilityModal({ open: false, tx: null });
       await fetchTransactions(startDate, endDate, session.companyDB);
+      if (batchActive) advanceBatch();
       return { expense };
     } catch (e) {
       toast.error("Falha ao integrar prestação", {
