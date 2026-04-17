@@ -320,6 +320,7 @@ Deno.serve(async (req) => {
     let sapResult;
     try {
       sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "PurchaseOrders");
+      lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
       if (attachmentEntry !== null) attachmentLinkStatus = "success";
     } catch (e) {
@@ -391,6 +392,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: false,
         error: msg,
+        sapPayload: lastSapPayload,
+        sapResponse: lastSapResponse,
         stages: {
           attachment: attachmentStatus,
           purchase_order: purchaseOrderStatus,
