@@ -134,8 +134,8 @@ Deno.serve(async (req) => {
       }),
     };
 
-    // 4. Post to Orders (Purchase Order)
-    const sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "Orders");
+    // 4. Post to PurchaseOrders (Pedido de Compra — usa fornecedor como CardCode)
+    const sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "PurchaseOrders");
 
     // 5. Update expense record
     await supabase
