@@ -24,6 +24,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -34,6 +41,15 @@ import {
 } from "@/hooks/useImportPagCorpSuppliers";
 import { PagCorpCandidateRow } from "@/components/PagCorpCandidateRow";
 
+const PERIOD_OPTIONS = [
+  { value: "7", label: "Últimos 7 dias" },
+  { value: "15", label: "Últimos 15 dias" },
+  { value: "30", label: "Últimos 30 dias" },
+  { value: "60", label: "Últimos 60 dias" },
+  { value: "90", label: "Últimos 90 dias" },
+  { value: "180", label: "Últimos 180 dias" },
+];
+
 export default function SuppliersImportPagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
@@ -42,18 +58,20 @@ export default function SuppliersImportPagCorp() {
   const { candidates, progress, scanning, error, scan, setCandidates } =
     useImportPagCorpSuppliers(session?.companyDB, suppliers);
 
+  const [days, setDays] = useState<string>("30");
+
   // Auto-scan on mount once suppliers are loaded
   const [scanned, setScanned] = useState(false);
   useEffect(() => {
     if (!scanned && session?.companyDB && suppliers.length > 0) {
       setScanned(true);
-      void scan();
+      void scan(Number(days));
     }
-  }, [scanned, session?.companyDB, suppliers.length, scan]);
+  }, [scanned, session?.companyDB, suppliers.length, scan, days]);
 
   const handleRescan = () => {
     setCandidates([]);
-    void scan();
+    void scan(Number(days));
   };
 
   const updateCandidate = (key: string, patch: Partial<PagCorpCandidate>) => {
@@ -101,7 +119,7 @@ export default function SuppliersImportPagCorp() {
                 Importar Fornecedores do PagCorp
               </h1>
               <p className="text-xs text-muted-foreground">
-                Prestações de contas dos últimos 30 dias
+                Prestações de contas do período selecionado
               </p>
             </div>
           </div>
@@ -151,7 +169,19 @@ export default function SuppliersImportPagCorp() {
               </Badge>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <Select value={days} onValueChange={setDays} disabled={scanning}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PERIOD_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               onClick={handleRescan}
@@ -207,7 +237,7 @@ export default function SuppliersImportPagCorp() {
                     className="text-center py-12 text-muted-foreground"
                   >
                     {scanned
-                      ? "Nenhum candidato encontrado nos últimos 30 dias."
+                      ? "Nenhum candidato encontrado no período selecionado."
                       : "Aguardando carregamento dos fornecedores…"}
                   </TableCell>
                 </TableRow>

@@ -107,7 +107,7 @@ export function useImportPagCorpSuppliers(
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const scan = useCallback(async () => {
+  const scan = useCallback(async (days: number = 30) => {
     if (!companyDb) {
       setError("Empresa não selecionada");
       return;
@@ -144,7 +144,7 @@ export function useImportPagCorpSuppliers(
       setProgress({ stage: "fetching", current: 0, total: 0 });
       const today = new Date();
       const start = new Date(today);
-      start.setDate(start.getDate() - 30);
+      start.setDate(start.getDate() - Math.max(1, days));
       const params = new URLSearchParams({
         startDate: start.toISOString().slice(0, 10),
         endDate: today.toISOString().slice(0, 10),
