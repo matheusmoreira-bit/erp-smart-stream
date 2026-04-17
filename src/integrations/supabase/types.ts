@@ -602,6 +602,56 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_supplier_links: {
+        Row: {
+          card_code: string | null
+          card_name: string | null
+          card_name_key: string | null
+          company_db: string | null
+          created_at: string
+          federal_tax_id: string | null
+          id: string
+          resolution: string
+          resolved_by: string | null
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          card_code?: string | null
+          card_name?: string | null
+          card_name_key?: string | null
+          company_db?: string | null
+          created_at?: string
+          federal_tax_id?: string | null
+          id?: string
+          resolution?: string
+          resolved_by?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          card_code?: string | null
+          card_name?: string | null
+          card_name_key?: string | null
+          company_db?: string | null
+          created_at?: string
+          federal_tax_id?: string | null
+          id?: string
+          resolution?: string
+          resolved_by?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagcorp_supplier_links_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       permission_group_modules: {
         Row: {
           created_at: string
