@@ -89,19 +89,17 @@ async function getCredentials(companyDb?: string): Promise<PagCorpCreds> {
 
   let data: { credential_key: string; credential_value: string }[] | null = null;
 
-  // Try company-specific credentials first
   if (companyDb) {
+    // Strict: only use credentials for this specific company.
     const res = await supabase
       .from("system_credentials")
       .select("credential_key, credential_value")
       .eq("system_name", "pagcorp")
       .eq("company_db", companyDb);
     if (res.error) throw new Error(`Failed to load credentials: ${res.error.message}`);
-    if (res.data && res.data.length > 0) data = res.data;
-  }
-
-  // Fallback to global credentials (company_db is null)
-  if (!data || data.length === 0) {
+    data = res.data;
+  } else {
+    // No company specified: use global credentials (company_db is null).
     const res = await supabase
       .from("system_credentials")
       .select("credential_key, credential_value")
@@ -111,7 +109,13 @@ async function getCredentials(companyDb?: string): Promise<PagCorpCreds> {
     data = res.data;
   }
 
-  if (!data || data.length === 0) throw new Error("PagCorp credentials not configured.");
+  if (!data || data.length === 0) {
+    throw new Error(
+      companyDb
+        ? `PagCorp não configurado para esta empresa (${companyDb}). Configure as credenciais em Credenciais > PagCorp.`
+        : "PagCorp credentials not configured.",
+    );
+  }
 
   const creds: Record<string, string> = {};
   for (const row of data) {
