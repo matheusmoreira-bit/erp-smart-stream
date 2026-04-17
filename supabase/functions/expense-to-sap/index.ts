@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
     console.error("expense-to-sap error:", msg);
     return new Response(
       JSON.stringify({ success: false, error: msg }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
