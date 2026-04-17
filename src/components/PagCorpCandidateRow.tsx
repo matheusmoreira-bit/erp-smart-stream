@@ -180,7 +180,11 @@ export function PagCorpCandidateRow({
       </TableCell>
       <TableCell className="font-medium align-top">{c.card_name}</TableCell>
       <TableCell className="font-mono text-xs align-top">
-        {c.federal_tax_id || "—"}
+        {c.federal_tax_id ? (
+          c.federal_tax_id
+        ) : (
+          <span className="text-destructive not-italic">— sem CNPJ/CPF</span>
+        )}
       </TableCell>
       <TableCell className="text-xs text-muted-foreground align-top">
         <div className="line-clamp-1">{c.transactionDescription}</div>
