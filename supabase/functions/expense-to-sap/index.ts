@@ -283,10 +283,18 @@ Deno.serve(async (req) => {
       ...headerCustom,
       DocumentLines: items.map((it: any) => {
         const hasItem = !!it.item_code;
+        const qty = Number(it.quantity) || 1;
+        let unit = Number(it.unit_price) || 0;
+        const lineTotal = Number(it.line_total) || 0;
+        // Defense: if unit_price is 0/missing but we have a line_total, derive it.
+        // SAP rejects/zeroes lines with UnitPrice=0, even when LineTotal is set.
+        if (unit === 0 && lineTotal !== 0 && qty !== 0) {
+          unit = lineTotal / qty;
+        }
         const line: Record<string, unknown> = {
           ItemDescription: it.description,
-          Quantity: Number(it.quantity) || 1,
-          UnitPrice: Number(it.unit_price) || 0,
+          Quantity: qty,
+          UnitPrice: unit,
           ...lineCustom,
         };
         if (hasItem) {
