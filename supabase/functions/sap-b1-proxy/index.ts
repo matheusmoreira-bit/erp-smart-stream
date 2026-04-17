@@ -345,7 +345,16 @@ Deno.serve(async (req) => {
           break;
         }
 
-        const pageData = await sapResp.json();
+        let pageData: any;
+        try {
+          pageData = await sapResp.json();
+        } catch (e) {
+          console.error(
+            "SAP queryAll: failed to parse page body, returning partial.",
+            e instanceof Error ? e.message : e,
+          );
+          break;
+        }
         const items = pageData.value || [];
         allResults.push(...items);
 
