@@ -316,6 +316,7 @@ Deno.serve(async (req) => {
       ItemDescription: (transaction.description || "PagCorp").slice(0, 100),
       Quantity: 1,
       UnitPrice: amount,
+      ...lineCustom,
     };
     if (acctMapping?.cost_center) docLine.CostingCode = acctMapping.cost_center;
     if (acctMapping?.project) docLine.ProjectCode = acctMapping.project;
@@ -328,6 +329,7 @@ Deno.serve(async (req) => {
       BPL_IDAssignedToInvoice: branchId,
       Comments: description,
       DocumentLines: [docLine],
+      ...headerCustom,
     };
 
     // 6. Create Purchase Order
