@@ -307,12 +307,14 @@ export function CreateExpenseModal({
       if (doc.document_date) setDocDate(doc.document_date);
       if (doc.due_date) setDueDate(doc.due_date);
       if (doc.remarks) setRemarks(doc.remarks);
+      const costCenterValue = (doc.cost_center_confidence ?? 0) > 0.95 ? (doc.cost_center_hint || "") : "";
+      const projectValue = (doc.project_confidence ?? 0) > 0.95 ? (doc.project_hint || "") : "";
+      const truncateDesc = (s: string) => (s && s.length > 200 ? s.slice(0, 197).trimEnd() + "..." : s || "");
+
       if (doc.items && doc.items.length > 0) {
-        const costCenterValue = (doc.cost_center_confidence ?? 0) > 0.95 ? (doc.cost_center_hint || "") : "";
-        const projectValue = (doc.project_confidence ?? 0) > 0.95 ? (doc.project_hint || "") : "";
         setItems(
           doc.items.map((item: any) => ({
-            description: item.description || "",
+            description: truncateDesc(item.description || ""),
             quantity: item.quantity || 1,
             unit_price: item.unit_price || 0,
             line_total: item.line_total || (item.quantity || 1) * (item.unit_price || 0),
@@ -322,6 +324,24 @@ export function CreateExpenseModal({
             sapItem: null,
           }))
         );
+      } else if (doc.total_amount && Number(doc.total_amount) > 0) {
+        // Fallback: no items detected, create single line with total amount
+        const fallbackDesc = truncateDesc(
+          doc.remarks ||
+            (doc.supplier_name ? `Despesa - ${doc.supplier_name}` : "Despesa")
+        );
+        setItems([
+          {
+            description: fallbackDesc,
+            quantity: 1,
+            unit_price: Number(doc.total_amount),
+            line_total: Number(doc.total_amount),
+            cost_center: costCenterValue,
+            project: projectValue,
+            item_code: "",
+            sapItem: null,
+          },
+        ]);
       }
       if (doc.confidence) setAiConfidence(doc.confidence);
 
