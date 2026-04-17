@@ -25,9 +25,17 @@ Deno.serve(async (req) => {
     const companyDb = url.searchParams.get("company_db");
 
     if (req.method === "GET") {
-      let query = adminClient.from("system_credentials").select("id, system_name, credential_key, updated_at, company_db");
+      const includeKeys = url.searchParams.get("keys"); // comma-separated keys to return values for
+      const selectCols = includeKeys
+        ? "id, system_name, credential_key, credential_value, updated_at, company_db"
+        : "id, system_name, credential_key, updated_at, company_db";
+      let query = adminClient.from("system_credentials").select(selectCols);
       if (systemName) query = query.eq("system_name", systemName);
       if (companyDb) query = query.eq("company_db", companyDb);
+      if (includeKeys) {
+        const keys = includeKeys.split(",").map((k) => k.trim()).filter(Boolean);
+        if (keys.length > 0) query = query.in("credential_key", keys);
+      }
       const { data, error } = await query.order("system_name").order("credential_key");
       if (error) throw error;
       return new Response(JSON.stringify({ credentials: data }), {

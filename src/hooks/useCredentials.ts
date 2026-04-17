@@ -88,5 +88,27 @@ export function useCredentials() {
     return credentials.some(c => c.system_name === system);
   }, [credentials]);
 
-  return { credentials, isLoading, error, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials };
+  const fetchCredentialValues = useCallback(
+    async (systemName: string, keys: string[], companyDb?: string): Promise<Record<string, string>> => {
+      try {
+        const params = new URLSearchParams();
+        params.set("system", systemName);
+        params.set("keys", keys.join(","));
+        if (companyDb) params.set("company_db", companyDb);
+        const res = await authFetch(`credentials?${params.toString()}`);
+        if (!res.ok) return {};
+        const data = await res.json();
+        const map: Record<string, string> = {};
+        for (const row of data.credentials || []) {
+          map[row.credential_key] = row.credential_value ?? "";
+        }
+        return map;
+      } catch {
+        return {};
+      }
+    },
+    []
+  );
+
+  return { credentials, isLoading, error, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials, fetchCredentialValues };
 }
