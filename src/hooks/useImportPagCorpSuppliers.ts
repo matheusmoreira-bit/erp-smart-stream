@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { authFetch } from "@/lib/auth-fetch";
-import type { Supplier } from "@/hooks/useSuppliers";
+import { createSupplier, type Supplier } from "@/hooks/useSuppliers";
+import type { SapSession } from "@/lib/sap-client";
 
 export interface PagCorpCandidate {
   /** Stable client-side id (tx id + index) */
