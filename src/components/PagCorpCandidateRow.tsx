@@ -22,6 +22,7 @@ import { useSap } from "@/contexts/SapContext";
 import {
   importPagCorpCandidate,
   savePagCorpSupplierLink,
+  hasValidBrazilianTaxId,
   type PagCorpCandidate,
 } from "@/hooks/useImportPagCorpSuppliers";
 
@@ -78,7 +79,16 @@ export function PagCorpCandidateRow({
     c.savedResolution === "linked" ||
     c.savedResolution === "ignored";
 
+  const canImport = hasValidBrazilianTaxId(c.federal_tax_id);
+
   const handleImport = async () => {
+    if (!canImport) {
+      toast.error("CNPJ/CPF obrigatório", {
+        description:
+          "Apenas fornecedores nacionais com CNPJ (14 dígitos) ou CPF (11 dígitos) podem ser importados.",
+      });
+      return;
+    }
     setBusy(true);
     try {
       const created = await importPagCorpCandidate(c, session);
@@ -170,7 +180,11 @@ export function PagCorpCandidateRow({
       </TableCell>
       <TableCell className="font-medium align-top">{c.card_name}</TableCell>
       <TableCell className="font-mono text-xs align-top">
-        {c.federal_tax_id || "—"}
+        {c.federal_tax_id ? (
+          c.federal_tax_id
+        ) : (
+          <span className="text-destructive not-italic">— sem CNPJ/CPF</span>
+        )}
       </TableCell>
       <TableCell className="text-xs text-muted-foreground align-top">
         <div className="line-clamp-1">{c.transactionDescription}</div>
@@ -228,7 +242,17 @@ export function PagCorpCandidateRow({
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" onClick={handleImport} disabled={busy} className="gap-1.5">
+            <Button
+              size="sm"
+              onClick={handleImport}
+              disabled={busy || !canImport}
+              className="gap-1.5"
+              title={
+                canImport
+                  ? undefined
+                  : "Apenas fornecedores com CNPJ ou CPF podem ser importados"
+              }
+            >
               {busy ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (

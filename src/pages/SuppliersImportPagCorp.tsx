@@ -40,6 +40,7 @@ import { useSuppliers } from "@/hooks/useSuppliers";
 import {
   useImportPagCorpSuppliers,
   importPagCorpCandidate,
+  hasValidBrazilianTaxId,
   type PagCorpCandidate,
 } from "@/hooks/useImportPagCorpSuppliers";
 import { PagCorpCandidateRow } from "@/components/PagCorpCandidateRow";
@@ -93,6 +94,7 @@ export default function SuppliersImportPagCorp() {
   const isSelectable = (c: PagCorpCandidate) =>
     !c.aiFailed &&
     !c.existing &&
+    hasValidBrazilianTaxId(c.federal_tax_id) &&
     c.savedResolution !== "imported" &&
     c.savedResolution !== "linked" &&
     c.savedResolution !== "ignored";
