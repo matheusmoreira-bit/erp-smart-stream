@@ -305,6 +305,7 @@ export type Database = {
           remarks: string | null
           requester_email: string | null
           requester_name: string
+          sap_attachment_entry: number | null
           sap_doc_entry: number | null
           sap_doc_num: number | null
           status: Database["public"]["Enums"]["expense_status"]
@@ -327,6 +328,7 @@ export type Database = {
           remarks?: string | null
           requester_email?: string | null
           requester_name: string
+          sap_attachment_entry?: number | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
           status?: Database["public"]["Enums"]["expense_status"]
@@ -349,6 +351,7 @@ export type Database = {
           remarks?: string | null
           requester_email?: string | null
           requester_name?: string
+          sap_attachment_entry?: number | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
           status?: Database["public"]["Enums"]["expense_status"]
