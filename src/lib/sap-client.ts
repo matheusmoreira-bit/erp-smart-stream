@@ -1,6 +1,7 @@
 import { authFetch } from "@/lib/auth-fetch";
 
 const FUNCTION_URL = "sap-b1-proxy";
+const CREDENTIALS_FUNCTION_URL = "credentials";
 
 export interface SapSession {
   sessionId: string;
@@ -47,10 +48,26 @@ async function callProxy(body: Record<string, unknown>) {
   return data;
 }
 
+async function getConfiguredSapCompanyDb(companyDB: string): Promise<string> {
+  const resp = await authFetch(`${CREDENTIALS_FUNCTION_URL}?system=sap&company_db=${encodeURIComponent(companyDB)}&keys=company_db`, {
+    method: "GET",
+  });
+
+  const data = await resp.json();
+  if (!resp.ok) {
+    throw new Error(data.error || `Erro HTTP ${resp.status}`);
+  }
+
+  const configuredCompanyDb = data?.credentials?.find?.((row: { credential_key?: string; credential_value?: string }) => row.credential_key === "company_db")?.credential_value;
+  return typeof configuredCompanyDb === "string" && configuredCompanyDb.trim() ? configuredCompanyDb.trim() : companyDB;
+}
+
 export async function sapLogin(userName: string, password: string, companyDB: string): Promise<SapSession> {
+  const sapCompanyDb = await getConfiguredSapCompanyDb(companyDB);
   const result = await callProxy({
     action: "login",
-    credentials: { UserName: userName, Password: password, CompanyDB: companyDB },
+    companyDB,
+    credentials: { UserName: userName, Password: password, CompanyDB: sapCompanyDb },
   });
 
   const session: SapSession = {
