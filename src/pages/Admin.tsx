@@ -482,11 +482,24 @@ export default function Admin() {
 
     // Save ERP credentials from wizard step 3
     if (!hasError) {
-      const credEntries = Object.entries(wizardCreds).filter(([, v]) => v.trim());
+      const wizardSystem = SYSTEMS.find((s) => s.name === companyForm.erp_type);
+      const credEntries = (wizardSystem?.fields || [])
+        .filter((field) => {
+          if (field.type === "toggle") return wizardCreds[field.key] !== undefined;
+          return !!wizardCreds[field.key]?.trim();
+        })
+        .map((field) => [
+          field.key,
+          field.type === "toggle"
+            ? wizardCreds[field.key] === "true"
+              ? "true"
+              : "false"
+            : wizardCreds[field.key].trim(),
+        ] as const);
       if (credEntries.length > 0) {
         for (const [key, value] of credEntries) {
           await supabase.from("system_credentials").upsert(
-            { company_db: companyForm.company_db, system_name: companyForm.erp_type, credential_key: key, credential_value: value.trim() },
+            { company_db: companyForm.company_db, system_name: companyForm.erp_type, credential_key: key, credential_value: value },
             { onConflict: "company_db,system_name,credential_key" }
           );
         }
@@ -989,10 +1002,45 @@ export default function Admin() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {system.fields.map((field) => {
                         const isPassword = field.type === "password";
+                        const isCustom = field.type === "custom_fields";
+                        const isToggle = field.type === "toggle";
                         const showPw = showWizardPasswords[field.key];
+
+                        if (isCustom) {
+                          return (
+                            <CustomFieldsEditor
+                              key={field.key}
+                              value={wizardCreds[field.key] || ""}
+                              onChange={(v) => setWizardCreds((prev) => ({ ...prev, [field.key]: v }))}
+                            />
+                          );
+                        }
+
+                        if (isToggle) {
+                          return (
+                            <div
+                              key={field.key}
+                              className="md:col-span-2 flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4"
+                            >
+                              <div className="space-y-1">
+                                <Label className="text-sm font-medium text-foreground">{field.label}</Label>
+                                {field.description && (
+                                  <p className="text-xs text-muted-foreground">{field.description}</p>
+                                )}
+                              </div>
+                              <Switch
+                                checked={wizardCreds[field.key] === "true"}
+                                onCheckedChange={(checked) =>
+                                  setWizardCreds((prev) => ({ ...prev, [field.key]: checked ? "true" : "false" }))
+                                }
+                              />
+                            </div>
+                          );
+                        }
+
                         return (
                           <div key={field.key} className="space-y-1.5">
-                            <label className="text-sm text-muted-foreground">{field.label}</label>
+                            <Label className="text-sm text-muted-foreground">{field.label}</Label>
                             <div className="relative">
                               <Input
                                 type={isPassword && !showPw ? "password" : "text"}
