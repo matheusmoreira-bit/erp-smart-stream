@@ -17,12 +17,13 @@ import {
   SapSearchCombobox,
   type SapSearchOption,
 } from "@/components/SapSearchCombobox";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useSap } from "@/contexts/SapContext";
 import {
+  importPagCorpCandidate,
   savePagCorpSupplierLink,
   type PagCorpCandidate,
 } from "@/hooks/useImportPagCorpSuppliers";
-import { createSupplier } from "@/hooks/useSuppliers";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   try {
