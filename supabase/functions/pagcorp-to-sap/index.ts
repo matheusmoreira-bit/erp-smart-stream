@@ -254,12 +254,7 @@ Deno.serve(async (req) => {
       throw new Error("Nenhum item mapeado encontrado (cadastre um item fallback em Mapeamento PagCorp)");
     }
 
-    const paymentAccount = sapCreds.pagcorp_payment_account;
-    if (!paymentAccount) {
-      throw new Error(
-        "Conta de pagamento PagCorp não configurada. Adicione a credencial 'pagcorp_payment_account' nas Credenciais SAP da empresa.",
-      );
-    }
+    // (Pagamento desabilitado: integração agora cria apenas o Pedido de Compra)
 
     const configuredBranch = Number(sapCreds.default_branch_id || "");
     const branchId = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
