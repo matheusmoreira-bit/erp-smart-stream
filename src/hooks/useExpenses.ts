@@ -7,10 +7,13 @@ export type ExpenseStatus =
   | "pendente_aprovacao"
   | "aprovado"
   | "rejeitado"
+  | "cancelado"
   | "pc_lancado"
   | "nf_entrada"
   | "pagamento"
   | "finalizado";
+
+export type ExpenseOrigin = "manual" | "pagcorp";
 
 export interface ExpenseItem {
   id?: string;
@@ -46,6 +49,9 @@ export interface Expense {
   current_approver?: string;
   sap_doc_entry?: number;
   sap_doc_num?: number;
+  origin?: ExpenseOrigin;
+  created_by_email?: string;
+  company_db?: string;
   created_at: string;
   updated_at: string;
   items?: ExpenseItem[];
@@ -59,6 +65,9 @@ export interface CreateExpenseInput {
   cost_center?: string;
   project?: string;
   remarks?: string;
+  origin?: ExpenseOrigin;
+  initialStatus?: ExpenseStatus;
+  skipRules?: boolean;
   items: Omit<ExpenseItem, "id">[];
 }
 
@@ -67,6 +76,7 @@ const STATUS_LABELS: Record<ExpenseStatus, string> = {
   pendente_aprovacao: "Pendente Aprovação",
   aprovado: "Aprovado",
   rejeitado: "Rejeitado",
+  cancelado: "Cancelado",
   pc_lancado: "PC Lançado no SAP",
   nf_entrada: "NF de Entrada",
   pagamento: "Pagamento",
@@ -78,6 +88,7 @@ const STATUS_COLORS: Record<ExpenseStatus, string> = {
   pendente_aprovacao: "bg-warning/15 text-warning",
   aprovado: "bg-success/15 text-success",
   rejeitado: "bg-destructive/15 text-destructive",
+  cancelado: "bg-muted text-muted-foreground line-through",
   pc_lancado: "bg-primary/15 text-primary",
   nf_entrada: "bg-primary/15 text-primary",
   pagamento: "bg-primary/15 text-primary",
@@ -85,6 +96,84 @@ const STATUS_COLORS: Record<ExpenseStatus, string> = {
 };
 
 export { STATUS_LABELS, STATUS_COLORS };
+
+/* ───────────────── Rule Evaluation ───────────────── */
+
+interface RuleCriterion {
+  field: string;
+  operator: string;
+  value: string;
+  value2?: string;
+}
+
+interface RuleRow {
+  id: string;
+  name: string;
+  is_active: boolean;
+  priority: number;
+  criteria: RuleCriterion[];
+}
+
+interface RuleLevelRow {
+  rule_id: string;
+  level_order: number;
+  approver_name: string;
+  approver_email: string | null;
+}
+
+function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean {
+  const raw = ctx[c.field];
+  if (raw === undefined || raw === null) return false;
+  const val = String(raw).toLowerCase();
+  const target = String(c.value ?? "").toLowerCase();
+
+  switch (c.operator) {
+    case "greater_than": return Number(raw) > Number(c.value);
+    case "less_than": return Number(raw) < Number(c.value);
+    case "between": return Number(raw) >= Number(c.value) && Number(raw) <= Number(c.value2 ?? c.value);
+    case "equal": return val === target;
+    case "not_equal": return val !== target;
+    case "contains": return val.includes(target);
+    case "not_contains": return !val.includes(target);
+    case "like": {
+      const pattern = target.replace(/%/g, ".*").replace(/_/g, ".");
+      return new RegExp(`^${pattern}$`).test(val);
+    }
+    default: return false;
+  }
+}
+
+async function findMatchingRule(ctx: Record<string, any>): Promise<{ rule: RuleRow; firstApprover?: { name: string; email: string | null } } | null> {
+  const { data: rules } = await supabase
+    .from("approval_rules")
+    .select("*")
+    .eq("is_active", true)
+    .order("priority", { ascending: false });
+
+  if (!rules || rules.length === 0) return null;
+
+  for (const r of rules as any[]) {
+    const criteria: RuleCriterion[] = Array.isArray(r.criteria) ? r.criteria : [];
+    if (criteria.length === 0) continue;
+    const allMatch = criteria.every((c) => evaluateCriterion(c, ctx));
+    if (allMatch) {
+      const { data: levels } = await supabase
+        .from("approval_rule_levels")
+        .select("*")
+        .eq("rule_id", r.id)
+        .order("level_order", { ascending: true })
+        .limit(1);
+      const first = levels && levels.length > 0 ? levels[0] as RuleLevelRow : null;
+      return {
+        rule: r as RuleRow,
+        firstApprover: first ? { name: first.approver_name, email: first.approver_email } : undefined,
+      };
+    }
+  }
+  return null;
+}
+
+/* ───────────────── Hook ───────────────── */
 
 export function useExpenses() {
   const { session } = useSap();
@@ -103,7 +192,6 @@ export function useExpenses() {
 
       if (err) throw err;
 
-      // Fetch items for all expenses
       const expenseIds = (data || []).map((e: any) => e.id);
       let itemsMap: Record<string, ExpenseItem[]> = {};
       if (expenseIds.length > 0) {
@@ -138,6 +226,33 @@ export function useExpenses() {
       if (!session) throw new Error("Sessão SAP não encontrada");
 
       const totalAmount = input.items.reduce((sum, item) => sum + item.line_total, 0);
+      const origin: ExpenseOrigin = input.origin || "manual";
+
+      // Determine initial status
+      let status: ExpenseStatus = input.initialStatus || "rascunho";
+      let currentApprover: string | null = null;
+
+      // Evaluate approval rules for manual expenses (PagCorp skips rules)
+      if (!input.skipRules && origin === "manual") {
+        const ctx = {
+          total_amount: totalAmount,
+          cost_center: input.cost_center || "",
+          project: input.project || "",
+          requester_name: session.userName,
+          supplier_name: input.supplier_name,
+          currency: input.currency || "BRL",
+          doc_type: "expense",
+        };
+        const match = await findMatchingRule(ctx);
+        if (match) {
+          status = "pendente_aprovacao";
+          currentApprover = match.firstApprover?.name || null;
+        } else {
+          status = "aprovado";
+        }
+      }
+
+      const userIdentifier = session.userName.includes("@") ? session.userName : `${session.userName}`;
 
       const { data: expense, error: err } = await supabase
         .from("expenses")
@@ -149,16 +264,19 @@ export function useExpenses() {
           cost_center: input.cost_center || null,
           project: input.project || null,
           remarks: input.remarks || null,
-          status: "rascunho" as any,
+          status: status as any,
           requester_name: session.userName,
-          requester_email: null,
-        })
+          requester_email: userIdentifier,
+          created_by_email: userIdentifier,
+          current_approver: currentApprover,
+          origin,
+          company_db: session.companyDB,
+        } as any)
         .select()
         .single();
 
       if (err) throw err;
 
-      // Insert items
       if (input.items.length > 0) {
         const { error: itemsErr } = await supabase.from("expense_items").insert(
           input.items.map((item) => ({
@@ -176,7 +294,7 @@ export function useExpenses() {
       }
 
       await fetchExpenses();
-      return expense;
+      return { expense, status, origin };
     },
     [session, fetchExpenses]
   );
@@ -186,6 +304,46 @@ export function useExpenses() {
       const { error: err } = await supabase
         .from("expenses")
         .update({ status: "pendente_aprovacao" as any })
+        .eq("id", expenseId);
+      if (err) throw err;
+      await fetchExpenses();
+    },
+    [fetchExpenses]
+  );
+
+  const cancelExpense = useCallback(
+    async (expenseId: string) => {
+      const { error: err } = await supabase
+        .from("expenses")
+        .update({ status: "cancelado" as any })
+        .eq("id", expenseId);
+      if (err) throw err;
+      await fetchExpenses();
+    },
+    [fetchExpenses]
+  );
+
+  const approveExpense = useCallback(
+    async (expenseId: string, remarks?: string) => {
+      const updates: any = { status: "aprovado" };
+      if (remarks) updates.remarks = remarks;
+      const { error: err } = await supabase
+        .from("expenses")
+        .update(updates)
+        .eq("id", expenseId);
+      if (err) throw err;
+      await fetchExpenses();
+    },
+    [fetchExpenses]
+  );
+
+  const rejectExpense = useCallback(
+    async (expenseId: string, remarks?: string) => {
+      const updates: any = { status: "rejeitado" };
+      if (remarks) updates.remarks = remarks;
+      const { error: err } = await supabase
+        .from("expenses")
+        .update(updates)
         .eq("id", expenseId);
       if (err) throw err;
       await fetchExpenses();
@@ -204,5 +362,8 @@ export function useExpenses() {
     refresh: fetchExpenses,
     createExpense,
     submitForApproval,
+    cancelExpense,
+    approveExpense,
+    rejectExpense,
   };
 }
