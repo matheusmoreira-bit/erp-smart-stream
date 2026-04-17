@@ -266,6 +266,24 @@ Deno.serve(async (req) => {
     const configuredBranch = Number(sapCreds.default_branch_id || "");
     const branchId = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
 
+    // Parse custom fields (UDFs) from credentials: header / line scope
+    const headerCustom: Record<string, unknown> = {};
+    const lineCustom: Record<string, unknown> = {};
+    if (sapCreds.custom_fields) {
+      try {
+        const parsed = JSON.parse(sapCreds.custom_fields);
+        if (Array.isArray(parsed)) {
+          for (const f of parsed) {
+            if (!f?.name || typeof f.name !== "string") continue;
+            const target = f.scope === "line" ? lineCustom : headerCustom;
+            target[f.name] = f.value ?? "";
+          }
+        }
+      } catch (e) {
+        console.warn("Falha ao parsear custom_fields SAP:", e);
+      }
+    }
+
     // 4. Upload attachments (only for accountability with receipts)
     let attachmentEntry: number | null = null;
     if (integrationType === "accountability" && Array.isArray(transaction.receipts) && transaction.receipts.length > 0) {
@@ -298,6 +316,7 @@ Deno.serve(async (req) => {
       ItemDescription: (transaction.description || "PagCorp").slice(0, 100),
       Quantity: 1,
       UnitPrice: amount,
+      ...lineCustom,
     };
     if (acctMapping?.cost_center) docLine.CostingCode = acctMapping.cost_center;
     if (acctMapping?.project) docLine.ProjectCode = acctMapping.project;
@@ -310,6 +329,7 @@ Deno.serve(async (req) => {
       BPL_IDAssignedToInvoice: branchId,
       Comments: description,
       DocumentLines: [docLine],
+      ...headerCustom,
     };
 
     // 6. Create Purchase Order
