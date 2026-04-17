@@ -99,9 +99,12 @@ export function CachedSearchCombobox({
   const filtered = query.length > 0
     ? options.filter((o) => {
         const q = query.toLowerCase();
+        const qDigits = query.replace(/\D/g, "");
+        const extraDigits = (o.extra ?? "").replace(/\D/g, "");
         return (o.code ?? "").toLowerCase().includes(q)
           || (o.name ?? "").toLowerCase().includes(q)
-          || (o.extra ?? "").toLowerCase().includes(q);
+          || (o.extra ?? "").toLowerCase().includes(q)
+          || (qDigits.length >= 3 && extraDigits.includes(qDigits));
       }).slice(0, 50)
     : options.slice(0, 50);
 
