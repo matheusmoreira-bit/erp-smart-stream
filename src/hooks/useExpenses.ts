@@ -273,6 +273,7 @@ export function useExpenses() {
           current_approver: currentApprover,
           origin,
           company_db: session.companyDB,
+          branch_id: input.branch_id ?? 1,
         } as any)
         .select()
         .single();
