@@ -178,14 +178,26 @@ export async function getNextCardCode(session: SapSession): Promise<string> {
   return `${prefix}${next}`;
 }
 
+// Map ISO currency codes (used in our app/UI) to SAP B1 internal codes (OCRD.Currency).
+const CURRENCY_ISO_TO_SAP: Record<string, string> = {
+  BRL: "R$",
+  USD: "USD",
+  EUR: "EUR",
+  GBP: "GBP",
+  CAD: "CAN",
+};
+
+function toSapCurrency(iso?: string | null): string | undefined {
+  if (!iso) return undefined;
+  return CURRENCY_ISO_TO_SAP[iso.toUpperCase()] || iso;
+}
+
 function buildSapPayload(s: SupplierInput) {
   const payload: Record<string, unknown> = {
     CardCode: s.card_code,
     CardName: s.card_name,
     CardType: s.card_type || "cSupplier",
-    // Currency intentionally omitted — let SAP use its configured default
-    // (sending "BRL" fails when the company isn't configured with that ISO code).
-
+    Currency: toSapCurrency(s.currency),
     UnifiedFederalTaxID: s.federal_tax_id || undefined,
     U_FGR_TAXID0: s.u_fgr_taxid0 || s.federal_tax_id || undefined,
     EmailAddress: s.email || undefined,
