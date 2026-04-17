@@ -65,6 +65,7 @@ export function CreateExpenseModal({
   const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [branchId, setBranchId] = useState<number>(1);
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
