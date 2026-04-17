@@ -643,7 +643,7 @@ export function CreateExpenseModal({
                       });
                     }}
                     placeholder="Buscar item SAP por nome ou código..."
-                    suggestedQuery={item.description && !item.sapItem ? item.description : undefined}
+                    suggestedQuery={!item.sapItem ? (item.searchHint || item.description || undefined) : undefined}
                     portalContainer={dialogContainer}
                   />
                   <div className="grid grid-cols-12 gap-2">
