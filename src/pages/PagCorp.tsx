@@ -448,6 +448,8 @@ export default function PagCorp() {
         sapSession={session}
         prefill={expenseModal.prefill}
         title="Integrar Despesa PagCorp"
+        origin="pagcorp"
+        skipRules={true}
       />
     </div>
   );
