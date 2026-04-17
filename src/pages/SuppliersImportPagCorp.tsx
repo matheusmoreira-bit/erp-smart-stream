@@ -250,7 +250,21 @@ export default function SuppliersImportPagCorp() {
               </Badge>
             )}
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
+            {selectedKeys.size > 0 && (
+              <Button
+                onClick={handleBulkImport}
+                disabled={bulkBusy || scanning}
+                className="gap-2"
+              >
+                {bulkBusy ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                Importar selecionados ({selectedKeys.size})
+              </Button>
+            )}
             <Select value={days} onValueChange={setDays} disabled={scanning}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue />
