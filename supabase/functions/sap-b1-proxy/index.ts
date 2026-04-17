@@ -81,6 +81,22 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
   if (!companyDB) return DEFAULT_SAP_BASE_URL;
   try {
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // 1) Primary source: ERP credential configured in Backoffice (system_credentials)
+    const { data: credRow } = await sb
+      .from("system_credentials")
+      .select("credential_value")
+      .eq("company_db", companyDB)
+      .eq("system_name", "sap")
+      .eq("credential_key", "service_layer_url")
+      .maybeSingle();
+    if (credRow?.credential_value) {
+      let url = String(credRow.credential_value).replace(/\/+$/, "");
+      if (!url.includes("/b1s/v1")) url = `${url}/b1s/v1`;
+      return url;
+    }
+
+    // 2) Fallback: legacy column on companies table
     const { data } = await sb
       .from("companies")
       .select("service_layer_url")
@@ -92,7 +108,7 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
       return url;
     }
   } catch (e) {
-    console.error("Failed to fetch service_layer_url:", e);
+    console.error("Failed to fetch SAP base URL:", e);
   }
   return DEFAULT_SAP_BASE_URL;
 }
