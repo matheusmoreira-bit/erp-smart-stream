@@ -337,64 +337,13 @@ Deno.serve(async (req) => {
       throw e;
     }
 
-    // 7. Create AP Invoice based on PO (BaseEntry/BaseLine/BaseType=22 PO)
-    const invoiceLine: Record<string, unknown> = {
-      ...docLine,
-      BaseType: 22,
-      BaseEntry: poResult.docEntry,
-      BaseLine: 0,
-    };
-    sapPayloads.ap_invoice = {
-      ...baseDoc,
-      DocumentLines: [invoiceLine],
-      ...(attachmentEntry ? { AttachmentEntry: attachmentEntry } : {}),
-    };
-    let invResult;
-    try {
-      invResult = await postSapDocument(sap, sapPayloads.ap_invoice as any, "PurchaseInvoices");
-      stages.ap_invoice = "success";
-      sapResponses.ap_invoice = { DocEntry: invResult.docEntry, DocNum: invResult.docNum };
-    } catch (e) {
-      stages.ap_invoice = "failed";
-      throw e;
-    }
-
-    // 8. Create Outgoing Payment for the AP Invoice
-    sapPayloads.outgoing_payment = {
-      DocType: "rSupplier",
-      CardCode: supplierCode,
-      DocDate: today,
-      TaxDate: today,
-      BPL_IDAssignedToInvoice: branchId,
-      Remarks: description,
-      TransferAccount: paymentAccount,
-      TransferSum: amount,
-      TransferDate: today,
-      PaymentInvoices: [
-        {
-          DocEntry: invResult.docEntry,
-          SumApplied: amount,
-          InvoiceType: "it_PurchaseInvoice",
-        },
-      ],
-    };
-    let payResult;
-    try {
-      payResult = await postSapDocument(sap, sapPayloads.outgoing_payment as any, "VendorPayments");
-      stages.outgoing_payment = "success";
-      sapResponses.outgoing_payment = { DocEntry: payResult.docEntry, DocNum: payResult.docNum };
-    } catch (e) {
-      stages.outgoing_payment = "failed";
-      throw e;
-    }
-
-    // 9. Persist final success log
+    // 7. Persist final success log (apenas Pedido de Compra)
     await supabase
       .from("pagcorp_integration_log")
       .update({
         status: "success",
-        sap_doc_entry: invResult.docEntry,
-        sap_doc_num: invResult.docNum,
+        sap_doc_entry: poResult.docEntry,
+        sap_doc_num: poResult.docNum,
         sap_payload: sapPayloads as any,
         sap_response: { ...sapResponses, supplierCode, supplierName, stages, attachmentEntry } as any,
       } as any)
