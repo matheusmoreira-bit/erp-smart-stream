@@ -88,13 +88,28 @@ function formatDate(dateStr: string) {
   });
 }
 
-function formatCurrency(value: number | null, currency = "BRL") {
+function normalizeCurrency(currency?: string | null): string {
+  if (!currency) return "BRL";
+  const c = currency.trim().toUpperCase();
+  // Map common symbols/aliases to ISO 4217 codes
+  if (c === "R$" || c === "REAL" || c === "REAIS") return "BRL";
+  if (c === "US$" || c === "USD$" || c === "$") return "USD";
+  if (c === "€" || c === "EURO") return "EUR";
+  // Valid ISO codes are 3 letters
+  return /^[A-Z]{3}$/.test(c) ? c : "BRL";
+}
+
+function formatCurrency(value: number | null, currency: string | null = "BRL") {
   if (value === null || Number.isNaN(value)) return "—";
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-  }).format(value);
+  try {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: normalizeCurrency(currency),
+      minimumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency ?? ""} ${value.toFixed(2)}`.trim();
+  }
 }
 
 function StageBadge({
