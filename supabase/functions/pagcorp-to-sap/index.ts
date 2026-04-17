@@ -173,8 +173,6 @@ Deno.serve(async (req) => {
   const stages: Record<string, "pending" | "success" | "failed" | "skipped"> = {
     attachment_upload: "skipped",
     purchase_order: "pending",
-    ap_invoice: "pending",
-    outgoing_payment: "pending",
   };
   let sapPayloads: Record<string, unknown> = {};
   let sapResponses: Record<string, unknown> = {};
