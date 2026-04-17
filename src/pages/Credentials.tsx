@@ -103,7 +103,18 @@ function CredentialModal({
           {system.fields.map((field) => {
             const isConfigured = existingKeys.includes(field.key);
             const isPassword = field.type === "password";
+            const isCustom = field.type === "custom_fields";
             const showPw = showPasswords[field.key];
+
+            if (isCustom) {
+              return (
+                <CustomFieldsEditor
+                  key={field.key}
+                  value={values[field.key] || ""}
+                  onChange={(v) => setValues((prev) => ({ ...prev, [field.key]: v }))}
+                />
+              );
+            }
 
             return (
               <div key={field.key} className="space-y-1.5">
