@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
+import { useExpenses } from "@/hooks/useExpenses";
 import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
