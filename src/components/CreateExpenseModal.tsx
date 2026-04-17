@@ -163,6 +163,7 @@ export function CreateExpenseModal({
       setCurrencyWarning(null);
       setDocDate("");
       setDueDate("");
+      setBranchId(1);
       setRemarks("");
       setAiWarning(null);
       setSuggestedSupplierName(undefined);
