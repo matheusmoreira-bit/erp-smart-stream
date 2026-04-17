@@ -161,5 +161,37 @@ export function usePagCorp() {
     return data;
   }, []);
 
-  return { transactions, isLoading, error, fetchTransactions, logIntegration };
+  /**
+   * Direct integration: PagCorp transaction → SAP (PC + NF + Pagamento), no
+   * approvals, no internal expense row. Logs everything in pagcorp_integration_log.
+   */
+  const integrateDirect = useCallback(async (
+    transaction: PagCorpTransaction,
+    integrationType: "generic" | "accountability",
+    companyDb: string,
+    supplierCode: string,
+    supplierName?: string,
+    integratedBy?: string,
+  ) => {
+    const { authFetch } = await import("@/lib/auth-fetch");
+    const res = await authFetch("pagcorp-to-sap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transaction,
+        companyDb,
+        integrationType,
+        supplierCode,
+        supplierName,
+        integratedBy,
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.success === false) {
+      throw new Error(result.error || `Erro ${res.status}`);
+    }
+    return result;
+  }, []);
+
+  return { transactions, isLoading, error, fetchTransactions, logIntegration, integrateDirect };
 }
