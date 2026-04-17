@@ -59,6 +59,15 @@ export function cleanDigits(s?: string | null): string {
   return (s || "").replace(/\D/g, "");
 }
 
+/**
+ * Valid Brazilian tax id: CPF (11 digits) or CNPJ (14 digits).
+ * Only suppliers with a valid local tax id can be imported into SAP.
+ */
+export function hasValidBrazilianTaxId(s?: string | null): boolean {
+  const d = cleanDigits(s);
+  return d.length === 11 || d.length === 14;
+}
+
 export function normalizeName(s?: string | null): string {
   return (s || "")
     .toLowerCase()
