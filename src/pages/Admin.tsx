@@ -115,14 +115,52 @@ function SystemCredentialModal({
   const [saving, setSaving] = useState(false);
   const Icon = system.icon;
 
+  // Load existing non-secret values (custom_fields, toggle, default_branch_id) when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    const loadableKeys = system.fields
+      .filter(
+        (f) =>
+          f.type !== "password" &&
+          existingKeys.includes(f.key) &&
+          (f.type === "custom_fields" ||
+            f.type === "toggle" ||
+            f.key === "default_branch_id"),
+      )
+      .map((f) => f.key);
+    if (loadableKeys.length === 0) return;
+    (async () => {
+      const { data } = await supabase
+        .from("system_credentials")
+        .select("credential_key, credential_value")
+        .eq("company_db", companyDb)
+        .eq("system_name", system.name)
+        .in("credential_key", loadableKeys);
+      if (data) {
+        const map: Record<string, string> = {};
+        for (const row of data) map[row.credential_key] = row.credential_value;
+        setValues((prev) => ({ ...map, ...prev }));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, system.name, companyDb]);
+
   const handleSave = async () => {
     const creds = system.fields
-      .filter((f) => values[f.key]?.trim())
+      .filter((f) => {
+        if (f.type === "toggle") return values[f.key] !== undefined;
+        return values[f.key]?.trim();
+      })
       .map((f) => ({
         company_db: companyDb,
         system_name: system.name,
         credential_key: f.key,
-        credential_value: values[f.key].trim(),
+        credential_value:
+          f.type === "toggle"
+            ? values[f.key] === "true"
+              ? "true"
+              : "false"
+            : values[f.key].trim(),
       }));
 
     if (creds.length === 0) {
@@ -181,7 +219,45 @@ function SystemCredentialModal({
           {system.fields.map((field) => {
             const isConfigured = existingKeys.includes(field.key);
             const isPassword = field.type === "password";
+            const isCustom = field.type === "custom_fields";
+            const isToggle = field.type === "toggle";
             const showPw = showPasswords[field.key];
+
+            if (isCustom) {
+              return (
+                <CustomFieldsEditor
+                  key={field.key}
+                  value={values[field.key] || ""}
+                  onChange={(v) => setValues((prev) => ({ ...prev, [field.key]: v }))}
+                />
+              );
+            }
+
+            if (isToggle) {
+              const checked = values[field.key] === "true";
+              return (
+                <div
+                  key={field.key}
+                  className="md:col-span-2 flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4"
+                >
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      {field.label}
+                      {isConfigured && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                    </Label>
+                    {field.description && (
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                    )}
+                  </div>
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={(v) =>
+                      setValues((prev) => ({ ...prev, [field.key]: v ? "true" : "false" }))
+                    }
+                  />
+                </div>
+              );
+            }
 
             return (
               <div key={field.key} className="space-y-1.5">
@@ -192,7 +268,11 @@ function SystemCredentialModal({
                 <div className="relative">
                   <Input
                     type={isPassword && !showPw ? "password" : "text"}
-                    placeholder={isConfigured ? "••••••• (já configurado)" : field.placeholder}
+                    placeholder={
+                      isConfigured && isPassword
+                        ? "••••••• (já configurado)"
+                        : field.placeholder
+                    }
                     value={values[field.key] || ""}
                     onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
                     className="bg-card pr-10"
