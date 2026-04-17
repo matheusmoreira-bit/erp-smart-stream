@@ -424,10 +424,10 @@ export default function PagCorp() {
                               size="sm"
                               className="gap-1 text-xs"
                               disabled={shouldDisableIntegrate}
-                              onClick={() => handleValidateAndIntegrate(t)}
+                              onClick={() => openIntegrateDialog(t, "accountability")}
                             >
                               <Sparkles className="w-3 h-3" />
-                              Validar IA + SAP
+                              Integrar (Prest.)
                             </Button>
                           ) : (
                             <Button
@@ -436,7 +436,7 @@ export default function PagCorp() {
                               className="gap-1 text-xs"
                               disabled={shouldDisableIntegrate}
                               title={shouldDisableIntegrate ? (txAgeDays < 15 ? "Transação com menos de 15 dias" : "Faltam 3 dias ou menos para o fim do mês") : undefined}
-                              onClick={() => handleIntegrateGeneric(t)}
+                              onClick={() => openIntegrateDialog(t, "generic")}
                             >
                               <Upload className="w-3 h-3" />
                               Integrar SAP
@@ -453,16 +453,13 @@ export default function PagCorp() {
         </div>
       </main>
 
-      {/* Expense Form Modal */}
-      <CreateExpenseModal
-        open={expenseModal.open}
-        onClose={() => setExpenseModal({ open: false })}
-        onCreate={createExpense}
-        sapSession={session}
-        prefill={expenseModal.prefill}
-        title="Integrar Despesa PagCorp"
-        origin="pagcorp"
-        skipRules={true}
+      <PagCorpIntegrateDialog
+        open={integrateDialog.open}
+        onClose={() => setIntegrateDialog({ open: false, tx: null, type: "generic" })}
+        transaction={integrateDialog.tx}
+        integrationType={integrateDialog.type}
+        companyDb={session?.companyDB}
+        onConfirm={handleConfirmIntegrate}
       />
     </div>
   );
