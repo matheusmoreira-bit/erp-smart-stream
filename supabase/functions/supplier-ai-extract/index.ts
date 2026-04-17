@@ -33,23 +33,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "UNAUTHORIZED" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) {
-      return new Response(JSON.stringify({ error: "UNAUTHORIZED" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Auth: this function is called from SAP-authenticated context where users
+    // don't have Supabase Auth sessions. We accept any caller with the project
+    // anon key (enforced by Supabase platform). No user JWT validation here.
 
     const body = (await req.json()) as ExtractionPayload;
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
