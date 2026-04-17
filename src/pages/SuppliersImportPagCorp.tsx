@@ -39,6 +39,7 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import {
   useImportPagCorpSuppliers,
+  importPagCorpCandidate,
   type PagCorpCandidate,
 } from "@/hooks/useImportPagCorpSuppliers";
 import { PagCorpCandidateRow } from "@/components/PagCorpCandidateRow";
