@@ -52,6 +52,7 @@ export interface Expense {
   origin?: ExpenseOrigin;
   created_by_email?: string;
   company_db?: string;
+  branch_id?: number;
   created_at: string;
   updated_at: string;
   items?: ExpenseItem[];
