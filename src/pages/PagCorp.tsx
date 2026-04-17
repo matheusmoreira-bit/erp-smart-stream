@@ -541,6 +541,28 @@ export default function PagCorp() {
         companyDb={session?.companyDB}
         onConfirm={handleConfirmIntegrate}
       />
+
+      <CreateExpenseModal
+        open={accountabilityModal.open}
+        onClose={() => setAccountabilityModal({ open: false, tx: null })}
+        onCreate={handleCreateAccountabilityExpense}
+        sapSession={session}
+        title="Integrar Prestação de Conta"
+        origin="pagcorp"
+        skipRules
+        prefill={
+          accountabilityModal.tx
+            ? {
+                description: accountabilityModal.tx.description,
+                amount: accountabilityModal.tx.amount,
+                currency: accountabilityModal.tx.currency,
+                accountAlias: accountabilityModal.tx.accountAlias,
+                receipts: accountabilityModal.tx.receipts,
+                triggerAI: true,
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }
