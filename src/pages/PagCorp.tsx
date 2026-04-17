@@ -189,7 +189,7 @@ export default function PagCorp() {
         session.companyDB,
         supplier.code,
         supplier.name,
-        session.userName || session.userId || undefined,
+        session.userName || undefined,
       );
       if (result.alreadyIntegrated) {
         toast.info("Transação já estava integrada no SAP", {
