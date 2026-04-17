@@ -109,6 +109,7 @@ function CredentialModal({
             const isConfigured = existingKeys.includes(field.key);
             const isPassword = field.type === "password";
             const isCustom = field.type === "custom_fields";
+            const isToggle = field.type === "toggle";
             const showPw = showPasswords[field.key];
 
             if (isCustom) {
@@ -118,6 +119,32 @@ function CredentialModal({
                   value={values[field.key] || ""}
                   onChange={(v) => setValues((prev) => ({ ...prev, [field.key]: v }))}
                 />
+              );
+            }
+
+            if (isToggle) {
+              const checked = values[field.key] === "true";
+              return (
+                <div
+                  key={field.key}
+                  className="md:col-span-2 flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4"
+                >
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      {field.label}
+                      {isConfigured && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                    </Label>
+                    {field.description && (
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                    )}
+                  </div>
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={(v) =>
+                      setValues((prev) => ({ ...prev, [field.key]: v ? "true" : "false" }))
+                    }
+                  />
+                </div>
               );
             }
 
