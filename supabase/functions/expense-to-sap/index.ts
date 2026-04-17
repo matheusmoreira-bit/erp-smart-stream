@@ -69,6 +69,31 @@ async function postSapDocument(
   return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
 }
 
+// Upload attachments to SAP B1 Attachments2 endpoint. Returns AbsoluteEntry to link in document.
+async function uploadAttachmentsToSap(
+  sapBaseUrl: string,
+  cookies: string,
+  files: { name: string; blob: Blob }[],
+): Promise<number | null> {
+  if (files.length === 0) return null;
+  const form = new FormData();
+  for (const f of files) {
+    // SAP B1 SL expects files appended as form parts; the field name is the filename
+    form.append("files", f.blob, f.name);
+  }
+  const res = await fetch(`${sapBaseUrl}/Attachments2`, {
+    method: "POST",
+    headers: { Cookie: cookies },
+    body: form,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.error?.message?.value || JSON.stringify(body);
+    throw new Error(`SAP Attachments2 failed [${res.status}]: ${msg}`);
+  }
+  return body.AbsoluteEntry ?? null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
