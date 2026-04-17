@@ -52,6 +52,7 @@ export interface Expense {
   origin?: ExpenseOrigin;
   created_by_email?: string;
   company_db?: string;
+  branch_id?: number;
   created_at: string;
   updated_at: string;
   items?: ExpenseItem[];
@@ -68,6 +69,7 @@ export interface CreateExpenseInput {
   origin?: ExpenseOrigin;
   initialStatus?: ExpenseStatus;
   skipRules?: boolean;
+  branch_id?: number;
   items: Omit<ExpenseItem, "id">[];
 }
 
@@ -271,6 +273,7 @@ export function useExpenses() {
           current_approver: currentApprover,
           origin,
           company_db: session.companyDB,
+          branch_id: input.branch_id ?? 1,
         } as any)
         .select()
         .single();
