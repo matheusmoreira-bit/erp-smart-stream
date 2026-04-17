@@ -451,6 +451,15 @@ export default function PagCorp() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Buscar
           </Button>
+          <Button
+            onClick={startBatch}
+            disabled={selectedIds.size === 0 || batchActive}
+            variant="secondary"
+            className="gap-2"
+          >
+            <Layers className="w-4 h-4" />
+            Integrar em lote{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+          </Button>
         </div>
       </div>
 
