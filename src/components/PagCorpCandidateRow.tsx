@@ -22,6 +22,7 @@ import { useSap } from "@/contexts/SapContext";
 import {
   importPagCorpCandidate,
   savePagCorpSupplierLink,
+  hasValidBrazilianTaxId,
   type PagCorpCandidate,
 } from "@/hooks/useImportPagCorpSuppliers";
 
