@@ -45,6 +45,12 @@ export const SYSTEMS: SystemConfig[] = [
         type: "toggle",
         description: "Ao integrar despesas, envia primeiro os anexos ao SAP e vincula ao documento",
       },
+      {
+        key: "use_hana_db",
+        label: "Usar HANA DB para queries",
+        type: "toggle",
+        description: "Quando desativado, todas as consultas serão feitas via Service Layer (use para instâncias sem API HANA DB)",
+      },
       { key: "custom_fields", label: "Campos Customizados", type: "custom_fields" },
     ],
   },
