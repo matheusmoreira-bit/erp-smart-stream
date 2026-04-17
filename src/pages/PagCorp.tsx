@@ -286,11 +286,13 @@ export default function PagCorp() {
         });
       }
       await fetchTransactions(startDate, endDate, session.companyDB);
+      if (batchActive) advanceBatch();
     } catch (e) {
       toast.error("Falha na integração", {
         description: e instanceof Error ? e.message : "Erro desconhecido",
         action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
       });
+      if (batchActive) advanceBatch();
     } finally {
       setIntegrating(null);
     }
