@@ -297,7 +297,7 @@ export async function toggleSupplierActive(
   session: SapSession | null,
 ): Promise<Supplier> {
   const newActive = !supplier.is_active;
-  let sapStatus = supplier.sap_sync_status;
+  let sapStatus = supplier.sap_sync_status || "synced";
   let sapError: string | null = null;
   let syncedAt: string | null = supplier.sap_last_synced_at;
 
@@ -314,6 +314,42 @@ export async function toggleSupplierActive(
     }
   }
 
+  // If id starts with "sap:" the row only exists in SAP cache — insert local mirror.
+  const isSapOnly = supplier.id.startsWith("sap:");
+
+  if (isSapOnly) {
+    const { data, error } = await (supabase as any)
+      .from(TABLE)
+      .insert({
+        company_db: supplier.company_db,
+        card_code: supplier.card_code,
+        card_name: supplier.card_name,
+        card_type: supplier.card_type || "S",
+        federal_tax_id: supplier.federal_tax_id,
+        u_fgr_taxid0: supplier.u_fgr_taxid0,
+        email: supplier.email,
+        phone1: supplier.phone1,
+        phone2: supplier.phone2,
+        currency: supplier.currency || "BRL",
+        bill_to_street: supplier.bill_to_street,
+        bill_to_zip: supplier.bill_to_zip,
+        bill_to_city: supplier.bill_to_city,
+        bill_to_state: supplier.bill_to_state,
+        bill_to_country: supplier.bill_to_country || "BR",
+        bill_to_block: supplier.bill_to_block,
+        bill_to_building: supplier.bill_to_building,
+        is_active: newActive,
+        sap_sync_status: sapStatus,
+        sap_sync_error: sapError,
+        sap_last_synced_at: syncedAt,
+        source: "sap",
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data as Supplier;
+  }
+
   const { data, error } = await (supabase as any)
     .from(TABLE)
     .update({
@@ -328,8 +364,6 @@ export async function toggleSupplierActive(
   if (error) throw error;
   return data as Supplier;
 }
-
-export async function findSupplierByTaxId(
   taxId: string,
   companyDb: string,
 ): Promise<Supplier | null> {
