@@ -527,6 +527,13 @@ export default function PagCorp() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Selecionar todas"
+                      />
+                    </TableHead>
                     <TableHead className="text-muted-foreground">Data</TableHead>
                     <TableHead className="text-muted-foreground">Descrição</TableHead>
                     <TableHead className="text-muted-foreground">Portador</TableHead>
