@@ -145,13 +145,24 @@ function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean 
   }
 }
 
-async function findMatchingRule(ctx: Record<string, any>): Promise<{ rule: RuleRow; firstApprover?: { name: string; email: string | null } } | null> {
-  const { data: rules } = await supabase
+async function findMatchingRule(
+  ctx: Record<string, any>,
+  companyDb: string | null,
+): Promise<{ rule: RuleRow; firstApprover?: { name: string; email: string | null } } | null> {
+  let q = supabase
     .from("approval_rules")
     .select("*")
     .eq("is_active", true)
     .order("priority", { ascending: false });
 
+  // Match rules of the active company OR legacy rules without a company (treated as global).
+  if (companyDb) {
+    q = q.or(`company_db.eq.${companyDb},company_db.is.null`);
+  } else {
+    q = q.is("company_db", null);
+  }
+
+  const { data: rules } = await q;
   if (!rules || rules.length === 0) return null;
 
   for (const r of rules as any[]) {
