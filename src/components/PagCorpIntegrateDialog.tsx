@@ -27,6 +27,8 @@ interface Props {
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
+  /** Whether the pagcorp_payment_account credential is configured for this company. */
+  paymentAccountConfigured: boolean;
   onConfirm: (supplier: SapSearchOption) => Promise<void>;
 }
 
@@ -36,25 +38,16 @@ export function PagCorpIntegrateDialog({
   transaction,
   integrationType,
   companyDb,
+  paymentAccountConfigured,
   onConfirm,
 }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentAccount, setPaymentAccount] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !companyDb) return;
+    if (!open) return;
     setSupplier(null);
     setSubmitting(false);
-    setPaymentAccount(null);
-    supabase
-      .from("system_credentials")
-      .select("credential_value")
-      .eq("system_name", "sap")
-      .eq("company_db", companyDb)
-      .eq("credential_key", "pagcorp_payment_account")
-      .maybeSingle()
-      .then(({ data }) => setPaymentAccount((data as any)?.credential_value || null));
   }, [open, companyDb]);
 
   if (!transaction) return null;
