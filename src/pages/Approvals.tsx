@@ -396,6 +396,21 @@ export default function ApprovalsPage() {
     if (!session) return;
     setIsActioning(true);
     try {
+      // Internal expense doc has negative approvalRequestId and __internalId
+      const internalDoc = (selectedDoc as any)?.__internalId;
+      if (internalDoc) {
+        if (action === "approve") {
+          await approveExpense(internalDoc, remarks);
+          toast.success("Despesa interna aprovada!");
+        } else {
+          await rejectExpense(internalDoc, remarks);
+          toast.success("Despesa interna rejeitada.");
+        }
+        setSelectedDoc(null);
+        refreshExpenses();
+        return;
+      }
+
       const endpoint = `ApprovalRequests(${code})`;
       const body: Record<string, unknown> = {
         ApprovalRequestDecisions: [{
@@ -408,7 +423,6 @@ export default function ApprovalsPage() {
       clearClientCache();
       toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
 
-      // Audit log
       const doc = approvals.find((a) => a.approvalRequestId === code);
       const { logAuditAction } = await import("@/hooks/useAuditLog");
       await logAuditAction({
