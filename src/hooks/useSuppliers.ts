@@ -364,6 +364,8 @@ export async function toggleSupplierActive(
   if (error) throw error;
   return data as Supplier;
 }
+
+export async function findSupplierByTaxId(
   taxId: string,
   companyDb: string,
 ): Promise<Supplier | null> {
