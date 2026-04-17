@@ -15,8 +15,10 @@ import {
   Upload,
   Clock,
   History,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -108,6 +110,10 @@ export default function PagCorp() {
     tx: PagCorpTransaction | null;
   }>({ open: false, tx: null });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [batchQueue, setBatchQueue] = useState<PagCorpTransaction[]>([]);
+  const [batchIndex, setBatchIndex] = useState(0);
+  const [batchActive, setBatchActive] = useState(false);
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
@@ -189,6 +195,73 @@ export default function PagCorp() {
     }
   };
 
+  const toggleSelect = (id: string | number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectableTransactions = useMemo(
+    () => filteredTransactions.filter((t) => !t.integrated),
+    [filteredTransactions],
+  );
+
+  const allSelected =
+    selectableTransactions.length > 0 &&
+    selectableTransactions.every((t) => selectedIds.has(t.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableTransactions.map((t) => t.id)));
+    }
+  };
+
+  const openBatchItem = (t: PagCorpTransaction) => {
+    if (t.hasAccountability) {
+      setAccountabilityModal({ open: true, tx: t });
+    } else {
+      setIntegrateDialog({ open: true, tx: t, type: "generic" });
+    }
+  };
+
+  const startBatch = () => {
+    if (!checkSapCredentials()) return;
+    const queue = selectableTransactions.filter((t) => selectedIds.has(t.id));
+    if (queue.length === 0) {
+      toast.info("Selecione ao menos uma transação");
+      return;
+    }
+    setBatchQueue(queue);
+    setBatchIndex(0);
+    setBatchActive(true);
+    openBatchItem(queue[0]);
+  };
+
+  const advanceBatch = () => {
+    const next = batchIndex + 1;
+    if (next >= batchQueue.length) {
+      setBatchActive(false);
+      setBatchQueue([]);
+      setBatchIndex(0);
+      setSelectedIds(new Set());
+      toast.success("Lote concluído");
+      return;
+    }
+    setBatchIndex(next);
+    openBatchItem(batchQueue[next]);
+  };
+
+  const cancelBatch = () => {
+    setBatchActive(false);
+    setBatchQueue([]);
+    setBatchIndex(0);
+  };
+
   const handleConfirmIntegrate = async (supplier: SapSearchOption) => {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
@@ -213,11 +286,13 @@ export default function PagCorp() {
         });
       }
       await fetchTransactions(startDate, endDate, session.companyDB);
+      if (batchActive) advanceBatch();
     } catch (e) {
       toast.error("Falha na integração", {
         description: e instanceof Error ? e.message : "Erro desconhecido",
         action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
       });
+      if (batchActive) advanceBatch();
     } finally {
       setIntegrating(null);
     }
@@ -279,6 +354,7 @@ export default function PagCorp() {
       });
       setAccountabilityModal({ open: false, tx: null });
       await fetchTransactions(startDate, endDate, session.companyDB);
+      if (batchActive) advanceBatch();
       return { expense };
     } catch (e) {
       toast.error("Falha ao integrar prestação", {
@@ -375,6 +451,15 @@ export default function PagCorp() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Buscar
           </Button>
+          <Button
+            onClick={startBatch}
+            disabled={selectedIds.size === 0 || batchActive}
+            variant="secondary"
+            className="gap-2"
+          >
+            <Layers className="w-4 h-4" />
+            Integrar em lote{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+          </Button>
         </div>
       </div>
 
@@ -442,6 +527,13 @@ export default function PagCorp() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Selecionar todas"
+                      />
+                    </TableHead>
                     <TableHead className="text-muted-foreground">Data</TableHead>
                     <TableHead className="text-muted-foreground">Descrição</TableHead>
                     <TableHead className="text-muted-foreground">Portador</TableHead>
@@ -453,17 +545,19 @@ export default function PagCorp() {
                 <TableBody>
                   {filteredTransactions.map((t) => {
                     const hasAttachments = t.hasAccountability && Array.isArray(t.attachments) && t.attachments.length > 0;
-
-                    // Disable integrate button logic
-                    const now = new Date();
-                    const txDate = t.date ? new Date(t.date) : null;
-                    const txAgeDays = txDate ? (now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
-                    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-                    const daysUntilMonthEnd = lastDayOfMonth - now.getDate();
-                    const shouldDisableIntegrate = (!t.hasAccountability || !t.accountabilityApproved) && (txAgeDays < 15 || daysUntilMonthEnd <= 3);
+                    const isSelected = selectedIds.has(t.id);
 
                     return (
-                      <TableRow key={t.id} className="border-border">
+                      <TableRow key={t.id} className="border-border" data-state={isSelected ? "selected" : undefined}>
+                        <TableCell className="w-10">
+                          {!t.integrated && (
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelect(t.id)}
+                              aria-label="Selecionar"
+                            />
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm text-foreground whitespace-nowrap">
                           {formatDate(t.date)}
                         </TableCell>
@@ -503,7 +597,6 @@ export default function PagCorp() {
                               variant="outline"
                               size="sm"
                               className="gap-1 text-xs"
-                              disabled={shouldDisableIntegrate}
                               onClick={() => openIntegrateDialog(t, "accountability")}
                             >
                               <Sparkles className="w-3 h-3" />
@@ -514,8 +607,6 @@ export default function PagCorp() {
                               variant="outline"
                               size="sm"
                               className="gap-1 text-xs"
-                              disabled={shouldDisableIntegrate}
-                              title={shouldDisableIntegrate ? (txAgeDays < 15 ? "Transação com menos de 15 dias" : "Faltam 3 dias ou menos para o fim do mês") : undefined}
                               onClick={() => openIntegrateDialog(t, "generic")}
                             >
                               <Upload className="w-3 h-3" />
@@ -533,9 +624,29 @@ export default function PagCorp() {
         </div>
       </main>
 
+      {batchActive && (
+        <div className="fixed bottom-4 right-4 z-40 glass-card px-4 py-3 flex items-center gap-3 shadow-lg border border-primary/30">
+          <Layers className="w-4 h-4 text-primary" />
+          <div className="text-sm">
+            <p className="font-medium text-foreground">
+              Lote em andamento: {batchIndex + 1} / {batchQueue.length}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Cancelar a despesa atual encerra o lote
+            </p>
+          </div>
+          <Button size="sm" variant="ghost" onClick={cancelBatch}>
+            Encerrar
+          </Button>
+        </div>
+      )}
+
       <PagCorpIntegrateDialog
         open={integrateDialog.open}
-        onClose={() => setIntegrateDialog({ open: false, tx: null, type: "generic" })}
+        onClose={() => {
+          setIntegrateDialog({ open: false, tx: null, type: "generic" });
+          if (batchActive) cancelBatch();
+        }}
         transaction={integrateDialog.tx}
         integrationType={integrateDialog.type}
         companyDb={session?.companyDB}
@@ -544,7 +655,10 @@ export default function PagCorp() {
 
       <CreateExpenseModal
         open={accountabilityModal.open}
-        onClose={() => setAccountabilityModal({ open: false, tx: null })}
+        onClose={() => {
+          setAccountabilityModal({ open: false, tx: null });
+          if (batchActive) cancelBatch();
+        }}
         onCreate={handleCreateAccountabilityExpense}
         sapSession={session}
         title="Integrar Prestação de Conta"
