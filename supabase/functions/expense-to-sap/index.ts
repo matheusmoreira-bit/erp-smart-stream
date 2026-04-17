@@ -157,6 +157,34 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 3.1 Optional: upload attachments first and link via AttachmentEntry
+    let attachmentEntry: number | null = null;
+    const integrateAttachments = (sapCreds.integrate_attachments || "").toLowerCase() === "true";
+    if (integrateAttachments) {
+      const { data: atts, error: attErr } = await supabase
+        .from("expense_attachments")
+        .select("file_path, file_name")
+        .eq("expense_id", expense_id);
+      if (attErr) console.warn("Erro ao listar anexos:", attErr.message);
+
+      const files: { name: string; blob: Blob }[] = [];
+      for (const a of atts || []) {
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from("expense-attachments")
+          .download(a.file_path);
+        if (dlErr || !blob) {
+          console.warn(`Falha ao baixar anexo ${a.file_path}:`, dlErr?.message);
+          continue;
+        }
+        files.push({ name: a.file_name, blob });
+      }
+
+      if (files.length > 0) {
+        attachmentEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
+        console.log(`Anexos enviados ao SAP — AbsoluteEntry=${attachmentEntry}`);
+      }
+    }
+
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
       DocDate: today,
@@ -164,6 +192,7 @@ Deno.serve(async (req) => {
       TaxDate: today,
       BPL_IDAssignedToInvoice: (expense.branch_id && Number(expense.branch_id) > 0) ? Number(expense.branch_id) : 1,
       Comments: `Despesa interna #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
+      ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
       ...headerCustom,
       DocumentLines: items.map((it: any) => {
         const hasItem = !!it.item_code;
