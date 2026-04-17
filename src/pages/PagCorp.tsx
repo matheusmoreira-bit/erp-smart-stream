@@ -76,9 +76,6 @@ export default function PagCorp() {
   useEffect(() => { fetchCredentials(session?.companyDB, "sap"); }, [fetchCredentials, session?.companyDB]);
 
   const hasSapCredentials = credentials.some((c) => c.system_name === "sap" && c.company_db === session?.companyDB);
-  const hasPagcorpPaymentAccount = credentials.some(
-    (c) => c.system_name === "sap" && c.company_db === session?.companyDB && c.credential_key === "pagcorp_payment_account",
-  );
 
   const checkSapCredentials = (): boolean => {
     if (!hasSapCredentials) {
