@@ -83,7 +83,7 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
   "document_number": "Número do documento/NF",
   "items": [
     {
-      "description": "Descrição do item/serviço",
+      "description": "Descrição do item/serviço (MÁXIMO 200 caracteres - resuma se necessário)",
       "quantity": 1,
       "unit_price": 0.00,
       "line_total": 0.00,
