@@ -46,6 +46,8 @@ export function CreateExpenseModal({
   sapSession,
   prefill,
   title,
+  origin = "manual",
+  skipRules = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -53,6 +55,8 @@ export function CreateExpenseModal({
   sapSession: any;
   prefill?: PagCorpPrefill;
   title?: string;
+  origin?: "manual" | "pagcorp";
+  skipRules?: boolean;
 }) {
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -409,6 +413,8 @@ export function CreateExpenseModal({
         supplier_code: supplier.code || undefined,
         currency: currency || undefined,
         remarks: remarks || undefined,
+        origin,
+        skipRules,
         items: items.map(({ sapItem, sapCostCenter, sapProject, ...rest }) => rest),
       });
       toast.success("Despesa criada com sucesso!");

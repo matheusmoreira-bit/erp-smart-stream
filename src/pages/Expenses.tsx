@@ -13,6 +13,7 @@ import {
   Calendar,
   DollarSign,
   Send,
+  X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -24,6 +25,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
@@ -56,113 +67,161 @@ function ExpenseDetailModal({
   open,
   onClose,
   onSubmit,
+  onCancel,
+  canCancel,
   isSubmitting,
+  isCancelling,
 }: {
   expense: Expense | null;
   open: boolean;
   onClose: () => void;
   onSubmit: (id: string) => void;
+  onCancel: (id: string) => void;
+  canCancel: boolean;
   isSubmitting: boolean;
+  isCancelling: boolean;
 }) {
+  const [confirmCancel, setConfirmCancel] = useState(false);
   if (!expense) return null;
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <span className="text-foreground font-semibold">Despesa</span>
-            <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
-            <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(expense.total_amount, expense.currency)}</span>
-          </DialogTitle>
-        </DialogHeader>
+  const showSubmit = expense.status === "rascunho";
+  const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
 
-        <div className="space-y-4 mt-2">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">Fornecedor</p>
-              <p className="text-foreground font-medium">{expense.supplier_name}</p>
-              {expense.supplier_code && <p className="text-xs text-muted-foreground font-mono">{expense.supplier_code}</p>}
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Solicitante</p>
-              <p className="text-foreground font-medium">{expense.requester_name}</p>
-            </div>
-            {expense.cost_center && (
+  return (
+    <>
+      <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <span className="text-foreground font-semibold">Despesa</span>
+              <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
+              {expense.origin === "pagcorp" && (
+                <Badge variant="outline" className="text-xs">PagCorp</Badge>
+              )}
+              <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(expense.total_amount, expense.currency)}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground">Centro de Custo</p>
-                <p className="text-foreground">{expense.cost_center}</p>
+                <p className="text-xs text-muted-foreground">Fornecedor</p>
+                <p className="text-foreground font-medium">{expense.supplier_name}</p>
+                {expense.supplier_code && <p className="text-xs text-muted-foreground font-mono">{expense.supplier_code}</p>}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Solicitante</p>
+                <p className="text-foreground font-medium">{expense.requester_name}</p>
+              </div>
+              {expense.cost_center && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Centro de Custo</p>
+                  <p className="text-foreground">{expense.cost_center}</p>
+                </div>
+              )}
+              {expense.project && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Projeto</p>
+                  <p className="text-foreground">{expense.project}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-xs text-muted-foreground">Data de Criação</p>
+                <p className="text-foreground">{formatDate(expense.created_at)}</p>
+              </div>
+              {expense.current_approver && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Aprovador Atual</p>
+                  <p className="text-foreground font-medium">{expense.current_approver}</p>
+                </div>
+              )}
+            </div>
+
+            {expense.remarks && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Observações</p>
+                <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{expense.remarks}</p>
               </div>
             )}
-            {expense.project && (
+
+            {expense.items && expense.items.length > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground">Projeto</p>
-                <p className="text-foreground">{expense.project}</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Itens</p>
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-muted/30 border-b border-border">
+                        <th className="text-left py-2 px-3 text-muted-foreground">Descrição</th>
+                        <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
+                        <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
+                        <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expense.items.map((item, i) => (
+                        <tr key={i} className="border-b border-border/50">
+                          <td className="py-2 px-3 text-foreground">{item.description}</td>
+                          <td className="py-2 px-3 text-right font-mono">{item.quantity}</td>
+                          <td className="py-2 px-3 text-right font-mono">{formatCurrency(item.unit_price)}</td>
+                          <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(item.line_total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
-            <div>
-              <p className="text-xs text-muted-foreground">Data de Criação</p>
-              <p className="text-foreground">{formatDate(expense.created_at)}</p>
-            </div>
-            {expense.current_approver && (
-              <div>
-                <p className="text-xs text-muted-foreground">Aprovador Atual</p>
-                <p className="text-foreground font-medium">{expense.current_approver}</p>
+
+            {(showSubmit || showCancel) && (
+              <div className="border-t border-border pt-4 flex justify-end gap-3">
+                <Button variant="outline" onClick={onClose}>Fechar</Button>
+                {showCancel && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmCancel(true)}
+                    disabled={isCancelling}
+                    className="gap-1.5"
+                  >
+                    {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XIcon className="w-4 h-4" />}
+                    Cancelar Despesa
+                  </Button>
+                )}
+                {showSubmit && (
+                  <Button
+                    onClick={() => onSubmit(expense.id)}
+                    disabled={isSubmitting}
+                    className="gap-1.5"
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    Enviar para Aprovação
+                  </Button>
+                )}
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
 
-          {expense.remarks && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Observações</p>
-              <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{expense.remarks}</p>
-            </div>
-          )}
-
-          {expense.items && expense.items.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Itens</p>
-              <div className="border border-border rounded-lg overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-muted/30 border-b border-border">
-                      <th className="text-left py-2 px-3 text-muted-foreground">Descrição</th>
-                      <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
-                      <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
-                      <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expense.items.map((item, i) => (
-                      <tr key={i} className="border-b border-border/50">
-                        <td className="py-2 px-3 text-foreground">{item.description}</td>
-                        <td className="py-2 px-3 text-right font-mono">{item.quantity}</td>
-                        <td className="py-2 px-3 text-right font-mono">{formatCurrency(item.unit_price)}</td>
-                        <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(item.line_total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {expense.status === "rascunho" && (
-            <div className="border-t border-border pt-4 flex justify-end gap-3">
-              <Button variant="outline" onClick={onClose}>Fechar</Button>
-              <Button
-                onClick={() => onSubmit(expense.id)}
-                disabled={isSubmitting}
-                className="gap-1.5"
-              >
-                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Enviar para Aprovação
-              </Button>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar despesa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação marcará a despesa como cancelada e removerá da fila de aprovações. Não é possível desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { setConfirmCancel(false); onCancel(expense.id); }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Sim, cancelar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -204,12 +263,13 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
 export default function ExpensesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, submitForApproval } = useExpenses();
+  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense } = useExpenses();
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   if (!session) {
@@ -218,6 +278,14 @@ export default function ExpensesPage() {
   }
 
   const companyLabel = getLabel(session?.companyDB || "");
+  const isAdmin = !!session.isSuperUser;
+  const userIdentifier = session.userName.toLowerCase();
+
+  const canCancel = (expense: Expense) => {
+    if (isAdmin) return true;
+    const owner = (expense.created_by_email || expense.requester_email || expense.requester_name || "").toLowerCase();
+    return owner === userIdentifier || owner.startsWith(userIdentifier + "@");
+  };
 
   const filtered = expenses.filter((e) => {
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
@@ -243,6 +311,29 @@ export default function ExpensesPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCancel = async (id: string) => {
+    setIsCancelling(true);
+    try {
+      await cancelExpense(id);
+      toast.success("Despesa cancelada.");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao cancelar");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleCreate = async (input: any) => {
+    const result = await createExpense(input) as any;
+    if (result?.status === "pendente_aprovacao") {
+      toast.info("Despesa enviada para aprovação automaticamente.");
+    } else if (result?.status === "aprovado") {
+      toast.success("Despesa aprovada (nenhuma regra aplicável).");
+    }
+    return result;
   };
 
   const statusOptions = [
@@ -381,13 +472,16 @@ export default function ExpensesPage() {
         open={!!selectedExpense}
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
+        onCancel={handleCancel}
+        canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         isSubmitting={isSubmitting}
+        isCancelling={isCancelling}
       />
 
       <CreateExpenseModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        onCreate={createExpense}
+        onCreate={handleCreate}
         sapSession={session}
       />
     </div>
