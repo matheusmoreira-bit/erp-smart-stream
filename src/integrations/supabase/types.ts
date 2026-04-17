@@ -289,11 +289,14 @@ export type Database = {
       }
       expenses: {
         Row: {
+          company_db: string | null
           cost_center: string | null
           created_at: string
+          created_by_email: string | null
           currency: string
           current_approver: string | null
           id: string
+          origin: string
           project: string | null
           remarks: string | null
           requester_email: string | null
@@ -307,11 +310,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_db?: string | null
           cost_center?: string | null
           created_at?: string
+          created_by_email?: string | null
           currency?: string
           current_approver?: string | null
           id?: string
+          origin?: string
           project?: string | null
           remarks?: string | null
           requester_email?: string | null
@@ -325,11 +331,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_db?: string | null
           cost_center?: string | null
           created_at?: string
+          created_by_email?: string | null
           currency?: string
           current_approver?: string | null
           id?: string
+          origin?: string
           project?: string | null
           remarks?: string | null
           requester_email?: string | null
@@ -851,6 +860,7 @@ export type Database = {
         | "nf_entrada"
         | "pagamento"
         | "finalizado"
+        | "cancelado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -988,6 +998,7 @@ export const Constants = {
         "nf_entrada",
         "pagamento",
         "finalizado",
+        "cancelado",
       ],
     },
   },
