@@ -119,7 +119,7 @@ export default function SuppliersImportPagCorp() {
                 Importar Fornecedores do PagCorp
               </h1>
               <p className="text-xs text-muted-foreground">
-                Prestações de contas dos últimos 30 dias
+                Prestações de contas do período selecionado
               </p>
             </div>
           </div>
@@ -169,7 +169,19 @@ export default function SuppliersImportPagCorp() {
               </Badge>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <Select value={days} onValueChange={setDays} disabled={scanning}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PERIOD_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               onClick={handleRescan}
@@ -225,7 +237,7 @@ export default function SuppliersImportPagCorp() {
                     className="text-center py-12 text-muted-foreground"
                   >
                     {scanned
-                      ? "Nenhum candidato encontrado nos últimos 30 dias."
+                      ? "Nenhum candidato encontrado no período selecionado."
                       : "Aguardando carregamento dos fornecedores…"}
                   </TableCell>
                 </TableRow>
