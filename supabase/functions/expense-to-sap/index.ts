@@ -120,15 +120,17 @@ Deno.serve(async (req) => {
       TaxDate: today,
       Comments: `Despesa interna #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
       DocumentLines: items.map((it: any) => {
+        // Service/G-L based line (LineType=1) — avoids "purchasing item" validation on ItemCode
         const line: Record<string, unknown> = {
-          ItemCode: it.item_code || undefined,
+          LineType: "dDocument_Service",
           ItemDescription: it.description,
           Quantity: Number(it.quantity) || 1,
           UnitPrice: Number(it.unit_price) || 0,
         };
+        // If item_code looks like a G/L account, map it to AccountCode
+        if (it.item_code) line.AccountCode = it.item_code;
         if (it.cost_center || expense.cost_center) line.CostingCode = it.cost_center || expense.cost_center;
         if (it.project || expense.project) line.ProjectCode = it.project || expense.project;
-        // strip undefined
         for (const k of Object.keys(line)) if (line[k] === undefined) delete line[k];
         return line;
       }),
