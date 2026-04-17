@@ -83,7 +83,8 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
   "document_number": "Número do documento/NF",
   "items": [
     {
-      "description": "Descrição do item/serviço (MÁXIMO 200 caracteres - resuma se necessário)",
+      "description": "Descrição LITERAL do item/serviço, exatamente como está escrito no documento (sem resumir, sem reformular)",
+      "item_search_hint": "Termo curto (1-4 palavras) que representa o TIPO/CATEGORIA do item consumido, interpretado a partir do fornecedor e do contexto, para buscar no cadastro de itens do SAP. Exemplos: 'combustível', 'pedágio', 'refeição', 'hospedagem', 'táxi', 'estacionamento', 'material de escritório'.",
       "quantity": 1,
       "unit_price": 0.00,
       "line_total": 0.00,
@@ -100,7 +101,8 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
 
 Regras IMPORTANTES:
 - Extraia TODOS os itens listados no documento
-- CRÍTICO: Cada "description" de item DEVE ter no MÁXIMO 200 caracteres. Se a descrição original for maior, RESUMA mantendo o essencial. Nunca ultrapasse 200 caracteres.
+- CRÍTICO: O campo "description" deve conter o texto LITERAL do item como aparece no documento. NÃO resuma, NÃO reformule, NÃO traduza. Copie exatamente como está escrito (preservando acentos e capitalização razoável). Se a descrição original for muito longa, mantenha-a integral mesmo assim.
+- CRÍTICO: O campo "item_search_hint" deve ser uma INTERPRETAÇÃO sua do que foi consumido, baseada no fornecedor (ex.: posto de gasolina → "combustível"; concessionária de rodovia → "pedágio"; restaurante → "refeição"; hotel/pousada → "hospedagem"; aplicativo de transporte → "táxi"). Use de 1 a 4 palavras em português, no singular, sem marca/fornecedor — apenas o tipo genérico do item para servir como termo de busca no cadastro SAP.
 - O campo "supplier_match_confidence" indica sua confiança de que o nome/CNPJ do fornecedor está correto (0 a 1). Se não tiver certeza, use um valor baixo.
 - NÃO invente dados. Se não conseguir identificar um campo com certeza, use null.
 - Para "item_code_match": só preencha se tiver certeza absoluta do código SAP do item. Na dúvida, use null.
