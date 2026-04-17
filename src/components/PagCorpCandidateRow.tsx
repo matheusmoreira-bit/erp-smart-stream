@@ -59,7 +59,14 @@ interface Props {
 
 type Mode = "idle" | "linking" | "importing" | "ignoring";
 
-export function PagCorpCandidateRow({ candidate: c, onResolved, onRefreshSuppliers }: Props) {
+export function PagCorpCandidateRow({
+  candidate: c,
+  onResolved,
+  onRefreshSuppliers,
+  selected,
+  onToggleSelected,
+  selectable,
+}: Props) {
   const { session } = useSap();
   const [mode, setMode] = useState<Mode>("idle");
   const [busy, setBusy] = useState(false);
@@ -74,47 +81,15 @@ export function PagCorpCandidateRow({ candidate: c, onResolved, onRefreshSupplie
   const handleImport = async () => {
     setBusy(true);
     try {
-      const created = await createSupplier(
-        {
-          company_db: session?.companyDB || null,
-          card_code: null,
-          card_name: c.card_name,
-          card_type: "S",
-          federal_tax_id: c.federal_tax_id,
-          u_fgr_taxid0: c.federal_tax_id,
-          email: c.email || null,
-          phone1: c.phone1 || null,
-          phone2: c.phone2 || null,
-          currency: "BRL",
-          bill_to_street: c.bill_to_street || null,
-          bill_to_zip: c.bill_to_zip || null,
-          bill_to_city: c.bill_to_city || null,
-          bill_to_state: c.bill_to_state || null,
-          bill_to_country: "BR",
-          bill_to_block: c.bill_to_block || null,
-          bill_to_building: c.bill_to_building || null,
-          is_active: true,
-          source: "pagcorp_import",
-        },
-        session,
-      );
-      await savePagCorpSupplierLink({
-        companyDb: session?.companyDB || null,
-        federalTaxId: c.federal_tax_id,
-        cardName: c.card_name,
-        supplierId: created?.id || null,
-        cardCode: created?.card_code || null,
-        resolution: "imported",
-        resolvedBy: session?.userName || null,
-      });
+      const created = await importPagCorpCandidate(c, session);
       toast.success("Fornecedor importado", { description: c.card_name });
       onResolved(c.key, {
         savedResolution: "imported",
         existing: true,
         existingMatch: {
           by: "saved_link",
-          card_code: created?.card_code || null,
-          card_name: created?.card_name || c.card_name,
+          card_code: created.card_code,
+          card_name: created.card_name,
         },
       });
       void onRefreshSuppliers();
