@@ -83,7 +83,7 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
   "document_number": "Número do documento/NF",
   "items": [
     {
-      "description": "Descrição do item/serviço",
+      "description": "Descrição do item/serviço (MÁXIMO 200 caracteres - resuma se necessário)",
       "quantity": 1,
       "unit_price": 0.00,
       "line_total": 0.00,
@@ -100,6 +100,7 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
 
 Regras IMPORTANTES:
 - Extraia TODOS os itens listados no documento
+- CRÍTICO: Cada "description" de item DEVE ter no MÁXIMO 200 caracteres. Se a descrição original for maior, RESUMA mantendo o essencial. Nunca ultrapasse 200 caracteres.
 - O campo "supplier_match_confidence" indica sua confiança de que o nome/CNPJ do fornecedor está correto (0 a 1). Se não tiver certeza, use um valor baixo.
 - NÃO invente dados. Se não conseguir identificar um campo com certeza, use null.
 - Para "item_code_match": só preencha se tiver certeza absoluta do código SAP do item. Na dúvida, use null.
@@ -165,6 +166,14 @@ Regras IMPORTANTES:
     // Post-process: check if document client matches logged company
     const docs = Array.isArray(parsed) ? parsed : [parsed];
     for (const doc of docs) {
+      // Enforce 200-char limit on item descriptions (safety net)
+      if (Array.isArray(doc.items)) {
+        for (const item of doc.items) {
+          if (typeof item.description === "string" && item.description.length > 200) {
+            item.description = item.description.slice(0, 197).trimEnd() + "...";
+          }
+        }
+      }
       if (companyDB && doc.client_name) {
         const clientLower = doc.client_name.toLowerCase();
         const companyAliases = COMPANY_NAMES[companyDB] || [];
