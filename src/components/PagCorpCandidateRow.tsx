@@ -51,6 +51,10 @@ interface Props {
   onResolved: (key: string, patch: Partial<PagCorpCandidate>) => void;
   /** Refresh supplier list after an import */
   onRefreshSuppliers: () => void | Promise<void>;
+  /** Bulk-selection state (only meaningful for unresolved, non-failed rows) */
+  selected?: boolean;
+  onToggleSelected?: (key: string, checked: boolean) => void;
+  selectable?: boolean;
 }
 
 type Mode = "idle" | "linking" | "importing" | "ignoring";
