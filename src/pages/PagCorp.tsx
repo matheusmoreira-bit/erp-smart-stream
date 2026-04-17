@@ -195,6 +195,73 @@ export default function PagCorp() {
     }
   };
 
+  const toggleSelect = (id: string | number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectableTransactions = useMemo(
+    () => filteredTransactions.filter((t) => !t.integrated),
+    [filteredTransactions],
+  );
+
+  const allSelected =
+    selectableTransactions.length > 0 &&
+    selectableTransactions.every((t) => selectedIds.has(t.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableTransactions.map((t) => t.id)));
+    }
+  };
+
+  const openBatchItem = (t: PagCorpTransaction) => {
+    if (t.hasAccountability) {
+      setAccountabilityModal({ open: true, tx: t });
+    } else {
+      setIntegrateDialog({ open: true, tx: t, type: "generic" });
+    }
+  };
+
+  const startBatch = () => {
+    if (!checkSapCredentials()) return;
+    const queue = selectableTransactions.filter((t) => selectedIds.has(t.id));
+    if (queue.length === 0) {
+      toast.info("Selecione ao menos uma transação");
+      return;
+    }
+    setBatchQueue(queue);
+    setBatchIndex(0);
+    setBatchActive(true);
+    openBatchItem(queue[0]);
+  };
+
+  const advanceBatch = () => {
+    const next = batchIndex + 1;
+    if (next >= batchQueue.length) {
+      setBatchActive(false);
+      setBatchQueue([]);
+      setBatchIndex(0);
+      setSelectedIds(new Set());
+      toast.success("Lote concluído");
+      return;
+    }
+    setBatchIndex(next);
+    openBatchItem(batchQueue[next]);
+  };
+
+  const cancelBatch = () => {
+    setBatchActive(false);
+    setBatchQueue([]);
+    setBatchIndex(0);
+  };
+
   const handleConfirmIntegrate = async (supplier: SapSearchOption) => {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
