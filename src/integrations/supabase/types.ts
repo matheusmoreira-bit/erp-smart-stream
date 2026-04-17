@@ -691,6 +691,90 @@ export type Database = {
         }
         Relationships: []
       }
+      suppliers: {
+        Row: {
+          bill_to_block: string | null
+          bill_to_building: string | null
+          bill_to_city: string | null
+          bill_to_country: string | null
+          bill_to_state: string | null
+          bill_to_street: string | null
+          bill_to_zip: string | null
+          card_code: string | null
+          card_name: string
+          card_type: string
+          company_db: string | null
+          created_at: string
+          currency: string
+          email: string | null
+          federal_tax_id: string | null
+          id: string
+          is_active: boolean
+          phone1: string | null
+          phone2: string | null
+          sap_last_synced_at: string | null
+          sap_sync_error: string | null
+          sap_sync_status: string
+          source: string
+          u_fgr_taxid0: string | null
+          updated_at: string
+        }
+        Insert: {
+          bill_to_block?: string | null
+          bill_to_building?: string | null
+          bill_to_city?: string | null
+          bill_to_country?: string | null
+          bill_to_state?: string | null
+          bill_to_street?: string | null
+          bill_to_zip?: string | null
+          card_code?: string | null
+          card_name: string
+          card_type?: string
+          company_db?: string | null
+          created_at?: string
+          currency?: string
+          email?: string | null
+          federal_tax_id?: string | null
+          id?: string
+          is_active?: boolean
+          phone1?: string | null
+          phone2?: string | null
+          sap_last_synced_at?: string | null
+          sap_sync_error?: string | null
+          sap_sync_status?: string
+          source?: string
+          u_fgr_taxid0?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bill_to_block?: string | null
+          bill_to_building?: string | null
+          bill_to_city?: string | null
+          bill_to_country?: string | null
+          bill_to_state?: string | null
+          bill_to_street?: string | null
+          bill_to_zip?: string | null
+          card_code?: string | null
+          card_name?: string
+          card_type?: string
+          company_db?: string | null
+          created_at?: string
+          currency?: string
+          email?: string | null
+          federal_tax_id?: string | null
+          id?: string
+          is_active?: boolean
+          phone1?: string | null
+          phone2?: string | null
+          sap_last_synced_at?: string | null
+          sap_sync_error?: string | null
+          sap_sync_status?: string
+          source?: string
+          u_fgr_taxid0?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       synapse_execution_log: {
         Row: {
           affected_count: number | null
