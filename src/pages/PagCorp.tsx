@@ -545,17 +545,19 @@ export default function PagCorp() {
                 <TableBody>
                   {filteredTransactions.map((t) => {
                     const hasAttachments = t.hasAccountability && Array.isArray(t.attachments) && t.attachments.length > 0;
-
-                    // Disable integrate button logic
-                    const now = new Date();
-                    const txDate = t.date ? new Date(t.date) : null;
-                    const txAgeDays = txDate ? (now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
-                    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-                    const daysUntilMonthEnd = lastDayOfMonth - now.getDate();
-                    const shouldDisableIntegrate = (!t.hasAccountability || !t.accountabilityApproved) && (txAgeDays < 15 || daysUntilMonthEnd <= 3);
+                    const isSelected = selectedIds.has(t.id);
 
                     return (
-                      <TableRow key={t.id} className="border-border">
+                      <TableRow key={t.id} className="border-border" data-state={isSelected ? "selected" : undefined}>
+                        <TableCell className="w-10">
+                          {!t.integrated && (
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelect(t.id)}
+                              aria-label="Selecionar"
+                            />
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm text-foreground whitespace-nowrap">
                           {formatDate(t.date)}
                         </TableCell>
@@ -595,7 +597,6 @@ export default function PagCorp() {
                               variant="outline"
                               size="sm"
                               className="gap-1 text-xs"
-                              disabled={shouldDisableIntegrate}
                               onClick={() => openIntegrateDialog(t, "accountability")}
                             >
                               <Sparkles className="w-3 h-3" />
@@ -606,8 +607,6 @@ export default function PagCorp() {
                               variant="outline"
                               size="sm"
                               className="gap-1 text-xs"
-                              disabled={shouldDisableIntegrate}
-                              title={shouldDisableIntegrate ? (txAgeDays < 15 ? "Transação com menos de 15 dias" : "Faltam 3 dias ou menos para o fim do mês") : undefined}
                               onClick={() => openIntegrateDialog(t, "generic")}
                             >
                               <Upload className="w-3 h-3" />
