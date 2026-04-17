@@ -100,6 +100,7 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
 
 Regras IMPORTANTES:
 - Extraia TODOS os itens listados no documento
+- CRÍTICO: Cada "description" de item DEVE ter no MÁXIMO 200 caracteres. Se a descrição original for maior, RESUMA mantendo o essencial. Nunca ultrapasse 200 caracteres.
 - O campo "supplier_match_confidence" indica sua confiança de que o nome/CNPJ do fornecedor está correto (0 a 1). Se não tiver certeza, use um valor baixo.
 - NÃO invente dados. Se não conseguir identificar um campo com certeza, use null.
 - Para "item_code_match": só preencha se tiver certeza absoluta do código SAP do item. Na dúvida, use null.
