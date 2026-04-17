@@ -41,19 +41,22 @@ export function PagCorpIntegrateDialog({
 }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { credentials, fetchCredentials } = useCredentials();
+  const [paymentAccount, setPaymentAccount] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open && companyDb) fetchCredentials(companyDb, "sap");
-    if (!open) {
-      setSupplier(null);
-      setSubmitting(false);
-    }
-  }, [open, companyDb, fetchCredentials]);
-
-  const paymentAccount = credentials.find(
-    (c) => c.system_name === "sap" && c.company_db === companyDb && c.credential_key === "pagcorp_payment_account",
-  )?.credential_value;
+    if (!open || !companyDb) return;
+    setSupplier(null);
+    setSubmitting(false);
+    setPaymentAccount(null);
+    supabase
+      .from("system_credentials")
+      .select("credential_value")
+      .eq("system_name", "sap")
+      .eq("company_db", companyDb)
+      .eq("credential_key", "pagcorp_payment_account")
+      .maybeSingle()
+      .then(({ data }) => setPaymentAccount((data as any)?.credential_value || null));
+  }, [open, companyDb]);
 
   if (!transaction) return null;
 
