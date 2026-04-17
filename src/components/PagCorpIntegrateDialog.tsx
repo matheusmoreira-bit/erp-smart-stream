@@ -111,7 +111,7 @@ export function PagCorpIntegrateDialog({
             </label>
             <SapSearchCombobox
               endpoint="BusinessPartners"
-              filterTemplate="CardType eq 'cSupplier' and (contains(tolower(CardName),'{q}') or contains(tolower(CardCode),'{q}'))"
+              filterTemplate="CardType eq 'cSupplier' and (contains(CardName,'{q}') or contains(CardCode,'{q}'))"
               selectFields="CardCode,CardName,FederalTaxID"
               mapRow={(row: any) => ({
                 code: row.CardCode,
