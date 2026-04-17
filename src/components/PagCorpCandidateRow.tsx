@@ -79,7 +79,16 @@ export function PagCorpCandidateRow({
     c.savedResolution === "linked" ||
     c.savedResolution === "ignored";
 
+  const canImport = hasValidBrazilianTaxId(c.federal_tax_id);
+
   const handleImport = async () => {
+    if (!canImport) {
+      toast.error("CNPJ/CPF obrigatório", {
+        description:
+          "Apenas fornecedores nacionais com CNPJ (14 dígitos) ou CPF (11 dígitos) podem ser importados.",
+      });
+      return;
+    }
     setBusy(true);
     try {
       const created = await importPagCorpCandidate(c, session);
