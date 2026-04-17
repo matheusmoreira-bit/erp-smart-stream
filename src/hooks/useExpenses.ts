@@ -354,6 +354,19 @@ export function useExpenses() {
     [fetchExpenses, session]
   );
 
+  const retrySapIntegration = useCallback(
+    async (expenseId: string) => {
+      const { data, error: fnErr } = await supabase.functions.invoke("expense-to-sap", {
+        body: { expense_id: expenseId },
+      });
+      if (fnErr) throw fnErr;
+      if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
+      await fetchExpenses();
+      return data;
+    },
+    [fetchExpenses]
+  );
+
   const rejectExpense = useCallback(
     async (expenseId: string, remarks?: string) => {
       const updates: any = { status: "rejeitado" };
