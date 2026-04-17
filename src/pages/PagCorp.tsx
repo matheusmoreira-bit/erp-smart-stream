@@ -624,9 +624,29 @@ export default function PagCorp() {
         </div>
       </main>
 
+      {batchActive && (
+        <div className="fixed bottom-4 right-4 z-40 glass-card px-4 py-3 flex items-center gap-3 shadow-lg border border-primary/30">
+          <Layers className="w-4 h-4 text-primary" />
+          <div className="text-sm">
+            <p className="font-medium text-foreground">
+              Lote em andamento: {batchIndex + 1} / {batchQueue.length}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Cancelar a despesa atual encerra o lote
+            </p>
+          </div>
+          <Button size="sm" variant="ghost" onClick={cancelBatch}>
+            Encerrar
+          </Button>
+        </div>
+      )}
+
       <PagCorpIntegrateDialog
         open={integrateDialog.open}
-        onClose={() => setIntegrateDialog({ open: false, tx: null, type: "generic" })}
+        onClose={() => {
+          setIntegrateDialog({ open: false, tx: null, type: "generic" });
+          if (batchActive) cancelBatch();
+        }}
         transaction={integrateDialog.tx}
         integrationType={integrateDialog.type}
         companyDb={session?.companyDB}
@@ -635,7 +655,10 @@ export default function PagCorp() {
 
       <CreateExpenseModal
         open={accountabilityModal.open}
-        onClose={() => setAccountabilityModal({ open: false, tx: null })}
+        onClose={() => {
+          setAccountabilityModal({ open: false, tx: null });
+          if (batchActive) cancelBatch();
+        }}
         onCreate={handleCreateAccountabilityExpense}
         sapSession={session}
         title="Integrar Prestação de Conta"
