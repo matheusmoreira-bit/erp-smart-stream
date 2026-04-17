@@ -395,5 +395,6 @@ export function useExpenses() {
     cancelExpense,
     approveExpense,
     rejectExpense,
+    retrySapIntegration,
   };
 }
