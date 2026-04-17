@@ -27,8 +27,6 @@ interface Props {
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
-  /** Whether the pagcorp_payment_account credential is configured for this company. */
-  paymentAccountConfigured: boolean;
   onConfirm: (supplier: SapSearchOption) => Promise<void>;
 }
 
@@ -38,7 +36,6 @@ export function PagCorpIntegrateDialog({
   transaction,
   integrationType,
   companyDb,
-  paymentAccountConfigured,
   onConfirm,
 }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
