@@ -147,6 +147,15 @@ Deno.serve(async (req) => {
           sapCode = parsed?.error?.code;
         } catch { /* ignore */ }
 
+        // Build a safe payload echo (mask the password) to help diagnose login issues.
+        const passwordLength = typeof credentials.Password === "string" ? credentials.Password.length : 0;
+        const safePayload = {
+          UserName: credentials.UserName,
+          CompanyDB: credentials.CompanyDB,
+          Password: passwordLength > 0 ? `***(${passwordLength} chars)` : "(vazio)",
+          baseUrl: SAP_BASE_URL,
+        };
+
         // SAP -306 ("Fail to NONE-SSO login from SLD") means the SLD rejected the
         // username/password attempt. Most common causes: wrong CompanyDB casing,
         // wrong credentials, or the SAP user is configured as SSO-only.
@@ -158,7 +167,14 @@ Deno.serve(async (req) => {
             "3) se o usuário SAP não está configurado apenas para SSO.";
         }
 
-        return new Response(JSON.stringify({ error: errorMsg, sapCode }), {
+        const detailedError =
+          `${errorMsg}\n\nPayload enviado:\n` +
+          `• UserName: ${safePayload.UserName}\n` +
+          `• CompanyDB: ${safePayload.CompanyDB}\n` +
+          `• Password: ${safePayload.Password}\n` +
+          `• URL: ${safePayload.baseUrl}/Login`;
+
+        return new Response(JSON.stringify({ error: detailedError, sapCode, payload: safePayload }), {
           status: loginResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
