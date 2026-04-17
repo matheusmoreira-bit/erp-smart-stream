@@ -359,8 +359,6 @@ Deno.serve(async (req) => {
       p_details: {
         integration_type: integrationType,
         purchase_order: poResult,
-        ap_invoice: invResult,
-        outgoing_payment: payResult,
         stages,
       } as any,
     });
@@ -370,8 +368,6 @@ Deno.serve(async (req) => {
         success: true,
         stages,
         purchaseOrder: { DocEntry: poResult.docEntry, DocNum: poResult.docNum },
-        apInvoice: { DocEntry: invResult.docEntry, DocNum: invResult.docNum },
-        outgoingPayment: { DocEntry: payResult.docEntry, DocNum: payResult.docNum },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
