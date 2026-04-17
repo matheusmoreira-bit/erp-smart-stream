@@ -312,17 +312,27 @@ export function CreateExpenseModal({
 
       if (doc.items && doc.items.length > 0) {
         setItems(
-          doc.items.map((item: any) => ({
-            description: item.description || "",
-            quantity: item.quantity || 1,
-            unit_price: item.unit_price || 0,
-            line_total: item.line_total || (item.quantity || 1) * (item.unit_price || 0),
-            cost_center: costCenterValue,
-            project: projectValue,
-            item_code: item.item_code_match || "",
-            sapItem: null,
-            searchHint: item.item_search_hint || "",
-          }))
+          doc.items.map((item: any) => {
+            const qty = Number(item.quantity) || 1;
+            let unit = Number(item.unit_price) || 0;
+            const lineTotalRaw = Number(item.line_total) || 0;
+            // Derive unit_price from line_total / qty when AI returned only the total
+            if (unit === 0 && lineTotalRaw !== 0 && qty !== 0) {
+              unit = lineTotalRaw / qty;
+            }
+            const lineTotal = lineTotalRaw !== 0 ? lineTotalRaw : qty * unit;
+            return {
+              description: item.description || "",
+              quantity: qty,
+              unit_price: unit,
+              line_total: lineTotal,
+              cost_center: costCenterValue,
+              project: projectValue,
+              item_code: item.item_code_match || "",
+              sapItem: null,
+              searchHint: item.item_search_hint || "",
+            };
+          })
         );
       } else if (doc.total_amount && Number(doc.total_amount) > 0) {
         // Fallback: no items detected, create single line with total amount
