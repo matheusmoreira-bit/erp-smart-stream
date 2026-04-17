@@ -94,6 +94,7 @@ export default function SuppliersImportPagCorp() {
   const isSelectable = (c: PagCorpCandidate) =>
     !c.aiFailed &&
     !c.existing &&
+    hasValidBrazilianTaxId(c.federal_tax_id) &&
     c.savedResolution !== "imported" &&
     c.savedResolution !== "linked" &&
     c.savedResolution !== "ignored";
