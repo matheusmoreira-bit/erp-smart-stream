@@ -328,6 +328,7 @@ export function useExpenses() {
           file_size: number;
           mime_type: string;
         }[] = [];
+        const failedUploads: string[] = [];
 
         for (const file of input.files) {
           const safeName = file.name.replace(/[^\w.\-]+/g, "_");
@@ -340,6 +341,7 @@ export function useExpenses() {
             });
           if (upErr) {
             console.error("Falha ao subir anexo", file.name, upErr);
+            failedUploads.push(`${file.name}: ${upErr.message}`);
             continue;
           }
           attachmentRows.push({
@@ -355,7 +357,17 @@ export function useExpenses() {
           const { error: attErr } = await supabase
             .from("expense_attachments")
             .insert(attachmentRows);
-          if (attErr) console.error("Falha ao registrar anexos:", attErr);
+          if (attErr) {
+            console.error("Falha ao registrar anexos:", attErr);
+            throw new Error(`Falha ao registrar anexos no banco: ${attErr.message}`);
+          }
+        }
+
+        if (failedUploads.length > 0) {
+          // Surface failures so the user knows the SAP integration won't have attachments.
+          throw new Error(
+            `Falha ao enviar ${failedUploads.length} anexo(s): ${failedUploads.join("; ")}`,
+          );
         }
       }
 
