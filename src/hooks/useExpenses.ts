@@ -332,9 +332,26 @@ export function useExpenses() {
         .update(updates)
         .eq("id", expenseId);
       if (err) throw err;
+
+      // Trigger SAP integration immediately (only for SAP companies)
+      if (session?.erpType === "sap") {
+        try {
+          const { data, error: fnErr } = await supabase.functions.invoke("expense-to-sap", {
+            body: { expense_id: expenseId },
+          });
+          if (fnErr) throw fnErr;
+          if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
+        } catch (sapErr) {
+          await fetchExpenses();
+          throw new Error(
+            `Despesa aprovada, mas falhou ao integrar no SAP: ${sapErr instanceof Error ? sapErr.message : "Erro desconhecido"}`,
+          );
+        }
+      }
+
       await fetchExpenses();
     },
-    [fetchExpenses]
+    [fetchExpenses, session]
   );
 
   const rejectExpense = useCallback(
