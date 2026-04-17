@@ -103,6 +103,10 @@ export default function PagCorp() {
     tx: PagCorpTransaction | null;
     type: "generic" | "accountability";
   }>({ open: false, tx: null, type: "generic" });
+  const [accountabilityModal, setAccountabilityModal] = useState<{
+    open: boolean;
+    tx: PagCorpTransaction | null;
+  }>({ open: false, tx: null });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
 
   const handleStartDateChange = (value: string) => {
