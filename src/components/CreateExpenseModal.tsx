@@ -413,6 +413,8 @@ export function CreateExpenseModal({
         supplier_code: supplier.code || undefined,
         currency: currency || undefined,
         remarks: remarks || undefined,
+        origin,
+        skipRules,
         items: items.map(({ sapItem, sapCostCenter, sapProject, ...rest }) => rest),
       });
       toast.success("Despesa criada com sucesso!");
