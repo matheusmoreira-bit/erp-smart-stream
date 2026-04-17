@@ -187,9 +187,18 @@ export function useExpenses() {
     setIsLoading(true);
     setError(null);
     try {
+      // Always scope expenses to the active company. If there is no session,
+      // return nothing instead of leaking other companies' data.
+      const activeCompanyDb = session?.companyDB;
+      if (!activeCompanyDb) {
+        setExpenses([]);
+        return;
+      }
+
       const { data, error: err } = await supabase
         .from("expenses")
         .select("*")
+        .eq("company_db", activeCompanyDb)
         .order("created_at", { ascending: false });
 
       if (err) throw err;
@@ -221,7 +230,7 @@ export function useExpenses() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [session?.companyDB]);
 
   const createExpense = useCallback(
     async (input: CreateExpenseInput) => {
