@@ -65,7 +65,6 @@ export function CreateExpenseModal({
   const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [branchId, setBranchId] = useState<number>(1);
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
@@ -163,7 +162,6 @@ export function CreateExpenseModal({
       setCurrencyWarning(null);
       setDocDate("");
       setDueDate("");
-      setBranchId(1);
       setRemarks("");
       setAiWarning(null);
       setSuggestedSupplierName(undefined);
@@ -417,7 +415,8 @@ export function CreateExpenseModal({
         remarks: remarks || undefined,
         origin,
         skipRules,
-        branch_id: branchId,
+        // Filial não é mais editável aqui — a edge function de integração
+        // SAP usa o `default_branch_id` configurado no cadastro da empresa.
         items: items.map(({ sapItem, sapCostCenter, sapProject, ...rest }) => rest),
       });
       toast.success("Despesa criada com sucesso!");
@@ -560,8 +559,8 @@ export function CreateExpenseModal({
             </div>
           )}
 
-          {/* Currency + Dates */}
-          <div className="grid grid-cols-4 gap-3">
+          {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Moeda *</label>
               <Input
@@ -569,16 +568,6 @@ export function CreateExpenseModal({
                 readOnly
                 placeholder="Definida pelo fornecedor"
                 className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Filial *</label>
-              <Input
-                type="number"
-                min={1}
-                value={branchId}
-                onChange={(e) => setBranchId(parseInt(e.target.value, 10) || 1)}
-                className="text-sm h-9"
               />
             </div>
             <div>
