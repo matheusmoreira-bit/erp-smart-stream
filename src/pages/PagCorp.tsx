@@ -41,8 +41,8 @@ import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
 import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
-import { CreateExpenseModal, type PagCorpPrefill } from "@/components/CreateExpenseModal";
-import { useExpenses } from "@/hooks/useExpenses";
+import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -69,10 +69,9 @@ function formatDate(dateStr: string) {
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, integrateDirect } = usePagCorp();
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
-  const { createExpense } = useExpenses();
 
   useEffect(() => { fetchCredentials(session?.companyDB, "sap"); }, [fetchCredentials, session?.companyDB]);
 
@@ -95,7 +94,11 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [accountabilityFilter, setAccountabilityFilter] = useState<"all" | "yes" | "no">("all");
-  const [expenseModal, setExpenseModal] = useState<{ open: boolean; prefill?: PagCorpPrefill }>({ open: false });
+  const [integrateDialog, setIntegrateDialog] = useState<{
+    open: boolean;
+    tx: PagCorpTransaction | null;
+    type: "generic" | "accountability";
+  }>({ open: false, tx: null, type: "generic" });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
 
   const handleStartDateChange = (value: string) => {
@@ -169,33 +172,43 @@ export default function PagCorp() {
     return map;
   }, [filteredTransactions]);
 
-  const handleValidateAndIntegrate = (t: PagCorpTransaction) => {
+  const openIntegrateDialog = (t: PagCorpTransaction, type: "generic" | "accountability") => {
     if (!checkSapCredentials()) return;
-    setExpenseModal({
-      open: true,
-      prefill: {
-        description: t.description,
-        amount: t.amount,
-        currency: t.currency,
-        accountAlias: t.accountAlias || t.accountName || undefined,
-        receipts: t.receipts || [],
-        triggerAI: true,
-      },
-    });
+    setIntegrateDialog({ open: true, tx: t, type });
   };
 
-  const handleIntegrateGeneric = (t: PagCorpTransaction) => {
-    if (!checkSapCredentials()) return;
-    setExpenseModal({
-      open: true,
-      prefill: {
-        description: t.description,
-        amount: t.amount,
-        currency: t.currency,
-        accountAlias: t.accountAlias || t.accountName || undefined,
-        triggerAI: false,
-      },
-    });
+  const handleConfirmIntegrate = async (supplier: SapSearchOption) => {
+    const t = integrateDialog.tx;
+    if (!t || !session?.companyDB) return;
+    setIntegrating(t.id);
+    setIntegrateDialog({ open: false, tx: null, type: "generic" });
+    try {
+      const result = await integrateDirect(
+        t,
+        integrateDialog.type,
+        session.companyDB,
+        supplier.code,
+        supplier.name,
+        session.userName || undefined,
+      );
+      if (result.alreadyIntegrated) {
+        toast.info("Transação já estava integrada no SAP", {
+          description: `DocNum #${result.docNum}`,
+        });
+      } else {
+        toast.success("Integrada no SAP com sucesso", {
+          description: `PC #${result.purchaseOrder?.DocNum} • NF #${result.apInvoice?.DocNum} • Pagamento #${result.outgoingPayment?.DocNum}`,
+        });
+      }
+      await fetchTransactions(startDate, endDate, session.companyDB);
+    } catch (e) {
+      toast.error("Falha na integração", {
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+        action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
+      });
+    } finally {
+      setIntegrating(null);
+    }
   };
 
   const companyLabel = getLabel(session?.companyDB || "");
@@ -411,10 +424,10 @@ export default function PagCorp() {
                               size="sm"
                               className="gap-1 text-xs"
                               disabled={shouldDisableIntegrate}
-                              onClick={() => handleValidateAndIntegrate(t)}
+                              onClick={() => openIntegrateDialog(t, "accountability")}
                             >
                               <Sparkles className="w-3 h-3" />
-                              Validar IA + SAP
+                              Integrar (Prest.)
                             </Button>
                           ) : (
                             <Button
@@ -423,7 +436,7 @@ export default function PagCorp() {
                               className="gap-1 text-xs"
                               disabled={shouldDisableIntegrate}
                               title={shouldDisableIntegrate ? (txAgeDays < 15 ? "Transação com menos de 15 dias" : "Faltam 3 dias ou menos para o fim do mês") : undefined}
-                              onClick={() => handleIntegrateGeneric(t)}
+                              onClick={() => openIntegrateDialog(t, "generic")}
                             >
                               <Upload className="w-3 h-3" />
                               Integrar SAP
@@ -440,16 +453,13 @@ export default function PagCorp() {
         </div>
       </main>
 
-      {/* Expense Form Modal */}
-      <CreateExpenseModal
-        open={expenseModal.open}
-        onClose={() => setExpenseModal({ open: false })}
-        onCreate={createExpense}
-        sapSession={session}
-        prefill={expenseModal.prefill}
-        title="Integrar Despesa PagCorp"
-        origin="pagcorp"
-        skipRules={true}
+      <PagCorpIntegrateDialog
+        open={integrateDialog.open}
+        onClose={() => setIntegrateDialog({ open: false, tx: null, type: "generic" })}
+        transaction={integrateDialog.tx}
+        integrationType={integrateDialog.type}
+        companyDb={session?.companyDB}
+        onConfirm={handleConfirmIntegrate}
       />
     </div>
   );
