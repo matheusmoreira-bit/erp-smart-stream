@@ -40,6 +40,12 @@ export const SYSTEMS: SystemConfig[] = [
       { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
       { key: "default_branch_id", label: "Filial padrão (BPLId)", placeholder: "1" },
       {
+        key: "pagcorp_payment_account",
+        label: "Conta de pagamento PagCorp",
+        placeholder: "1.1.2.001",
+        description: "Conta contábil (TransferAccount) usada no Pagamento ao Fornecedor gerado pela integração direta PagCorp → SAP",
+      },
+      {
         key: "integrate_attachments",
         label: "Integrar anexos",
         type: "toggle",
