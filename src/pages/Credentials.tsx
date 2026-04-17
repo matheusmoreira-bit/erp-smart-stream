@@ -41,24 +41,29 @@ function CredentialModal({
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const hasExisting = existingKeys.length > 0;
 
-  // Load existing custom_fields value when dialog opens (only non-secret fields)
+  // Load existing non-secret values (custom_fields, toggle) when dialog opens
   useEffect(() => {
     if (!open) return;
-    const customField = system.fields.find((f) => f.type === "custom_fields");
-    if (customField && existingKeys.includes(customField.key)) {
-      fetchCredentialValues(system.name, [customField.key], companyDb).then((map) => {
-        if (map[customField.key]) {
-          setValues((prev) => ({ ...prev, [customField.key]: map[customField.key] }));
-        }
-      });
-    }
+    const loadableKeys = system.fields
+      .filter((f) => (f.type === "custom_fields" || f.type === "toggle") && existingKeys.includes(f.key))
+      .map((f) => f.key);
+    if (loadableKeys.length === 0) return;
+    fetchCredentialValues(system.name, loadableKeys, companyDb).then((map) => {
+      setValues((prev) => ({ ...prev, ...map }));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, system.name]);
 
   const handleSave = async () => {
     const creds = system.fields
-      .filter((f) => values[f.key]?.trim())
-      .map((f) => ({ key: f.key, value: values[f.key].trim() }));
+      .filter((f) => {
+        if (f.type === "toggle") return values[f.key] !== undefined;
+        return values[f.key]?.trim();
+      })
+      .map((f) => ({
+        key: f.key,
+        value: f.type === "toggle" ? (values[f.key] === "true" ? "true" : "false") : values[f.key].trim(),
+      }));
 
     if (creds.length === 0) {
       toast.error("Preencha pelo menos um campo");
@@ -104,6 +109,7 @@ function CredentialModal({
             const isConfigured = existingKeys.includes(field.key);
             const isPassword = field.type === "password";
             const isCustom = field.type === "custom_fields";
+            const isToggle = field.type === "toggle";
             const showPw = showPasswords[field.key];
 
             if (isCustom) {
@@ -113,6 +119,32 @@ function CredentialModal({
                   value={values[field.key] || ""}
                   onChange={(v) => setValues((prev) => ({ ...prev, [field.key]: v }))}
                 />
+              );
+            }
+
+            if (isToggle) {
+              const checked = values[field.key] === "true";
+              return (
+                <div
+                  key={field.key}
+                  className="md:col-span-2 flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4"
+                >
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      {field.label}
+                      {isConfigured && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                    </Label>
+                    {field.description && (
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                    )}
+                  </div>
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={(v) =>
+                      setValues((prev) => ({ ...prev, [field.key]: v ? "true" : "false" }))
+                    }
+                  />
+                </div>
               );
             }
 

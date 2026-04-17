@@ -3,8 +3,9 @@ import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, type LucideIc
 export interface SystemField {
   key: string;
   label: string;
-  type?: "text" | "password" | "custom_fields";
+  type?: "text" | "password" | "custom_fields" | "toggle";
   placeholder?: string;
+  description?: string;
 }
 
 export interface SystemConfig {
@@ -37,6 +38,12 @@ export const SYSTEMS: SystemConfig[] = [
       { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
       { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
       { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+      {
+        key: "integrate_attachments",
+        label: "Integrar anexos",
+        type: "toggle",
+        description: "Ao integrar despesas, envia primeiro os anexos ao SAP e vincula ao documento",
+      },
       { key: "custom_fields", label: "Campos Customizados", type: "custom_fields" },
     ],
   },
