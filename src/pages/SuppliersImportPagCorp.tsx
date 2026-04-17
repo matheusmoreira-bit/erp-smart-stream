@@ -40,6 +40,7 @@ import { useSuppliers } from "@/hooks/useSuppliers";
 import {
   useImportPagCorpSuppliers,
   importPagCorpCandidate,
+  hasValidBrazilianTaxId,
   type PagCorpCandidate,
 } from "@/hooks/useImportPagCorpSuppliers";
 import { PagCorpCandidateRow } from "@/components/PagCorpCandidateRow";
