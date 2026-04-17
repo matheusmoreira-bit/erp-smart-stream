@@ -38,6 +38,7 @@ export const SYSTEMS: SystemConfig[] = [
       { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
       { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
       { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+      { key: "default_branch_id", label: "Filial padrão (BPLId)", placeholder: "1" },
       {
         key: "integrate_attachments",
         label: "Integrar anexos",
