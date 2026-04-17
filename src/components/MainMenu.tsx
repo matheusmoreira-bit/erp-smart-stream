@@ -12,6 +12,7 @@ import {
   Key,
   Users,
   Zap,
+  Radio,
   ScrollText,
   Lock,
   type LucideIcon,
@@ -95,6 +96,15 @@ const modules: ModuleCard[] = [
     color: "text-primary",
     bgGlow: "from-primary/20 to-primary/5",
     moduleKey: "synapse",
+  },
+  {
+    title: "Monitor de Integrações",
+    description: "Acompanhamento unificado de todas as integrações com o SAP (despesas manuais e PagCorp), com status detalhado por estágio.",
+    icon: Radio,
+    path: "/integrations/monitor",
+    color: "text-success",
+    bgGlow: "from-success/20 to-success/5",
+    moduleKey: "integration_history",
   },
   {
     title: "Credenciais",
