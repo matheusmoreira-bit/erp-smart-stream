@@ -327,11 +327,15 @@ export default function PagCorp() {
       let sapDocEntry: number | undefined;
       let sapDocNum: number | undefined;
       let sapError: string | undefined;
+      let sapPayloadFromFn: any = null;
+      let sapResponseFromFn: any = null;
       try {
         const { data, error: fnErr } = await supabase.functions.invoke("expense-to-sap", {
           body: { expense_id: (expense as any).id },
         });
         if (fnErr) throw fnErr;
+        sapPayloadFromFn = data?.sapPayload ?? null;
+        sapResponseFromFn = data?.sapResponse ?? null;
         if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
         sapDocEntry = data?.docEntry;
         sapDocNum = data?.docNum;
@@ -339,7 +343,9 @@ export default function PagCorp() {
         sapError = sapErr instanceof Error ? sapErr.message : "Erro SAP desconhecido";
       }
 
-      // Log into pagcorp_integration_log so the list reflects integrated state
+      // Log into pagcorp_integration_log so the list reflects integrated state.
+      // Persist the real payload sent to SAP (returned by the edge function) so
+      // the History screen can display it instead of just the expense_id.
       await logIntegration(
         t,
         "accountability",
@@ -349,8 +355,8 @@ export default function PagCorp() {
         sapDocEntry,
         sapDocNum,
         sapError,
-        { expense_id: (expense as any).id },
-        undefined,
+        sapPayloadFromFn ?? { expense_id: (expense as any).id },
+        sapResponseFromFn ?? undefined,
       );
 
       if (sapError) throw new Error(sapError);

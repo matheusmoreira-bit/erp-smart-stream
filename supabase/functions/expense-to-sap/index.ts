@@ -112,6 +112,10 @@ Deno.serve(async (req) => {
   let attachmentLinkStatus: StageStatus = "not_applicable";
   let expenseId: string | null = null;
   let supabase: ReturnType<typeof createClient> | null = null;
+  // Captured outside the try/catch so the error path can return the same
+  // payload that was actually sent to SAP (used by the integration log UI).
+  let lastSapPayload: Record<string, unknown> | null = null;
+  let lastSapResponse: unknown = null;
 
   const persistStatus = async (extra: Record<string, unknown> = {}) => {
     if (!supabase || !expenseId) return;
@@ -308,6 +312,7 @@ Deno.serve(async (req) => {
         return line;
       }),
     };
+    lastSapPayload = sapPayload;
 
     // 4. Post to PurchaseOrders. The link stage succeeds in the same call as
     // the PO creation because SAP B1 binds AttachmentEntry into the document
@@ -315,6 +320,7 @@ Deno.serve(async (req) => {
     let sapResult;
     try {
       sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "PurchaseOrders");
+      lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
       if (attachmentEntry !== null) attachmentLinkStatus = "success";
     } catch (e) {
@@ -367,6 +373,8 @@ Deno.serve(async (req) => {
         success: true,
         docEntry: sapResult.docEntry,
         docNum: sapResult.docNum,
+        sapPayload,
+        sapResponse: sapResult.response,
         stages: {
           attachment: attachmentStatus,
           purchase_order: purchaseOrderStatus,
@@ -384,6 +392,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: false,
         error: msg,
+        sapPayload: lastSapPayload,
+        sapResponse: lastSapResponse,
         stages: {
           attachment: attachmentStatus,
           purchase_order: purchaseOrderStatus,
