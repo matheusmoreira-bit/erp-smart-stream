@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Building2,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Table,
@@ -37,6 +39,7 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import {
   useImportPagCorpSuppliers,
+  importPagCorpCandidate,
   type PagCorpCandidate,
 } from "@/hooks/useImportPagCorpSuppliers";
 import { PagCorpCandidateRow } from "@/components/PagCorpCandidateRow";
@@ -59,6 +62,8 @@ export default function SuppliersImportPagCorp() {
     useImportPagCorpSuppliers(session?.companyDB, suppliers);
 
   const [days, setDays] = useState<string>("30");
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // Auto-scan on mount once suppliers are loaded
   const [scanned, setScanned] = useState(false);
@@ -71,11 +76,87 @@ export default function SuppliersImportPagCorp() {
 
   const handleRescan = () => {
     setCandidates([]);
+    setSelectedKeys(new Set());
     void scan(Number(days));
   };
 
   const updateCandidate = (key: string, patch: Partial<PagCorpCandidate>) => {
     setCandidates((prev) => prev.map((c) => (c.key === key ? { ...c, ...patch } : c)));
+    setSelectedKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  };
+
+  const isSelectable = (c: PagCorpCandidate) =>
+    !c.aiFailed &&
+    !c.existing &&
+    c.savedResolution !== "imported" &&
+    c.savedResolution !== "linked" &&
+    c.savedResolution !== "ignored";
+
+  const selectableCandidates = useMemo(
+    () => candidates.filter(isSelectable),
+    [candidates],
+  );
+
+  const allSelected =
+    selectableCandidates.length > 0 &&
+    selectableCandidates.every((c) => selectedKeys.has(c.key));
+
+  const toggleSelected = (key: string, checked: boolean) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (!checked) {
+      setSelectedKeys(new Set());
+      return;
+    }
+    setSelectedKeys(new Set(selectableCandidates.map((c) => c.key)));
+  };
+
+  const handleBulkImport = async () => {
+    const targets = candidates.filter((c) => selectedKeys.has(c.key) && isSelectable(c));
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    let ok = 0;
+    let fail = 0;
+    for (const c of targets) {
+      try {
+        const created = await importPagCorpCandidate(c, session);
+        updateCandidate(c.key, {
+          savedResolution: "imported",
+          existing: true,
+          existingMatch: {
+            by: "saved_link",
+            card_code: created.card_code,
+            card_name: created.card_name,
+          },
+        });
+        ok++;
+      } catch (e) {
+        fail++;
+        toast.error(`Falha: ${c.card_name}`, {
+          description: e instanceof Error ? e.message : undefined,
+        });
+      }
+    }
+    setBulkBusy(false);
+    setSelectedKeys(new Set());
+    if (ok > 0) {
+      toast.success(`${ok} fornecedor(es) importado(s)`, {
+        description: fail > 0 ? `${fail} falha(s)` : undefined,
+      });
+      void refreshSuppliers();
+    }
   };
 
   const companyLabel = getLabel(session?.companyDB || "");
@@ -169,7 +250,21 @@ export default function SuppliersImportPagCorp() {
               </Badge>
             )}
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
+            {selectedKeys.size > 0 && (
+              <Button
+                onClick={handleBulkImport}
+                disabled={bulkBusy || scanning}
+                className="gap-2"
+              >
+                {bulkBusy ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                Importar selecionados ({selectedKeys.size})
+              </Button>
+            )}
             <Select value={days} onValueChange={setDays} disabled={scanning}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue />
@@ -221,6 +316,14 @@ export default function SuppliersImportPagCorp() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(v) => toggleSelectAll(!!v)}
+                    disabled={selectableCandidates.length === 0}
+                    aria-label="Selecionar todos"
+                  />
+                </TableHead>
                 <TableHead>Fornecedor extraído</TableHead>
                 <TableHead>CNPJ/CPF</TableHead>
                 <TableHead>Origem (transação)</TableHead>
@@ -233,7 +336,7 @@ export default function SuppliersImportPagCorp() {
               {candidates.length === 0 && !scanning ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-12 text-muted-foreground"
                   >
                     {scanned
@@ -243,7 +346,7 @@ export default function SuppliersImportPagCorp() {
                 </TableRow>
               ) : scanning && candidates.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     <Loader2 className="w-5 h-5 animate-spin inline mr-2" />
                     Processando…
                   </TableCell>
@@ -255,6 +358,9 @@ export default function SuppliersImportPagCorp() {
                     candidate={c}
                     onResolved={updateCandidate}
                     onRefreshSuppliers={refreshSuppliers}
+                    selectable={isSelectable(c)}
+                    selected={selectedKeys.has(c.key)}
+                    onToggleSelected={toggleSelected}
                   />
                 ))
               )}
