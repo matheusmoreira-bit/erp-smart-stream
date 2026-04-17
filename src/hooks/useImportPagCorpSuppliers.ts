@@ -26,10 +26,12 @@ export interface PagCorpCandidate {
   /** Result of dedup against existing suppliers */
   existing: boolean;
   existingMatch?: {
-    by: "tax_id" | "name";
+    by: "tax_id" | "name" | "saved_link";
     card_code?: string | null;
     card_name?: string | null;
   };
+  /** Persistent decision saved in pagcorp_supplier_links */
+  savedResolution?: "imported" | "linked" | "ignored";
   /** AI extraction failed for this transaction */
   aiFailed?: boolean;
   aiError?: string;
@@ -41,11 +43,22 @@ export interface ScanProgress {
   total: number;
 }
 
-function cleanDigits(s?: string | null): string {
+export interface PagCorpSupplierLink {
+  id: string;
+  company_db: string | null;
+  federal_tax_id: string | null;
+  card_name_key: string | null;
+  supplier_id: string | null;
+  card_code: string | null;
+  card_name: string | null;
+  resolution: "imported" | "linked" | "ignored";
+}
+
+export function cleanDigits(s?: string | null): string {
   return (s || "").replace(/\D/g, "");
 }
 
-function normalizeName(s?: string | null): string {
+export function normalizeName(s?: string | null): string {
   return (s || "")
     .toLowerCase()
     .normalize("NFD")
@@ -54,12 +67,36 @@ function normalizeName(s?: string | null): string {
     .trim();
 }
 
+/** Upsert a decision (link / import / ignore) so future scans skip it. */
+export async function savePagCorpSupplierLink(input: {
+  companyDb: string | null;
+  federalTaxId: string | null;
+  cardName: string | null;
+  supplierId?: string | null;
+  cardCode?: string | null;
+  resolution: "imported" | "linked" | "ignored";
+  resolvedBy?: string | null;
+}) {
+  const tax = cleanDigits(input.federalTaxId) || null;
+  const nameKey = normalizeName(input.cardName) || null;
+  const { error } = await (supabase as any).from("pagcorp_supplier_links").insert({
+    company_db: input.companyDb,
+    federal_tax_id: tax,
+    card_name_key: nameKey,
+    supplier_id: input.supplierId || null,
+    card_code: input.cardCode || null,
+    card_name: input.cardName || null,
+    resolution: input.resolution,
+    resolved_by: input.resolvedBy || null,
+  });
+  if (error) throw error;
+}
+
 /**
  * Scans the last 30 days of PagCorp transactions that have accountability
  * (receipts), extracts supplier data via AI for each, and classifies them
- * as "new" or "already exists" against the current supplier list.
- *
- * Dedup criteria: matches by CNPJ/CPF (digits only) OR by normalized name.
+ * as "new", "already exists" (against the supplier list) or "previously
+ * resolved" (against pagcorp_supplier_links).
  */
 export function useImportPagCorpSuppliers(
   companyDb: string | undefined,
@@ -90,6 +127,19 @@ export function useImportPagCorpSuppliers(
         if (name) nameIndex.set(name, s);
       }
 
+      // 1b) Load persisted PagCorp -> supplier mappings
+      const { data: linksData } = await (supabase as any)
+        .from("pagcorp_supplier_links")
+        .select("*")
+        .eq("company_db", companyDb);
+      const links = (linksData || []) as PagCorpSupplierLink[];
+      const linkByTax = new Map<string, PagCorpSupplierLink>();
+      const linkByName = new Map<string, PagCorpSupplierLink>();
+      for (const l of links) {
+        if (l.federal_tax_id) linkByTax.set(l.federal_tax_id, l);
+        if (l.card_name_key) linkByName.set(l.card_name_key, l);
+      }
+
       // 2) Fetch PagCorp transactions of the last 30 days
       setProgress({ stage: "fetching", current: 0, total: 0 });
       const today = new Date();
@@ -108,15 +158,11 @@ export function useImportPagCorpSuppliers(
       const result = await res.json();
       const items: any[] = result.items || [];
 
-      // Only transactions that have receipts (accountability)
       const withReceipts = items.filter(
         (t) => Array.isArray(t.receipts) && t.receipts.length > 0,
       );
 
-      // 3) Run AI extraction sequentially (avoids hammering the gateway)
       const results: PagCorpCandidate[] = [];
-      // Track candidates already added in this scan to avoid duplicates among
-      // multiple transactions that point to the same supplier.
       const seenTax = new Set<string>();
       const seenName = new Set<string>();
 
@@ -164,30 +210,44 @@ export function useImportPagCorpSuppliers(
           const tax = cleanDigits(extracted.federal_tax_id);
           const nameKey = normalizeName(extracted.card_name);
 
-          // Dedup against existing suppliers
-          let existingMatch:
-            | PagCorpCandidate["existingMatch"]
-            | undefined;
-          const taxHit = tax ? taxIndex.get(tax) : undefined;
-          if (taxHit) {
-            existingMatch = {
-              by: "tax_id",
-              card_code: taxHit.card_code,
-              card_name: taxHit.card_name,
-            };
-          } else {
-            const nameHit = nameKey ? nameIndex.get(nameKey) : undefined;
-            if (nameHit) {
+          // Saved decision wins
+          const savedLink =
+            (tax ? linkByTax.get(tax) : undefined) ||
+            (nameKey ? linkByName.get(nameKey) : undefined);
+
+          let existingMatch: PagCorpCandidate["existingMatch"] | undefined;
+          let savedResolution: PagCorpCandidate["savedResolution"];
+
+          if (savedLink) {
+            savedResolution = savedLink.resolution;
+            if (savedLink.resolution === "linked" || savedLink.resolution === "imported") {
               existingMatch = {
-                by: "name",
-                card_code: nameHit.card_code,
-                card_name: nameHit.card_name,
+                by: "saved_link",
+                card_code: savedLink.card_code,
+                card_name: savedLink.card_name,
               };
+            }
+          } else {
+            const taxHit = tax ? taxIndex.get(tax) : undefined;
+            if (taxHit) {
+              existingMatch = {
+                by: "tax_id",
+                card_code: taxHit.card_code,
+                card_name: taxHit.card_name,
+              };
+            } else {
+              const nameHit = nameKey ? nameIndex.get(nameKey) : undefined;
+              if (nameHit) {
+                existingMatch = {
+                  by: "name",
+                  card_code: nameHit.card_code,
+                  card_name: nameHit.card_name,
+                };
+              }
             }
           }
 
-          // Skip duplicates already collected in this scan
-          if (!existingMatch) {
+          if (!existingMatch && !savedResolution) {
             if (tax && seenTax.has(tax)) continue;
             if (!tax && nameKey && seenName.has(nameKey)) continue;
             if (tax) seenTax.add(tax);
@@ -213,6 +273,7 @@ export function useImportPagCorpSuppliers(
             bill_to_building: extracted.bill_to_building || null,
             existing: !!existingMatch,
             existingMatch,
+            savedResolution,
           });
         } catch (e) {
           results.push({
