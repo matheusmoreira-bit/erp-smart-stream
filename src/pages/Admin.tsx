@@ -432,13 +432,32 @@ export default function Admin() {
     setCompanyDialog(true);
   };
 
-  const openEditCompany = (c: Company) => {
+  const openEditCompany = async (c: Company) => {
     setEditingCompany(c);
     setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", default_currency: c.default_currency || "BRL", timezone: c.timezone || "America/Sao_Paulo", logo_url: c.logo_url || "", targets: c.targets || { ...DEFAULT_TARGETS } });
     setWizardStep(1);
-    setWizardCreds({});
     setShowWizardPasswords({});
+    setWizardCreds({});
     setCompanyDialog(true);
+
+    // Pre-load existing ERP credentials so edit form shows saved values
+    // (passwords are intentionally not pre-filled for safety).
+    const erpType = c.erp_type || "sap";
+    const system = SYSTEMS.find((s) => s.name === erpType);
+    if (!system) return;
+    const loadableKeys = system.fields
+      .filter((f) => f.type !== "password")
+      .map((f) => f.key);
+    if (loadableKeys.length === 0) return;
+    const { data } = await supabase
+      .from("system_credentials")
+      .select("credential_key, credential_value")
+      .eq("company_db", c.company_db)
+      .eq("system_name", erpType)
+      .in("credential_key", loadableKeys);
+    const map: Record<string, string> = {};
+    for (const row of data || []) map[row.credential_key] = row.credential_value;
+    setWizardCreds(map);
   };
 
   const saveCompany = async () => {
