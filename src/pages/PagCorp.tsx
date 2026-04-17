@@ -42,6 +42,9 @@ import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
+import { CreateExpenseModal } from "@/components/CreateExpenseModal";
+import { useExpenses } from "@/hooks/useExpenses";
+import { supabase } from "@/integrations/supabase/client";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 function formatCurrency(value: number, currency: string = "BRL") {
