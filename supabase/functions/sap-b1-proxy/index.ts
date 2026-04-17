@@ -166,8 +166,9 @@ Deno.serve(async (req) => {
         // Build a safe payload echo (mask the password) to help diagnose login issues.
         const passwordLength = typeof credentials.Password === "string" ? credentials.Password.length : 0;
         const safePayload = {
+          selectedCompany: companyDB || credentials.CompanyDB,
+          effectiveCompanyDB: credentials.CompanyDB,
           UserName: credentials.UserName,
-          CompanyDB: credentials.CompanyDB,
           Password: passwordLength > 0 ? `***(${passwordLength} chars)` : "(vazio)",
           baseUrl: SAP_BASE_URL,
         };
@@ -178,15 +179,16 @@ Deno.serve(async (req) => {
         if (sapCode === -306 || /NONE-SSO/i.test(errorMsg)) {
           errorMsg =
             "SAP rejeitou o login (código -306). Verifique: " +
-            "1) o nome do Banco de Dados (case-sensitive); " +
+            "1) o Banco de Dados ERP configurado (case-sensitive); " +
             "2) usuário e senha; " +
             "3) se o usuário SAP não está configurado apenas para SSO.";
         }
 
         const detailedError =
           `${errorMsg}\n\nPayload enviado:\n` +
+          `• Empresa selecionada: ${safePayload.selectedCompany}\n` +
+          `• CompanyDB efetivo: ${safePayload.effectiveCompanyDB}\n` +
           `• UserName: ${safePayload.UserName}\n` +
-          `• CompanyDB: ${safePayload.CompanyDB}\n` +
           `• Password: ${safePayload.Password}\n` +
           `• URL: ${safePayload.baseUrl}/Login`;
 
