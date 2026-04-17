@@ -140,11 +140,25 @@ Deno.serve(async (req) => {
         const errorText = await loginResp.text();
         console.error("SAP Login error:", loginResp.status, errorText);
         let errorMsg = "Falha no login SAP B1";
+        let sapCode: number | undefined;
         try {
           const parsed = JSON.parse(errorText);
           errorMsg = parsed?.error?.message?.value || errorMsg;
+          sapCode = parsed?.error?.code;
         } catch { /* ignore */ }
-        return new Response(JSON.stringify({ error: errorMsg }), {
+
+        // SAP -306 ("Fail to NONE-SSO login from SLD") means the SLD rejected the
+        // username/password attempt. Most common causes: wrong CompanyDB casing,
+        // wrong credentials, or the SAP user is configured as SSO-only.
+        if (sapCode === -306 || /NONE-SSO/i.test(errorMsg)) {
+          errorMsg =
+            "SAP rejeitou o login (código -306). Verifique: " +
+            "1) o nome do Banco de Dados (case-sensitive); " +
+            "2) usuário e senha; " +
+            "3) se o usuário SAP não está configurado apenas para SSO.";
+        }
+
+        return new Response(JSON.stringify({ error: errorMsg, sapCode }), {
           status: loginResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
