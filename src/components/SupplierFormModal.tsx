@@ -27,6 +27,7 @@ import {
   createSupplier,
   updateSupplier,
   getNextCardCode,
+  fetchSupplierFromSap,
 } from "@/hooks/useSuppliers";
 
 const supplierSchema = z.object({
@@ -100,6 +101,7 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
     if (!open) return;
     if (editing) {
       setCardCode(editing.card_code || "");
+      // Seed form with whatever local data we already have
       setForm({
         card_name: editing.card_name || "",
         card_type: "S",
@@ -117,6 +119,32 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
         bill_to_block: editing.bill_to_block || "",
         bill_to_building: editing.bill_to_building || "",
       });
+      // Hydrate full details (addresses etc.) from SAP — list query only returns summary fields.
+      if (session && editing.card_code) {
+        setLoadingCode(true);
+        fetchSupplierFromSap(editing.card_code, session)
+          .then((full) => {
+            if (!full) return;
+            setForm((f) => ({
+              ...f,
+              card_name: full.card_name || f.card_name,
+              federal_tax_id: (full.federal_tax_id as string) || f.federal_tax_id,
+              u_fgr_taxid0: (full.u_fgr_taxid0 as string) || f.u_fgr_taxid0,
+              email: (full.email as string) || f.email,
+              phone1: (full.phone1 as string) || f.phone1,
+              phone2: (full.phone2 as string) || f.phone2,
+              currency: full.currency || f.currency,
+              bill_to_street: (full.bill_to_street as string) || f.bill_to_street,
+              bill_to_zip: (full.bill_to_zip as string) || f.bill_to_zip,
+              bill_to_city: (full.bill_to_city as string) || f.bill_to_city,
+              bill_to_state: (full.bill_to_state as string) || f.bill_to_state,
+              bill_to_country: (full.bill_to_country as string) || f.bill_to_country,
+              bill_to_block: (full.bill_to_block as string) || f.bill_to_block,
+              bill_to_building: (full.bill_to_building as string) || f.bill_to_building,
+            }));
+          })
+          .finally(() => setLoadingCode(false));
+      }
     } else {
       setForm((f) => ({
         ...f,

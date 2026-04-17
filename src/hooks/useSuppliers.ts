@@ -379,6 +379,63 @@ export async function toggleSupplierActive(
   return data as Supplier;
 }
 
+/**
+ * Fetches a single supplier from SAP with full details (including addresses).
+ * Used to hydrate the edit modal since the list query only fetches summary fields.
+ */
+export async function fetchSupplierFromSap(
+  cardCode: string,
+  session: SapSession,
+): Promise<Partial<Supplier> | null> {
+  try {
+    const { data } = await sapQuery(
+      session,
+      `BusinessPartners('${cardCode}')`,
+      {
+        $select:
+          "CardCode,CardName,CardType,FederalTaxID,UnifiedFederalTaxID,U_FGR_TAXID0,EmailAddress,Phone1,Phone2,Currency,Frozen,BPAddresses",
+      },
+      false,
+    );
+    const raw = data as any;
+    if (!raw) return null;
+
+    // Pick BillTo address (preferred) or first available
+    const addresses: any[] = Array.isArray(raw.BPAddresses) ? raw.BPAddresses : [];
+    const billTo =
+      addresses.find((a) => a.AddressType === "bo_BillTo") ||
+      addresses.find((a) => (a.AddressName || "").toUpperCase().includes("COBRAN")) ||
+      addresses[0] ||
+      {};
+
+    // Reverse map SAP currency -> ISO
+    const sapToIso: Record<string, string> = { "R$": "BRL", CAN: "CAD" };
+    const currencyRaw: string = raw.Currency || "";
+    const currency = sapToIso[currencyRaw] || currencyRaw || "BRL";
+
+    return {
+      card_code: raw.CardCode || cardCode,
+      card_name: raw.CardName || "",
+      card_type: "S",
+      federal_tax_id: raw.UnifiedFederalTaxID || raw.FederalTaxID || null,
+      u_fgr_taxid0: raw.U_FGR_TAXID0 || null,
+      email: raw.EmailAddress || null,
+      phone1: raw.Phone1 || null,
+      phone2: raw.Phone2 || null,
+      currency,
+      bill_to_street: billTo.Street || null,
+      bill_to_zip: billTo.ZipCode || null,
+      bill_to_city: billTo.City || null,
+      bill_to_state: billTo.State || null,
+      bill_to_country: billTo.Country || "BR",
+      bill_to_block: billTo.Block || null,
+      bill_to_building: billTo.Building || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function findSupplierByTaxId(
   taxId: string,
   companyDb: string,
