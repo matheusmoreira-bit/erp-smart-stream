@@ -351,6 +351,26 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Respect per-company toggle: when HANA DB queries are disabled, short-circuit with empty result.
+      // Hooks that depend on these views already handle empty data gracefully.
+      try {
+        const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        const { data: flag } = await sb
+          .from("system_credentials")
+          .select("credential_value")
+          .eq("company_db", database)
+          .eq("system_name", "sap")
+          .eq("credential_key", "use_hana_db")
+          .maybeSingle();
+        if (flag?.credential_value === "false") {
+          return new Response(JSON.stringify({ data: [], fromCache: false, hanaDisabled: true }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch (e) {
+        console.warn("Could not read use_hana_db flag, defaulting to enabled:", e);
+      }
+
       const tableName = extractTableName(table);
       const cacheKey = `${sessionId}:view:${database}:${tableName}:${JSON.stringify(params || {})}`;
       const cached = getCached(cacheKey);
