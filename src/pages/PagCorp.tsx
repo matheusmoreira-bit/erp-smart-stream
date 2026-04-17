@@ -355,6 +355,7 @@ export default function PagCorp() {
       toast.success("Despesa criada e integrada no SAP", {
         description: sapDocNum ? `PC #${sapDocNum}` : undefined,
       });
+      programmaticCloseRef.current = true;
       setAccountabilityModal({ open: false, tx: null });
       await fetchTransactions(startDate, endDate, session.companyDB);
       if (batchActive) advanceBatch();
