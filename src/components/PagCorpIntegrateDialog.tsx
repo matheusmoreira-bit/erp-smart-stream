@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
-import { supabase } from "@/integrations/supabase/client";
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -28,6 +27,8 @@ interface Props {
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
+  /** Whether the pagcorp_payment_account credential is configured for this company. */
+  paymentAccountConfigured: boolean;
   onConfirm: (supplier: SapSearchOption) => Promise<void>;
 }
 
@@ -37,25 +38,16 @@ export function PagCorpIntegrateDialog({
   transaction,
   integrationType,
   companyDb,
+  paymentAccountConfigured,
   onConfirm,
 }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentAccount, setPaymentAccount] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !companyDb) return;
+    if (!open) return;
     setSupplier(null);
     setSubmitting(false);
-    setPaymentAccount(null);
-    supabase
-      .from("system_credentials")
-      .select("credential_value")
-      .eq("system_name", "sap")
-      .eq("company_db", companyDb)
-      .eq("credential_key", "pagcorp_payment_account")
-      .maybeSingle()
-      .then(({ data }) => setPaymentAccount((data as any)?.credential_value || null));
   }, [open, companyDb]);
 
   if (!transaction) return null;
@@ -124,16 +116,14 @@ export function PagCorpIntegrateDialog({
             />
           </div>
 
-          {!paymentAccount && (
+          {!paymentAccountConfigured ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
               Conta de pagamento PagCorp não configurada para esta empresa. Adicione a credencial{" "}
               <code className="font-mono">pagcorp_payment_account</code> em Credenciais SAP.
             </div>
-          )}
-
-          {paymentAccount && (
+          ) : (
             <p className="text-xs text-muted-foreground">
-              Conta de pagamento: <span className="font-mono text-foreground">{paymentAccount}</span>
+              Conta de pagamento PagCorp configurada para esta empresa.
             </p>
           )}
         </div>
@@ -142,7 +132,7 @@ export function PagCorpIntegrateDialog({
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={!supplier || !paymentAccount || submitting}>
+          <Button onClick={handleSubmit} disabled={!supplier || !paymentAccountConfigured || submitting}>
             {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Integrar agora
           </Button>
