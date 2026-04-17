@@ -15,8 +15,10 @@ import {
   Upload,
   Clock,
   History,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
