@@ -69,6 +69,7 @@ export interface CreateExpenseInput {
   origin?: ExpenseOrigin;
   initialStatus?: ExpenseStatus;
   skipRules?: boolean;
+  branch_id?: number;
   items: Omit<ExpenseItem, "id">[];
 }
 
