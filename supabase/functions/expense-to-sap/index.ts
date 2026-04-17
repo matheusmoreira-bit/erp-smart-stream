@@ -157,10 +157,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3.1 Optional: upload attachments first and link via AttachmentEntry
-    let attachmentEntry: number | null = null;
+    // 3.1 Optional: upload attachments first and link via AttachmentEntry.
+    // Reuse sap_attachment_entry if a previous attempt already uploaded them —
+    // this avoids duplicating attachments in SAP when retrying after a failure
+    // (e.g. permission error on PurchaseOrders).
+    let attachmentEntry: number | null = expense.sap_attachment_entry ?? null;
     const integrateAttachments = (sapCreds.integrate_attachments || "").toLowerCase() === "true";
-    if (integrateAttachments) {
+    if (integrateAttachments && attachmentEntry === null) {
       const { data: atts, error: attErr } = await supabase
         .from("expense_attachments")
         .select("file_path, file_name")
@@ -182,13 +185,26 @@ Deno.serve(async (req) => {
       if (files.length > 0) {
         attachmentEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
         console.log(`Anexos enviados ao SAP — AbsoluteEntry=${attachmentEntry}`);
+        // Persist immediately so a retry after PO failure won't re-upload.
+        if (attachmentEntry !== null) {
+          await supabase
+            .from("expenses")
+            .update({ sap_attachment_entry: attachmentEntry })
+            .eq("id", expense_id);
+        }
       }
+    } else if (attachmentEntry !== null) {
+      console.log(`Reaproveitando anexo já enviado ao SAP — AbsoluteEntry=${attachmentEntry}`);
     }
 
+    // Branch resolution: company-configured default ALWAYS wins unless the
+    // expense explicitly stored a different branch_id. We treat branch_id of
+    // 0/1 from older form defaults as "not set" so the company default applies.
     const configuredBranch = Number(sapCreds.default_branch_id || "");
     const fallbackBranch = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
-    const branchId = (expense.branch_id && Number(expense.branch_id) > 0)
-      ? Number(expense.branch_id)
+    const expenseBranch = Number(expense.branch_id);
+    const branchId = (Number.isFinite(expenseBranch) && expenseBranch > 1)
+      ? expenseBranch
       : fallbackBranch;
 
     const sapPayload: Record<string, unknown> = {
