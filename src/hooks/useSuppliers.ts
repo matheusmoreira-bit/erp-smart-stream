@@ -104,7 +104,7 @@ export function useSuppliers(companyDb?: string) {
         id: local?.id || `sap:${opt.code}`,
         company_db: companyDb || null,
         card_code: opt.code,
-        card_name: raw.CardName || opt.name,
+        card_name: raw.CardName || opt.name || opt.code || "(sem nome)",
         card_type: "S",
         federal_tax_id: local?.federal_tax_id ?? (raw.UnifiedFederalTaxID || raw.FederalTaxID || null),
         u_fgr_taxid0: local?.u_fgr_taxid0 ?? null,
@@ -132,7 +132,7 @@ export function useSuppliers(companyDb?: string) {
     for (const r of localByCode.values()) merged.push(r);
     for (const r of orphans) merged.push(r);
 
-    merged.sort((a, b) => a.card_name.localeCompare(b.card_name));
+    merged.sort((a, b) => (a.card_name || "").localeCompare(b.card_name || ""));
     return merged;
   }, [sapOptions, localRows, companyDb]);
 
