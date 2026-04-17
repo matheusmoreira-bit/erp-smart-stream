@@ -9,6 +9,14 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Status values used to track each integration stage on the expense row.
+// Possible values:
+//   "not_applicable" — stage skipped (e.g. no attachments, or feature disabled)
+//   "pending"        — not yet attempted in this run
+//   "success"        — stage completed without error
+//   "failed"         — stage failed (see sap_integration_error)
+type StageStatus = "not_applicable" | "pending" | "success" | "failed";
+
 async function getSapCredentials(
   supabase: ReturnType<typeof createClient>,
   companyDb?: string,
@@ -97,11 +105,38 @@ async function uploadAttachmentsToSap(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  try {
-    const { expense_id } = await req.json();
-    if (!expense_id) throw new Error("expense_id obrigatório");
+  // Track stage status across the whole request so we can persist progress
+  // even when later stages fail. These are flushed on success and on error.
+  let attachmentStatus: StageStatus = "not_applicable";
+  let purchaseOrderStatus: StageStatus = "pending";
+  let attachmentLinkStatus: StageStatus = "not_applicable";
+  let expenseId: string | null = null;
+  let supabase: ReturnType<typeof createClient> | null = null;
 
-    const supabase = createClient(
+  const persistStatus = async (extra: Record<string, unknown> = {}) => {
+    if (!supabase || !expenseId) return;
+    try {
+      await supabase
+        .from("expenses")
+        .update({
+          sap_attachment_status: attachmentStatus,
+          sap_purchase_order_status: purchaseOrderStatus,
+          sap_attachment_link_status: attachmentLinkStatus,
+          sap_integration_last_attempt_at: new Date().toISOString(),
+          ...extra,
+        })
+        .eq("id", expenseId);
+    } catch (e) {
+      console.warn("Falha ao persistir status de integração:", e);
+    }
+  };
+
+  try {
+    const body = await req.json();
+    expenseId = body.expense_id;
+    if (!expenseId) throw new Error("expense_id obrigatório");
+
+    supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
@@ -110,7 +145,7 @@ Deno.serve(async (req) => {
     const { data: expense, error: expErr } = await supabase
       .from("expenses")
       .select("*")
-      .eq("id", expense_id)
+      .eq("id", expenseId)
       .single();
     if (expErr || !expense) throw new Error(`Despesa não encontrada: ${expErr?.message ?? ""}`);
 
@@ -124,7 +159,7 @@ Deno.serve(async (req) => {
     const { data: items, error: itemsErr } = await supabase
       .from("expense_items")
       .select("*")
-      .eq("expense_id", expense_id);
+      .eq("expense_id", expenseId);
     if (itemsErr) throw new Error(`Erro ao carregar itens: ${itemsErr.message}`);
     if (!items || items.length === 0) throw new Error("Despesa sem itens — não é possível lançar no SAP");
 
@@ -157,44 +192,70 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3.1 Optional: upload attachments first and link via AttachmentEntry.
-    // Reuse sap_attachment_entry if a previous attempt already uploaded them —
-    // this avoids duplicating attachments in SAP when retrying after a failure
-    // (e.g. permission error on PurchaseOrders).
+    // 3.1 Attachments stage — upload first and link via AttachmentEntry.
+    // Reuse sap_attachment_entry if a previous attempt already uploaded them
+    // to avoid duplicating attachments in SAP when retrying after a failure.
     let attachmentEntry: number | null = expense.sap_attachment_entry ?? null;
     const integrateAttachments = (sapCreds.integrate_attachments || "").toLowerCase() === "true";
-    if (integrateAttachments && attachmentEntry === null) {
-      const { data: atts, error: attErr } = await supabase
-        .from("expense_attachments")
-        .select("file_path, file_name")
-        .eq("expense_id", expense_id);
-      if (attErr) console.warn("Erro ao listar anexos:", attErr.message);
 
-      const files: { name: string; blob: Blob }[] = [];
-      for (const a of atts || []) {
-        const { data: blob, error: dlErr } = await supabase.storage
-          .from("expense-attachments")
-          .download(a.file_path);
-        if (dlErr || !blob) {
-          console.warn(`Falha ao baixar anexo ${a.file_path}:`, dlErr?.message);
-          continue;
-        }
-        files.push({ name: a.file_name, blob });
-      }
+    if (integrateAttachments) {
+      if (attachmentEntry !== null) {
+        // Already uploaded in a previous run — nothing to do at this stage.
+        attachmentStatus = "success";
+        console.log(`Reaproveitando anexo já enviado ao SAP — AbsoluteEntry=${attachmentEntry}`);
+      } else {
+        attachmentStatus = "pending";
+        try {
+          const { data: atts, error: attErr } = await supabase
+            .from("expense_attachments")
+            .select("file_path, file_name")
+            .eq("expense_id", expenseId);
+          if (attErr) console.warn("Erro ao listar anexos:", attErr.message);
 
-      if (files.length > 0) {
-        attachmentEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
-        console.log(`Anexos enviados ao SAP — AbsoluteEntry=${attachmentEntry}`);
-        // Persist immediately so a retry after PO failure won't re-upload.
-        if (attachmentEntry !== null) {
-          await supabase
-            .from("expenses")
-            .update({ sap_attachment_entry: attachmentEntry })
-            .eq("id", expense_id);
+          const files: { name: string; blob: Blob }[] = [];
+          for (const a of atts || []) {
+            const { data: blob, error: dlErr } = await supabase.storage
+              .from("expense-attachments")
+              .download(a.file_path);
+            if (dlErr || !blob) {
+              console.warn(`Falha ao baixar anexo ${a.file_path}:`, dlErr?.message);
+              continue;
+            }
+            files.push({ name: a.file_name, blob });
+          }
+
+          if (files.length === 0) {
+            // No attachments to upload — feature is enabled but nothing to send.
+            attachmentStatus = "not_applicable";
+          } else {
+            attachmentEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
+            console.log(`Anexos enviados ao SAP — AbsoluteEntry=${attachmentEntry}`);
+            if (attachmentEntry !== null) {
+              attachmentStatus = "success";
+              // Persist the SAP attachment reference + status immediately so a
+              // retry after a later failure won't re-upload.
+              await supabase
+                .from("expenses")
+                .update({
+                  sap_attachment_entry: attachmentEntry,
+                  sap_attachment_status: attachmentStatus,
+                })
+                .eq("id", expenseId);
+            } else {
+              attachmentStatus = "failed";
+              await persistStatus({
+                sap_integration_error: "SAP retornou AbsoluteEntry nulo no upload de anexos",
+              });
+              throw new Error("SAP retornou AbsoluteEntry nulo no upload de anexos");
+            }
+          }
+        } catch (e) {
+          attachmentStatus = "failed";
+          const msg = e instanceof Error ? e.message : String(e);
+          await persistStatus({ sap_integration_error: `Falha no envio do anexo: ${msg}` });
+          throw e;
         }
       }
-    } else if (attachmentEntry !== null) {
-      console.log(`Reaproveitando anexo já enviado ao SAP — AbsoluteEntry=${attachmentEntry}`);
     }
 
     // Branch resolution: company-configured default ALWAYS wins unless the
@@ -206,6 +267,10 @@ Deno.serve(async (req) => {
     const branchId = (Number.isFinite(expenseBranch) && expenseBranch > 1)
       ? expenseBranch
       : fallbackBranch;
+
+    // If we have an attachment to link, mark the link stage as pending so it
+    // shows up in audit even if the PO creation fails.
+    if (attachmentEntry !== null) attachmentLinkStatus = "pending";
 
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
@@ -236,41 +301,87 @@ Deno.serve(async (req) => {
       }),
     };
 
-    // 4. Post to PurchaseOrders (Pedido de Compra — usa fornecedor como CardCode)
-    const sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "PurchaseOrders");
+    // 4. Post to PurchaseOrders. The link stage succeeds in the same call as
+    // the PO creation because SAP B1 binds AttachmentEntry into the document
+    // header at insert time.
+    let sapResult;
+    try {
+      sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "PurchaseOrders");
+      purchaseOrderStatus = "success";
+      if (attachmentEntry !== null) attachmentLinkStatus = "success";
+    } catch (e) {
+      purchaseOrderStatus = "failed";
+      // If the PO failed, the attachment was uploaded but never linked to a
+      // document — surface that explicitly instead of leaving the stage as
+      // "pending" forever.
+      if (attachmentEntry !== null) attachmentLinkStatus = "failed";
+      const msg = e instanceof Error ? e.message : String(e);
+      await persistStatus({ sap_integration_error: `Falha ao criar Pedido de Compra: ${msg}` });
+      throw e;
+    }
 
-    // 5. Update expense record
+    // 5. Update expense record (clear error + flush all stage statuses)
     await supabase
       .from("expenses")
       .update({
         status: "pc_lancado",
         sap_doc_entry: sapResult.docEntry,
         sap_doc_num: sapResult.docNum,
+        sap_attachment_status: attachmentStatus,
+        sap_purchase_order_status: purchaseOrderStatus,
+        sap_attachment_link_status: attachmentLinkStatus,
+        sap_integration_error: null,
+        sap_integration_last_attempt_at: new Date().toISOString(),
       })
-      .eq("id", expense_id);
+      .eq("id", expenseId);
 
     // 6. Audit
     await supabase.rpc("insert_audit_log", {
       p_action: "sap_document_created",
       p_entity_type: "expense",
-      p_entity_id: expense_id,
+      p_entity_id: expenseId,
       p_company_db: expense.company_db || null,
       p_details: {
         sap_endpoint: "PurchaseOrders",
         sap_doc_entry: sapResult.docEntry,
         sap_doc_num: sapResult.docNum,
+        sap_attachment_entry: attachmentEntry,
+        stage_status: {
+          attachment: attachmentStatus,
+          purchase_order: purchaseOrderStatus,
+          attachment_link: attachmentLinkStatus,
+        },
       },
     });
 
     return new Response(
-      JSON.stringify({ success: true, docEntry: sapResult.docEntry, docNum: sapResult.docNum }),
+      JSON.stringify({
+        success: true,
+        docEntry: sapResult.docEntry,
+        docNum: sapResult.docNum,
+        stages: {
+          attachment: attachmentStatus,
+          purchase_order: purchaseOrderStatus,
+          attachment_link: attachmentLinkStatus,
+        },
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro desconhecido";
     console.error("expense-to-sap error:", msg);
+    // Best-effort: persist whatever stage statuses we collected before the throw.
+    await persistStatus({ sap_integration_error: msg });
     return new Response(
-      JSON.stringify({ success: false, error: msg }),
+      JSON.stringify({
+        success: false,
+        error: msg,
+        stages: {
+          attachment: attachmentStatus,
+          purchase_order: purchaseOrderStatus,
+          attachment_link: attachmentLinkStatus,
+        },
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
