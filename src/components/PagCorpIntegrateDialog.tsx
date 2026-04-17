@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
-import { supabase } from "@/integrations/supabase/client";
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 
 function formatCurrency(value: number, currency: string = "BRL") {
