@@ -71,6 +71,7 @@ export interface CreateExpenseInput {
   skipRules?: boolean;
   branch_id?: number;
   items: Omit<ExpenseItem, "id">[];
+  files?: File[];
 }
 
 const STATUS_LABELS: Record<ExpenseStatus, string> = {
@@ -314,6 +315,48 @@ export function useExpenses() {
           }))
         );
         if (itemsErr) throw itemsErr;
+      }
+
+      // Upload attachments to storage and persist references so the SAP
+      // integration can later upload them to SAP B1 Attachments2.
+      if (input.files && input.files.length > 0) {
+        const expenseId = (expense as any).id;
+        const attachmentRows: {
+          expense_id: string;
+          file_path: string;
+          file_name: string;
+          file_size: number;
+          mime_type: string;
+        }[] = [];
+
+        for (const file of input.files) {
+          const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+          const path = `${expenseId}/${Date.now()}_${safeName}`;
+          const { error: upErr } = await supabase.storage
+            .from("expense-attachments")
+            .upload(path, file, {
+              contentType: file.type || "application/octet-stream",
+              upsert: false,
+            });
+          if (upErr) {
+            console.error("Falha ao subir anexo", file.name, upErr);
+            continue;
+          }
+          attachmentRows.push({
+            expense_id: expenseId,
+            file_path: path,
+            file_name: file.name,
+            file_size: file.size,
+            mime_type: file.type || "application/octet-stream",
+          });
+        }
+
+        if (attachmentRows.length > 0) {
+          const { error: attErr } = await supabase
+            .from("expense_attachments")
+            .insert(attachmentRows);
+          if (attErr) console.error("Falha ao registrar anexos:", attErr);
+        }
       }
 
       await fetchExpenses();

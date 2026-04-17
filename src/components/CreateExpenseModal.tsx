@@ -418,6 +418,7 @@ export function CreateExpenseModal({
         // Filial não é mais editável aqui — a edge function de integração
         // SAP usa o `default_branch_id` configurado no cadastro da empresa.
         items: items.map(({ sapItem, sapCostCenter, sapProject, ...rest }) => rest),
+        files: files.length > 0 ? files : undefined,
       });
       toast.success("Despesa criada com sucesso!");
       onClose();
