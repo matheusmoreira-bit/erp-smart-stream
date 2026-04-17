@@ -1,0 +1,1 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS branch_id integer NOT NULL DEFAULT 1;

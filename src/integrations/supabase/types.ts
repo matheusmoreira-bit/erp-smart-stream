@@ -289,6 +289,7 @@ export type Database = {
       }
       expenses: {
         Row: {
+          branch_id: number
           company_db: string | null
           cost_center: string | null
           created_at: string
@@ -310,6 +311,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          branch_id?: number
           company_db?: string | null
           cost_center?: string | null
           created_at?: string
@@ -331,6 +333,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          branch_id?: number
           company_db?: string | null
           cost_center?: string | null
           created_at?: string
