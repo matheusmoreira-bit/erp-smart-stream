@@ -648,8 +648,10 @@ export default function PagCorp() {
       <PagCorpIntegrateDialog
         open={integrateDialog.open}
         onClose={() => {
+          const wasProgrammatic = programmaticCloseRef.current;
+          programmaticCloseRef.current = false;
           setIntegrateDialog({ open: false, tx: null, type: "generic" });
-          if (batchActive) cancelBatch();
+          if (batchActive && !wasProgrammatic) cancelBatch();
         }}
         transaction={integrateDialog.tx}
         integrationType={integrateDialog.type}
@@ -660,8 +662,10 @@ export default function PagCorp() {
       <CreateExpenseModal
         open={accountabilityModal.open}
         onClose={() => {
+          const wasProgrammatic = programmaticCloseRef.current;
+          programmaticCloseRef.current = false;
           setAccountabilityModal({ open: false, tx: null });
-          if (batchActive) cancelBatch();
+          if (batchActive && !wasProgrammatic) cancelBatch();
         }}
         onCreate={handleCreateAccountabilityExpense}
         sapSession={session}
