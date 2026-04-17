@@ -265,7 +265,7 @@ export function useExpenses() {
           currency: input.currency || "BRL",
           doc_type: "expense",
         };
-        const match = await findMatchingRule(ctx);
+        const match = await findMatchingRule(ctx, session.companyDB || null);
         if (match) {
           status = "pendente_aprovacao";
           currentApprover = match.firstApprover?.name || null;
