@@ -14,6 +14,7 @@ import {
   DollarSign,
   Send,
   X as XIcon,
+  RotateCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -68,24 +69,31 @@ function ExpenseDetailModal({
   onClose,
   onSubmit,
   onCancel,
+  onRetrySap,
   canCancel,
+  canRetrySap,
   isSubmitting,
   isCancelling,
+  isRetrying,
 }: {
   expense: Expense | null;
   open: boolean;
   onClose: () => void;
   onSubmit: (id: string) => void;
   onCancel: (id: string) => void;
+  onRetrySap: (id: string) => void;
   canCancel: boolean;
+  canRetrySap: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
+  isRetrying: boolean;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   if (!expense) return null;
 
   const showSubmit = expense.status === "rascunho";
   const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
+  const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
 
   return (
     <>
@@ -172,7 +180,7 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            {(showSubmit || showCancel) && (
+            {(showSubmit || showCancel || showRetrySap) && (
               <div className="border-t border-border pt-4 flex justify-end gap-3">
                 <Button variant="outline" onClick={onClose}>Fechar</Button>
                 {showCancel && (
@@ -184,6 +192,16 @@ function ExpenseDetailModal({
                   >
                     {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XIcon className="w-4 h-4" />}
                     Cancelar Despesa
+                  </Button>
+                )}
+                {showRetrySap && (
+                  <Button
+                    onClick={() => onRetrySap(expense.id)}
+                    disabled={isRetrying}
+                    className="gap-1.5"
+                  >
+                    {isRetrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+                    Reintegrar no SAP
                   </Button>
                 )}
                 {showSubmit && (
@@ -263,13 +281,14 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
 export default function ExpensesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense } = useExpenses();
+  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses();
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   if (!session) {
@@ -323,6 +342,19 @@ export default function ExpensesPage() {
       toast.error(e instanceof Error ? e.message : "Erro ao cancelar");
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const handleRetrySap = async (id: string) => {
+    setIsRetrying(true);
+    try {
+      await retrySapIntegration(id);
+      toast.success("Despesa integrada no SAP com sucesso!");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao reintegrar no SAP");
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -473,9 +505,12 @@ export default function ExpensesPage() {
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
         onCancel={handleCancel}
+        onRetrySap={handleRetrySap}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
+        canRetrySap={session.erpType === "sap" && (isAdmin || (selectedExpense ? canCancel(selectedExpense) : false))}
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
+        isRetrying={isRetrying}
       />
 
       <CreateExpenseModal
