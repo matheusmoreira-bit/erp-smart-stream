@@ -619,7 +619,16 @@ export function CreateExpenseModal({
                     onChange={(val) => {
                       setItems((prev) => {
                         const updated = [...prev];
-                        updated[i] = { ...updated[i], sapItem: val, item_code: val?.code || "", description: val?.name || updated[i].description };
+                        // Preserve description from AI / user input — only fill it
+                        // from the SAP item name if the field is currently empty.
+                        const currentDesc = (updated[i].description || "").trim();
+                        const nextDesc = currentDesc ? currentDesc : (val?.name || "");
+                        updated[i] = {
+                          ...updated[i],
+                          sapItem: val,
+                          item_code: val?.code || "",
+                          description: nextDesc,
+                        };
                         return updated;
                       });
                     }}
