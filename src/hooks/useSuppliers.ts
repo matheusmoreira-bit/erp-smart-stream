@@ -132,7 +132,7 @@ export function useSuppliers(companyDb?: string) {
     for (const r of localByCode.values()) merged.push(r);
     for (const r of orphans) merged.push(r);
 
-    merged.sort((a, b) => a.card_name.localeCompare(b.card_name));
+    merged.sort((a, b) => (a.card_name || "").localeCompare(b.card_name || ""));
     return merged;
   }, [sapOptions, localRows, companyDb]);
 
