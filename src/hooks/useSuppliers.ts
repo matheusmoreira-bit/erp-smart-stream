@@ -183,7 +183,9 @@ function buildSapPayload(s: SupplierInput) {
     CardCode: s.card_code,
     CardName: s.card_name,
     CardType: s.card_type || "cSupplier",
-    Currency: s.currency || "BRL",
+    // Currency intentionally omitted — let SAP use its configured default
+    // (sending "BRL" fails when the company isn't configured with that ISO code).
+
     UnifiedFederalTaxID: s.federal_tax_id || undefined,
     U_FGR_TAXID0: s.u_fgr_taxid0 || s.federal_tax_id || undefined,
     EmailAddress: s.email || undefined,
