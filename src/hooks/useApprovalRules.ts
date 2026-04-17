@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSap } from "@/contexts/SapContext";
 
 export type CriterionOperator =
   | "greater_than"
@@ -55,6 +56,7 @@ export interface ApprovalRule {
   created_by: string;
   created_at: string;
   updated_at: string;
+  company_db: string | null;
   levels: ApprovalRuleLevel[];
 }
 
@@ -66,6 +68,8 @@ export interface CreateRuleInput {
 }
 
 export function useApprovalRules() {
+  const { session } = useSap();
+  const activeCompanyDb = session?.companyDB || null;
   const [rules, setRules] = useState<ApprovalRule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,9 +78,17 @@ export function useApprovalRules() {
     setIsLoading(true);
     setError(null);
     try {
+      // Scope rules to the active company. If there is no session, return nothing
+      // instead of leaking other companies' rules.
+      if (!activeCompanyDb) {
+        setRules([]);
+        return;
+      }
+
       const { data, error: err } = await supabase
         .from("approval_rules")
         .select("*")
+        .eq("company_db", activeCompanyDb)
         .order("priority", { ascending: false });
       if (err) throw err;
 
@@ -108,10 +120,13 @@ export function useApprovalRules() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [activeCompanyDb]);
 
   const createRule = useCallback(
     async (input: CreateRuleInput, createdBy: string) => {
+      if (!activeCompanyDb) {
+        throw new Error("Selecione uma empresa antes de criar uma regra");
+      }
       const { data: rule, error: err } = await supabase
         .from("approval_rules")
         .insert({
@@ -119,6 +134,7 @@ export function useApprovalRules() {
           priority: input.priority || 0,
           criteria: input.criteria as any,
           created_by: createdBy,
+          company_db: activeCompanyDb,
         })
         .select()
         .single();
@@ -139,7 +155,7 @@ export function useApprovalRules() {
       await fetchRules();
       return rule;
     },
-    [fetchRules]
+    [fetchRules, activeCompanyDb]
   );
 
   const toggleRule = useCallback(

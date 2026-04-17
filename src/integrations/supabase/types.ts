@@ -51,6 +51,7 @@ export type Database = {
       }
       approval_rules: {
         Row: {
+          company_db: string | null
           cost_center: string | null
           created_at: string
           created_by: string
@@ -67,6 +68,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_db?: string | null
           cost_center?: string | null
           created_at?: string
           created_by: string
@@ -83,6 +85,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_db?: string | null
           cost_center?: string | null
           created_at?: string
           created_by?: string
