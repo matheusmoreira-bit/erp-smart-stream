@@ -172,33 +172,43 @@ export default function PagCorp() {
     return map;
   }, [filteredTransactions]);
 
-  const handleValidateAndIntegrate = (t: PagCorpTransaction) => {
+  const openIntegrateDialog = (t: PagCorpTransaction, type: "generic" | "accountability") => {
     if (!checkSapCredentials()) return;
-    setExpenseModal({
-      open: true,
-      prefill: {
-        description: t.description,
-        amount: t.amount,
-        currency: t.currency,
-        accountAlias: t.accountAlias || t.accountName || undefined,
-        receipts: t.receipts || [],
-        triggerAI: true,
-      },
-    });
+    setIntegrateDialog({ open: true, tx: t, type });
   };
 
-  const handleIntegrateGeneric = (t: PagCorpTransaction) => {
-    if (!checkSapCredentials()) return;
-    setExpenseModal({
-      open: true,
-      prefill: {
-        description: t.description,
-        amount: t.amount,
-        currency: t.currency,
-        accountAlias: t.accountAlias || t.accountName || undefined,
-        triggerAI: false,
-      },
-    });
+  const handleConfirmIntegrate = async (supplier: SapSearchOption) => {
+    const t = integrateDialog.tx;
+    if (!t || !session?.companyDB) return;
+    setIntegrating(t.id);
+    setIntegrateDialog({ open: false, tx: null, type: "generic" });
+    try {
+      const result = await integrateDirect(
+        t,
+        integrateDialog.type,
+        session.companyDB,
+        supplier.code,
+        supplier.name,
+        session.userName || session.userId || undefined,
+      );
+      if (result.alreadyIntegrated) {
+        toast.info("Transação já estava integrada no SAP", {
+          description: `DocNum #${result.docNum}`,
+        });
+      } else {
+        toast.success("Integrada no SAP com sucesso", {
+          description: `PC #${result.purchaseOrder?.DocNum} • NF #${result.apInvoice?.DocNum} • Pagamento #${result.outgoingPayment?.DocNum}`,
+        });
+      }
+      await fetchTransactions(startDate, endDate, session.companyDB);
+    } catch (e) {
+      toast.error("Falha na integração", {
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+        action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
+      });
+    } finally {
+      setIntegrating(null);
+    }
   };
 
   const companyLabel = getLabel(session?.companyDB || "");
