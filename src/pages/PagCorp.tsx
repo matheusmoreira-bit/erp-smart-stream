@@ -114,6 +114,8 @@ export default function PagCorp() {
   const [batchQueue, setBatchQueue] = useState<PagCorpTransaction[]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
   const [batchActive, setBatchActive] = useState(false);
+  // True when modal close is programmatic (after success), so we don't cancel the batch
+  const programmaticCloseRef = useRef(false);
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
