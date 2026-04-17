@@ -159,6 +159,15 @@ export function PagCorpCandidateRow({
 
   return (
     <TableRow className={resolved ? "opacity-70" : ""}>
+      <TableCell className="align-top w-10">
+        {selectable ? (
+          <Checkbox
+            checked={!!selected}
+            onCheckedChange={(v) => onToggleSelected?.(c.key, !!v)}
+            aria-label="Selecionar fornecedor"
+          />
+        ) : null}
+      </TableCell>
       <TableCell className="font-medium align-top">{c.card_name}</TableCell>
       <TableCell className="font-mono text-xs align-top">
         {c.federal_tax_id || "—"}
