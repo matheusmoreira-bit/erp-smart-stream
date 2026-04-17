@@ -134,8 +134,8 @@ Deno.serve(async (req) => {
       }),
     };
 
-    // 4. Post to Orders (Purchase Order)
-    const sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "Orders");
+    // 4. Post to PurchaseOrders (Pedido de Compra — usa fornecedor como CardCode)
+    const sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "PurchaseOrders");
 
     // 5. Update expense record
     await supabase
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
       p_entity_id: expense_id,
       p_company_db: expense.company_db || null,
       p_details: {
-        sap_endpoint: "Orders",
+        sap_endpoint: "PurchaseOrders",
         sap_doc_entry: sapResult.docEntry,
         sap_doc_num: sapResult.docNum,
       },
@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
     console.error("expense-to-sap error:", msg);
     return new Response(
       JSON.stringify({ success: false, error: msg }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
