@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   CreditCard,
@@ -114,6 +114,8 @@ export default function PagCorp() {
   const [batchQueue, setBatchQueue] = useState<PagCorpTransaction[]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
   const [batchActive, setBatchActive] = useState(false);
+  // True when modal close is programmatic (after success), so we don't cancel the batch
+  const programmaticCloseRef = useRef(false);
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
@@ -266,6 +268,7 @@ export default function PagCorp() {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
     setIntegrating(t.id);
+    programmaticCloseRef.current = true;
     setIntegrateDialog({ open: false, tx: null, type: "generic" });
     try {
       const result = await integrateDirect(
@@ -352,6 +355,7 @@ export default function PagCorp() {
       toast.success("Despesa criada e integrada no SAP", {
         description: sapDocNum ? `PC #${sapDocNum}` : undefined,
       });
+      programmaticCloseRef.current = true;
       setAccountabilityModal({ open: false, tx: null });
       await fetchTransactions(startDate, endDate, session.companyDB);
       if (batchActive) advanceBatch();
@@ -644,8 +648,10 @@ export default function PagCorp() {
       <PagCorpIntegrateDialog
         open={integrateDialog.open}
         onClose={() => {
+          const wasProgrammatic = programmaticCloseRef.current;
+          programmaticCloseRef.current = false;
           setIntegrateDialog({ open: false, tx: null, type: "generic" });
-          if (batchActive) cancelBatch();
+          if (batchActive && !wasProgrammatic) cancelBatch();
         }}
         transaction={integrateDialog.tx}
         integrationType={integrateDialog.type}
@@ -656,8 +662,10 @@ export default function PagCorp() {
       <CreateExpenseModal
         open={accountabilityModal.open}
         onClose={() => {
+          const wasProgrammatic = programmaticCloseRef.current;
+          programmaticCloseRef.current = false;
           setAccountabilityModal({ open: false, tx: null });
-          if (batchActive) cancelBatch();
+          if (batchActive && !wasProgrammatic) cancelBatch();
         }}
         onCreate={handleCreateAccountabilityExpense}
         sapSession={session}
