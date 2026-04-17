@@ -168,14 +168,6 @@ Regras IMPORTANTES:
     // Post-process: check if document client matches logged company
     const docs = Array.isArray(parsed) ? parsed : [parsed];
     for (const doc of docs) {
-      // Enforce 200-char limit on item descriptions (safety net)
-      if (Array.isArray(doc.items)) {
-        for (const item of doc.items) {
-          if (typeof item.description === "string" && item.description.length > 200) {
-            item.description = item.description.slice(0, 197).trimEnd() + "...";
-          }
-        }
-      }
       if (companyDB && doc.client_name) {
         const clientLower = doc.client_name.toLowerCase();
         const companyAliases = COMPANY_NAMES[companyDB] || [];
