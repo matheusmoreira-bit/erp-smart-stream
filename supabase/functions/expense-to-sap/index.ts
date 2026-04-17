@@ -112,6 +112,10 @@ Deno.serve(async (req) => {
   let attachmentLinkStatus: StageStatus = "not_applicable";
   let expenseId: string | null = null;
   let supabase: ReturnType<typeof createClient> | null = null;
+  // Captured outside the try/catch so the error path can return the same
+  // payload that was actually sent to SAP (used by the integration log UI).
+  let lastSapPayload: Record<string, unknown> | null = null;
+  let lastSapResponse: unknown = null;
 
   const persistStatus = async (extra: Record<string, unknown> = {}) => {
     if (!supabase || !expenseId) return;
@@ -308,6 +312,7 @@ Deno.serve(async (req) => {
         return line;
       }),
     };
+    lastSapPayload = sapPayload;
 
     // 4. Post to PurchaseOrders. The link stage succeeds in the same call as
     // the PO creation because SAP B1 binds AttachmentEntry into the document
