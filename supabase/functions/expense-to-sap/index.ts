@@ -185,12 +185,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    const configuredBranch = Number(sapCreds.default_branch_id || "");
+    const fallbackBranch = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
+    const branchId = (expense.branch_id && Number(expense.branch_id) > 0)
+      ? Number(expense.branch_id)
+      : fallbackBranch;
+
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
       DocDate: today,
       DocDueDate: today,
       TaxDate: today,
-      BPL_IDAssignedToInvoice: (expense.branch_id && Number(expense.branch_id) > 0) ? Number(expense.branch_id) : 1,
+      BPL_IDAssignedToInvoice: branchId,
       Comments: `Despesa interna #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
       ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
       ...headerCustom,
