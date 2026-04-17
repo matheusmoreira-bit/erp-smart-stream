@@ -255,7 +255,10 @@ export default function PagCorp() {
       return;
     }
     setBatchIndex(next);
-    openBatchItem(batchQueue[next]);
+    // Delay reopening so Radix Dialog can finish its close animation/state
+    // before mounting the next one. Without this, the second modal silently
+    // fails to open because the previous instance is still tearing down.
+    setTimeout(() => openBatchItem(batchQueue[next]), 350);
   };
 
   const cancelBatch = () => {
