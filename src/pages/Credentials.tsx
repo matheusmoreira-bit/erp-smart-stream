@@ -36,10 +36,24 @@ function CredentialModal({
   onOpenChange: (open: boolean) => void;
   companyDb?: string;
 }) {
-  const { saveCredentials, deleteCredentials, isLoading } = useCredentials();
+  const { saveCredentials, deleteCredentials, fetchCredentialValues, isLoading } = useCredentials();
   const [values, setValues] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const hasExisting = existingKeys.length > 0;
+
+  // Load existing custom_fields value when dialog opens (only non-secret fields)
+  useEffect(() => {
+    if (!open) return;
+    const customField = system.fields.find((f) => f.type === "custom_fields");
+    if (customField && existingKeys.includes(customField.key)) {
+      fetchCredentialValues(system.name, [customField.key], companyDb).then((map) => {
+        if (map[customField.key]) {
+          setValues((prev) => ({ ...prev, [customField.key]: map[customField.key] }));
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, system.name]);
 
   const handleSave = async () => {
     const creds = system.fields
