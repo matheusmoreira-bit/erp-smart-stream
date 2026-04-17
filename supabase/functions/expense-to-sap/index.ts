@@ -367,6 +367,8 @@ Deno.serve(async (req) => {
         success: true,
         docEntry: sapResult.docEntry,
         docNum: sapResult.docNum,
+        sapPayload,
+        sapResponse: sapResult.response,
         stages: {
           attachment: attachmentStatus,
           purchase_order: purchaseOrderStatus,
