@@ -306,8 +306,13 @@ export type Database = {
           requester_email: string | null
           requester_name: string
           sap_attachment_entry: number | null
+          sap_attachment_link_status: string | null
+          sap_attachment_status: string | null
           sap_doc_entry: number | null
           sap_doc_num: number | null
+          sap_integration_error: string | null
+          sap_integration_last_attempt_at: string | null
+          sap_purchase_order_status: string | null
           status: Database["public"]["Enums"]["expense_status"]
           supplier_code: string | null
           supplier_name: string
@@ -329,8 +334,13 @@ export type Database = {
           requester_email?: string | null
           requester_name: string
           sap_attachment_entry?: number | null
+          sap_attachment_link_status?: string | null
+          sap_attachment_status?: string | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
+          sap_integration_error?: string | null
+          sap_integration_last_attempt_at?: string | null
+          sap_purchase_order_status?: string | null
           status?: Database["public"]["Enums"]["expense_status"]
           supplier_code?: string | null
           supplier_name: string
@@ -352,8 +362,13 @@ export type Database = {
           requester_email?: string | null
           requester_name?: string
           sap_attachment_entry?: number | null
+          sap_attachment_link_status?: string | null
+          sap_attachment_status?: string | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
+          sap_integration_error?: string | null
+          sap_integration_last_attempt_at?: string | null
+          sap_purchase_order_status?: string | null
           status?: Database["public"]["Enums"]["expense_status"]
           supplier_code?: string | null
           supplier_name?: string
