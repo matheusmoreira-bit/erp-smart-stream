@@ -345,6 +345,19 @@ export default function ExpensesPage() {
     }
   };
 
+  const handleRetrySap = async (id: string) => {
+    setIsRetrying(true);
+    try {
+      await retrySapIntegration(id);
+      toast.success("Despesa integrada no SAP com sucesso!");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao reintegrar no SAP");
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   const handleCreate = async (input: any) => {
     const result = await createExpense(input) as any;
     if (result?.status === "pendente_aprovacao") {
