@@ -3,7 +3,7 @@ import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, type LucideIc
 export interface SystemField {
   key: string;
   label: string;
-  type?: string;
+  type?: "text" | "password" | "custom_fields";
   placeholder?: string;
 }
 
@@ -37,6 +37,7 @@ export const SYSTEMS: SystemConfig[] = [
       { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
       { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
       { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },
+      { key: "custom_fields", label: "Campos Customizados", type: "custom_fields" },
     ],
   },
   {

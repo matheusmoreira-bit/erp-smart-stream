@@ -113,6 +113,25 @@ Deno.serve(async (req) => {
 
     // 3. Build Purchase Order payload
     const today = new Date().toISOString().slice(0, 10);
+
+    // Parse custom fields (UDFs) from credentials: header / line scope
+    let headerCustom: Record<string, unknown> = {};
+    let lineCustom: Record<string, unknown> = {};
+    if (sapCreds.custom_fields) {
+      try {
+        const parsed = JSON.parse(sapCreds.custom_fields);
+        if (Array.isArray(parsed)) {
+          for (const f of parsed) {
+            if (!f?.name || typeof f.name !== "string") continue;
+            const target = f.scope === "line" ? lineCustom : headerCustom;
+            target[f.name] = f.value ?? "";
+          }
+        }
+      } catch (e) {
+        console.warn("Falha ao parsear custom_fields SAP:", e);
+      }
+    }
+
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
       DocDate: today,
@@ -120,12 +139,14 @@ Deno.serve(async (req) => {
       TaxDate: today,
       BPL_IDAssignedToInvoice: (expense.branch_id && Number(expense.branch_id) > 0) ? Number(expense.branch_id) : 1,
       Comments: `Despesa interna #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
+      ...headerCustom,
       DocumentLines: items.map((it: any) => {
         const hasItem = !!it.item_code;
         const line: Record<string, unknown> = {
           ItemDescription: it.description,
           Quantity: Number(it.quantity) || 1,
           UnitPrice: Number(it.unit_price) || 0,
+          ...lineCustom,
         };
         if (hasItem) {
           line.ItemCode = it.item_code;
