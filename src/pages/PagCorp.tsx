@@ -69,10 +69,9 @@ function formatDate(dateStr: string) {
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions, logIntegration } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, integrateDirect } = usePagCorp();
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
-  const { createExpense } = useExpenses();
 
   useEffect(() => { fetchCredentials(session?.companyDB, "sap"); }, [fetchCredentials, session?.companyDB]);
 
@@ -95,7 +94,11 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [accountabilityFilter, setAccountabilityFilter] = useState<"all" | "yes" | "no">("all");
-  const [expenseModal, setExpenseModal] = useState<{ open: boolean; prefill?: PagCorpPrefill }>({ open: false });
+  const [integrateDialog, setIntegrateDialog] = useState<{
+    open: boolean;
+    tx: PagCorpTransaction | null;
+    type: "generic" | "accountability";
+  }>({ open: false, tx: null, type: "generic" });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
 
   const handleStartDateChange = (value: string) => {
