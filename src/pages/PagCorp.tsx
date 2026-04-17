@@ -42,6 +42,9 @@ import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
+import { CreateExpenseModal } from "@/components/CreateExpenseModal";
+import { useExpenses } from "@/hooks/useExpenses";
+import { supabase } from "@/integrations/supabase/client";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -69,7 +72,8 @@ function formatDate(dateStr: string) {
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions, integrateDirect } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, integrateDirect, logIntegration } = usePagCorp();
+  const { createExpense } = useExpenses();
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
 
@@ -99,6 +103,10 @@ export default function PagCorp() {
     tx: PagCorpTransaction | null;
     type: "generic" | "accountability";
   }>({ open: false, tx: null, type: "generic" });
+  const [accountabilityModal, setAccountabilityModal] = useState<{
+    open: boolean;
+    tx: PagCorpTransaction | null;
+  }>({ open: false, tx: null });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
 
   const handleStartDateChange = (value: string) => {
@@ -174,7 +182,11 @@ export default function PagCorp() {
 
   const openIntegrateDialog = (t: PagCorpTransaction, type: "generic" | "accountability") => {
     if (!checkSapCredentials()) return;
-    setIntegrateDialog({ open: true, tx: t, type });
+    if (type === "accountability") {
+      setAccountabilityModal({ open: true, tx: t });
+    } else {
+      setIntegrateDialog({ open: true, tx: t, type });
+    }
   };
 
   const handleConfirmIntegrate = async (supplier: SapSearchOption) => {
@@ -196,8 +208,8 @@ export default function PagCorp() {
           description: `DocNum #${result.docNum}`,
         });
       } else {
-        toast.success("Integrada no SAP com sucesso", {
-          description: `PC #${result.purchaseOrder?.DocNum} • NF #${result.apInvoice?.DocNum} • Pagamento #${result.outgoingPayment?.DocNum}`,
+        toast.success("Pedido de Compra criado no SAP", {
+          description: `PC #${result.purchaseOrder?.DocNum}`,
         });
       }
       await fetchTransactions(startDate, endDate, session.companyDB);
@@ -206,6 +218,74 @@ export default function PagCorp() {
         description: e instanceof Error ? e.message : "Erro desconhecido",
         action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
       });
+    } finally {
+      setIntegrating(null);
+    }
+  };
+
+  /**
+   * Accountability flow: opens the same form as a manual expense (items, cost
+   * centers, projects, attachments) and creates an internal expense with origin
+   * "pagcorp", skipping approval rules. SAP integration runs immediately, and we
+   * write a row into pagcorp_integration_log so the transaction shows as
+   * integrated in the PagCorp list and history.
+   */
+  const handleCreateAccountabilityExpense = async (input: any) => {
+    const t = accountabilityModal.tx;
+    if (!t || !session?.companyDB) return;
+    setIntegrating(t.id);
+    try {
+      const { expense } = await createExpense({
+        ...input,
+        origin: "pagcorp",
+        skipRules: true,
+        initialStatus: "aprovado",
+      });
+
+      // Trigger SAP integration immediately
+      let sapDocEntry: number | undefined;
+      let sapDocNum: number | undefined;
+      let sapError: string | undefined;
+      try {
+        const { data, error: fnErr } = await supabase.functions.invoke("expense-to-sap", {
+          body: { expense_id: (expense as any).id },
+        });
+        if (fnErr) throw fnErr;
+        if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
+        sapDocEntry = data?.docEntry;
+        sapDocNum = data?.docNum;
+      } catch (sapErr) {
+        sapError = sapErr instanceof Error ? sapErr.message : "Erro SAP desconhecido";
+      }
+
+      // Log into pagcorp_integration_log so the list reflects integrated state
+      await logIntegration(
+        t,
+        "accountability",
+        sapError ? "error" : "success",
+        session.companyDB,
+        session.userName || undefined,
+        sapDocEntry,
+        sapDocNum,
+        sapError,
+        { expense_id: (expense as any).id },
+        undefined,
+      );
+
+      if (sapError) throw new Error(sapError);
+
+      toast.success("Despesa criada e integrada no SAP", {
+        description: sapDocNum ? `PC #${sapDocNum}` : undefined,
+      });
+      setAccountabilityModal({ open: false, tx: null });
+      await fetchTransactions(startDate, endDate, session.companyDB);
+      return { expense };
+    } catch (e) {
+      toast.error("Falha ao integrar prestação", {
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+        action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
+      });
+      throw e;
     } finally {
       setIntegrating(null);
     }
@@ -460,6 +540,28 @@ export default function PagCorp() {
         integrationType={integrateDialog.type}
         companyDb={session?.companyDB}
         onConfirm={handleConfirmIntegrate}
+      />
+
+      <CreateExpenseModal
+        open={accountabilityModal.open}
+        onClose={() => setAccountabilityModal({ open: false, tx: null })}
+        onCreate={handleCreateAccountabilityExpense}
+        sapSession={session}
+        title="Integrar Prestação de Conta"
+        origin="pagcorp"
+        skipRules
+        prefill={
+          accountabilityModal.tx
+            ? {
+                description: accountabilityModal.tx.description,
+                amount: accountabilityModal.tx.amount,
+                currency: accountabilityModal.tx.currency,
+                accountAlias: accountabilityModal.tx.accountAlias,
+                receipts: accountabilityModal.tx.receipts,
+                triggerAI: true,
+              }
+            : undefined
+        }
       />
     </div>
   );
