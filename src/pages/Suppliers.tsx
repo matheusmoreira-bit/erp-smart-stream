@@ -12,6 +12,7 @@ import {
   XCircle,
   AlertCircle,
   LogOut,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -143,6 +144,14 @@ export default function Suppliers() {
           <Button variant="outline" onClick={refresh} disabled={isLoading} className="gap-2">
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate("/suppliers/import-pagcorp")}
+            className="gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            Importar do PagCorp
           </Button>
           <Button onClick={() => setCreating(true)} className="gap-2">
             <Plus className="w-4 h-4" />
