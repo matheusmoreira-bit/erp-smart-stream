@@ -15,6 +15,7 @@ import {
   Radio,
   ScrollText,
   Lock,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -87,6 +88,15 @@ const modules: ModuleCard[] = [
     color: "text-warning",
     bgGlow: "from-warning/20 to-warning/5",
     moduleKey: "users",
+  },
+  {
+    title: "Fornecedores",
+    description: "Cadastro de fornecedores com sincronização SAP e extração via IA a partir de notas fiscais.",
+    icon: Building2,
+    path: "/suppliers",
+    color: "text-success",
+    bgGlow: "from-success/20 to-success/5",
+    moduleKey: "suppliers",
   },
   {
     title: "Synapse",
