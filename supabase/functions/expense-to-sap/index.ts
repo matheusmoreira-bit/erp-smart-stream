@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
       p_entity_id: expense_id,
       p_company_db: expense.company_db || null,
       p_details: {
-        sap_endpoint: "Orders",
+        sap_endpoint: "PurchaseOrders",
         sap_doc_entry: sapResult.docEntry,
         sap_doc_num: sapResult.docNum,
       },
