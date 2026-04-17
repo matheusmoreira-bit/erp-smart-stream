@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
       DocDate: today,
       DocDueDate: today,
       TaxDate: today,
-      BPL_IDAssignedToInvoice: Number(expense.branch_id) || 1,
+      BPL_IDAssignedToInvoice: (expense.branch_id && Number(expense.branch_id) > 0) ? Number(expense.branch_id) : 1,
       Comments: `Despesa interna #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
       DocumentLines: items.map((it: any) => {
         const hasItem = !!it.item_code;
