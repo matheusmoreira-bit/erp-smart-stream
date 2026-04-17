@@ -58,18 +58,20 @@ export default function SuppliersImportPagCorp() {
   const { candidates, progress, scanning, error, scan, setCandidates } =
     useImportPagCorpSuppliers(session?.companyDB, suppliers);
 
+  const [days, setDays] = useState<string>("30");
+
   // Auto-scan on mount once suppliers are loaded
   const [scanned, setScanned] = useState(false);
   useEffect(() => {
     if (!scanned && session?.companyDB && suppliers.length > 0) {
       setScanned(true);
-      void scan();
+      void scan(Number(days));
     }
-  }, [scanned, session?.companyDB, suppliers.length, scan]);
+  }, [scanned, session?.companyDB, suppliers.length, scan, days]);
 
   const handleRescan = () => {
     setCandidates([]);
-    void scan();
+    void scan(Number(days));
   };
 
   const updateCandidate = (key: string, patch: Partial<PagCorpCandidate>) => {
