@@ -238,7 +238,17 @@ export function PagCorpCandidateRow({
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" onClick={handleImport} disabled={busy} className="gap-1.5">
+            <Button
+              size="sm"
+              onClick={handleImport}
+              disabled={busy || !canImport}
+              className="gap-1.5"
+              title={
+                canImport
+                  ? undefined
+                  : "Apenas fornecedores com CNPJ ou CPF podem ser importados"
+              }
+            >
               {busy ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
