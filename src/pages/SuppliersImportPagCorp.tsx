@@ -316,6 +316,14 @@ export default function SuppliersImportPagCorp() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(v) => toggleSelectAll(!!v)}
+                    disabled={selectableCandidates.length === 0}
+                    aria-label="Selecionar todos"
+                  />
+                </TableHead>
                 <TableHead>Fornecedor extraído</TableHead>
                 <TableHead>CNPJ/CPF</TableHead>
                 <TableHead>Origem (transação)</TableHead>
@@ -328,7 +336,7 @@ export default function SuppliersImportPagCorp() {
               {candidates.length === 0 && !scanning ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-12 text-muted-foreground"
                   >
                     {scanned
@@ -338,7 +346,7 @@ export default function SuppliersImportPagCorp() {
                 </TableRow>
               ) : scanning && candidates.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     <Loader2 className="w-5 h-5 animate-spin inline mr-2" />
                     Processando…
                   </TableCell>
@@ -350,6 +358,9 @@ export default function SuppliersImportPagCorp() {
                     candidate={c}
                     onResolved={updateCandidate}
                     onRefreshSuppliers={refreshSuppliers}
+                    selectable={isSelectable(c)}
+                    selected={selectedKeys.has(c.key)}
+                    onToggleSelected={toggleSelected}
                   />
                 ))
               )}
