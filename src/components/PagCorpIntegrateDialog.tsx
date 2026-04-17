@@ -116,16 +116,14 @@ export function PagCorpIntegrateDialog({
             />
           </div>
 
-          {!paymentAccount && (
+          {!paymentAccountConfigured ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
               Conta de pagamento PagCorp não configurada para esta empresa. Adicione a credencial{" "}
               <code className="font-mono">pagcorp_payment_account</code> em Credenciais SAP.
             </div>
-          )}
-
-          {paymentAccount && (
+          ) : (
             <p className="text-xs text-muted-foreground">
-              Conta de pagamento: <span className="font-mono text-foreground">{paymentAccount}</span>
+              Conta de pagamento PagCorp configurada para esta empresa.
             </p>
           )}
         </div>
@@ -134,7 +132,7 @@ export function PagCorpIntegrateDialog({
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={!supplier || !paymentAccount || submitting}>
+          <Button onClick={handleSubmit} disabled={!supplier || !paymentAccountConfigured || submitting}>
             {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Integrar agora
           </Button>
