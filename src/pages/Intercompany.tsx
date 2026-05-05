@@ -186,7 +186,7 @@ function ResultReportDialog({
   );
 }
 
-function CreateAccountDialog({ onCreated }: { onCreated: () => void }) {
+function CreateAccountDialog({ onCreated, companyDbs }: { onCreated: () => void; companyDbs: string[] }) {
   const { createAccount } = useIntercompany();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -200,12 +200,17 @@ function CreateAccountDialog({ onCreated }: { onCreated: () => void }) {
       toast.error("Preencha código e nome");
       return;
     }
+    if (companyDbs.length === 0) {
+      toast.error("Selecione ao menos uma empresa");
+      return;
+    }
     setSubmitting(true);
     try {
       const { results } = await createAccount({
         code: code.trim(),
         name: name.trim(),
         account_type: accountType,
+        company_dbs: companyDbs,
       });
       setReport(results);
       setOpen(false);
