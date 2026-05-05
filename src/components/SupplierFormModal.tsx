@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
+import { parseSapError } from "@/lib/sap-error";
 import {
   type Supplier,
   type SupplierInput,
@@ -291,8 +292,10 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
         : await createSupplier(payload, session);
 
       if (saved.sap_sync_status === "error") {
-        toast.warning("Salvo localmente, falha ao sincronizar com SAP", {
-          description: saved.sap_sync_error || undefined,
+        const parsed = parseSapError(saved.sap_sync_error || "");
+        toast.warning(`Salvo localmente — ${parsed.title}`, {
+          description: parsed.description,
+          duration: 8000,
         });
       } else {
         toast.success(editing ? "Fornecedor atualizado" : "Fornecedor cadastrado");
@@ -300,8 +303,10 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
       onSaved(saved);
       onClose();
     } catch (e) {
-      toast.error("Erro ao salvar", {
-        description: e instanceof Error ? e.message : "Erro desconhecido",
+      const parsed = parseSapError(e);
+      toast.error(parsed.title, {
+        description: parsed.description,
+        duration: 8000,
       });
     } finally {
       setSubmitting(false);
