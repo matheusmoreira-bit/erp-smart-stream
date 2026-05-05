@@ -440,13 +440,18 @@ export async function findSupplierByTaxId(
   taxId: string,
   companyDb: string,
 ): Promise<Supplier | null> {
-  const cleaned = taxId.replace(/\D/g, "");
-  if (!cleaned) return null;
+  const trimmed = taxId.trim();
+  if (!trimmed) return null;
+  const cleaned = trimmed.replace(/\D/g, "");
+  // Match either the digits-only form (BR style) or the original form
+  // (foreign IDs like 'GB123456789' or 'EIN 12-3456789').
+  const orParts = [`federal_tax_id.eq.${trimmed}`];
+  if (cleaned && cleaned !== trimmed) orParts.push(`federal_tax_id.eq.${cleaned}`);
   const { data } = await (supabase as any)
     .from(TABLE)
     .select("*")
     .eq("company_db", companyDb)
-    .or(`federal_tax_id.eq.${cleaned},federal_tax_id.eq.${taxId}`)
+    .or(orParts.join(","))
     .limit(1)
     .maybeSingle();
   return (data as Supplier) || null;
