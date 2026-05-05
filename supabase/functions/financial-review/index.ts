@@ -370,6 +370,172 @@ Deno.serve(async (req) => {
       return json({ items: data });
     }
 
+    if (action === "auto-link") {
+      // Vincula automaticamente um adiantamento/pagamento on-account a uma NF existente.
+      // body: { doc_type, doc_entry, invoice_doc_entry, amount?, card_code }
+      const docType = String(body.doc_type || "");
+      const docEntry = Number(body.doc_entry);
+      const invoiceDocEntry = Number(body.invoice_doc_entry);
+      const cardCode = String(body.card_code || "");
+      const amountIn = body.amount != null ? Number(body.amount) : null;
+      if (!docType || !docEntry || !invoiceDocEntry || !cardCode) {
+        return json({ error: "doc_type, doc_entry, invoice_doc_entry e card_code são obrigatórios" }, 400);
+      }
+
+      const isAP = docType === "ADVANCE_AP" || docType === "PAYMENT_OA_OUT";
+      const isAdvance = docType === "ADVANCE_AP" || docType === "ADVANCE_AR";
+
+      const result = await withSession(creds, async (cookies) => {
+        // Buscar a NF e o documento de origem para validar valores e moeda
+        const invoiceEndpoint = isAP ? "PurchaseInvoices" : "Invoices";
+        const invResp = await fetch(
+          `${creds.baseUrl}/${invoiceEndpoint}(${invoiceDocEntry})?$select=DocEntry,DocNum,DocTotal,PaidToDate,DocCurrency,DocDate`,
+          { headers: { Cookie: cookies } },
+        );
+        if (!invResp.ok) {
+          const t = await invResp.text().catch(() => "");
+          return { ok: false as const, error: `NF não encontrada: ${t.slice(0, 200)}` };
+        }
+        const inv: any = await invResp.json();
+        const invoiceOpen = (inv.DocTotal ?? 0) - (inv.PaidToDate ?? 0);
+
+        if (isAdvance) {
+          // ADVANCE_AP / ADVANCE_AR: criar pagamento que liga DownPayment + Invoice
+          // Buscar o downpayment para pegar valor
+          const dpEndpoint = isAP ? "PurchaseDownPayments" : "DownPayments";
+          const dpResp = await fetch(
+            `${creds.baseUrl}/${dpEndpoint}(${docEntry})?$select=DocEntry,DocTotal,PaidToDate,DocCurrency`,
+            { headers: { Cookie: cookies } },
+          );
+          if (!dpResp.ok) {
+            const t = await dpResp.text().catch(() => "");
+            return { ok: false as const, error: `Adiantamento não encontrado: ${t.slice(0, 200)}` };
+          }
+          const dp: any = await dpResp.json();
+          const dpOpen = (dp.DocTotal ?? 0) - (dp.PaidToDate ?? 0);
+
+          // Valor a aplicar = min(DP em aberto, NF em aberto) ou amountIn se informado
+          const applyAmount = amountIn != null
+            ? Math.min(amountIn, dpOpen, invoiceOpen)
+            : Math.min(dpOpen, invoiceOpen);
+
+          if (applyAmount <= 0.0001) {
+            return { ok: false as const, error: "Sem saldo aplicável (DP ou NF já quitados)" };
+          }
+
+          // InvoiceType para PaymentInvoices:
+          //   AP: 'it_PurchaseInvoice' (NF) e 'it_PurchaseDownPayment' (DP)
+          //   AR: 'it_Invoice' e 'it_DownPayment'
+          const invType = isAP ? "it_PurchaseInvoice" : "it_Invoice";
+          const dpType = isAP ? "it_PurchaseDownPayment" : "it_DownPayment";
+
+          const payEndpoint = isAP ? "VendorPayments" : "IncomingPayments";
+          const payload: Record<string, unknown> = {
+            CardCode: cardCode,
+            DocCurrency: inv.DocCurrency,
+            JournalRemarks: `Auto-link DP ${docEntry} -> ${invoiceEndpoint} ${invoiceDocEntry}`,
+            PaymentInvoices: [
+              { DocEntry: invoiceDocEntry, SumApplied: applyAmount, InvoiceType: invType },
+              { DocEntry: docEntry, SumApplied: -applyAmount, InvoiceType: dpType },
+            ],
+          };
+          const r = await sapPost(creds.baseUrl, cookies, payEndpoint, payload);
+          return r.ok
+            ? { ok: true as const, data: r.data, applied: applyAmount }
+            : { ok: false as const, error: r.error };
+        }
+
+        // PAYMENT_OA_OUT / PAYMENT_OA_IN: pagamento já existe, fazer reconciliação interna BP
+        // Precisamos das TransId/Lines no JournalEntry de cada documento.
+        // Para o pagamento on-account: o JE referencia o pagamento.
+        // Para a NF: o JE referencia a NF.
+        // Buscamos ambos via JournalEntries com filtro por origem.
+        //
+        // Estratégia: buscar JE do pagamento (TransId conhecido como DocEntry-1 não é confiável)
+        // — usar /JournalEntries?$filter=TransactionCode eq '...' não é determinístico.
+        // Caminho seguro: JournalEntries?$filter=ReferenceLine relates... — porém SAP B1 expõe
+        // a propriedade JdtNum/TransId via documento. Para Payments: o objeto retorna JdtNum.
+        const payObj = isAP ? "VendorPayments" : "IncomingPayments";
+        const payJe = await fetch(
+          `${creds.baseUrl}/${payObj}(${docEntry})?$select=DocEntry,DocNum,DocCurrency,JournalEntry`,
+          { headers: { Cookie: cookies } },
+        );
+        if (!payJe.ok) {
+          const t = await payJe.text().catch(() => "");
+          return { ok: false as const, error: `Pagamento não encontrado: ${t.slice(0, 200)}` };
+        }
+        const payDoc: any = await payJe.json();
+        const payTransId = payDoc.JournalEntry;
+
+        // JE da NF
+        const invJeNum = (inv as any).JournalEntry;
+        let invTransId: number | undefined = invJeNum;
+        if (!invTransId) {
+          const invFull = await fetch(
+            `${creds.baseUrl}/${invoiceEndpoint}(${invoiceDocEntry})?$select=JournalEntry`,
+            { headers: { Cookie: cookies } },
+          );
+          if (invFull.ok) {
+            const j: any = await invFull.json();
+            invTransId = j.JournalEntry;
+          }
+        }
+        if (!payTransId || !invTransId) {
+          return { ok: false as const, error: "Não foi possível resolver os JournalEntries para reconciliação" };
+        }
+
+        // Buscar as linhas (JournalEntryLines) de cada JE para identificar as do BP
+        async function bpLine(transId: number): Promise<{ line: number; amount: number } | null> {
+          const r = await fetch(
+            `${creds.baseUrl}/JournalEntries(${transId})?$select=JdtNum,JournalEntryLines`,
+            { headers: { Cookie: cookies } },
+          );
+          if (!r.ok) return null;
+          const j: any = await r.json();
+          const lines: any[] = j.JournalEntryLines || [];
+          // Linha do BP: ShortName === cardCode
+          const bp = lines.find((l) => l.ShortName === cardCode);
+          if (!bp) return null;
+          const amt = (bp.Debit ?? 0) - (bp.Credit ?? 0);
+          return { line: bp.Line_ID ?? bp.LineNum ?? 0, amount: Math.abs(amt) };
+        }
+
+        const payBp = await bpLine(payTransId);
+        const invBp = await bpLine(invTransId);
+        if (!payBp || !invBp) {
+          return { ok: false as const, error: "Linha do parceiro não encontrada nos JE" };
+        }
+
+        const reconcileAmount = amountIn != null
+          ? Math.min(amountIn, payBp.amount, invBp.amount)
+          : Math.min(payBp.amount, invBp.amount);
+
+        if (reconcileAmount <= 0.0001) {
+          return { ok: false as const, error: "Sem valor para reconciliar" };
+        }
+
+        const recResp = await sapPost(
+          creds.baseUrl,
+          cookies,
+          "InternalReconciliationsService_Reconcile",
+          {
+            BusinessPartner: { CardCode: cardCode },
+            ReconcileType: "rt_BPInternal",
+            InternalReconciliationRows: [
+              { TransId: payTransId, TransRowId: payBp.line, ReconcileAmount: reconcileAmount },
+              { TransId: invTransId, TransRowId: invBp.line, ReconcileAmount: reconcileAmount },
+            ],
+          },
+        );
+        return recResp.ok
+          ? { ok: true as const, data: recResp.data, applied: reconcileAmount }
+          : { ok: false as const, error: recResp.error };
+      });
+
+      if (!result.ok) return json({ error: result.error }, 400);
+      return json({ ok: true, applied: result.applied, data: result.data });
+    }
+
     if (action === "internal-reconcile") {
       // Internal reconciliation between BP transactions
       // body: { card_code, lines: [{ TransId, TransRowId, ReconcileAmount }] }
