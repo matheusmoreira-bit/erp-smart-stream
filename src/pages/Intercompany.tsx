@@ -286,7 +286,7 @@ function CreateAccountDialog({ onCreated, companyDbs }: { onCreated: () => void;
   );
 }
 
-function CreateCostCenterDialog({ onCreated }: { onCreated: () => void }) {
+function CreateCostCenterDialog({ onCreated, companyDbs }: { onCreated: () => void; companyDbs: string[] }) {
   const { createCostCenter } = useIntercompany();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -300,12 +300,17 @@ function CreateCostCenterDialog({ onCreated }: { onCreated: () => void }) {
       toast.error("Preencha código e nome");
       return;
     }
+    if (companyDbs.length === 0) {
+      toast.error("Selecione ao menos uma empresa");
+      return;
+    }
     setSubmitting(true);
     try {
       const { results } = await createCostCenter({
         center_code: code.trim(),
         center_name: name.trim(),
         group_code: groupCode.trim() ? Number(groupCode.trim()) : undefined,
+        company_dbs: companyDbs,
       });
       setReport(results);
       setOpen(false);
