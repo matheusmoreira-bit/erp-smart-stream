@@ -87,7 +87,7 @@ export default function FinancialReview() {
   const { session } = useSap();
   const companyDb = session?.companyDB;
   const userEmail = session?.userName;
-  const { items, loading, error, refresh, listOpenInvoices, cancelPayment } =
+  const { items, loading, error, refresh, listOpenInvoices, cancelPayment, autoLink } =
     useFinancialReview(companyDb);
 
   const [search, setSearch] = useState("");
@@ -437,6 +437,18 @@ export default function FinancialReview() {
             details: { doc_type: docType, doc_entry: docEntry },
           });
         }}
+        onAutoLink={async (params) => {
+          const r = await autoLink(params);
+          logAuditAction({
+            action: "auto_link",
+            entity_type: "financial_review",
+            entity_id: String(params.docEntry),
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { ...params, applied: r.applied },
+          });
+          return r;
+        }}
         onDone={() => {
           setSelected(null);
           refresh();
@@ -455,18 +467,27 @@ function ReconcileDialog({
   onClose,
   onListInvoices,
   onCancel,
+  onAutoLink,
   onDone,
 }: {
   item: AdvanceItem | null;
   onClose: () => void;
   onListInvoices: (cardCode: string, bp: "supplier" | "customer") => Promise<OpenInvoice[]>;
   onCancel: (docType: AdvanceItem["doc_type"], docEntry: number) => Promise<void>;
+  onAutoLink: (params: {
+    docType: AdvanceItem["doc_type"];
+    docEntry: number;
+    invoiceDocEntry: number;
+    cardCode: string;
+    amount?: number;
+  }) => Promise<{ ok: true; applied: number }>;
   onDone: () => void;
 }) {
   const [tab, setTab] = useState<"link" | "internal" | "cancel" | "guide">("guide");
   const [invoices, setInvoices] = useState<OpenInvoice[] | null>(null);
   const [loadingInv, setLoadingInv] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [linkingId, setLinkingId] = useState<number | null>(null);
 
   useEffect(() => {
     setTab("guide");
@@ -509,6 +530,35 @@ function ReconcileDialog({
     }
   };
 
+  const handleAutoLink = async (inv: OpenInvoice) => {
+    if (!confirm(
+      `Vincular o adiantamento ${item.doc_num ?? item.doc_entry} à NF ${inv.doc_num}?\n` +
+      `Será aplicado ${formatMoney(Math.min(item.open_amount, inv.open_amount), inv.doc_currency)}.`,
+    )) return;
+    setLinkingId(inv.doc_entry);
+    try {
+      const r = await onAutoLink({
+        docType: item.doc_type,
+        docEntry: item.doc_entry,
+        invoiceDocEntry: inv.doc_entry,
+        cardCode: item.card_code,
+      });
+      toast({
+        title: "Vinculação concluída",
+        description: `Aplicado ${formatMoney(r.applied, inv.doc_currency)} à NF ${inv.doc_num}.`,
+      });
+      onDone();
+    } catch (e) {
+      toast({
+        title: "Falha ao vincular",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setLinkingId(null);
+    }
+  };
+
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
@@ -543,9 +593,10 @@ function ReconcileDialog({
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground flex gap-2 items-start">
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
-              Selecione uma nota em aberto deste parceiro para abrir a tela de vinculação no SAP.
-              A criação automática do pagamento de quitação não é feita aqui — apenas listamos as
-              candidatas para você confirmar manualmente.
+              Selecione uma nota em aberto deste parceiro e clique em <strong>Vincular</strong>{" "}
+              para que o sistema crie automaticamente o pagamento/reconciliação no SAP que quita
+              o adiantamento contra a NF escolhida (valor aplicado = menor entre o saldo do
+              adiantamento e o saldo da NF).
             </p>
             {loadingInv && (
               <div className="text-sm text-muted-foreground flex items-center gap-2">
@@ -566,6 +617,7 @@ function ReconcileDialog({
                       <TableHead>Data</TableHead>
                       <TableHead className="text-right">Em aberto</TableHead>
                       <TableHead>Ref.</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -578,6 +630,20 @@ function ReconcileDialog({
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {inv.reference || "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            onClick={() => handleAutoLink(inv)}
+                            disabled={linkingId !== null}
+                          >
+                            {linkingId === inv.doc_entry ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Link2 className="w-3.5 h-3.5" />
+                            )}
+                            Vincular
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

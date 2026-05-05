@@ -83,5 +83,28 @@ export function useFinancialReview(companyDb: string | undefined) {
     [companyDb],
   );
 
-  return { items, loading, error, refresh, listOpenInvoices, cancelPayment };
+  const autoLink = useCallback(
+    async (params: {
+      docType: AdvanceDocType;
+      docEntry: number;
+      invoiceDocEntry: number;
+      cardCode: string;
+      amount?: number;
+    }) => {
+      if (!companyDb) throw new Error("Empresa não selecionada");
+      const r = await call<{ ok: true; applied: number }>({
+        action: "auto-link",
+        company_db: companyDb,
+        doc_type: params.docType,
+        doc_entry: params.docEntry,
+        invoice_doc_entry: params.invoiceDocEntry,
+        card_code: params.cardCode,
+        amount: params.amount,
+      });
+      return r;
+    },
+    [companyDb],
+  );
+
+  return { items, loading, error, refresh, listOpenInvoices, cancelPayment, autoLink };
 }
