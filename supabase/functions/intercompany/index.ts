@@ -157,7 +157,24 @@ async function sapPost(
   return { ok: true, data };
 }
 
-async function listActiveSapCompanies(
+async function sapPatch(
+  baseUrl: string,
+  cookies: string,
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const resp = await fetch(`${baseUrl}/${endpoint}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: cookies },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    const msg = (data as any)?.error?.message?.value || `HTTP ${resp.status}`;
+    return { ok: false, error: msg };
+  }
+  return { ok: true };
+}
   sb: ReturnType<typeof createClient>,
 ): Promise<{ company_db: string; display_name: string }[]> {
   const { data, error } = await sb
