@@ -312,20 +312,34 @@ export function CreateExpenseModal({
 
       if (doc.supplier_name) setSuggestedSupplierName(doc.supplier_name);
       // Capture supplier data for "Cadastrar Fornecedor" fallback (incluindo
-      // endereço, e-mail e telefones extraídos pela IA do documento)
+      // endereço, e-mail, telefones, país e moeda extraídos pela IA do documento)
       const addr = doc.supplier_address || {};
+      const country = (addr.country || doc.supplier_country || "BR")
+        .toString()
+        .toUpperCase()
+        .slice(0, 2);
       setAiSupplierData({
         card_name: doc.supplier_name || "",
-        federal_tax_id: doc.supplier_cnpj || "",
+        federal_tax_id: doc.supplier_cnpj || doc.supplier_tax_id || "",
         email: doc.supplier_email || "",
         phone1: doc.supplier_phone1 || "",
         phone2: doc.supplier_phone2 || "",
+        currency: doc.currency || "",
+        bill_to_country: country,
         bill_to_street: addr.street || "",
         bill_to_building: addr.building || "",
         bill_to_block: addr.block || "",
-        bill_to_zip: addr.zip ? String(addr.zip).replace(/\D/g, "") : "",
+        bill_to_zip: addr.zip
+          ? country === "BR"
+            ? String(addr.zip).replace(/\D/g, "")
+            : String(addr.zip).trim()
+          : "",
         bill_to_city: addr.city || "",
-        bill_to_state: addr.state ? String(addr.state).toUpperCase().slice(0, 2) : "",
+        bill_to_state: addr.state
+          ? country === "BR"
+            ? String(addr.state).toUpperCase().slice(0, 2)
+            : String(addr.state).trim()
+          : "",
       });
       if (doc.document_date) setDocDate(doc.document_date);
       if (doc.due_date) setDueDate(doc.due_date);

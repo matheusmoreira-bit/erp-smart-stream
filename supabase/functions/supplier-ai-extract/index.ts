@@ -6,17 +6,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `Você é um especialista em extração de dados fiscais brasileiros a partir de notas fiscais, recibos e cupons.
+const SYSTEM_PROMPT = `Você é um especialista em extração de dados fiscais a partir de notas fiscais, recibos, cupons e commercial invoices — em português, inglês, espanhol ou outros idiomas.
 Sua tarefa: extrair os dados do FORNECEDOR (emissor do documento) para cadastro no SAP Business One.
 
 Regras OBRIGATÓRIAS:
 - Retorne APENAS pelo tool call extract_supplier.
-- federal_tax_id: somente dígitos do CNPJ (14) ou CPF (11), sem máscara.
+- federal_tax_id: para BR, somente dígitos do CNPJ (14) ou CPF (11), sem máscara. Para fornecedores INTERNACIONAIS (EIN, VAT-ID, RFC, CUIT, RUT, NIF/CIF, etc.), preserve o formato original.
+- country: SEMPRE em ISO-3166 alpha-2 (2 letras maiúsculas). 'BR' para Brasil; 'US', 'GB', 'DE', 'PT', 'ES', 'MX', 'AR', 'CL', etc.
 - card_name: razão social ou nome fantasia exatamente como aparece.
 - email: somente se claramente do emissor (não do cliente).
-- phone1/phone2: formato com DDD, ex: "(11) 3000-0000".
+- phone1/phone2: BR no formato "(11) 0000-0000"; internacional com código do país, ex.: "+1 555 000 0000", "+44 20 0000 0000".
 - Endereço: extrair somente se for do EMISSOR (não do destinatário).
-- state: sigla de 2 letras (UF). country: "BR" por padrão.
+- state: BR = sigla UF (2 letras); internacional = nome ou sigla conforme o documento.
+- zip: BR = 8 dígitos sem máscara; internacional = formato original (pode ser alfanumérico, ex.: 'SW1A 1AA').
+- Termos comuns para o emissor: "Vendor", "Supplier", "Bill From", "Emitente", "Proveedor".
+- Termos para identificação fiscal por país: BR=CNPJ/CPF, US=EIN, GB=VAT, EU=VAT-ID/USt-IdNr, MX=RFC, AR=CUIT, CL/UY=RUT, ES=NIF/CIF, AU=ABN, CA=BN.
 - Se um campo não for identificável, retorne null.`;
 
 interface ExtractionPayload {
@@ -73,17 +77,17 @@ Deno.serve(async (req) => {
           type: "object",
           properties: {
             card_name: { type: ["string", "null"] },
-            federal_tax_id: { type: ["string", "null"], description: "CNPJ/CPF apenas dígitos" },
+            federal_tax_id: { type: ["string", "null"], description: "BR: CNPJ/CPF apenas dígitos. Internacional: EIN/VAT/RFC/etc., formato original." },
             email: { type: ["string", "null"] },
             phone1: { type: ["string", "null"] },
             phone2: { type: ["string", "null"] },
             bill_to_street: { type: ["string", "null"] },
-            bill_to_zip: { type: ["string", "null"] },
+            bill_to_zip: { type: ["string", "null"], description: "BR: 8 dígitos. Internacional: formato original (alfanumérico permitido)." },
             bill_to_city: { type: ["string", "null"] },
-            bill_to_state: { type: ["string", "null"] },
-            bill_to_country: { type: ["string", "null"] },
-            bill_to_block: { type: ["string", "null"], description: "Bairro" },
-            bill_to_building: { type: ["string", "null"], description: "Número/complemento" },
+            bill_to_state: { type: ["string", "null"], description: "BR: sigla UF (2 letras). Internacional: nome ou sigla conforme documento." },
+            bill_to_country: { type: ["string", "null"], description: "ISO-3166 alpha-2 (2 letras maiúsculas). Ex.: 'BR', 'US', 'GB', 'DE'." },
+            bill_to_block: { type: ["string", "null"], description: "Bairro (BR) ou distrito/neighborhood (internacional)" },
+            bill_to_building: { type: ["string", "null"], description: "Número/complemento ou linha 2 do endereço internacional" },
             confidence: { type: "number", description: "0..1" },
           },
           required: ["card_name", "federal_tax_id", "confidence"],
@@ -134,9 +138,16 @@ Deno.serve(async (req) => {
     }
     const extracted = JSON.parse(toolCall.function.arguments);
 
-    // Normalize tax id to digits only
+    // Normalize: BR tax IDs are digits-only; foreign IDs preserve format.
+    // Country code uppercased to ISO alpha-2.
+    if (extracted.bill_to_country) {
+      extracted.bill_to_country = String(extracted.bill_to_country).toUpperCase().slice(0, 2);
+    }
+    const isBR = !extracted.bill_to_country || extracted.bill_to_country === "BR";
     if (extracted.federal_tax_id) {
-      extracted.federal_tax_id = String(extracted.federal_tax_id).replace(/\D/g, "");
+      extracted.federal_tax_id = isBR
+        ? String(extracted.federal_tax_id).replace(/\D/g, "")
+        : String(extracted.federal_tax_id).trim();
     }
 
     return new Response(JSON.stringify({ supplier: extracted }), {

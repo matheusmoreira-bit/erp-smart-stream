@@ -167,7 +167,8 @@ export default function Suppliers() {
               <TableRow>
                 <TableHead>CardCode</TableHead>
                 <TableHead>Nome</TableHead>
-                <TableHead>CNPJ/CPF</TableHead>
+                <TableHead>País</TableHead>
+                <TableHead>CNPJ/Tax ID</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Telefone</TableHead>
                 <TableHead>Moeda</TableHead>
@@ -178,7 +179,7 @@ export default function Suppliers() {
             <TableBody>
               {filtered.length === 0 && !isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     Nenhum fornecedor encontrado.
                   </TableCell>
                 </TableRow>
@@ -187,6 +188,22 @@ export default function Suppliers() {
                   <TableRow key={s.id} className={!s.is_active ? "opacity-60" : ""}>
                     <TableCell className="font-mono text-xs">{s.card_code || "—"}</TableCell>
                     <TableCell className="font-medium">{s.card_name}</TableCell>
+                    <TableCell className="text-xs">
+                      {(() => {
+                        const c = (s.bill_to_country || "BR").toUpperCase();
+                        return (
+                          <span
+                            className={
+                              c === "BR"
+                                ? "text-muted-foreground"
+                                : "px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold"
+                            }
+                          >
+                            {c}
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{s.federal_tax_id || "—"}</TableCell>
                     <TableCell className="text-xs">{s.email || "—"}</TableCell>
                     <TableCell className="text-xs">{s.phone1 || "—"}</TableCell>
