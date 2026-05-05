@@ -414,8 +414,29 @@ export default function FinancialReview() {
       <ReconcileDialog
         item={selected}
         onClose={() => setSelected(null)}
-        onListInvoices={listOpenInvoices}
-        onCancel={cancelPayment}
+        onListInvoices={async (cc, bp) => {
+          const list = await listOpenInvoices(cc, bp);
+          logAuditAction({
+            action: "list_open_invoices",
+            entity_type: "financial_review",
+            entity_id: cc,
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { card_code: cc, bp_type: bp, count: list.length },
+          });
+          return list;
+        }}
+        onCancel={async (docType, docEntry) => {
+          await cancelPayment(docType, docEntry);
+          logAuditAction({
+            action: "cancel_payment",
+            entity_type: "financial_review",
+            entity_id: String(docEntry),
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { doc_type: docType, doc_entry: docEntry },
+          });
+        }}
         onDone={() => {
           setSelected(null);
           refresh();
