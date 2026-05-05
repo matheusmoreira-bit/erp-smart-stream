@@ -321,7 +321,7 @@ export default function UsersPage() {
                             size="icon"
                             className="h-8 w-8"
                             title="Redefinir senha"
-                            onClick={() => setConfirmAction({ type: "password", user })}
+                            onClick={() => setPwdUser(user)}
                           >
                             <KeyRound className="w-4 h-4 text-warning" />
                           </Button>
