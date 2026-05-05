@@ -16,7 +16,8 @@ import {
   FileText,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
-import { useFinancialReview, type AdvanceItem, type OpenInvoice } from "@/hooks/useFinancialReview";
+import { useFinancialReview, type AdvanceItem, type OpenInvoice, type InvoiceWithAdvances } from "@/hooks/useFinancialReview";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { logAuditAction } from "@/hooks/useAuditLog";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
