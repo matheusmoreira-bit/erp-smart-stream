@@ -87,6 +87,9 @@ function computeLockoutRanking(records: Usr5Record[]): RankItem[] {
 
   for (const r of loginRecords) {
     if (r.UserCode !== currentUser) {
+      if (consecutiveFails >= 3 && currentUser) {
+        lockoutMap.set(currentUser, (lockoutMap.get(currentUser) || 0) + 1);
+      }
       currentUser = r.UserCode;
       consecutiveFails = 0;
     }
