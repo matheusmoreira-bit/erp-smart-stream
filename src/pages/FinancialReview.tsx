@@ -16,7 +16,8 @@ import {
   FileText,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
-import { useFinancialReview, type AdvanceItem, type OpenInvoice } from "@/hooks/useFinancialReview";
+import { useFinancialReview, type AdvanceItem, type OpenInvoice, type InvoiceWithAdvances } from "@/hooks/useFinancialReview";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { logAuditAction } from "@/hooks/useAuditLog";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -88,13 +89,26 @@ export default function FinancialReview() {
   const { session } = useSap();
   const companyDb = session?.companyDB;
   const userEmail = session?.userName;
-  const { items, loading, error, refresh, listOpenInvoices, cancelPayment, autoLink } =
-    useFinancialReview(companyDb);
+  const {
+    items,
+    loading,
+    error,
+    refresh,
+    listOpenInvoices,
+    cancelPayment,
+    autoLink,
+    invoicesWithAdv,
+    invoicesLoading,
+    invoicesError,
+    refreshInvoicesWithAdvances,
+  } = useFinancialReview(companyDb);
 
   const [search, setSearch] = useState("");
   const [bpFilter, setBpFilter] = useState<"all" | "supplier" | "customer">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | AdvanceItem["doc_type"]>("all");
   const [selected, setSelected] = useState<AdvanceItem | null>(null);
+  const [activeTab, setActiveTab] = useState<"advances" | "invoices">("advances");
+  const [invSearch, setInvSearch] = useState("");
 
   useEffect(() => {
     if (companyDb) {
@@ -107,6 +121,13 @@ export default function FinancialReview() {
       });
     }
   }, [companyDb, refresh, userEmail]);
+
+  useEffect(() => {
+    if (companyDb && activeTab === "invoices" && invoicesWithAdv.length === 0 && !invoicesLoading) {
+      refreshInvoicesWithAdvances();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyDb, activeTab]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -255,16 +276,29 @@ export default function FinancialReview() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
-              <FileDown className="w-4 h-4" />
-              CSV
-            </Button>
-            <Button variant="outline" size="sm" onClick={exportPdf} disabled={filtered.length === 0}>
-              <FileText className="w-4 h-4" />
-              PDF
-            </Button>
-            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            {activeTab === "advances" && (
+              <>
+                <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
+                  <FileDown className="w-4 h-4" />
+                  CSV
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportPdf} disabled={filtered.length === 0}>
+                  <FileText className="w-4 h-4" />
+                  PDF
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (activeTab === "advances" ? refresh() : refreshInvoicesWithAdvances())}
+              disabled={activeTab === "advances" ? loading : invoicesLoading}
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${
+                  (activeTab === "advances" ? loading : invoicesLoading) ? "animate-spin" : ""
+                }`}
+              />
               Atualizar
             </Button>
           </div>
@@ -272,6 +306,13 @@ export default function FinancialReview() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "advances" | "invoices")}>
+          <TabsList>
+            <TabsTrigger value="advances">Adiantamentos</TabsTrigger>
+            <TabsTrigger value="invoices">NFs em aberto</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="advances" className="space-y-4">
         {/* Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="glass-card p-4">
@@ -404,6 +445,20 @@ export default function FinancialReview() {
             </Table>
           </div>
         </div>
+          </TabsContent>
+
+          <TabsContent value="invoices" className="space-y-4">
+            <InvoicesWithAdvancesTab
+              loading={invoicesLoading}
+              error={invoicesError}
+              invoices={invoicesWithAdv}
+              advances={items}
+              search={invSearch}
+              onSearchChange={setInvSearch}
+              onSelectAdvance={(adv) => setSelected(adv)}
+            />
+          </TabsContent>
+        </Tabs>
 
         <p className="text-xs text-muted-foreground flex gap-1 items-center">
           <Building2 className="w-3 h-3" />
@@ -462,6 +517,194 @@ export default function FinancialReview() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Reconcile dialog with step-by-step guide
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab: Open invoices for BPs that have open advances
+// ─────────────────────────────────────────────────────────────────────────────
+
+function InvoicesWithAdvancesTab({
+  loading,
+  error,
+  invoices,
+  advances,
+  search,
+  onSearchChange,
+  onSelectAdvance,
+}: {
+  loading: boolean;
+  error: string | null;
+  invoices: InvoiceWithAdvances[];
+  advances: AdvanceItem[];
+  search: string;
+  onSearchChange: (v: string) => void;
+  onSelectAdvance: (adv: AdvanceItem) => void;
+}) {
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return invoices;
+    return invoices.filter(
+      (i) =>
+        i.card_code.toLowerCase().includes(q) ||
+        i.card_name.toLowerCase().includes(q) ||
+        String(i.doc_num).includes(q) ||
+        (i.reference ?? "").toLowerCase().includes(q),
+    );
+  }, [invoices, search]);
+
+  const totals = useMemo(() => {
+    const open = filtered.reduce((s, i) => s + (i.open_amount || 0), 0);
+    const adv = filtered.reduce((s, i) => s + (i.advances_open_total || 0), 0);
+    const bps = new Set(filtered.map((i) => i.card_code)).size;
+    return { count: filtered.length, open, adv, bps };
+  }, [filtered]);
+
+  const advancesByBp = useMemo(() => {
+    const m = new Map<string, AdvanceItem[]>();
+    for (const a of advances) {
+      const arr = m.get(a.card_code) || [];
+      arr.push(a);
+      m.set(a.card_code, arr);
+    }
+    return m;
+  }, [advances]);
+
+  const handleReconcile = (inv: InvoiceWithAdvances) => {
+    const list = (advancesByBp.get(inv.card_code) || []).filter((a) => a.bp_type === inv.bp_type);
+    if (list.length === 0) return;
+    // Pick the largest open advance to start; user can change inside the dialog
+    const best = [...list].sort((a, b) => b.open_amount - a.open_amount)[0];
+    onSelectAdvance(best);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground">NFs em aberto</p>
+          <p className="text-2xl font-bold">{totals.count}</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground">Parceiros</p>
+          <p className="text-2xl font-bold">{totals.bps}</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground">Total em aberto (NFs)</p>
+          <p className="text-2xl font-bold">{formatMoney(totals.open, "BRL")}</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground">Adiantamentos disponíveis</p>
+          <p className="text-2xl font-bold">{formatMoney(totals.adv, "BRL")}</p>
+        </div>
+      </div>
+
+      <div className="glass-card p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar parceiro, nº NF ou referência…"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      {error && (
+        <div className="glass-card p-4 border-destructive/50 flex gap-2 items-start">
+          <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
+          <div className="text-sm text-destructive">{error}</div>
+        </div>
+      )}
+
+      <div className="glass-card p-3 text-xs text-muted-foreground flex gap-2 items-start">
+        <Info className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
+        <span>
+          Esta lista mostra apenas <strong>NFs em aberto</strong> de fornecedores/clientes que
+          também possuem <strong>adiantamentos em aberto</strong> — ou seja, candidatas naturais a
+          vinculação.
+        </span>
+      </div>
+
+      <div className="glass-card overflow-hidden">
+        <div className="max-h-[60vh] overflow-auto">
+          <Table>
+            <TableHeader className="sticky top-0 bg-card z-10">
+              <TableRow>
+                <TableHead>Tipo</TableHead>
+                <TableHead>NF</TableHead>
+                <TableHead>Parceiro</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead className="text-right">NF em aberto</TableHead>
+                <TableHead className="text-right">Adiant. disponíveis</TableHead>
+                <TableHead>Referência</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    <RefreshCw className="w-5 h-5 animate-spin inline mr-2" />
+                    Consultando SAP…
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    Nenhuma NF em aberto encontrada para parceiros com adiantamentos.
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading &&
+                filtered.map((inv) => (
+                  <TableRow
+                    key={`${inv.invoice_kind}-${inv.doc_entry}`}
+                    className="border-b hover:bg-muted/40"
+                  >
+                    <TableCell>
+                      <Badge
+                        variant={inv.invoice_kind === "PURCHASE" ? "default" : "secondary"}
+                        className="whitespace-nowrap"
+                      >
+                        {inv.invoice_kind === "PURCHASE" ? "NF Entrada" : "NF Saída"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{inv.doc_num}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-sm">{inv.card_name}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{inv.card_code}</div>
+                    </TableCell>
+                    <TableCell className="text-sm">{formatDate(inv.doc_date)}</TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatMoney(inv.open_amount, inv.doc_currency)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="font-semibold text-success">
+                        {formatMoney(inv.advances_open_total, inv.doc_currency)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {inv.advances_count} doc{inv.advances_count > 1 ? "s" : ""}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {inv.reference || "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" onClick={() => handleReconcile(inv)}>
+                        <Link2 className="w-3.5 h-3.5" />
+                        Reconciliar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ReconcileDialog({
   item,

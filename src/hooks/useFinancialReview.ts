@@ -30,6 +30,15 @@ export interface OpenInvoice {
   reference: string | null;
 }
 
+export interface InvoiceWithAdvances extends OpenInvoice {
+  card_code: string;
+  card_name: string;
+  bp_type: "supplier" | "customer";
+  invoice_kind: "PURCHASE" | "SALES";
+  advances_count: number;
+  advances_open_total: number;
+}
+
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const r = await authFetch("financial-review", {
     method: "POST",
@@ -46,6 +55,10 @@ export function useFinancialReview(companyDb: string | undefined) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [invoicesWithAdv, setInvoicesWithAdv] = useState<InvoiceWithAdvances[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState<string | null>(null);
+
   const refresh = useCallback(async () => {
     if (!companyDb) return;
     setLoading(true);
@@ -58,6 +71,24 @@ export function useFinancialReview(companyDb: string | undefined) {
       setItems([]);
     } finally {
       setLoading(false);
+    }
+  }, [companyDb]);
+
+  const refreshInvoicesWithAdvances = useCallback(async () => {
+    if (!companyDb) return;
+    setInvoicesLoading(true);
+    setInvoicesError(null);
+    try {
+      const r = await call<{ items: InvoiceWithAdvances[] }>({
+        action: "list-invoices-with-advances",
+        company_db: companyDb,
+      });
+      setInvoicesWithAdv(r.items || []);
+    } catch (e) {
+      setInvoicesError(e instanceof Error ? e.message : String(e));
+      setInvoicesWithAdv([]);
+    } finally {
+      setInvoicesLoading(false);
     }
   }, [companyDb]);
 
@@ -106,5 +137,17 @@ export function useFinancialReview(companyDb: string | undefined) {
     [companyDb],
   );
 
-  return { items, loading, error, refresh, listOpenInvoices, cancelPayment, autoLink };
+  return {
+    items,
+    loading,
+    error,
+    refresh,
+    listOpenInvoices,
+    cancelPayment,
+    autoLink,
+    invoicesWithAdv,
+    invoicesLoading,
+    invoicesError,
+    refreshInvoicesWithAdvances,
+  };
 }
