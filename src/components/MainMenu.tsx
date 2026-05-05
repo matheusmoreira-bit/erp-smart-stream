@@ -250,25 +250,44 @@ export function MainMenu() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="max-w-5xl w-full">
+      <main className="flex-1 px-6 py-12">
+        <div className="max-w-5xl mx-auto w-full">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
             <h2 className="text-3xl font-bold text-foreground">Módulos</h2>
             <p className="text-muted-foreground mt-2">Selecione um módulo para começar</p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {modules.map((mod, i) => (
-              <ModuleCardItem
-                key={mod.title}
-                mod={mod}
-                index={i}
-                hasAccess={permLoading || userModules.includes(mod.moduleKey)}
-              />
-            ))}
+          <div className="space-y-12">
+            {moduleGroups.map((group) => {
+              const groupModules = group.keys
+                .map((k) => modules[k])
+                .filter((m): m is ModuleCard => Boolean(m));
+              const visible = groupModules.filter(
+                (m) => permLoading || userModules.includes(m.moduleKey),
+              );
+              if (visible.length === 0) return null;
+              return (
+                <section key={group.title}>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 px-1">
+                    {group.title}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {groupModules.map((mod, i) => (
+                      <ModuleCardItem
+                        key={`${group.title}-${mod.title}`}
+                        mod={mod}
+                        index={i}
+                        hasAccess={permLoading || userModules.includes(mod.moduleKey)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </div>
       </main>
+
     </div>
   );
 }
