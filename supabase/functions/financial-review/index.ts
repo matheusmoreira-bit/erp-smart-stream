@@ -478,7 +478,14 @@ Deno.serve(async (req) => {
       return json({ items: data });
     }
 
-    if (action === "auto-link") {
+    if (action === "list-invoices-with-advances") {
+      const data = await withSession(creds, (cookies) =>
+        listInvoicesWithAdvances(creds, cookies),
+      );
+      return json({ items: data });
+    }
+
+
       // Vincula automaticamente um adiantamento/pagamento on-account a uma NF existente.
       // body: { doc_type, doc_entry, invoice_doc_entry, amount?, card_code }
       const docType = String(body.doc_type || "");
