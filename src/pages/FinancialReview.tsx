@@ -89,13 +89,26 @@ export default function FinancialReview() {
   const { session } = useSap();
   const companyDb = session?.companyDB;
   const userEmail = session?.userName;
-  const { items, loading, error, refresh, listOpenInvoices, cancelPayment, autoLink } =
-    useFinancialReview(companyDb);
+  const {
+    items,
+    loading,
+    error,
+    refresh,
+    listOpenInvoices,
+    cancelPayment,
+    autoLink,
+    invoicesWithAdv,
+    invoicesLoading,
+    invoicesError,
+    refreshInvoicesWithAdvances,
+  } = useFinancialReview(companyDb);
 
   const [search, setSearch] = useState("");
   const [bpFilter, setBpFilter] = useState<"all" | "supplier" | "customer">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | AdvanceItem["doc_type"]>("all");
   const [selected, setSelected] = useState<AdvanceItem | null>(null);
+  const [activeTab, setActiveTab] = useState<"advances" | "invoices">("advances");
+  const [invSearch, setInvSearch] = useState("");
 
   useEffect(() => {
     if (companyDb) {
@@ -108,6 +121,13 @@ export default function FinancialReview() {
       });
     }
   }, [companyDb, refresh, userEmail]);
+
+  useEffect(() => {
+    if (companyDb && activeTab === "invoices" && invoicesWithAdv.length === 0 && !invoicesLoading) {
+      refreshInvoicesWithAdvances();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyDb, activeTab]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
