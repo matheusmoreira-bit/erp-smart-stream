@@ -657,9 +657,21 @@ export default function Intercompany() {
     loadAccounts,
     loadCostCenters,
   } = useIntercompany();
+  const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
+  const sapCompanies = useMemo(
+    () => allCompanies.filter((c) => (c.erp_type || "sap") === "sap"),
+    [allCompanies],
+  );
 
   const [tab, setTab] = useState<"accounts" | "centers">("accounts");
   const [search, setSearch] = useState("");
+  const [selectedDbs, setSelectedDbs] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("intercompany.selectedDbs");
+      if (raw) return JSON.parse(raw) as string[];
+    } catch { /* noop */ }
+    return [];
+  });
   const [conflict, setConflict] = useState<{
     open: boolean;
     code: string;
@@ -667,10 +679,36 @@ export default function Intercompany() {
     kind: "account" | "center";
   }>({ open: false, code: "", names: [], kind: "account" });
 
+  // Default to all SAP companies on first load when nothing is persisted
   useEffect(() => {
-    loadAccounts();
-    loadCostCenters();
-  }, [loadAccounts, loadCostCenters]);
+    if (loadingCompanies) return;
+    if (selectedDbs.length === 0 && sapCompanies.length > 0) {
+      setSelectedDbs(sapCompanies.map((c) => c.company_db));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingCompanies, sapCompanies.length]);
+
+  // Persist selection
+  useEffect(() => {
+    try {
+      localStorage.setItem("intercompany.selectedDbs", JSON.stringify(selectedDbs));
+    } catch { /* noop */ }
+  }, [selectedDbs]);
+
+  const reloadAccounts = useMemo(
+    () => () => loadAccounts(selectedDbs),
+    [loadAccounts, selectedDbs],
+  );
+  const reloadCenters = useMemo(
+    () => () => loadCostCenters(selectedDbs),
+    [loadCostCenters, selectedDbs],
+  );
+
+  useEffect(() => {
+    if (selectedDbs.length === 0) return;
+    reloadAccounts();
+    reloadCenters();
+  }, [reloadAccounts, reloadCenters, selectedDbs]);
 
   const { rows: accountRows, companies: accountCompanies } = useMemo(
     () => consolidateAccounts(accountResults),
