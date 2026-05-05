@@ -429,14 +429,21 @@ function ConsolidatedTable({
           Mesmo código com nomes diferentes
         </span>
       </div>
-      <div className="border rounded-md overflow-auto max-h-[65vh]">
-        <Table>
-        <TableHeader className="sticky top-0 bg-card z-10">
-          <TableRow>
-            <TableHead className="w-32">Código</TableHead>
-            <TableHead>Nome</TableHead>
+      <div className="border rounded-md">
+        <Table className="max-h-[65vh]">
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="w-32 sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]">
+              Código
+            </TableHead>
+            <TableHead className="sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]">
+              Nome
+            </TableHead>
             {companies.map((c) => (
-              <TableHead key={c.db} className="text-center text-xs whitespace-nowrap">
+              <TableHead
+                key={c.db}
+                className="text-center text-xs whitespace-nowrap sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]"
+              >
                 {c.name}
               </TableHead>
             ))}
