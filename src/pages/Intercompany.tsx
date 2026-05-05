@@ -630,11 +630,37 @@ function ConsolidatedTable({
                       </TableCell>
                     );
                   }
+                  const key = `${row.code}::${c.db}`;
+                  const isPending = pending === key;
+                  const next = !info.active;
                   return (
                     <TableCell key={c.db} className="text-center" title={info.name}>
-                      <CheckCircle2
-                        className={`w-4 h-4 inline ${info.active ? "text-success" : "text-muted-foreground"}`}
-                      />
+                      <button
+                        type="button"
+                        disabled={isPending || !onToggleActive}
+                        onClick={async () => {
+                          if (!onToggleActive) return;
+                          setPending(key);
+                          try {
+                            await onToggleActive(row.code, c.db, next);
+                          } finally {
+                            setPending(null);
+                          }
+                        }}
+                        className={`inline-flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-wait ${
+                          info.active ? "text-success" : "text-muted-foreground"
+                        }`}
+                        title={`${info.name} — ${info.active ? "Clique para inativar" : "Clique para ativar"}`}
+                        aria-label={info.active ? "Inativar" : "Ativar"}
+                      >
+                        {isPending ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : info.active ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : (
+                          <XCircle className="w-4 h-4" />
+                        )}
+                      </button>
                     </TableCell>
                   );
                 })}
