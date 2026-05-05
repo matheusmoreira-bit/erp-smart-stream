@@ -86,6 +86,7 @@ export default function FinancialReview() {
   const navigate = useNavigate();
   const { session } = useSap();
   const companyDb = session?.companyDB;
+  const userEmail = session?.userName || session?.email;
   const { items, loading, error, refresh, listOpenInvoices, cancelPayment } =
     useFinancialReview(companyDb);
 
@@ -95,8 +96,16 @@ export default function FinancialReview() {
   const [selected, setSelected] = useState<AdvanceItem | null>(null);
 
   useEffect(() => {
-    if (companyDb) refresh();
-  }, [companyDb, refresh]);
+    if (companyDb) {
+      refresh();
+      logAuditAction({
+        action: "view",
+        entity_type: "financial_review",
+        actor_email: userEmail,
+        company_db: companyDb,
+      });
+    }
+  }, [companyDb, refresh, userEmail]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
