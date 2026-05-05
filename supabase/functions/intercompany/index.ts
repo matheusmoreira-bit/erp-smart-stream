@@ -157,6 +157,25 @@ async function sapPost(
   return { ok: true, data };
 }
 
+async function sapPatch(
+  baseUrl: string,
+  cookies: string,
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const resp = await fetch(`${baseUrl}/${endpoint}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: cookies },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    const msg = (data as any)?.error?.message?.value || `HTTP ${resp.status}`;
+    return { ok: false, error: msg };
+  }
+  return { ok: true };
+}
+
 async function listActiveSapCompanies(
   sb: ReturnType<typeof createClient>,
 ): Promise<{ company_db: string; display_name: string }[]> {
@@ -298,7 +317,37 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
-    if (action === "list-companies") {
+    if (action === "rename-account") {
+      const { code, name } = body;
+      if (!code || !name) return json({ error: "code e name são obrigatórios" }, 400);
+      const results = await forEachCompany(sb, body.company_dbs, async (creds, cookies) => {
+        // Encode code (may contain dots) using OData key syntax
+        const encoded = encodeURIComponent(String(code));
+        const r = await sapPatch(creds.baseUrl, cookies, `ChartOfAccounts('${encoded}')`, {
+          Name: String(name),
+        });
+        if (!r.ok) throw new Error(r.error);
+        return { Code: code, Name: name };
+      });
+      return json({ results });
+    }
+
+    if (action === "rename-cost-center") {
+      const { center_code, center_name } = body;
+      if (!center_code || !center_name) {
+        return json({ error: "center_code e center_name são obrigatórios" }, 400);
+      }
+      const results = await forEachCompany(sb, body.company_dbs, async (creds, cookies) => {
+        const encoded = encodeURIComponent(String(center_code));
+        const r = await sapPatch(creds.baseUrl, cookies, `ProfitCenters('${encoded}')`, {
+          CenterName: String(center_name),
+        });
+        if (!r.ok) throw new Error(r.error);
+        return { CenterCode: center_code, CenterName: center_name };
+      });
+      return json({ results });
+    }
+
       const companies = await listActiveSapCompanies(sb);
       return json({ companies });
     }

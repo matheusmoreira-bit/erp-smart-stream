@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   Search,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +70,9 @@ const ACCOUNT_TYPES: { value: string; label: string }[] = [
 function consolidateAccounts(
   results: PerCompanyResult<SapAccountRow[]>[],
 ): { rows: UnifiedAccountRow[]; companies: { db: string; name: string }[] } {
-  const companies = results.map((r) => ({ db: r.company_db, name: r.display_name }));
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
   const map = new Map<string, UnifiedAccountRow>();
   for (const r of results) {
     if (!r.ok || !r.data) continue;
@@ -95,7 +98,9 @@ function consolidateAccounts(
 function consolidateCenters(
   results: PerCompanyResult<SapCostCenterRow[]>[],
 ): { rows: UnifiedCenterRow[]; companies: { db: string; name: string }[] } {
-  const companies = results.map((r) => ({ db: r.company_db, name: r.display_name }));
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
   const map = new Map<string, UnifiedCenterRow>();
   for (const r of results) {
     if (!r.ok || !r.data) continue;
@@ -118,25 +123,7 @@ function consolidateCenters(
   return { rows, companies };
 }
 
-function CompanyErrorsBanner({ results }: { results: PerCompanyResult[] }) {
-  const failed = results.filter((r) => !r.ok);
-  if (failed.length === 0) return null;
-  return (
-    <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
-      <div className="flex items-center gap-2 font-medium text-destructive mb-1">
-        <AlertTriangle className="w-4 h-4" />
-        {failed.length} empresa(s) com falha
-      </div>
-      <ul className="space-y-0.5 text-xs text-muted-foreground">
-        {failed.map((f) => (
-          <li key={f.company_db}>
-            <span className="font-medium text-foreground">{f.display_name}:</span> {f.error}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+
 
 function ResultReportDialog({
   open,
@@ -379,14 +366,146 @@ function CreateCostCenterDialog({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+function ResolveConflictDialog({
+  open,
+  onOpenChange,
+  code,
+  names,
+  kind,
+  onResolved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  code: string;
+  names: string[];
+  kind: "account" | "center";
+  onResolved: () => void;
+}) {
+  const { renameAccount, renameCostCenter } = useIntercompany();
+  const [selected, setSelected] = useState<string>("");
+  const [custom, setCustom] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const [report, setReport] = useState<PerCompanyResult[] | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSelected(names[0] || "");
+      setCustom("");
+    }
+  }, [open, names]);
+
+  const finalName = selected === "__custom__" ? custom.trim() : selected;
+
+  const submit = async () => {
+    if (!finalName) {
+      toast.error("Informe um nome");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { results } =
+        kind === "account"
+          ? await renameAccount({ code, name: finalName })
+          : await renameCostCenter({ center_code: code, center_name: finalName });
+      setReport(results);
+      onOpenChange(false);
+      onResolved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao unificar nome");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unificar nome — {code}</DialogTitle>
+            <DialogDescription>
+              Escolha o nome que será aplicado em todas as empresas onde este registro existe.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Nomes encontrados</Label>
+              <div className="space-y-1.5">
+                {names.map((n) => (
+                  <label
+                    key={n}
+                    className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm ${
+                      selected === n ? "border-primary bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="conflict-name"
+                      checked={selected === n}
+                      onChange={() => setSelected(n)}
+                    />
+                    <span className="flex-1">{n}</span>
+                  </label>
+                ))}
+                <label
+                  className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm ${
+                    selected === "__custom__" ? "border-primary bg-primary/5" : "border-border"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="conflict-name"
+                    checked={selected === "__custom__"}
+                    onChange={() => setSelected("__custom__")}
+                  />
+                  <span className="text-muted-foreground">Outro nome…</span>
+                </label>
+              </div>
+            </div>
+            {selected === "__custom__" && (
+              <div>
+                <Label>Novo nome</Label>
+                <Input
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value)}
+                  placeholder="Digite o nome unificado"
+                  autoFocus
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={submit} disabled={submitting || !finalName}>
+              {submitting ? "Aplicando..." : "Aplicar em todas"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {report && (
+        <ResultReportDialog
+          open={!!report}
+          onOpenChange={(v) => !v && setReport(null)}
+          results={report}
+          title="Relatório de unificação de nome"
+        />
+      )}
+    </>
+  );
+}
+
 function ConsolidatedTable({
   rows,
   companies,
   search,
+  onResolveConflict,
 }: {
   rows: { code: string; names: Set<string>; presence: Map<string, { name: string; active: boolean }> }[];
   companies: { db: string; name: string }[];
   search: string;
+  onResolveConflict?: (code: string, names: string[]) => void;
 }) {
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -462,9 +581,15 @@ function ConsolidatedTable({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span>{names[0] || "—"}</span>
                     {conflict && (
-                      <Badge variant="outline" className="text-warning border-warning/40 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => onResolveConflict?.(row.code, names)}
+                        className="inline-flex items-center gap-1 rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning hover:bg-warning/20 transition-colors"
+                        title="Unificar nome em todas as empresas"
+                      >
+                        <Pencil className="w-3 h-3" />
                         nomes divergentes
-                      </Badge>
+                      </button>
                     )}
                     {missing && (
                       <Badge variant="outline" className="text-muted-foreground text-[10px]">
@@ -519,6 +644,12 @@ export default function Intercompany() {
 
   const [tab, setTab] = useState<"accounts" | "centers">("accounts");
   const [search, setSearch] = useState("");
+  const [conflict, setConflict] = useState<{
+    open: boolean;
+    code: string;
+    names: string[];
+    kind: "account" | "center";
+  }>({ open: false, code: "", names: [], kind: "account" });
 
   useEffect(() => {
     loadAccounts();
@@ -533,6 +664,36 @@ export default function Intercompany() {
     () => consolidateCenters(centerResults),
     [centerResults],
   );
+
+  // Floating notification (15s) for companies that failed
+  const lastErrorKeyRef = useRef<string>("");
+  useEffect(() => {
+    const failed = [...accountResults, ...centerResults].filter((r) => !r.ok);
+    if (failed.length === 0) return;
+    // Deduplicate per company_db (a company can fail in both lists)
+    const byDb = new Map<string, { display_name: string; error?: string }>();
+    for (const f of failed) {
+      if (!byDb.has(f.company_db)) {
+        byDb.set(f.company_db, { display_name: f.display_name, error: f.error });
+      }
+    }
+    const key = Array.from(byDb.keys()).sort().join("|");
+    if (key === lastErrorKeyRef.current) return;
+    lastErrorKeyRef.current = key;
+    toast.error(`${byDb.size} empresa(s) com falha`, {
+      description: (
+        <ul className="space-y-0.5 mt-1">
+          {Array.from(byDb.entries()).map(([db, v]) => (
+            <li key={db} className="text-xs">
+              <span className="font-medium">{v.display_name}:</span> {v.error}
+            </li>
+          ))}
+        </ul>
+      ) as unknown as string,
+      duration: 15000,
+      icon: <AlertTriangle className="w-4 h-4" />,
+    });
+  }, [accountResults, centerResults]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -606,7 +767,6 @@ export default function Intercompany() {
             </div>
 
             <TabsContent value="accounts" className="space-y-3 mt-4">
-              <CompanyErrorsBanner results={accountResults} />
               {loadingAccounts && accountResults.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12 text-sm">
                   Carregando plano de contas de todas as empresas…
@@ -616,12 +776,14 @@ export default function Intercompany() {
                   rows={accountRows}
                   companies={accountCompanies}
                   search={search}
+                  onResolveConflict={(code, names) =>
+                    setConflict({ open: true, code, names, kind: "account" })
+                  }
                 />
               )}
             </TabsContent>
 
             <TabsContent value="centers" className="space-y-3 mt-4">
-              <CompanyErrorsBanner results={centerResults} />
               {loadingCenters && centerResults.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12 text-sm">
                   Carregando centros de custo de todas as empresas…
@@ -631,12 +793,27 @@ export default function Intercompany() {
                   rows={centerRows}
                   companies={centerCompanies}
                   search={search}
+                  onResolveConflict={(code, names) =>
+                    setConflict({ open: true, code, names, kind: "center" })
+                  }
                 />
               )}
             </TabsContent>
           </Tabs>
         </motion.div>
       </main>
+
+      <ResolveConflictDialog
+        open={conflict.open}
+        onOpenChange={(v) => setConflict((c) => ({ ...c, open: v }))}
+        code={conflict.code}
+        names={conflict.names}
+        kind={conflict.kind}
+        onResolved={() => {
+          if (conflict.kind === "account") loadAccounts();
+          else loadCostCenters();
+        }}
+      />
     </div>
   );
 }

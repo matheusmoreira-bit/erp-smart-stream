@@ -85,6 +85,26 @@ export function useIntercompany() {
     [],
   );
 
+  const renameAccount = useCallback(
+    async (input: { code: string; name: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "rename-account",
+        ...input,
+      });
+    },
+    [],
+  );
+
+  const renameCostCenter = useCallback(
+    async (input: { center_code: string; center_name: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "rename-cost-center",
+        ...input,
+      });
+    },
+    [],
+  );
+
   return {
     loadingAccounts,
     loadingCenters,
@@ -94,5 +114,7 @@ export function useIntercompany() {
     loadCostCenters,
     createAccount,
     createCostCenter,
+    renameAccount,
+    renameCostCenter,
   };
 }
