@@ -564,7 +564,7 @@ function ConsolidatedTable({
           Inativo (clique para ativar)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <Plus className="w-4 h-4 text-primary" />
+          <Ban className="w-4 h-4 text-destructive" />
           Não existe — clique para replicar nesta empresa
         </span>
         <span className="inline-flex items-center gap-1.5">
