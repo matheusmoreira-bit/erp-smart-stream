@@ -145,6 +145,7 @@ export function CreateExpenseModal({
       }
       if (prefill.accountAlias) {
         setSuggestedSupplierName(prefill.accountAlias);
+        setAiSupplierData({ card_name: prefill.accountAlias });
       }
       const today = new Date().toISOString().slice(0, 10);
       setDocDate(today);
