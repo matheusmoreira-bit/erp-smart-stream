@@ -117,6 +117,15 @@ const modules: ModuleCard[] = [
     moduleKey: "integration_history",
   },
   {
+    title: "Intercompany",
+    description: "Plano de contas e centros de custo consolidados entre empresas, com criação simultânea em todas.",
+    icon: Building2,
+    path: "/intercompany",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    moduleKey: "intercompany",
+  },
+  {
     title: "Credenciais",
     description: "Gerencie conexões com sistemas externos (PagCorp, SAP) de forma segura.",
     icon: Key,
