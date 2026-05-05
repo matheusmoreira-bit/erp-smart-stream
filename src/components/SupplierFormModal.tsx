@@ -255,13 +255,22 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
     }
     setSubmitting(true);
     try {
+      const isBR = (form.bill_to_country || "BR").toUpperCase() === "BR";
+      // Brazilian tax IDs are stored digits-only; foreign IDs preserve format.
+      const taxIdNormalized = isBR
+        ? form.federal_tax_id.replace(/\D/g, "")
+        : form.federal_tax_id.trim();
+      const ufgrNormalized = isBR
+        ? (form.u_fgr_taxid0 || form.federal_tax_id).replace(/\D/g, "") || null
+        : (form.u_fgr_taxid0 || form.federal_tax_id).trim() || null;
+
       const payload: SupplierInput = {
         company_db: session.companyDB,
         card_code: cardCode || null,
         card_name: form.card_name.trim(),
         card_type: "S",
-        federal_tax_id: form.federal_tax_id.replace(/\D/g, ""),
-        u_fgr_taxid0: (form.u_fgr_taxid0 || form.federal_tax_id).replace(/\D/g, "") || null,
+        federal_tax_id: taxIdNormalized,
+        u_fgr_taxid0: ufgrNormalized,
         email: form.email || null,
         phone1: form.phone1 || null,
         phone2: form.phone2 || null,
@@ -270,7 +279,7 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
         bill_to_zip: form.bill_to_zip || null,
         bill_to_city: form.bill_to_city || null,
         bill_to_state: form.bill_to_state || null,
-        bill_to_country: form.bill_to_country || "BR",
+        bill_to_country: (form.bill_to_country || "BR").toUpperCase(),
         bill_to_block: form.bill_to_block || null,
         bill_to_building: form.bill_to_building || null,
         is_active: editing ? editing.is_active : true,
