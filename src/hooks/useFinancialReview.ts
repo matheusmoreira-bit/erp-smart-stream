@@ -55,6 +55,10 @@ export function useFinancialReview(companyDb: string | undefined) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [invoicesWithAdv, setInvoicesWithAdv] = useState<InvoiceWithAdvances[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState<string | null>(null);
+
   const refresh = useCallback(async () => {
     if (!companyDb) return;
     setLoading(true);
@@ -67,6 +71,24 @@ export function useFinancialReview(companyDb: string | undefined) {
       setItems([]);
     } finally {
       setLoading(false);
+    }
+  }, [companyDb]);
+
+  const refreshInvoicesWithAdvances = useCallback(async () => {
+    if (!companyDb) return;
+    setInvoicesLoading(true);
+    setInvoicesError(null);
+    try {
+      const r = await call<{ items: InvoiceWithAdvances[] }>({
+        action: "list-invoices-with-advances",
+        company_db: companyDb,
+      });
+      setInvoicesWithAdv(r.items || []);
+    } catch (e) {
+      setInvoicesError(e instanceof Error ? e.message : String(e));
+      setInvoicesWithAdv([]);
+    } finally {
+      setInvoicesLoading(false);
     }
   }, [companyDb]);
 
@@ -115,5 +137,17 @@ export function useFinancialReview(companyDb: string | undefined) {
     [companyDb],
   );
 
-  return { items, loading, error, refresh, listOpenInvoices, cancelPayment, autoLink };
+  return {
+    items,
+    loading,
+    error,
+    refresh,
+    listOpenInvoices,
+    cancelPayment,
+    autoLink,
+    invoicesWithAdv,
+    invoicesLoading,
+    invoicesError,
+    refreshInvoicesWithAdvances,
+  };
 }
