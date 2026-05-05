@@ -962,6 +962,21 @@ export default function Intercompany() {
                   onResolveConflict={(code, names) =>
                     setConflict({ open: true, code, names, kind: "center" })
                   }
+                  onToggleActive={async (code, companyDb, nextActive) => {
+                    try {
+                      const { results } = await toggleCostCenter({
+                        center_code: code,
+                        active: nextActive,
+                        company_db: companyDb,
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao atualizar");
+                      toast.success(`Centro ${code} ${nextActive ? "ativado" : "inativado"}`);
+                      await reloadCenters();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
+                    }
+                  }}
                 />
               )}
             </TabsContent>
