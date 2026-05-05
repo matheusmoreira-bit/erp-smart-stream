@@ -74,6 +74,18 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
   "supplier_name": "Nome do fornecedor/empresa emissora (quem VENDEU/prestou serviço)",
   "supplier_cnpj": "CNPJ do fornecedor se disponível",
   "supplier_match_confidence": 0.95,
+  "supplier_email": "Email do fornecedor (emissor), se aparecer no documento. null caso contrário.",
+  "supplier_phone1": "Telefone principal do fornecedor (com DDD, formato '(11) 0000-0000'), se houver. null caso contrário.",
+  "supplier_phone2": "Telefone secundário do fornecedor, se houver. null caso contrário.",
+  "supplier_address": {
+    "street": "Logradouro do fornecedor (rua/avenida + nome), sem número/bairro. null se ausente.",
+    "building": "Número e/ou complemento do endereço do fornecedor (ex: '123', '456 - Sala 2'). null se ausente.",
+    "block": "Bairro do fornecedor. null se ausente.",
+    "zip": "CEP do fornecedor, apenas dígitos (8). null se ausente.",
+    "city": "Cidade do fornecedor. null se ausente.",
+    "state": "UF do fornecedor (sigla 2 letras). null se ausente.",
+    "country": "País (ISO 2 letras). 'BR' por padrão se for endereço brasileiro."
+  },
   "client_name": "Nome do cliente/destinatário (quem COMPROU/recebeu o serviço)",
   "client_cnpj": "CNPJ do cliente se disponível",
   "total_amount": 0.00,
@@ -112,7 +124,11 @@ Regras IMPORTANTES:
 - Datas no formato YYYY-MM-DD
 - Extraia o CLIENTE (destinatário) separadamente do FORNECEDOR (emitente)
 - "document_date" é a data de emissão da nota/documento
-- "due_date" é a data de vencimento. Se não houver, calcule como document_date + 30 dias.`;
+- "due_date" é a data de vencimento. Se não houver, calcule como document_date + 30 dias.
+- IMPORTANTE: Os campos supplier_email, supplier_phone1, supplier_phone2 e supplier_address devem se referir SEMPRE ao EMISSOR (fornecedor), nunca ao destinatário/cliente. Se o documento mostrar dados do cliente apenas, retorne null nesses campos.
+- Para supplier_address: extraia somente do bloco do EMITENTE. Não confunda com endereço de entrega/cliente.
+- supplier_address.zip deve conter apenas dígitos (8 dígitos para CEP brasileiro), sem máscara.
+- supplier_address.state deve ser a sigla da UF em 2 letras maiúsculas (ex.: 'SP', 'RJ').`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

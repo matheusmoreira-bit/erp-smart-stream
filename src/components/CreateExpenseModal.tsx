@@ -311,10 +311,21 @@ export function CreateExpenseModal({
       const doc = docs[0];
 
       if (doc.supplier_name) setSuggestedSupplierName(doc.supplier_name);
-      // Capture supplier data for "Cadastrar Fornecedor" fallback
+      // Capture supplier data for "Cadastrar Fornecedor" fallback (incluindo
+      // endereço, e-mail e telefones extraídos pela IA do documento)
+      const addr = doc.supplier_address || {};
       setAiSupplierData({
         card_name: doc.supplier_name || "",
         federal_tax_id: doc.supplier_cnpj || "",
+        email: doc.supplier_email || "",
+        phone1: doc.supplier_phone1 || "",
+        phone2: doc.supplier_phone2 || "",
+        bill_to_street: addr.street || "",
+        bill_to_building: addr.building || "",
+        bill_to_block: addr.block || "",
+        bill_to_zip: addr.zip ? String(addr.zip).replace(/\D/g, "") : "",
+        bill_to_city: addr.city || "",
+        bill_to_state: addr.state ? String(addr.state).toUpperCase().slice(0, 2) : "",
       });
       if (doc.document_date) setDocDate(doc.document_date);
       if (doc.due_date) setDueDate(doc.due_date);
