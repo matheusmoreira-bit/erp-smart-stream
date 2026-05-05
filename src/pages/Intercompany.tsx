@@ -407,8 +407,30 @@ function ConsolidatedTable({
   }
 
   return (
-    <div className="border rounded-md overflow-auto max-h-[65vh]">
-      <Table>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground px-1">
+        <span className="font-medium text-foreground">Legenda:</span>
+        <span className="inline-flex items-center gap-1.5">
+          <CheckCircle2 className="w-4 h-4 text-success" />
+          Existe e está ativo
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
+          Existe, mas inativo/congelado
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-4 text-center font-mono">—</span>
+          Não existe nesta empresa
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Badge variant="outline" className="text-warning border-warning/40 text-[10px]">
+            nomes divergentes
+          </Badge>
+          Mesmo código com nomes diferentes
+        </span>
+      </div>
+      <div className="border rounded-md overflow-auto max-h-[65vh]">
+        <Table>
         <TableHeader className="sticky top-0 bg-card z-10">
           <TableRow>
             <TableHead className="w-32">Código</TableHead>
@@ -473,6 +495,7 @@ function ConsolidatedTable({
           )}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
