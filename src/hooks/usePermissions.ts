@@ -37,6 +37,7 @@ export const ALL_MODULES = [
   { key: "notifications", label: "Notificações" },
   { key: "integration_history", label: "Monitor de Integrações" },
   { key: "intercompany", label: "Intercompany" },
+  { key: "financial_review", label: "Avaliação Financeira" },
 ] as const;
 
 // Legacy compat aliases
