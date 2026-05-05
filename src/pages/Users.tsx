@@ -1,15 +1,18 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import type { SapUser } from "@/lib/cache-repository";
 import CreateUserDialog from "@/components/CreateUserDialog";
+import { useSap } from "@/contexts/SapContext";
+import { listSapTargetCompanies, changePasswordInCompanies } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
 
 type ConfirmAction = {
@@ -41,10 +44,66 @@ function formatLastLogin(user: SapUser): string {
 
 export default function UsersPage() {
   const navigate = useNavigate();
+  const { session } = useSap();
   const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword, createUser } = useSapUsers();
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<string>("recorrentes");
+
+  // Multi-company password reset state
+  const [pwdUser, setPwdUser] = useState<SapUser | null>(null);
+  const [otherCompanies, setOtherCompanies] = useState<{ company_db: string; display_name: string }[]>([]);
+  const [pwdSelected, setPwdSelected] = useState<Set<string>>(new Set());
+  const [pwdSubmitting, setPwdSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!pwdUser || !session) return;
+    listSapTargetCompanies(session.companyDB).then((cs) =>
+      setOtherCompanies(cs.map((c) => ({ company_db: c.company_db, display_name: c.display_name }))),
+    );
+    setPwdSelected(new Set());
+  }, [pwdUser, session]);
+
+  const togglePwdCompany = (db: string) => {
+    setPwdSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(db)) next.delete(db);
+      else next.add(db);
+      return next;
+    });
+  };
+
+  const handleResetPassword = async () => {
+    if (!pwdUser) return;
+    setPwdSubmitting(true);
+    try {
+      await resetPassword(pwdUser);
+      let extra: Awaited<ReturnType<typeof changePasswordInCompanies>> = [];
+      if (pwdSelected.size > 0) {
+        extra = await changePasswordInCompanies(pwdUser.UserCode, "Sap@2025", Array.from(pwdSelected));
+      }
+      const failures = extra.filter((r) => r.status === "error");
+      const successes = extra.filter((r) => r.status === "success");
+      const skipped = extra.filter((r) => r.status === "skipped");
+
+      if (extra.length === 0) {
+        toast.success(`Senha de ${pwdUser.UserName} alterada para Sap@2025`);
+      } else if (failures.length === 0) {
+        toast.success(
+          `Senha alterada em ${1 + successes.length} empresa(s)${skipped.length ? ` (${skipped.length} ignorada(s))` : ""}.`,
+        );
+      } else {
+        toast.warning(
+          `Alterada em ${1 + successes.length} empresa(s). Falhas: ${failures.map((f) => f.displayName).join(", ")}`,
+        );
+      }
+      setPwdUser(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao redefinir senha");
+    } finally {
+      setPwdSubmitting(false);
+    }
+  };
 
   const filteredUsers = useMemo(() => {
     let list = users;
@@ -262,7 +321,7 @@ export default function UsersPage() {
                             size="icon"
                             className="h-8 w-8"
                             title="Redefinir senha"
-                            onClick={() => setConfirmAction({ type: "password", user })}
+                            onClick={() => setPwdUser(user)}
                           >
                             <KeyRound className="w-4 h-4 text-warning" />
                           </Button>
@@ -291,6 +350,48 @@ export default function UsersPage() {
               variant={confirmAction?.type === "lock" ? "destructive" : "default"}
               onClick={handleConfirm}
             >
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pwdUser} onOpenChange={(o) => { if (!o) setPwdUser(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Redefinir Senha</DialogTitle>
+            <DialogDescription>
+              A senha de <span className="font-medium text-foreground">{pwdUser?.UserName}</span> será redefinida para <span className="font-mono">Sap@2025</span> na empresa atual.
+            </DialogDescription>
+          </DialogHeader>
+
+          {otherCompanies.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <p className="text-sm font-medium">Aplicar também em outras empresas</p>
+              <p className="text-xs text-muted-foreground">
+                Identificamos o usuário pelo código <span className="font-mono">{pwdUser?.UserCode}</span> em cada empresa selecionada (caso exista).
+              </p>
+              <div className="max-h-48 overflow-y-auto space-y-2 rounded-md border border-border p-2">
+                {otherCompanies.map((c) => (
+                  <label key={c.company_db} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <Checkbox
+                      checked={pwdSelected.has(c.company_db)}
+                      onCheckedChange={() => togglePwdCompany(c.company_db)}
+                    />
+                    <span className="text-foreground">{c.display_name}</span>
+                    <span className="text-xs text-muted-foreground">({c.company_db})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPwdUser(null)} disabled={pwdSubmitting}>
+              Cancelar
+            </Button>
+            <Button onClick={handleResetPassword} disabled={pwdSubmitting}>
+              {pwdSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Confirmar
             </Button>
           </DialogFooter>

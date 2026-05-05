@@ -1,12 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { KeyRound, Loader2 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { sapLogin, sapAction } from "@/lib/sap-client";
+import { listSapTargetCompanies, changePasswordInCompanies, type MultiCompanyPasswordResult } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
+
+interface CompanyOption {
+  company_db: string;
+  display_name: string;
+}
 
 export function ChangePasswordDialog() {
   const { session } = useSap();
@@ -15,6 +22,31 @@ export function ChangePasswordDialog() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!open || !session) return;
+    listSapTargetCompanies(session.companyDB).then((cs) => {
+      setOtherCompanies(cs.map((c) => ({ company_db: c.company_db, display_name: c.display_name })));
+    });
+  }, [open, session]);
+
+  const reset = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setSelected(new Set());
+  };
+
+  const toggle = (db: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(db)) next.delete(db);
+      else next.add(db);
+      return next;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +67,7 @@ export function ChangePasswordDialog() {
       // Step 1: Validate current password via Login
       await sapLogin(session.userName, currentPassword, session.companyDB);
 
-      // Step 2: Change password via PATCH Users
+      // Step 2: Change password in current company
       await sapAction(
         session,
         `Users('${session.userName}')`,
@@ -43,11 +75,30 @@ export function ChangePasswordDialog() {
         { Password: newPassword }
       );
 
-      toast.success("Senha alterada com sucesso!");
+      // Step 3: Replicate to additional companies, if any
+      let extraResults: MultiCompanyPasswordResult[] = [];
+      if (selected.size > 0) {
+        extraResults = await changePasswordInCompanies(session.userName, newPassword, Array.from(selected));
+      }
+
+      const failures = extraResults.filter((r) => r.status === "error");
+      const skipped = extraResults.filter((r) => r.status === "skipped");
+      const successes = extraResults.filter((r) => r.status === "success");
+
+      if (extraResults.length === 0) {
+        toast.success("Senha alterada com sucesso!");
+      } else if (failures.length === 0) {
+        toast.success(
+          `Senha alterada em ${1 + successes.length} empresa(s)${skipped.length ? ` (${skipped.length} ignorada(s))` : ""}.`,
+        );
+      } else {
+        toast.warning(
+          `Alterada em ${1 + successes.length} empresa(s). Falhas: ${failures.map((f) => f.displayName).join(", ")}`,
+        );
+      }
+
       setOpen(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      reset();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao alterar senha";
       if (msg.includes("login") || msg.includes("Login") || msg.includes("Invalid")) {
@@ -63,7 +114,7 @@ export function ChangePasswordDialog() {
   if (!session) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); } }}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogTrigger asChild>
         <button className="text-xs text-muted-foreground hover:text-foreground transition-colors" title="Alterar senha">
           <KeyRound className="w-4 h-4" />
@@ -107,6 +158,28 @@ export function ChangePasswordDialog() {
               autoComplete="new-password"
             />
           </div>
+
+          {otherCompanies.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-border">
+              <Label className="text-sm">Aplicar também em outras empresas</Label>
+              <p className="text-xs text-muted-foreground">
+                A nova senha será aplicada ao usuário <span className="font-medium text-foreground">{session.userName}</span> em cada empresa selecionada (caso exista).
+              </p>
+              <div className="max-h-40 overflow-y-auto space-y-2 rounded-md border border-border p-2">
+                {otherCompanies.map((c) => (
+                  <label key={c.company_db} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <Checkbox
+                      checked={selected.has(c.company_db)}
+                      onCheckedChange={() => toggle(c.company_db)}
+                    />
+                    <span className="text-foreground">{c.display_name}</span>
+                    <span className="text-xs text-muted-foreground">({c.company_db})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             Alterar Senha
