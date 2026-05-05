@@ -69,7 +69,9 @@ const ACCOUNT_TYPES: { value: string; label: string }[] = [
 function consolidateAccounts(
   results: PerCompanyResult<SapAccountRow[]>[],
 ): { rows: UnifiedAccountRow[]; companies: { db: string; name: string }[] } {
-  const companies = results.map((r) => ({ db: r.company_db, name: r.display_name }));
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
   const map = new Map<string, UnifiedAccountRow>();
   for (const r of results) {
     if (!r.ok || !r.data) continue;
