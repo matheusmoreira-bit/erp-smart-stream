@@ -306,6 +306,13 @@ export default function FinancialReview() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "advances" | "invoices")}>
+          <TabsList>
+            <TabsTrigger value="advances">Adiantamentos</TabsTrigger>
+            <TabsTrigger value="invoices">NFs em aberto</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="advances" className="space-y-4">
         {/* Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="glass-card p-4">
