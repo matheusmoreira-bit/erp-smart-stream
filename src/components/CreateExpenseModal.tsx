@@ -588,7 +588,47 @@ export function CreateExpenseModal({
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
             />
+            {!supplier && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
+              <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <span className="text-amber-600 dark:text-amber-400 text-sm">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground">
+                    Fornecedor não encontrado no SAP
+                    {aiSupplierData?.card_name ? `: "${aiSupplierData.card_name}"` : ""}
+                    {aiSupplierData?.federal_tax_id ? ` (CNPJ ${aiSupplierData.federal_tax_id})` : ""}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSupplierForm(true)}
+                  className="gap-1.5 text-xs h-7 shrink-0"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Cadastrar Fornecedor
+                </Button>
+              </div>
+            )}
           </div>
+
+          {/* Supplier creation modal — pre-filled with AI extracted data */}
+          <SupplierFormModal
+            open={showSupplierForm}
+            onClose={() => setShowSupplierForm(false)}
+            prefill={aiSupplierData}
+            source="expense_ai"
+            onSaved={(s) => {
+              setShowSupplierForm(false);
+              if (s.card_code) {
+                handleSupplierChange({
+                  code: s.card_code,
+                  name: s.card_name,
+                  extra: (s as any).federal_tax_id || undefined,
+                  ...((s as any).currency ? { currency: (s as any).currency } : {}),
+                } as any);
+                toast.success("Fornecedor cadastrado e selecionado!");
+              }
+            }}
+          />
 
           {/* Currency Warning */}
           {currencyWarning && (
