@@ -689,6 +689,8 @@ export default function Intercompany() {
     centerResults,
     loadAccounts,
     loadCostCenters,
+    toggleAccount,
+    toggleCostCenter,
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = useMemo(
