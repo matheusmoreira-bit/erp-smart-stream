@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput } from "@/hooks/useExpenses";
+import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
+import { UserPlus } from "lucide-react";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -71,6 +73,8 @@ export function CreateExpenseModal({
   ]);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
+  const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
 
@@ -141,6 +145,7 @@ export function CreateExpenseModal({
       }
       if (prefill.accountAlias) {
         setSuggestedSupplierName(prefill.accountAlias);
+        setAiSupplierData({ card_name: prefill.accountAlias });
       }
       const today = new Date().toISOString().slice(0, 10);
       setDocDate(today);
@@ -165,6 +170,8 @@ export function CreateExpenseModal({
       setRemarks("");
       setAiWarning(null);
       setSuggestedSupplierName(undefined);
+      setAiSupplierData(null);
+      setShowSupplierForm(false);
       setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
       setFiles([]);
       setAiConfidence(null);
@@ -304,6 +311,11 @@ export function CreateExpenseModal({
       const doc = docs[0];
 
       if (doc.supplier_name) setSuggestedSupplierName(doc.supplier_name);
+      // Capture supplier data for "Cadastrar Fornecedor" fallback
+      setAiSupplierData({
+        card_name: doc.supplier_name || "",
+        federal_tax_id: doc.supplier_cnpj || "",
+      });
       if (doc.document_date) setDocDate(doc.document_date);
       if (doc.due_date) setDueDate(doc.due_date);
       if (doc.remarks) setRemarks(doc.remarks);
@@ -577,7 +589,47 @@ export function CreateExpenseModal({
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
             />
+            {!supplier && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
+              <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <span className="text-amber-600 dark:text-amber-400 text-sm">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground">
+                    Fornecedor não encontrado no SAP
+                    {aiSupplierData?.card_name ? `: "${aiSupplierData.card_name}"` : ""}
+                    {aiSupplierData?.federal_tax_id ? ` (CNPJ ${aiSupplierData.federal_tax_id})` : ""}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSupplierForm(true)}
+                  className="gap-1.5 text-xs h-7 shrink-0"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Cadastrar Fornecedor
+                </Button>
+              </div>
+            )}
           </div>
+
+          {/* Supplier creation modal — pre-filled with AI extracted data */}
+          <SupplierFormModal
+            open={showSupplierForm}
+            onClose={() => setShowSupplierForm(false)}
+            prefill={aiSupplierData}
+            source="expense_ai"
+            onSaved={(s) => {
+              setShowSupplierForm(false);
+              if (s.card_code) {
+                handleSupplierChange({
+                  code: s.card_code,
+                  name: s.card_name,
+                  extra: (s as any).federal_tax_id || undefined,
+                  ...((s as any).currency ? { currency: (s as any).currency } : {}),
+                } as any);
+                toast.success("Fornecedor cadastrado e selecionado!");
+              }
+            }}
+          />
 
           {/* Currency Warning */}
           {currencyWarning && (
