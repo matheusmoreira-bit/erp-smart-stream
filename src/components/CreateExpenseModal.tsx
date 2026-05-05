@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput } from "@/hooks/useExpenses";
+import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
+import { UserPlus } from "lucide-react";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
