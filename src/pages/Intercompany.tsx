@@ -11,7 +11,11 @@ import {
   XCircle,
   Search,
   Pencil,
+  ChevronDown,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useCompanies } from "@/hooks/useCompanies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -186,7 +190,7 @@ function ResultReportDialog({
   );
 }
 
-function CreateAccountDialog({ onCreated }: { onCreated: () => void }) {
+function CreateAccountDialog({ onCreated, companyDbs }: { onCreated: () => void; companyDbs: string[] }) {
   const { createAccount } = useIntercompany();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -200,12 +204,17 @@ function CreateAccountDialog({ onCreated }: { onCreated: () => void }) {
       toast.error("Preencha código e nome");
       return;
     }
+    if (companyDbs.length === 0) {
+      toast.error("Selecione ao menos uma empresa");
+      return;
+    }
     setSubmitting(true);
     try {
       const { results } = await createAccount({
         code: code.trim(),
         name: name.trim(),
         account_type: accountType,
+        company_dbs: companyDbs,
       });
       setReport(results);
       setOpen(false);
@@ -281,7 +290,7 @@ function CreateAccountDialog({ onCreated }: { onCreated: () => void }) {
   );
 }
 
-function CreateCostCenterDialog({ onCreated }: { onCreated: () => void }) {
+function CreateCostCenterDialog({ onCreated, companyDbs }: { onCreated: () => void; companyDbs: string[] }) {
   const { createCostCenter } = useIntercompany();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -295,12 +304,17 @@ function CreateCostCenterDialog({ onCreated }: { onCreated: () => void }) {
       toast.error("Preencha código e nome");
       return;
     }
+    if (companyDbs.length === 0) {
+      toast.error("Selecione ao menos uma empresa");
+      return;
+    }
     setSubmitting(true);
     try {
       const { results } = await createCostCenter({
         center_code: code.trim(),
         center_name: name.trim(),
         group_code: groupCode.trim() ? Number(groupCode.trim()) : undefined,
+        company_dbs: companyDbs,
       });
       setReport(results);
       setOpen(false);
@@ -372,6 +386,7 @@ function ResolveConflictDialog({
   code,
   names,
   kind,
+  companyDbs,
   onResolved,
 }: {
   open: boolean;
@@ -379,6 +394,7 @@ function ResolveConflictDialog({
   code: string;
   names: string[];
   kind: "account" | "center";
+  companyDbs: string[];
   onResolved: () => void;
 }) {
   const { renameAccount, renameCostCenter } = useIntercompany();
@@ -401,12 +417,16 @@ function ResolveConflictDialog({
       toast.error("Informe um nome");
       return;
     }
+    if (companyDbs.length === 0) {
+      toast.error("Selecione ao menos uma empresa");
+      return;
+    }
     setSubmitting(true);
     try {
       const { results } =
         kind === "account"
-          ? await renameAccount({ code, name: finalName })
-          : await renameCostCenter({ center_code: code, center_name: finalName });
+          ? await renameAccount({ code, name: finalName, company_dbs: companyDbs })
+          : await renameCostCenter({ center_code: code, center_name: finalName, company_dbs: companyDbs });
       setReport(results);
       onOpenChange(false);
       onResolved();
@@ -641,9 +661,21 @@ export default function Intercompany() {
     loadAccounts,
     loadCostCenters,
   } = useIntercompany();
+  const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
+  const sapCompanies = useMemo(
+    () => allCompanies.filter((c) => (c.erp_type || "sap") === "sap"),
+    [allCompanies],
+  );
 
   const [tab, setTab] = useState<"accounts" | "centers">("accounts");
   const [search, setSearch] = useState("");
+  const [selectedDbs, setSelectedDbs] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("intercompany.selectedDbs");
+      if (raw) return JSON.parse(raw) as string[];
+    } catch { /* noop */ }
+    return [];
+  });
   const [conflict, setConflict] = useState<{
     open: boolean;
     code: string;
@@ -651,10 +683,36 @@ export default function Intercompany() {
     kind: "account" | "center";
   }>({ open: false, code: "", names: [], kind: "account" });
 
+  // Default to all SAP companies on first load when nothing is persisted
   useEffect(() => {
-    loadAccounts();
-    loadCostCenters();
-  }, [loadAccounts, loadCostCenters]);
+    if (loadingCompanies) return;
+    if (selectedDbs.length === 0 && sapCompanies.length > 0) {
+      setSelectedDbs(sapCompanies.map((c) => c.company_db));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingCompanies, sapCompanies.length]);
+
+  // Persist selection
+  useEffect(() => {
+    try {
+      localStorage.setItem("intercompany.selectedDbs", JSON.stringify(selectedDbs));
+    } catch { /* noop */ }
+  }, [selectedDbs]);
+
+  const reloadAccounts = useMemo(
+    () => () => loadAccounts(selectedDbs),
+    [loadAccounts, selectedDbs],
+  );
+  const reloadCenters = useMemo(
+    () => () => loadCostCenters(selectedDbs),
+    [loadCostCenters, selectedDbs],
+  );
+
+  useEffect(() => {
+    if (selectedDbs.length === 0) return;
+    reloadAccounts();
+    reloadCenters();
+  }, [reloadAccounts, reloadCenters, selectedDbs]);
 
   const { rows: accountRows, companies: accountCompanies } = useMemo(
     () => consolidateAccounts(accountResults),
@@ -734,33 +792,95 @@ export default function Intercompany() {
                     className="pl-8 w-64"
                   />
                 </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Building2 className="w-4 h-4" />
+                      Empresas
+                      <Badge variant="secondary" className="ml-1">
+                        {selectedDbs.length}/{sapCompanies.length}
+                      </Badge>
+                      <ChevronDown className="w-3 h-3 opacity-60" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 p-0">
+                    <div className="flex items-center justify-between px-3 py-2 border-b">
+                      <span className="text-xs font-medium">Empresas consideradas</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => setSelectedDbs(sapCompanies.map((c) => c.company_db))}
+                        >
+                          Todas
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[11px] text-muted-foreground hover:underline"
+                          onClick={() => setSelectedDbs([])}
+                        >
+                          Nenhuma
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-72 overflow-auto py-1">
+                      {sapCompanies.length === 0 ? (
+                        <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                          Nenhuma empresa SAP ativa
+                        </div>
+                      ) : (
+                        sapCompanies.map((c) => {
+                          const checked = selectedDbs.includes(c.company_db);
+                          return (
+                            <label
+                              key={c.company_db}
+                              className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted/50 cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  setSelectedDbs((prev) =>
+                                    v
+                                      ? Array.from(new Set([...prev, c.company_db]))
+                                      : prev.filter((d) => d !== c.company_db),
+                                  );
+                                }}
+                              />
+                              <span className="flex-1 truncate">{c.display_name}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 {tab === "accounts" ? (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={loadAccounts}
-                      disabled={loadingAccounts}
+                      onClick={reloadAccounts}
+                      disabled={loadingAccounts || selectedDbs.length === 0}
                       className="gap-2"
                     >
                       <RefreshCw className={`w-4 h-4 ${loadingAccounts ? "animate-spin" : ""}`} />
                       Atualizar
                     </Button>
-                    <CreateAccountDialog onCreated={loadAccounts} />
+                    <CreateAccountDialog onCreated={reloadAccounts} companyDbs={selectedDbs} />
                   </>
                 ) : (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={loadCostCenters}
-                      disabled={loadingCenters}
+                      onClick={reloadCenters}
+                      disabled={loadingCenters || selectedDbs.length === 0}
                       className="gap-2"
                     >
                       <RefreshCw className={`w-4 h-4 ${loadingCenters ? "animate-spin" : ""}`} />
                       Atualizar
                     </Button>
-                    <CreateCostCenterDialog onCreated={loadCostCenters} />
+                    <CreateCostCenterDialog onCreated={reloadCenters} companyDbs={selectedDbs} />
                   </>
                 )}
               </div>
@@ -809,9 +929,10 @@ export default function Intercompany() {
         code={conflict.code}
         names={conflict.names}
         kind={conflict.kind}
+        companyDbs={selectedDbs}
         onResolved={() => {
-          if (conflict.kind === "account") loadAccounts();
-          else loadCostCenters();
+          if (conflict.kind === "account") reloadAccounts();
+          else reloadCenters();
         }}
       />
     </div>

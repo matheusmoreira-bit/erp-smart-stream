@@ -41,11 +41,12 @@ export function useIntercompany() {
   const [accountResults, setAccountResults] = useState<PerCompanyResult<SapAccountRow[]>[]>([]);
   const [centerResults, setCenterResults] = useState<PerCompanyResult<SapCostCenterRow[]>[]>([]);
 
-  const loadAccounts = useCallback(async () => {
+  const loadAccounts = useCallback(async (company_dbs?: string[]) => {
     setLoadingAccounts(true);
     try {
       const r = await callIntercompany<{ results: PerCompanyResult<SapAccountRow[]>[] }>({
         action: "list-accounts",
+        company_dbs,
       });
       setAccountResults(r.results || []);
     } finally {
@@ -53,11 +54,12 @@ export function useIntercompany() {
     }
   }, []);
 
-  const loadCostCenters = useCallback(async () => {
+  const loadCostCenters = useCallback(async (company_dbs?: string[]) => {
     setLoadingCenters(true);
     try {
       const r = await callIntercompany<{ results: PerCompanyResult<SapCostCenterRow[]>[] }>({
         action: "list-cost-centers",
+        company_dbs,
       });
       setCenterResults(r.results || []);
     } finally {
@@ -66,7 +68,7 @@ export function useIntercompany() {
   }, []);
 
   const createAccount = useCallback(
-    async (input: { code: string; name: string; account_type?: string }) => {
+    async (input: { code: string; name: string; account_type?: string; company_dbs?: string[] }) => {
       return await callIntercompany<{ results: PerCompanyResult[] }>({
         action: "create-account",
         ...input,
@@ -76,7 +78,7 @@ export function useIntercompany() {
   );
 
   const createCostCenter = useCallback(
-    async (input: { center_code: string; center_name: string; group_code?: number }) => {
+    async (input: { center_code: string; center_name: string; group_code?: number; company_dbs?: string[] }) => {
       return await callIntercompany<{ results: PerCompanyResult[] }>({
         action: "create-cost-center",
         ...input,
@@ -86,7 +88,7 @@ export function useIntercompany() {
   );
 
   const renameAccount = useCallback(
-    async (input: { code: string; name: string }) => {
+    async (input: { code: string; name: string; company_dbs?: string[] }) => {
       return await callIntercompany<{ results: PerCompanyResult[] }>({
         action: "rename-account",
         ...input,
@@ -96,7 +98,7 @@ export function useIntercompany() {
   );
 
   const renameCostCenter = useCallback(
-    async (input: { center_code: string; center_name: string }) => {
+    async (input: { center_code: string; center_name: string; company_dbs?: string[] }) => {
       return await callIntercompany<{ results: PerCompanyResult[] }>({
         action: "rename-cost-center",
         ...input,
