@@ -634,7 +634,7 @@ function ReconcileDialog({
                         <TableCell className="text-right">
                           <Button
                             size="sm"
-                            onClick={() => handleAutoLink(inv)}
+                            onClick={() => setPreviewInvoice(inv)}
                             disabled={linkingId !== null}
                           >
                             {linkingId === inv.doc_entry ? (
