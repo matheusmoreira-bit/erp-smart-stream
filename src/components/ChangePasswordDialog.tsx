@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KeyRound, Loader2 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
-import { sapLogin, sapAction } from "@/lib/sap-client";
+import { sapLogin, sapAction, sapQuery } from "@/lib/sap-client";
 import { listSapTargetCompanies, changePasswordInCompanies, type MultiCompanyPasswordResult } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
 
