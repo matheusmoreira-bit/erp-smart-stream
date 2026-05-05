@@ -384,6 +384,136 @@ function CreateCostCenterDialog({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+function ResolveConflictDialog({
+  open,
+  onOpenChange,
+  code,
+  names,
+  kind,
+  onResolved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  code: string;
+  names: string[];
+  kind: "account" | "center";
+  onResolved: () => void;
+}) {
+  const { renameAccount, renameCostCenter } = useIntercompany();
+  const [selected, setSelected] = useState<string>("");
+  const [custom, setCustom] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const [report, setReport] = useState<PerCompanyResult[] | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSelected(names[0] || "");
+      setCustom("");
+    }
+  }, [open, names]);
+
+  const finalName = selected === "__custom__" ? custom.trim() : selected;
+
+  const submit = async () => {
+    if (!finalName) {
+      toast.error("Informe um nome");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { results } =
+        kind === "account"
+          ? await renameAccount({ code, name: finalName })
+          : await renameCostCenter({ center_code: code, center_name: finalName });
+      setReport(results);
+      onOpenChange(false);
+      onResolved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao unificar nome");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unificar nome — {code}</DialogTitle>
+            <DialogDescription>
+              Escolha o nome que será aplicado em todas as empresas onde este registro existe.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Nomes encontrados</Label>
+              <div className="space-y-1.5">
+                {names.map((n) => (
+                  <label
+                    key={n}
+                    className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm ${
+                      selected === n ? "border-primary bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="conflict-name"
+                      checked={selected === n}
+                      onChange={() => setSelected(n)}
+                    />
+                    <span className="flex-1">{n}</span>
+                  </label>
+                ))}
+                <label
+                  className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm ${
+                    selected === "__custom__" ? "border-primary bg-primary/5" : "border-border"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="conflict-name"
+                    checked={selected === "__custom__"}
+                    onChange={() => setSelected("__custom__")}
+                  />
+                  <span className="text-muted-foreground">Outro nome…</span>
+                </label>
+              </div>
+            </div>
+            {selected === "__custom__" && (
+              <div>
+                <Label>Novo nome</Label>
+                <Input
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value)}
+                  placeholder="Digite o nome unificado"
+                  autoFocus
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={submit} disabled={submitting || !finalName}>
+              {submitting ? "Aplicando..." : "Aplicar em todas"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {report && (
+        <ResultReportDialog
+          open={!!report}
+          onOpenChange={(v) => !v && setReport(null)}
+          results={report}
+          title="Relatório de unificação de nome"
+        />
+      )}
+    </>
+  );
+}
+
 function ConsolidatedTable({
   rows,
   companies,
