@@ -429,7 +429,7 @@ export async function fetchSupplierFromSap(
       bill_to_state: billTo.State || null,
       bill_to_country: billTo.Country || "BR",
       bill_to_block: billTo.Block || null,
-      bill_to_building: billTo.Building || null,
+      bill_to_building: billTo.BuildingFloorRoom || billTo.Building || null,
     };
   } catch {
     return null;
