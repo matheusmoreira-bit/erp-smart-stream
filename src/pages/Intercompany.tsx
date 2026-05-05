@@ -123,25 +123,7 @@ function consolidateCenters(
   return { rows, companies };
 }
 
-function CompanyErrorsBanner({ results }: { results: PerCompanyResult[] }) {
-  const failed = results.filter((r) => !r.ok);
-  if (failed.length === 0) return null;
-  return (
-    <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
-      <div className="flex items-center gap-2 font-medium text-destructive mb-1">
-        <AlertTriangle className="w-4 h-4" />
-        {failed.length} empresa(s) com falha
-      </div>
-      <ul className="space-y-0.5 text-xs text-muted-foreground">
-        {failed.map((f) => (
-          <li key={f.company_db}>
-            <span className="font-medium text-foreground">{f.display_name}:</span> {f.error}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+
 
 function ResultReportDialog({
   open,
