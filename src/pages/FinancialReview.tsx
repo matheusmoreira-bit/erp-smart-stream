@@ -12,9 +12,14 @@ import {
   Building2,
   CheckCircle2,
   AlertCircle,
+  FileDown,
+  FileText,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { useFinancialReview, type AdvanceItem, type OpenInvoice } from "@/hooks/useFinancialReview";
+import { logAuditAction } from "@/hooks/useAuditLog";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -81,6 +86,7 @@ export default function FinancialReview() {
   const navigate = useNavigate();
   const { session } = useSap();
   const companyDb = session?.companyDB;
+  const userEmail = session?.userName;
   const { items, loading, error, refresh, listOpenInvoices, cancelPayment } =
     useFinancialReview(companyDb);
 
@@ -90,8 +96,16 @@ export default function FinancialReview() {
   const [selected, setSelected] = useState<AdvanceItem | null>(null);
 
   useEffect(() => {
-    if (companyDb) refresh();
-  }, [companyDb, refresh]);
+    if (companyDb) {
+      refresh();
+      logAuditAction({
+        action: "view",
+        entity_type: "financial_review",
+        actor_email: userEmail,
+        company_db: companyDb,
+      });
+    }
+  }, [companyDb, refresh, userEmail]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -122,6 +136,105 @@ export default function FinancialReview() {
     };
   }, [filtered]);
 
+  const linkStatus = (it: AdvanceItem) =>
+    it.doc_type.startsWith("PAYMENT_OA") ? "Sem vínculo (on-account)" : "Adiant. sem NF final";
+
+  const exportCsv = () => {
+    const header = [
+      "Tipo",
+      "Doc",
+      "CardCode",
+      "Parceiro",
+      "Tipo Parceiro",
+      "Data",
+      "Moeda",
+      "Valor Total",
+      "Pago",
+      "Em Aberto",
+      "Referência",
+      "Status Vínculo",
+      "Observações",
+    ];
+    const rows = filtered.map((i) => [
+      TYPE_LABEL[i.doc_type],
+      i.doc_num ?? i.doc_entry,
+      i.card_code,
+      i.card_name,
+      i.bp_type === "supplier" ? "Fornecedor" : "Cliente",
+      i.doc_date ?? "",
+      i.doc_currency,
+      i.doc_total,
+      i.paid_to_date,
+      i.open_amount,
+      i.reference ?? "",
+      linkStatus(i),
+      (i.remarks ?? "").replace(/[\r\n]+/g, " "),
+    ]);
+    const escape = (v: unknown) => {
+      const s = String(v ?? "");
+      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = "\uFEFF" + [header, ...rows].map((r) => r.map(escape).join(";")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `avaliacao-financeira-${companyDb}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    logAuditAction({
+      action: "export_csv",
+      entity_type: "financial_review",
+      actor_email: userEmail,
+      company_db: companyDb,
+      details: { rows: filtered.length, filters: { search, bpFilter, typeFilter } },
+    });
+    toast({ title: "CSV exportado", description: `${filtered.length} linhas` });
+  };
+
+  const exportPdf = () => {
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    doc.setFontSize(14);
+    doc.text("Avaliação Financeira — Adiantamentos em aberto", 40, 36);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(
+      `Empresa: ${companyDb} · Gerado em ${new Date().toLocaleString("pt-BR")} · ${filtered.length} itens`,
+      40,
+      52,
+    );
+    doc.text(
+      `Fornecedores: ${totals.supplierCount} (${formatMoney(totals.supplierSum, "BRL")})  ·  Clientes: ${totals.customerCount} (${formatMoney(totals.customerSum, "BRL")})`,
+      40,
+      66,
+    );
+    autoTable(doc, {
+      startY: 80,
+      head: [["Tipo", "Doc", "Parceiro", "Data", "Em aberto", "Referência", "Status"]],
+      body: filtered.map((i) => [
+        TYPE_LABEL[i.doc_type],
+        String(i.doc_num ?? i.doc_entry),
+        `${i.card_name}\n${i.card_code}`,
+        formatDate(i.doc_date),
+        formatMoney(i.open_amount, i.doc_currency),
+        i.reference ?? "—",
+        linkStatus(i),
+      ]),
+      styles: { fontSize: 8, cellPadding: 4 },
+      headStyles: { fillColor: [40, 40, 40] },
+      columnStyles: { 4: { halign: "right" } },
+    });
+    doc.save(`avaliacao-financeira-${companyDb}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    logAuditAction({
+      action: "export_pdf",
+      entity_type: "financial_review",
+      actor_email: userEmail,
+      company_db: companyDb,
+      details: { rows: filtered.length, filters: { search, bpFilter, typeFilter } },
+    });
+    toast({ title: "PDF exportado", description: `${filtered.length} linhas` });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-6 py-4">
@@ -140,10 +253,20 @@ export default function FinancialReview() {
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            Atualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
+              <FileDown className="w-4 h-4" />
+              CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportPdf} disabled={filtered.length === 0}>
+              <FileText className="w-4 h-4" />
+              PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              Atualizar
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -291,8 +414,29 @@ export default function FinancialReview() {
       <ReconcileDialog
         item={selected}
         onClose={() => setSelected(null)}
-        onListInvoices={listOpenInvoices}
-        onCancel={cancelPayment}
+        onListInvoices={async (cc, bp) => {
+          const list = await listOpenInvoices(cc, bp);
+          logAuditAction({
+            action: "list_open_invoices",
+            entity_type: "financial_review",
+            entity_id: cc,
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { card_code: cc, bp_type: bp, count: list.length },
+          });
+          return list;
+        }}
+        onCancel={async (docType, docEntry) => {
+          await cancelPayment(docType, docEntry);
+          logAuditAction({
+            action: "cancel_payment",
+            entity_type: "financial_review",
+            entity_id: String(docEntry),
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { doc_type: docType, doc_entry: docEntry },
+          });
+        }}
         onDone={() => {
           setSelected(null);
           refresh();
