@@ -355,6 +355,48 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!pwdUser} onOpenChange={(o) => { if (!o) setPwdUser(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Redefinir Senha</DialogTitle>
+            <DialogDescription>
+              A senha de <span className="font-medium text-foreground">{pwdUser?.UserName}</span> será redefinida para <span className="font-mono">Sap@2025</span> na empresa atual.
+            </DialogDescription>
+          </DialogHeader>
+
+          {otherCompanies.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <p className="text-sm font-medium">Aplicar também em outras empresas</p>
+              <p className="text-xs text-muted-foreground">
+                Identificamos o usuário pelo código <span className="font-mono">{pwdUser?.UserCode}</span> em cada empresa selecionada (caso exista).
+              </p>
+              <div className="max-h-48 overflow-y-auto space-y-2 rounded-md border border-border p-2">
+                {otherCompanies.map((c) => (
+                  <label key={c.company_db} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <Checkbox
+                      checked={pwdSelected.has(c.company_db)}
+                      onCheckedChange={() => togglePwdCompany(c.company_db)}
+                    />
+                    <span className="text-foreground">{c.display_name}</span>
+                    <span className="text-xs text-muted-foreground">({c.company_db})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPwdUser(null)} disabled={pwdSubmitting}>
+              Cancelar
+            </Button>
+            <Button onClick={handleResetPassword} disabled={pwdSubmitting}>
+              {pwdSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
