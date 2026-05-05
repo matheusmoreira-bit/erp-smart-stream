@@ -47,6 +47,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
+import { FileSignature, ArrowRight } from "lucide-react";
 
 const TYPE_LABEL: Record<AdvanceItem["doc_type"], string> = {
   ADVANCE_AP: "Adiant. Fornecedor (NF)",
@@ -488,10 +489,12 @@ function ReconcileDialog({
   const [loadingInv, setLoadingInv] = useState(false);
   const [busy, setBusy] = useState(false);
   const [linkingId, setLinkingId] = useState<number | null>(null);
+  const [previewInvoice, setPreviewInvoice] = useState<OpenInvoice | null>(null);
 
   useEffect(() => {
     setTab("guide");
     setInvoices(null);
+    setPreviewInvoice(null);
   }, [item]);
 
   if (!item) return null;
@@ -531,10 +534,6 @@ function ReconcileDialog({
   };
 
   const handleAutoLink = async (inv: OpenInvoice) => {
-    if (!confirm(
-      `Vincular o adiantamento ${item.doc_num ?? item.doc_entry} à NF ${inv.doc_num}?\n` +
-      `Será aplicado ${formatMoney(Math.min(item.open_amount, inv.open_amount), inv.doc_currency)}.`,
-    )) return;
     setLinkingId(inv.doc_entry);
     try {
       const r = await onAutoLink({
@@ -547,6 +546,7 @@ function ReconcileDialog({
         title: "Vinculação concluída",
         description: `Aplicado ${formatMoney(r.applied, inv.doc_currency)} à NF ${inv.doc_num}.`,
       });
+      setPreviewInvoice(null);
       onDone();
     } catch (e) {
       toast({
@@ -634,7 +634,7 @@ function ReconcileDialog({
                         <TableCell className="text-right">
                           <Button
                             size="sm"
-                            onClick={() => handleAutoLink(inv)}
+                            onClick={() => setPreviewInvoice(inv)}
                             disabled={linkingId !== null}
                           >
                             {linkingId === inv.doc_entry ? (
@@ -708,6 +708,14 @@ function ReconcileDialog({
             Fechar
           </Button>
         </DialogFooter>
+
+        <LinkPreviewDialog
+          advance={item}
+          invoice={previewInvoice}
+          busy={linkingId !== null}
+          onClose={() => setPreviewInvoice(null)}
+          onConfirm={() => previewInvoice && handleAutoLink(previewInvoice)}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -783,5 +791,183 @@ function GuideTab({ item }: { item: AdvanceItem }) {
         </ul>
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Preview dialog: shows what will be created in SAP before confirming
+// ─────────────────────────────────────────────────────────────────────────────
+
+function LinkPreviewDialog({
+  advance,
+  invoice,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  advance: AdvanceItem;
+  invoice: OpenInvoice | null;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!invoice) return null;
+
+  const isPayment = advance.doc_type.startsWith("PAYMENT_OA");
+  const isOutgoing = advance.doc_type === "ADVANCE_AP" || advance.doc_type === "PAYMENT_OA_OUT";
+  const applied = Math.min(advance.open_amount, invoice.open_amount);
+  const advRemaining = advance.open_amount - applied;
+  const invRemaining = invoice.open_amount - applied;
+  const currency = invoice.doc_currency || advance.doc_currency;
+
+  // Document that will be generated in SAP
+  const docKind = isPayment
+    ? "Internal Reconciliation (BP)"
+    : isOutgoing
+      ? "VendorPayment (Pagamento a fornecedor)"
+      : "IncomingPayment (Recebimento de cliente)";
+
+  const endpoint = isPayment
+    ? "POST /InternalReconciliationsService_Reconcile"
+    : isOutgoing
+      ? "POST /VendorPayments"
+      : "POST /IncomingPayments";
+
+  return (
+    <Dialog open={!!invoice} onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSignature className="w-5 h-5 text-primary" />
+            Confirmar vinculação
+          </DialogTitle>
+          <DialogDescription>
+            Revise abaixo o documento que será criado no SAP B1 antes de confirmar.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Visual flow */}
+        <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+          <div className="rounded-md border p-3 bg-muted/30">
+            <p className="text-xs text-muted-foreground">Adiantamento</p>
+            <p className="text-sm font-medium truncate">
+              {TYPE_LABEL[advance.doc_type]}
+            </p>
+            <p className="text-xs font-mono">Doc {advance.doc_num ?? advance.doc_entry}</p>
+            <p className="text-sm font-semibold mt-1">
+              {formatMoney(advance.open_amount, currency)}
+            </p>
+          </div>
+          <ArrowRight className="w-5 h-5 text-muted-foreground" />
+          <div className="rounded-md border p-3 bg-muted/30">
+            <p className="text-xs text-muted-foreground">Nota fiscal</p>
+            <p className="text-sm font-medium truncate">NF {invoice.doc_num}</p>
+            <p className="text-xs">{formatDate(invoice.doc_date)}</p>
+            <p className="text-sm font-semibold mt-1">
+              {formatMoney(invoice.open_amount, currency)}
+            </p>
+          </div>
+        </div>
+
+        {/* Document to be created */}
+        <div className="rounded-md border p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Documento que será criado</p>
+            <Badge variant="outline" className="font-mono text-[10px]">
+              {endpoint}
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">{docKind}</p>
+
+          {!isPayment && (
+            <div className="text-xs">
+              <p className="font-medium mb-1">PaymentInvoices (linhas):</p>
+              <div className="rounded bg-muted/40 p-2 font-mono space-y-0.5">
+                <div>
+                  + DocEntry={invoice.doc_entry} (NF {invoice.doc_num}) · SumApplied={" "}
+                  <span className="text-success">
+                    {formatMoney(applied, currency)}
+                  </span>
+                </div>
+                <div>
+                  − DocEntry={advance.doc_entry} (Adiant. {advance.doc_num ?? advance.doc_entry}) ·
+                  SumApplied={" "}
+                  <span className="text-destructive">
+                    -{formatMoney(applied, currency)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-muted-foreground mt-1">
+                CardCode: <span className="font-mono">{advance.card_code}</span> · Total líquido:{" "}
+                <span className="font-mono">0,00</span> (compensação)
+              </p>
+            </div>
+          )}
+
+          {isPayment && (
+            <div className="text-xs space-y-1">
+              <p>
+                Reconciliação interna do parceiro <strong>{advance.card_code}</strong>:
+              </p>
+              <div className="rounded bg-muted/40 p-2 font-mono space-y-0.5">
+                <div>• Pagamento on-account (DocEntry={advance.doc_entry})</div>
+                <div>• NF (DocEntry={invoice.doc_entry}, DocNum={invoice.doc_num})</div>
+                <div>• AmountToReconcile = {formatMoney(applied, currency)}</div>
+              </div>
+              <p className="text-muted-foreground">
+                Os JournalEntries serão resolvidos automaticamente para obter TransId/TransRowId.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Resulting balances */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="rounded-md border p-3">
+            <p className="text-xs text-muted-foreground">Saldo do adiantamento após</p>
+            <p className="font-semibold">
+              {formatMoney(advRemaining, currency)}
+              {advRemaining === 0 && (
+                <span className="ml-2 text-xs text-success font-normal">(quitado)</span>
+              )}
+            </p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-xs text-muted-foreground">Saldo da NF após</p>
+            <p className="font-semibold">
+              {formatMoney(invRemaining, currency)}
+              {invRemaining === 0 && (
+                <span className="ml-2 text-xs text-success font-normal">(quitada)</span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground flex gap-1.5 items-start">
+          <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          O valor aplicado é o menor entre o saldo do adiantamento e o saldo da NF. Após confirmar,
+          a operação não pode ser desfeita pela tela — exigirá estorno manual no SAP.
+        </p>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button onClick={onConfirm} disabled={busy}>
+            {busy ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Processando…
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                Confirmar e criar no SAP
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
