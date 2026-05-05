@@ -77,6 +77,25 @@ function validateEndpoint(endpoint: string): boolean {
   return true;
 }
 
+function extractSapErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload) return fallback;
+  if (typeof payload === "string") return payload || fallback;
+  if (typeof payload !== "object") return fallback;
+
+  const error = (payload as { error?: unknown }).error;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+    if (message && typeof message === "object") {
+      const value = (message as { value?: unknown }).value;
+      if (typeof value === "string" && value.trim()) return value;
+    }
+  }
+
+  return fallback;
+}
+
 async function getSapBaseUrl(companyDB?: string): Promise<string> {
   if (!companyDB) return DEFAULT_SAP_BASE_URL;
   try {
@@ -510,12 +529,15 @@ Deno.serve(async (req) => {
       try { respData = JSON.parse(respText); } catch { respData = respText; }
 
       if (!sapResp.ok) {
-        let errorMsg = "Erro na ação SAP B1";
-        if (respData && typeof respData === "object" && "error" in respData) {
-          errorMsg = (respData as any).error?.message?.value || errorMsg;
-        }
-        return new Response(JSON.stringify({ error: errorMsg }), {
-          status: sapResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        const errorMsg = extractSapErrorMessage(respData, "Erro na ação SAP B1");
+        console.error("SAP action error:", sapResp.status, {
+          endpoint,
+          method: httpMethod,
+          error: errorMsg,
+          response: respData,
+        });
+        return new Response(JSON.stringify({ error: errorMsg, sapStatus: sapResp.status }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
