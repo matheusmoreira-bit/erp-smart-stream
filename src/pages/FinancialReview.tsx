@@ -12,9 +12,14 @@ import {
   Building2,
   CheckCircle2,
   AlertCircle,
+  FileDown,
+  FileText,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { useFinancialReview, type AdvanceItem, type OpenInvoice } from "@/hooks/useFinancialReview";
+import { logAuditAction } from "@/hooks/useAuditLog";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
