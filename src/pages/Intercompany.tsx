@@ -382,6 +382,7 @@ function ResolveConflictDialog({
   code,
   names,
   kind,
+  companyDbs,
   onResolved,
 }: {
   open: boolean;
@@ -389,6 +390,7 @@ function ResolveConflictDialog({
   code: string;
   names: string[];
   kind: "account" | "center";
+  companyDbs: string[];
   onResolved: () => void;
 }) {
   const { renameAccount, renameCostCenter } = useIntercompany();
@@ -411,12 +413,16 @@ function ResolveConflictDialog({
       toast.error("Informe um nome");
       return;
     }
+    if (companyDbs.length === 0) {
+      toast.error("Selecione ao menos uma empresa");
+      return;
+    }
     setSubmitting(true);
     try {
       const { results } =
         kind === "account"
-          ? await renameAccount({ code, name: finalName })
-          : await renameCostCenter({ center_code: code, center_name: finalName });
+          ? await renameAccount({ code, name: finalName, company_dbs: companyDbs })
+          : await renameCostCenter({ center_code: code, center_name: finalName, company_dbs: companyDbs });
       setReport(results);
       onOpenChange(false);
       onResolved();
