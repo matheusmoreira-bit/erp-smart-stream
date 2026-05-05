@@ -182,12 +182,31 @@ export function useSapUsers() {
     }
   }, [session]);
 
+  const resolveInternalKey = useCallback(async (user: SapUser): Promise<number> => {
+    if (user.InternalKey && user.InternalKey > 0) return user.InternalKey;
+    if (!session) throw new Error("Sem sessão ativa");
+    if (!user.UserCode) throw new Error("UserCode ausente");
+    const lookup = await sapQuery(
+      session,
+      `Users?$filter=UserCode eq '${user.UserCode.replace(/'/g, "''")}'&$select=InternalKey`,
+      undefined,
+      false,
+    );
+    const rows = (lookup as { data?: { value?: Array<{ InternalKey: number }> } }).data?.value
+      ?? (lookup as { value?: Array<{ InternalKey: number }> }).value
+      ?? [];
+    const key = Number(rows[0]?.InternalKey);
+    if (!key) throw new Error(`Usuário '${user.UserCode}' não encontrado no SAP`);
+    return key;
+  }, [session]);
+
   const toggleLock = useCallback(async (user: SapUser) => {
     if (!session) return;
     setActionLoading(user.InternalKey);
     try {
+      const internalKey = await resolveInternalKey(user);
       const newLocked = user.Locked === "tNO" ? "tYES" : "tNO";
-      await sapAction(session, `Users(${user.InternalKey})`, "PATCH", {
+      await sapAction(session, `Users(${internalKey})`, "PATCH", {
         Locked: newLocked,
       });
       sapUsersCache.clear();
@@ -199,13 +218,14 @@ export function useSapUsers() {
     } finally {
       setActionLoading(null);
     }
-  }, [session, fetchUsers]);
+  }, [session, fetchUsers, resolveInternalKey]);
 
   const resetPassword = useCallback(async (user: SapUser) => {
     if (!session) return;
     setActionLoading(user.InternalKey);
     try {
-      await sapAction(session, `Users(${user.InternalKey})`, "PATCH", {
+      const internalKey = await resolveInternalKey(user);
+      await sapAction(session, `Users(${internalKey})`, "PATCH", {
         Password: "Sap@2025",
       });
     } catch (e) {
@@ -214,7 +234,7 @@ export function useSapUsers() {
     } finally {
       setActionLoading(null);
     }
-  }, [session]);
+  }, [session, resolveInternalKey]);
 
   const createUser = useCallback(async (userData: UserCreatePayload): Promise<{ created: boolean; replicationResults: ReplicationResult[] }> => {
     if (!session) throw new Error("Sem sessão ativa");
