@@ -183,12 +183,14 @@ export function useSapUsers() {
   }, [session]);
 
   const resolveInternalKey = useCallback(async (user: SapUser): Promise<number> => {
-    if (user.InternalKey && user.InternalKey > 0) return user.InternalKey;
     if (!session) throw new Error("Sem sessão ativa");
-    if (!user.UserCode) throw new Error("UserCode ausente");
+    if (!user.UserCode) {
+      if (user.InternalKey && user.InternalKey > 0) return user.InternalKey;
+      throw new Error("UserCode ausente");
+    }
     const lookup = await sapQuery(
       session,
-      `Users?$filter=UserCode eq '${user.UserCode.replace(/'/g, "''")}'&$select=InternalKey`,
+      `Users?$filter=UserCode eq '${user.UserCode.replace(/'/g, "''")}'&$select=InternalKey,UserCode`,
       undefined,
       false,
     );
