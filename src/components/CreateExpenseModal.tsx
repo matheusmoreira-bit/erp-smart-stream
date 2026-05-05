@@ -169,6 +169,8 @@ export function CreateExpenseModal({
       setRemarks("");
       setAiWarning(null);
       setSuggestedSupplierName(undefined);
+      setAiSupplierData(null);
+      setShowSupplierForm(false);
       setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
       setFiles([]);
       setAiConfidence(null);
