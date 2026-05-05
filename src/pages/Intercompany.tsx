@@ -469,9 +469,15 @@ function ConsolidatedTable({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span>{names[0] || "—"}</span>
                     {conflict && (
-                      <Badge variant="outline" className="text-warning border-warning/40 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => onResolveConflict?.(row.code, names)}
+                        className="inline-flex items-center gap-1 rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning hover:bg-warning/20 transition-colors"
+                        title="Unificar nome em todas as empresas"
+                      >
+                        <Pencil className="w-3 h-3" />
                         nomes divergentes
-                      </Badge>
+                      </button>
                     )}
                     {missing && (
                       <Badge variant="outline" className="text-muted-foreground text-[10px]">
