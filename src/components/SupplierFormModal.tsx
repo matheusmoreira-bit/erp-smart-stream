@@ -172,6 +172,33 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
     }
   }, [open, editing, prefill, session]);
 
+  // Auto-complete address from CEP (ViaCEP). Triggered when CEP has 8 digits
+  // and at least one address field is missing. Never overrides existing values.
+  const [cepLookup, setCepLookup] = useState<string | null>(null);
+  useEffect(() => {
+    const cep = (form.bill_to_zip || "").replace(/\D/g, "");
+    if (cep.length !== 8 || cep === cepLookup) return;
+    setCepLookup(cep);
+    let cancelled = false;
+    fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data || data.erro) return;
+        setForm((f) => ({
+          ...f,
+          bill_to_street: f.bill_to_street || data.logradouro || "",
+          bill_to_block: f.bill_to_block || data.bairro || "",
+          bill_to_city: f.bill_to_city || data.localidade || "",
+          bill_to_state: f.bill_to_state || (data.uf ? String(data.uf).toUpperCase() : ""),
+          bill_to_country: f.bill_to_country || "BR",
+        }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [form.bill_to_zip, cepLookup]);
+
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async () => {
