@@ -929,9 +929,10 @@ export default function Intercompany() {
         code={conflict.code}
         names={conflict.names}
         kind={conflict.kind}
+        companyDbs={selectedDbs}
         onResolved={() => {
-          if (conflict.kind === "account") loadAccounts();
-          else loadCostCenters();
+          if (conflict.kind === "account") reloadAccounts();
+          else reloadCenters();
         }}
       />
     </div>
