@@ -138,9 +138,16 @@ Deno.serve(async (req) => {
     }
     const extracted = JSON.parse(toolCall.function.arguments);
 
-    // Normalize tax id to digits only
+    // Normalize: BR tax IDs are digits-only; foreign IDs preserve format.
+    // Country code uppercased to ISO alpha-2.
+    if (extracted.bill_to_country) {
+      extracted.bill_to_country = String(extracted.bill_to_country).toUpperCase().slice(0, 2);
+    }
+    const isBR = !extracted.bill_to_country || extracted.bill_to_country === "BR";
     if (extracted.federal_tax_id) {
-      extracted.federal_tax_id = String(extracted.federal_tax_id).replace(/\D/g, "");
+      extracted.federal_tax_id = isBR
+        ? String(extracted.federal_tax_id).replace(/\D/g, "")
+        : String(extracted.federal_tax_id).trim();
     }
 
     return new Response(JSON.stringify({ supplier: extracted }), {
