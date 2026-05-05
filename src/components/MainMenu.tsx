@@ -155,20 +155,27 @@ const modules: Record<string, ModuleCard> = {
   },
 };
 
-const moduleGroups: { title: string; keys: string[] }[] = [
-  {
-    title: "Geral",
-    keys: ["analytics", "expenses", "approvals", "suppliers"],
-  },
-  {
-    title: "Financeiro / Contábil",
-    keys: ["pagcorp", "integration_history", "financial_review", "intercompany"],
-  },
-  {
-    title: "Admin",
-    keys: ["approval_rules", "users", "synapse", "integration_history", "credentials", "audit_log"],
-  },
-];
+const moduleGroups: { title: string; keys: string[] }[] = (
+  [
+    {
+      title: "Geral",
+      keys: ["analytics", "expenses", "approvals", "suppliers"],
+    },
+    {
+      title: "Financeiro / Contábil",
+      keys: ["pagcorp", "integration_history", "financial_review", "intercompany"],
+    },
+    {
+      title: "Admin",
+      keys: ["approval_rules", "users", "synapse", "integration_history", "credentials", "audit_log"],
+    },
+  ] as { title: string; keys: string[] }[]
+).map((g) => ({
+  ...g,
+  keys: [...g.keys].sort((a, b) =>
+    (modules[a]?.title ?? a).localeCompare(modules[b]?.title ?? b, "pt-BR"),
+  ),
+}));
 
 
 function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: number; hasAccess: boolean }) {
