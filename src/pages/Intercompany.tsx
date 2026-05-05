@@ -930,6 +930,21 @@ export default function Intercompany() {
                   onResolveConflict={(code, names) =>
                     setConflict({ open: true, code, names, kind: "account" })
                   }
+                  onToggleActive={async (code, companyDb, nextActive) => {
+                    try {
+                      const { results } = await toggleAccount({
+                        code,
+                        active: nextActive,
+                        company_db: companyDb,
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao atualizar");
+                      toast.success(`Conta ${code} ${nextActive ? "ativada" : "inativada"}`);
+                      await reloadAccounts();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
+                    }
+                  }}
                 />
               )}
             </TabsContent>
