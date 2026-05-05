@@ -348,6 +348,7 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
+    if (action === "list-companies") {
       const companies = await listActiveSapCompanies(sb);
       return json({ companies });
     }
