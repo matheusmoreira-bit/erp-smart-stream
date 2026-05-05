@@ -489,10 +489,12 @@ function ReconcileDialog({
   const [loadingInv, setLoadingInv] = useState(false);
   const [busy, setBusy] = useState(false);
   const [linkingId, setLinkingId] = useState<number | null>(null);
+  const [previewInvoice, setPreviewInvoice] = useState<OpenInvoice | null>(null);
 
   useEffect(() => {
     setTab("guide");
     setInvoices(null);
+    setPreviewInvoice(null);
   }, [item]);
 
   if (!item) return null;
