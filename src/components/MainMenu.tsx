@@ -16,6 +16,7 @@ import {
   ScrollText,
   Lock,
   Building2,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -124,6 +125,15 @@ const modules: ModuleCard[] = [
     color: "text-primary",
     bgGlow: "from-primary/20 to-primary/5",
     moduleKey: "intercompany",
+  },
+  {
+    title: "Avaliação Financeira",
+    description: "Adiantamentos em aberto (clientes/fornecedores) sem vínculo a notas, com passo a passo de reconciliação.",
+    icon: Wallet,
+    path: "/financial-review",
+    color: "text-success",
+    bgGlow: "from-success/20 to-success/5",
+    moduleKey: "financial_review",
   },
   {
     title: "Credenciais",

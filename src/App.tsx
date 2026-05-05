@@ -18,6 +18,7 @@ import Credentials from "./pages/Credentials.tsx";
 import UsersPage from "./pages/Users.tsx";
 import Suppliers from "./pages/Suppliers.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
+import FinancialReview from "./pages/FinancialReview.tsx";
 import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
 import IdpSync from "./pages/IdpSync.tsx";
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="/suppliers" element={<Suppliers />} />
               <Route path="/suppliers/import-pagcorp" element={<SuppliersImportPagCorp />} />
               <Route path="/intercompany" element={<Intercompany />} />
+              <Route path="/financial-review" element={<FinancialReview />} />
               <Route path="/users/activity" element={<UserActivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />
               <Route path="/synapse" element={<Synapse />} />
