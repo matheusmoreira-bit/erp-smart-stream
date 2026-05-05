@@ -785,7 +785,6 @@ export default function Intercompany() {
             </div>
 
             <TabsContent value="accounts" className="space-y-3 mt-4">
-              <CompanyErrorsBanner results={accountResults} />
               {loadingAccounts && accountResults.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12 text-sm">
                   Carregando plano de contas de todas as empresas…
@@ -795,12 +794,14 @@ export default function Intercompany() {
                   rows={accountRows}
                   companies={accountCompanies}
                   search={search}
+                  onResolveConflict={(code, names) =>
+                    setConflict({ open: true, code, names, kind: "account" })
+                  }
                 />
               )}
             </TabsContent>
 
             <TabsContent value="centers" className="space-y-3 mt-4">
-              <CompanyErrorsBanner results={centerResults} />
               {loadingCenters && centerResults.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12 text-sm">
                   Carregando centros de custo de todas as empresas…
@@ -810,12 +811,27 @@ export default function Intercompany() {
                   rows={centerRows}
                   companies={centerCompanies}
                   search={search}
+                  onResolveConflict={(code, names) =>
+                    setConflict({ open: true, code, names, kind: "center" })
+                  }
                 />
               )}
             </TabsContent>
           </Tabs>
         </motion.div>
       </main>
+
+      <ResolveConflictDialog
+        open={conflict.open}
+        onOpenChange={(v) => setConflict((c) => ({ ...c, open: v }))}
+        code={conflict.code}
+        names={conflict.names}
+        kind={conflict.kind}
+        onResolved={() => {
+          if (conflict.kind === "account") loadAccounts();
+          else loadCostCenters();
+        }}
+      />
     </div>
   );
 }
