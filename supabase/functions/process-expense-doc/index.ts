@@ -67,36 +67,37 @@ serve(async (req) => {
       text: "Analise os documentos acima e extraia as informações conforme solicitado. Responda APENAS com o JSON, sem markdown ou explicações.",
     });
 
-    const systemPrompt = `Você é um assistente especializado em processar documentos fiscais brasileiros (notas fiscais, recibos, boletos, etc.).
+    const systemPrompt = `Você é um assistente especializado em processar documentos fiscais — tanto brasileiros (notas fiscais, recibos, boletos) quanto internacionais (commercial invoices, receipts em inglês/espanhol/etc.).
 Analise os documentos enviados e extraia as seguintes informações em formato JSON:
 
 {
   "supplier_name": "Nome do fornecedor/empresa emissora (quem VENDEU/prestou serviço)",
-  "supplier_cnpj": "CNPJ do fornecedor se disponível",
+  "supplier_cnpj": "Identificação fiscal do fornecedor — CNPJ/CPF (BR), EIN (US), VAT-ID (UE/UK), RFC (MX), CUIT (AR), RUT (CL/UY), NIF/CIF (ES/PT), etc. Sem máscara/pontuação para BR; mantém o formato original para internacional.",
+  "supplier_country": "ISO-3166 alpha-2 do país do fornecedor (ex.: 'BR', 'US', 'GB', 'DE'). 'BR' por padrão se claramente brasileiro; deduza de moeda/idioma/endereço para outros casos.",
   "supplier_match_confidence": 0.95,
   "supplier_email": "Email do fornecedor (emissor), se aparecer no documento. null caso contrário.",
-  "supplier_phone1": "Telefone principal do fornecedor (com DDD, formato '(11) 0000-0000'), se houver. null caso contrário.",
-  "supplier_phone2": "Telefone secundário do fornecedor, se houver. null caso contrário.",
+  "supplier_phone1": "Telefone principal do fornecedor com código do país quando internacional (ex: '+1 555 000 0000', ou '(11) 0000-0000' para BR). null se ausente.",
+  "supplier_phone2": "Telefone secundário do fornecedor, mesmo formato. null se ausente.",
   "supplier_address": {
-    "street": "Logradouro do fornecedor (rua/avenida + nome), sem número/bairro. null se ausente.",
-    "building": "Número e/ou complemento do endereço do fornecedor (ex: '123', '456 - Sala 2'). null se ausente.",
-    "block": "Bairro do fornecedor. null se ausente.",
-    "zip": "CEP do fornecedor, apenas dígitos (8). null se ausente.",
+    "street": "Logradouro/endereço linha 1 do fornecedor (sem número/bairro quando possível). null se ausente.",
+    "building": "Número e/ou complemento (ou linha 2 do endereço internacional). null se ausente.",
+    "block": "Bairro (BR) ou distrito/neighborhood (internacional). null se ausente.",
+    "zip": "CEP/ZIP/Postal Code do fornecedor. Para BR: apenas dígitos (8). Para outros países: mantenha formato original (alfanumérico permitido, ex.: 'SW1A 1AA', '10115').",
     "city": "Cidade do fornecedor. null se ausente.",
-    "state": "UF do fornecedor (sigla 2 letras). null se ausente.",
-    "country": "País (ISO 2 letras). 'BR' por padrão se for endereço brasileiro."
+    "state": "Estado/UF/província/região do fornecedor. Para BR: sigla 2 letras (UF). Para outros: nome ou sigla conforme aparece no documento.",
+    "country": "ISO-3166 alpha-2 do endereço (mesma regra de supplier_country). 'BR' por padrão para endereços brasileiros."
   },
   "client_name": "Nome do cliente/destinatário (quem COMPROU/recebeu o serviço)",
-  "client_cnpj": "CNPJ do cliente se disponível",
+  "client_cnpj": "CNPJ/Tax ID do cliente se disponível",
   "total_amount": 0.00,
-  "currency": "BRL",
+  "currency": "ISO 4217 do documento — 'BRL', 'USD', 'EUR', 'GBP', etc. Use o que efetivamente aparece no documento (símbolo $, R$, €, £, ou texto explícito).",
   "document_date": "YYYY-MM-DD (data de emissão do documento)",
   "due_date": "YYYY-MM-DD (data de vencimento, se houver; caso não exista, usar document_date + 30 dias)",
-  "document_number": "Número do documento/NF",
+  "document_number": "Número do documento/NF/Invoice #",
   "items": [
     {
-      "description": "Descrição LITERAL do item/serviço, exatamente como está escrito no documento (sem resumir, sem reformular)",
-      "item_search_hint": "Termo curto (1-4 palavras) que representa o TIPO/CATEGORIA do item consumido, interpretado a partir do fornecedor e do contexto, para buscar no cadastro de itens do SAP. Exemplos: 'combustível', 'pedágio', 'refeição', 'hospedagem', 'táxi', 'estacionamento', 'material de escritório'.",
+      "description": "Descrição LITERAL do item/serviço, exatamente como está escrito no documento (sem resumir, sem reformular, sem traduzir)",
+      "item_search_hint": "Termo curto (1-4 palavras) em PORTUGUÊS que representa o TIPO/CATEGORIA do item consumido, mesmo que o documento esteja em outro idioma. Exemplos: 'combustível', 'pedágio', 'refeição', 'hospedagem', 'táxi', 'estacionamento', 'material de escritório', 'software', 'consultoria'.",
       "quantity": 1,
       "unit_price": 0.00,
       "line_total": 0.00,
@@ -112,23 +113,27 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
 }
 
 Regras IMPORTANTES:
-- Extraia TODOS os itens listados no documento
-- CRÍTICO: O campo "description" deve conter o texto LITERAL do item como aparece no documento. NÃO resuma, NÃO reformule, NÃO traduza. Copie exatamente como está escrito (preservando acentos e capitalização razoável). Se a descrição original for muito longa, mantenha-a integral mesmo assim.
-- CRÍTICO: O campo "item_search_hint" deve ser uma INTERPRETAÇÃO sua do que foi consumido, baseada no fornecedor (ex.: posto de gasolina → "combustível"; concessionária de rodovia → "pedágio"; restaurante → "refeição"; hotel/pousada → "hospedagem"; aplicativo de transporte → "táxi"). Use de 1 a 4 palavras em português, no singular, sem marca/fornecedor — apenas o tipo genérico do item para servir como termo de busca no cadastro SAP.
-- O campo "supplier_match_confidence" indica sua confiança de que o nome/CNPJ do fornecedor está correto (0 a 1). Se não tiver certeza, use um valor baixo.
+- Documentos podem estar em PORTUGUÊS, INGLÊS, ESPANHOL ou outros idiomas. Você deve interpretar todos.
+- Termos comuns para o emissor: "Vendor", "Supplier", "Seller", "Bill From", "Emitente", "Proveedor". Para o destinatário: "Bill To", "Customer", "Client", "Sold To", "Destinatário", "Cliente".
+- Termos para identificação fiscal por país: BR=CNPJ/CPF, US=EIN/SSN, GB=VAT/Company Number, EU=VAT-ID/USt-IdNr/TVA, MX=RFC, AR=CUIT, CL/UY=RUT, CO=NIT, PE/PY=RUC, ES=NIF/CIF, PT=NIF, AU=ABN, CA=BN.
+- Extraia TODOS os itens listados no documento.
+- CRÍTICO: O campo "description" deve conter o texto LITERAL do item como aparece no documento. NÃO resuma, NÃO reformule, NÃO traduza. Copie exatamente como está escrito.
+- CRÍTICO: O campo "item_search_hint" deve ser uma INTERPRETAÇÃO sua em PORTUGUÊS do que foi consumido. Use de 1 a 4 palavras, no singular, sem marca/fornecedor.
+- O campo "supplier_match_confidence" indica sua confiança no nome/identificação do fornecedor (0 a 1).
 - NÃO invente dados. Se não conseguir identificar um campo com certeza, use null.
 - Para "item_code_match": só preencha se tiver certeza absoluta do código SAP do item. Na dúvida, use null.
-- O campo confidence indica sua confiança geral na extração (0 a 1)
-- Se houver múltiplos documentos, retorne um array de objetos
-- Valores monetários devem ser números (não strings)
-- Datas no formato YYYY-MM-DD
-- Extraia o CLIENTE (destinatário) separadamente do FORNECEDOR (emitente)
-- "document_date" é a data de emissão da nota/documento
+- O campo confidence indica sua confiança geral na extração (0 a 1).
+- Se houver múltiplos documentos, retorne um array de objetos.
+- Valores monetários devem ser números (não strings). Use ponto decimal.
+- Datas no formato YYYY-MM-DD.
+- Extraia o CLIENTE (destinatário) separadamente do FORNECEDOR (emitente).
+- "document_date" é a data de emissão da nota/documento.
 - "due_date" é a data de vencimento. Se não houver, calcule como document_date + 30 dias.
-- IMPORTANTE: Os campos supplier_email, supplier_phone1, supplier_phone2 e supplier_address devem se referir SEMPRE ao EMISSOR (fornecedor), nunca ao destinatário/cliente. Se o documento mostrar dados do cliente apenas, retorne null nesses campos.
-- Para supplier_address: extraia somente do bloco do EMITENTE. Não confunda com endereço de entrega/cliente.
-- supplier_address.zip deve conter apenas dígitos (8 dígitos para CEP brasileiro), sem máscara.
-- supplier_address.state deve ser a sigla da UF em 2 letras maiúsculas (ex.: 'SP', 'RJ').`;
+- IMPORTANTE: Os campos supplier_email, supplier_phone1, supplier_phone2, supplier_address, supplier_country devem se referir SEMPRE ao EMISSOR (fornecedor), nunca ao destinatário/cliente.
+- Para supplier_address: extraia somente do bloco do EMITENTE.
+- supplier_address.zip: BR = apenas 8 dígitos; internacional = formato original (pode ser alfanumérico).
+- supplier_address.state: BR = sigla UF de 2 letras maiúsculas; internacional = nome ou sigla conforme aparece.
+- supplier_country e supplier_address.country: SEMPRE em ISO-3166 alpha-2 (2 letras maiúsculas, ex.: 'BR', 'US', 'GB', 'DE', 'PT').`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
