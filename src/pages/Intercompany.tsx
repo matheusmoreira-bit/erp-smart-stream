@@ -521,12 +521,15 @@ function ConsolidatedTable({
   companies,
   search,
   onResolveConflict,
+  onToggleActive,
 }: {
   rows: { code: string; names: Set<string>; presence: Map<string, { name: string; active: boolean }> }[];
   companies: { db: string; name: string }[];
   search: string;
   onResolveConflict?: (code: string, names: string[]) => void;
+  onToggleActive?: (code: string, companyDb: string, nextActive: boolean) => Promise<void> | void;
 }) {
+  const [pending, setPending] = useState<string | null>(null);
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     if (!s) return rows;
@@ -551,11 +554,11 @@ function ConsolidatedTable({
         <span className="font-medium text-foreground">Legenda:</span>
         <span className="inline-flex items-center gap-1.5">
           <CheckCircle2 className="w-4 h-4 text-success" />
-          Existe e está ativo
+          Ativo (clique para inativar)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
-          Existe, mas inativo/congelado
+          <XCircle className="w-4 h-4 text-muted-foreground" />
+          Inativo (clique para ativar)
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="w-4 text-center font-mono">—</span>
@@ -627,11 +630,37 @@ function ConsolidatedTable({
                       </TableCell>
                     );
                   }
+                  const key = `${row.code}::${c.db}`;
+                  const isPending = pending === key;
+                  const next = !info.active;
                   return (
                     <TableCell key={c.db} className="text-center" title={info.name}>
-                      <CheckCircle2
-                        className={`w-4 h-4 inline ${info.active ? "text-success" : "text-muted-foreground"}`}
-                      />
+                      <button
+                        type="button"
+                        disabled={isPending || !onToggleActive}
+                        onClick={async () => {
+                          if (!onToggleActive) return;
+                          setPending(key);
+                          try {
+                            await onToggleActive(row.code, c.db, next);
+                          } finally {
+                            setPending(null);
+                          }
+                        }}
+                        className={`inline-flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-wait ${
+                          info.active ? "text-success" : "text-muted-foreground"
+                        }`}
+                        title={`${info.name} — ${info.active ? "Clique para inativar" : "Clique para ativar"}`}
+                        aria-label={info.active ? "Inativar" : "Ativar"}
+                      >
+                        {isPending ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : info.active ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : (
+                          <XCircle className="w-4 h-4" />
+                        )}
+                      </button>
                     </TableCell>
                   );
                 })}
@@ -660,6 +689,8 @@ export default function Intercompany() {
     centerResults,
     loadAccounts,
     loadCostCenters,
+    toggleAccount,
+    toggleCostCenter,
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = useMemo(
@@ -899,6 +930,21 @@ export default function Intercompany() {
                   onResolveConflict={(code, names) =>
                     setConflict({ open: true, code, names, kind: "account" })
                   }
+                  onToggleActive={async (code, companyDb, nextActive) => {
+                    try {
+                      const { results } = await toggleAccount({
+                        code,
+                        active: nextActive,
+                        company_db: companyDb,
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao atualizar");
+                      toast.success(`Conta ${code} ${nextActive ? "ativada" : "inativada"}`);
+                      await reloadAccounts();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
+                    }
+                  }}
                 />
               )}
             </TabsContent>
@@ -916,6 +962,21 @@ export default function Intercompany() {
                   onResolveConflict={(code, names) =>
                     setConflict({ open: true, code, names, kind: "center" })
                   }
+                  onToggleActive={async (code, companyDb, nextActive) => {
+                    try {
+                      const { results } = await toggleCostCenter({
+                        center_code: code,
+                        active: nextActive,
+                        company_db: companyDb,
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao atualizar");
+                      toast.success(`Centro ${code} ${nextActive ? "ativado" : "inativado"}`);
+                      await reloadCenters();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
+                    }
+                  }}
                 />
               )}
             </TabsContent>
