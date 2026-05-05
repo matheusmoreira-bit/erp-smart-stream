@@ -276,16 +276,29 @@ export default function FinancialReview() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
-              <FileDown className="w-4 h-4" />
-              CSV
-            </Button>
-            <Button variant="outline" size="sm" onClick={exportPdf} disabled={filtered.length === 0}>
-              <FileText className="w-4 h-4" />
-              PDF
-            </Button>
-            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            {activeTab === "advances" && (
+              <>
+                <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
+                  <FileDown className="w-4 h-4" />
+                  CSV
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportPdf} disabled={filtered.length === 0}>
+                  <FileText className="w-4 h-4" />
+                  PDF
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (activeTab === "advances" ? refresh() : refreshInvoicesWithAdvances())}
+              disabled={activeTab === "advances" ? loading : invoicesLoading}
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${
+                  (activeTab === "advances" ? loading : invoicesLoading) ? "animate-spin" : ""
+                }`}
+              />
               Atualizar
             </Button>
           </div>
