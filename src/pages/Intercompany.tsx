@@ -522,12 +522,14 @@ function ConsolidatedTable({
   search,
   onResolveConflict,
   onToggleActive,
+  onReplicate,
 }: {
   rows: { code: string; names: Set<string>; presence: Map<string, { name: string; active: boolean }> }[];
   companies: { db: string; name: string }[];
   search: string;
   onResolveConflict?: (code: string, names: string[]) => void;
   onToggleActive?: (code: string, companyDb: string, nextActive: boolean) => Promise<void> | void;
+  onReplicate?: (code: string, name: string, companyDb: string) => Promise<void> | void;
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const filtered = useMemo(() => {
