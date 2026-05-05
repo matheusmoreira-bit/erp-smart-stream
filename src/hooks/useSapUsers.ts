@@ -291,7 +291,7 @@ export function useSapUsers() {
               UserCode: userData.UserCode,
               UserName: userData.UserName,
               eMail: userData.eMail,
-              Password: userData.Password,
+              UserPassword: userData.Password,
             });
             results.push({ companyDB: company.company_db, displayName: company.display_name, status: "success" });
           } finally {
