@@ -136,7 +136,10 @@ async function getAuthToken(creds: PagCorpCreds): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ clientKey: creds.client_key, clientSecret: creds.client_secret }),
   });
-  if (!tokenRes.ok) throw new Error(`Client auth failed [${tokenRes.status}]`);
+  if (!tokenRes.ok) {
+    const body = await tokenRes.text().catch(() => "");
+    throw new Error(`Client auth failed [${tokenRes.status}]: ${body.slice(0, 300)}`);
+  }
   const { token: accessToken } = await tokenRes.json();
 
   const jwt = decodeJwtPayload(accessToken);
@@ -152,7 +155,10 @@ async function getAuthToken(creds: PagCorpCreds): Promise<string> {
     },
     body: JSON.stringify({ login: creds.login_email, password: encryptedPassword }),
   });
-  if (!loginRes.ok) throw new Error(`Login failed [${loginRes.status}]`);
+  if (!loginRes.ok) {
+    const body = await loginRes.text().catch(() => "");
+    throw new Error(`Login failed [${loginRes.status}]: ${body.slice(0, 300)}`);
+  }
   const { token: apiToken } = await loginRes.json();
   return apiToken;
 }
