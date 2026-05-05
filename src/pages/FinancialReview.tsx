@@ -530,6 +530,35 @@ function ReconcileDialog({
     }
   };
 
+  const handleAutoLink = async (inv: OpenInvoice) => {
+    if (!confirm(
+      `Vincular o adiantamento ${item.doc_num ?? item.doc_entry} à NF ${inv.doc_num}?\n` +
+      `Será aplicado ${formatMoney(Math.min(item.open_amount, inv.open_amount), inv.doc_currency)}.`,
+    )) return;
+    setLinkingId(inv.doc_entry);
+    try {
+      const r = await onAutoLink({
+        docType: item.doc_type,
+        docEntry: item.doc_entry,
+        invoiceDocEntry: inv.doc_entry,
+        cardCode: item.card_code,
+      });
+      toast({
+        title: "Vinculação concluída",
+        description: `Aplicado ${formatMoney(r.applied, inv.doc_currency)} à NF ${inv.doc_num}.`,
+      });
+      onDone();
+    } catch (e) {
+      toast({
+        title: "Falha ao vincular",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setLinkingId(null);
+    }
+  };
+
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
