@@ -708,6 +708,14 @@ function ReconcileDialog({
             Fechar
           </Button>
         </DialogFooter>
+
+        <LinkPreviewDialog
+          advance={item}
+          invoice={previewInvoice}
+          busy={linkingId !== null}
+          onClose={() => setPreviewInvoice(null)}
+          onConfirm={() => previewInvoice && handleAutoLink(previewInvoice)}
+        />
       </DialogContent>
     </Dialog>
   );
