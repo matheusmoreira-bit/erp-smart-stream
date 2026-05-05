@@ -30,6 +30,15 @@ export interface OpenInvoice {
   reference: string | null;
 }
 
+export interface InvoiceWithAdvances extends OpenInvoice {
+  card_code: string;
+  card_name: string;
+  bp_type: "supplier" | "customer";
+  invoice_kind: "PURCHASE" | "SALES";
+  advances_count: number;
+  advances_open_total: number;
+}
+
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const r = await authFetch("financial-review", {
     method: "POST",
