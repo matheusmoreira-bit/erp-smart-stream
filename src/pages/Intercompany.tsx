@@ -572,7 +572,7 @@ function ConsolidatedTable({
         </span>
       </div>
       <div className="border rounded-md overflow-auto max-h-[65vh]">
-        <Table>
+        <table className="w-full caption-bottom text-sm">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className="w-32 sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]">
@@ -675,7 +675,7 @@ function ConsolidatedTable({
             </TableRow>
           )}
         </TableBody>
-      </Table>
+      </table>
       </div>
     </div>
   );
