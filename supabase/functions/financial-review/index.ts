@@ -331,6 +331,114 @@ async function listOpenInvoicesForBp(
   }));
 }
 
+interface InvoiceWithAdvances {
+  doc_entry: number;
+  doc_num: number;
+  doc_date: string | null;
+  doc_total: number;
+  paid_to_date: number;
+  open_amount: number;
+  doc_currency: string;
+  reference: string | null;
+  card_code: string;
+  card_name: string;
+  bp_type: "supplier" | "customer";
+  invoice_kind: "PURCHASE" | "SALES";
+  // BP-level aggregates of open advances
+  advances_count: number;
+  advances_open_total: number;
+}
+
+async function listInvoicesWithAdvances(
+  creds: SapCreds,
+  cookies: string,
+): Promise<InvoiceWithAdvances[]> {
+  // 1) Get all open advances grouped by card_code
+  const advances = await listAdvances(creds, cookies);
+  if (advances.length === 0) return [];
+
+  // Build BP map: card_code -> { count, total, bp_type, card_name }
+  const bpMap = new Map<
+    string,
+    { count: number; total: number; bp_type: "supplier" | "customer"; card_name: string }
+  >();
+  for (const a of advances) {
+    const cur = bpMap.get(a.card_code);
+    if (cur) {
+      cur.count++;
+      cur.total += a.open_amount;
+    } else {
+      bpMap.set(a.card_code, {
+        count: 1,
+        total: a.open_amount,
+        bp_type: a.bp_type,
+        card_name: a.card_name,
+      });
+    }
+  }
+
+  const supplierCards = [...bpMap.entries()].filter(([, v]) => v.bp_type === "supplier").map(([k]) => k);
+  const customerCards = [...bpMap.entries()].filter(([, v]) => v.bp_type === "customer").map(([k]) => k);
+
+  const out: InvoiceWithAdvances[] = [];
+
+  // SAP Service Layer URL length is limited — chunk into groups of 25 cards.
+  async function fetchInvoicesFor(
+    cards: string[],
+    endpoint: "PurchaseInvoices" | "Invoices",
+    bpType: "supplier" | "customer",
+    invoiceKind: "PURCHASE" | "SALES",
+  ) {
+    if (cards.length === 0) return;
+    const chunkSize = 25;
+    for (let i = 0; i < cards.length; i += chunkSize) {
+      const chunk = cards.slice(i, i + chunkSize);
+      const orFilter = chunk.map((c) => `CardCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
+      try {
+        const data = await sapGetAll(
+          creds.baseUrl,
+          cookies,
+          endpoint,
+          {
+            $select: "DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,NumAtCard,CardCode,CardName",
+            $filter: `DocumentStatus eq 'bost_Open' and (${orFilter})`,
+          },
+          5000,
+        );
+        for (const d of data) {
+          const open = (d.DocTotal ?? 0) - (d.PaidToDate ?? 0);
+          if (open <= 0.0001) continue;
+          const bp = bpMap.get(d.CardCode);
+          if (!bp) continue;
+          out.push({
+            doc_entry: d.DocEntry,
+            doc_num: d.DocNum,
+            doc_date: d.DocDate,
+            doc_total: d.DocTotal,
+            paid_to_date: d.PaidToDate ?? 0,
+            open_amount: open,
+            doc_currency: d.DocCurrency,
+            reference: d.NumAtCard,
+            card_code: d.CardCode,
+            card_name: d.CardName || bp.card_name,
+            bp_type: bpType,
+            invoice_kind: invoiceKind,
+            advances_count: bp.count,
+            advances_open_total: bp.total,
+          });
+        }
+      } catch (e) {
+        console.warn(`${endpoint} chunk err`, e);
+      }
+    }
+  }
+
+  await fetchInvoicesFor(supplierCards, "PurchaseInvoices", "supplier", "PURCHASE");
+  await fetchInvoicesFor(customerCards, "Invoices", "customer", "SALES");
+
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
