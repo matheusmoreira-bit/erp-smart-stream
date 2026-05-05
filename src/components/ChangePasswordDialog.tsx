@@ -67,10 +67,23 @@ export function ChangePasswordDialog() {
       // Step 1: Validate current password via Login
       await sapLogin(session.userName, currentPassword, session.companyDB);
 
-      // Step 2: Change password in current company
+      // Step 2: Look up InternalKey for the current user (Users entity key is integer)
+      const lookup = await sapQuery(
+        session,
+        `Users?$filter=UserCode eq '${session.userName.replace(/'/g, "''")}'&$select=InternalKey`,
+        undefined,
+        false,
+      );
+      const rows = Array.isArray(lookup.data)
+        ? (lookup.data as Array<{ InternalKey?: number }>)
+        : (((lookup.data as { value?: Array<{ InternalKey?: number }> })?.value) || []);
+      const internalKey = rows[0]?.InternalKey;
+      if (internalKey == null) throw new Error("Usuário não encontrado no SAP.");
+
+      // Step 3: Change password in current company
       await sapAction(
         session,
-        `Users('${session.userName}')`,
+        `Users(${internalKey})`,
         "PATCH",
         { Password: newPassword }
       );
