@@ -47,6 +47,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
+import { FileSignature, ArrowRight } from "lucide-react";
 
 const TYPE_LABEL: Record<AdvanceItem["doc_type"], string> = {
   ADVANCE_AP: "Adiant. Fornecedor (NF)",
