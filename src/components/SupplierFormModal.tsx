@@ -346,6 +346,8 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
                   <SelectItem value="BRL">BRL</SelectItem>
                   <SelectItem value="USD">USD</SelectItem>
                   <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="GBP">GBP</SelectItem>
+                  <SelectItem value="CAD">CAD</SelectItem>
                   <SelectItem value="##">## (multimoeda)</SelectItem>
                 </SelectContent>
               </Select>
@@ -357,56 +359,109 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
             <Input value={form.card_name} onChange={(e) => set("card_name", e.target.value)} maxLength={200} />
           </div>
 
-          <div>
-            <Label>CNPJ / CPF *</Label>
-            <Input value={form.federal_tax_id} onChange={(e) => set("federal_tax_id", e.target.value)} placeholder="Apenas dígitos" />
-          </div>
-          <div>
-            <Label>U_FGR_TAXID0</Label>
-            <Input value={form.u_fgr_taxid0} onChange={(e) => set("u_fgr_taxid0", e.target.value)} placeholder="CNPJ/CPF (auto)" />
-          </div>
+          {(() => {
+            const country = getCountry(form.bill_to_country);
+            const foreign = isForeign(form.bill_to_country);
+            return (
+              <>
+                <div>
+                  <Label>{country.tax_id_label} *</Label>
+                  <Input
+                    value={form.federal_tax_id}
+                    onChange={(e) => set("federal_tax_id", e.target.value)}
+                    placeholder={foreign ? country.tax_id_label : "Apenas dígitos"}
+                  />
+                </div>
+                <div>
+                  <Label>U_FGR_TAXID0</Label>
+                  <Input
+                    value={form.u_fgr_taxid0}
+                    onChange={(e) => set("u_fgr_taxid0", e.target.value)}
+                    placeholder={foreign ? `${country.tax_id_label} (auto)` : "CNPJ/CPF (auto)"}
+                  />
+                </div>
 
-          <div>
-            <Label>Email</Label>
-            <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
-          </div>
-          <div>
-            <Label>Telefone 1</Label>
-            <Input value={form.phone1} onChange={(e) => set("phone1", e.target.value)} placeholder="(11) 0000-0000" />
-          </div>
-          <div>
-            <Label>Telefone 2</Label>
-            <Input value={form.phone2} onChange={(e) => set("phone2", e.target.value)} placeholder="(11) 0000-0000" />
-          </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+                </div>
+                <div>
+                  <Label>Telefone 1</Label>
+                  <Input
+                    value={form.phone1}
+                    onChange={(e) => set("phone1", e.target.value)}
+                    placeholder={foreign ? "+1 555 000 0000" : "(11) 0000-0000"}
+                  />
+                </div>
+                <div>
+                  <Label>Telefone 2</Label>
+                  <Input
+                    value={form.phone2}
+                    onChange={(e) => set("phone2", e.target.value)}
+                    placeholder={foreign ? "+1 555 000 0000" : "(11) 0000-0000"}
+                  />
+                </div>
 
-          <div className="md:col-span-2 pt-2">
-            <p className="text-sm font-medium text-foreground">Endereço (cobrança = entrega)</p>
-          </div>
+                <div className="md:col-span-2 pt-2 flex items-center justify-between">
+                  <p className="text-sm font-medium text-foreground">Endereço (cobrança = entrega)</p>
+                  {foreign && (
+                    <span className="text-[10px] uppercase tracking-wider text-primary font-semibold px-2 py-0.5 rounded bg-primary/10">
+                      Internacional
+                    </span>
+                  )}
+                </div>
 
-          <div className="md:col-span-2">
-            <Label>Logradouro</Label>
-            <Input value={form.bill_to_street} onChange={(e) => set("bill_to_street", e.target.value)} />
-          </div>
-          <div>
-            <Label>Número/Compl.</Label>
-            <Input value={form.bill_to_building} onChange={(e) => set("bill_to_building", e.target.value)} />
-          </div>
-          <div>
-            <Label>Bairro</Label>
-            <Input value={form.bill_to_block} onChange={(e) => set("bill_to_block", e.target.value)} />
-          </div>
-          <div>
-            <Label>CEP</Label>
-            <Input value={form.bill_to_zip} onChange={(e) => set("bill_to_zip", e.target.value)} />
-          </div>
-          <div>
-            <Label>Cidade</Label>
-            <Input value={form.bill_to_city} onChange={(e) => set("bill_to_city", e.target.value)} />
-          </div>
-          <div>
-            <Label>UF</Label>
-            <Input maxLength={2} value={form.bill_to_state} onChange={(e) => set("bill_to_state", e.target.value.toUpperCase())} />
-          </div>
+                <div>
+                  <Label>País *</Label>
+                  <Select value={form.bill_to_country} onValueChange={handleCountryChange}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {COUNTRIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.name} ({c.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{country.zip_label}</Label>
+                  <Input
+                    value={form.bill_to_zip}
+                    onChange={(e) => set("bill_to_zip", e.target.value)}
+                    placeholder={foreign ? "" : "Digite o CEP para autocompletar"}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label>{foreign ? "Endereço (linha 1)" : "Logradouro"}</Label>
+                  <Input value={form.bill_to_street} onChange={(e) => set("bill_to_street", e.target.value)} />
+                </div>
+                <div>
+                  <Label>{foreign ? "Endereço (linha 2)" : "Número/Compl."}</Label>
+                  <Input value={form.bill_to_building} onChange={(e) => set("bill_to_building", e.target.value)} />
+                </div>
+                <div>
+                  <Label>{foreign ? "Distrito" : "Bairro"}</Label>
+                  <Input value={form.bill_to_block} onChange={(e) => set("bill_to_block", e.target.value)} />
+                </div>
+                <div>
+                  <Label>Cidade</Label>
+                  <Input value={form.bill_to_city} onChange={(e) => set("bill_to_city", e.target.value)} />
+                </div>
+                <div>
+                  <Label>{country.state_label}</Label>
+                  <Input
+                    maxLength={foreign ? 60 : 2}
+                    value={form.bill_to_state}
+                    onChange={(e) =>
+                      set("bill_to_state", foreign ? e.target.value : e.target.value.toUpperCase())
+                    }
+                  />
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         <DialogFooter>
