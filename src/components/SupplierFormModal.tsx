@@ -29,27 +29,39 @@ import {
   getNextCardCode,
   fetchSupplierFromSap,
 } from "@/hooks/useSuppliers";
+import { COUNTRIES, getCountry, isForeign } from "@/lib/countries";
 
-const supplierSchema = z.object({
-  card_name: z.string().trim().min(2, "Nome obrigatório").max(200),
-  card_type: z.enum(["S"]).default("S"),
-  federal_tax_id: z
-    .string()
-    .trim()
-    .min(11, "CNPJ/CPF inválido")
-    .max(20),
-  u_fgr_taxid0: z.string().trim().max(20).optional().or(z.literal("")),
-  email: z.string().trim().email("Email inválido").max(200).optional().or(z.literal("")),
-  phone1: z.string().trim().max(30).optional().or(z.literal("")),
-  phone2: z.string().trim().max(30).optional().or(z.literal("")),
-  currency: z.string().trim().min(3).max(3),
-  bill_to_street: z.string().trim().max(200).optional().or(z.literal("")),
-  bill_to_zip: z.string().trim().max(20).optional().or(z.literal("")),
-  bill_to_city: z.string().trim().max(100).optional().or(z.literal("")),
-  bill_to_state: z.string().trim().max(2).optional().or(z.literal("")),
-  bill_to_block: z.string().trim().max(100).optional().or(z.literal("")),
-  bill_to_building: z.string().trim().max(50).optional().or(z.literal("")),
-});
+const supplierSchema = z
+  .object({
+    card_name: z.string().trim().min(2, "Nome obrigatório").max(200),
+    card_type: z.enum(["S"]).default("S"),
+    federal_tax_id: z.string().trim().min(3, "Identificação fiscal obrigatória").max(40),
+    u_fgr_taxid0: z.string().trim().max(40).optional().or(z.literal("")),
+    email: z.string().trim().email("Email inválido").max(200).optional().or(z.literal("")),
+    phone1: z.string().trim().max(30).optional().or(z.literal("")),
+    phone2: z.string().trim().max(30).optional().or(z.literal("")),
+    currency: z.string().trim().min(3).max(3),
+    bill_to_street: z.string().trim().max(200).optional().or(z.literal("")),
+    bill_to_zip: z.string().trim().max(20).optional().or(z.literal("")),
+    bill_to_city: z.string().trim().max(100).optional().or(z.literal("")),
+    bill_to_state: z.string().trim().max(60).optional().or(z.literal("")),
+    bill_to_country: z.string().trim().length(2, "País obrigatório"),
+    bill_to_block: z.string().trim().max(100).optional().or(z.literal("")),
+    bill_to_building: z.string().trim().max(50).optional().or(z.literal("")),
+  })
+  .superRefine((val, ctx) => {
+    // Brazilian tax ID validation: 11 (CPF) or 14 (CNPJ) digits
+    if ((val.bill_to_country || "").toUpperCase() === "BR") {
+      const digits = val.federal_tax_id.replace(/\D/g, "");
+      if (digits.length !== 11 && digits.length !== 14) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["federal_tax_id"],
+          message: "CNPJ (14 dígitos) ou CPF (11 dígitos)",
+        });
+      }
+    }
+  });
 
 export interface SupplierFormPrefill {
   card_name?: string;
