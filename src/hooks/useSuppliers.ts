@@ -219,7 +219,7 @@ function buildSapPayload(s: SupplierInput) {
       State: s.bill_to_state || undefined,
       Country: s.bill_to_country || "BR",
       Block: s.bill_to_block || undefined,
-      Building: s.bill_to_building || undefined,
+      BuildingFloorRoom: s.bill_to_building || undefined,
       AddressType: "bo_BillTo",
     };
     const ship = { ...address, AddressName: "ENTREGA", AddressType: "bo_ShipTo" };
