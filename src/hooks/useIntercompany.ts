@@ -107,6 +107,26 @@ export function useIntercompany() {
     [],
   );
 
+  const toggleAccount = useCallback(
+    async (input: { code: string; active: boolean; company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "toggle-account",
+        ...input,
+      });
+    },
+    [],
+  );
+
+  const toggleCostCenter = useCallback(
+    async (input: { center_code: string; active: boolean; company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "toggle-cost-center",
+        ...input,
+      });
+    },
+    [],
+  );
+
   return {
     loadingAccounts,
     loadingCenters,
@@ -118,5 +138,7 @@ export function useIntercompany() {
     createCostCenter,
     renameAccount,
     renameCostCenter,
+    toggleAccount,
+    toggleCostCenter,
   };
 }
