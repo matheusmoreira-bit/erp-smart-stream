@@ -97,7 +97,9 @@ function consolidateAccounts(
 function consolidateCenters(
   results: PerCompanyResult<SapCostCenterRow[]>[],
 ): { rows: UnifiedCenterRow[]; companies: { db: string; name: string }[] } {
-  const companies = results.map((r) => ({ db: r.company_db, name: r.display_name }));
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
   const map = new Map<string, UnifiedCenterRow>();
   for (const r of results) {
     if (!r.ok || !r.data) continue;
