@@ -69,9 +69,10 @@ function RankingCard({
  * sorted chronologically.
  */
 function computeLockoutRanking(records: Usr5Record[]): RankItem[] {
-  // Sort by user then date/time
+  // Consider any login-related action (I, W, F) — failure detection is by SessionID < 0 OR Action === "F"
   const loginRecords = records
-    .filter((r) => r.Action === "I" || r.Action === "W")
+    .filter((r) => r.Action === "I" || r.Action === "W" || r.Action === "F" || r.Action === "K")
+    .slice()
     .sort((a, b) => {
       if (a.UserCode !== b.UserCode) return a.UserCode.localeCompare(b.UserCode);
       if (a.Date !== b.Date) return a.Date.localeCompare(b.Date);
@@ -79,9 +80,10 @@ function computeLockoutRanking(records: Usr5Record[]): RankItem[] {
     });
 
   const lockoutMap = new Map<string, number>();
-
   let currentUser = "";
   let consecutiveFails = 0;
+
+  const isFail = (r: Usr5Record) => isFailedLogin(r) || r.Action === "F" || r.Action === "K";
 
   for (const r of loginRecords) {
     if (r.UserCode !== currentUser) {
@@ -89,15 +91,14 @@ function computeLockoutRanking(records: Usr5Record[]): RankItem[] {
       consecutiveFails = 0;
     }
 
-    if (isFailedLogin(r)) {
+    if (isFail(r)) {
       consecutiveFails++;
       if (consecutiveFails === 3) {
         lockoutMap.set(currentUser, (lockoutMap.get(currentUser) || 0) + 1);
-      } else if (consecutiveFails > 3) {
-        // Still in a lockout streak — each additional 3 counts as another
-        // We only count complete sets of 3
+        consecutiveFails = 0; // reset to allow detecting subsequent lockouts
       }
     } else {
+      // successful login or other action breaks the streak
       consecutiveFails = 0;
     }
   }
