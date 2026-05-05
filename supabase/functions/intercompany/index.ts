@@ -73,38 +73,67 @@ async function sapGetAll(
   params: Record<string, string>,
 ): Promise<any[]> {
   const all: any[] = [];
-  let skip = 0;
-  const top = 100;
-  while (true) {
+  const pageSize = 100;
+  // Initial URL
+  let url: string | null = (() => {
     const qp = new URLSearchParams(params);
-    qp.set("$top", String(top));
-    qp.set("$skip", String(skip));
-    const url = `${baseUrl}/${endpoint}?${qp.toString()}`;
+    qp.set("$top", String(pageSize));
+    qp.set("$skip", "0");
+    return `${baseUrl}/${endpoint}?${qp.toString()}`;
+  })();
+  let pageCount = 0;
+
+  while (url) {
     let resp: Response | null = null;
+    let lastErr: unknown = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         resp = await fetch(url, {
           method: "GET",
-          headers: { "Content-Type": "application/json", Cookie: cookies },
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: cookies,
+            Prefer: "odata.maxpagesize=" + pageSize,
+          },
         });
-        break;
+        if (resp.ok) break;
+        // 5xx -> retry; 4xx -> stop with error
+        if (resp.status < 500) {
+          const t = await resp.text().catch(() => "");
+          throw new Error(`SAP ${endpoint} HTTP ${resp.status}: ${t.slice(0, 300)}`);
+        }
+        lastErr = new Error(`HTTP ${resp.status}`);
       } catch (e) {
-        console.warn(`intercompany fetch attempt ${attempt + 1} failed:`, e);
-        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+        lastErr = e;
+        console.warn(`intercompany ${endpoint} attempt ${attempt + 1} failed:`, e);
       }
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
     }
-    if (!resp || !resp.ok) break;
-    let body: any;
-    try {
-      body = await resp.json();
-    } catch {
-      break;
+    if (!resp || !resp.ok) {
+      throw lastErr instanceof Error
+        ? lastErr
+        : new Error(`Falha ao buscar ${endpoint} após retries`);
     }
-    const items = body.value || [];
+    const body: any = await resp.json();
+    const items: any[] = body.value || [];
     all.push(...items);
-    if (items.length < top) break;
-    skip += top;
-    if (all.length > 20000) break;
+    pageCount++;
+
+    // SAP B1 Service Layer paging: prefer odata.nextLink when present
+    const nextLink: string | undefined = body["odata.nextLink"] || body["@odata.nextLink"];
+    if (nextLink) {
+      url = nextLink.startsWith("http") ? nextLink : `${baseUrl}/${nextLink}`;
+    } else if (items.length >= pageSize) {
+      // Fallback: continue paginating manually
+      const qp = new URLSearchParams(params);
+      qp.set("$top", String(pageSize));
+      qp.set("$skip", String(pageCount * pageSize));
+      url = `${baseUrl}/${endpoint}?${qp.toString()}`;
+    } else {
+      url = null;
+    }
+
+    if (all.length > 50000) break;
   }
   return all;
 }
