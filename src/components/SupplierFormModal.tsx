@@ -218,7 +218,27 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
     return () => {
       cancelled = true;
     };
-  }, [form.bill_to_zip, cepLookup]);
+  }, [form.bill_to_zip, form.bill_to_country, cepLookup]);
+
+  // When the user changes country (and not editing), suggest the country's
+  // default currency unless the user has already chosen something custom.
+  const handleCountryChange = (code: string) => {
+    const upper = code.toUpperCase();
+    setForm((f) => {
+      const currentDefault = getCountry(f.bill_to_country).default_currency;
+      const shouldSwitchCurrency = !f.currency || f.currency === currentDefault;
+      return {
+        ...f,
+        bill_to_country: upper,
+        currency: shouldSwitchCurrency ? getCountry(upper).default_currency : f.currency,
+        // Clear state when switching to/from BR — formats differ (UF vs free text)
+        bill_to_state:
+          (upper === "BR") !== ((f.bill_to_country || "BR").toUpperCase() === "BR")
+            ? ""
+            : f.bill_to_state,
+      };
+    });
+  };
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
