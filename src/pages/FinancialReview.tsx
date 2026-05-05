@@ -467,18 +467,27 @@ function ReconcileDialog({
   onClose,
   onListInvoices,
   onCancel,
+  onAutoLink,
   onDone,
 }: {
   item: AdvanceItem | null;
   onClose: () => void;
   onListInvoices: (cardCode: string, bp: "supplier" | "customer") => Promise<OpenInvoice[]>;
   onCancel: (docType: AdvanceItem["doc_type"], docEntry: number) => Promise<void>;
+  onAutoLink: (params: {
+    docType: AdvanceItem["doc_type"];
+    docEntry: number;
+    invoiceDocEntry: number;
+    cardCode: string;
+    amount?: number;
+  }) => Promise<{ ok: true; applied: number }>;
   onDone: () => void;
 }) {
   const [tab, setTab] = useState<"link" | "internal" | "cancel" | "guide">("guide");
   const [invoices, setInvoices] = useState<OpenInvoice[] | null>(null);
   const [loadingInv, setLoadingInv] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [linkingId, setLinkingId] = useState<number | null>(null);
 
   useEffect(() => {
     setTab("guide");
