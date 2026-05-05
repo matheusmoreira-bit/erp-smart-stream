@@ -226,7 +226,7 @@ export function useSapUsers() {
     try {
       const internalKey = await resolveInternalKey(user);
       await sapAction(session, `Users(${internalKey})`, "PATCH", {
-        Password: "Sap@2025",
+        UserPassword: "Sap@2025",
       });
     } catch (e) {
       console.error("Error resetting password:", e);
@@ -244,7 +244,7 @@ export function useSapUsers() {
       UserCode: userData.UserCode,
       UserName: userData.UserName,
       eMail: userData.eMail,
-      Password: userData.Password,
+      UserPassword: userData.Password,
     });
 
     // Clear cache and refresh
