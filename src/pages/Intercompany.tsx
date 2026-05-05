@@ -646,14 +646,14 @@ function ConsolidatedTable({
                                 setPending(null);
                               }
                             }}
-                            className="inline-flex items-center justify-center rounded-md p-1 text-primary transition-colors hover:bg-primary/10 disabled:opacity-50 disabled:cursor-wait"
-                            title={`Replicar "${sourceName}" (${row.code}) nesta empresa`}
-                            aria-label="Replicar nesta empresa"
+                            className="inline-flex items-center justify-center rounded-md p-1 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50 disabled:cursor-wait"
+                            title={`Não existe nesta empresa — clique para replicar "${sourceName}" (${row.code})`}
+                            aria-label="Não existe — clique para replicar nesta empresa"
                           >
                             {isReplicating ? (
                               <RefreshCw className="w-4 h-4 animate-spin" />
                             ) : (
-                              <Plus className="w-4 h-4" />
+                              <Ban className="w-4 h-4" />
                             )}
                           </button>
                         ) : (
