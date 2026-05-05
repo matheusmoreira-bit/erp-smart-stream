@@ -85,7 +85,7 @@ export function ChangePasswordDialog() {
         session,
         `Users(${internalKey})`,
         "PATCH",
-        { Password: newPassword }
+        { UserPassword: newPassword }
       );
 
       // Step 3: Replicate to additional companies, if any
