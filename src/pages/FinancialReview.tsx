@@ -437,6 +437,18 @@ export default function FinancialReview() {
             details: { doc_type: docType, doc_entry: docEntry },
           });
         }}
+        onAutoLink={async (params) => {
+          const r = await autoLink(params);
+          logAuditAction({
+            action: "auto_link",
+            entity_type: "financial_review",
+            entity_id: String(params.docEntry),
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { ...params, applied: r.applied },
+          });
+          return r;
+        }}
         onDone={() => {
           setSelected(null);
           refresh();
