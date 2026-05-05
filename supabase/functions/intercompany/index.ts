@@ -175,6 +175,8 @@ async function sapPatch(
   }
   return { ok: true };
 }
+
+async function listActiveSapCompanies(
   sb: ReturnType<typeof createClient>,
 ): Promise<{ company_db: string; display_name: string }[]> {
   const { data, error } = await sb
