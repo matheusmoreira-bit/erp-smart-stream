@@ -626,9 +626,38 @@ function ConsolidatedTable({
                 {companies.map((c) => {
                   const info = row.presence.get(c.db);
                   if (!info) {
+                    const replicateKey = `${row.code}::${c.db}::replicate`;
+                    const isReplicating = pending === replicateKey;
+                    const sourceName = names[0];
+                    const canReplicate = !!onReplicate && !!sourceName;
                     return (
-                      <TableCell key={c.db} className="text-center text-xs text-muted-foreground">
-                        —
+                      <TableCell key={c.db} className="text-center">
+                        {canReplicate ? (
+                          <button
+                            type="button"
+                            disabled={isReplicating}
+                            onClick={async () => {
+                              if (!onReplicate) return;
+                              setPending(replicateKey);
+                              try {
+                                await onReplicate(row.code, sourceName, c.db);
+                              } finally {
+                                setPending(null);
+                              }
+                            }}
+                            className="inline-flex items-center justify-center rounded-md p-1 text-primary transition-colors hover:bg-primary/10 disabled:opacity-50 disabled:cursor-wait"
+                            title={`Replicar "${sourceName}" (${row.code}) nesta empresa`}
+                            aria-label="Replicar nesta empresa"
+                          >
+                            {isReplicating ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Plus className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     );
                   }
