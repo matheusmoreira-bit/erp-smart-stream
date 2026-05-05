@@ -593,9 +593,10 @@ function ReconcileDialog({
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground flex gap-2 items-start">
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
-              Selecione uma nota em aberto deste parceiro para abrir a tela de vinculação no SAP.
-              A criação automática do pagamento de quitação não é feita aqui — apenas listamos as
-              candidatas para você confirmar manualmente.
+              Selecione uma nota em aberto deste parceiro e clique em <strong>Vincular</strong>{" "}
+              para que o sistema crie automaticamente o pagamento/reconciliação no SAP que quita
+              o adiantamento contra a NF escolhida (valor aplicado = menor entre o saldo do
+              adiantamento e o saldo da NF).
             </p>
             {loadingInv && (
               <div className="text-sm text-muted-foreground flex items-center gap-2">
@@ -616,6 +617,7 @@ function ReconcileDialog({
                       <TableHead>Data</TableHead>
                       <TableHead className="text-right">Em aberto</TableHead>
                       <TableHead>Ref.</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -628,6 +630,20 @@ function ReconcileDialog({
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {inv.reference || "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            onClick={() => handleAutoLink(inv)}
+                            disabled={linkingId !== null}
+                          >
+                            {linkingId === inv.doc_entry ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Link2 className="w-3.5 h-3.5" />
+                            )}
+                            Vincular
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
