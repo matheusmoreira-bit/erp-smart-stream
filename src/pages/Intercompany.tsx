@@ -495,6 +495,7 @@ function ConsolidatedTable({
           )}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
