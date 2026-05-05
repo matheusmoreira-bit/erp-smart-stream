@@ -36,6 +36,7 @@ export const ALL_MODULES = [
   { key: "audit_log", label: "Logs de Auditoria" },
   { key: "notifications", label: "Notificações" },
   { key: "integration_history", label: "Monitor de Integrações" },
+  { key: "intercompany", label: "Intercompany" },
 ] as const;
 
 // Legacy compat aliases
