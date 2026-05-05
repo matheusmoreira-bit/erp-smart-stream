@@ -662,6 +662,12 @@ export default function Intercompany() {
 
   const [tab, setTab] = useState<"accounts" | "centers">("accounts");
   const [search, setSearch] = useState("");
+  const [conflict, setConflict] = useState<{
+    open: boolean;
+    code: string;
+    names: string[];
+    kind: "account" | "center";
+  }>({ open: false, code: "", names: [], kind: "account" });
 
   useEffect(() => {
     loadAccounts();
@@ -676,6 +682,36 @@ export default function Intercompany() {
     () => consolidateCenters(centerResults),
     [centerResults],
   );
+
+  // Floating notification (15s) for companies that failed
+  const lastErrorKeyRef = useRef<string>("");
+  useEffect(() => {
+    const failed = [...accountResults, ...centerResults].filter((r) => !r.ok);
+    if (failed.length === 0) return;
+    // Deduplicate per company_db (a company can fail in both lists)
+    const byDb = new Map<string, { display_name: string; error?: string }>();
+    for (const f of failed) {
+      if (!byDb.has(f.company_db)) {
+        byDb.set(f.company_db, { display_name: f.display_name, error: f.error });
+      }
+    }
+    const key = Array.from(byDb.keys()).sort().join("|");
+    if (key === lastErrorKeyRef.current) return;
+    lastErrorKeyRef.current = key;
+    toast.error(`${byDb.size} empresa(s) com falha`, {
+      description: (
+        <ul className="space-y-0.5 mt-1">
+          {Array.from(byDb.entries()).map(([db, v]) => (
+            <li key={db} className="text-xs">
+              <span className="font-medium">{v.display_name}:</span> {v.error}
+            </li>
+          ))}
+        </ul>
+      ) as unknown as string,
+      duration: 15000,
+      icon: <AlertTriangle className="w-4 h-4" />,
+    });
+  }, [accountResults, centerResults]);
 
   return (
     <div className="min-h-screen bg-background">
