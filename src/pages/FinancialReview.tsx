@@ -86,7 +86,7 @@ export default function FinancialReview() {
   const navigate = useNavigate();
   const { session } = useSap();
   const companyDb = session?.companyDB;
-  const userEmail = session?.userName || session?.email;
+  const userEmail = session?.userName;
   const { items, loading, error, refresh, listOpenInvoices, cancelPayment } =
     useFinancialReview(companyDb);
 
