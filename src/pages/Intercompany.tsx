@@ -792,33 +792,95 @@ export default function Intercompany() {
                     className="pl-8 w-64"
                   />
                 </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Building2 className="w-4 h-4" />
+                      Empresas
+                      <Badge variant="secondary" className="ml-1">
+                        {selectedDbs.length}/{sapCompanies.length}
+                      </Badge>
+                      <ChevronDown className="w-3 h-3 opacity-60" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 p-0">
+                    <div className="flex items-center justify-between px-3 py-2 border-b">
+                      <span className="text-xs font-medium">Empresas consideradas</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => setSelectedDbs(sapCompanies.map((c) => c.company_db))}
+                        >
+                          Todas
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[11px] text-muted-foreground hover:underline"
+                          onClick={() => setSelectedDbs([])}
+                        >
+                          Nenhuma
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-72 overflow-auto py-1">
+                      {sapCompanies.length === 0 ? (
+                        <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                          Nenhuma empresa SAP ativa
+                        </div>
+                      ) : (
+                        sapCompanies.map((c) => {
+                          const checked = selectedDbs.includes(c.company_db);
+                          return (
+                            <label
+                              key={c.company_db}
+                              className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted/50 cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  setSelectedDbs((prev) =>
+                                    v
+                                      ? Array.from(new Set([...prev, c.company_db]))
+                                      : prev.filter((d) => d !== c.company_db),
+                                  );
+                                }}
+                              />
+                              <span className="flex-1 truncate">{c.display_name}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 {tab === "accounts" ? (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={loadAccounts}
-                      disabled={loadingAccounts}
+                      onClick={reloadAccounts}
+                      disabled={loadingAccounts || selectedDbs.length === 0}
                       className="gap-2"
                     >
                       <RefreshCw className={`w-4 h-4 ${loadingAccounts ? "animate-spin" : ""}`} />
                       Atualizar
                     </Button>
-                    <CreateAccountDialog onCreated={loadAccounts} />
+                    <CreateAccountDialog onCreated={reloadAccounts} companyDbs={selectedDbs} />
                   </>
                 ) : (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={loadCostCenters}
-                      disabled={loadingCenters}
+                      onClick={reloadCenters}
+                      disabled={loadingCenters || selectedDbs.length === 0}
                       className="gap-2"
                     >
                       <RefreshCw className={`w-4 h-4 ${loadingCenters ? "animate-spin" : ""}`} />
                       Atualizar
                     </Button>
-                    <CreateCostCenterDialog onCreated={loadCostCenters} />
+                    <CreateCostCenterDialog onCreated={reloadCenters} companyDbs={selectedDbs} />
                   </>
                 )}
               </div>
