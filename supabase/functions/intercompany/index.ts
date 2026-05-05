@@ -40,7 +40,8 @@ async function loadSapCreds(
   }
   let baseUrl = (map.service_layer_url || map.base_url || map.url || "").replace(/\/+$/, "");
   if (!baseUrl) return null;
-  if (!baseUrl.includes("/b1s/v1")) baseUrl = `${baseUrl}/b1s/v1`;
+  if (baseUrl.includes("/b1s/v1")) baseUrl = baseUrl.replace("/b1s/v1", "/b1s/v2");
+  else if (!baseUrl.includes("/b1s/v2")) baseUrl = `${baseUrl}/b1s/v2`;
   const sapCompanyDB = map.company_db || map.CompanyDB || companyDb;
   const userName = map.username || map.UserName;
   const password = map.password || map.Password;
