@@ -308,6 +308,11 @@ export function CreateExpenseModal({
       const doc = docs[0];
 
       if (doc.supplier_name) setSuggestedSupplierName(doc.supplier_name);
+      // Capture supplier data for "Cadastrar Fornecedor" fallback
+      setAiSupplierData({
+        card_name: doc.supplier_name || "",
+        federal_tax_id: doc.supplier_cnpj || "",
+      });
       if (doc.document_date) setDocDate(doc.document_date);
       if (doc.due_date) setDueDate(doc.due_date);
       if (doc.remarks) setRemarks(doc.remarks);
