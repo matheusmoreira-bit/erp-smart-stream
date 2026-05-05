@@ -522,12 +522,14 @@ function ConsolidatedTable({
   search,
   onResolveConflict,
   onToggleActive,
+  onReplicate,
 }: {
   rows: { code: string; names: Set<string>; presence: Map<string, { name: string; active: boolean }> }[];
   companies: { db: string; name: string }[];
   search: string;
   onResolveConflict?: (code: string, names: string[]) => void;
   onToggleActive?: (code: string, companyDb: string, nextActive: boolean) => Promise<void> | void;
+  onReplicate?: (code: string, name: string, companyDb: string) => Promise<void> | void;
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const filtered = useMemo(() => {
@@ -561,8 +563,8 @@ function ConsolidatedTable({
           Inativo (clique para ativar)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-4 text-center font-mono">—</span>
-          Não existe nesta empresa
+          <Plus className="w-4 h-4 text-primary" />
+          Não existe — clique para replicar nesta empresa
         </span>
         <span className="inline-flex items-center gap-1.5">
           <Badge variant="outline" className="text-warning border-warning/40 text-[10px]">
@@ -624,9 +626,38 @@ function ConsolidatedTable({
                 {companies.map((c) => {
                   const info = row.presence.get(c.db);
                   if (!info) {
+                    const replicateKey = `${row.code}::${c.db}::replicate`;
+                    const isReplicating = pending === replicateKey;
+                    const sourceName = names[0];
+                    const canReplicate = !!onReplicate && !!sourceName;
                     return (
-                      <TableCell key={c.db} className="text-center text-xs text-muted-foreground">
-                        —
+                      <TableCell key={c.db} className="text-center">
+                        {canReplicate ? (
+                          <button
+                            type="button"
+                            disabled={isReplicating}
+                            onClick={async () => {
+                              if (!onReplicate) return;
+                              setPending(replicateKey);
+                              try {
+                                await onReplicate(row.code, sourceName, c.db);
+                              } finally {
+                                setPending(null);
+                              }
+                            }}
+                            className="inline-flex items-center justify-center rounded-md p-1 text-primary transition-colors hover:bg-primary/10 disabled:opacity-50 disabled:cursor-wait"
+                            title={`Replicar "${sourceName}" (${row.code}) nesta empresa`}
+                            aria-label="Replicar nesta empresa"
+                          >
+                            {isReplicating ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Plus className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     );
                   }
@@ -691,6 +722,8 @@ export default function Intercompany() {
     loadCostCenters,
     toggleAccount,
     toggleCostCenter,
+    createAccount,
+    createCostCenter,
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = useMemo(
@@ -945,6 +978,21 @@ export default function Intercompany() {
                       toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
                     }
                   }}
+                  onReplicate={async (code, name, companyDb) => {
+                    try {
+                      const { results } = await createAccount({
+                        code,
+                        name,
+                        company_dbs: [companyDb],
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
+                      toast.success(`Conta ${code} replicada nesta empresa`);
+                      await reloadAccounts();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao replicar");
+                    }
+                  }}
                 />
               )}
             </TabsContent>
@@ -975,6 +1023,21 @@ export default function Intercompany() {
                       await reloadCenters();
                     } catch (e) {
                       toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
+                    }
+                  }}
+                  onReplicate={async (code, name, companyDb) => {
+                    try {
+                      const { results } = await createCostCenter({
+                        center_code: code,
+                        center_name: name,
+                        company_dbs: [companyDb],
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
+                      toast.success(`Centro ${code} replicado nesta empresa`);
+                      await reloadCenters();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao replicar");
                     }
                   }}
                 />
