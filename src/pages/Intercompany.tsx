@@ -563,8 +563,8 @@ function ConsolidatedTable({
           Inativo (clique para ativar)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-4 text-center font-mono">—</span>
-          Não existe nesta empresa
+          <Plus className="w-4 h-4 text-primary" />
+          Não existe — clique para replicar nesta empresa
         </span>
         <span className="inline-flex items-center gap-1.5">
           <Badge variant="outline" className="text-warning border-warning/40 text-[10px]">
