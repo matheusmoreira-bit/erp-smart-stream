@@ -34,7 +34,7 @@ export const SYSTEMS: SystemConfig[] = [
     icon: Server,
     category: "erp",
     fields: [
-      { key: "service_layer_url", label: "URL do Service Layer", placeholder: "https://servidor:50000/b1s/v1/" },
+      { key: "service_layer_url", label: "URL do Service Layer", placeholder: "https://servidor:50000/b1s/v2/" },
       { key: "company_db", label: "Banco de Dados", placeholder: "SBO_EMPRESA" },
       { key: "username", label: "Usuário de Integração", placeholder: "usuario_integracao" },
       { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário" },

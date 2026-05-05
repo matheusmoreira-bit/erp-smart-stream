@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 // Use env vars instead of hardcoded URLs
-const DEFAULT_SAP_BASE_URL = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v1";
+const DEFAULT_SAP_BASE_URL = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
 const HANA_VIEWS_URL = Deno.env.get("HANA_VIEWS_URL") || "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
 // In-memory cache with TTL
@@ -92,7 +92,8 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
       .maybeSingle();
     if (credRow?.credential_value) {
       let url = String(credRow.credential_value).replace(/\/+$/, "");
-      if (!url.includes("/b1s/v1")) url = `${url}/b1s/v1`;
+      if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
+      else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
       return url;
     }
 
@@ -104,7 +105,8 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
       .maybeSingle();
     if (data?.service_layer_url) {
       let url = data.service_layer_url.replace(/\/+$/, "");
-      if (!url.includes("/b1s/v1")) url = `${url}/b1s/v1`;
+      if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
+      else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
       return url;
     }
   } catch (e) {
