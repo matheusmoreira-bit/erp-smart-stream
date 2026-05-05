@@ -128,7 +128,9 @@ export default function UsersPage() {
       );
     }
 
-    return list;
+    return [...list].sort((a, b) =>
+      (a.UserName || a.UserCode || "").localeCompare(b.UserName || b.UserCode || "", "pt-BR", { sensitivity: "base" })
+    );
   }, [users, search, viewMode]);
 
   const handleConfirm = async () => {
