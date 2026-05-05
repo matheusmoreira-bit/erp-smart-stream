@@ -87,7 +87,7 @@ export default function FinancialReview() {
   const { session } = useSap();
   const companyDb = session?.companyDB;
   const userEmail = session?.userName;
-  const { items, loading, error, refresh, listOpenInvoices, cancelPayment } =
+  const { items, loading, error, refresh, listOpenInvoices, cancelPayment, autoLink } =
     useFinancialReview(companyDb);
 
   const [search, setSearch] = useState("");
