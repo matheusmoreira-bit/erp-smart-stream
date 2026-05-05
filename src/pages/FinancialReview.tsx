@@ -534,10 +534,6 @@ function ReconcileDialog({
   };
 
   const handleAutoLink = async (inv: OpenInvoice) => {
-    if (!confirm(
-      `Vincular o adiantamento ${item.doc_num ?? item.doc_entry} à NF ${inv.doc_num}?\n` +
-      `Será aplicado ${formatMoney(Math.min(item.open_amount, inv.open_amount), inv.doc_currency)}.`,
-    )) return;
     setLinkingId(inv.doc_entry);
     try {
       const r = await onAutoLink({
@@ -550,6 +546,7 @@ function ReconcileDialog({
         title: "Vinculação concluída",
         description: `Aplicado ${formatMoney(r.applied, inv.doc_currency)} à NF ${inv.doc_num}.`,
       });
+      setPreviewInvoice(null);
       onDone();
     } catch (e) {
       toast({
