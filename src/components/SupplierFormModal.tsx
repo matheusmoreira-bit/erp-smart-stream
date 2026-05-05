@@ -160,6 +160,9 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
           .finally(() => setLoadingCode(false));
       }
     } else {
+      const prefillCountry = (prefill?.bill_to_country || "BR").toUpperCase();
+      const prefillCurrency =
+        prefill?.currency || getCountry(prefillCountry).default_currency;
       setForm((f) => ({
         ...f,
         card_name: prefill?.card_name || "",
@@ -168,10 +171,12 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
         email: prefill?.email || "",
         phone1: prefill?.phone1 || "",
         phone2: prefill?.phone2 || "",
+        currency: prefillCurrency,
         bill_to_street: prefill?.bill_to_street || "",
         bill_to_zip: prefill?.bill_to_zip || "",
         bill_to_city: prefill?.bill_to_city || "",
         bill_to_state: prefill?.bill_to_state || "",
+        bill_to_country: prefillCountry,
         bill_to_block: prefill?.bill_to_block || "",
         bill_to_building: prefill?.bill_to_building || "",
       }));
