@@ -388,10 +388,12 @@ function ConsolidatedTable({
   rows,
   companies,
   search,
+  onResolveConflict,
 }: {
   rows: { code: string; names: Set<string>; presence: Map<string, { name: string; active: boolean }> }[];
   companies: { db: string; name: string }[];
   search: string;
+  onResolveConflict?: (code: string, names: string[]) => void;
 }) {
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
