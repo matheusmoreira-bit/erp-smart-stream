@@ -1,15 +1,18 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import type { SapUser } from "@/lib/cache-repository";
 import CreateUserDialog from "@/components/CreateUserDialog";
+import { useSap } from "@/contexts/SapContext";
+import { listSapTargetCompanies, changePasswordInCompanies } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
 
 type ConfirmAction = {
