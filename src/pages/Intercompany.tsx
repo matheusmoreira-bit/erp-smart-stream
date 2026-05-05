@@ -554,11 +554,11 @@ function ConsolidatedTable({
         <span className="font-medium text-foreground">Legenda:</span>
         <span className="inline-flex items-center gap-1.5">
           <CheckCircle2 className="w-4 h-4 text-success" />
-          Existe e está ativo
+          Ativo (clique para inativar)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
-          Existe, mas inativo/congelado
+          <XCircle className="w-4 h-4 text-muted-foreground" />
+          Inativo (clique para ativar)
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="w-4 text-center font-mono">—</span>
