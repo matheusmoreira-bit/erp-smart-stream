@@ -445,6 +445,20 @@ export default function FinancialReview() {
             </Table>
           </div>
         </div>
+          </TabsContent>
+
+          <TabsContent value="invoices" className="space-y-4">
+            <InvoicesWithAdvancesTab
+              loading={invoicesLoading}
+              error={invoicesError}
+              invoices={invoicesWithAdv}
+              advances={items}
+              search={invSearch}
+              onSearchChange={setInvSearch}
+              onSelectAdvance={(adv) => setSelected(adv)}
+            />
+          </TabsContent>
+        </Tabs>
 
         <p className="text-xs text-muted-foreground flex gap-1 items-center">
           <Building2 className="w-3 h-3" />
