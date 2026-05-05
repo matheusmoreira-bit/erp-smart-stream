@@ -186,7 +186,6 @@ export default function Suppliers() {
               ) : (
                 filtered.map((s) => (
                   <TableRow key={s.id} className={!s.is_active ? "opacity-60" : ""}>
-                  <TableHead /> {/* placeholder removed */}
                     <TableCell className="font-mono text-xs">{s.card_code || "—"}</TableCell>
                     <TableCell className="font-medium">{s.card_name}</TableCell>
                     <TableCell className="text-xs">
