@@ -210,13 +210,17 @@ function buildSapPayload(s: SupplierInput) {
   if (s.card_type === "S") payload.CardType = "cSupplier";
 
   // Same address for billing and shipping
+  // SAP State field is limited (~3 chars). For international addresses with long state names,
+  // omit the State to avoid "Value too long" errors. Brazilian UF codes (2 chars) are always safe.
+  const rawState = (s.bill_to_state || "").trim();
+  const safeState = rawState && rawState.length <= 3 ? rawState : undefined;
   if (s.bill_to_street || s.bill_to_zip || s.bill_to_city) {
     const address = {
       AddressName: "COBRANCA",
       Street: s.bill_to_street || undefined,
       ZipCode: s.bill_to_zip || undefined,
       City: s.bill_to_city || undefined,
-      State: s.bill_to_state || undefined,
+      State: safeState,
       Country: s.bill_to_country || "BR",
       Block: s.bill_to_block || undefined,
       BuildingFloorRoom: s.bill_to_building || undefined,
