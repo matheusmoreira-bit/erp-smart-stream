@@ -42,8 +42,8 @@ async function callProxy(body: Record<string, unknown>) {
   });
 
   const data = await resp.json();
-  if (!resp.ok) {
-    throw new Error(data.error || `Erro HTTP ${resp.status}`);
+  if (!resp.ok || data?.error) {
+    throw new Error(data?.error || `Erro HTTP ${resp.status}`);
   }
   return data;
 }
