@@ -976,6 +976,21 @@ export default function Intercompany() {
                       toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
                     }
                   }}
+                  onReplicate={async (code, name, companyDb) => {
+                    try {
+                      const { results } = await createAccount({
+                        code,
+                        name,
+                        company_dbs: [companyDb],
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
+                      toast.success(`Conta ${code} replicada nesta empresa`);
+                      await reloadAccounts();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao replicar");
+                    }
+                  }}
                 />
               )}
             </TabsContent>
