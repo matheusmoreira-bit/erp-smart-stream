@@ -39,7 +39,8 @@ async function getSapCredentials(
 async function loginSap(sapCreds: Record<string, string>) {
   let baseUrl = (sapCreds.service_layer_url || sapCreds.base_url || sapCreds.url || "").replace(/\/+$/, "");
   if (!baseUrl) throw new Error("URL do SAP B1 não configurada");
-  if (!baseUrl.includes("/b1s/v1")) baseUrl = `${baseUrl}/b1s/v1`;
+  if (baseUrl.includes("/b1s/v1")) baseUrl = baseUrl.replace("/b1s/v1", "/b1s/v2");
+  else if (!baseUrl.includes("/b1s/v2")) baseUrl = `${baseUrl}/b1s/v2`;
 
   const companyDB = sapCreds.company_db || sapCreds.CompanyDB;
   const userName = sapCreds.username || sapCreds.UserName;
