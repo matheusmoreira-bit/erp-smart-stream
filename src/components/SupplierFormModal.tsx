@@ -195,6 +195,8 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
   // and at least one address field is missing. Never overrides existing values.
   const [cepLookup, setCepLookup] = useState<string | null>(null);
   useEffect(() => {
+    // Only run ViaCEP for Brazilian addresses
+    if ((form.bill_to_country || "BR").toUpperCase() !== "BR") return;
     const cep = (form.bill_to_zip || "").replace(/\D/g, "");
     if (cep.length !== 8 || cep === cepLookup) return;
     setCepLookup(cep);
