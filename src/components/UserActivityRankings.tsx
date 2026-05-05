@@ -87,20 +87,26 @@ function computeLockoutRanking(records: Usr5Record[]): RankItem[] {
 
   for (const r of loginRecords) {
     if (r.UserCode !== currentUser) {
+      if (consecutiveFails >= 3 && currentUser) {
+        lockoutMap.set(currentUser, (lockoutMap.get(currentUser) || 0) + 1);
+      }
       currentUser = r.UserCode;
       consecutiveFails = 0;
     }
 
     if (isFail(r)) {
       consecutiveFails++;
-      if (consecutiveFails === 3) {
-        lockoutMap.set(currentUser, (lockoutMap.get(currentUser) || 0) + 1);
-        consecutiveFails = 0; // reset to allow detecting subsequent lockouts
-      }
     } else {
       // successful login or other action breaks the streak
+      if (consecutiveFails >= 3) {
+        lockoutMap.set(currentUser, (lockoutMap.get(currentUser) || 0) + 1);
+      }
       consecutiveFails = 0;
     }
+  }
+  // Handle trailing streak (last record was a failure)
+  if (consecutiveFails >= 3 && currentUser) {
+    lockoutMap.set(currentUser, (lockoutMap.get(currentUser) || 0) + 1);
   }
 
   return Array.from(lockoutMap, ([user, value]) => ({
