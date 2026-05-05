@@ -35,8 +35,8 @@ interface ModuleCard {
   moduleKey: string;
 }
 
-const modules: ModuleCard[] = [
-  {
+const modules: Record<string, ModuleCard> = {
+  analytics: {
     title: "Analytics",
     description: "Visão geral de métricas, tempos por etapa e insights de performance do fluxo de compras.",
     icon: BarChart3,
@@ -45,7 +45,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-primary/20 to-primary/5",
     moduleKey: "analytics",
   },
-  {
+  expenses: {
     title: "Despesas",
     description: "Crie e acompanhe solicitações de despesas com fluxo de aprovação e integração SAP.",
     icon: ShoppingCart,
@@ -54,7 +54,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-success/20 to-success/5",
     moduleKey: "expenses",
   },
-  {
+  approvals: {
     title: "Aprovações",
     description: "Documentos pendentes de aprovação com detalhes de valor, fornecedor, aprovador e vencimento.",
     icon: ClipboardCheck,
@@ -63,7 +63,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-warning/20 to-warning/5",
     moduleKey: "approvals",
   },
-  {
+  approval_rules: {
     title: "Regras de Aprovação",
     description: "Configure regras de aprovação em N níveis com critérios de valor, centro de custo e tipo de documento.",
     icon: Shield,
@@ -72,7 +72,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-destructive/20 to-destructive/5",
     moduleKey: "approval_rules",
   },
-  {
+  pagcorp: {
     title: "PagCorp",
     description: "Transações de cartões corporativos com filtro de prestação de conta e lançamento no SAP.",
     icon: CreditCard,
@@ -81,7 +81,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-primary/20 to-primary/5",
     moduleKey: "pagcorp",
   },
-  {
+  users: {
     title: "Usuários",
     description: "Gerencie usuários SAP: bloqueio, desbloqueio e redefinição de senhas.",
     icon: Users,
@@ -90,7 +90,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-warning/20 to-warning/5",
     moduleKey: "users",
   },
-  {
+  suppliers: {
     title: "Fornecedores",
     description: "Cadastro de fornecedores com sincronização SAP e extração via IA a partir de notas fiscais.",
     icon: Building2,
@@ -99,7 +99,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-success/20 to-success/5",
     moduleKey: "suppliers",
   },
-  {
+  synapse: {
     title: "Synapse",
     description: "Central de automações e integrações entre sistemas (JumpCloud, SAP, IdP).",
     icon: Zap,
@@ -108,7 +108,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-primary/20 to-primary/5",
     moduleKey: "synapse",
   },
-  {
+  integration_history: {
     title: "Monitor de Integrações",
     description: "Acompanhamento unificado de todas as integrações com o SAP (despesas manuais e PagCorp), com status detalhado por estágio.",
     icon: Radio,
@@ -117,7 +117,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-success/20 to-success/5",
     moduleKey: "integration_history",
   },
-  {
+  intercompany: {
     title: "Intercompany",
     description: "Plano de contas e centros de custo consolidados entre empresas, com criação simultânea em todas.",
     icon: Building2,
@@ -126,7 +126,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-primary/20 to-primary/5",
     moduleKey: "intercompany",
   },
-  {
+  financial_review: {
     title: "Avaliação Financeira",
     description: "Adiantamentos em aberto (clientes/fornecedores) sem vínculo a notas, com passo a passo de reconciliação.",
     icon: Wallet,
@@ -135,7 +135,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-success/20 to-success/5",
     moduleKey: "financial_review",
   },
-  {
+  credentials: {
     title: "Credenciais",
     description: "Gerencie conexões com sistemas externos (PagCorp, SAP) de forma segura.",
     icon: Key,
@@ -144,7 +144,7 @@ const modules: ModuleCard[] = [
     bgGlow: "from-muted/20 to-muted/5",
     moduleKey: "credentials",
   },
-  {
+  audit_log: {
     title: "Logs de Auditoria",
     description: "Registro completo de todas as ações realizadas no sistema para análise e auditoria.",
     icon: ScrollText,
@@ -153,7 +153,23 @@ const modules: ModuleCard[] = [
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "audit_log",
   },
+};
+
+const moduleGroups: { title: string; keys: string[] }[] = [
+  {
+    title: "Geral",
+    keys: ["analytics", "expenses", "approvals", "suppliers"],
+  },
+  {
+    title: "Financeiro / Contábil",
+    keys: ["pagcorp", "integration_history", "financial_review", "intercompany"],
+  },
+  {
+    title: "Admin",
+    keys: ["approval_rules", "users", "synapse", "integration_history", "credentials", "audit_log"],
+  },
 ];
+
 
 function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: number; hasAccess: boolean }) {
   const navigate = useNavigate();
@@ -234,25 +250,44 @@ export function MainMenu() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="max-w-5xl w-full">
+      <main className="flex-1 px-6 py-12">
+        <div className="max-w-5xl mx-auto w-full">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
             <h2 className="text-3xl font-bold text-foreground">Módulos</h2>
             <p className="text-muted-foreground mt-2">Selecione um módulo para começar</p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {modules.map((mod, i) => (
-              <ModuleCardItem
-                key={mod.title}
-                mod={mod}
-                index={i}
-                hasAccess={permLoading || userModules.includes(mod.moduleKey)}
-              />
-            ))}
+          <div className="space-y-12">
+            {moduleGroups.map((group) => {
+              const groupModules = group.keys
+                .map((k) => modules[k])
+                .filter((m): m is ModuleCard => Boolean(m));
+              const visible = groupModules.filter(
+                (m) => permLoading || userModules.includes(m.moduleKey),
+              );
+              if (visible.length === 0) return null;
+              return (
+                <section key={group.title}>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 px-1">
+                    {group.title}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {groupModules.map((mod, i) => (
+                      <ModuleCardItem
+                        key={`${group.title}-${mod.title}`}
+                        mod={mod}
+                        index={i}
+                        hasAccess={permLoading || userModules.includes(mod.moduleKey)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </div>
       </main>
+
     </div>
   );
 }
