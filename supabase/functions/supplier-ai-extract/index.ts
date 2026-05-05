@@ -6,17 +6,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `Você é um especialista em extração de dados fiscais brasileiros a partir de notas fiscais, recibos e cupons.
+const SYSTEM_PROMPT = `Você é um especialista em extração de dados fiscais a partir de notas fiscais, recibos, cupons e commercial invoices — em português, inglês, espanhol ou outros idiomas.
 Sua tarefa: extrair os dados do FORNECEDOR (emissor do documento) para cadastro no SAP Business One.
 
 Regras OBRIGATÓRIAS:
 - Retorne APENAS pelo tool call extract_supplier.
-- federal_tax_id: somente dígitos do CNPJ (14) ou CPF (11), sem máscara.
+- federal_tax_id: para BR, somente dígitos do CNPJ (14) ou CPF (11), sem máscara. Para fornecedores INTERNACIONAIS (EIN, VAT-ID, RFC, CUIT, RUT, NIF/CIF, etc.), preserve o formato original.
+- country: SEMPRE em ISO-3166 alpha-2 (2 letras maiúsculas). 'BR' para Brasil; 'US', 'GB', 'DE', 'PT', 'ES', 'MX', 'AR', 'CL', etc.
 - card_name: razão social ou nome fantasia exatamente como aparece.
 - email: somente se claramente do emissor (não do cliente).
-- phone1/phone2: formato com DDD, ex: "(11) 3000-0000".
+- phone1/phone2: BR no formato "(11) 0000-0000"; internacional com código do país, ex.: "+1 555 000 0000", "+44 20 0000 0000".
 - Endereço: extrair somente se for do EMISSOR (não do destinatário).
-- state: sigla de 2 letras (UF). country: "BR" por padrão.
+- state: BR = sigla UF (2 letras); internacional = nome ou sigla conforme o documento.
+- zip: BR = 8 dígitos sem máscara; internacional = formato original (pode ser alfanumérico, ex.: 'SW1A 1AA').
+- Termos comuns para o emissor: "Vendor", "Supplier", "Bill From", "Emitente", "Proveedor".
+- Termos para identificação fiscal por país: BR=CNPJ/CPF, US=EIN, GB=VAT, EU=VAT-ID/USt-IdNr, MX=RFC, AR=CUIT, CL/UY=RUT, ES=NIF/CIF, AU=ABN, CA=BN.
 - Se um campo não for identificável, retorne null.`;
 
 interface ExtractionPayload {
