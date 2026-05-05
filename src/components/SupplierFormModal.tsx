@@ -69,10 +69,12 @@ export interface SupplierFormPrefill {
   email?: string;
   phone1?: string;
   phone2?: string;
+  currency?: string;
   bill_to_street?: string;
   bill_to_zip?: string;
   bill_to_city?: string;
   bill_to_state?: string;
+  bill_to_country?: string;
   bill_to_block?: string;
   bill_to_building?: string;
 }
