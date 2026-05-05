@@ -521,12 +521,15 @@ function ConsolidatedTable({
   companies,
   search,
   onResolveConflict,
+  onToggleActive,
 }: {
   rows: { code: string; names: Set<string>; presence: Map<string, { name: string; active: boolean }> }[];
   companies: { db: string; name: string }[];
   search: string;
   onResolveConflict?: (code: string, names: string[]) => void;
+  onToggleActive?: (code: string, companyDb: string, nextActive: boolean) => Promise<void> | void;
 }) {
+  const [pending, setPending] = useState<string | null>(null);
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     if (!s) return rows;
