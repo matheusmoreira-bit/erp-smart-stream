@@ -484,9 +484,8 @@ Deno.serve(async (req) => {
       );
       return json({ items: data });
     }
+    if (action === "auto-link") {
 
-
-      // Vincula automaticamente um adiantamento/pagamento on-account a uma NF existente.
       // body: { doc_type, doc_entry, invoice_doc_entry, amount?, card_code }
       const docType = String(body.doc_type || "");
       const docEntry = Number(body.doc_entry);
