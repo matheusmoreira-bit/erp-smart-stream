@@ -813,6 +813,74 @@ function ReconcileDialog({
     }
   };
 
+  const toggleInvoice = (id: number) => {
+    setSelectedInvoiceIds((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleAll = () => {
+    if (!invoices) return;
+    if (selectedInvoiceIds.size === invoices.length) setSelectedInvoiceIds(new Set());
+    else setSelectedInvoiceIds(new Set(invoices.map((i) => i.doc_entry)));
+  };
+
+  const selectedInvoices = (invoices || []).filter((i) => selectedInvoiceIds.has(i.doc_entry));
+
+  let _remaining = item.open_amount;
+  const plannedAllocations: Array<{ inv: OpenInvoice; planned: number }> = [];
+  for (const inv of selectedInvoices) {
+    const manual = amounts[inv.doc_entry];
+    const manualNum = manual != null && manual !== "" ? Number(String(manual).replace(",", ".")) : NaN;
+    const planned = !Number.isNaN(manualNum) && manualNum > 0
+      ? Math.min(manualNum, inv.open_amount, _remaining)
+      : Math.min(inv.open_amount, _remaining);
+    plannedAllocations.push({ inv, planned });
+    _remaining -= planned;
+    if (_remaining < 0) _remaining = 0;
+  }
+  const totalPlanned = plannedAllocations.reduce((s, a) => s + a.planned, 0);
+
+  const handleBatchLink = async () => {
+    if (selectedInvoices.length === 0) return;
+    setBatchBusy(true);
+    try {
+      const r = await onAutoLinkBatch({
+        mode: "advance-to-invoices",
+        docType: item.doc_type,
+        docEntry: item.doc_entry,
+        cardCode: item.card_code,
+        invoices: plannedAllocations
+          .filter((a) => a.planned > 0)
+          .map((a) => ({ docEntry: a.inv.doc_entry, amount: a.planned })),
+      });
+      if (r.failed === 0) {
+        toast({
+          title: "Vinculação em lote concluída",
+          description: `${r.succeeded} NF(s) vinculadas · Total ${formatMoney(r.total_applied, item.doc_currency)}.`,
+        });
+      } else {
+        toast({
+          title: `Vinculação parcial (${r.succeeded}/${r.succeeded + r.failed})`,
+          description: `${r.failed} falha(s). Total aplicado ${formatMoney(r.total_applied, item.doc_currency)}.`,
+          variant: r.succeeded > 0 ? "default" : "destructive",
+        });
+      }
+      onDone();
+    } catch (e) {
+      toast({
+        title: "Falha ao vincular em lote",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setBatchBusy(false);
+    }
+  };
+
   const handleAutoLink = async (inv: OpenInvoice) => {
     setLinkingId(inv.doc_entry);
     try {
