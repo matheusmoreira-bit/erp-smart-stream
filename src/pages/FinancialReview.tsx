@@ -399,7 +399,7 @@ export default function FinancialReview() {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                       <RefreshCw className="w-5 h-5 animate-spin inline mr-2" />
                       Consultando SAP…
                     </TableCell>
@@ -407,7 +407,7 @@ export default function FinancialReview() {
                 )}
                 {!loading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                       Nenhum adiantamento em aberto encontrado.
                     </TableCell>
                   </TableRow>
