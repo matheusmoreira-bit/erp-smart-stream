@@ -201,6 +201,9 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // o próprio DocTotal. Para pagamentos parcialmente aplicados, subtraímos
   // o que já foi consumido em PaymentInvoices.
 
+  const paymentSelect =
+    "DocEntry,DocNum,CardCode,CardName,DocDate,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,CashSum,TransferSum,CheckSum,CreditSum,BillOfExchangeAmount,CashSumFC,TransferSumFC,CheckSumFC,CreditSumFC,BillOfExchangeAmountFC,PaymentInvoices";
+
   function calcOpen(d: any): { docTotal: number; applied: number; open: number } {
     const checks = Array.isArray(d.PaymentChecks) ? d.PaymentChecks : [];
     const cards = Array.isArray(d.PaymentCreditCards) ? d.PaymentCreditCards : [];
@@ -225,6 +228,7 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // 1) Adiantamentos / pagamentos a fornecedores em aberto (OVPM)
   try {
     const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
+      $select: paymentSelect,
       $filter: "Cancelled eq 'tNO'",
     });
     for (const d of op) {
@@ -253,6 +257,7 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // 2) Adiantamentos / pagamentos de clientes em aberto (ORCT)
   try {
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
+      $select: paymentSelect,
       $filter: "Cancelled eq 'tNO'",
     });
     for (const d of ip) {
