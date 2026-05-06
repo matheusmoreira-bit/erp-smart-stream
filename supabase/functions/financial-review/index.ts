@@ -231,7 +231,7 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
     const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
       $select: paymentSelect,
       $filter: "Cancelled eq 'tNO'",
-    });
+    }, 1000);
     for (const d of op) {
       const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;
@@ -260,7 +260,7 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
       $select: paymentSelect,
       $filter: "Cancelled eq 'tNO'",
-    });
+    }, 1000);
     for (const d of ip) {
       const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;
