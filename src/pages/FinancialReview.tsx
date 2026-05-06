@@ -390,6 +390,7 @@ export default function FinancialReview() {
                   <TableHead>Doc.</TableHead>
                   <TableHead>Parceiro</TableHead>
                   <TableHead>Data</TableHead>
+                  <TableHead className="text-right">Valor original</TableHead>
                   <TableHead className="text-right">Valor em aberto</TableHead>
                   <TableHead>Referência</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
