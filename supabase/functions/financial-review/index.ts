@@ -315,12 +315,15 @@ async function listOpenInvoicesForBp(
     cookies,
     endpoint,
     {
-      $select: "DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,NumAtCard",
-      $filter: `CardCode eq '${cardCode.replace(/'/g, "''")}' and DocumentStatus eq 'bost_Open'`,
+      $select: "DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,NumAtCard,DocumentStatus",
+      // Inclui NFs Abertas e Fechadas; o filtro de saldo > 0 é aplicado abaixo.
+      $filter: `CardCode eq '${cardCode.replace(/'/g, "''")}'`,
     },
     2000,
   );
-  return data.map((d) => ({
+  return data
+    .filter((d) => ((d.DocTotal ?? 0) - (d.PaidToDate ?? 0)) > 0.0001)
+    .map((d) => ({
     doc_entry: d.DocEntry,
     doc_num: d.DocNum,
     doc_date: d.DocDate,
@@ -401,8 +404,10 @@ async function listInvoicesWithAdvances(
           cookies,
           endpoint,
           {
-            $select: "DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,NumAtCard,CardCode,CardName",
-            $filter: `DocumentStatus eq 'bost_Open' and (${orFilter})`,
+            $select: "DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,NumAtCard,CardCode,CardName,DocumentStatus",
+            // Não filtrar por DocumentStatus: NFs podem estar "Fechadas" mas com saldo > 0
+            // (ex.: vinculadas a adiantamentos pendentes). Filtra-se pelo saldo abaixo.
+            $filter: `(${orFilter})`,
           },
           5000,
         );
