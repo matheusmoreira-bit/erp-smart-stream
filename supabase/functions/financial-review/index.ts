@@ -185,31 +185,43 @@ interface AdvanceItem {
 async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceItem[]> {
   const items: AdvanceItem[] = [];
 
-  // Fonte única (espelha as queries OVPM/ORCT do SAP):
+  // Estratégia: o SAP B1 Service Layer NÃO expõe o campo OVPM/ORCT.OpenBal
+  // diretamente. Para identificar adiantamentos com saldo disponível e não
+  // cancelados, fazemos:
   //
-  //   Fornecedor (OVPM):
-  //     SELECT DocNum, DocDate, CardCode, CardName, DocTotal, OpenBal
-  //     FROM OVPM WHERE DocType='S' AND OpenBal>0 AND Canceled='N'
+  //   1) Buscar pagamentos não cancelados (Cancelled eq 'tNO')
+  //   2) Excluir pagamentos completamente reconciliados/aplicados:
+  //      - DocumentStatus eq 'bost_Open'  (mantém só os abertos)
+  //   3) Calcular o saldo somando os meios de pagamento do header
+  //      (CashSum + TransferSum + CheckAccountSum + CreditSum + BoeSum)
+  //      e subtraindo o que já foi aplicado em invoices/down payments
+  //      (somatório de PaymentInvoices[].SumApplied + PaymentAccounts[]).
   //
-  //   Cliente (ORCT):
-  //     SELECT DocNum, DocDate, CardCode, CardName, DocTotal, OpenBal
-  //     FROM ORCT WHERE DocType='C' AND OpenBal>0 AND Canceled='N'
-  //
-  // No Service Layer:
-  //   OVPM => VendorPayments    (DocType eq 'rSupplier')
-  //   ORCT => IncomingPayments  (DocType eq 'rCustomer')
-  //   OpenBal => OpenBalance (campo exposto pela Service Layer)
-  //   Canceled='N' => Cancelled eq 'tNO'
+  // Para adiantamento puro (sem invoices vinculadas) o saldo disponível é
+  // o próprio DocTotal. Para pagamentos parcialmente aplicados, subtraímos
+  // o que já foi consumido em PaymentInvoices.
+
+  function calcOpen(d: any): { docTotal: number; applied: number; open: number } {
+    const docTotal = Number(d.DocTotal ?? 0);
+    const invoices: any[] = Array.isArray(d.PaymentInvoices) ? d.PaymentInvoices : [];
+    const applied = invoices.reduce(
+      (sum, pi) => sum + Number(pi.SumApplied ?? pi.AppliedFC ?? pi.AppliedSys ?? 0),
+      0,
+    );
+    const open = Math.max(0, docTotal - applied);
+    return { docTotal, applied, open };
+  }
 
   // 1) Adiantamentos / pagamentos a fornecedores em aberto (OVPM)
   try {
     const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
       $select:
-        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,OpenBalance,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled",
-      $filter: "DocType eq 'rSupplier' and Cancelled eq 'tNO' and OpenBalance gt 0",
+        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,DocumentStatus,PaymentInvoices",
+      $filter:
+        "DocType eq 'rSupplier' and Cancelled eq 'tNO' and DocumentStatus eq 'bost_Open'",
     });
     for (const d of op) {
-      const open = d.OpenBalance ?? 0;
+      const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;
       items.push({
         doc_type: "ADVANCE_AP",
@@ -219,8 +231,8 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
         card_name: d.CardName,
         bp_type: "supplier",
         doc_date: d.DocDate,
-        doc_total: d.DocTotal ?? 0,
-        paid_to_date: (d.DocTotal ?? 0) - open,
+        doc_total: docTotal,
+        paid_to_date: applied,
         open_amount: open,
         doc_currency: d.DocCurrency,
         remarks: d.JournalRemarks,
@@ -235,11 +247,12 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   try {
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
       $select:
-        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,OpenBalance,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled",
-      $filter: "DocType eq 'rCustomer' and Cancelled eq 'tNO' and OpenBalance gt 0",
+        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,DocumentStatus,PaymentInvoices",
+      $filter:
+        "DocType eq 'rCustomer' and Cancelled eq 'tNO' and DocumentStatus eq 'bost_Open'",
     });
     for (const d of ip) {
-      const open = d.OpenBalance ?? 0;
+      const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;
       items.push({
         doc_type: "ADVANCE_AR",
@@ -249,8 +262,8 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
         card_name: d.CardName,
         bp_type: "customer",
         doc_date: d.DocDate,
-        doc_total: d.DocTotal ?? 0,
-        paid_to_date: (d.DocTotal ?? 0) - open,
+        doc_total: docTotal,
+        paid_to_date: applied,
         open_amount: open,
         doc_currency: d.DocCurrency,
         remarks: d.JournalRemarks,
