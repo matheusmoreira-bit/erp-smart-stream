@@ -185,16 +185,31 @@ interface AdvanceItem {
 async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceItem[]> {
   const items: AdvanceItem[] = [];
 
-  // 1) AP DownPayment Invoices (PurchaseDownPayments)
-  // Inclui adiantamentos com status Aberto OU Fechado, desde que ainda tenham saldo
-  // (DocTotal − PaidToDate > 0). No SAP, adiantamentos podem aparecer como "Fechado"
-  // mas com valor pago = 0 (boleto/PIX gerado, ainda não pago) — esses precisam aparecer.
+  // Fonte única (espelha as queries OVPM/ORCT do SAP):
+  //
+  //   Fornecedor (OVPM):
+  //     SELECT DocNum, DocDate, CardCode, CardName, DocTotal, OpenBal
+  //     FROM OVPM WHERE DocType='S' AND OpenBal>0 AND Canceled='N'
+  //
+  //   Cliente (ORCT):
+  //     SELECT DocNum, DocDate, CardCode, CardName, DocTotal, OpenBal
+  //     FROM ORCT WHERE DocType='C' AND OpenBal>0 AND Canceled='N'
+  //
+  // No Service Layer:
+  //   OVPM => VendorPayments    (DocType eq 'rSupplier')
+  //   ORCT => IncomingPayments  (DocType eq 'rCustomer')
+  //   OpenBal => OpenBalance (campo exposto pela Service Layer)
+  //   Canceled='N' => Cancelled eq 'tNO'
+
+  // 1) Adiantamentos / pagamentos a fornecedores em aberto (OVPM)
   try {
-    const apDp = await sapGetAll(creds.baseUrl, cookies, "PurchaseDownPayments", {
-      $select: "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,PaidToDate,DocCurrency,Comments,NumAtCard,DocumentStatus",
+    const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
+      $select:
+        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,OpenBalance,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled",
+      $filter: "DocType eq 'rSupplier' and Cancelled eq 'tNO' and OpenBalance gt 0",
     });
-    for (const d of apDp) {
-      const open = (d.DocTotal ?? 0) - (d.PaidToDate ?? 0);
+    for (const d of op) {
+      const open = d.OpenBalance ?? 0;
       if (open <= 0.0001) continue;
       items.push({
         doc_type: "ADVANCE_AP",
@@ -204,66 +219,9 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
         card_name: d.CardName,
         bp_type: "supplier",
         doc_date: d.DocDate,
-        doc_total: d.DocTotal,
-        paid_to_date: d.PaidToDate ?? 0,
+        doc_total: d.DocTotal ?? 0,
+        paid_to_date: (d.DocTotal ?? 0) - open,
         open_amount: open,
-        doc_currency: d.DocCurrency,
-        remarks: d.Comments,
-        reference: d.NumAtCard,
-      });
-    }
-  } catch (e) {
-    console.warn("PurchaseDownPayments err", e);
-  }
-
-  // 2) AR DownPayment Invoices (DownPayments)
-  // Mesma lógica: inclui Aberto e Fechado com saldo > 0.
-  try {
-    const arDp = await sapGetAll(creds.baseUrl, cookies, "DownPayments", {
-      $select: "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,PaidToDate,DocCurrency,Comments,NumAtCard,DocumentStatus",
-    });
-    for (const d of arDp) {
-      const open = (d.DocTotal ?? 0) - (d.PaidToDate ?? 0);
-      if (open <= 0.0001) continue;
-      items.push({
-        doc_type: "ADVANCE_AR",
-        doc_entry: d.DocEntry,
-        doc_num: d.DocNum,
-        card_code: d.CardCode,
-        card_name: d.CardName,
-        bp_type: "customer",
-        doc_date: d.DocDate,
-        doc_total: d.DocTotal,
-        paid_to_date: d.PaidToDate ?? 0,
-        open_amount: open,
-        doc_currency: d.DocCurrency,
-        remarks: d.Comments,
-        reference: d.NumAtCard,
-      });
-    }
-  } catch (e) {
-    console.warn("DownPayments err", e);
-  }
-
-  // 3) Outgoing Payments lançados "on account" sem invoice
-  try {
-    const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
-      $select: "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType",
-      $filter: "DocType eq 'rAccount'",
-    });
-    for (const d of op) {
-      // For "on account" payments paid_to_date == DocTotal (fully paid into account, awaiting matching)
-      items.push({
-        doc_type: "PAYMENT_OA_OUT",
-        doc_entry: d.DocEntry,
-        doc_num: d.DocNum,
-        card_code: d.CardCode,
-        card_name: d.CardName,
-        bp_type: "supplier",
-        doc_date: d.DocDate,
-        doc_total: d.DocTotal,
-        paid_to_date: d.DocTotal ?? 0,
-        open_amount: d.DocTotal ?? 0,
         doc_currency: d.DocCurrency,
         remarks: d.JournalRemarks,
         reference: d.Reference1,
@@ -273,24 +231,27 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
     console.warn("VendorPayments err", e);
   }
 
-  // 4) Incoming Payments on account (clientes)
+  // 2) Adiantamentos / pagamentos de clientes em aberto (ORCT)
   try {
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
-      $select: "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType",
-      $filter: "DocType eq 'rAccount'",
+      $select:
+        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,OpenBalance,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled",
+      $filter: "DocType eq 'rCustomer' and Cancelled eq 'tNO' and OpenBalance gt 0",
     });
     for (const d of ip) {
+      const open = d.OpenBalance ?? 0;
+      if (open <= 0.0001) continue;
       items.push({
-        doc_type: "PAYMENT_OA_IN",
+        doc_type: "ADVANCE_AR",
         doc_entry: d.DocEntry,
         doc_num: d.DocNum,
         card_code: d.CardCode,
         card_name: d.CardName,
         bp_type: "customer",
         doc_date: d.DocDate,
-        doc_total: d.DocTotal,
-        paid_to_date: d.DocTotal ?? 0,
-        open_amount: d.DocTotal ?? 0,
+        doc_total: d.DocTotal ?? 0,
+        paid_to_date: (d.DocTotal ?? 0) - open,
+        open_amount: open,
         doc_currency: d.DocCurrency,
         remarks: d.JournalRemarks,
         reference: d.Reference1,
