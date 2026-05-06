@@ -566,7 +566,7 @@ function InvoicesWithAdvancesTab({
   advances,
   search,
   onSearchChange,
-  onSelectAdvance,
+  onSelectInvoice,
 }: {
   loading: boolean;
   error: string | null;
@@ -574,7 +574,7 @@ function InvoicesWithAdvancesTab({
   advances: AdvanceItem[];
   search: string;
   onSearchChange: (v: string) => void;
-  onSelectAdvance: (adv: AdvanceItem) => void;
+  onSelectInvoice: (inv: InvoiceWithAdvances) => void;
 }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -595,22 +595,8 @@ function InvoicesWithAdvancesTab({
     return { count: filtered.length, open, adv, bps };
   }, [filtered]);
 
-  const advancesByBp = useMemo(() => {
-    const m = new Map<string, AdvanceItem[]>();
-    for (const a of advances) {
-      const arr = m.get(a.card_code) || [];
-      arr.push(a);
-      m.set(a.card_code, arr);
-    }
-    return m;
-  }, [advances]);
-
   const handleReconcile = (inv: InvoiceWithAdvances) => {
-    const list = (advancesByBp.get(inv.card_code) || []).filter((a) => a.bp_type === inv.bp_type);
-    if (list.length === 0) return;
-    // Pick the largest open advance to start; user can change inside the dialog
-    const best = [...list].sort((a, b) => b.open_amount - a.open_amount)[0];
-    onSelectAdvance(best);
+    onSelectInvoice(inv);
   };
 
   return (
