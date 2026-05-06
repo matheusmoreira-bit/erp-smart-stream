@@ -73,7 +73,7 @@ async function sapGetAll(
   maxItems = 5000,
 ): Promise<any[]> {
   const all: any[] = [];
-  const pageSize = 100;
+  const pageSize = Math.max(1, Math.min(100, maxItems));
   let url: string | null = (() => {
     const qp = new URLSearchParams(params);
     qp.set("$top", String(pageSize));
@@ -109,9 +109,9 @@ async function sapGetAll(
     } else {
       url = null;
     }
-    if (all.length > maxItems) break;
+    if (all.length >= maxItems) break;
   }
-  return all;
+  return all.slice(0, maxItems);
 }
 
 async function sapPost(
