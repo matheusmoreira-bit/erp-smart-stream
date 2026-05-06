@@ -736,6 +736,7 @@ function ReconcileDialog({
   onListInvoices,
   onCancel,
   onAutoLink,
+  onAutoLinkBatch,
   onDone,
 }: {
   item: AdvanceItem | null;
@@ -749,6 +750,13 @@ function ReconcileDialog({
     cardCode: string;
     amount?: number;
   }) => Promise<{ ok: true; applied: number }>;
+  onAutoLinkBatch: (params: {
+    mode: "advance-to-invoices";
+    docType: AdvanceItem["doc_type"];
+    docEntry: number;
+    cardCode: string;
+    invoices: Array<{ docEntry: number; amount?: number }>;
+  }) => Promise<{ ok: true; succeeded: number; failed: number; total_applied: number; results: Array<{ ok: boolean; applied: number; error?: string }> }>;
   onDone: () => void;
 }) {
   const [tab, setTab] = useState<"link" | "internal" | "cancel" | "guide">("guide");
@@ -757,11 +765,16 @@ function ReconcileDialog({
   const [busy, setBusy] = useState(false);
   const [linkingId, setLinkingId] = useState<number | null>(null);
   const [previewInvoice, setPreviewInvoice] = useState<OpenInvoice | null>(null);
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<number>>(new Set());
+  const [amounts, setAmounts] = useState<Record<number, string>>({});
+  const [batchBusy, setBatchBusy] = useState(false);
 
   useEffect(() => {
     setTab("guide");
     setInvoices(null);
     setPreviewInvoice(null);
+    setSelectedInvoiceIds(new Set());
+    setAmounts({});
   }, [item]);
 
   if (!item) return null;
