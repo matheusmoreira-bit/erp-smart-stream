@@ -73,15 +73,20 @@ async function sapGetAll(
   maxItems = 5000,
 ): Promise<any[]> {
   const all: any[] = [];
-  const pageSize = Math.max(1, Math.min(100, maxItems));
-  let url: string | null = (() => {
-    const qp = new URLSearchParams(params);
-    qp.set("$top", String(pageSize));
-    qp.set("$skip", "0");
-    return `${baseUrl}/${endpoint}?${qp.toString()}`;
-  })();
-  let pageCount = 0;
-  while (url) {
+  const pageSize = 100;
+  let skip = 0;
+  let useNextLink: string | null = null;
+  let safety = 0;
+  while (safety++ < 200) {
+    let url: string;
+    if (useNextLink) {
+      url = useNextLink.startsWith("http") ? useNextLink : `${baseUrl}/${useNextLink}`;
+    } else {
+      const qp = new URLSearchParams(params);
+      qp.set("$top", String(pageSize));
+      qp.set("$skip", String(skip));
+      url = `${baseUrl}/${endpoint}?${qp.toString()}`;
+    }
     const resp = await fetch(url, {
       method: "GET",
       headers: {
@@ -97,17 +102,14 @@ async function sapGetAll(
     const body: any = await resp.json();
     const items: any[] = body.value || [];
     all.push(...items);
-    pageCount++;
     const nextLink: string | undefined = body["odata.nextLink"] || body["@odata.nextLink"];
     if (nextLink) {
-      url = nextLink.startsWith("http") ? nextLink : `${baseUrl}/${nextLink}`;
+      useNextLink = nextLink;
     } else if (items.length >= pageSize) {
-      const qp = new URLSearchParams(params);
-      qp.set("$top", String(pageSize));
-      qp.set("$skip", String(pageCount * pageSize));
-      url = `${baseUrl}/${endpoint}?${qp.toString()}`;
+      useNextLink = null;
+      skip += items.length;
     } else {
-      url = null;
+      break;
     }
     if (all.length >= maxItems) break;
   }
@@ -231,7 +233,8 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
     const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
       $select: paymentSelect,
       $filter: "Cancelled eq 'tNO'",
-    }, 200);
+      $orderby: "DocEntry desc",
+    }, 5000);
     for (const d of op) {
       const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;
@@ -260,7 +263,8 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
       $select: paymentSelect,
       $filter: "Cancelled eq 'tNO'",
-    }, 200);
+      $orderby: "DocEntry desc",
+    }, 5000);
     for (const d of ip) {
       const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;

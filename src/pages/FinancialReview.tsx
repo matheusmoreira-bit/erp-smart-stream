@@ -390,6 +390,7 @@ export default function FinancialReview() {
                   <TableHead>Doc.</TableHead>
                   <TableHead>Parceiro</TableHead>
                   <TableHead>Data</TableHead>
+                  <TableHead className="text-right">Valor original</TableHead>
                   <TableHead className="text-right">Valor em aberto</TableHead>
                   <TableHead>Referência</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -398,7 +399,7 @@ export default function FinancialReview() {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                       <RefreshCw className="w-5 h-5 animate-spin inline mr-2" />
                       Consultando SAP…
                     </TableCell>
@@ -406,7 +407,7 @@ export default function FinancialReview() {
                 )}
                 {!loading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                       Nenhum adiantamento em aberto encontrado.
                     </TableCell>
                   </TableRow>
@@ -430,6 +431,9 @@ export default function FinancialReview() {
                         <div className="text-xs text-muted-foreground font-mono">{it.card_code}</div>
                       </TableCell>
                       <TableCell className="text-sm">{formatDate(it.doc_date)}</TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {formatMoney(it.doc_total, it.doc_currency)}
+                      </TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatMoney(it.open_amount, it.doc_currency)}
                       </TableCell>
