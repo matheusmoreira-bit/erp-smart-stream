@@ -137,6 +137,54 @@ export function useFinancialReview(companyDb: string | undefined) {
     [companyDb],
   );
 
+  const autoLinkBatch = useCallback(
+    async (
+      params:
+        | {
+            mode: "advance-to-invoices";
+            docType: AdvanceDocType;
+            docEntry: number;
+            cardCode: string;
+            invoices: Array<{ docEntry: number; amount?: number }>;
+          }
+        | {
+            mode: "invoice-to-advances";
+            invoiceDocEntry: number;
+            cardCode: string;
+            advances: Array<{ docType: AdvanceDocType; docEntry: number; amount?: number }>;
+          },
+    ) => {
+      if (!companyDb) throw new Error("Empresa não selecionada");
+      const payload: Record<string, unknown> = {
+        action: "auto-link-batch",
+        company_db: companyDb,
+        mode: params.mode,
+        card_code: params.cardCode,
+      };
+      if (params.mode === "advance-to-invoices") {
+        payload.doc_type = params.docType;
+        payload.doc_entry = params.docEntry;
+        payload.invoices = params.invoices.map((i) => ({ doc_entry: i.docEntry, amount: i.amount }));
+      } else {
+        payload.invoice_doc_entry = params.invoiceDocEntry;
+        payload.advances = params.advances.map((a) => ({
+          doc_type: a.docType,
+          doc_entry: a.docEntry,
+          amount: a.amount,
+        }));
+      }
+      const r = await call<{
+        ok: true;
+        succeeded: number;
+        failed: number;
+        total_applied: number;
+        results: Array<{ ok: boolean; applied: number; error?: string; pair: unknown }>;
+      }>(payload);
+      return r;
+    },
+    [companyDb],
+  );
+
   return {
     items,
     loading,
@@ -145,6 +193,7 @@ export function useFinancialReview(companyDb: string | undefined) {
     listOpenInvoices,
     cancelPayment,
     autoLink,
+    autoLinkBatch,
     invoicesWithAdv,
     invoicesLoading,
     invoicesError,
