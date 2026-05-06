@@ -431,6 +431,9 @@ export default function FinancialReview() {
                         <div className="text-xs text-muted-foreground font-mono">{it.card_code}</div>
                       </TableCell>
                       <TableCell className="text-sm">{formatDate(it.doc_date)}</TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {formatMoney(it.doc_total, it.doc_currency)}
+                      </TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatMoney(it.open_amount, it.doc_currency)}
                       </TableCell>
