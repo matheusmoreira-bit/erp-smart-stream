@@ -97,6 +97,7 @@ export default function FinancialReview() {
     listOpenInvoices,
     cancelPayment,
     autoLink,
+    autoLinkBatch,
     invoicesWithAdv,
     invoicesLoading,
     invoicesError,
@@ -107,6 +108,7 @@ export default function FinancialReview() {
   const [bpFilter, setBpFilter] = useState<"all" | "supplier" | "customer">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | AdvanceItem["doc_type"]>("all");
   const [selected, setSelected] = useState<AdvanceItem | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithAdvances | null>(null);
   const [activeTab, setActiveTab] = useState<"advances" | "invoices">("advances");
   const [invSearch, setInvSearch] = useState("");
 
