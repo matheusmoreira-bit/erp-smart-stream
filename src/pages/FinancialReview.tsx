@@ -941,10 +941,10 @@ function ReconcileDialog({
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground flex gap-2 items-start">
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
-              Selecione uma nota em aberto deste parceiro e clique em <strong>Vincular</strong>{" "}
-              para que o sistema crie automaticamente o pagamento/reconciliação no SAP que quita
-              o adiantamento contra a NF escolhida (valor aplicado = menor entre o saldo do
-              adiantamento e o saldo da NF).
+              Marque uma ou mais NFs em aberto deste parceiro. O sistema cria{" "}
+              <strong>um único pagamento no SAP</strong> que quita o adiantamento contra todas as
+              NFs selecionadas. O valor é distribuído automaticamente respeitando o saldo de cada
+              NF — você pode sobrescrever por linha.
             </p>
             {loadingInv && (
               <div className="text-sm text-muted-foreground flex items-center gap-2">
@@ -957,47 +957,88 @@ function ReconcileDialog({
               </div>
             )}
             {invoices && invoices.length > 0 && (
-              <div className="max-h-72 overflow-auto border rounded">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Doc</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead className="text-right">Em aberto</TableHead>
-                      <TableHead>Ref.</TableHead>
-                      <TableHead className="text-right">Ação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoices.map((inv) => (
-                      <TableRow key={inv.doc_entry}>
-                        <TableCell className="font-mono text-xs">{inv.doc_num}</TableCell>
-                        <TableCell className="text-sm">{formatDate(inv.doc_date)}</TableCell>
-                        <TableCell className="text-right">
-                          {formatMoney(inv.open_amount, inv.doc_currency)}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {inv.reference || "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            onClick={() => setPreviewInvoice(inv)}
-                            disabled={linkingId !== null}
-                          >
-                            {linkingId === inv.doc_entry ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Link2 className="w-3.5 h-3.5" />
-                            )}
-                            Vincular
-                          </Button>
-                        </TableCell>
+              <>
+                <div className="max-h-72 overflow-auto border rounded">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={selectedInvoiceIds.size === invoices.length && invoices.length > 0}
+                            onCheckedChange={toggleAll}
+                          />
+                        </TableHead>
+                        <TableHead>Doc</TableHead>
+                        <TableHead>Data</TableHead>
+                        <TableHead className="text-right">Em aberto</TableHead>
+                        <TableHead className="text-right w-40">Aplicar</TableHead>
+                        <TableHead>Ref.</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.map((inv) => {
+                        const checked = selectedInvoiceIds.has(inv.doc_entry);
+                        const alloc = plannedAllocations.find((a) => a.inv.doc_entry === inv.doc_entry);
+                        return (
+                          <TableRow key={inv.doc_entry} className={checked ? "bg-primary/5" : ""}>
+                            <TableCell>
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => toggleInvoice(inv.doc_entry)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{inv.doc_num}</TableCell>
+                            <TableCell className="text-sm">{formatDate(inv.doc_date)}</TableCell>
+                            <TableCell className="text-right">
+                              {formatMoney(inv.open_amount, inv.doc_currency)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {checked ? (
+                                <Input
+                                  className="h-8 text-right"
+                                  placeholder={alloc ? alloc.planned.toFixed(2) : ""}
+                                  value={amounts[inv.doc_entry] ?? ""}
+                                  onChange={(e) =>
+                                    setAmounts((a) => ({ ...a, [inv.doc_entry]: e.target.value }))
+                                  }
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {inv.reference || "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-md border p-3 bg-muted/30">
+                  <div className="text-sm">
+                    <div>
+                      <strong>{selectedInvoices.length}</strong> NF(s) · Total a aplicar:{" "}
+                      <strong>{formatMoney(totalPlanned, item.doc_currency)}</strong>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Saldo do adiantamento após:{" "}
+                      <strong>{formatMoney(item.open_amount - totalPlanned, item.doc_currency)}</strong>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleBatchLink}
+                    disabled={selectedInvoices.length === 0 || totalPlanned <= 0 || batchBusy}
+                  >
+                    {batchBusy ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Link2 className="w-4 h-4" />
+                    )}
+                    Vincular {selectedInvoices.length > 0 ? `${selectedInvoices.length} NF(s)` : "selecionadas"}
+                  </Button>
+                </div>
+              </>
             )}
           </div>
         )}
