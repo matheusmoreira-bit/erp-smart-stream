@@ -375,6 +375,7 @@ async function listInvoicesWithAdvances(
   const out: InvoiceWithAdvances[] = [];
 
   // SAP Service Layer URL length is limited — chunk into groups of 25 cards.
+  // Run chunks in parallel (limited concurrency) to avoid the 150s edge timeout.
   async function fetchInvoicesFor(
     cards: string[],
     endpoint: "PurchaseInvoices" | "Invoices",
@@ -383,52 +384,64 @@ async function listInvoicesWithAdvances(
   ) {
     if (cards.length === 0) return;
     const chunkSize = 25;
+    const chunks: string[][] = [];
     for (let i = 0; i < cards.length; i += chunkSize) {
-      const chunk = cards.slice(i, i + chunkSize);
-      const orFilter = chunk.map((c) => `CardCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
-      try {
-        const data = await sapGetAll(
-          creds.baseUrl,
-          cookies,
-          endpoint,
-          {
-            $select: "DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,NumAtCard,CardCode,CardName,DocumentStatus",
-            // Não filtrar por DocumentStatus: NFs podem estar "Fechadas" mas com saldo > 0
-            // (ex.: vinculadas a adiantamentos pendentes). Filtra-se pelo saldo abaixo.
-            $filter: `(${orFilter})`,
-          },
-          5000,
-        );
-        for (const d of data) {
-          const open = (d.DocTotal ?? 0) - (d.PaidToDate ?? 0);
-          if (open <= 0.0001) continue;
-          const bp = bpMap.get(d.CardCode);
-          if (!bp) continue;
-          out.push({
-            doc_entry: d.DocEntry,
-            doc_num: d.DocNum,
-            doc_date: d.DocDate,
-            doc_total: d.DocTotal,
-            paid_to_date: d.PaidToDate ?? 0,
-            open_amount: open,
-            doc_currency: d.DocCurrency,
-            reference: d.NumAtCard,
-            card_code: d.CardCode,
-            card_name: d.CardName || bp.card_name,
-            bp_type: bpType,
-            invoice_kind: invoiceKind,
-            advances_count: bp.count,
-            advances_open_total: bp.total,
-          });
+      chunks.push(cards.slice(i, i + chunkSize));
+    }
+
+    const concurrency = 5;
+    let cursor = 0;
+    async function worker() {
+      while (cursor < chunks.length) {
+        const idx = cursor++;
+        const chunk = chunks[idx];
+        const orFilter = chunk.map((c) => `CardCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
+        try {
+          const data = await sapGetAll(
+            creds.baseUrl,
+            cookies,
+            endpoint,
+            {
+              $select: "DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,NumAtCard,CardCode,CardName,DocumentStatus",
+              // Restringe a NFs em aberto (bost_Open) para reduzir drasticamente o volume.
+              $filter: `DocumentStatus eq 'bost_Open' and (${orFilter})`,
+            },
+            2000,
+          );
+          for (const d of data) {
+            const open = (d.DocTotal ?? 0) - (d.PaidToDate ?? 0);
+            if (open <= 0.0001) continue;
+            const bp = bpMap.get(d.CardCode);
+            if (!bp) continue;
+            out.push({
+              doc_entry: d.DocEntry,
+              doc_num: d.DocNum,
+              doc_date: d.DocDate,
+              doc_total: d.DocTotal,
+              paid_to_date: d.PaidToDate ?? 0,
+              open_amount: open,
+              doc_currency: d.DocCurrency,
+              reference: d.NumAtCard,
+              card_code: d.CardCode,
+              card_name: d.CardName || bp.card_name,
+              bp_type: bpType,
+              invoice_kind: invoiceKind,
+              advances_count: bp.count,
+              advances_open_total: bp.total,
+            });
+          }
+        } catch (e) {
+          console.warn(`${endpoint} chunk err`, e);
         }
-      } catch (e) {
-        console.warn(`${endpoint} chunk err`, e);
       }
     }
+    await Promise.all(Array.from({ length: Math.min(concurrency, chunks.length) }, worker));
   }
 
-  await fetchInvoicesFor(supplierCards, "PurchaseInvoices", "supplier", "PURCHASE");
-  await fetchInvoicesFor(customerCards, "Invoices", "customer", "SALES");
+  await Promise.all([
+    fetchInvoicesFor(supplierCards, "PurchaseInvoices", "supplier", "PURCHASE"),
+    fetchInvoicesFor(customerCards, "Invoices", "customer", "SALES"),
+  ]);
 
   return out;
 }
