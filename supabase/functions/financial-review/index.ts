@@ -190,9 +190,7 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // cancelados, fazemos:
   //
   //   1) Buscar pagamentos não cancelados (Cancelled eq 'tNO')
-  //   2) Excluir pagamentos completamente reconciliados/aplicados:
-  //      - DocumentStatus eq 'bost_Open'  (mantém só os abertos)
-  //   3) Calcular o saldo somando os meios de pagamento do header
+  //   2) Calcular o saldo somando os meios de pagamento do header
   //      (CashSum + TransferSum + CheckAccountSum + CreditSum + BoeSum)
   //      e subtraindo o que já foi aplicado em invoices/down payments
   //      (somatório de PaymentInvoices[].SumApplied + PaymentAccounts[]).
@@ -216,9 +214,8 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   try {
     const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
       $select:
-        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,DocumentStatus,PaymentInvoices",
-      $filter:
-        "DocType eq 'rSupplier' and Cancelled eq 'tNO' and DocumentStatus eq 'bost_Open'",
+        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,PaymentInvoices",
+      $filter: "DocType eq 'rSupplier' and Cancelled eq 'tNO'",
     });
     for (const d of op) {
       const { docTotal, applied, open } = calcOpen(d);
@@ -247,9 +244,8 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   try {
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
       $select:
-        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,DocumentStatus,PaymentInvoices",
-      $filter:
-        "DocType eq 'rCustomer' and Cancelled eq 'tNO' and DocumentStatus eq 'bost_Open'",
+        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,PaymentInvoices",
+      $filter: "DocType eq 'rCustomer' and Cancelled eq 'tNO'",
     });
     for (const d of ip) {
       const { docTotal, applied, open } = calcOpen(d);
