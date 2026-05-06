@@ -202,7 +202,17 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // o que já foi consumido em PaymentInvoices.
 
   function calcOpen(d: any): { docTotal: number; applied: number; open: number } {
-    const docTotal = Number(d.DocTotal ?? 0);
+    const checks = Array.isArray(d.PaymentChecks) ? d.PaymentChecks : [];
+    const cards = Array.isArray(d.PaymentCreditCards) ? d.PaymentCreditCards : [];
+    const paymentTotal =
+      Number(d.CashSum ?? 0) +
+      Number(d.TransferSum ?? 0) +
+      Number(d.CheckSum ?? 0) +
+      Number(d.CreditSum ?? 0) +
+      Number(d.BillOfExchangeAmount ?? d.BoeSum ?? 0) +
+      checks.reduce((sum: number, c: any) => sum + Number(c.CheckSum ?? 0), 0) +
+      cards.reduce((sum: number, c: any) => sum + Number(c.CreditSum ?? 0), 0);
+    const docTotal = Number(d.DocTotal ?? d.DocTotalSy ?? paymentTotal ?? 0);
     const invoices: any[] = Array.isArray(d.PaymentInvoices) ? d.PaymentInvoices : [];
     const applied = invoices.reduce(
       (sum, pi) => sum + Number(pi.SumApplied ?? pi.AppliedFC ?? pi.AppliedSys ?? 0),
@@ -215,8 +225,6 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // 1) Adiantamentos / pagamentos a fornecedores em aberto (OVPM)
   try {
     const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
-      $select:
-        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,PaymentInvoices",
       $filter: "Cancelled eq 'tNO'",
     });
     for (const d of op) {
@@ -245,8 +253,6 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // 2) Adiantamentos / pagamentos de clientes em aberto (ORCT)
   try {
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
-      $select:
-        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,PaymentInvoices",
       $filter: "Cancelled eq 'tNO'",
     });
     for (const d of ip) {
