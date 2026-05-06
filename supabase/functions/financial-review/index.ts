@@ -202,19 +202,20 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // o que já foi consumido em PaymentInvoices.
 
   const paymentSelect =
-    "DocEntry,DocNum,CardCode,CardName,DocDate,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,CashSum,TransferSum,CheckSum,CreditSum,BillOfExchangeAmount,CashSumFC,TransferSumFC,CheckSumFC,CreditSumFC,BillOfExchangeAmountFC,PaymentInvoices";
+    "DocEntry,DocNum,CardCode,CardName,DocDate,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,CashSum,TransferSum,TransferRealAmount,BillOfExchangeAmount,PaymentInvoices,PaymentChecks,PaymentCreditCards,PaymentAccounts";
 
   function calcOpen(d: any): { docTotal: number; applied: number; open: number } {
     const checks = Array.isArray(d.PaymentChecks) ? d.PaymentChecks : [];
     const cards = Array.isArray(d.PaymentCreditCards) ? d.PaymentCreditCards : [];
+    const accounts = Array.isArray(d.PaymentAccounts) ? d.PaymentAccounts : [];
     const paymentTotal =
       Number(d.CashSum ?? 0) +
       Number(d.TransferSum ?? 0) +
-      Number(d.CheckSum ?? 0) +
-      Number(d.CreditSum ?? 0) +
+      Number(d.TransferRealAmount ?? 0) +
       Number(d.BillOfExchangeAmount ?? d.BoeSum ?? 0) +
       checks.reduce((sum: number, c: any) => sum + Number(c.CheckSum ?? 0), 0) +
-      cards.reduce((sum: number, c: any) => sum + Number(c.CreditSum ?? 0), 0);
+      cards.reduce((sum: number, c: any) => sum + Number(c.CreditSum ?? c.CreditCardAmount ?? 0), 0) +
+      accounts.reduce((sum: number, a: any) => sum + Number(a.SumPaid ?? a.GrossAmount ?? 0), 0);
     const docTotal = Number(d.DocTotal ?? d.DocTotalSy ?? paymentTotal ?? 0);
     const invoices: any[] = Array.isArray(d.PaymentInvoices) ? d.PaymentInvoices : [];
     const applied = invoices.reduce(
