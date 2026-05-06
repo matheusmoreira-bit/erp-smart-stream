@@ -457,7 +457,7 @@ export default function FinancialReview() {
               advances={items}
               search={invSearch}
               onSearchChange={setInvSearch}
-              onSelectAdvance={(adv) => setSelected(adv)}
+              onSelectInvoice={(inv) => setSelectedInvoice(inv)}
             />
           </TabsContent>
         </Tabs>
@@ -507,9 +507,44 @@ export default function FinancialReview() {
           });
           return r;
         }}
+        onAutoLinkBatch={async (params) => {
+          const r = await autoLinkBatch(params);
+          logAuditAction({
+            action: "auto_link_batch",
+            entity_type: "financial_review",
+            entity_id: params.mode === "advance-to-invoices" ? String(params.docEntry) : String(params.invoiceDocEntry),
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { mode: params.mode, succeeded: r.succeeded, failed: r.failed, total_applied: r.total_applied },
+          });
+          return r;
+        }}
         onDone={() => {
           setSelected(null);
           refresh();
+        }}
+      />
+
+      <InvoiceReconcileDialog
+        invoice={selectedInvoice}
+        advances={items}
+        onClose={() => setSelectedInvoice(null)}
+        onAutoLinkBatch={async (params) => {
+          const r = await autoLinkBatch(params);
+          logAuditAction({
+            action: "auto_link_batch",
+            entity_type: "financial_review",
+            entity_id: String(params.mode === "invoice-to-advances" ? params.invoiceDocEntry : ""),
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { mode: params.mode, succeeded: r.succeeded, failed: r.failed, total_applied: r.total_applied },
+          });
+          return r;
+        }}
+        onDone={() => {
+          setSelectedInvoice(null);
+          refresh();
+          refreshInvoicesWithAdvances();
         }}
       />
     </div>
