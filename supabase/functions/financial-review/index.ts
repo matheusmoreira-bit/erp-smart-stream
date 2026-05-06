@@ -185,12 +185,13 @@ interface AdvanceItem {
 async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceItem[]> {
   const items: AdvanceItem[] = [];
 
-  // 1) AP DownPayment Invoices (PurchaseDownPayments) — open
-  // DocumentStatus 'bost_Open' (open) and DocType 'dDocument_Items' or 'dDocument_Service'
+  // 1) AP DownPayment Invoices (PurchaseDownPayments)
+  // Inclui adiantamentos com status Aberto OU Fechado, desde que ainda tenham saldo
+  // (DocTotal − PaidToDate > 0). No SAP, adiantamentos podem aparecer como "Fechado"
+  // mas com valor pago = 0 (boleto/PIX gerado, ainda não pago) — esses precisam aparecer.
   try {
     const apDp = await sapGetAll(creds.baseUrl, cookies, "PurchaseDownPayments", {
       $select: "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,PaidToDate,DocCurrency,Comments,NumAtCard,DocumentStatus",
-      $filter: "DocumentStatus eq 'bost_Open'",
     });
     for (const d of apDp) {
       const open = (d.DocTotal ?? 0) - (d.PaidToDate ?? 0);
@@ -216,10 +217,10 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   }
 
   // 2) AR DownPayment Invoices (DownPayments)
+  // Mesma lógica: inclui Aberto e Fechado com saldo > 0.
   try {
     const arDp = await sapGetAll(creds.baseUrl, cookies, "DownPayments", {
       $select: "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,PaidToDate,DocCurrency,Comments,NumAtCard,DocumentStatus",
-      $filter: "DocumentStatus eq 'bost_Open'",
     });
     for (const d of arDp) {
       const open = (d.DocTotal ?? 0) - (d.PaidToDate ?? 0);
