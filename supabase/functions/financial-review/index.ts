@@ -73,7 +73,7 @@ async function sapGetAll(
   maxItems = 5000,
 ): Promise<any[]> {
   const all: any[] = [];
-  const pageSize = 100;
+  const pageSize = Math.max(1, Math.min(100, maxItems));
   let url: string | null = (() => {
     const qp = new URLSearchParams(params);
     qp.set("$top", String(pageSize));
@@ -109,9 +109,9 @@ async function sapGetAll(
     } else {
       url = null;
     }
-    if (all.length > maxItems) break;
+    if (all.length >= maxItems) break;
   }
-  return all;
+  return all.slice(0, maxItems);
 }
 
 async function sapPost(
@@ -189,10 +189,10 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // diretamente. Para identificar adiantamentos com saldo disponível e não
   // cancelados, fazemos:
   //
-  //   1) Buscar pagamentos não cancelados (Cancelled eq 'tNO')
-  //   2) Excluir pagamentos completamente reconciliados/aplicados:
-  //      - DocumentStatus eq 'bost_Open'  (mantém só os abertos)
-  //   3) Calcular o saldo somando os meios de pagamento do header
+  //   1) Buscar pagamentos não cancelados (Cancelled eq 'tNO') direto dos
+  //      endpoints equivalentes a OVPM/ORCT. Não filtramos por DocType no OData
+  //      porque instalações SAP podem expor enums diferentes do valor esperado.
+  //   2) Calcular o saldo somando os meios de pagamento do header
   //      (CashSum + TransferSum + CheckAccountSum + CreditSum + BoeSum)
   //      e subtraindo o que já foi aplicado em invoices/down payments
   //      (somatório de PaymentInvoices[].SumApplied + PaymentAccounts[]).
@@ -201,8 +201,22 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // o próprio DocTotal. Para pagamentos parcialmente aplicados, subtraímos
   // o que já foi consumido em PaymentInvoices.
 
+  const paymentSelect =
+    "DocEntry,DocNum,CardCode,CardName,DocDate,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,CashSum,TransferSum,TransferRealAmount,BillOfExchangeAmount,PaymentInvoices,PaymentChecks,PaymentCreditCards,PaymentAccounts";
+
   function calcOpen(d: any): { docTotal: number; applied: number; open: number } {
-    const docTotal = Number(d.DocTotal ?? 0);
+    const checks = Array.isArray(d.PaymentChecks) ? d.PaymentChecks : [];
+    const cards = Array.isArray(d.PaymentCreditCards) ? d.PaymentCreditCards : [];
+    const accounts = Array.isArray(d.PaymentAccounts) ? d.PaymentAccounts : [];
+    const paymentTotal =
+      Number(d.CashSum ?? 0) +
+      Number(d.TransferSum ?? 0) +
+      Number(d.TransferRealAmount ?? 0) +
+      Number(d.BillOfExchangeAmount ?? d.BoeSum ?? 0) +
+      checks.reduce((sum: number, c: any) => sum + Number(c.CheckSum ?? 0), 0) +
+      cards.reduce((sum: number, c: any) => sum + Number(c.CreditSum ?? c.CreditCardAmount ?? 0), 0) +
+      accounts.reduce((sum: number, a: any) => sum + Number(a.SumPaid ?? a.GrossAmount ?? 0), 0);
+    const docTotal = Number(d.DocTotal ?? d.DocTotalSy ?? paymentTotal ?? 0);
     const invoices: any[] = Array.isArray(d.PaymentInvoices) ? d.PaymentInvoices : [];
     const applied = invoices.reduce(
       (sum, pi) => sum + Number(pi.SumApplied ?? pi.AppliedFC ?? pi.AppliedSys ?? 0),
@@ -215,11 +229,9 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // 1) Adiantamentos / pagamentos a fornecedores em aberto (OVPM)
   try {
     const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
-      $select:
-        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,DocumentStatus,PaymentInvoices",
-      $filter:
-        "DocType eq 'rSupplier' and Cancelled eq 'tNO' and DocumentStatus eq 'bost_Open'",
-    });
+      $select: paymentSelect,
+      $filter: "Cancelled eq 'tNO'",
+    }, 200);
     for (const d of op) {
       const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;
@@ -246,11 +258,9 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
   // 2) Adiantamentos / pagamentos de clientes em aberto (ORCT)
   try {
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
-      $select:
-        "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,JournalRemarks,Reference1,DocType,Cancelled,DocumentStatus,PaymentInvoices",
-      $filter:
-        "DocType eq 'rCustomer' and Cancelled eq 'tNO' and DocumentStatus eq 'bost_Open'",
-    });
+      $select: paymentSelect,
+      $filter: "Cancelled eq 'tNO'",
+    }, 200);
     for (const d of ip) {
       const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;
