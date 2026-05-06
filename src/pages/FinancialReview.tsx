@@ -39,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -97,6 +98,7 @@ export default function FinancialReview() {
     listOpenInvoices,
     cancelPayment,
     autoLink,
+    autoLinkBatch,
     invoicesWithAdv,
     invoicesLoading,
     invoicesError,
@@ -107,6 +109,7 @@ export default function FinancialReview() {
   const [bpFilter, setBpFilter] = useState<"all" | "supplier" | "customer">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | AdvanceItem["doc_type"]>("all");
   const [selected, setSelected] = useState<AdvanceItem | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithAdvances | null>(null);
   const [activeTab, setActiveTab] = useState<"advances" | "invoices">("advances");
   const [invSearch, setInvSearch] = useState("");
 
@@ -455,7 +458,7 @@ export default function FinancialReview() {
               advances={items}
               search={invSearch}
               onSearchChange={setInvSearch}
-              onSelectAdvance={(adv) => setSelected(adv)}
+              onSelectInvoice={(inv) => setSelectedInvoice(inv)}
             />
           </TabsContent>
         </Tabs>
@@ -505,9 +508,44 @@ export default function FinancialReview() {
           });
           return r;
         }}
+        onAutoLinkBatch={async (params) => {
+          const r = await autoLinkBatch(params);
+          logAuditAction({
+            action: "auto_link_batch",
+            entity_type: "financial_review",
+            entity_id: String(params.docEntry),
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { mode: params.mode, succeeded: r.succeeded, failed: r.failed, total_applied: r.total_applied },
+          });
+          return r;
+        }}
         onDone={() => {
           setSelected(null);
           refresh();
+        }}
+      />
+
+      <InvoiceReconcileDialog
+        invoice={selectedInvoice}
+        advances={items}
+        onClose={() => setSelectedInvoice(null)}
+        onAutoLinkBatch={async (params) => {
+          const r = await autoLinkBatch(params);
+          logAuditAction({
+            action: "auto_link_batch",
+            entity_type: "financial_review",
+            entity_id: String(params.mode === "invoice-to-advances" ? params.invoiceDocEntry : ""),
+            actor_email: userEmail,
+            company_db: companyDb,
+            details: { mode: params.mode, succeeded: r.succeeded, failed: r.failed, total_applied: r.total_applied },
+          });
+          return r;
+        }}
+        onDone={() => {
+          setSelectedInvoice(null);
+          refresh();
+          refreshInvoicesWithAdvances();
         }}
       />
     </div>
@@ -529,7 +567,7 @@ function InvoicesWithAdvancesTab({
   advances,
   search,
   onSearchChange,
-  onSelectAdvance,
+  onSelectInvoice,
 }: {
   loading: boolean;
   error: string | null;
@@ -537,7 +575,7 @@ function InvoicesWithAdvancesTab({
   advances: AdvanceItem[];
   search: string;
   onSearchChange: (v: string) => void;
-  onSelectAdvance: (adv: AdvanceItem) => void;
+  onSelectInvoice: (inv: InvoiceWithAdvances) => void;
 }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -558,22 +596,8 @@ function InvoicesWithAdvancesTab({
     return { count: filtered.length, open, adv, bps };
   }, [filtered]);
 
-  const advancesByBp = useMemo(() => {
-    const m = new Map<string, AdvanceItem[]>();
-    for (const a of advances) {
-      const arr = m.get(a.card_code) || [];
-      arr.push(a);
-      m.set(a.card_code, arr);
-    }
-    return m;
-  }, [advances]);
-
   const handleReconcile = (inv: InvoiceWithAdvances) => {
-    const list = (advancesByBp.get(inv.card_code) || []).filter((a) => a.bp_type === inv.bp_type);
-    if (list.length === 0) return;
-    // Pick the largest open advance to start; user can change inside the dialog
-    const best = [...list].sort((a, b) => b.open_amount - a.open_amount)[0];
-    onSelectAdvance(best);
+    onSelectInvoice(inv);
   };
 
   return (
@@ -712,6 +736,7 @@ function ReconcileDialog({
   onListInvoices,
   onCancel,
   onAutoLink,
+  onAutoLinkBatch,
   onDone,
 }: {
   item: AdvanceItem | null;
@@ -725,6 +750,13 @@ function ReconcileDialog({
     cardCode: string;
     amount?: number;
   }) => Promise<{ ok: true; applied: number }>;
+  onAutoLinkBatch: (params: {
+    mode: "advance-to-invoices";
+    docType: AdvanceItem["doc_type"];
+    docEntry: number;
+    cardCode: string;
+    invoices: Array<{ docEntry: number; amount?: number }>;
+  }) => Promise<{ ok: true; succeeded: number; failed: number; total_applied: number; results: Array<{ ok: boolean; applied: number; error?: string }> }>;
   onDone: () => void;
 }) {
   const [tab, setTab] = useState<"link" | "internal" | "cancel" | "guide">("guide");
@@ -733,11 +765,16 @@ function ReconcileDialog({
   const [busy, setBusy] = useState(false);
   const [linkingId, setLinkingId] = useState<number | null>(null);
   const [previewInvoice, setPreviewInvoice] = useState<OpenInvoice | null>(null);
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<number>>(new Set());
+  const [amounts, setAmounts] = useState<Record<number, string>>({});
+  const [batchBusy, setBatchBusy] = useState(false);
 
   useEffect(() => {
     setTab("guide");
     setInvoices(null);
     setPreviewInvoice(null);
+    setSelectedInvoiceIds(new Set());
+    setAmounts({});
   }, [item]);
 
   if (!item) return null;
@@ -773,6 +810,74 @@ function ReconcileDialog({
       });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const toggleInvoice = (id: number) => {
+    setSelectedInvoiceIds((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleAll = () => {
+    if (!invoices) return;
+    if (selectedInvoiceIds.size === invoices.length) setSelectedInvoiceIds(new Set());
+    else setSelectedInvoiceIds(new Set(invoices.map((i) => i.doc_entry)));
+  };
+
+  const selectedInvoices = (invoices || []).filter((i) => selectedInvoiceIds.has(i.doc_entry));
+
+  let _remaining = item.open_amount;
+  const plannedAllocations: Array<{ inv: OpenInvoice; planned: number }> = [];
+  for (const inv of selectedInvoices) {
+    const manual = amounts[inv.doc_entry];
+    const manualNum = manual != null && manual !== "" ? Number(String(manual).replace(",", ".")) : NaN;
+    const planned = !Number.isNaN(manualNum) && manualNum > 0
+      ? Math.min(manualNum, inv.open_amount, _remaining)
+      : Math.min(inv.open_amount, _remaining);
+    plannedAllocations.push({ inv, planned });
+    _remaining -= planned;
+    if (_remaining < 0) _remaining = 0;
+  }
+  const totalPlanned = plannedAllocations.reduce((s, a) => s + a.planned, 0);
+
+  const handleBatchLink = async () => {
+    if (selectedInvoices.length === 0) return;
+    setBatchBusy(true);
+    try {
+      const r = await onAutoLinkBatch({
+        mode: "advance-to-invoices",
+        docType: item.doc_type,
+        docEntry: item.doc_entry,
+        cardCode: item.card_code,
+        invoices: plannedAllocations
+          .filter((a) => a.planned > 0)
+          .map((a) => ({ docEntry: a.inv.doc_entry, amount: a.planned })),
+      });
+      if (r.failed === 0) {
+        toast({
+          title: "Vinculação em lote concluída",
+          description: `${r.succeeded} NF(s) vinculadas · Total ${formatMoney(r.total_applied, item.doc_currency)}.`,
+        });
+      } else {
+        toast({
+          title: `Vinculação parcial (${r.succeeded}/${r.succeeded + r.failed})`,
+          description: `${r.failed} falha(s). Total aplicado ${formatMoney(r.total_applied, item.doc_currency)}.`,
+          variant: r.succeeded > 0 ? "default" : "destructive",
+        });
+      }
+      onDone();
+    } catch (e) {
+      toast({
+        title: "Falha ao vincular em lote",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setBatchBusy(false);
     }
   };
 
@@ -836,10 +941,10 @@ function ReconcileDialog({
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground flex gap-2 items-start">
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
-              Selecione uma nota em aberto deste parceiro e clique em <strong>Vincular</strong>{" "}
-              para que o sistema crie automaticamente o pagamento/reconciliação no SAP que quita
-              o adiantamento contra a NF escolhida (valor aplicado = menor entre o saldo do
-              adiantamento e o saldo da NF).
+              Marque uma ou mais NFs em aberto deste parceiro. O sistema cria{" "}
+              <strong>um único pagamento no SAP</strong> que quita o adiantamento contra todas as
+              NFs selecionadas. O valor é distribuído automaticamente respeitando o saldo de cada
+              NF — você pode sobrescrever por linha.
             </p>
             {loadingInv && (
               <div className="text-sm text-muted-foreground flex items-center gap-2">
@@ -852,47 +957,88 @@ function ReconcileDialog({
               </div>
             )}
             {invoices && invoices.length > 0 && (
-              <div className="max-h-72 overflow-auto border rounded">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Doc</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead className="text-right">Em aberto</TableHead>
-                      <TableHead>Ref.</TableHead>
-                      <TableHead className="text-right">Ação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoices.map((inv) => (
-                      <TableRow key={inv.doc_entry}>
-                        <TableCell className="font-mono text-xs">{inv.doc_num}</TableCell>
-                        <TableCell className="text-sm">{formatDate(inv.doc_date)}</TableCell>
-                        <TableCell className="text-right">
-                          {formatMoney(inv.open_amount, inv.doc_currency)}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {inv.reference || "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            onClick={() => setPreviewInvoice(inv)}
-                            disabled={linkingId !== null}
-                          >
-                            {linkingId === inv.doc_entry ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Link2 className="w-3.5 h-3.5" />
-                            )}
-                            Vincular
-                          </Button>
-                        </TableCell>
+              <>
+                <div className="max-h-72 overflow-auto border rounded">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={selectedInvoiceIds.size === invoices.length && invoices.length > 0}
+                            onCheckedChange={toggleAll}
+                          />
+                        </TableHead>
+                        <TableHead>Doc</TableHead>
+                        <TableHead>Data</TableHead>
+                        <TableHead className="text-right">Em aberto</TableHead>
+                        <TableHead className="text-right w-40">Aplicar</TableHead>
+                        <TableHead>Ref.</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.map((inv) => {
+                        const checked = selectedInvoiceIds.has(inv.doc_entry);
+                        const alloc = plannedAllocations.find((a) => a.inv.doc_entry === inv.doc_entry);
+                        return (
+                          <TableRow key={inv.doc_entry} className={checked ? "bg-primary/5" : ""}>
+                            <TableCell>
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => toggleInvoice(inv.doc_entry)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{inv.doc_num}</TableCell>
+                            <TableCell className="text-sm">{formatDate(inv.doc_date)}</TableCell>
+                            <TableCell className="text-right">
+                              {formatMoney(inv.open_amount, inv.doc_currency)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {checked ? (
+                                <Input
+                                  className="h-8 text-right"
+                                  placeholder={alloc ? alloc.planned.toFixed(2) : ""}
+                                  value={amounts[inv.doc_entry] ?? ""}
+                                  onChange={(e) =>
+                                    setAmounts((a) => ({ ...a, [inv.doc_entry]: e.target.value }))
+                                  }
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {inv.reference || "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-md border p-3 bg-muted/30">
+                  <div className="text-sm">
+                    <div>
+                      <strong>{selectedInvoices.length}</strong> NF(s) · Total a aplicar:{" "}
+                      <strong>{formatMoney(totalPlanned, item.doc_currency)}</strong>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Saldo do adiantamento após:{" "}
+                      <strong>{formatMoney(item.open_amount - totalPlanned, item.doc_currency)}</strong>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleBatchLink}
+                    disabled={selectedInvoices.length === 0 || totalPlanned <= 0 || batchBusy}
+                  >
+                    {batchBusy ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Link2 className="w-4 h-4" />
+                    )}
+                    Vincular {selectedInvoices.length > 0 ? `${selectedInvoices.length} NF(s)` : "selecionadas"}
+                  </Button>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -1209,6 +1355,231 @@ function LinkPreviewDialog({
               </>
             )}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Invoice-driven reconciliation: 1 NF -> N ADTs (multi-select advances)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function InvoiceReconcileDialog({
+  invoice,
+  advances,
+  onClose,
+  onAutoLinkBatch,
+  onDone,
+}: {
+  invoice: InvoiceWithAdvances | null;
+  advances: AdvanceItem[];
+  onClose: () => void;
+  onAutoLinkBatch: (params: {
+    mode: "invoice-to-advances";
+    invoiceDocEntry: number;
+    cardCode: string;
+    advances: Array<{ docType: AdvanceDocType; docEntry: number; amount?: number }>;
+  }) => Promise<{ ok: true; succeeded: number; failed: number; total_applied: number; results: Array<{ ok: boolean; applied: number; error?: string }> }>;
+  onDone: () => void;
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [amounts, setAmounts] = useState<Record<number, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setAmounts({});
+  }, [invoice]);
+
+  if (!invoice) return null;
+
+  const candidateAdvances = advances.filter(
+    (a) => a.card_code === invoice.card_code && a.bp_type === invoice.bp_type,
+  );
+
+  const toggle = (id: number) => {
+    setSelectedIds((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+  const toggleAll = () => {
+    if (selectedIds.size === candidateAdvances.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(candidateAdvances.map((a) => a.doc_entry)));
+  };
+
+  const selected = candidateAdvances.filter((a) => selectedIds.has(a.doc_entry));
+
+  let invRemaining = invoice.open_amount;
+  const planned: Array<{ adv: AdvanceItem; planned: number }> = [];
+  for (const adv of selected) {
+    const manual = amounts[adv.doc_entry];
+    const manualNum = manual != null && manual !== "" ? Number(String(manual).replace(",", ".")) : NaN;
+    const p = !Number.isNaN(manualNum) && manualNum > 0
+      ? Math.min(manualNum, adv.open_amount, invRemaining)
+      : Math.min(adv.open_amount, invRemaining);
+    planned.push({ adv, planned: p });
+    invRemaining -= p;
+    if (invRemaining < 0) invRemaining = 0;
+  }
+  const totalPlanned = planned.reduce((s, a) => s + a.planned, 0);
+
+  const handleBatch = async () => {
+    if (selected.length === 0) return;
+    setBusy(true);
+    try {
+      const r = await onAutoLinkBatch({
+        mode: "invoice-to-advances",
+        invoiceDocEntry: invoice.doc_entry,
+        cardCode: invoice.card_code,
+        advances: planned
+          .filter((p) => p.planned > 0)
+          .map((p) => ({ docType: p.adv.doc_type, docEntry: p.adv.doc_entry, amount: p.planned })),
+      });
+      if (r.failed === 0) {
+        toast({
+          title: "Vinculação em lote concluída",
+          description: `${r.succeeded} adiantamento(s) vinculado(s) · Total ${formatMoney(r.total_applied, invoice.doc_currency)}.`,
+        });
+      } else {
+        toast({
+          title: `Vinculação parcial (${r.succeeded}/${r.succeeded + r.failed})`,
+          description: `${r.failed} falha(s). Total aplicado ${formatMoney(r.total_applied, invoice.doc_currency)}.`,
+          variant: r.succeeded > 0 ? "default" : "destructive",
+        });
+      }
+      onDone();
+    } catch (e) {
+      toast({
+        title: "Falha ao vincular em lote",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Validation: cannot mix DownPayments (ADVANCE_*) with on-account (PAYMENT_OA_*) — they need different SAP ops
+  const hasDP = selected.some((a) => a.doc_type === "ADVANCE_AP" || a.doc_type === "ADVANCE_AR");
+  const hasOA = selected.some((a) => a.doc_type === "PAYMENT_OA_OUT" || a.doc_type === "PAYMENT_OA_IN");
+  const mixedWarning = hasDP && hasOA;
+
+  return (
+    <Dialog open={!!invoice} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{invoice.card_name}</DialogTitle>
+          <DialogDescription>
+            {invoice.invoice_kind === "PURCHASE" ? "NF Entrada" : "NF Saída"} · Doc {invoice.doc_num} ·{" "}
+            <span className="font-semibold">
+              {formatMoney(invoice.open_amount, invoice.doc_currency)} em aberto
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <p className="text-sm text-muted-foreground flex gap-2 items-start">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          Marque um ou mais adiantamentos deste parceiro para quitar esta NF em uma única operação.
+          O valor é distribuído automaticamente respeitando o saldo de cada adiantamento.
+        </p>
+
+        {candidateAdvances.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-6 text-center">
+            Nenhum adiantamento disponível para este parceiro.
+          </div>
+        ) : (
+          <>
+            <div className="max-h-72 overflow-auto border rounded">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={selectedIds.size === candidateAdvances.length && candidateAdvances.length > 0}
+                        onCheckedChange={toggleAll}
+                      />
+                    </TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Doc</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead className="text-right">Em aberto</TableHead>
+                    <TableHead className="text-right w-40">Aplicar</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {candidateAdvances.map((adv) => {
+                    const checked = selectedIds.has(adv.doc_entry);
+                    const alloc = planned.find((p) => p.adv.doc_entry === adv.doc_entry);
+                    return (
+                      <TableRow key={`${adv.doc_type}-${adv.doc_entry}`} className={checked ? "bg-primary/5" : ""}>
+                        <TableCell>
+                          <Checkbox checked={checked} onCheckedChange={() => toggle(adv.doc_entry)} />
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={TYPE_VARIANT[adv.doc_type]} className="whitespace-nowrap text-[10px]">
+                            {TYPE_LABEL[adv.doc_type]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{adv.doc_num ?? adv.doc_entry}</TableCell>
+                        <TableCell className="text-sm">{formatDate(adv.doc_date)}</TableCell>
+                        <TableCell className="text-right">
+                          {formatMoney(adv.open_amount, adv.doc_currency)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {checked ? (
+                            <Input
+                              className="h-8 text-right"
+                              placeholder={alloc ? alloc.planned.toFixed(2) : ""}
+                              value={amounts[adv.doc_entry] ?? ""}
+                              onChange={(e) => setAmounts((a) => ({ ...a, [adv.doc_entry]: e.target.value }))}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {mixedWarning && (
+              <div className="text-xs text-destructive flex gap-1 items-start">
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                Não é possível misturar adiantamentos (NF) com pagamentos on-account na mesma operação.
+                Eles serão processados separadamente.
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 rounded-md border p-3 bg-muted/30">
+              <div className="text-sm">
+                <div>
+                  <strong>{selected.length}</strong> adiant. · Total a aplicar:{" "}
+                  <strong>{formatMoney(totalPlanned, invoice.doc_currency)}</strong>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Saldo da NF após:{" "}
+                  <strong>{formatMoney(invoice.open_amount - totalPlanned, invoice.doc_currency)}</strong>
+                </div>
+              </div>
+              <Button
+                onClick={handleBatch}
+                disabled={selected.length === 0 || totalPlanned <= 0 || busy}
+              >
+                {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                Vincular {selected.length > 0 ? `${selected.length} adiant.` : "selecionados"}
+              </Button>
+            </div>
+          </>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
