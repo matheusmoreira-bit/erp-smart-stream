@@ -261,7 +261,8 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
     const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
       $select: paymentSelect,
       $filter: "Cancelled eq 'tNO'",
-    }, 200);
+      $orderby: "DocEntry desc",
+    }, 5000);
     for (const d of ip) {
       const { docTotal, applied, open } = calcOpen(d);
       if (open <= 0.0001) continue;
