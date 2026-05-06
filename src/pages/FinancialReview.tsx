@@ -513,7 +513,7 @@ export default function FinancialReview() {
           logAuditAction({
             action: "auto_link_batch",
             entity_type: "financial_review",
-            entity_id: params.mode === "advance-to-invoices" ? String(params.docEntry) : String(params.invoiceDocEntry),
+            entity_id: String(params.docEntry),
             actor_email: userEmail,
             company_db: companyDb,
             details: { mode: params.mode, succeeded: r.succeeded, failed: r.failed, total_applied: r.total_applied },
