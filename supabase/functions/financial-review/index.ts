@@ -656,6 +656,292 @@ Deno.serve(async (req) => {
       return json({ ok: true, applied: result.applied, data: result.data });
     }
 
+    if (action === "auto-link-batch") {
+      // Body shape (one of):
+      //  { mode: "advance-to-invoices", doc_type, doc_entry, card_code, invoices: [{ doc_entry, amount? }] }
+      //  { mode: "invoice-to-advances", invoice_kind: "PURCHASE"|"SALES", invoice_doc_entry, card_code, advances: [{ doc_type, doc_entry, amount? }] }
+      const mode = String(body.mode || "");
+      const cardCode = String(body.card_code || "");
+      if (!cardCode) return json({ error: "card_code é obrigatório" }, 400);
+
+      // Normalize to a flat list of { advance, invoiceKind, invoiceDocEntry, amount? } pairs
+      // grouped by AP vs AR (one VendorPayments / IncomingPayments per group).
+      type Pair = {
+        advanceDocType: string; // ADVANCE_AP | ADVANCE_AR | PAYMENT_OA_OUT | PAYMENT_OA_IN
+        advanceDocEntry: number;
+        invoiceDocEntry: number;
+        amount?: number;
+      };
+      const pairs: Pair[] = [];
+
+      if (mode === "advance-to-invoices") {
+        const docType = String(body.doc_type || "");
+        const docEntry = Number(body.doc_entry);
+        const invoices = Array.isArray(body.invoices) ? body.invoices : [];
+        if (!docType || !docEntry || invoices.length === 0) {
+          return json({ error: "doc_type, doc_entry e invoices são obrigatórios" }, 400);
+        }
+        for (const inv of invoices) {
+          pairs.push({
+            advanceDocType: docType,
+            advanceDocEntry: docEntry,
+            invoiceDocEntry: Number(inv.doc_entry),
+            amount: inv.amount != null ? Number(inv.amount) : undefined,
+          });
+        }
+      } else if (mode === "invoice-to-advances") {
+        const invoiceDocEntry = Number(body.invoice_doc_entry);
+        const advances = Array.isArray(body.advances) ? body.advances : [];
+        if (!invoiceDocEntry || advances.length === 0) {
+          return json({ error: "invoice_doc_entry e advances são obrigatórios" }, 400);
+        }
+        for (const a of advances) {
+          pairs.push({
+            advanceDocType: String(a.doc_type),
+            advanceDocEntry: Number(a.doc_entry),
+            invoiceDocEntry,
+            amount: a.amount != null ? Number(a.amount) : undefined,
+          });
+        }
+      } else {
+        return json({ error: "mode inválido (use advance-to-invoices ou invoice-to-advances)" }, 400);
+      }
+
+      // Validate consistency: all advances must be either AP-side or AR-side, and same kind family
+      const isAPDoc = (t: string) => t === "ADVANCE_AP" || t === "PAYMENT_OA_OUT";
+      const allAP = pairs.every((p) => isAPDoc(p.advanceDocType));
+      const allAR = pairs.every((p) => !isAPDoc(p.advanceDocType));
+      if (!allAP && !allAR) {
+        return json({ error: "Não é possível misturar adiantamentos de fornecedor e cliente" }, 400);
+      }
+      const isAP = allAP;
+
+      // Separate adiantamentos (DownPayments) and pagamentos on-account
+      const advancePairs = pairs.filter(
+        (p) => p.advanceDocType === "ADVANCE_AP" || p.advanceDocType === "ADVANCE_AR",
+      );
+      const oaPairs = pairs.filter(
+        (p) => p.advanceDocType === "PAYMENT_OA_OUT" || p.advanceDocType === "PAYMENT_OA_IN",
+      );
+
+      const result = await withSession(creds, async (cookies) => {
+        const results: Array<{ ok: boolean; applied: number; error?: string; pair: Pair }> = [];
+
+        // ── Group 1: DownPayments → single VendorPayments/IncomingPayments per advance
+        // (cannot mix multiple DPs of different docs into one payment safely; we group by
+        //  unique (advance) when "advance-to-invoices" mode, and by unique (invoice) when
+        //  "invoice-to-advances" mode — see strategy below.)
+        const invoiceEndpoint = isAP ? "PurchaseInvoices" : "Invoices";
+        const dpEndpoint = isAP ? "PurchaseDownPayments" : "DownPayments";
+        const invType = isAP ? "it_PurchaseInvoice" : "it_Invoice";
+        const dpType = isAP ? "it_PurchaseDownPayment" : "it_DownPayment";
+        const payEndpoint = isAP ? "VendorPayments" : "IncomingPayments";
+
+        // Helper: fetch open amounts
+        async function fetchInvoiceOpen(de: number) {
+          const r = await fetch(
+            `${creds.baseUrl}/${invoiceEndpoint}(${de})?$select=DocEntry,DocNum,DocTotal,PaidToDate,DocCurrency`,
+            { headers: { Cookie: cookies } },
+          );
+          if (!r.ok) return null;
+          const j: any = await r.json();
+          return {
+            docEntry: j.DocEntry,
+            open: (j.DocTotal ?? 0) - (j.PaidToDate ?? 0),
+            currency: j.DocCurrency,
+          };
+        }
+        async function fetchDpOpen(de: number) {
+          const r = await fetch(
+            `${creds.baseUrl}/${dpEndpoint}(${de})?$select=DocEntry,DocTotal,PaidToDate,DocCurrency`,
+            { headers: { Cookie: cookies } },
+          );
+          if (!r.ok) return null;
+          const j: any = await r.json();
+          return {
+            docEntry: j.DocEntry,
+            open: (j.DocTotal ?? 0) - (j.PaidToDate ?? 0),
+            currency: j.DocCurrency,
+          };
+        }
+
+        if (advancePairs.length > 0) {
+          if (mode === "advance-to-invoices") {
+            // 1 DP -> N NFs : criar 1 pagamento com várias linhas (NFs +) e 1 linha (DP -)
+            const dpDocEntry = advancePairs[0].advanceDocEntry; // todas iguais nesse modo
+            const dp = await fetchDpOpen(dpDocEntry);
+            if (!dp) {
+              for (const p of advancePairs) results.push({ ok: false, applied: 0, error: "Adiantamento não encontrado", pair: p });
+            } else {
+              let dpRemaining = dp.open;
+              const lines: Array<Record<string, unknown>> = [];
+              const planned: Array<{ pair: Pair; applied: number }> = [];
+              let docCurrency = dp.currency;
+              for (const p of advancePairs) {
+                if (dpRemaining <= 0.0001) {
+                  results.push({ ok: false, applied: 0, error: "Saldo do adiantamento esgotado", pair: p });
+                  continue;
+                }
+                const inv = await fetchInvoiceOpen(p.invoiceDocEntry);
+                if (!inv) {
+                  results.push({ ok: false, applied: 0, error: "NF não encontrada", pair: p });
+                  continue;
+                }
+                docCurrency = inv.currency || docCurrency;
+                const apply = p.amount != null
+                  ? Math.min(p.amount, dpRemaining, inv.open)
+                  : Math.min(dpRemaining, inv.open);
+                if (apply <= 0.0001) {
+                  results.push({ ok: false, applied: 0, error: "Sem saldo aplicável", pair: p });
+                  continue;
+                }
+                lines.push({ DocEntry: p.invoiceDocEntry, SumApplied: apply, InvoiceType: invType });
+                dpRemaining -= apply;
+                planned.push({ pair: p, applied: apply });
+              }
+              if (lines.length > 0) {
+                const totalApplied = planned.reduce((s, x) => s + x.applied, 0);
+                lines.push({ DocEntry: dpDocEntry, SumApplied: -totalApplied, InvoiceType: dpType });
+                const r = await sapPost(creds.baseUrl, cookies, payEndpoint, {
+                  CardCode: cardCode,
+                  DocCurrency: docCurrency,
+                  JournalRemarks: `Auto-link batch DP ${dpDocEntry} -> ${planned.length} NFs`,
+                  PaymentInvoices: lines,
+                });
+                if (r.ok) {
+                  for (const x of planned) results.push({ ok: true, applied: x.applied, pair: x.pair });
+                } else {
+                  for (const x of planned) results.push({ ok: false, applied: 0, error: r.error, pair: x.pair });
+                }
+              }
+            }
+          } else {
+            // 1 NF -> N DPs : criar 1 pagamento com 1 linha NF (+) e várias linhas DP (-)
+            const invoiceDocEntry = advancePairs[0].invoiceDocEntry;
+            const inv = await fetchInvoiceOpen(invoiceDocEntry);
+            if (!inv) {
+              for (const p of advancePairs) results.push({ ok: false, applied: 0, error: "NF não encontrada", pair: p });
+            } else {
+              let invRemaining = inv.open;
+              const lines: Array<Record<string, unknown>> = [];
+              const planned: Array<{ pair: Pair; applied: number }> = [];
+              for (const p of advancePairs) {
+                if (invRemaining <= 0.0001) {
+                  results.push({ ok: false, applied: 0, error: "Saldo da NF esgotado", pair: p });
+                  continue;
+                }
+                const dp = await fetchDpOpen(p.advanceDocEntry);
+                if (!dp) {
+                  results.push({ ok: false, applied: 0, error: "Adiantamento não encontrado", pair: p });
+                  continue;
+                }
+                const apply = p.amount != null
+                  ? Math.min(p.amount, dp.open, invRemaining)
+                  : Math.min(dp.open, invRemaining);
+                if (apply <= 0.0001) {
+                  results.push({ ok: false, applied: 0, error: "Sem saldo aplicável", pair: p });
+                  continue;
+                }
+                lines.push({ DocEntry: p.advanceDocEntry, SumApplied: -apply, InvoiceType: dpType });
+                invRemaining -= apply;
+                planned.push({ pair: p, applied: apply });
+              }
+              if (lines.length > 0) {
+                const totalApplied = planned.reduce((s, x) => s + x.applied, 0);
+                lines.unshift({ DocEntry: invoiceDocEntry, SumApplied: totalApplied, InvoiceType: invType });
+                const r = await sapPost(creds.baseUrl, cookies, payEndpoint, {
+                  CardCode: cardCode,
+                  DocCurrency: inv.currency,
+                  JournalRemarks: `Auto-link batch ${planned.length} DPs -> NF ${invoiceDocEntry}`,
+                  PaymentInvoices: lines,
+                });
+                if (r.ok) {
+                  for (const x of planned) results.push({ ok: true, applied: x.applied, pair: x.pair });
+                } else {
+                  for (const x of planned) results.push({ ok: false, applied: 0, error: r.error, pair: x.pair });
+                }
+              }
+            }
+          }
+        }
+
+        // ── Group 2: PAYMENT_OA — internal reconciliation (multi-line). Process one by one,
+        //     reusing the single-link logic semantics, but issued sequentially.
+        for (const p of oaPairs) {
+          try {
+            const isAPp = p.advanceDocType === "PAYMENT_OA_OUT";
+            const invEp = isAPp ? "PurchaseInvoices" : "Invoices";
+            const payObj = isAPp ? "VendorPayments" : "IncomingPayments";
+            const payJe = await fetch(
+              `${creds.baseUrl}/${payObj}(${p.advanceDocEntry})?$select=DocEntry,JournalEntry`,
+              { headers: { Cookie: cookies } },
+            );
+            const invJe = await fetch(
+              `${creds.baseUrl}/${invEp}(${p.invoiceDocEntry})?$select=DocEntry,JournalEntry,DocTotal,PaidToDate`,
+              { headers: { Cookie: cookies } },
+            );
+            if (!payJe.ok || !invJe.ok) {
+              results.push({ ok: false, applied: 0, error: "Pagamento ou NF não encontrado", pair: p });
+              continue;
+            }
+            const payDoc: any = await payJe.json();
+            const invDoc: any = await invJe.json();
+            const payTransId = payDoc.JournalEntry;
+            const invTransId = invDoc.JournalEntry;
+            if (!payTransId || !invTransId) {
+              results.push({ ok: false, applied: 0, error: "JE não resolvido", pair: p });
+              continue;
+            }
+            async function bpLine(transId: number) {
+              const r = await fetch(
+                `${creds.baseUrl}/JournalEntries(${transId})?$select=JdtNum,JournalEntryLines`,
+                { headers: { Cookie: cookies } },
+              );
+              if (!r.ok) return null;
+              const j: any = await r.json();
+              const lines: any[] = j.JournalEntryLines || [];
+              const bp = lines.find((l) => l.ShortName === cardCode);
+              if (!bp) return null;
+              const amt = (bp.Debit ?? 0) - (bp.Credit ?? 0);
+              return { line: bp.Line_ID ?? bp.LineNum ?? 0, amount: Math.abs(amt) };
+            }
+            const payBp = await bpLine(payTransId);
+            const invBp = await bpLine(invTransId);
+            if (!payBp || !invBp) {
+              results.push({ ok: false, applied: 0, error: "Linha do BP não encontrada", pair: p });
+              continue;
+            }
+            const apply = p.amount != null
+              ? Math.min(p.amount, payBp.amount, invBp.amount)
+              : Math.min(payBp.amount, invBp.amount);
+            if (apply <= 0.0001) {
+              results.push({ ok: false, applied: 0, error: "Sem saldo", pair: p });
+              continue;
+            }
+            const r = await sapPost(creds.baseUrl, cookies, "InternalReconciliationsService_Reconcile", {
+              BusinessPartner: { CardCode: cardCode },
+              ReconcileType: "rt_BPInternal",
+              InternalReconciliationRows: [
+                { TransId: payTransId, TransRowId: payBp.line, ReconcileAmount: apply },
+                { TransId: invTransId, TransRowId: invBp.line, ReconcileAmount: apply },
+              ],
+            });
+            if (r.ok) results.push({ ok: true, applied: apply, pair: p });
+            else results.push({ ok: false, applied: 0, error: r.error, pair: p });
+          } catch (e) {
+            results.push({ ok: false, applied: 0, error: e instanceof Error ? e.message : String(e), pair: p });
+          }
+        }
+
+        return { ok: true as const, results };
+      });
+
+      const succeeded = result.results.filter((r) => r.ok).length;
+      const failed = result.results.filter((r) => !r.ok).length;
+      const totalApplied = result.results.reduce((s, r) => s + (r.applied || 0), 0);
+      return json({ ok: true, succeeded, failed, total_applied: totalApplied, results: result.results });
+    }
+
     if (action === "internal-reconcile") {
       // Internal reconciliation between BP transactions
       // body: { card_code, lines: [{ TransId, TransRowId, ReconcileAmount }] }
