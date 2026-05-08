@@ -303,11 +303,20 @@ export default function UsersPage() {
                       </span>
                     </div>
 
-                    <div className="w-24 flex items-center justify-end gap-1">
+                    <div className="w-32 flex items-center justify-end gap-1">
                       {isActing ? (
                         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                       ) : (
                         <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Editar telefone"
+                            onClick={() => setPhoneUser(user)}
+                          >
+                            <Phone className="w-4 h-4 text-primary" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
