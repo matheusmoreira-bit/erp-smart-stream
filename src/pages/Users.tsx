@@ -416,6 +416,17 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {phoneUser && (
+        <EditPhoneDialog
+          open={!!phoneUser}
+          onOpenChange={(o) => { if (!o) setPhoneUser(null); }}
+          userCode={phoneUser.UserCode}
+          userName={phoneUser.UserName || phoneUser.UserCode}
+          currentPhone={phones[phoneUser.UserCode]?.phone}
+          onSave={(phone, source) => upsertPhone(phoneUser.UserCode, phone, source)}
+        />
+      )}
     </div>
   );
 }
