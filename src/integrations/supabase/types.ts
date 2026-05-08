@@ -1094,6 +1094,36 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_login_alerts: {
+        Row: {
+          company_db: string
+          failure_key: string
+          id: string
+          payload: Json
+          sent_at: string
+          user_code: string
+          whatsapp_to: string
+        }
+        Insert: {
+          company_db: string
+          failure_key: string
+          id?: string
+          payload?: Json
+          sent_at?: string
+          user_code: string
+          whatsapp_to: string
+        }
+        Update: {
+          company_db?: string
+          failure_key?: string
+          id?: string
+          payload?: Json
+          sent_at?: string
+          user_code?: string
+          whatsapp_to?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
