@@ -13,6 +13,8 @@ import type { SapUser } from "@/lib/cache-repository";
 import CreateUserDialog from "@/components/CreateUserDialog";
 import { useSap } from "@/contexts/SapContext";
 import { listSapTargetCompanies, changePasswordInCompanies } from "@/lib/sap-multi-password";
+import { useUserPhones } from "@/hooks/useUserPhones";
+import EditPhoneDialog from "@/components/EditPhoneDialog";
 import { toast } from "sonner";
 
 type ConfirmAction = {
