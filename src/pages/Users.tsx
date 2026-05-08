@@ -249,7 +249,7 @@ export default function UsersPage() {
             <div className="grid grid-cols-[1fr_auto_auto] items-center px-6 py-3 border-b border-border bg-muted/30">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Usuário</span>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-48 text-center">Status</span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-24 text-right">Ações</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-32 text-right">Ações</span>
             </div>
 
             {filteredUsers.length === 0 ? (
