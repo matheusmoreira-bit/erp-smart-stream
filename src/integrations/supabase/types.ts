@@ -1073,6 +1073,36 @@ export type Database = {
           },
         ]
       }
+      user_phones: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          phone: string
+          source: string
+          updated_at: string
+          user_code: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          phone: string
+          source?: string
+          updated_at?: string
+          user_code: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          phone?: string
+          source?: string
+          updated_at?: string
+          user_code?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1091,6 +1121,36 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_approval_alerts: {
+        Row: {
+          approval_request_id: number
+          approver_code: string
+          company_db: string
+          id: string
+          payload: Json
+          sent_at: string
+          whatsapp_to: string
+        }
+        Insert: {
+          approval_request_id: number
+          approver_code: string
+          company_db: string
+          id?: string
+          payload?: Json
+          sent_at?: string
+          whatsapp_to: string
+        }
+        Update: {
+          approval_request_id?: number
+          approver_code?: string
+          company_db?: string
+          id?: string
+          payload?: Json
+          sent_at?: string
+          whatsapp_to?: string
         }
         Relationships: []
       }

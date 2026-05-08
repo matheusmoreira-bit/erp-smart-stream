@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import type { SapUser } from "@/lib/cache-repository";
 import CreateUserDialog from "@/components/CreateUserDialog";
 import { useSap } from "@/contexts/SapContext";
 import { listSapTargetCompanies, changePasswordInCompanies } from "@/lib/sap-multi-password";
+import { useUserPhones } from "@/hooks/useUserPhones";
+import EditPhoneDialog from "@/components/EditPhoneDialog";
 import { toast } from "sonner";
 
 type ConfirmAction = {
@@ -49,6 +51,8 @@ export default function UsersPage() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<string>("recorrentes");
+  const { phones, upsertPhone } = useUserPhones();
+  const [phoneUser, setPhoneUser] = useState<SapUser | null>(null);
 
   // Multi-company password reset state
   const [pwdUser, setPwdUser] = useState<SapUser | null>(null);
@@ -245,7 +249,7 @@ export default function UsersPage() {
             <div className="grid grid-cols-[1fr_auto_auto] items-center px-6 py-3 border-b border-border bg-muted/30">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Usuário</span>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-48 text-center">Status</span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-24 text-right">Ações</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-32 text-right">Ações</span>
             </div>
 
             {filteredUsers.length === 0 ? (
@@ -275,6 +279,10 @@ export default function UsersPage() {
                         <p className="text-sm text-muted-foreground truncate">
                           E-mail: {user.eMail || "Sem e-mail"}
                         </p>
+                        <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          {phones[user.UserCode]?.phone || <span className="italic">Sem telefone</span>}
+                        </p>
                       </div>
                     </div>
 
@@ -295,11 +303,20 @@ export default function UsersPage() {
                       </span>
                     </div>
 
-                    <div className="w-24 flex items-center justify-end gap-1">
+                    <div className="w-32 flex items-center justify-end gap-1">
                       {isActing ? (
                         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                       ) : (
                         <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Editar telefone"
+                            onClick={() => setPhoneUser(user)}
+                          >
+                            <Phone className="w-4 h-4 text-primary" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -399,6 +416,17 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {phoneUser && (
+        <EditPhoneDialog
+          open={!!phoneUser}
+          onOpenChange={(o) => { if (!o) setPhoneUser(null); }}
+          userCode={phoneUser.UserCode}
+          userName={phoneUser.UserName || phoneUser.UserCode}
+          currentPhone={phones[phoneUser.UserCode]?.phone}
+          onSave={(phone, source) => upsertPhone(phoneUser.UserCode, phone, source)}
+        />
+      )}
     </div>
   );
 }
