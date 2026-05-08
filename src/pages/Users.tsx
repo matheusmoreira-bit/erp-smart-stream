@@ -279,6 +279,10 @@ export default function UsersPage() {
                         <p className="text-sm text-muted-foreground truncate">
                           E-mail: {user.eMail || "Sem e-mail"}
                         </p>
+                        <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          {phones[user.UserCode]?.phone || <span className="italic">Sem telefone</span>}
+                        </p>
                       </div>
                     </div>
 
