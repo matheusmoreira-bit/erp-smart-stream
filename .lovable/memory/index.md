@@ -4,5 +4,5 @@
 
 ## Memories
 - [Users screen actions](mem://preferences/users-screen-actions.md) — Keep the Users screen action buttons minimal and icon-based instead of large filled buttons.
-- [Permission System](mem://features/permissions.md) — Unified permission groups with module-level access control, per-company user assignments, backoffice admin = all access
-- [Notification Center](mem://features/notifications.md) — In-app notification bell with realtime updates, notification preferences per category (in_app + email), helper to create notifications
+- [OMIE open modules](mem://features/omie-open-modules.md) — Temporary rule: OMIE companies must keep all modules unlocked for all users, without permission-level control.
+- [WhatsApp notifications](mem://features/whatsapp-notifications.md) — Cron-based WhatsApp pipes (login failures, pending approvals) with per-user phone book imported from SAP MobilePhone or manual.
