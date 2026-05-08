@@ -51,6 +51,8 @@ export default function UsersPage() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<string>("recorrentes");
+  const { phones, upsertPhone } = useUserPhones();
+  const [phoneUser, setPhoneUser] = useState<SapUser | null>(null);
 
   // Multi-company password reset state
   const [pwdUser, setPwdUser] = useState<SapUser | null>(null);
