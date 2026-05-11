@@ -181,7 +181,7 @@ export default function NotificationsPage() {
                         />
                       </div>
                     </div>
-                r);
+                );
                 })}
               </div>
             </div>
