@@ -1,0 +1,2 @@
+UPDATE public.system_credentials SET credential_value='690b77c428700a761988a2c6', updated_at=now() WHERE system_name='jumpcloud' AND credential_key='org_id';
+UPDATE public.system_credentials SET credential_value='jca_MKGNNohBN2fQGcb4ypzFfnUvndJ6djyexjDI', updated_at=now() WHERE system_name='jumpcloud' AND credential_key='api_key';
