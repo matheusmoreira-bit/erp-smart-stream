@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const SMTP_HOST = "smtp.gmail.com";
-const SMTP_PORT = 587;
+const SMTP_PORT = 465;
 const SMTP_USER = "system@anagaming.com.br";
 
 Deno.serve(async (req) => {
