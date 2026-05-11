@@ -33,7 +33,7 @@ interface ApprovalRow {
 interface SapUserMini {
   UserCode: string;
   eMail?: string;
-  MobilePhone?: string;
+  MobilePhoneNumber?: string;
 }
 
 function normalizeBaseUrl(url: string): string {
@@ -84,7 +84,7 @@ async function sapFetchAllUsers(
   let skip = 0;
   const pageSize = 100;
   for (let page = 0; page < 50; page++) {
-    const url = `${baseUrl}/Users?$select=UserCode,eMail,MobilePhone&$top=${pageSize}&$skip=${skip}`;
+    const url = `${baseUrl}/Users?$select=UserCode,eMail,MobilePhoneNumber&$top=${pageSize}&$skip=${skip}`;
     const resp = await fetch(url, {
       headers: {
         Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}`,
@@ -223,7 +223,7 @@ async function processCompany(
       const sapUser = email ? usersByEmail.get(email) : undefined;
       const approverCode = sapUser?.UserCode || (ap.Aprovador || "").trim();
       const phoneSrc = approverCode ? manualPhones.get(approverCode) : undefined;
-      const phone = normalizePhone(phoneSrc || sapUser?.MobilePhone || "");
+      const phone = normalizePhone(phoneSrc || sapUser?.MobilePhoneNumber || "");
 
       if (!phone) {
         result.no_phone++;

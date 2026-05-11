@@ -51,13 +51,13 @@ export default function EditPhoneDialog({
       const safe = userCode.replace(/'/g, "''");
       const res = await sapQuery(
         session,
-        `Users?$filter=UserCode eq '${safe}'&$select=UserCode,MobilePhone`,
+        `Users?$filter=UserCode eq '${safe}'&$select=UserCode,MobilePhoneNumber`,
         undefined,
         false,
       );
       const rows =
-        (res as { data?: { value?: Array<{ MobilePhone?: string }> } }).data?.value ?? [];
-      const mobile = rows[0]?.MobilePhone?.trim();
+        (res as { data?: { value?: Array<{ MobilePhoneNumber?: string }> } }).data?.value ?? [];
+      const mobile = rows[0]?.MobilePhoneNumber?.trim();
       if (!mobile) {
         toast.warning("SAP não tem telefone celular cadastrado para este usuário");
       } else {
@@ -114,7 +114,7 @@ export default function EditPhoneDialog({
                 size="sm"
                 onClick={handleImportFromSap}
                 disabled={importing || saving}
-                title="Importar do SAP (MobilePhone)"
+                title="Importar do SAP (MobilePhoneNumber)"
               >
                 {importing ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
