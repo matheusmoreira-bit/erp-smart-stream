@@ -121,12 +121,13 @@ export function useNotificationPreferences() {
   const updatePreference = useCallback(
     async (category: string, field: "in_app" | "email" | "whatsapp" | "slack", value: boolean) => {
       if (!identifier) return;
+      const row: Record<string, unknown> = {
+        user_identifier: identifier,
+        category,
+        [field]: value,
+      };
       await supabase.from("notification_preferences").upsert(
-        {
-          user_identifier: identifier,
-          category,
-          [field]: value,
-        },
+        row as never,
         { onConflict: "user_identifier,category" }
       );
       await fetchPreferences();
