@@ -137,15 +137,17 @@ export default function NotificationsPage() {
               </p>
 
               <div className="space-y-0 divide-y divide-border">
-                <div className="grid grid-cols-[1fr_80px_80px] gap-4 pb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <div className="grid grid-cols-[1fr_70px_70px_80px_70px] gap-3 pb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   <span>Categoria</span>
                   <span className="text-center">In-App</span>
                   <span className="text-center">E-mail</span>
+                  <span className="text-center">WhatsApp</span>
+                  <span className="text-center">Slack</span>
                 </div>
                 {NOTIFICATION_CATEGORIES.map((cat) => {
                   const pref = getPreference(cat.key);
                   return (
-                    <div key={cat.key} className="grid grid-cols-[1fr_80px_80px] gap-4 py-4 items-center">
+                    <div key={cat.key} className="grid grid-cols-[1fr_70px_70px_80px_70px] gap-3 py-4 items-center">
                       <div className="flex items-center gap-2">
                         <span>{categoryIcon[cat.key] || "🔔"}</span>
                         <span className="text-sm font-medium text-foreground">{cat.label}</span>
@@ -164,8 +166,22 @@ export default function NotificationsPage() {
                           disabled={prefLoading}
                         />
                       </div>
+                      <div className="flex justify-center">
+                        <Switch
+                          checked={pref.whatsapp}
+                          onCheckedChange={(val) => updatePreference(cat.key, "whatsapp", val)}
+                          disabled={prefLoading}
+                        />
+                      </div>
+                      <div className="flex justify-center">
+                        <Switch
+                          checked={pref.slack}
+                          onCheckedChange={(val) => updatePreference(cat.key, "slack", val)}
+                          disabled={prefLoading}
+                        />
+                      </div>
                     </div>
-                  );
+                r);
                 })}
               </div>
             </div>

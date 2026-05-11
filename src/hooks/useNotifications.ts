@@ -21,6 +21,8 @@ export interface NotificationPreference {
   category: string;
   in_app: boolean;
   email: boolean;
+  whatsapp: boolean;
+  slack: boolean;
 }
 
 export const NOTIFICATION_CATEGORIES = [
@@ -117,14 +119,13 @@ export function useNotificationPreferences() {
   }, [fetchPreferences]);
 
   const updatePreference = useCallback(
-    async (category: string, field: "in_app" | "email", value: boolean) => {
+    async (category: string, field: "in_app" | "email" | "whatsapp" | "slack", value: boolean) => {
       if (!identifier) return;
       await supabase.from("notification_preferences").upsert(
         {
           user_identifier: identifier,
           category,
           [field]: value,
-          ...(field === "in_app" ? {} : {}),
         },
         { onConflict: "user_identifier,category" }
       );
@@ -138,6 +139,8 @@ export function useNotificationPreferences() {
       return preferences.find((p) => p.category === category) || {
         in_app: true,
         email: false,
+        whatsapp: true,
+        slack: false,
         category,
         user_identifier: identifier,
         id: "",
