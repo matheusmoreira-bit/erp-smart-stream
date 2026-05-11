@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
       connection: {
         hostname: SMTP_HOST,
         port: SMTP_PORT,
-        tls: false,
+        tls: true,
         auth: { username: SMTP_USER, password },
       },
     });
