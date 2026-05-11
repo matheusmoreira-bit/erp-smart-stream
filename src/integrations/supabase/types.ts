@@ -516,8 +516,10 @@ export type Database = {
           email: boolean
           id: string
           in_app: boolean
+          slack: boolean
           updated_at: string
           user_identifier: string
+          whatsapp: boolean
         }
         Insert: {
           category: string
@@ -525,8 +527,10 @@ export type Database = {
           email?: boolean
           id?: string
           in_app?: boolean
+          slack?: boolean
           updated_at?: string
           user_identifier: string
+          whatsapp?: boolean
         }
         Update: {
           category?: string
@@ -534,8 +538,10 @@ export type Database = {
           email?: boolean
           id?: string
           in_app?: boolean
+          slack?: boolean
           updated_at?: string
           user_identifier?: string
+          whatsapp?: boolean
         }
         Relationships: []
       }
