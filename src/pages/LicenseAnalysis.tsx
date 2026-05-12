@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Loader2, Search, Award, TrendingDown, TrendingUp, DollarSign, Users, AlertCircle, Pencil } from "lucide-react";
+import { ArrowLeft, RefreshCw, Loader2, Search, Award, TrendingDown, TrendingUp, DollarSign, Users, AlertCircle, Pencil, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -72,6 +72,9 @@ export default function LicenseAnalysisPage() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <Button variant="outline" size="sm" onClick={() => navigate("/users/license-import")}>
+              <Upload className="w-4 h-4 mr-2" />Importar CSV
+            </Button>
             <Dialog open={pricingOpen} onOpenChange={(o) => { setPricingOpen(o); if (o) { setProPrice(String(pricing.PRO ?? 0)); setCrmPrice(String(pricing.CRM ?? 0)); } }}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm"><DollarSign className="w-4 h-4 mr-2" />Custos</Button>

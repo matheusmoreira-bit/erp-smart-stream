@@ -23,6 +23,7 @@ import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
 import IdpSync from "./pages/IdpSync.tsx";
 import LicenseAnalysis from "./pages/LicenseAnalysis.tsx";
+import LicenseImport from "./pages/LicenseImport.tsx";
 import Synapse from "./pages/Synapse.tsx";
 import AuditLog from "./pages/AuditLog.tsx";
 import Notifications from "./pages/Notifications.tsx";
@@ -62,6 +63,7 @@ const App = () => (
               <Route path="/users/activity" element={<UserActivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />
               <Route path="/users/license-analysis" element={<LicenseAnalysis />} />
+              <Route path="/users/license-import" element={<LicenseImport />} />
               <Route path="/synapse" element={<Synapse />} />
               <Route path="/audit-log" element={<AuditLog />} />
               <Route path="/notifications" element={<Notifications />} />
