@@ -47,9 +47,10 @@ function userKey(companyDb: string, userCode: string) {
 }
 
 function normalizeCachedUser(companyDb: string, user: SapUser | Record<string, unknown>): UserLicense {
-  const userCode = String(user.UserCode ?? user.user_code ?? user.USER_CODE ?? "").trim();
-  const userName = String(user.UserName ?? user.u_name ?? user.U_NAME ?? userCode).trim();
-  const locked = user.Locked ?? user.locked ?? user.LOCKED;
+  const row = user as Record<string, unknown>;
+  const userCode = String(row.UserCode ?? row.user_code ?? row.USER_CODE ?? "").trim();
+  const userName = String(row.UserName ?? row.u_name ?? row.U_NAME ?? userCode).trim();
+  const locked = row.Locked ?? row.locked ?? row.LOCKED;
   return {
     id: `cache:${companyDb}:${userCode}`,
     company_db: normalizeDbName(companyDb) || companyDb,
