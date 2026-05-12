@@ -28,6 +28,8 @@ export default function LicenseAnalysisPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("with_license");
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<string>("default");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const { rows, pricing, loading, refresh, updateLicenseType, updatePricing } = useLicenseAnalysis(period);
 
   const [proPrice, setProPrice] = useState<string>("");
