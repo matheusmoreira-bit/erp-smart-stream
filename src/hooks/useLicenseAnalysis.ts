@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { useUserActivity, isFailedLogin } from "@/hooks/useUserActivity";
-import type { SapUser } from "@/lib/cache-repository";
+import { authFetch } from "@/lib/auth-fetch";
 
 export interface UserLicense {
   id: string;
@@ -30,36 +30,11 @@ export interface LicenseRow extends UserLicense {
   status: "subutilizada" | "saudavel" | "intensa" | "sem-licenca";
 }
 
-interface SapCacheRow {
-  company_db: string;
-  data: SapUser[] | Record<string, unknown>[] | null;
-}
-
 function normalizeDbName(db?: string | null): string {
   return (db || "")
     .trim()
     .replace(/^SBO_TESTE_\d+_/i, "SBO_")
     .replace(/^tst_/i, "");
-}
-
-function userKey(companyDb: string, userCode: string) {
-  return `${normalizeDbName(companyDb).toLowerCase()}::${userCode.toLowerCase()}`;
-}
-
-function normalizeCachedUser(companyDb: string, user: SapUser | Record<string, unknown>): UserLicense {
-  const row = user as Record<string, unknown>;
-  const userCode = String(row.UserCode ?? row.user_code ?? row.USER_CODE ?? "").trim();
-  const userName = String(row.UserName ?? row.u_name ?? row.U_NAME ?? userCode).trim();
-  const locked = row.Locked ?? row.locked ?? row.LOCKED;
-  return {
-    id: `cache:${companyDb}:${userCode}`,
-    company_db: normalizeDbName(companyDb) || companyDb,
-    user_code: userCode,
-    user_name: userName || userCode,
-    is_locked: locked === "tYES" || locked === "Y" || locked === true || locked === 1 || locked === "1",
-    has_license: false,
-    license_type: null,
-  };
 }
 
 function parseDate(d: string): Date | null {
@@ -80,47 +55,18 @@ export function useLicenseAnalysis(periodDays: number) {
 
   const load = async () => {
     setLoading(true);
-    const companyCandidates = Array.from(new Set([companyDb, normalizedDb].filter(Boolean) as string[]));
-
-    let cacheQuery = supabase
-      .from("sap_cache")
-      .select("company_db,data,updated_at")
-      .eq("cache_key", "users")
-      .order("updated_at", { ascending: false });
-    if (companyCandidates.length > 0) cacheQuery = cacheQuery.in("company_db", companyCandidates);
-    const { data: cacheRows } = await cacheQuery.limit(companyCandidates.length > 0 ? 5 : 20);
-
-    const cachedCompanies = ((cacheRows || []) as unknown as SapCacheRow[]).map((row) => normalizeDbName(row.company_db));
-    const licenseCompanies = Array.from(new Set([...companyCandidates, ...cachedCompanies].filter(Boolean)));
-
-    let licenseQuery = supabase.from("user_licenses").select("*").order("user_name");
-    if (licenseCompanies.length > 0) licenseQuery = licenseQuery.in("company_db", licenseCompanies);
-    const { data: lic } = await licenseQuery;
-
-    const { data: price } = await supabase.from("license_pricing").select("*");
-
-    const licenseByUser = new Map<string, UserLicense>();
-    for (const l of (lic || []) as UserLicense[]) {
-      licenseByUser.set(userKey(l.company_db, l.user_code), l);
+    const resp = await authFetch(`license-analysis${companyDb ? `?company_db=${encodeURIComponent(companyDb)}` : ""}`);
+    const data = await resp.json();
+    if (!resp.ok || data?.error) {
+      console.error("Erro ao carregar análise de licenças:", data?.error || resp.status);
+      setLicenses([]);
+      setLoading(false);
+      return;
     }
-
-    const cacheBasedRows = ((cacheRows || []) as unknown as SapCacheRow[]).flatMap((cacheRow) => {
-      const users = Array.isArray(cacheRow.data) ? cacheRow.data : [];
-      return users
-        .map((u) => normalizeCachedUser(cacheRow.company_db, u))
-        .filter((u) => u.user_code)
-        .map((cached) => {
-          const license = licenseByUser.get(userKey(cached.company_db, cached.user_code));
-          return license
-            ? { ...license, user_name: cached.user_name, is_locked: cached.is_locked }
-            : cached;
-        });
-    });
-
-    setLicenses(cacheBasedRows.length > 0 ? cacheBasedRows : ((lic || []) as UserLicense[]));
-    if (price) {
+    setLicenses((data.users || []) as UserLicense[]);
+    if (data.pricing) {
       const m: Record<string, number> = {};
-      for (const p of price as LicensePricing[]) m[p.license_type] = Number(p.monthly_cost);
+      for (const p of data.pricing as LicensePricing[]) m[p.license_type] = Number(p.monthly_cost);
       setPricing(m);
     }
     setLoading(false);
