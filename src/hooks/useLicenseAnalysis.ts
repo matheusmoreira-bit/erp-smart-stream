@@ -144,8 +144,22 @@ export function useLicenseAnalysis(periodDays: number) {
     const { error } = row.id.startsWith("cache:")
       ? await supabase.from("user_licenses").upsert(payload, { onConflict: "company_db,user_code" })
       : await supabase.from("user_licenses").update({ license_type, has_license }).eq("id", row.id);
-    if (!error) await load();
-    return !error;
+    if (error) {
+      console.error("updateLicenseType error:", error);
+      toast.error(`Falha ao atualizar licença: ${error.message}`);
+      return false;
+    }
+    // Atualização otimista local — replica para todos com mesmo user_code
+    setLicenses((prev) =>
+      prev.map((l) =>
+        l.user_code.toLowerCase() === row.user_code.toLowerCase()
+          ? { ...l, license_type, has_license }
+          : l,
+      ),
+    );
+    toast.success("Licença atualizada em todas as empresas");
+    await load();
+    return true;
   };
 
   const updatePricing = async (license_type: "PRO" | "CRM", monthly_cost: number) => {
