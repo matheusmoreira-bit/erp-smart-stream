@@ -61,6 +61,7 @@ const App = () => (
               <Route path="/financial-review" element={<FinancialReview />} />
               <Route path="/users/activity" element={<UserActivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />
+              <Route path="/users/license-analysis" element={<LicenseAnalysis />} />
               <Route path="/synapse" element={<Synapse />} />
               <Route path="/audit-log" element={<AuditLog />} />
               <Route path="/notifications" element={<Notifications />} />
