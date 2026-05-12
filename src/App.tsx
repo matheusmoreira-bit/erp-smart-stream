@@ -71,6 +71,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
+          <GlobalAiChat />
         </SapProvider>
       </TooltipProvider>
     </QueryClientProvider>
