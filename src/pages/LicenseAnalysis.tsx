@@ -204,7 +204,7 @@ export default function LicenseAnalysisPage() {
                       <th onClick={() => toggleSort("perLogin")} className="px-4 py-3 text-right cursor-pointer select-none hover:text-foreground">R$/login<SortIcon k="perLogin" /></th>
                       <th onClick={() => toggleSort("perHour")} className="px-4 py-3 text-right cursor-pointer select-none hover:text-foreground">R$/hora<SortIcon k="perHour" /></th>
                       <th onClick={() => toggleSort("status")} className="px-4 py-3 text-left cursor-pointer select-none hover:text-foreground">Status<SortIcon k="status" /></th>
-                      <th className="px-4 py-3"></th>
+                      <th className="px-4 py-3 text-left">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
