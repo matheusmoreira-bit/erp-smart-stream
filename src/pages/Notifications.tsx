@@ -51,6 +51,9 @@ export default function NotificationsPage() {
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="audit" className="gap-2">
+              <History className="w-4 h-4" /> Auditoria
+            </TabsTrigger>
             <TabsTrigger value="preferences" className="gap-2">
               <Settings className="w-4 h-4" /> Preferências
             </TabsTrigger>
