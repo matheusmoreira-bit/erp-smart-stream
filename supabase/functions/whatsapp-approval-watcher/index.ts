@@ -28,6 +28,7 @@ interface ApprovalRow {
   "Fornecedor / Parceiro"?: string;
   "Código da moeda original"?: string;
   "Valor total"?: number | string;
+  "Valor do documento na moeda original"?: number | string;
   "Dias em aberto"?: number;
 }
 
