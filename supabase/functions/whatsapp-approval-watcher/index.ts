@@ -244,7 +244,13 @@ async function processCompany(
         .maybeSingle();
       if (recent) continue;
 
-      const valor = formatCurrency(ap["Valor total"], ap["Código da moeda original"]);
+      const moedaOriginal = (ap["Código da moeda original"] || "BRL").trim().toUpperCase();
+      const valorOriginal = Number(ap["Valor do documento na moeda original"] || 0);
+      const valorBRL = Number(ap["Valor total"] || 0);
+      const valor =
+        moedaOriginal && moedaOriginal !== "BRL" && valorOriginal > 0
+          ? `${formatCurrency(valorOriginal, moedaOriginal)} → ${formatCurrency(valorBRL, "BRL")}`
+          : formatCurrency(valorBRL, "BRL");
       const docNum = ap["Nº do documento"] || "—";
       const tipo = ap["Tipo de solicitação"] || "Documento";
       const fornecedor = ap["Fornecedor / Parceiro"] || "—";
@@ -258,7 +264,8 @@ async function processCompany(
         `Fornecedor: ${fornecedor}\n` +
         `Solicitante: ${solicitante}\n` +
         `Valor: ${valor}\n` +
-        `Dias em aberto: ${dias}`;
+        `Dias em aberto: ${dias}\n` +
+        `<a href="${APPROVAL_APP_URL}">Abrir aplicativo de aprovação</a>`;
 
       const sent = await sendWhatsApp(phone, msg);
       if (!sent.ok) {
