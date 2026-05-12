@@ -23,6 +23,7 @@ import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
 import IdpSync from "./pages/IdpSync.tsx";
 import LicenseAnalysis from "./pages/LicenseAnalysis.tsx";
+import LicenseImport from "./pages/LicenseImport.tsx";
 import Synapse from "./pages/Synapse.tsx";
 import AuditLog from "./pages/AuditLog.tsx";
 import Notifications from "./pages/Notifications.tsx";
