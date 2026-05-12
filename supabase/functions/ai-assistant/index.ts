@@ -268,21 +268,29 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return data;
     }
     case "notifications_summary": {
+      // user_identifier may be email or auth uid; try both
+      const email = (await sb.auth.admin.getUserById(userId)).data.user?.email || "";
+      const ids = [userId, email].filter(Boolean);
       const { data, error } = await sb.from("notifications")
-        .select("id, title, body, read_at, created_at, type")
-        .eq("user_id", userId)
+        .select("id, title, body, is_read, created_at, category, link")
+        .in("user_identifier", ids)
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) throw error;
-      const unread = (data || []).filter((n: any) => !n.read_at).length;
+      const unread = (data || []).filter((n: any) => !n.is_read).length;
       return { unread, recent: data };
     }
     case "idle_license_alerts": {
       const limit = Number(args.limit || 20);
-      let q = sb.from("user_licenses")
-        .select("user_code, user_name, company_db, license_type, idle_days, last_login_at")
-        .gte("idle_days", 30)
-        .order("idle_days", { ascending: false })
+      let q = sb.from("license_idle_alerts")
+        .select("user_code, company_db, license_type, days_idle, alert_week, sent_at")
+        .order("days_idle", { ascending: false })
+        .limit(limit);
+      if (args.company_db) q = q.eq("company_db", args.company_db);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data;
+    }
         .limit(limit);
       if (args.company_db) q = q.eq("company_db", args.company_db);
       const { data, error } = await q;
