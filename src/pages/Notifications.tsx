@@ -133,6 +133,10 @@ export default function NotificationsPage() {
             </ScrollArea>
           </TabsContent>
 
+          <TabsContent value="audit">
+            <NotificationAuditTab />
+          </TabsContent>
+
           <TabsContent value="preferences">
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-1">Preferências de Notificação</h3>
