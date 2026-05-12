@@ -291,12 +291,6 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       if (error) throw error;
       return data;
     }
-        .limit(limit);
-      if (args.company_db) q = q.eq("company_db", args.company_db);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data;
-    }
     default:
       return { error: `Unknown tool: ${name}` };
   }
