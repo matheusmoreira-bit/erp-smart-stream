@@ -31,6 +31,7 @@ import NotFound from "./pages/NotFound.tsx";
 import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
+import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
+          <GlobalAiChat />
         </SapProvider>
       </TooltipProvider>
     </QueryClientProvider>
