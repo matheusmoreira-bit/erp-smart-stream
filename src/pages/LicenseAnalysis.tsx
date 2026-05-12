@@ -44,12 +44,48 @@ export default function LicenseAnalysisPage() {
       list = list.filter(r => r.user_code.toLowerCase().includes(q) || r.user_name.toLowerCase().includes(q));
     }
     return [...list].sort((a, b) => {
+      if (sortKey !== "default") {
+        const dir = sortDir === "asc" ? 1 : -1;
+        const get = (r: LicenseRow): any => {
+          switch (sortKey) {
+            case "user": return r.user_name?.toLowerCase() || "";
+            case "license": return r.license_type || "";
+            case "logins": return r.logins || 0;
+            case "time": return r.totalMinutes || 0;
+            case "cost": return r.monthlyCost || 0;
+            case "perLogin": return r.costPerLogin ?? -1;
+            case "perHour": return r.costPerHour ?? -1;
+            case "status": return r.status;
+            default: return 0;
+          }
+        };
+        const va = get(a), vb = get(b);
+        if (typeof va === "string") return va.localeCompare(vb) * dir;
+        return (va - vb) * dir;
+      }
       // subutilizadas com licença primeiro (mais oportunidade de economia)
       const order = { subutilizada: 0, saudavel: 1, intensa: 2, "sem-licenca": 3 };
       if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
       return b.monthlyCost - a.monthlyCost;
     });
-  }, [rows, statusFilter, search]);
+  }, [rows, statusFilter, search, sortKey, sortDir]);
+
+  const toggleSort = (key: string) => {
+    if (sortKey === key) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortKey("default"); setSortDir("asc"); }
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const SortIcon = ({ k }: { k: string }) => {
+    if (sortKey !== k) return <ArrowUpDown className="w-3 h-3 inline ml-1 opacity-40" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="w-3 h-3 inline ml-1" />
+      : <ArrowDown className="w-3 h-3 inline ml-1" />;
+  };
 
   const metrics = useMemo(() => {
     const withLic = rows.filter(r => r.has_license);
