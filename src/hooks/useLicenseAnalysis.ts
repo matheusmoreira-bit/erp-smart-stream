@@ -130,7 +130,7 @@ export function useLicenseAnalysis(periodDays: number) {
         status,
       };
     });
-  }, [licenses, records, periodDays, pricing]);
+  }, [licenses, records, periodDays, pricing, companyDb]);
 
   const updateLicenseType = async (row: UserLicense, license_type: "PRO" | "CRM" | null, has_license: boolean) => {
     const payload = {
