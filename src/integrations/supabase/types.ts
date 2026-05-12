@@ -509,6 +509,27 @@ export type Database = {
         }
         Relationships: []
       }
+      license_pricing: {
+        Row: {
+          currency: string
+          license_type: string
+          monthly_cost: number
+          updated_at: string
+        }
+        Insert: {
+          currency?: string
+          license_type: string
+          monthly_cost?: number
+          updated_at?: string
+        }
+        Update: {
+          currency?: string
+          license_type?: string
+          monthly_cost?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           category: string
@@ -1078,6 +1099,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_licenses: {
+        Row: {
+          company_db: string
+          created_at: string
+          has_license: boolean
+          id: string
+          is_locked: boolean
+          license_type: string | null
+          notes: string | null
+          updated_at: string
+          user_code: string
+          user_name: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          has_license?: boolean
+          id?: string
+          is_locked?: boolean
+          license_type?: string | null
+          notes?: string | null
+          updated_at?: string
+          user_code: string
+          user_name: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          has_license?: boolean
+          id?: string
+          is_locked?: boolean
+          license_type?: string | null
+          notes?: string | null
+          updated_at?: string
+          user_code?: string
+          user_name?: string
+        }
+        Relationships: []
       }
       user_phones: {
         Row: {
