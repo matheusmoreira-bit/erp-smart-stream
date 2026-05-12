@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { useUserActivity, isFailedLogin } from "@/hooks/useUserActivity";
+import type { SapUser } from "@/lib/cache-repository";
 
 export interface UserLicense {
   id: string;
@@ -29,6 +30,37 @@ export interface LicenseRow extends UserLicense {
   status: "subutilizada" | "saudavel" | "intensa" | "sem-licenca";
 }
 
+interface SapCacheRow {
+  company_db: string;
+  data: SapUser[] | Record<string, unknown>[] | null;
+}
+
+function normalizeDbName(db?: string | null): string {
+  return (db || "")
+    .trim()
+    .replace(/^SBO_TESTE_\d+_/i, "SBO_")
+    .replace(/^tst_/i, "");
+}
+
+function userKey(companyDb: string, userCode: string) {
+  return `${normalizeDbName(companyDb).toLowerCase()}::${userCode.toLowerCase()}`;
+}
+
+function normalizeCachedUser(companyDb: string, user: SapUser | Record<string, unknown>): UserLicense {
+  const userCode = String(user.UserCode ?? user.user_code ?? user.USER_CODE ?? "").trim();
+  const userName = String(user.UserName ?? user.u_name ?? user.U_NAME ?? userCode).trim();
+  const locked = user.Locked ?? user.locked ?? user.LOCKED;
+  return {
+    id: `cache:${companyDb}:${userCode}`,
+    company_db: normalizeDbName(companyDb) || companyDb,
+    user_code: userCode,
+    user_name: userName || userCode,
+    is_locked: locked === "tYES" || locked === "Y" || locked === true || locked === 1 || locked === "1",
+    has_license: false,
+    license_type: null,
+  };
+}
+
 function parseDate(d: string): Date | null {
   if (!d) return null;
   const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -43,29 +75,48 @@ export function useLicenseAnalysis(periodDays: number) {
   const [loading, setLoading] = useState(false);
 
   const companyDb = session?.companyDB;
-  // Map TEST/sandbox databases back to their base license dataset
-  const normalizedDb = (companyDb || "")
-    .replace(/^SBO_TESTE_\d+_/i, "SBO_")
-    .replace(/^tst_/i, "");
+  const normalizedDb = normalizeDbName(companyDb);
 
   const load = async () => {
-    if (!companyDb) return;
     setLoading(true);
-    let { data: lic } = await supabase
-      .from("user_licenses")
-      .select("*")
-      .eq("company_db", companyDb)
-      .order("user_name");
-    if ((!lic || lic.length === 0) && normalizedDb && normalizedDb !== companyDb) {
-      const fallback = await supabase
-        .from("user_licenses")
-        .select("*")
-        .eq("company_db", normalizedDb)
-        .order("user_name");
-      lic = fallback.data;
-    }
+    const companyCandidates = Array.from(new Set([companyDb, normalizedDb].filter(Boolean) as string[]));
+
+    let cacheQuery = supabase
+      .from("sap_cache")
+      .select("company_db,data,updated_at")
+      .eq("cache_key", "users")
+      .order("updated_at", { ascending: false });
+    if (companyCandidates.length > 0) cacheQuery = cacheQuery.in("company_db", companyCandidates);
+    const { data: cacheRows } = await cacheQuery.limit(companyCandidates.length > 0 ? 5 : 20);
+
+    const cachedCompanies = ((cacheRows || []) as unknown as SapCacheRow[]).map((row) => normalizeDbName(row.company_db));
+    const licenseCompanies = Array.from(new Set([...companyCandidates, ...cachedCompanies].filter(Boolean)));
+
+    let licenseQuery = supabase.from("user_licenses").select("*").order("user_name");
+    if (licenseCompanies.length > 0) licenseQuery = licenseQuery.in("company_db", licenseCompanies);
+    const { data: lic } = await licenseQuery;
+
     const { data: price } = await supabase.from("license_pricing").select("*");
-    if (lic) setLicenses(lic as UserLicense[]);
+
+    const licenseByUser = new Map<string, UserLicense>();
+    for (const l of (lic || []) as UserLicense[]) {
+      licenseByUser.set(userKey(l.company_db, l.user_code), l);
+    }
+
+    const cacheBasedRows = ((cacheRows || []) as unknown as SapCacheRow[]).flatMap((cacheRow) => {
+      const users = Array.isArray(cacheRow.data) ? cacheRow.data : [];
+      return users
+        .map((u) => normalizeCachedUser(cacheRow.company_db, u))
+        .filter((u) => u.user_code)
+        .map((cached) => {
+          const license = licenseByUser.get(userKey(cached.company_db, cached.user_code));
+          return license
+            ? { ...license, user_name: cached.user_name, is_locked: cached.is_locked }
+            : cached;
+        });
+    });
+
+    setLicenses(cacheBasedRows.length > 0 ? cacheBasedRows : ((lic || []) as UserLicense[]));
     if (price) {
       const m: Record<string, number> = {};
       for (const p of price as LicensePricing[]) m[p.license_type] = Number(p.monthly_cost);
@@ -74,7 +125,7 @@ export function useLicenseAnalysis(periodDays: number) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [companyDb]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [companyDb, normalizedDb]);
 
   const rows: LicenseRow[] = useMemo(() => {
     const cutoff = new Date();
@@ -85,7 +136,7 @@ export function useLicenseAnalysis(periodDays: number) {
     for (const r of records) {
       const d = parseDate(r.Date);
       if (!d || d < cutoff) continue;
-      const key = r.UserCode;
+      const key = r.UserCode.toLowerCase();
       const cur = stats.get(key) || { logins: 0, fails: 0, mins: 0, last: null };
       if (r.Action === "I" || r.Action === "W") {
         if (isFailedLogin(r)) cur.fails++;
@@ -97,7 +148,7 @@ export function useLicenseAnalysis(periodDays: number) {
     }
 
     return licenses.map((l) => {
-      const s = stats.get(l.user_code) || { logins: 0, fails: 0, mins: 0, last: null };
+      const s = stats.get(l.user_code.toLowerCase()) || { logins: 0, fails: 0, mins: 0, last: null };
       const monthlyCost = l.has_license && l.license_type ? pricing[l.license_type] || 0 : 0;
       // Pro-rate cost to selected period
       const periodCost = (monthlyCost / 30) * periodDays;
@@ -127,8 +178,18 @@ export function useLicenseAnalysis(periodDays: number) {
     });
   }, [licenses, records, periodDays, pricing]);
 
-  const updateLicenseType = async (id: string, license_type: "PRO" | "CRM" | null, has_license: boolean) => {
-    const { error } = await supabase.from("user_licenses").update({ license_type, has_license }).eq("id", id);
+  const updateLicenseType = async (row: UserLicense, license_type: "PRO" | "CRM" | null, has_license: boolean) => {
+    const payload = {
+      company_db: row.company_db,
+      user_code: row.user_code,
+      user_name: row.user_name,
+      is_locked: row.is_locked,
+      has_license,
+      license_type,
+    };
+    const { error } = row.id.startsWith("cache:")
+      ? await supabase.from("user_licenses").upsert(payload, { onConflict: "company_db,user_code" })
+      : await supabase.from("user_licenses").update({ license_type, has_license }).eq("id", row.id);
     if (!error) await load();
     return !error;
   };
