@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Loader2, Search, Award, TrendingDown, TrendingUp, DollarSign, Users, AlertCircle, Pencil } from "lucide-react";
+import { ArrowLeft, RefreshCw, Loader2, Search, Award, TrendingDown, TrendingUp, DollarSign, Users, AlertCircle, Pencil, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
