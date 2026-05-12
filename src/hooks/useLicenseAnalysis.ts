@@ -94,7 +94,14 @@ export function useLicenseAnalysis(periodDays: number) {
       stats.set(key, cur);
     }
 
-    return licenses.map((l) => {
+    // Activity records only exist for the currently logged-in company.
+    // Filter licenses to that company so logins/tempo match correctly.
+    const currentDb = normalizeDbName(companyDb);
+    const scopedLicenses = currentDb
+      ? licenses.filter((l) => normalizeDbName(l.company_db) === currentDb)
+      : licenses;
+
+    return scopedLicenses.map((l) => {
       const s = stats.get(l.user_code.toLowerCase()) || { logins: 0, fails: 0, mins: 0, last: null };
       const monthlyCost = l.has_license && l.license_type ? pricing[l.license_type] || 0 : 0;
       // Pro-rate cost to selected period
@@ -123,7 +130,7 @@ export function useLicenseAnalysis(periodDays: number) {
         status,
       };
     });
-  }, [licenses, records, periodDays, pricing]);
+  }, [licenses, records, periodDays, pricing, companyDb]);
 
   const updateLicenseType = async (row: UserLicense, license_type: "PRO" | "CRM" | null, has_license: boolean) => {
     const payload = {
