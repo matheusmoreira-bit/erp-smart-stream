@@ -43,14 +43,28 @@ export function useLicenseAnalysis(periodDays: number) {
   const [loading, setLoading] = useState(false);
 
   const companyDb = session?.companyDB;
+  // Map TEST/sandbox databases back to their base license dataset
+  const normalizedDb = (companyDb || "")
+    .replace(/^SBO_TESTE_\d+_/i, "SBO_")
+    .replace(/^tst_/i, "");
 
   const load = async () => {
     if (!companyDb) return;
     setLoading(true);
-    const [{ data: lic }, { data: price }] = await Promise.all([
-      supabase.from("user_licenses").select("*").eq("company_db", companyDb).order("user_name"),
-      supabase.from("license_pricing").select("*"),
-    ]);
+    let { data: lic } = await supabase
+      .from("user_licenses")
+      .select("*")
+      .eq("company_db", companyDb)
+      .order("user_name");
+    if ((!lic || lic.length === 0) && normalizedDb && normalizedDb !== companyDb) {
+      const fallback = await supabase
+        .from("user_licenses")
+        .select("*")
+        .eq("company_db", normalizedDb)
+        .order("user_name");
+      lic = fallback.data;
+    }
+    const { data: price } = await supabase.from("license_pricing").select("*");
     if (lic) setLicenses(lic as UserLicense[]);
     if (price) {
       const m: Record<string, number> = {};

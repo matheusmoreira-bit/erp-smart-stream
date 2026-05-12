@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -198,6 +198,10 @@ export default function UsersPage() {
             <Button variant="outline" size="sm" onClick={() => navigate("/users/idp-sync")}>
               <Users className="w-4 h-4 mr-2" />
               IdP Sync
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/users/license-analysis")}>
+              <DollarSign className="w-4 h-4 mr-2" />
+              Licenças
             </Button>
             <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
