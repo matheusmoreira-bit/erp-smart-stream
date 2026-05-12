@@ -40,7 +40,7 @@ export default function NotificationsPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-6">
+      <main className="max-w-6xl mx-auto px-6 py-6">
         <Tabs defaultValue="notifications">
           <TabsList className="mb-6">
             <TabsTrigger value="notifications" className="gap-2">
