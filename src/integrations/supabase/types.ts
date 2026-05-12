@@ -509,6 +509,45 @@ export type Database = {
         }
         Relationships: []
       }
+      license_idle_alerts: {
+        Row: {
+          alert_week: string
+          company_db: string
+          days_idle: number | null
+          email_to: string | null
+          id: string
+          license_type: string | null
+          payload: Json
+          sent_at: string
+          user_code: string
+          whatsapp_to: string | null
+        }
+        Insert: {
+          alert_week: string
+          company_db: string
+          days_idle?: number | null
+          email_to?: string | null
+          id?: string
+          license_type?: string | null
+          payload?: Json
+          sent_at?: string
+          user_code: string
+          whatsapp_to?: string | null
+        }
+        Update: {
+          alert_week?: string
+          company_db?: string
+          days_idle?: number | null
+          email_to?: string | null
+          id?: string
+          license_type?: string | null
+          payload?: Json
+          sent_at?: string
+          user_code?: string
+          whatsapp_to?: string | null
+        }
+        Relationships: []
+      }
       license_pricing: {
         Row: {
           currency: string
