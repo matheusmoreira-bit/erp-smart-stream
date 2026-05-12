@@ -12,6 +12,7 @@ const corsHeaders = {
 const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
 const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 const FALLBACK_WHATSAPP_TO = "5531972665309";
+const APPROVAL_APP_URL = "https://sap-b1-approval-hub-761741690592.us-west1.run.app/";
 const HANA_VIEWS_URL =
   Deno.env.get("HANA_VIEWS_URL") ||
   "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
@@ -27,6 +28,7 @@ interface ApprovalRow {
   "Fornecedor / Parceiro"?: string;
   "Código da moeda original"?: string;
   "Valor total"?: number | string;
+  "Valor do documento na moeda original"?: number | string;
   "Dias em aberto"?: number;
 }
 
@@ -242,7 +244,13 @@ async function processCompany(
         .maybeSingle();
       if (recent) continue;
 
-      const valor = formatCurrency(ap["Valor total"], ap["Código da moeda original"]);
+      const moedaOriginal = (ap["Código da moeda original"] || "BRL").trim().toUpperCase();
+      const valorOriginal = Number(ap["Valor do documento na moeda original"] || 0);
+      const valorBRL = Number(ap["Valor total"] || 0);
+      const valor =
+        moedaOriginal && moedaOriginal !== "BRL" && valorOriginal > 0
+          ? `${formatCurrency(valorOriginal, moedaOriginal)} → ${formatCurrency(valorBRL, "BRL")}`
+          : formatCurrency(valorBRL, "BRL");
       const docNum = ap["Nº do documento"] || "—";
       const tipo = ap["Tipo de solicitação"] || "Documento";
       const fornecedor = ap["Fornecedor / Parceiro"] || "—";
@@ -256,7 +264,8 @@ async function processCompany(
         `Fornecedor: ${fornecedor}\n` +
         `Solicitante: ${solicitante}\n` +
         `Valor: ${valor}\n` +
-        `Dias em aberto: ${dias}`;
+        `Dias em aberto: ${dias}\n` +
+        `<a href="${APPROVAL_APP_URL}">Abrir aplicativo de aprovação</a>`;
 
       const sent = await sendWhatsApp(phone, msg);
       if (!sent.ok) {
@@ -275,8 +284,12 @@ async function processCompany(
           fornecedor,
           solicitante,
           valor,
+          valor_original: valorOriginal,
+          valor_brl: valorBRL,
+          moeda_original: moedaOriginal,
           dias,
           approver_email: email,
+          link: APPROVAL_APP_URL,
         },
       });
       result.alerts_sent++;
