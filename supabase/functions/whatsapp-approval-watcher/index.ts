@@ -12,6 +12,7 @@ const corsHeaders = {
 const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
 const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 const FALLBACK_WHATSAPP_TO = "5531972665309";
+const APPROVAL_APP_URL = "https://sap-b1-approval-hub-761741690592.us-west1.run.app/";
 const HANA_VIEWS_URL =
   Deno.env.get("HANA_VIEWS_URL") ||
   "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
