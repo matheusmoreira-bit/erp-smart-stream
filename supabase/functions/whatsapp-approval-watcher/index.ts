@@ -284,8 +284,12 @@ async function processCompany(
           fornecedor,
           solicitante,
           valor,
+          valor_original: valorOriginal,
+          valor_brl: valorBRL,
+          moeda_original: moedaOriginal,
           dias,
           approver_email: email,
+          link: APPROVAL_APP_URL,
         },
       });
       result.alerts_sent++;
