@@ -152,32 +152,41 @@ const tools = [
 async function runTool(name: string, args: Record<string, unknown>, sb: ReturnType<typeof createClient>, userId: string) {
   switch (name) {
     case "list_companies": {
-      const { data, error } = await sb.from("companies").select("company_db, display_name, erp_type, active").eq("active", true);
+      const { data, error } = await sb.from("companies").select("company_db, display_name, erp_type, default_currency, is_active").eq("is_active", true);
       if (error) throw error;
       return data;
     }
     case "license_summary": {
-      let q = sb.from("user_licenses").select("company_db, license_type, has_license, idle_days");
+      let q = sb.from("user_licenses").select("company_db, license_type, has_license, is_locked");
       if (args.company_db) q = q.eq("company_db", args.company_db);
       const { data, error } = await q;
       if (error) throw error;
-      const grouped: Record<string, { total: number; pro: number; crm: number; sem: number; ociosos: number }> = {};
+      // Idle counts come from license_idle_alerts (current week)
+      let qi = sb.from("license_idle_alerts").select("company_db, days_idle");
+      if (args.company_db) qi = qi.eq("company_db", args.company_db);
+      const { data: idle } = await qi;
+      const idleCount: Record<string, number> = {};
+      for (const r of idle || []) {
+        const k = (r as any).company_db;
+        idleCount[k] = (idleCount[k] || 0) + 1;
+      }
+      const grouped: Record<string, { total: number; pro: number; crm: number; sem: number; bloqueados: number; ociosos: number }> = {};
       for (const r of data || []) {
         const k = (r as any).company_db;
-        if (!grouped[k]) grouped[k] = { total: 0, pro: 0, crm: 0, sem: 0, ociosos: 0 };
+        if (!grouped[k]) grouped[k] = { total: 0, pro: 0, crm: 0, sem: 0, bloqueados: 0, ociosos: idleCount[k] || 0 };
         grouped[k].total++;
         const lt = ((r as any).license_type || "").toUpperCase();
         if (lt === "PRO") grouped[k].pro++;
         else if (lt === "CRM") grouped[k].crm++;
         else grouped[k].sem++;
-        if (((r as any).idle_days ?? 0) >= 30) grouped[k].ociosos++;
+        if ((r as any).is_locked) grouped[k].bloqueados++;
       }
       return grouped;
     }
     case "search_users": {
       const q = String(args.query || "");
       const { data, error } = await sb.from("user_licenses")
-        .select("user_code, user_name, company_db, license_type, has_license, idle_days, last_login_at")
+        .select("user_code, user_name, company_db, license_type, has_license, is_locked")
         .or(`user_code.ilike.%${q}%,user_name.ilike.%${q}%`)
         .limit(50);
       if (error) throw error;
@@ -186,7 +195,7 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
     case "expenses_summary": {
       const days = Number(args.days || 30);
       const since = new Date(Date.now() - days * 86400000).toISOString();
-      let q = sb.from("expenses").select("status, company_db, total_amount, created_at").gte("created_at", since);
+      let q = sb.from("expenses").select("status, company_db, total_amount, currency, created_at").gte("created_at", since);
       if (args.company_db) q = q.eq("company_db", args.company_db);
       const { data, error } = await q;
       if (error) throw error;
@@ -202,8 +211,8 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
     case "list_pending_approvals": {
       const limit = Number(args.limit || 20);
       let q = sb.from("expenses")
-        .select("id, title, requester_email, total_amount, currency, company_db, created_at, status, current_approver_email")
-        .in("status", ["submitted", "in_approval"])
+        .select("id, supplier_name, requester_name, requester_email, total_amount, currency, company_db, created_at, status, current_approver, remarks")
+        .in("status", ["submitted", "in_approval", "pending_approval"])
         .order("created_at", { ascending: true })
         .limit(limit);
       if (args.company_db) q = q.eq("company_db", args.company_db);
@@ -215,13 +224,13 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       }));
     }
     case "approval_rules_overview": {
-      let q = sb.from("approval_rules").select("id, name, company_db, active, min_amount, max_amount, currency");
+      let q = sb.from("approval_rules").select("id, name, company_db, is_active, min_value, max_value, doc_type, cost_center");
       if (args.company_db) q = q.eq("company_db", args.company_db);
       const { data: rules, error } = await q;
       if (error) throw error;
       const ids = (rules || []).map((r: any) => r.id);
       const { data: levels } = ids.length
-        ? await sb.from("approval_rule_levels").select("rule_id, level, approver_email, min_amount").in("rule_id", ids)
+        ? await sb.from("approval_rule_levels").select("rule_id, level_order, approver_name, approver_email").in("rule_id", ids).order("level_order")
         : { data: [] as any[] };
       return (rules || []).map((r: any) => ({ ...r, levels: (levels || []).filter((l: any) => l.rule_id === r.id) }));
     }
@@ -229,8 +238,8 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       const q = String(args.query || "");
       const limit = Number(args.limit || 20);
       const { data, error } = await sb.from("suppliers")
-        .select("id, name, document, email, phone, country, status")
-        .or(`name.ilike.%${q}%,document.ilike.%${q}%,email.ilike.%${q}%`)
+        .select("id, card_code, card_name, federal_tax_id, email, phone1, bill_to_country, is_active, company_db")
+        .or(`card_name.ilike.%${q}%,federal_tax_id.ilike.%${q}%,email.ilike.%${q}%`)
         .limit(limit);
       if (error) throw error;
       return data;
