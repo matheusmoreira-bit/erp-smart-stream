@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, Settings, Check, CheckCheck } from "lucide-react";
+import { ArrowLeft, Bell, Settings, Check, CheckCheck, History } from "lucide-react";
 import { useNotifications, useNotificationPreferences, NOTIFICATION_CATEGORIES } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { NotificationAuditTab } from "@/components/NotificationAuditTab";
 
 const categoryIcon: Record<string, string> = {
   approval: "📋",
@@ -39,7 +40,7 @@ export default function NotificationsPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-6">
+      <main className="max-w-6xl mx-auto px-6 py-6">
         <Tabs defaultValue="notifications">
           <TabsList className="mb-6">
             <TabsTrigger value="notifications" className="gap-2">
@@ -49,6 +50,9 @@ export default function NotificationsPage() {
                   {unreadCount}
                 </span>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="gap-2">
+              <History className="w-4 h-4" /> Auditoria
             </TabsTrigger>
             <TabsTrigger value="preferences" className="gap-2">
               <Settings className="w-4 h-4" /> Preferências
@@ -127,6 +131,10 @@ export default function NotificationsPage() {
                 </div>
               )}
             </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="audit">
+            <NotificationAuditTab />
           </TabsContent>
 
           <TabsContent value="preferences">
