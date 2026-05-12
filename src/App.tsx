@@ -63,6 +63,7 @@ const App = () => (
               <Route path="/users/activity" element={<UserActivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />
               <Route path="/users/license-analysis" element={<LicenseAnalysis />} />
+              <Route path="/users/license-import" element={<LicenseImport />} />
               <Route path="/synapse" element={<Synapse />} />
               <Route path="/audit-log" element={<AuditLog />} />
               <Route path="/notifications" element={<Notifications />} />
