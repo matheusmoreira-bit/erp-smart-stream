@@ -192,18 +192,18 @@ export default function LicenseAnalysisPage() {
                   <p className="text-xs text-muted-foreground">{filtered.length} usuário(s) · período de {period} dias</p>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[calc(100vh-360px)]">
                 <table className="w-full text-sm">
-                  <thead className="bg-card">
-                    <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                      <th className="px-4 py-3 text-left">Usuário</th>
-                      <th className="px-4 py-3 text-left">Licença</th>
-                      <th className="px-4 py-3 text-right">Logins</th>
-                      <th className="px-4 py-3 text-right">Tempo</th>
-                      <th className="px-4 py-3 text-right">Custo Mensal</th>
-                      <th className="px-4 py-3 text-right">R$/login</th>
-                      <th className="px-4 py-3 text-right">R$/hora</th>
-                      <th className="px-4 py-3 text-left">Status</th>
+                  <thead className="bg-card sticky top-0 z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
+                    <tr className="text-xs uppercase tracking-wider text-muted-foreground">
+                      <th onClick={() => toggleSort("user")} className="px-4 py-3 text-left cursor-pointer select-none hover:text-foreground">Usuário<SortIcon k="user" /></th>
+                      <th onClick={() => toggleSort("license")} className="px-4 py-3 text-left cursor-pointer select-none hover:text-foreground">Licença<SortIcon k="license" /></th>
+                      <th onClick={() => toggleSort("logins")} className="px-4 py-3 text-right cursor-pointer select-none hover:text-foreground">Logins<SortIcon k="logins" /></th>
+                      <th onClick={() => toggleSort("time")} className="px-4 py-3 text-right cursor-pointer select-none hover:text-foreground">Tempo<SortIcon k="time" /></th>
+                      <th onClick={() => toggleSort("cost")} className="px-4 py-3 text-right cursor-pointer select-none hover:text-foreground">Custo Mensal<SortIcon k="cost" /></th>
+                      <th onClick={() => toggleSort("perLogin")} className="px-4 py-3 text-right cursor-pointer select-none hover:text-foreground">R$/login<SortIcon k="perLogin" /></th>
+                      <th onClick={() => toggleSort("perHour")} className="px-4 py-3 text-right cursor-pointer select-none hover:text-foreground">R$/hora<SortIcon k="perHour" /></th>
+                      <th onClick={() => toggleSort("status")} className="px-4 py-3 text-left cursor-pointer select-none hover:text-foreground">Status<SortIcon k="status" /></th>
                       <th className="px-4 py-3"></th>
                     </tr>
                   </thead>
