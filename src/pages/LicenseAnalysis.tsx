@@ -192,8 +192,8 @@ export default function LicenseAnalysisPage() {
                           <Select
                             value={r.has_license ? (r.license_type || "PRO") : "none"}
                             onValueChange={async (v) => {
-                              if (v === "none") await updateLicenseType(r.id, null, false);
-                              else await updateLicenseType(r.id, v as "PRO" | "CRM", true);
+                              if (v === "none") await updateLicenseType(r, null, false);
+                              else await updateLicenseType(r, v as "PRO" | "CRM", true);
                             }}
                           >
                             <SelectTrigger className="h-7 text-xs w-[90px]"><SelectValue /></SelectTrigger>
