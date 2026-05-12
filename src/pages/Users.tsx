@@ -199,6 +199,10 @@ export default function UsersPage() {
               <Users className="w-4 h-4 mr-2" />
               IdP Sync
             </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/users/license-analysis")}>
+              <DollarSign className="w-4 h-4 mr-2" />
+              Licenças
+            </Button>
             <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
               Atualizar
