@@ -376,7 +376,7 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
       // fallback: pega primeiro approver configurado da etapa
       const stageCode = Number(pending.ApprovalRequestStep);
       const approverIds =
-        readCache(slStageApproversCache, `${session.companyDB}:${stageCode}`)?.get(stageCode) || [];
+        slStageApproversMem.get(session.companyDB)?.get(stageCode) || [];
       const firstId = approverIds[0];
       if (firstId) approver = usersByKey.get(firstId);
     }
