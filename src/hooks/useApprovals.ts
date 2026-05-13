@@ -389,8 +389,8 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
       ? templatesByCode.get(r.ApprovalTemplatesID)?.Name || "—"
       : "—";
 
-    const objCode = String(r.ObjectCode || "");
-    const docTypeName = OBJECT_CODE_TO_NAME[objCode] || `Documento (${objCode})`;
+    const objCode = String(r.ObjectType || "");
+    const docTypeName = OBJECT_CODE_TO_NAME[objCode] || (objCode ? `Documento (${objCode})` : "Documento");
     const currency = (draft.DocCurrency || "BRL").toUpperCase();
     const docTotal =
       currency !== "BRL" && draft.DocTotalFc
