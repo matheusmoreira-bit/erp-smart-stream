@@ -226,7 +226,31 @@ async function getUsers(session: SapSession): Promise<Map<number, SLUser>> {
   return map;
 }
 
-async function getTemplates(session: SapSession): Promise<Map<number, SLTemplate>> {
+async function fetchUsersByIds(session: SapSession, ids: number[]): Promise<void> {
+  const map = slUsersMem.get(session.companyDB) || new Map<number, SLUser>();
+  const missing = ids.filter((id) => Number.isFinite(id) && id > 0 && !map.has(id));
+  if (!missing.length) {
+    slUsersMem.set(session.companyDB, map);
+    return;
+  }
+  await Promise.all(
+    missing.map(async (id) => {
+      try {
+        const res = await sapQuery(
+          session,
+          `Users(${id})?$select=InternalKey,UserCode,UserName,eMail`,
+          undefined,
+          true,
+        );
+        const u = res.data as SLUser;
+        if (u && typeof u.InternalKey === "number") map.set(u.InternalKey, u);
+      } catch (e) {
+        console.warn(`Users(${id}) falhou:`, e);
+      }
+    }),
+  );
+  slUsersMem.set(session.companyDB, map);
+}
   const memo = slTemplatesMem.get(session.companyDB);
   if (memo) return memo;
 
