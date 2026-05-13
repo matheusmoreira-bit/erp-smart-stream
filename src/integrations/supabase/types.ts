@@ -667,6 +667,36 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_send_runs: {
+        Row: {
+          details: Json
+          error_message: string | null
+          function_name: string
+          id: string
+          recipients_count: number
+          sent_at: string
+          status: string
+        }
+        Insert: {
+          details?: Json
+          error_message?: string | null
+          function_name: string
+          id?: string
+          recipients_count?: number
+          sent_at?: string
+          status?: string
+        }
+        Update: {
+          details?: Json
+          error_message?: string | null
+          function_name?: string
+          id?: string
+          recipients_count?: number
+          sent_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null

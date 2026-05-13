@@ -354,12 +354,29 @@ Deno.serve(async (req) => {
     const totalAlerts = results.reduce((s, r) => s + r.alerts_sent, 0);
     const fallback = FALLBACK_WHATSAPP_TO; // não usado, apenas evita warning de unused
     void fallback;
+    const hasError = results.some((r) => r.status === "error");
+    await sb.from("notification_send_runs").insert({
+      function_name: "whatsapp-approval-watcher",
+      status: hasError ? (totalAlerts > 0 ? "partial" : "error") : "success",
+      recipients_count: totalAlerts,
+      error_message: hasError ? results.filter((r) => r.error).map((r) => `${r.company_db}: ${r.error}`).join(" | ") : null,
+      details: { results },
+    });
     return new Response(
       JSON.stringify({ ok: true, total_alerts: totalAlerts, results }, null, 2),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
     console.error("Approval watcher error:", e);
+    try {
+      await sb.from("notification_send_runs").insert({
+        function_name: "whatsapp-approval-watcher",
+        status: "error",
+        recipients_count: 0,
+        error_message: (e as Error).message,
+        details: {},
+      });
+    } catch { /* ignore */ }
     return new Response(
       JSON.stringify({ ok: false, error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

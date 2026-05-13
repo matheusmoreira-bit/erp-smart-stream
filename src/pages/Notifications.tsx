@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, Settings, Check, CheckCheck, History } from "lucide-react";
+import { ArrowLeft, Bell, Settings, Check, CheckCheck, History, Send } from "lucide-react";
 import { useNotifications, useNotificationPreferences, NOTIFICATION_CATEGORIES } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NotificationAuditTab } from "@/components/NotificationAuditTab";
+import { NotificationSendHistoryTab } from "@/components/NotificationSendHistoryTab";
 
 const categoryIcon: Record<string, string> = {
   approval: "📋",
@@ -53,6 +54,9 @@ export default function NotificationsPage() {
             </TabsTrigger>
             <TabsTrigger value="audit" className="gap-2">
               <History className="w-4 h-4" /> Auditoria
+            </TabsTrigger>
+            <TabsTrigger value="history" className="gap-2">
+              <Send className="w-4 h-4" /> Histórico de envios
             </TabsTrigger>
             <TabsTrigger value="preferences" className="gap-2">
               <Settings className="w-4 h-4" /> Preferências
@@ -135,6 +139,10 @@ export default function NotificationsPage() {
 
           <TabsContent value="audit">
             <NotificationAuditTab />
+          </TabsContent>
+
+          <TabsContent value="history">
+            <NotificationSendHistoryTab />
           </TabsContent>
 
           <TabsContent value="preferences">
