@@ -381,6 +381,131 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
+    if (action === "list-business-partners") {
+      const results = await forEachCompany(sb, body.company_dbs, async (_c, cookies) => {
+        return await sapGetAll(_c.baseUrl, cookies, "BusinessPartners", {
+          $select: "CardCode,CardName,CardType,FederalTaxID,Currency,GroupCode,Valid,Frozen",
+        });
+      });
+      return json({ results });
+    }
+
+    if (action === "list-items") {
+      const results = await forEachCompany(sb, body.company_dbs, async (_c, cookies) => {
+        return await sapGetAll(_c.baseUrl, cookies, "Items", {
+          $select: "ItemCode,ItemName,ItemsGroupCode,ItemType,Valid,Frozen",
+        });
+      });
+      return json({ results });
+    }
+
+    if (action === "replicate-business-partner" || action === "replicate-item") {
+      const { code, source_company_db, target_company_db } = body;
+      if (!code || !source_company_db || !target_company_db) {
+        return json(
+          { error: "code, source_company_db e target_company_db são obrigatórios" },
+          400,
+        );
+      }
+      if (source_company_db === target_company_db) {
+        return json({ error: "Origem e destino não podem ser iguais" }, 400);
+      }
+
+      const isBP = action === "replicate-business-partner";
+      const endpoint = isBP ? "BusinessPartners" : "Items";
+      const keyField = isBP ? "CardCode" : "ItemCode";
+      const allowedFields = isBP
+        ? [
+            "CardCode",
+            "CardName",
+            "CardType",
+            "FederalTaxID",
+            "Currency",
+            "GroupCode",
+            "EmailAddress",
+            "Phone1",
+            "Phone2",
+            "ContactPerson",
+            "MailAddress",
+            "MailZipCode",
+            "City",
+            "State",
+            "Country",
+            "Address",
+            "ZipCode",
+            "Notes",
+            "AdditionalID",
+            "Industry",
+            "Valid",
+            "Frozen",
+          ]
+        : [
+            "ItemCode",
+            "ItemName",
+            "ItemsGroupCode",
+            "ItemType",
+            "ForeignName",
+            "BarCode",
+            "PurchaseUnit",
+            "SalesUnit",
+            "InventoryUOM",
+            "ManageSerialNumbers",
+            "ManageBatchNumbers",
+            "PurchaseItem",
+            "SalesItem",
+            "InventoryItem",
+            "Valid",
+            "Frozen",
+          ];
+
+      // 1. Fetch full record from source
+      const srcCreds = await loadSapCreds(sb, String(source_company_db));
+      if (!srcCreds) return json({ error: "Credenciais SAP da empresa de origem não configuradas" }, 400);
+      const srcCookies = await sapLogin(srcCreds);
+      let sourceData: Record<string, unknown> | null = null;
+      try {
+        const encoded = encodeURIComponent(String(code));
+        const resp = await fetch(`${srcCreds.baseUrl}/${endpoint}('${encoded}')`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json", Cookie: srcCookies },
+        });
+        if (!resp.ok) {
+          const t = await resp.text().catch(() => "");
+          throw new Error(`Falha ao ler ${keyField} ${code} na origem: HTTP ${resp.status} ${t.slice(0, 200)}`);
+        }
+        sourceData = await resp.json();
+      } finally {
+        fetch(`${srcCreds.baseUrl}/Logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: srcCookies },
+        }).catch(() => {});
+      }
+      if (!sourceData) return json({ error: "Registro de origem não encontrado" }, 404);
+
+      // Build curated payload
+      const payload: Record<string, unknown> = {};
+      for (const f of allowedFields) {
+        const v = (sourceData as Record<string, unknown>)[f];
+        if (v !== undefined && v !== null && v !== "") payload[f] = v;
+      }
+
+      // 2. Check existence on target then POST
+      const results = await forEachCompany(sb, [String(target_company_db)], async (creds, cookies) => {
+        const encoded = encodeURIComponent(String(code));
+        const checkResp = await fetch(`${creds.baseUrl}/${endpoint}('${encoded}')?$select=${keyField}`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json", Cookie: cookies },
+        });
+        if (checkResp.ok) {
+          throw new Error(`Código ${code} já existe na empresa de destino`);
+        }
+        const r = await sapPost(creds.baseUrl, cookies, endpoint, payload);
+        if (!r.ok) throw new Error(r.error);
+        return { code };
+      });
+      return json({ results });
+    }
+
     if (action === "list-companies") {
       const companies = await listActiveSapCompanies(sb);
       return json({ companies });

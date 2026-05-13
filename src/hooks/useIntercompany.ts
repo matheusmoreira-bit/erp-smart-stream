@@ -24,6 +24,26 @@ export interface SapCostCenterRow {
   Active?: string;
 }
 
+export interface SapBusinessPartnerRow {
+  CardCode: string;
+  CardName: string;
+  CardType?: string;
+  FederalTaxID?: string;
+  Currency?: string;
+  GroupCode?: number;
+  Valid?: string;
+  Frozen?: string;
+}
+
+export interface SapItemRow {
+  ItemCode: string;
+  ItemName: string;
+  ItemsGroupCode?: number;
+  ItemType?: string;
+  Valid?: string;
+  Frozen?: string;
+}
+
 async function callIntercompany<T>(body: Record<string, unknown>): Promise<T> {
   const resp = await authFetch("intercompany", {
     method: "POST",
@@ -38,8 +58,12 @@ async function callIntercompany<T>(body: Record<string, unknown>): Promise<T> {
 export function useIntercompany() {
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingCenters, setLoadingCenters] = useState(false);
+  const [loadingBPs, setLoadingBPs] = useState(false);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [accountResults, setAccountResults] = useState<PerCompanyResult<SapAccountRow[]>[]>([]);
   const [centerResults, setCenterResults] = useState<PerCompanyResult<SapCostCenterRow[]>[]>([]);
+  const [bpResults, setBpResults] = useState<PerCompanyResult<SapBusinessPartnerRow[]>[]>([]);
+  const [itemResults, setItemResults] = useState<PerCompanyResult<SapItemRow[]>[]>([]);
 
   const loadAccounts = useCallback(async (company_dbs?: string[]) => {
     setLoadingAccounts(true);
@@ -127,18 +151,72 @@ export function useIntercompany() {
     [],
   );
 
+  const loadBusinessPartners = useCallback(async (company_dbs?: string[]) => {
+    setLoadingBPs(true);
+    try {
+      const r = await callIntercompany<{ results: PerCompanyResult<SapBusinessPartnerRow[]>[] }>({
+        action: "list-business-partners",
+        company_dbs,
+      });
+      setBpResults(r.results || []);
+    } finally {
+      setLoadingBPs(false);
+    }
+  }, []);
+
+  const loadItems = useCallback(async (company_dbs?: string[]) => {
+    setLoadingItems(true);
+    try {
+      const r = await callIntercompany<{ results: PerCompanyResult<SapItemRow[]>[] }>({
+        action: "list-items",
+        company_dbs,
+      });
+      setItemResults(r.results || []);
+    } finally {
+      setLoadingItems(false);
+    }
+  }, []);
+
+  const replicateBusinessPartner = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-business-partner",
+        ...input,
+      });
+    },
+    [],
+  );
+
+  const replicateItem = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-item",
+        ...input,
+      });
+    },
+    [],
+  );
+
   return {
     loadingAccounts,
     loadingCenters,
+    loadingBPs,
+    loadingItems,
     accountResults,
     centerResults,
+    bpResults,
+    itemResults,
     loadAccounts,
     loadCostCenters,
+    loadBusinessPartners,
+    loadItems,
     createAccount,
     createCostCenter,
     renameAccount,
     renameCostCenter,
     toggleAccount,
     toggleCostCenter,
+    replicateBusinessPartner,
+    replicateItem,
   };
 }
