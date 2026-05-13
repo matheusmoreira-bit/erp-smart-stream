@@ -388,6 +388,21 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
     Array.from(pendingStageCodes).map((code) => getStageApprovers(session, code)),
   );
 
+  // Coletar todos os user IDs necessários (originators + decisores + 1º aprovador da etapa)
+  const userIdsNeeded = new Set<number>();
+  for (const { r, decisions } of enriched) {
+    if (r.OriginatorID) userIdsNeeded.add(Number(r.OriginatorID));
+    for (const d of decisions) {
+      if (d.UserID) userIdsNeeded.add(Number(d.UserID));
+    }
+  }
+  for (const stageCode of pendingStageCodes) {
+    const ids = slStageApproversMem.get(session.companyDB)?.get(stageCode) || [];
+    for (const id of ids) userIdsNeeded.add(id);
+  }
+  await fetchUsersByIds(session, Array.from(userIdsNeeded));
+  const usersFinal = slUsersMem.get(session.companyDB) || usersByKey;
+
   return enriched.map(({ r, decisions, draft }): ApprovalDoc => {
     const originator = r.OriginatorID ? usersByKey.get(r.OriginatorID) : undefined;
 
