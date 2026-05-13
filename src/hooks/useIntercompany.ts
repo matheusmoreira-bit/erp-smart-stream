@@ -58,8 +58,12 @@ async function callIntercompany<T>(body: Record<string, unknown>): Promise<T> {
 export function useIntercompany() {
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingCenters, setLoadingCenters] = useState(false);
+  const [loadingBPs, setLoadingBPs] = useState(false);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [accountResults, setAccountResults] = useState<PerCompanyResult<SapAccountRow[]>[]>([]);
   const [centerResults, setCenterResults] = useState<PerCompanyResult<SapCostCenterRow[]>[]>([]);
+  const [bpResults, setBpResults] = useState<PerCompanyResult<SapBusinessPartnerRow[]>[]>([]);
+  const [itemResults, setItemResults] = useState<PerCompanyResult<SapItemRow[]>[]>([]);
 
   const loadAccounts = useCallback(async (company_dbs?: string[]) => {
     setLoadingAccounts(true);
