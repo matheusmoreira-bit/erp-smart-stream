@@ -857,12 +857,28 @@ export default function Intercompany() {
     () => () => loadCostCenters(selectedDbs),
     [loadCostCenters, selectedDbs],
   );
+  const reloadBPs = useMemo(
+    () => () => loadBusinessPartners(selectedDbs),
+    [loadBusinessPartners, selectedDbs],
+  );
+  const reloadItems = useMemo(
+    () => () => loadItems(selectedDbs),
+    [loadItems, selectedDbs],
+  );
 
+  // Load accounts/centers eagerly; BPs/items only on tab access (datasets podem ser grandes)
   useEffect(() => {
     if (selectedDbs.length === 0) return;
     reloadAccounts();
     reloadCenters();
   }, [reloadAccounts, reloadCenters, selectedDbs]);
+
+  useEffect(() => {
+    if (selectedDbs.length === 0) return;
+    if (tab === "bps" && bpResults.length === 0 && !loadingBPs) reloadBPs();
+    if (tab === "items" && itemResults.length === 0 && !loadingItems) reloadItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, selectedDbs]);
 
   const { rows: accountRows, companies: accountCompanies } = useMemo(
     () => consolidateAccounts(accountResults),
@@ -871,6 +887,14 @@ export default function Intercompany() {
   const { rows: centerRows, companies: centerCompanies } = useMemo(
     () => consolidateCenters(centerResults),
     [centerResults],
+  );
+  const { rows: bpRows, companies: bpCompanies } = useMemo(
+    () => consolidateBPs(bpResults),
+    [bpResults],
+  );
+  const { rows: itemRows, companies: itemCompanies } = useMemo(
+    () => consolidateItems(itemResults),
+    [itemResults],
   );
 
   // Floating notification (15s) for companies that failed
