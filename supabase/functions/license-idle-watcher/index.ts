@@ -213,6 +213,20 @@ Deno.serve(async (req) => {
           if (!cur || d > cur) lastLoginByUser.set(key, d);
         }
 
+        // Reforça com OUSR.LastLoginDate (USR5 pode estar truncado por retenção)
+        try {
+          const ousr = await fetchHanaTable<OusrRow>(dbName, session.sessionId, "OUSR");
+          for (const row of ousr) {
+            const { code, date } = parseOusrLastLogin(row);
+            if (!code || !date) continue;
+            const key = code.toLowerCase();
+            const cur = lastLoginByUser.get(key);
+            if (!cur || date > cur) lastLoginByUser.set(key, date);
+          }
+        } catch (e) {
+          console.warn(`OUSR fetch falhou ${co.company_db}:`, (e as Error).message);
+        }
+
         const { data: licenses } = await sb
           .from("user_licenses")
           .select("user_code, user_name, license_type, has_license, is_locked, company_db")
