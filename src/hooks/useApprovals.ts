@@ -242,7 +242,7 @@ async function getStages(session: SapSession): Promise<Map<number, SLStage>> {
   try {
     const res = await sapQuery(
       session,
-      "ApprovalStages?$select=Code,Name,NumberOfApproversRequired&$top=200",
+      "ApprovalStages?$select=Code,Name&$top=200",
       undefined,
       true,
     );
