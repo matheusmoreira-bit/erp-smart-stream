@@ -117,6 +117,13 @@ interface SLApprovalDecision {
   ApprovalRequestStep?: number;
 }
 
+interface SLApprovalRequestLine {
+  Status?: string;
+  UserID?: number;
+  StageCode?: number;
+  ApprovalRequestStep?: number;
+}
+
 interface SLApprovalRequest {
   Code?: number;
   OriginatorID?: number;
@@ -129,6 +136,7 @@ interface SLApprovalRequest {
   UpdateDate?: string;
   ApprovalTemplatesID?: number;
   ApprovalRequestDecisions?: SLApprovalDecision[];
+  ApprovalRequestLines?: SLApprovalRequestLine[];
 }
 
 interface SLUser {
@@ -182,6 +190,30 @@ function daysBetween(fromIso?: string): number {
   if (!fromIso) return 0;
   const ms = Date.now() - new Date(fromIso).getTime();
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+
+function isPendingDecisionStatus(status?: string): boolean {
+  return status === "asWithoutDecision" || status === "asPending";
+}
+
+function isPendingLineStatus(status?: string): boolean {
+  return status === "ardPending" || status === "asWithoutDecision" || status === "asPending";
+}
+
+function getPendingApproval(r: SLApprovalRequest, decisions: SLApprovalDecision[]) {
+  const decision = decisions.find((d) => isPendingDecisionStatus(d.Status));
+  if (decision) {
+    return {
+      userId: decision.UserID,
+      stageCode: decision.ApprovalRequestStep,
+    };
+  }
+
+  const line = (r.ApprovalRequestLines || []).find((l) => isPendingLineStatus(l.Status));
+  return {
+    userId: line?.UserID,
+    stageCode: line?.StageCode || line?.ApprovalRequestStep,
+  };
 }
 
 // ===== Caches: DB (sap_cache, TTL 1 dia gerenciado pelo backend) + memória de sessão =====
@@ -377,12 +409,9 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
 
   // Buscar approvers das etapas pendentes (com cache por etapa)
   const pendingStageCodes = new Set<number>();
-  for (const { decisions } of enriched) {
-    for (const d of decisions) {
-      if ((d.Status === "asWithoutDecision" || d.Status === "asPending") && d.ApprovalRequestStep) {
-        pendingStageCodes.add(Number(d.ApprovalRequestStep));
-      }
-    }
+  for (const { r, decisions } of enriched) {
+    const pending = getPendingApproval(r, decisions);
+    if (pending.stageCode) pendingStageCodes.add(Number(pending.stageCode));
   }
   await Promise.all(
     Array.from(pendingStageCodes).map((code) => getStageApprovers(session, code)),
@@ -392,6 +421,8 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
   const userIdsNeeded = new Set<number>();
   for (const { r, decisions } of enriched) {
     if (r.OriginatorID) userIdsNeeded.add(Number(r.OriginatorID));
+    const pending = getPendingApproval(r, decisions);
+    if (pending.userId) userIdsNeeded.add(Number(pending.userId));
     for (const d of decisions) {
       if (d.UserID) userIdsNeeded.add(Number(d.UserID));
     }
@@ -406,16 +437,14 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
   return enriched.map(({ r, decisions, draft }): ApprovalDoc => {
     const originator = r.OriginatorID ? usersFinal.get(r.OriginatorID) : undefined;
 
-    const pending = decisions.find(
-      (d) => d.Status === "asWithoutDecision" || d.Status === "asPending",
-    );
+    const pending = getPendingApproval(r, decisions);
 
     let approver: SLUser | undefined;
-    if (pending?.UserID) {
-      approver = usersFinal.get(pending.UserID);
-    } else if (pending?.ApprovalRequestStep) {
+    if (pending.userId) {
+      approver = usersFinal.get(pending.userId);
+    } else if (pending.stageCode) {
       // fallback: pega primeiro approver configurado da etapa
-      const stageCode = Number(pending.ApprovalRequestStep);
+      const stageCode = Number(pending.stageCode);
       const approverIds =
         slStageApproversMem.get(session.companyDB)?.get(stageCode) || [];
       const firstId = approverIds[0];
@@ -423,8 +452,8 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
     }
 
     const stageName =
-      pending?.ApprovalRequestStep
-        ? stagesByCode.get(Number(pending.ApprovalRequestStep))?.Name || "—"
+      pending.stageCode
+        ? stagesByCode.get(Number(pending.stageCode))?.Name || "—"
         : "—";
     const templateName = r.ApprovalTemplatesID
       ? templatesByCode.get(r.ApprovalTemplatesID)?.Name || "—"
