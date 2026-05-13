@@ -184,84 +184,100 @@ function daysBetween(fromIso?: string): number {
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
 }
 
-// ===== Module-level caches (templates/stages/users por empresa, TTL 5min) =====
-const SL_CACHE_TTL = 5 * 60 * 1000;
-interface SLCacheEntry<T> { data: T; expiry: number }
-const slUsersCache = new Map<string, SLCacheEntry<Map<number, SLUser>>>();
-const slTemplatesCache = new Map<string, SLCacheEntry<Map<number, SLTemplate>>>();
-const slStagesCache = new Map<string, SLCacheEntry<Map<number, SLStage>>>();
-const slStageApproversCache = new Map<string, SLCacheEntry<Map<number, number[]>>>();
+// ===== Caches: DB (sap_cache, TTL 1 dia gerenciado pelo backend) + memória de sessão =====
+const slUsersMem = new Map<string, Map<number, SLUser>>();
+const slTemplatesMem = new Map<string, Map<number, SLTemplate>>();
+const slStagesMem = new Map<string, Map<number, SLStage>>();
+const slStageApproversMem = new Map<string, Map<number, number[]>>();
 
-function readCache<T>(map: Map<string, SLCacheEntry<T>>, key: string): T | null {
-  const e = map.get(key);
-  if (!e) return null;
-  if (Date.now() > e.expiry) { map.delete(key); return null; }
-  return e.data;
-}
-function writeCache<T>(map: Map<string, SLCacheEntry<T>>, key: string, data: T) {
-  map.set(key, { data, expiry: Date.now() + SL_CACHE_TTL });
+async function readDbCache<T>(companyDB: string, cacheKey: string): Promise<T | null> {
+  const { data, error } = await supabase
+    .from("sap_cache")
+    .select("data, expires_at")
+    .eq("company_db", companyDB)
+    .eq("cache_key", cacheKey)
+    .maybeSingle();
+  if (error || !data) return null;
+  if (new Date(data.expires_at).getTime() < Date.now()) return null;
+  return data.data as T;
 }
 
 async function getUsers(session: SapSession): Promise<Map<number, SLUser>> {
-  const cached = readCache(slUsersCache, session.companyDB);
-  if (cached) return cached;
-  const res = await sapQuery(
-    session,
-    "Users?$select=InternalKey,UserCode,UserName,eMail&$top=500",
-    undefined,
-    true,
-  );
-  const data = res.data as { value?: SLUser[] } | SLUser[];
-  const list: SLUser[] = Array.isArray(data) ? data : (data?.value || []);
-  const map = new Map<number, SLUser>();
-  for (const u of list) {
-    if (typeof u.InternalKey === "number") map.set(u.InternalKey, u);
+  const memo = slUsersMem.get(session.companyDB);
+  if (memo) return memo;
+
+  const cached = await readDbCache<SLUser[]>(session.companyDB, "sl_users");
+  let list: SLUser[] = cached || [];
+  if (!cached) {
+    try {
+      const res = await sapQuery(
+        session,
+        "Users?$select=InternalKey,UserCode,UserName,eMail&$top=500",
+        undefined,
+        true,
+      );
+      const data = res.data as { value?: SLUser[] } | SLUser[];
+      list = Array.isArray(data) ? data : (data?.value || []);
+    } catch (e) { console.warn("Users SL falhou:", e); }
   }
-  writeCache(slUsersCache, session.companyDB, map);
+  const map = new Map<number, SLUser>();
+  for (const u of list) if (typeof u.InternalKey === "number") map.set(u.InternalKey, u);
+  slUsersMem.set(session.companyDB, map);
   return map;
 }
 
 async function getTemplates(session: SapSession): Promise<Map<number, SLTemplate>> {
-  const cached = readCache(slTemplatesCache, session.companyDB);
-  if (cached) return cached;
-  const map = new Map<number, SLTemplate>();
-  try {
-    const res = await sapQuery(session, "ApprovalTemplates?$top=200", undefined, true);
-    const data = res.data as { value?: SLTemplate[] } | SLTemplate[];
-    const list: SLTemplate[] = Array.isArray(data) ? data : (data?.value || []);
-    for (const t of list) if (typeof t.Code === "number") map.set(t.Code, t);
-  } catch (e) {
-    console.warn("Falha ao buscar ApprovalTemplates:", e);
+  const memo = slTemplatesMem.get(session.companyDB);
+  if (memo) return memo;
+
+  const cached = await readDbCache<SLTemplate[]>(session.companyDB, "sl_templates");
+  let list: SLTemplate[] = cached || [];
+  if (!cached) {
+    try {
+      const res = await sapQuery(session, "ApprovalTemplates?$select=Code,Name&$top=200", undefined, true);
+      const data = res.data as { value?: SLTemplate[] } | SLTemplate[];
+      list = Array.isArray(data) ? data : (data?.value || []);
+    } catch (e) { console.warn("Templates SL falhou:", e); }
   }
-  writeCache(slTemplatesCache, session.companyDB, map);
+  const map = new Map<number, SLTemplate>();
+  for (const t of list) if (typeof t.Code === "number") map.set(t.Code, t);
+  slTemplatesMem.set(session.companyDB, map);
   return map;
 }
 
 async function getStages(session: SapSession): Promise<Map<number, SLStage>> {
-  const cached = readCache(slStagesCache, session.companyDB);
-  if (cached) return cached;
-  const map = new Map<number, SLStage>();
-  try {
-    const res = await sapQuery(
-      session,
-      "ApprovalStages?$select=Code,Name&$top=200",
-      undefined,
-      true,
-    );
-    const data = res.data as { value?: SLStage[] } | SLStage[];
-    const list: SLStage[] = Array.isArray(data) ? data : (data?.value || []);
-    for (const s of list) if (typeof s.Code === "number") map.set(s.Code, s);
-  } catch (e) {
-    console.warn("Falha ao buscar ApprovalStages:", e);
+  const memo = slStagesMem.get(session.companyDB);
+  if (memo) return memo;
+
+  const cached = await readDbCache<SLStage[]>(session.companyDB, "sl_stages");
+  let list: SLStage[] = cached || [];
+  if (!cached) {
+    try {
+      const res = await sapQuery(session, "ApprovalStages?$select=Code,Name&$top=200", undefined, true);
+      const data = res.data as { value?: SLStage[] } | SLStage[];
+      list = Array.isArray(data) ? data : (data?.value || []);
+    } catch (e) { console.warn("Stages SL falhou:", e); }
   }
-  writeCache(slStagesCache, session.companyDB, map);
+  const map = new Map<number, SLStage>();
+  for (const s of list) if (typeof s.Code === "number") map.set(s.Code, s);
+  slStagesMem.set(session.companyDB, map);
   return map;
 }
 
 async function getStageApprovers(session: SapSession, stageCode: number): Promise<number[]> {
-  const cacheKey = `${session.companyDB}:${stageCode}`;
-  const cached = readCache(slStageApproversCache, cacheKey);
-  if (cached) return cached.get(stageCode) || [];
+  let bucket = slStageApproversMem.get(session.companyDB);
+  if (bucket?.has(stageCode)) return bucket.get(stageCode) || [];
+
+  if (!bucket) {
+    const cached = await readDbCache<Record<string, number[]>>(session.companyDB, "sl_stage_approvers");
+    bucket = new Map<number, number[]>();
+    if (cached) {
+      for (const [k, v] of Object.entries(cached)) bucket.set(Number(k), v);
+    }
+    slStageApproversMem.set(session.companyDB, bucket);
+    if (bucket.has(stageCode)) return bucket.get(stageCode) || [];
+  }
+
   try {
     const res = await sapQuery(
       session,
@@ -273,7 +289,7 @@ async function getStageApprovers(session: SapSession, stageCode: number): Promis
     const ids = (raw?.StageApprovers || [])
       .map((a) => Number(a.UserCode))
       .filter((n) => Number.isFinite(n) && n > 0);
-    writeCache(slStageApproversCache, cacheKey, new Map<number, number[]>([[stageCode, ids]]));
+    bucket.set(stageCode, ids);
     return ids;
   } catch {
     return [];
