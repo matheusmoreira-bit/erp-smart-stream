@@ -151,16 +151,6 @@ export function useIntercompany() {
     [],
   );
 
-  return {
-    loadingAccounts,
-    loadingCenters,
-    accountResults,
-    centerResults,
-    loadAccounts,
-    loadCostCenters,
-    createAccount,
-    createCostCenter,
-    renameAccount,
   const loadBusinessPartners = useCallback(async (company_dbs?: string[]) => {
     setLoadingBPs(true);
     try {
