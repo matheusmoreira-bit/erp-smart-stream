@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQueryView } from "@/lib/sap-client";
+import { sapQuery, sapQueryView, type SapSession } from "@/lib/sap-client";
 
 export interface ApprovalDoc {
   approvalRequestId: number;
