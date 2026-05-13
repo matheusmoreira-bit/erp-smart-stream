@@ -159,7 +159,7 @@ export async function sapQueryView<T = unknown>(
   table: string,
   params?: Record<string, string | number>,
   useCache = true,
-): Promise<{ data: T[]; fromCache: boolean }> {
+): Promise<{ data: T[]; fromCache: boolean; hanaDisabled?: boolean }> {
   const cacheKey = `view:${session.companyDB}:${table}:${JSON.stringify(params || {})}`;
 
   if (useCache) {
@@ -176,11 +176,11 @@ export async function sapQueryView<T = unknown>(
     params,
   });
 
-  if (useCache) {
+  if (useCache && !result.hanaDisabled) {
     setClientCache(cacheKey, result.data);
   }
 
-  return { data: result.data as T[], fromCache: result.fromCache };
+  return { data: result.data as T[], fromCache: result.fromCache, hanaDisabled: !!result.hanaDisabled };
 }
 
 export async function sapQueryAll(
