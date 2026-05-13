@@ -264,8 +264,8 @@ async function processCompany(
         `Fornecedor: ${fornecedor}\n` +
         `Solicitante: ${solicitante}\n` +
         `Valor: ${valor}\n` +
-        `Dias em aberto: ${dias}\n` +
-        `<a href="${APPROVAL_APP_URL}">Abrir aplicativo de aprovação</a>`;
+        `Dias em aberto: ${dias}\n\n` +
+        `Abrir aplicativo de aprovação:\n${APPROVAL_APP_URL}`;
 
       const sent = await sendWhatsApp(phone, msg);
       if (!sent.ok) {
