@@ -725,6 +725,23 @@ function ConsolidatedTable({
                   const key = `${row.code}::${c.db}`;
                   const isPending = pending === key;
                   const next = !info.active;
+                  if (readOnly) {
+                    return (
+                      <TableCell key={c.db} className="text-center" title={info.name}>
+                        <span
+                          className={`inline-flex items-center justify-center p-1 ${
+                            info.active ? "text-success" : "text-muted-foreground"
+                          }`}
+                        >
+                          {info.active ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            <XCircle className="w-4 h-4" />
+                          )}
+                        </span>
+                      </TableCell>
+                    );
+                  }
                   return (
                     <TableCell key={c.db} className="text-center" title={info.name}>
                       <button
