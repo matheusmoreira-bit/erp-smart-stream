@@ -794,14 +794,22 @@ export default function Intercompany() {
   const {
     loadingAccounts,
     loadingCenters,
+    loadingBPs,
+    loadingItems,
     accountResults,
     centerResults,
+    bpResults,
+    itemResults,
     loadAccounts,
     loadCostCenters,
+    loadBusinessPartners,
+    loadItems,
     toggleAccount,
     toggleCostCenter,
     createAccount,
     createCostCenter,
+    replicateBusinessPartner,
+    replicateItem,
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = useMemo(
@@ -809,7 +817,7 @@ export default function Intercompany() {
     [allCompanies],
   );
 
-  const [tab, setTab] = useState<"accounts" | "centers">("accounts");
+  const [tab, setTab] = useState<"accounts" | "centers" | "bps" | "items">("accounts");
   const [search, setSearch] = useState("");
   const [selectedDbs, setSelectedDbs] = useState<string[]>(() => {
     try {
