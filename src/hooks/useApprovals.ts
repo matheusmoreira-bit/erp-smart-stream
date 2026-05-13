@@ -404,7 +404,7 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
   const usersFinal = slUsersMem.get(session.companyDB) || usersByKey;
 
   return enriched.map(({ r, decisions, draft }): ApprovalDoc => {
-    const originator = r.OriginatorID ? usersByKey.get(r.OriginatorID) : undefined;
+    const originator = r.OriginatorID ? usersFinal.get(r.OriginatorID) : undefined;
 
     const pending = decisions.find(
       (d) => d.Status === "asWithoutDecision" || d.Status === "asPending",
@@ -412,14 +412,14 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
 
     let approver: SLUser | undefined;
     if (pending?.UserID) {
-      approver = usersByKey.get(pending.UserID);
+      approver = usersFinal.get(pending.UserID);
     } else if (pending?.ApprovalRequestStep) {
       // fallback: pega primeiro approver configurado da etapa
       const stageCode = Number(pending.ApprovalRequestStep);
       const approverIds =
         slStageApproversMem.get(session.companyDB)?.get(stageCode) || [];
       const firstId = approverIds[0];
-      if (firstId) approver = usersByKey.get(firstId);
+      if (firstId) approver = usersFinal.get(firstId);
     }
 
     const stageName =
