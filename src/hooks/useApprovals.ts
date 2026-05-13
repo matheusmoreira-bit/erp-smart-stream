@@ -251,6 +251,8 @@ async function fetchUsersByIds(session: SapSession, ids: number[]): Promise<void
   );
   slUsersMem.set(session.companyDB, map);
 }
+
+async function getTemplates(session: SapSession): Promise<Map<number, SLTemplate>> {
   const memo = slTemplatesMem.get(session.companyDB);
   if (memo) return memo;
 
