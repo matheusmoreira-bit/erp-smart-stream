@@ -72,22 +72,54 @@ async function sapLogin(baseUrl: string, user: string, pass: string, db: string)
   return { sessionId: json.SessionId as string, routeId: routeMatch?.[1] ?? "" };
 }
 
-async function fetchUsr5(database: string, sessionId: string): Promise<Usr5[]> {
+async function fetchHanaTable<T = unknown>(database: string, sessionId: string, table: string): Promise<T[]> {
   const params = new URLSearchParams({
-    SessionId: sessionId, DB: database, Table: "USR5", _t: String(Date.now()),
+    SessionId: sessionId, DB: database, Table: table, _t: String(Date.now()),
   });
   const resp = await fetch(`${HANA_VIEWS_URL}?${params}`, { method: "GET" });
-  if (!resp.ok) throw new Error(`HANA falhou: ${resp.status}`);
+  if (!resp.ok) throw new Error(`HANA falhou (${table}): ${resp.status}`);
   const text = await resp.text();
   if (!text) return [];
   const payload = JSON.parse(text);
   if (Array.isArray(payload)) {
     const wrapped = payload.find((it) => it && Array.isArray(it.data));
-    if (wrapped) return wrapped.data;
-    return payload;
+    if (wrapped) return wrapped.data as T[];
+    return payload as T[];
   }
-  if (payload && Array.isArray(payload.data)) return payload.data;
+  if (payload && Array.isArray(payload.data)) return payload.data as T[];
   return [];
+}
+
+const fetchUsr5 = (db: string, sid: string) => fetchHanaTable<Usr5>(db, sid, "USR5");
+
+interface OusrRow {
+  USER_CODE?: string;
+  UserCode?: string;
+  USERID?: string;
+  LastLoginDate?: string | null;
+  LASTLOGINDATE?: string | null;
+  LastLoginTime?: number | string | null;
+  LASTLOGINTIME?: number | string | null;
+}
+
+function parseOusrLastLogin(r: OusrRow): { code: string; date: Date | null } {
+  const code = String(r.USER_CODE ?? r.UserCode ?? r.USERID ?? "").trim();
+  const dRaw = r.LastLoginDate ?? r.LASTLOGINDATE ?? null;
+  if (!code || !dRaw) return { code, date: null };
+  const ds = String(dRaw).slice(0, 10).replace(/-/g, "");
+  if (ds.length !== 8) return { code, date: null };
+  const tRaw = r.LastLoginTime ?? r.LASTLOGINTIME ?? 0;
+  const t = String(tRaw ?? 0).padStart(4, "0");
+  return {
+    code,
+    date: new Date(Date.UTC(
+      Number(ds.slice(0, 4)),
+      Number(ds.slice(4, 6)) - 1,
+      Number(ds.slice(6, 8)),
+      Number(t.slice(0, 2)) || 0,
+      Number(t.slice(2, 4)) || 0,
+    )),
+  };
 }
 
 async function sendWhatsApp(message: string) {
@@ -179,6 +211,20 @@ Deno.serve(async (req) => {
           const key = r.UserCode.toLowerCase();
           const cur = lastLoginByUser.get(key);
           if (!cur || d > cur) lastLoginByUser.set(key, d);
+        }
+
+        // Reforça com OUSR.LastLoginDate (USR5 pode estar truncado por retenção)
+        try {
+          const ousr = await fetchHanaTable<OusrRow>(dbName, session.sessionId, "OUSR");
+          for (const row of ousr) {
+            const { code, date } = parseOusrLastLogin(row);
+            if (!code || !date) continue;
+            const key = code.toLowerCase();
+            const cur = lastLoginByUser.get(key);
+            if (!cur || date > cur) lastLoginByUser.set(key, date);
+          }
+        } catch (e) {
+          console.warn(`OUSR fetch falhou ${co.company_db}:`, (e as Error).message);
         }
 
         const { data: licenses } = await sb
