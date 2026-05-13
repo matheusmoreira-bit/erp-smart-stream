@@ -24,6 +24,26 @@ export interface SapCostCenterRow {
   Active?: string;
 }
 
+export interface SapBusinessPartnerRow {
+  CardCode: string;
+  CardName: string;
+  CardType?: string;
+  FederalTaxID?: string;
+  Currency?: string;
+  GroupCode?: number;
+  Valid?: string;
+  Frozen?: string;
+}
+
+export interface SapItemRow {
+  ItemCode: string;
+  ItemName: string;
+  ItemsGroupCode?: number;
+  ItemType?: string;
+  Valid?: string;
+  Frozen?: string;
+}
+
 async function callIntercompany<T>(body: Record<string, unknown>): Promise<T> {
   const resp = await authFetch("intercompany", {
     method: "POST",
