@@ -178,7 +178,7 @@ function daysBetween(fromIso?: string): number {
 async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<ApprovalDoc[]> {
   const reqRes = await sapQuery(
     session,
-    "ApprovalRequests?$filter=Status eq 'arsPending'&$expand=ApprovalRequestDecisions&$top=200",
+    "ApprovalRequests?$filter=Status eq 'arsPending'&$top=200",
     undefined,
     false,
   );
