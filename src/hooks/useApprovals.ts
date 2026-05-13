@@ -122,7 +122,7 @@ interface SLApprovalRequest {
   OriginatorID?: number;
   DraftEntry?: number;
   DocumentEntry?: number;
-  ObjectCode?: string;
+  ObjectType?: string;
   Status?: string;
   RemarksFromOriginator?: string;
   CreationDate?: string;
@@ -224,6 +224,32 @@ async function getUsers(session: SapSession): Promise<Map<number, SLUser>> {
   for (const u of list) if (typeof u.InternalKey === "number") map.set(u.InternalKey, u);
   slUsersMem.set(session.companyDB, map);
   return map;
+}
+
+async function fetchUsersByIds(session: SapSession, ids: number[]): Promise<void> {
+  const map = slUsersMem.get(session.companyDB) || new Map<number, SLUser>();
+  const missing = ids.filter((id) => Number.isFinite(id) && id > 0 && !map.has(id));
+  if (!missing.length) {
+    slUsersMem.set(session.companyDB, map);
+    return;
+  }
+  await Promise.all(
+    missing.map(async (id) => {
+      try {
+        const res = await sapQuery(
+          session,
+          `Users(${id})?$select=InternalKey,UserCode,UserName,eMail`,
+          undefined,
+          true,
+        );
+        const u = res.data as SLUser;
+        if (u && typeof u.InternalKey === "number") map.set(u.InternalKey, u);
+      } catch (e) {
+        console.warn(`Users(${id}) falhou:`, e);
+      }
+    }),
+  );
+  slUsersMem.set(session.companyDB, map);
 }
 
 async function getTemplates(session: SapSession): Promise<Map<number, SLTemplate>> {
@@ -362,8 +388,23 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
     Array.from(pendingStageCodes).map((code) => getStageApprovers(session, code)),
   );
 
+  // Coletar todos os user IDs necessários (originators + decisores + 1º aprovador da etapa)
+  const userIdsNeeded = new Set<number>();
+  for (const { r, decisions } of enriched) {
+    if (r.OriginatorID) userIdsNeeded.add(Number(r.OriginatorID));
+    for (const d of decisions) {
+      if (d.UserID) userIdsNeeded.add(Number(d.UserID));
+    }
+  }
+  for (const stageCode of pendingStageCodes) {
+    const ids = slStageApproversMem.get(session.companyDB)?.get(stageCode) || [];
+    for (const id of ids) userIdsNeeded.add(id);
+  }
+  await fetchUsersByIds(session, Array.from(userIdsNeeded));
+  const usersFinal = slUsersMem.get(session.companyDB) || usersByKey;
+
   return enriched.map(({ r, decisions, draft }): ApprovalDoc => {
-    const originator = r.OriginatorID ? usersByKey.get(r.OriginatorID) : undefined;
+    const originator = r.OriginatorID ? usersFinal.get(r.OriginatorID) : undefined;
 
     const pending = decisions.find(
       (d) => d.Status === "asWithoutDecision" || d.Status === "asPending",
@@ -371,14 +412,14 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
 
     let approver: SLUser | undefined;
     if (pending?.UserID) {
-      approver = usersByKey.get(pending.UserID);
+      approver = usersFinal.get(pending.UserID);
     } else if (pending?.ApprovalRequestStep) {
       // fallback: pega primeiro approver configurado da etapa
       const stageCode = Number(pending.ApprovalRequestStep);
       const approverIds =
         slStageApproversMem.get(session.companyDB)?.get(stageCode) || [];
       const firstId = approverIds[0];
-      if (firstId) approver = usersByKey.get(firstId);
+      if (firstId) approver = usersFinal.get(firstId);
     }
 
     const stageName =
@@ -389,8 +430,8 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
       ? templatesByCode.get(r.ApprovalTemplatesID)?.Name || "—"
       : "—";
 
-    const objCode = String(r.ObjectCode || "");
-    const docTypeName = OBJECT_CODE_TO_NAME[objCode] || `Documento (${objCode})`;
+    const objCode = String(r.ObjectType || "");
+    const docTypeName = OBJECT_CODE_TO_NAME[objCode] || (objCode ? `Documento (${objCode})` : "Documento");
     const currency = (draft.DocCurrency || "BRL").toUpperCase();
     const docTotal =
       currency !== "BRL" && draft.DocTotalFc
