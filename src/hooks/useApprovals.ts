@@ -259,11 +259,7 @@ async function getStages(session: SapSession): Promise<Map<number, SLStage>> {
 async function getStageApprovers(session: SapSession, stageCode: number): Promise<number[]> {
   const cacheKey = `${session.companyDB}:${stageCode}`;
   const cached = readCache(slStageApproversCache, cacheKey);
-  if (cached !== null) {
-    const all = readCache(slStageApproversCache, cacheKey);
-    if (all) return all.get(stageCode) || [];
-  }
-  // store one entry per stage to keep granular cache
+  if (cached) return cached.get(stageCode) || [];
   try {
     const res = await sapQuery(
       session,
@@ -275,8 +271,7 @@ async function getStageApprovers(session: SapSession, stageCode: number): Promis
     const ids = (raw?.StageApprovers || [])
       .map((a) => Number(a.UserCode))
       .filter((n) => Number.isFinite(n) && n > 0);
-    const oneEntry = new Map<number, number[]>([[stageCode, ids]]);
-    writeCache(slStageApproversCache, cacheKey, oneEntry);
+    writeCache(slStageApproversCache, cacheKey, new Map<number, number[]>([[stageCode, ids]]));
     return ids;
   } catch {
     return [];
