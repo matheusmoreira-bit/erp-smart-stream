@@ -153,6 +153,13 @@ interface SLDraft {
 interface SLTemplate {
   Code?: number;
   Name?: string;
+  ApprovalTemplatesStages?: Array<{ ApprovalStageID?: number }>;
+}
+
+interface SLStage {
+  Code?: number;
+  Name?: string;
+  NumberOfApproversRequired?: number;
 }
 
 const OBJECT_CODE_TO_NAME: Record<string, string> = {
@@ -175,6 +182,117 @@ function daysBetween(fromIso?: string): number {
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
 }
 
+// ===== Module-level caches (templates/stages/users por empresa, TTL 5min) =====
+const SL_CACHE_TTL = 5 * 60 * 1000;
+interface SLCacheEntry<T> { data: T; expiry: number }
+const slUsersCache = new Map<string, SLCacheEntry<Map<number, SLUser>>>();
+const slTemplatesCache = new Map<string, SLCacheEntry<Map<number, SLTemplate>>>();
+const slStagesCache = new Map<string, SLCacheEntry<Map<number, SLStage>>>();
+const slStageApproversCache = new Map<string, SLCacheEntry<Map<number, number[]>>>();
+
+function readCache<T>(map: Map<string, SLCacheEntry<T>>, key: string): T | null {
+  const e = map.get(key);
+  if (!e) return null;
+  if (Date.now() > e.expiry) { map.delete(key); return null; }
+  return e.data;
+}
+function writeCache<T>(map: Map<string, SLCacheEntry<T>>, key: string, data: T) {
+  map.set(key, { data, expiry: Date.now() + SL_CACHE_TTL });
+}
+
+async function getUsers(session: SapSession): Promise<Map<number, SLUser>> {
+  const cached = readCache(slUsersCache, session.companyDB);
+  if (cached) return cached;
+  const res = await sapQuery(
+    session,
+    "Users?$select=InternalKey,UserCode,UserName,eMail&$top=500",
+    undefined,
+    true,
+  );
+  const data = res.data as { value?: SLUser[] } | SLUser[];
+  const list: SLUser[] = Array.isArray(data) ? data : (data?.value || []);
+  const map = new Map<number, SLUser>();
+  for (const u of list) {
+    if (typeof u.InternalKey === "number") map.set(u.InternalKey, u);
+  }
+  writeCache(slUsersCache, session.companyDB, map);
+  return map;
+}
+
+async function getTemplates(session: SapSession): Promise<Map<number, SLTemplate>> {
+  const cached = readCache(slTemplatesCache, session.companyDB);
+  if (cached) return cached;
+  const map = new Map<number, SLTemplate>();
+  try {
+    const res = await sapQuery(session, "ApprovalTemplates?$top=200", undefined, true);
+    const data = res.data as { value?: SLTemplate[] } | SLTemplate[];
+    const list: SLTemplate[] = Array.isArray(data) ? data : (data?.value || []);
+    for (const t of list) if (typeof t.Code === "number") map.set(t.Code, t);
+  } catch (e) {
+    console.warn("Falha ao buscar ApprovalTemplates:", e);
+  }
+  writeCache(slTemplatesCache, session.companyDB, map);
+  return map;
+}
+
+async function getStages(session: SapSession): Promise<Map<number, SLStage>> {
+  const cached = readCache(slStagesCache, session.companyDB);
+  if (cached) return cached;
+  const map = new Map<number, SLStage>();
+  try {
+    const res = await sapQuery(
+      session,
+      "ApprovalStages?$select=Code,Name,NumberOfApproversRequired&$top=200",
+      undefined,
+      true,
+    );
+    const data = res.data as { value?: SLStage[] } | SLStage[];
+    const list: SLStage[] = Array.isArray(data) ? data : (data?.value || []);
+    for (const s of list) if (typeof s.Code === "number") map.set(s.Code, s);
+  } catch (e) {
+    console.warn("Falha ao buscar ApprovalStages:", e);
+  }
+  writeCache(slStagesCache, session.companyDB, map);
+  return map;
+}
+
+async function getStageApprovers(session: SapSession, stageCode: number): Promise<number[]> {
+  const cacheKey = `${session.companyDB}:${stageCode}`;
+  const cached = readCache(slStageApproversCache, cacheKey);
+  if (cached) return cached.get(stageCode) || [];
+  try {
+    const res = await sapQuery(
+      session,
+      `ApprovalStages(${stageCode})?$select=Code,StageApprovers`,
+      undefined,
+      true,
+    );
+    const raw = res.data as { StageApprovers?: Array<{ UserCode?: number }> };
+    const ids = (raw?.StageApprovers || [])
+      .map((a) => Number(a.UserCode))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    writeCache(slStageApproversCache, cacheKey, new Map<number, number[]>([[stageCode, ids]]));
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchDecisions(session: SapSession, requestCode: number): Promise<SLApprovalDecision[]> {
+  try {
+    const res = await sapQuery(
+      session,
+      `ApprovalRequests(${requestCode})/ApprovalRequestDecisions`,
+      undefined,
+      false,
+    );
+    const data = res.data as { value?: SLApprovalDecision[] } | SLApprovalDecision[];
+    return Array.isArray(data) ? data : (data?.value || []);
+  } catch {
+    return [];
+  }
+}
+
 async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<ApprovalDoc[]> {
   const reqRes = await sapQuery(
     session,
@@ -189,57 +307,69 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
 
   if (!requests.length) return [];
 
-  const usersRes = await sapQuery(
-    session,
-    "Users?$select=InternalKey,UserCode,UserName,eMail&$top=500",
-    undefined,
-    true,
-  );
-  const usersData = usersRes.data as { value?: SLUser[] } | SLUser[];
-  const users: SLUser[] = Array.isArray(usersData) ? usersData : (usersData?.value || []);
-  const usersByKey = new Map<number, SLUser>();
-  for (const u of users) {
-    if (typeof u.InternalKey === "number") usersByKey.set(u.InternalKey, u);
-  }
+  // Cargas paralelas com cache
+  const [usersByKey, templatesByCode, stagesByCode] = await Promise.all([
+    getUsers(session),
+    getTemplates(session),
+    getStages(session),
+  ]);
 
-  const tplRes = await sapQuery(
-    session,
-    "ApprovalTemplates?$select=Code,Name&$top=200",
-    undefined,
-    true,
-  ).catch(() => ({ data: { value: [] as SLTemplate[] } }));
-  const tplData = (tplRes as { data: unknown }).data as { value?: SLTemplate[] } | SLTemplate[];
-  const templates: SLTemplate[] = Array.isArray(tplData) ? tplData : (tplData?.value || []);
-  const tplByCode = new Map<number, string>();
-  for (const t of templates) {
-    if (typeof t.Code === "number") tplByCode.set(t.Code, t.Name || "");
-  }
-
-  const drafts = await Promise.all(
+  // Para cada request: buscar decisões + draft em paralelo
+  const enriched = await Promise.all(
     requests.map(async (r) => {
-      if (!r.DraftEntry) return null;
-      try {
-        const d = await sapQuery(
-          session,
-          `Drafts(${r.DraftEntry})?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,DocumentLines`,
-          undefined,
-          false,
-        );
-        return d.data as SLDraft;
-      } catch {
-        return null;
-      }
+      const decisionsP = fetchDecisions(session, Number(r.Code));
+      const draftP = r.DraftEntry
+        ? sapQuery(
+            session,
+            `Drafts(${r.DraftEntry})?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,DocumentLines`,
+            undefined,
+            false,
+          ).then((d) => d.data as SLDraft).catch(() => null)
+        : Promise.resolve(null);
+      const [decisions, draft] = await Promise.all([decisionsP, draftP]);
+      return { r, decisions, draft: draft || ({} as SLDraft) };
     }),
   );
 
-  return requests.map((r, idx): ApprovalDoc => {
-    const draft = drafts[idx] || {};
+  // Buscar approvers das etapas pendentes (com cache por etapa)
+  const pendingStageCodes = new Set<number>();
+  for (const { decisions } of enriched) {
+    for (const d of decisions) {
+      if ((d.Status === "asWithoutDecision" || d.Status === "asPending") && d.ApprovalRequestStep) {
+        pendingStageCodes.add(Number(d.ApprovalRequestStep));
+      }
+    }
+  }
+  await Promise.all(
+    Array.from(pendingStageCodes).map((code) => getStageApprovers(session, code)),
+  );
+
+  return enriched.map(({ r, decisions, draft }): ApprovalDoc => {
     const originator = r.OriginatorID ? usersByKey.get(r.OriginatorID) : undefined;
 
-    const pendingDecision = (r.ApprovalRequestDecisions || []).find(
+    const pending = decisions.find(
       (d) => d.Status === "asWithoutDecision" || d.Status === "asPending",
-    ) || (r.ApprovalRequestDecisions || [])[0];
-    const approver = pendingDecision?.UserID ? usersByKey.get(pendingDecision.UserID) : undefined;
+    );
+
+    let approver: SLUser | undefined;
+    if (pending?.UserID) {
+      approver = usersByKey.get(pending.UserID);
+    } else if (pending?.ApprovalRequestStep) {
+      // fallback: pega primeiro approver configurado da etapa
+      const stageCode = Number(pending.ApprovalRequestStep);
+      const approverIds =
+        readCache(slStageApproversCache, `${session.companyDB}:${stageCode}`)?.get(stageCode) || [];
+      const firstId = approverIds[0];
+      if (firstId) approver = usersByKey.get(firstId);
+    }
+
+    const stageName =
+      pending?.ApprovalRequestStep
+        ? stagesByCode.get(Number(pending.ApprovalRequestStep))?.Name || "—"
+        : "—";
+    const templateName = r.ApprovalTemplatesID
+      ? templatesByCode.get(r.ApprovalTemplatesID)?.Name || "—"
+      : "—";
 
     const objCode = String(r.ObjectCode || "");
     const docTypeName = OBJECT_CODE_TO_NAME[objCode] || `Documento (${objCode})`;
@@ -262,12 +392,12 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
       requester: originator?.UserName || originator?.UserCode || "—",
       currentApprover: approver?.UserName || approver?.UserCode || "—",
       approverEmail: approver?.eMail || "",
-      currentStage: r.ApprovalTemplatesID ? (tplByCode.get(r.ApprovalTemplatesID) || "—") : "—",
+      currentStage: stageName !== "—" ? stageName : templateName,
       status: "pending",
       docDate: r.CreationDate || draft.DocDate || "",
       dueDate: draft.DocDueDate || "",
       remarks: r.RemarksFromOriginator || draft.Comments || "",
-      approvalModel: r.ApprovalTemplatesID ? (tplByCode.get(r.ApprovalTemplatesID) || "") : "",
+      approvalModel: templateName !== "—" ? templateName : "",
       daysOpen: daysBetween(r.CreationDate),
       attachmentNames: "",
       documentLines: Array.isArray(draft.DocumentLines)
