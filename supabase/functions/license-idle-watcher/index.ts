@@ -307,11 +307,27 @@ Deno.serve(async (req) => {
       await sendEmail(`[Licenças ociosas] ${display} — ${list.length} usuário(s)`, html);
     }
 
+    await sb.from("notification_send_runs").insert({
+      function_name: "license-idle-watcher",
+      status: "success",
+      recipients_count: sentCount,
+      error_message: null,
+      details: { idle_total: allIdle.length, week: weekKey },
+    });
     return new Response(JSON.stringify({ ok: true, idle_total: allIdle.length, alerts_sent: sentCount, week: weekKey }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("license-idle-watcher error:", e);
+    try {
+      await sb.from("notification_send_runs").insert({
+        function_name: "license-idle-watcher",
+        status: "error",
+        recipients_count: 0,
+        error_message: (e as Error).message,
+        details: {},
+      });
+    } catch { /* ignore */ }
     return new Response(JSON.stringify({ error: (e as Error).message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

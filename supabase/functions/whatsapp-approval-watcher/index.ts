@@ -368,6 +368,15 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     console.error("Approval watcher error:", e);
+    try {
+      await sb.from("notification_send_runs").insert({
+        function_name: "whatsapp-approval-watcher",
+        status: "error",
+        recipients_count: 0,
+        error_message: (e as Error).message,
+        details: {},
+      });
+    } catch { /* ignore */ }
     return new Response(
       JSON.stringify({ ok: false, error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
