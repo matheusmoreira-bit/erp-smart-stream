@@ -411,7 +411,7 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
   const pendingStageCodes = new Set<number>();
   for (const { r, decisions } of enriched) {
     const pending = getPendingApproval(r, decisions);
-    if (pending.stageCode) pendingStageCodes.add(Number(pending.stageCode));
+    if (!pending.userId && pending.stageCode) pendingStageCodes.add(Number(pending.stageCode));
   }
   await Promise.all(
     Array.from(pendingStageCodes).map((code) => getStageApprovers(session, code)),
