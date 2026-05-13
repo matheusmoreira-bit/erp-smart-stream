@@ -52,6 +52,8 @@ import {
   type PerCompanyResult,
   type SapAccountRow,
   type SapCostCenterRow,
+  type SapBusinessPartnerRow,
+  type SapItemRow,
 } from "@/hooks/useIntercompany";
 
 interface UnifiedAccountRow {
@@ -64,6 +66,62 @@ interface UnifiedCenterRow {
   code: string;
   names: Set<string>;
   presence: Map<string, { name: string; active: boolean }>;
+}
+
+function consolidateBPs(
+  results: PerCompanyResult<SapBusinessPartnerRow[]>[],
+): { rows: UnifiedAccountRow[]; companies: { db: string; name: string }[] } {
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
+  const map = new Map<string, UnifiedAccountRow>();
+  for (const r of results) {
+    if (!r.ok || !r.data) continue;
+    for (const a of r.data) {
+      const code = String(a.CardCode || "").trim();
+      if (!code) continue;
+      let row = map.get(code);
+      if (!row) {
+        row = { code, names: new Set(), presence: new Map() };
+        map.set(code, row);
+      }
+      row.names.add(a.CardName || "");
+      row.presence.set(r.company_db, {
+        name: a.CardName || "",
+        active: a.Frozen !== "tYES" && a.Valid !== "tNO",
+      });
+    }
+  }
+  const rows = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  return { rows, companies };
+}
+
+function consolidateItems(
+  results: PerCompanyResult<SapItemRow[]>[],
+): { rows: UnifiedAccountRow[]; companies: { db: string; name: string }[] } {
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
+  const map = new Map<string, UnifiedAccountRow>();
+  for (const r of results) {
+    if (!r.ok || !r.data) continue;
+    for (const a of r.data) {
+      const code = String(a.ItemCode || "").trim();
+      if (!code) continue;
+      let row = map.get(code);
+      if (!row) {
+        row = { code, names: new Set(), presence: new Map() };
+        map.set(code, row);
+      }
+      row.names.add(a.ItemName || "");
+      row.presence.set(r.company_db, {
+        name: a.ItemName || "",
+        active: a.Frozen !== "tYES" && a.Valid !== "tNO",
+      });
+    }
+  }
+  const rows = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  return { rows, companies };
 }
 
 const ACCOUNT_TYPES: { value: string; label: string }[] = [
