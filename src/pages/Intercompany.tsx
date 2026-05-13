@@ -1030,7 +1030,7 @@ export default function Intercompany() {
                     </div>
                   </PopoverContent>
                 </Popover>
-                {tab === "accounts" ? (
+                {tab === "accounts" && (
                   <>
                     <Button
                       variant="outline"
@@ -1044,7 +1044,8 @@ export default function Intercompany() {
                     </Button>
                     <CreateAccountDialog onCreated={reloadAccounts} companyDbs={selectedDbs} />
                   </>
-                ) : (
+                )}
+                {tab === "centers" && (
                   <>
                     <Button
                       variant="outline"
@@ -1058,6 +1059,30 @@ export default function Intercompany() {
                     </Button>
                     <CreateCostCenterDialog onCreated={reloadCenters} companyDbs={selectedDbs} />
                   </>
+                )}
+                {tab === "bps" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={reloadBPs}
+                    disabled={loadingBPs || selectedDbs.length === 0}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingBPs ? "animate-spin" : ""}`} />
+                    Atualizar
+                  </Button>
+                )}
+                {tab === "items" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={reloadItems}
+                    disabled={loadingItems || selectedDbs.length === 0}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingItems ? "animate-spin" : ""}`} />
+                    Atualizar
+                  </Button>
                 )}
               </div>
             </div>
