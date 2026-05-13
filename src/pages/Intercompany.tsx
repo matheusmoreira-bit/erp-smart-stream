@@ -941,7 +941,7 @@ export default function Intercompany() {
             <div>
               <h1 className="text-xl font-bold text-foreground">Intercompany</h1>
               <p className="text-xs text-muted-foreground">
-                Plano de contas e centros de custo consolidados entre empresas
+                Plano de contas, centros de custo, parceiros de negócios e itens consolidados entre empresas
               </p>
             </div>
           </div>
