@@ -122,7 +122,7 @@ interface SLApprovalRequest {
   OriginatorID?: number;
   DraftEntry?: number;
   DocumentEntry?: number;
-  ObjectCode?: string;
+  ObjectType?: string;
   Status?: string;
   RemarksFromOriginator?: string;
   CreationDate?: string;
