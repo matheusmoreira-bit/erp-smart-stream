@@ -124,11 +124,16 @@ export function useApprovals() {
         `${session.companyDB}.VW_APROVACOES_DETALHADAS`,
       );
 
-      const docs = detailedView.data
-        .map(mapHanaApproval)
-        .filter((doc) => doc.approvalRequestId > 0);
-
-      setApprovals(docs);
+      if (detailedView.hanaDisabled) {
+        // Empresa sem middleware HANA — buscar tudo via Service Layer
+        const docs = await fetchApprovalsViaServiceLayer(session as SapSession);
+        setApprovals(docs);
+      } else {
+        const docs = detailedView.data
+          .map(mapHanaApproval)
+          .filter((doc) => doc.approvalRequestId > 0);
+        setApprovals(docs);
+      }
     } catch (e) {
       console.error("Error fetching approvals:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar aprovações");
