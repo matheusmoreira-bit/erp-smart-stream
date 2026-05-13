@@ -161,8 +161,72 @@ export function useIntercompany() {
     createAccount,
     createCostCenter,
     renameAccount,
+  const loadBusinessPartners = useCallback(async (company_dbs?: string[]) => {
+    setLoadingBPs(true);
+    try {
+      const r = await callIntercompany<{ results: PerCompanyResult<SapBusinessPartnerRow[]>[] }>({
+        action: "list-business-partners",
+        company_dbs,
+      });
+      setBpResults(r.results || []);
+    } finally {
+      setLoadingBPs(false);
+    }
+  }, []);
+
+  const loadItems = useCallback(async (company_dbs?: string[]) => {
+    setLoadingItems(true);
+    try {
+      const r = await callIntercompany<{ results: PerCompanyResult<SapItemRow[]>[] }>({
+        action: "list-items",
+        company_dbs,
+      });
+      setItemResults(r.results || []);
+    } finally {
+      setLoadingItems(false);
+    }
+  }, []);
+
+  const replicateBusinessPartner = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-business-partner",
+        ...input,
+      });
+    },
+    [],
+  );
+
+  const replicateItem = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-item",
+        ...input,
+      });
+    },
+    [],
+  );
+
+  return {
+    loadingAccounts,
+    loadingCenters,
+    loadingBPs,
+    loadingItems,
+    accountResults,
+    centerResults,
+    bpResults,
+    itemResults,
+    loadAccounts,
+    loadCostCenters,
+    loadBusinessPartners,
+    loadItems,
+    createAccount,
+    createCostCenter,
+    renameAccount,
     renameCostCenter,
     toggleAccount,
     toggleCostCenter,
+    replicateBusinessPartner,
+    replicateItem,
   };
 }
