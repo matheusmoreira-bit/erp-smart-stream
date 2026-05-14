@@ -898,8 +898,12 @@ export default function Intercompany() {
     () => () => loadItems(selectedDbs),
     [loadItems, selectedDbs],
   );
+  const reloadUsers = useMemo(
+    () => () => loadUsers(selectedDbs),
+    [loadUsers, selectedDbs],
+  );
 
-  // Load accounts/centers eagerly; BPs/items only on tab access (datasets podem ser grandes)
+  // Load accounts/centers eagerly; BPs/items/users only on tab access (datasets podem ser grandes)
   useEffect(() => {
     if (selectedDbs.length === 0) return;
     reloadAccounts();
@@ -910,6 +914,7 @@ export default function Intercompany() {
     if (selectedDbs.length === 0) return;
     if (tab === "bps" && bpResults.length === 0 && !loadingBPs) reloadBPs();
     if (tab === "items" && itemResults.length === 0 && !loadingItems) reloadItems();
+    if (tab === "users" && userResults.length === 0 && !loadingUsers) reloadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, selectedDbs]);
 
@@ -928,6 +933,10 @@ export default function Intercompany() {
   const { rows: itemRows, companies: itemCompanies } = useMemo(
     () => consolidateItems(itemResults),
     [itemResults],
+  );
+  const { rows: userRows, companies: userCompanies } = useMemo(
+    () => consolidateUsers(userResults),
+    [userResults],
   );
 
   // Floating notification (15s) for companies that failed
