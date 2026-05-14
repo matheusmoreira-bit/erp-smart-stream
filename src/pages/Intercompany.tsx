@@ -992,13 +992,14 @@ export default function Intercompany() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as "accounts" | "centers" | "bps" | "items")}>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as "accounts" | "centers" | "bps" | "items" | "users")}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <TabsList>
                 <TabsTrigger value="accounts">Plano de Contas</TabsTrigger>
                 <TabsTrigger value="centers">Centros de Custo</TabsTrigger>
                 <TabsTrigger value="bps">Parceiros de Negócios</TabsTrigger>
                 <TabsTrigger value="items">Itens</TabsTrigger>
+                <TabsTrigger value="users">Usuários</TabsTrigger>
               </TabsList>
               <div className="flex items-center gap-2">
                 <div className="relative">
