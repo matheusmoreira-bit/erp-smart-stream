@@ -44,6 +44,17 @@ export interface SapItemRow {
   Frozen?: string;
 }
 
+export interface SapUserRow {
+  UserCode: string;
+  UserName: string;
+  eMail?: string;
+  Superuser?: string;
+  Locked?: string;
+  Department?: number;
+  Branch?: number;
+  MobilePhone?: string;
+}
+
 async function callIntercompany<T>(body: Record<string, unknown>): Promise<T> {
   const resp = await authFetch("intercompany", {
     method: "POST",
