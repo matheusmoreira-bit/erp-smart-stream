@@ -1307,6 +1307,42 @@ export default function Intercompany() {
                 />
               )}
             </TabsContent>
+
+            <TabsContent value="users" className="space-y-3 mt-4">
+              {loadingUsers && userResults.length === 0 ? (
+                <div className="text-center text-muted-foreground py-12 text-sm">
+                  Carregando usuários de todas as empresas…
+                </div>
+              ) : (
+                <ConsolidatedTable
+                  rows={userRows}
+                  companies={userCompanies}
+                  search={search}
+                  readOnly
+                  onReplicate={async (code, _name, targetDb) => {
+                    const row = userRows.find((r) => r.code === code);
+                    const sourceDb = row ? Array.from(row.presence.keys())[0] : undefined;
+                    if (!sourceDb) {
+                      toast.error("Não foi possível identificar a empresa de origem");
+                      return;
+                    }
+                    try {
+                      const { results } = await replicateUser({
+                        code,
+                        source_company_db: sourceDb,
+                        target_company_db: targetDb,
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
+                      toast.success(`Usuário ${code} replicado nesta empresa (senha padrão: Sap@2025)`);
+                      await reloadUsers();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao replicar");
+                    }
+                  }}
+                />
+              )}
+            </TabsContent>
           </Tabs>
         </motion.div>
       </main>
