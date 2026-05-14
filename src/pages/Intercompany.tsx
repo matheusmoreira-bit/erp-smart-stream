@@ -850,7 +850,7 @@ export default function Intercompany() {
     [allCompanies],
   );
 
-  const [tab, setTab] = useState<"accounts" | "centers" | "bps" | "items">("accounts");
+  const [tab, setTab] = useState<"accounts" | "centers" | "bps" | "items" | "users">("accounts");
   const [search, setSearch] = useState("");
   const [selectedDbs, setSelectedDbs] = useState<string[]>(() => {
     try {
