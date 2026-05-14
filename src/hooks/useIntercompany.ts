@@ -44,6 +44,17 @@ export interface SapItemRow {
   Frozen?: string;
 }
 
+export interface SapUserRow {
+  UserCode: string;
+  UserName: string;
+  eMail?: string;
+  Superuser?: string;
+  Locked?: string;
+  Department?: number;
+  Branch?: number;
+  MobilePhone?: string;
+}
+
 async function callIntercompany<T>(body: Record<string, unknown>): Promise<T> {
   const resp = await authFetch("intercompany", {
     method: "POST",
@@ -64,6 +75,8 @@ export function useIntercompany() {
   const [centerResults, setCenterResults] = useState<PerCompanyResult<SapCostCenterRow[]>[]>([]);
   const [bpResults, setBpResults] = useState<PerCompanyResult<SapBusinessPartnerRow[]>[]>([]);
   const [itemResults, setItemResults] = useState<PerCompanyResult<SapItemRow[]>[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userResults, setUserResults] = useState<PerCompanyResult<SapUserRow[]>[]>([]);
 
   const loadAccounts = useCallback(async (company_dbs?: string[]) => {
     setLoadingAccounts(true);
@@ -197,19 +210,45 @@ export function useIntercompany() {
     [],
   );
 
+  const loadUsers = useCallback(async (company_dbs?: string[]) => {
+    setLoadingUsers(true);
+    try {
+      const r = await callIntercompany<{ results: PerCompanyResult<SapUserRow[]>[] }>({
+        action: "list-users",
+        company_dbs,
+      });
+      setUserResults(r.results || []);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, []);
+
+  const replicateUser = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string; password?: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-user",
+        ...input,
+      });
+    },
+    [],
+  );
+
   return {
     loadingAccounts,
     loadingCenters,
     loadingBPs,
     loadingItems,
+    loadingUsers,
     accountResults,
     centerResults,
     bpResults,
     itemResults,
+    userResults,
     loadAccounts,
     loadCostCenters,
     loadBusinessPartners,
     loadItems,
+    loadUsers,
     createAccount,
     createCostCenter,
     renameAccount,
@@ -218,5 +257,6 @@ export function useIntercompany() {
     toggleCostCenter,
     replicateBusinessPartner,
     replicateItem,
+    replicateUser,
   };
 }
