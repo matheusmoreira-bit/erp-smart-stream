@@ -54,6 +54,7 @@ import {
   type SapCostCenterRow,
   type SapBusinessPartnerRow,
   type SapItemRow,
+  type SapUserRow,
 } from "@/hooks/useIntercompany";
 
 interface UnifiedAccountRow {
