@@ -1127,6 +1127,18 @@ export default function Intercompany() {
                     Atualizar
                   </Button>
                 )}
+                {tab === "users" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={reloadUsers}
+                    disabled={loadingUsers || selectedDbs.length === 0}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingUsers ? "animate-spin" : ""}`} />
+                    Atualizar
+                  </Button>
+                )}
               </div>
             </div>
 
