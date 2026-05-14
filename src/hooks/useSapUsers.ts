@@ -238,41 +238,53 @@ export function useSapUsers() {
     }
   }, [session, resolveInternalKey]);
 
-  const createUser = useCallback(async (userData: UserCreatePayload): Promise<{ created: boolean; replicationResults: ReplicationResult[] }> => {
+  const createUser = useCallback(async (
+    userData: UserCreatePayload,
+    targetCompanyDbs?: string[],
+  ): Promise<{ created: boolean; replicationResults: ReplicationResult[] }> => {
     if (!session) throw new Error("Sem sessão ativa");
 
-    // 1. Create user in current company
-    await sapAction(session, "Users", "POST", {
-      UserCode: userData.UserCode,
-      UserName: userData.UserName,
-      eMail: userData.eMail,
-      UserPassword: userData.Password,
-    });
-
-    // Clear cache and refresh
-    sapUsersCache.clear();
-    clearClientCache();
-    fetchUsers(true);
-
-    // 2. Find other companies with same ERP type
     const erpType = session.erpType || "sap";
-    const { data: companies } = await supabase
+    const currentDb = session.companyDB;
+    const createInCurrent = !targetCompanyDbs || targetCompanyDbs.includes(currentDb);
+
+    // 1. Create user in current company (if selected)
+    if (createInCurrent) {
+      await sapAction(session, "Users", "POST", {
+        UserCode: userData.UserCode,
+        UserName: userData.UserName,
+        eMail: userData.eMail,
+        UserPassword: userData.Password,
+      });
+      sapUsersCache.clear();
+      clearClientCache();
+      fetchUsers(true);
+    }
+
+    // 2. Find other companies with same ERP type, filtered by selection
+    let q = supabase
       .from("companies")
       .select("company_db, display_name, erp_type")
       .eq("erp_type", erpType)
       .eq("is_active", true)
-      .neq("company_db", session.companyDB);
+      .neq("company_db", currentDb);
+    const { data: companies } = await q;
 
-    if (!companies || companies.length === 0) {
-      return { created: true, replicationResults: [] };
+    let targets = (companies || []) as { company_db: string; display_name: string; erp_type: string }[];
+    if (targetCompanyDbs) {
+      const set = new Set(targetCompanyDbs);
+      targets = targets.filter((c) => set.has(c.company_db));
+    }
+
+    if (targets.length === 0) {
+      return { created: createInCurrent, replicationResults: [] };
     }
 
     // 3. Replicate to each company using stored credentials
     const results: ReplicationResult[] = [];
 
-    for (const company of companies) {
+    for (const company of targets) {
       try {
-        // Fetch credentials for this company
         const { authFetch } = await import("@/lib/auth-fetch");
         const credsRes = await authFetch(`credentials?system=${erpType}&company_db=${company.company_db}`);
 
@@ -286,7 +298,6 @@ export function useSapUsers() {
           const password = getCredVal("password");
           if (!username || !password) throw new Error("Credenciais SAP incompletas");
 
-          // Login, create user, logout
           const tempSession = await sapLogin(username, password, company.company_db);
           try {
             await sapAction(tempSession, "Users", "POST", {
@@ -300,7 +311,6 @@ export function useSapUsers() {
             await sapLogout(tempSession).catch(() => {});
           }
         } else {
-          // For OMIE or other ERPs — skip replication for now (no user creation API)
           results.push({ companyDB: company.company_db, displayName: company.display_name, status: "error", message: "Replicação não suportada para este ERP" });
         }
       } catch (e) {
@@ -321,11 +331,11 @@ export function useSapUsers() {
         entity_type: "sap_user",
         entity_id: userData.UserCode,
         company_db: session.companyDB,
-        details: { userData: { UserCode: userData.UserCode, UserName: userData.UserName, eMail: userData.eMail }, replicationResults: results },
+        details: { userData: { UserCode: userData.UserCode, UserName: userData.UserName, eMail: userData.eMail }, replicationResults: results, targetCompanyDbs },
       });
     } catch {}
 
-    return { created: true, replicationResults: results };
+    return { created: createInCurrent, replicationResults: results };
   }, [session, fetchUsers]);
 
   const refresh = useCallback(() => fetchUsers(true), [fetchUsers]);
