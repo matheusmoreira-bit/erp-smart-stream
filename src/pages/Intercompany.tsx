@@ -125,6 +125,34 @@ function consolidateItems(
   return { rows, companies };
 }
 
+function consolidateUsers(
+  results: PerCompanyResult<SapUserRow[]>[],
+): { rows: UnifiedAccountRow[]; companies: { db: string; name: string }[] } {
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
+  const map = new Map<string, UnifiedAccountRow>();
+  for (const r of results) {
+    if (!r.ok || !r.data) continue;
+    for (const u of r.data) {
+      const code = String(u.UserCode || "").trim();
+      if (!code) continue;
+      let row = map.get(code);
+      if (!row) {
+        row = { code, names: new Set(), presence: new Map() };
+        map.set(code, row);
+      }
+      row.names.add(u.UserName || "");
+      row.presence.set(r.company_db, {
+        name: u.UserName || "",
+        active: u.Locked !== "tYES",
+      });
+    }
+  }
+  const rows = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  return { rows, companies };
+}
+
 const ACCOUNT_TYPES: { value: string; label: string }[] = [
   { value: "at_Other", label: "Outro" },
   { value: "at_Expenses", label: "Despesa" },
