@@ -210,6 +210,29 @@ export function useIntercompany() {
     [],
   );
 
+  const loadUsers = useCallback(async (company_dbs?: string[]) => {
+    setLoadingUsers(true);
+    try {
+      const r = await callIntercompany<{ results: PerCompanyResult<SapUserRow[]>[] }>({
+        action: "list-users",
+        company_dbs,
+      });
+      setUserResults(r.results || []);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, []);
+
+  const replicateUser = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string; password?: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-user",
+        ...input,
+      });
+    },
+    [],
+  );
+
   return {
     loadingAccounts,
     loadingCenters,
