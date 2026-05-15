@@ -956,6 +956,48 @@ export type Database = {
         }
         Relationships: []
       }
+      po_notification_sent: {
+        Row: {
+          company_db: string
+          email_html: string | null
+          email_subject: string | null
+          error_message: string | null
+          id: string
+          milestone: string
+          po_doc_entry: number
+          po_doc_num: number | null
+          recipient_email: string | null
+          sent_at: string
+          status: string
+        }
+        Insert: {
+          company_db: string
+          email_html?: string | null
+          email_subject?: string | null
+          error_message?: string | null
+          id?: string
+          milestone: string
+          po_doc_entry: number
+          po_doc_num?: number | null
+          recipient_email?: string | null
+          sent_at?: string
+          status?: string
+        }
+        Update: {
+          company_db?: string
+          email_html?: string | null
+          email_subject?: string | null
+          error_message?: string | null
+          id?: string
+          milestone?: string
+          po_doc_entry?: number
+          po_doc_num?: number | null
+          recipient_email?: string | null
+          sent_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       sap_cache: {
         Row: {
           cache_key: string
@@ -1118,6 +1160,36 @@ export type Database = {
           id?: string
           integration_key?: string
           status?: string
+        }
+        Relationships: []
+      }
+      synapse_global_settings: {
+        Row: {
+          created_at: string
+          id: string
+          integration_key: string
+          interval_minutes: number
+          is_active_global: boolean
+          parameters: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          integration_key: string
+          interval_minutes?: number
+          is_active_global?: boolean
+          parameters?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          integration_key?: string
+          interval_minutes?: number
+          is_active_global?: boolean
+          parameters?: Json
+          updated_at?: string
         }
         Relationships: []
       }
