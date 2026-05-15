@@ -63,6 +63,13 @@ export default function SynapsePage() {
   const [formInterval, setFormInterval] = useState(360);
   const [formActive, setFormActive] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [poNotifs, setPoNotifs] = useState<Array<{
+    id: string; sent_at: string; po_doc_num: number | null; po_doc_entry: number;
+    milestone: string; recipient_email: string | null; status: string;
+    error_message: string | null; email_html: string | null; email_subject: string | null;
+  }>>([]);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>("");
 
   useEffect(() => {
     if (companyDB) {
@@ -70,7 +77,7 @@ export default function SynapsePage() {
     }
   }, [companyDB, ensureIntegration, fetchIntegrations]);
 
-  const openConfig = (integration: SynapseIntegration) => {
+  const openConfig = async (integration: SynapseIntegration) => {
     setSelectedIntegration(integration);
     setFormParams(
       Object.fromEntries(
@@ -80,6 +87,17 @@ export default function SynapsePage() {
     setFormInterval(integration.interval_minutes);
     setFormActive(integration.is_active);
     fetchLogs(integration.integration_key);
+    setPoNotifs([]);
+    if (integration.integration_key === "purchase_order_notifications" && integration.company_db) {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("po_notification_sent")
+        .select("id, sent_at, po_doc_num, po_doc_entry, milestone, recipient_email, status, error_message, email_html, email_subject")
+        .eq("company_db", integration.company_db)
+        .order("sent_at", { ascending: false })
+        .limit(30);
+      setPoNotifs((data as any) || []);
+    }
     setConfigOpen(true);
   };
 
@@ -364,6 +382,36 @@ export default function SynapsePage() {
                 </div>
               </div>
             )}
+
+            {selectedIntegration?.integration_key === "purchase_order_notifications" && poNotifs.length > 0 && (
+              <div className="border-t border-border pt-4 space-y-2">
+                <p className="text-sm font-medium text-foreground">Notificações enviadas</p>
+                <div className="max-h-72 overflow-y-auto space-y-1">
+                  {poNotifs.map((n) => (
+                    <div key={n.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-muted/30">
+                      {statusIcon(n.status === "sent" ? "success" : n.status === "error" ? "error" : null)}
+                      <span className="text-muted-foreground w-24 shrink-0">
+                        {format(new Date(n.sent_at), "dd/MM HH:mm")}
+                      </span>
+                      <span className="text-foreground w-16 shrink-0">PO #{n.po_doc_num ?? n.po_doc_entry}</span>
+                      <span className="text-muted-foreground w-20 shrink-0 capitalize">{n.milestone}</span>
+                      <span className="text-foreground flex-1 truncate">{n.recipient_email || n.error_message || "—"}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => {
+                          setPreviewTitle(n.email_subject || `PO #${n.po_doc_num} — ${n.milestone}`);
+                          setPreviewHtml(n.email_html || `<pre>${(n.error_message || "Sem conteúdo").replace(/</g, "&lt;")}</pre>`);
+                        }}
+                      >
+                        Ver
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -375,6 +423,23 @@ export default function SynapsePage() {
               Salvar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={previewHtml !== null} onOpenChange={(o) => { if (!o) setPreviewHtml(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">{previewTitle}</DialogTitle>
+            <DialogDescription>Pré-visualização do email enviado / erro registrado</DialogDescription>
+          </DialogHeader>
+          <div className="border border-border rounded-lg overflow-hidden bg-white max-h-[60vh] overflow-y-auto">
+            <iframe
+              title="Email preview"
+              srcDoc={previewHtml || ""}
+              className="w-full"
+              style={{ height: "60vh", border: 0 }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

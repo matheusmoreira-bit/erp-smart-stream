@@ -125,6 +125,27 @@ export function useSynapseIntegrations(companyDB?: string) {
       } as any);
     }
 
+    // Ensure Purchase Order Notifications integration
+    const { data: ponData } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "purchase_order_notifications")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!ponData) {
+      await supabase.from("synapse_integrations").insert({
+        integration_key: "purchase_order_notifications",
+        display_name: "Notificações de Pedidos de Compra",
+        description:
+          "Envia email ao solicitante a cada marco do pedido: aprovação, NF de entrada, contas a pagar e baixa do pagamento. Sem duplicar notificações.",
+        is_active: false,
+        interval_minutes: 15,
+        parameters: { days_back: 30 },
+        company_db: companyDb,
+      } as any);
+    }
+
     await fetchIntegrations();
   }, [fetchIntegrations]);
 
@@ -134,6 +155,7 @@ export function useSynapseIntegrations(companyDB?: string) {
       const edgeFunctionMap: Record<string, string> = {
         jumpcloud_sap_sync: "synapse-jc-sync",
         pagcorp_erp_sync: "synapse-pagcorp-sync",
+        purchase_order_notifications: "synapse-po-notify",
       };
       const functionName = edgeFunctionMap[integrationKey] || "synapse-jc-sync";
 
