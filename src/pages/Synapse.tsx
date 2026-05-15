@@ -63,6 +63,13 @@ export default function SynapsePage() {
   const [formInterval, setFormInterval] = useState(360);
   const [formActive, setFormActive] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [poNotifs, setPoNotifs] = useState<Array<{
+    id: string; sent_at: string; po_doc_num: number | null; po_doc_entry: number;
+    milestone: string; recipient_email: string | null; status: string;
+    error_message: string | null; email_html: string | null; email_subject: string | null;
+  }>>([]);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>("");
 
   useEffect(() => {
     if (companyDB) {
@@ -70,7 +77,7 @@ export default function SynapsePage() {
     }
   }, [companyDB, ensureIntegration, fetchIntegrations]);
 
-  const openConfig = (integration: SynapseIntegration) => {
+  const openConfig = async (integration: SynapseIntegration) => {
     setSelectedIntegration(integration);
     setFormParams(
       Object.fromEntries(
@@ -80,6 +87,17 @@ export default function SynapsePage() {
     setFormInterval(integration.interval_minutes);
     setFormActive(integration.is_active);
     fetchLogs(integration.integration_key);
+    setPoNotifs([]);
+    if (integration.integration_key === "purchase_order_notifications" && integration.company_db) {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("po_notification_sent")
+        .select("id, sent_at, po_doc_num, po_doc_entry, milestone, recipient_email, status, error_message, email_html, email_subject")
+        .eq("company_db", integration.company_db)
+        .order("sent_at", { ascending: false })
+        .limit(30);
+      setPoNotifs((data as any) || []);
+    }
     setConfigOpen(true);
   };
 
