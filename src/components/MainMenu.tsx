@@ -46,8 +46,8 @@ const modules: Record<string, ModuleCard> = {
     moduleKey: "analytics",
   },
   expenses: {
-    title: "Despesas",
-    description: "Crie e acompanhe solicitações de despesas com fluxo de aprovação e integração SAP.",
+    title: "Compras",
+    description: "Crie e acompanhe solicitações de compras com fluxo de aprovação e integração SAP.",
     icon: ShoppingCart,
     path: "/expenses",
     color: "text-success",
