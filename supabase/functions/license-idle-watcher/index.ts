@@ -213,7 +213,12 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  try {
+  const url = new URL(req.url);
+  const isAsync = url.searchParams.get("async") === "1";
+  const forceWeek = url.searchParams.get("force") === "1";
+
+  const work = async () => {
+    try {
     const { data: companies } = await sb
       .from("companies")
       .select("company_db, display_name")
@@ -234,7 +239,7 @@ Deno.serve(async (req) => {
       credByCompany.get(row.company_db)![row.credential_key] = row.credential_value;
     }
 
-    const weekKey = isoWeekKey(new Date());
+    const weekKey = forceWeek ? `${isoWeekKey(new Date())}-force-${Date.now()}` : isoWeekKey(new Date());
     const cutoff = Date.now() - IDLE_DAYS * 86400000;
     const allIdle: Array<{ company_db: string; display_name: string; user_code: string; user_name: string; license_type: string; days_idle: number; last_login: string | null }> = [];
 
@@ -383,24 +388,36 @@ Deno.serve(async (req) => {
       status: "success",
       recipients_count: sentCount,
       error_message: null,
-      details: { idle_total: allIdle.length, week: weekKey },
+      details: { idle_total: allIdle.length, week: weekKey, forced: forceWeek },
     });
-    return new Response(JSON.stringify({ ok: true, idle_total: allIdle.length, alerts_sent: sentCount, week: weekKey }, null, 2), {
+    return { ok: true, idle_total: allIdle.length, alerts_sent: sentCount, week: weekKey };
+    } catch (e) {
+      console.error("license-idle-watcher error:", e);
+      try {
+        await sb.from("notification_send_runs").insert({
+          function_name: "license-idle-watcher",
+          status: "error",
+          recipients_count: 0,
+          error_message: (e as Error).message,
+          details: {},
+        });
+      } catch { /* ignore */ }
+      return { error: (e as Error).message };
+    }
+  };
+
+  if (isAsync) {
+    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
+    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work());
+    else work();
+    return new Response(JSON.stringify({ ok: true, queued: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    console.error("license-idle-watcher error:", e);
-    try {
-      await sb.from("notification_send_runs").insert({
-        function_name: "license-idle-watcher",
-        status: "error",
-        recipients_count: 0,
-        error_message: (e as Error).message,
-        details: {},
-      });
-    } catch { /* ignore */ }
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   }
+
+  const result = await work();
+  const status = (result as { error?: string }).error ? 500 : 200;
+  return new Response(JSON.stringify(result, null, 2), {
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 });
