@@ -531,11 +531,24 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onSubmit={handleSubmitForApproval}
         onCancel={handleCancel}
         onRetrySap={handleRetrySap}
+        onEdit={(exp) => { setSelectedExpense(null); setEditingExpense(exp); }}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
+        canEdit={selectedExpense ? canCancel(selectedExpense) : false}
         canRetrySap={session.erpType === "sap" && (isAdmin || (selectedExpense ? canCancel(selectedExpense) : false))}
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
         isRetrying={isRetrying}
+      />
+
+      <EditExpenseModal
+        expense={editingExpense}
+        open={!!editingExpense}
+        onClose={() => setEditingExpense(null)}
+        mode={mode}
+        onSave={async (input) => {
+          if (!editingExpense) return;
+          await updateExpense(editingExpense.id, input);
+        }}
       />
 
       <CreateExpenseModal
