@@ -47,12 +47,21 @@ export interface ApprovalRuleLevel {
   approver_email?: string;
 }
 
+export type RuleDocType = "purchase" | "sales" | "both";
+
+export const DOC_TYPE_LABELS: Record<RuleDocType, string> = {
+  purchase: "Compra",
+  sales: "Venda",
+  both: "Ambos",
+};
+
 export interface ApprovalRule {
   id: string;
   name: string;
   is_active: boolean;
   priority: number;
   criteria: RuleCriterion[];
+  doc_type: RuleDocType;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -63,6 +72,7 @@ export interface ApprovalRule {
 export interface CreateRuleInput {
   name: string;
   priority?: number;
+  doc_type?: RuleDocType;
   criteria: RuleCriterion[];
   levels: Omit<ApprovalRuleLevel, "id">[];
 }
