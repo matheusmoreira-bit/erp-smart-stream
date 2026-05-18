@@ -810,6 +810,13 @@ export default function ApprovalsPage() {
   const [showAll, setShowAll] = useState(false);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [isDelegating, setIsDelegating] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
+  const [minValue, setMinValue] = useState<string>("");
+  const [maxValue, setMaxValue] = useState<string>("");
+  const [createdFrom, setCreatedFrom] = useState<string>("");
+  const [createdTo, setCreatedTo] = useState<string>("");
+  const [dueFrom, setDueFrom] = useState<string>("");
+  const [dueTo, setDueTo] = useState<string>("");
 
   // Redirect to login if no session
   if (!session) {
