@@ -388,6 +388,91 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     [session, fetchExpenses, docType]
   );
 
+  const updateExpense = useCallback(
+    async (
+      expenseId: string,
+      input: {
+        supplier_name?: string;
+        supplier_code?: string | null;
+        remarks?: string | null;
+        items?: Omit<ExpenseItem, "id">[];
+      }
+    ) => {
+      if (!session) throw new Error("Sessão SAP não encontrada");
+
+      // Load current expense to validate status
+      const { data: current, error: getErr } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("id", expenseId)
+        .single();
+      if (getErr) throw getErr;
+      const status = (current as any).status as ExpenseStatus;
+      if (status !== "rascunho" && status !== "pendente_aprovacao") {
+        throw new Error("Somente pedidos em rascunho ou pendentes de aprovação podem ser alterados.");
+      }
+
+      const updates: any = {};
+      if (input.supplier_name !== undefined) updates.supplier_name = input.supplier_name;
+      if (input.supplier_code !== undefined) updates.supplier_code = input.supplier_code;
+      if (input.remarks !== undefined) updates.remarks = input.remarks;
+
+      if (input.items && input.items.length > 0) {
+        const totalAmount = input.items.reduce((s, i) => s + i.line_total, 0);
+        updates.total_amount = totalAmount;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error: upErr } = await supabase
+          .from("expenses")
+          .update(updates)
+          .eq("id", expenseId);
+        if (upErr) throw upErr;
+      }
+
+      if (input.items) {
+        const { error: delErr } = await supabase
+          .from("expense_items")
+          .delete()
+          .eq("expense_id", expenseId);
+        if (delErr) throw delErr;
+
+        const { error: insErr } = await supabase.from("expense_items").insert(
+          input.items.map((item) => ({
+            expense_id: expenseId,
+            item_code: item.item_code || null,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            line_total: item.line_total,
+            cost_center: item.cost_center || null,
+            project: item.project || null,
+          }))
+        );
+        if (insErr) throw insErr;
+      }
+
+      const actorEmail = session.userName.includes("@") ? session.userName : session.userName;
+      await supabase.rpc("insert_audit_log", {
+        p_action: "update_expense",
+        p_entity_type: "expense",
+        p_entity_id: expenseId,
+        p_actor_email: actorEmail,
+        p_company_db: session.companyDB || null,
+        p_details: {
+          doc_type: (current as any).doc_type || docType,
+          previous_total: (current as any).total_amount,
+          new_total: updates.total_amount ?? (current as any).total_amount,
+          updated_fields: Object.keys(updates),
+          items_count: input.items?.length,
+        } as any,
+      });
+
+      await fetchExpenses();
+    },
+    [session, fetchExpenses, docType]
+  );
+
   const submitForApproval = useCallback(
     async (expenseId: string) => {
       const { error: err } = await supabase
