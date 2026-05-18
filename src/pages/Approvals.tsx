@@ -798,7 +798,10 @@ export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { approvals, isLoading, error, refresh } = useApprovals();
-  const { expenses, refresh: refreshExpenses, approveExpense, rejectExpense } = useExpenses();
+  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense } = useExpenses("purchase");
+  const { expenses: salesExpenses, refresh: refreshSales } = useExpenses("sales");
+  const expenses = [...purchaseExpenses, ...salesExpenses];
+  const refreshExpenses = () => { refreshPurchase(); refreshSales(); };
   const { getLabel } = useCompanies(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
