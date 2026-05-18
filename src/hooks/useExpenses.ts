@@ -208,11 +208,11 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         return;
       }
 
-      const { data, error: err } = await supabase
-        .from("expenses")
+      const { data, error: err } = await (supabase
+        .from("expenses") as any)
         .select("*")
         .eq("company_db", activeCompanyDb)
-        .eq("doc_type" as any, docType)
+        .eq("doc_type", docType)
         .order("created_at", { ascending: false });
 
       if (err) throw err;
