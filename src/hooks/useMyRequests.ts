@@ -303,7 +303,7 @@ export function useMyRequests() {
           const line = linesByStep.get(step);
           const stageCode = line?.StageCode ? Number(line.StageCode) : undefined;
           const stage = stageCode ? stagesMap.get(stageCode) : undefined;
-          const user = d.UserID ? usersMap.get(d.UserID) : undefined;
+          const user = d.UserID ? usersMap.get(d.UserID) : (line?.UserID ? usersMap.get(line.UserID) : undefined);
           const decisionInfo = DECISION_STATUS_MAP[d.Status || ""] || { key: "pending" as const, label: d.Status || "—" };
           return {
             step,
@@ -316,6 +316,34 @@ export function useMyRequests() {
             remarks: d.Remarks || "",
           };
         });
+
+        // Fallback: if no decisions, build entries from ApprovalRequestLines so we still show approvers/stages
+        if (history.length === 0 && (r.ApprovalRequestLines || []).length > 0) {
+          const lines = (r.ApprovalRequestLines || []).slice().sort(
+            (a, b) => Number(a.ApprovalRequestStep || 0) - Number(b.ApprovalRequestStep || 0),
+          );
+          for (const l of lines) {
+            const step = Number(l.ApprovalRequestStep || 0);
+            const stageCode = l.StageCode ? Number(l.StageCode) : undefined;
+            const stage = stageCode ? stagesMap.get(stageCode) : undefined;
+            const user = l.UserID ? usersMap.get(l.UserID) : undefined;
+            const info = DECISION_STATUS_MAP[l.Status || ""] || (
+              statusInfo.key === "rejected" ? { key: "rejected" as const, label: "Rejeitado" }
+              : statusInfo.key === "approved" ? { key: "approved" as const, label: "Aprovado" }
+              : { key: "pending" as const, label: "Pendente" }
+            );
+            history.push({
+              step,
+              stageName: stage?.Name || templateName || "—",
+              approverName: user?.UserName || user?.UserCode || "—",
+              approverEmail: user?.eMail || "",
+              status: info.key,
+              statusLabel: info.label,
+              date: "",
+              remarks: "",
+            });
+          }
+        }
 
         return {
           approvalRequestId: Number(r.Code || 0),
