@@ -47,6 +47,7 @@ import {
   type Expense,
 } from "@/hooks/useExpenses";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
+import { EditExpenseModal } from "@/components/EditExpenseModal";
 import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
