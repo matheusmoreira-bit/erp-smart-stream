@@ -20,13 +20,17 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
+import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useNavigate } from "react-router-dom";
-import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X } from "lucide-react";
+import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { sapAction, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
+
 import {
   Dialog,
   DialogContent,
