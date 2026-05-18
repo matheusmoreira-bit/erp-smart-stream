@@ -522,7 +522,7 @@ async function writeApprovalsCache(companyDB: string, docs: ApprovalDoc[]): Prom
       updated_at: now.toISOString(),
       expires_at: expires.toISOString(),
     },
-    { onConflict: "company_db,cache_key" },
+    { onConflict: "cache_key,company_db" },
   );
 }
 
