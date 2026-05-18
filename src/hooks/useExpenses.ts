@@ -565,6 +565,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     error,
     refresh: fetchExpenses,
     createExpense,
+    updateExpense,
     submitForApproval,
     cancelExpense,
     approveExpense,
