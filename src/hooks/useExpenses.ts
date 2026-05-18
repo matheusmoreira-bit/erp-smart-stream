@@ -192,7 +192,7 @@ async function findMatchingRule(
 
 /* ───────────────── Hook ───────────────── */
 
-export function useExpenses() {
+export function useExpenses(docType: ExpenseDocType = "purchase") {
   const { session } = useSap();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -202,8 +202,6 @@ export function useExpenses() {
     setIsLoading(true);
     setError(null);
     try {
-      // Always scope expenses to the active company. If there is no session,
-      // return nothing instead of leaking other companies' data.
       const activeCompanyDb = session?.companyDB;
       if (!activeCompanyDb) {
         setExpenses([]);
@@ -214,6 +212,7 @@ export function useExpenses() {
         .from("expenses")
         .select("*")
         .eq("company_db", activeCompanyDb)
+        .eq("doc_type" as any, docType)
         .order("created_at", { ascending: false });
 
       if (err) throw err;
