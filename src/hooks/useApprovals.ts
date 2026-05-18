@@ -532,13 +532,12 @@ export function useApprovals() {
   const fetchApprovals = useCallback(async (opts?: { force?: boolean }) => {
     if (!session || session.erpType !== "sap") return;
     const force = !!opts?.force;
-    const companyDB = session.companyDB;
     setError(null);
 
     // 1) Try cache first (unless forced)
     if (!force) {
       try {
-        const cached = await readApprovalsCache(companyDB);
+        const cached = await readApprovalsCache(session as SapSession);
         if (cached) {
           setApprovals(cached.docs);
           setLastUpdatedAt(cached.updatedAt);
@@ -560,7 +559,7 @@ export function useApprovals() {
       setApprovals(docs);
       const now = new Date().toISOString();
       setLastUpdatedAt(now);
-      writeApprovalsCache(companyDB, docs).catch((e) => console.warn("approvals cache write failed:", e));
+      writeApprovalsCache(session as SapSession, docs).catch((e) => console.warn("approvals cache write failed:", e));
     } catch (e) {
       console.error("Error fetching approvals:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar aprovações");
