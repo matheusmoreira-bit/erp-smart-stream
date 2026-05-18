@@ -349,13 +349,6 @@ function RuleFormModal({
     });
   };
 
-  const reset = () => {
-    setName("");
-    setPriority(0);
-    setCriteria([]);
-    setLevels([]);
-  };
-
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast.error("Informe o nome da regra");
@@ -373,16 +366,15 @@ function RuleFormModal({
       toast.error("Todos os níveis devem ter um aprovador");
       return;
     }
-    setIsCreating(true);
+    setIsSaving(true);
     try {
-      await onCreate({ name, priority, criteria, levels });
-      toast.success("Regra criada com sucesso!");
-      reset();
+      await onSubmit({ name, priority, doc_type: docType, criteria, levels });
+      toast.success(editing ? "Regra atualizada com sucesso!" : "Regra criada com sucesso!");
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao criar regra");
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar regra");
     } finally {
-      setIsCreating(false);
+      setIsSaving(false);
     }
   };
 
@@ -392,18 +384,31 @@ function RuleFormModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
-            Nova Regra de Aprovação
+            {editing ? "Editar Regra de Aprovação" : "Nova Regra de Aprovação"}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 mt-2">
           {/* Basic info */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-3 sm:col-span-1">
               <label className="text-xs text-muted-foreground mb-1 block">Nome da Regra *</label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Aprovação acima de R$ 10.000" />
             </div>
-            <div className="col-span-2 sm:col-span-1">
+            <div className="col-span-3 sm:col-span-1">
+              <label className="text-xs text-muted-foreground mb-1 block">Tipo de Documento</label>
+              <Select value={docType} onValueChange={(v) => setDocType(v as RuleDocType)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="both">Ambos (Compra e Venda)</SelectItem>
+                  <SelectItem value="purchase">Compra</SelectItem>
+                  <SelectItem value="sales">Venda</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-3 sm:col-span-1">
               <label className="text-xs text-muted-foreground mb-1 block">Prioridade</label>
               <Input type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} placeholder="0" />
               <p className="text-[10px] text-muted-foreground mt-1">Maior = mais prioritário</p>
