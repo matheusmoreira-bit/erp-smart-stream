@@ -72,7 +72,9 @@ function ExpenseDetailModal({
   onSubmit,
   onCancel,
   onRetrySap,
+  onEdit,
   canCancel,
+  canEdit,
   canRetrySap,
   isSubmitting,
   isCancelling,
@@ -84,7 +86,9 @@ function ExpenseDetailModal({
   onSubmit: (id: string) => void;
   onCancel: (id: string) => void;
   onRetrySap: (id: string) => void;
+  onEdit: (expense: Expense) => void;
   canCancel: boolean;
+  canEdit: boolean;
   canRetrySap: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
@@ -95,6 +99,7 @@ function ExpenseDetailModal({
 
   const showSubmit = expense.status === "rascunho";
   const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
+  const showEdit = canEdit && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
 
   return (
