@@ -183,6 +183,37 @@ export async function sapQueryView<T = unknown>(
   return { data: result.data as T[], fromCache: result.fromCache, hanaDisabled: !!result.hanaDisabled };
 }
 
+export async function sapReadApprovalsCache<T = unknown>(
+  session: SapSession,
+): Promise<{ data: T | null; updatedAt: string | null; expiresAt: string | null }> {
+  const result = await callProxy({
+    action: "readApprovalsCache",
+    sessionId: session.sessionId,
+    routeId: session.routeId,
+    companyDB: session.companyDB,
+  });
+  return {
+    data: (result.data ?? null) as T | null,
+    updatedAt: result.updatedAt ?? null,
+    expiresAt: result.expiresAt ?? null,
+  };
+}
+
+export async function sapWriteApprovalsCache<T = unknown>(
+  session: SapSession,
+  docs: T,
+  ttlMs: number,
+): Promise<void> {
+  await callProxy({
+    action: "writeApprovalsCache",
+    sessionId: session.sessionId,
+    routeId: session.routeId,
+    companyDB: session.companyDB,
+    data: docs,
+    ttlMs,
+  });
+}
+
 export async function sapQueryAll(
   session: SapSession,
   endpoint: string,
