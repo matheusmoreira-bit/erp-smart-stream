@@ -15,6 +15,9 @@ import {
   Users,
   Filter,
   Search,
+  Pencil,
+  ShoppingCart,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
