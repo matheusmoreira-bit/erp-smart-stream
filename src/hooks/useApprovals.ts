@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQuery, sapQueryView, type SapSession } from "@/lib/sap-client";
+import { sapQuery, sapQueryView, sapReadApprovalsCache, sapWriteApprovalsCache, type SapSession } from "@/lib/sap-client";
 import { supabase } from "@/integrations/supabase/client";
 
 
@@ -355,27 +355,12 @@ async function getStageApprovers(session: SapSession, stageCode: number): Promis
   }
 }
 
-async function fetchDecisions(session: SapSession, requestCode: number): Promise<SLApprovalDecision[]> {
-  try {
-    const res = await sapQuery(
-      session,
-      `ApprovalRequests(${requestCode})/ApprovalRequestDecisions`,
-      undefined,
-      false,
-    );
-    const data = res.data as { value?: SLApprovalDecision[] } | SLApprovalDecision[];
-    return Array.isArray(data) ? data : (data?.value || []);
-  } catch {
-    return [];
-  }
-}
-
 async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<ApprovalDoc[]> {
   const reqRes = await sapQuery(
     session,
-    "ApprovalRequests?$filter=Status eq 'arsPending'&$top=200",
+    "ApprovalRequests?$filter=Status eq 'arsPending'&$select=Code,OriginatorID,DraftEntry,DocumentEntry,ObjectType,Status,RemarksFromOriginator,CreationDate,UpdateDate,ApprovalTemplatesID,ApprovalRequestDecisions,ApprovalRequestLines&$top=200",
     undefined,
-    false,
+    true,
   );
   const reqData = reqRes.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
   const requests: SLApprovalRequest[] = Array.isArray(reqData)
@@ -391,22 +376,28 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
     getStages(session),
   ]);
 
-  // Para cada request: buscar decisões + draft em paralelo
-  const enriched = await Promise.all(
-    requests.map(async (r) => {
-      const decisionsP = fetchDecisions(session, Number(r.Code));
-      const draftP = r.DraftEntry
-        ? sapQuery(
-            session,
-            `Drafts(${r.DraftEntry})?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,DocumentLines`,
-            undefined,
-            false,
-          ).then((d) => d.data as SLDraft).catch(() => null)
-        : Promise.resolve(null);
-      const [decisions, draft] = await Promise.all([decisionsP, draftP]);
-      return { r, decisions, draft: draft || ({} as SLDraft) };
-    }),
-  );
+  const runLimited = async <T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> => {
+    const results: R[] = [];
+    for (let i = 0; i < items.length; i += limit) {
+      const chunk = items.slice(i, i + limit);
+      results.push(...await Promise.all(chunk.map(worker)));
+    }
+    return results;
+  };
+
+  // Evita tempestade de chamadas ao Service Layer: decisões vêm no request;
+  // apenas drafts são carregados em pequenos lotes e com cache do proxy.
+  const enriched = await runLimited(requests, 6, async (r) => {
+    const draft = r.DraftEntry
+      ? await sapQuery(
+          session,
+          `Drafts(${r.DraftEntry})?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,DocumentLines`,
+          undefined,
+          true,
+        ).then((d) => d.data as SLDraft).catch(() => null)
+      : null;
+    return { r, decisions: r.ApprovalRequestDecisions || [], draft: draft || ({} as SLDraft) };
+  });
 
   // Buscar approvers das etapas pendentes (com cache por etapa)
   const pendingStageCodes = new Set<number>();
@@ -499,31 +490,14 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
 const APPROVALS_CACHE_KEY = "approvals:detailed";
 const APPROVALS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
 
-async function readApprovalsCache(companyDB: string): Promise<{ docs: ApprovalDoc[]; updatedAt: string } | null> {
-  const { data, error } = await supabase
-    .from("sap_cache")
-    .select("data, updated_at, expires_at")
-    .eq("company_db", companyDB)
-    .eq("cache_key", APPROVALS_CACHE_KEY)
-    .maybeSingle();
-  if (error || !data) return null;
-  const docs = (data.data as unknown as ApprovalDoc[]) || [];
-  return { docs, updatedAt: data.updated_at };
+async function readApprovalsCache(session: SapSession): Promise<{ docs: ApprovalDoc[]; updatedAt: string } | null> {
+  const data = await sapReadApprovalsCache<ApprovalDoc[]>(session);
+  if (!data.data || !data.updatedAt) return null;
+  return { docs: data.data, updatedAt: data.updatedAt };
 }
 
-async function writeApprovalsCache(companyDB: string, docs: ApprovalDoc[]): Promise<void> {
-  const now = new Date();
-  const expires = new Date(now.getTime() + APPROVALS_CACHE_TTL_MS);
-  await supabase.from("sap_cache").upsert(
-    {
-      company_db: companyDB,
-      cache_key: APPROVALS_CACHE_KEY,
-      data: docs as unknown as any,
-      updated_at: now.toISOString(),
-      expires_at: expires.toISOString(),
-    },
-    { onConflict: "cache_key,company_db" },
-  );
+async function writeApprovalsCache(session: SapSession, docs: ApprovalDoc[]): Promise<void> {
+  await sapWriteApprovalsCache(session, docs, APPROVALS_CACHE_TTL_MS);
 }
 
 export function useApprovals() {
