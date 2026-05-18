@@ -132,11 +132,150 @@ function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void })
   );
 }
 
+function DelegationDialog({
+  open,
+  onClose,
+  doc,
+  onConfirm,
+  isSubmitting,
+}: {
+  open: boolean;
+  onClose: () => void;
+  doc: ApprovalDoc | null;
+  onConfirm: (params: { userInternalKey: number; userName: string; userEmail: string; reason: string }) => Promise<void>;
+  isSubmitting: boolean;
+}) {
+  const { users, isLoading } = useSapUsers();
+  const [selectedKey, setSelectedKey] = useState<number | null>(null);
+  const [reason, setReason] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Reset state when reopened
+  const resetAndClose = () => {
+    setSelectedKey(null);
+    setReason("");
+    setPickerOpen(false);
+    onClose();
+  };
+
+  const selectedUser = users.find((u) => u.InternalKey === selectedKey);
+  const eligibleUsers = users.filter((u) => u.Locked !== "tYES" && (u.UserName || u.UserCode));
+
+  const handleConfirm = async () => {
+    if (!selectedUser || !selectedKey) {
+      toast.error("Selecione um usuário para delegar.");
+      return;
+    }
+    await onConfirm({
+      userInternalKey: selectedKey,
+      userName: selectedUser.UserName || selectedUser.UserCode,
+      userEmail: selectedUser.eMail || "",
+      reason: reason.trim(),
+    });
+    resetAndClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) resetAndClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserCog className="w-5 h-5 text-primary" />
+            Delegar aprovação
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+          <div className="text-sm bg-muted/30 rounded-lg p-3 space-y-1">
+            <p className="text-muted-foreground text-xs">Documento</p>
+            <p className="text-foreground font-medium">
+              <span className="font-mono">#{doc?.docNum}</span> · {doc?.docTypeName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Aprovador atual: <span className="text-foreground">{doc?.currentApprover}</span>
+            </p>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Novo aprovador *</Label>
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between font-normal"
+                  disabled={isLoading || isSubmitting}
+                >
+                  {selectedUser
+                    ? `${selectedUser.UserName || selectedUser.UserCode}${selectedUser.eMail ? ` (${selectedUser.eMail})` : ""}`
+                    : isLoading ? "Carregando usuários..." : "Selecionar usuário..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar por nome ou e-mail..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {eligibleUsers.map((u) => (
+                        <CommandItem
+                          key={u.InternalKey}
+                          value={`${u.UserName} ${u.UserCode} ${u.eMail || ""}`}
+                          onSelect={() => {
+                            setSelectedKey(u.InternalKey);
+                            setPickerOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", selectedKey === u.InternalKey ? "opacity-100" : "opacity-0")} />
+                          <div className="flex flex-col">
+                            <span className="text-sm">{u.UserName || u.UserCode}</span>
+                            {u.eMail && <span className="text-xs text-muted-foreground">{u.eMail}</span>}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Motivo da delegação</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Ex.: Aprovador em férias, transferência de responsabilidade..."
+              className="bg-muted/30 border-border text-sm"
+              rows={3}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-300">
+            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Esta ação será registrada no log de auditoria.</span>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2 border-t border-border">
+            <Button variant="outline" onClick={resetAndClose} disabled={isSubmitting}>Cancelar</Button>
+            <Button onClick={handleConfirm} disabled={isSubmitting || !selectedKey} className="gap-1.5">
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCog className="w-4 h-4" />}
+              Delegar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ApprovalDetailModal({
   doc,
   open,
   onClose,
   onAction,
+  onDelegate,
   isActioning,
   isSuperUser,
   currentUserName,
@@ -145,6 +284,7 @@ function ApprovalDetailModal({
   open: boolean;
   onClose: () => void;
   onAction: (code: number, action: "approve" | "reject", remarks: string) => Promise<void>;
+  onDelegate: (doc: ApprovalDoc) => void;
   isActioning: boolean;
   isSuperUser: boolean;
   currentUserName: string;
