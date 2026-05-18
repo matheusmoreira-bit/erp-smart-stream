@@ -632,37 +632,57 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
             {doc.history.length === 0 ? (
               <p className="text-sm text-muted-foreground italic">Nenhuma etapa de aprovação encontrada.</p>
             ) : (
-              <div className="space-y-2">
-                {doc.history.map((h, i) => (
-                  <div key={i} className="flex items-start gap-3 border border-border rounded-lg p-3 bg-muted/20">
-                    <div className="mt-0.5">
-                      {h.status === "approved" ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      ) : h.status === "rejected" ? (
-                        <XOctagon className="w-4 h-4 text-destructive" />
-                      ) : (
-                        <Clock className="w-4 h-4 text-amber-500" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-foreground">{h.stageName}</span>
-                        <StatusBadge status={h.status} label={h.statusLabel} />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        <span className="text-foreground font-medium">{h.approverName}</span>
-                        {h.approverEmail && <span> · {h.approverEmail}</span>}
-                      </p>
-                      {h.date && (
-                        <p className="text-xs text-muted-foreground mt-0.5 font-mono">{formatDate(h.date)}</p>
-                      )}
-                      {h.remarks && (
-                        <p className="text-xs text-foreground bg-background/60 rounded p-2 mt-2">{h.remarks}</p>
-                      )}
-                    </div>
+              (() => {
+                const currentStep = doc.history.find((h) => h.status === "pending")?.step;
+                return (
+                  <div className="space-y-2">
+                    {doc.history.map((h, i) => {
+                      const isCurrent = h.status === "pending" && h.step === currentStep;
+                      return (
+                        <div
+                          key={i}
+                          className={`flex items-start gap-3 border rounded-lg p-3 ${
+                            isCurrent
+                              ? "border-amber-500/50 bg-amber-500/5 ring-1 ring-amber-500/30"
+                              : "border-border bg-muted/20"
+                          }`}
+                        >
+                          <div className="mt-0.5">
+                            {h.status === "approved" ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            ) : h.status === "rejected" ? (
+                              <XOctagon className="w-4 h-4 text-destructive" />
+                            ) : (
+                              <Clock className="w-4 h-4 text-amber-500" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-foreground">{h.stageName}</span>
+                              <StatusBadge status={h.status} label={h.statusLabel} />
+                              {isCurrent && (
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
+                                  Aprovador atual
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              <span className="text-foreground font-medium">{h.approverName}</span>
+                              {h.approverEmail && <span> · {h.approverEmail}</span>}
+                            </p>
+                            {h.date && (
+                              <p className="text-xs text-muted-foreground mt-0.5 font-mono">{formatDate(h.date)}</p>
+                            )}
+                            {h.remarks && (
+                              <p className="text-xs text-foreground bg-background/60 rounded p-2 mt-2">{h.remarks}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
+                );
+              })()
             )}
           </div>
         </div>
