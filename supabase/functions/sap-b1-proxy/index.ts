@@ -485,10 +485,20 @@ Deno.serve(async (req) => {
         }
       }
 
-      const viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
+      let viewResp: Response;
+      try {
+        viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        if (isAbortError(e)) {
+          return new Response(JSON.stringify({ data: [], fromCache: false, hanaDisabled: true, timedOut: true }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw e;
+      }
 
       const payload = await parseResponseBody(viewResp);
 
