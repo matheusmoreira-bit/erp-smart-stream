@@ -8,6 +8,7 @@ const corsHeaders = {
 // Use env vars instead of hardcoded URLs
 const DEFAULT_SAP_BASE_URL = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
 const HANA_VIEWS_URL = Deno.env.get("HANA_VIEWS_URL") || "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+const APPROVALS_CACHE_KEY = "approvals:detailed";
 
 // In-memory cache with TTL
 const cache = new Map<string, { data: unknown; expiry: number }>();
@@ -94,6 +95,16 @@ function extractSapErrorMessage(payload: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 25_000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
 }
 
 async function getSapBaseUrl(companyDB?: string): Promise<string> {
@@ -264,7 +275,7 @@ Deno.serve(async (req) => {
       }
 
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
-      const sapResp = await fetch(fullUrl, {
+      const sapResp = await fetchWithTimeout(fullUrl, {
         method: "GET",
         headers: { "Content-Type": "application/json", Cookie: cookies },
       });
@@ -343,7 +354,7 @@ Deno.serve(async (req) => {
         let lastErr: unknown = null;
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            sapResp = await fetch(fullUrl, {
+            sapResp = await fetchWithTimeout(fullUrl, {
               method: "GET",
               headers: { "Content-Type": "application/json", Cookie: cookies },
             });
@@ -371,7 +382,7 @@ Deno.serve(async (req) => {
           break;
         }
 
-        let pageData: any;
+        let pageData: { value?: unknown[]; "odata.nextLink"?: string };
         try {
           pageData = await sapResp.json();
         } catch (e) {
@@ -456,7 +467,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const viewResp = await fetch(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
+      const viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
@@ -480,6 +491,42 @@ Deno.serve(async (req) => {
       if (rows.length > 0) setCache(cacheKey, rows);
 
       return new Response(JSON.stringify({ data: rows, fromCache: false }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // APPROVALS CACHE (service-role proxy so SAP-authenticated users can use the shared cache)
+    if (action === "readApprovalsCache" || action === "writeApprovalsCache") {
+      if (!companyDB || typeof companyDB !== "string") {
+        return new Response(JSON.stringify({ error: "companyDB é obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+      if (action === "readApprovalsCache") {
+        const { data, error } = await sb
+          .from("sap_cache")
+          .select("data, updated_at, expires_at")
+          .eq("company_db", companyDB)
+          .eq("cache_key", APPROVALS_CACHE_KEY)
+          .maybeSingle();
+        if (error) throw new Error(`Cache read failed: ${error.message}`);
+        return new Response(JSON.stringify({ data: data?.data ?? null, updatedAt: data?.updated_at ?? null, expiresAt: data?.expires_at ?? null }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const docs = Array.isArray(reqBody.data) ? reqBody.data : [];
+      const ttlMs = Number.isFinite(Number(reqBody.ttlMs)) ? Math.min(Math.max(Number(reqBody.ttlMs), 60_000), 60 * 60_000) : CACHE_TTL;
+      const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+      const { error } = await sb.from("sap_cache").upsert(
+        { company_db: companyDB, cache_key: APPROVALS_CACHE_KEY, data: docs, expires_at: expiresAt },
+        { onConflict: "cache_key,company_db" },
+      );
+      if (error) throw new Error(`Cache write failed: ${error.message}`);
+      return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
