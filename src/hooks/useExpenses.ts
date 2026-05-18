@@ -152,6 +152,7 @@ function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean 
 async function findMatchingRule(
   ctx: Record<string, any>,
   companyDb: string | null,
+  docType: ExpenseDocType,
 ): Promise<{ rule: RuleRow; firstApprover?: { name: string; email: string | null } } | null> {
   let q = supabase
     .from("approval_rules")
@@ -168,6 +169,13 @@ async function findMatchingRule(
 
   const { data: rules } = await q;
   if (!rules || rules.length === 0) return null;
+
+  // Filter by doc_type: rule applies when matching type, "both", or null (legacy)
+  const filtered = (rules as any[]).filter((r) => {
+    const rdt = r.doc_type;
+    return !rdt || rdt === "both" || rdt === docType;
+  });
+  if (filtered.length === 0) return null;
 
   for (const r of rules as any[]) {
     const criteria: RuleCriterion[] = Array.isArray(r.criteria) ? r.criteria : [];
