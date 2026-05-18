@@ -547,9 +547,19 @@ export function useApprovals() {
     const hanaDocs = detailedView.data
       .map(mapHanaApproval)
       .filter((doc) => doc.approvalRequestId > 0);
-    if (hanaDocs.length > 0) return hanaDocs;
-    return await fetchApprovalsViaServiceLayer(session as SapSession);
+
+    // Sempre complementar com Service Layer para cobrir aprovações que a view HANA
+    // não retorna (ex.: documentos recém-criados ou fora do filtro da view).
+    const knownIds = new Set(hanaDocs.map((d) => d.approvalRequestId));
+    try {
+      const slDocs = await fetchApprovalsViaServiceLayer(session as SapSession, knownIds);
+      if (slDocs.length) return [...hanaDocs, ...slDocs];
+    } catch (e) {
+      console.warn("SL fallback merge failed (mantendo apenas HANA):", e);
+    }
+    return hanaDocs;
   }, [session]);
+
 
   const fetchApprovals = useCallback(async (opts?: { force?: boolean }) => {
     if (!session || session.erpType !== "sap") return;
