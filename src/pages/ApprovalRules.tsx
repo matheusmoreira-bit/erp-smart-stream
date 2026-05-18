@@ -49,10 +49,12 @@ import {
   useApprovalRules,
   OPERATOR_LABELS,
   FIELD_OPTIONS,
+  DOC_TYPE_LABELS,
   type ApprovalRule,
   type ApprovalRuleLevel,
   type RuleCriterion,
   type CriterionOperator,
+  type RuleDocType,
   type CreateRuleInput,
 } from "@/hooks/useApprovalRules";
 import { useSapUsers } from "@/hooks/useSapUsers";
