@@ -26,10 +26,14 @@ import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useAp
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useNavigate } from "react-router-dom";
-import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History } from "lucide-react";
+import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
-import { sapAction, clearClientCache } from "@/lib/sap-client";
+import { sapAction, sapQuery, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
+import { useSapUsers } from "@/hooks/useSapUsers";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 import {
   Dialog,
