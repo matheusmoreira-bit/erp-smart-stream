@@ -620,7 +620,7 @@ export function CreateExpenseModal({
           {/* Supplier */}
           <div>
             <CachedSearchCombobox
-              label="Fornecedor *"
+              label={`${bpLabel} *`}
               options={supplierOptions}
               isLoading={suppliersLoading}
               value={supplier}
