@@ -47,12 +47,21 @@ export interface ApprovalRuleLevel {
   approver_email?: string;
 }
 
+export type RuleDocType = "purchase" | "sales" | "both";
+
+export const DOC_TYPE_LABELS: Record<RuleDocType, string> = {
+  purchase: "Compra",
+  sales: "Venda",
+  both: "Ambos",
+};
+
 export interface ApprovalRule {
   id: string;
   name: string;
   is_active: boolean;
   priority: number;
   criteria: RuleCriterion[];
+  doc_type: RuleDocType;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -63,6 +72,7 @@ export interface ApprovalRule {
 export interface CreateRuleInput {
   name: string;
   priority?: number;
+  doc_type?: RuleDocType;
   criteria: RuleCriterion[];
   levels: Omit<ApprovalRuleLevel, "id">[];
 }
@@ -112,6 +122,7 @@ export function useApprovalRules() {
         (data || []).map((r: any) => ({
           ...r,
           criteria: Array.isArray(r.criteria) ? r.criteria : [],
+          doc_type: (r.doc_type as RuleDocType) || "both",
           levels: levelsMap[r.id] || [],
         }))
       );
@@ -133,6 +144,7 @@ export function useApprovalRules() {
           name: input.name,
           priority: input.priority || 0,
           criteria: input.criteria as any,
+          doc_type: input.doc_type || "both",
           created_by: createdBy,
           company_db: activeCompanyDb,
         })
@@ -152,8 +164,63 @@ export function useApprovalRules() {
         if (lvlErr) throw lvlErr;
       }
 
+      await supabase.rpc("insert_audit_log", {
+        p_action: "create_approval_rule",
+        p_entity_type: "approval_rule",
+        p_entity_id: (rule as any).id,
+        p_actor_email: createdBy,
+        p_company_db: activeCompanyDb,
+        p_details: { name: input.name, doc_type: input.doc_type || "both" } as any,
+      });
+
       await fetchRules();
       return rule;
+    },
+    [fetchRules, activeCompanyDb]
+  );
+
+  const updateRule = useCallback(
+    async (id: string, input: CreateRuleInput, actor: string) => {
+      const { error: err } = await supabase
+        .from("approval_rules")
+        .update({
+          name: input.name,
+          priority: input.priority || 0,
+          criteria: input.criteria as any,
+          doc_type: input.doc_type || "both",
+        })
+        .eq("id", id);
+      if (err) throw err;
+
+      // Replace levels
+      const { error: delErr } = await supabase
+        .from("approval_rule_levels")
+        .delete()
+        .eq("rule_id", id);
+      if (delErr) throw delErr;
+
+      if (input.levels.length > 0) {
+        const { error: insErr } = await supabase.from("approval_rule_levels").insert(
+          input.levels.map((lvl) => ({
+            rule_id: id,
+            level_order: lvl.level_order,
+            approver_name: lvl.approver_name,
+            approver_email: lvl.approver_email || null,
+          }))
+        );
+        if (insErr) throw insErr;
+      }
+
+      await supabase.rpc("insert_audit_log", {
+        p_action: "update_approval_rule",
+        p_entity_type: "approval_rule",
+        p_entity_id: id,
+        p_actor_email: actor,
+        p_company_db: activeCompanyDb,
+        p_details: { name: input.name, doc_type: input.doc_type || "both" } as any,
+      });
+
+      await fetchRules();
     },
     [fetchRules, activeCompanyDb]
   );
@@ -165,9 +232,16 @@ export function useApprovalRules() {
         .update({ is_active: isActive })
         .eq("id", id);
       if (err) throw err;
+      await supabase.rpc("insert_audit_log", {
+        p_action: isActive ? "enable_approval_rule" : "disable_approval_rule",
+        p_entity_type: "approval_rule",
+        p_entity_id: id,
+        p_company_db: activeCompanyDb,
+        p_details: {} as any,
+      });
       await fetchRules();
     },
-    [fetchRules]
+    [fetchRules, activeCompanyDb]
   );
 
   const deleteRule = useCallback(
@@ -177,14 +251,21 @@ export function useApprovalRules() {
         .delete()
         .eq("id", id);
       if (err) throw err;
+      await supabase.rpc("insert_audit_log", {
+        p_action: "delete_approval_rule",
+        p_entity_type: "approval_rule",
+        p_entity_id: id,
+        p_company_db: activeCompanyDb,
+        p_details: {} as any,
+      });
       await fetchRules();
     },
-    [fetchRules]
+    [fetchRules, activeCompanyDb]
   );
 
   useEffect(() => {
     fetchRules();
   }, [fetchRules]);
 
-  return { rules, isLoading, error, refresh: fetchRules, createRule, toggleRule, deleteRule };
+  return { rules, isLoading, error, refresh: fetchRules, createRule, updateRule, toggleRule, deleteRule };
 }

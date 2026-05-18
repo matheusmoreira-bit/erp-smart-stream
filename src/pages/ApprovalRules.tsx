@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -15,6 +15,9 @@ import {
   Users,
   Filter,
   Search,
+  Pencil,
+  ShoppingCart,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -46,10 +49,12 @@ import {
   useApprovalRules,
   OPERATOR_LABELS,
   FIELD_OPTIONS,
+  DOC_TYPE_LABELS,
   type ApprovalRule,
   type ApprovalRuleLevel,
   type RuleCriterion,
   type CriterionOperator,
+  type RuleDocType,
   type CreateRuleInput,
 } from "@/hooks/useApprovalRules";
 import { useSapUsers } from "@/hooks/useSapUsers";
@@ -261,25 +266,52 @@ function CriterionRow({
   );
 }
 
-/* ─── Create Rule Modal ─── */
-function CreateRuleModal({
+/* ─── Rule Form Modal (create + edit) ─── */
+function RuleFormModal({
   open,
   onClose,
-  onCreate,
+  onSubmit,
   sapUsers,
   sapUsersLoading,
+  editing,
 }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (input: CreateRuleInput) => Promise<void>;
+  onSubmit: (input: CreateRuleInput) => Promise<void>;
   sapUsers: SapUser[];
   sapUsersLoading: boolean;
+  editing?: ApprovalRule | null;
 }) {
-  const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(0);
+  const [docType, setDocType] = useState<RuleDocType>("both");
   const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
   const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
+
+  // Hydrate form when opening / switching between create and edit
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setName(editing.name);
+      setPriority(editing.priority || 0);
+      setDocType((editing.doc_type as RuleDocType) || "both");
+      setCriteria(editing.criteria || []);
+      setLevels(
+        (editing.levels || []).map((l) => ({
+          level_order: l.level_order,
+          approver_name: l.approver_name,
+          approver_email: l.approver_email || "",
+        }))
+      );
+    } else {
+      setName("");
+      setPriority(0);
+      setDocType("both");
+      setCriteria([]);
+      setLevels([]);
+    }
+  }, [open, editing]);
 
   const addCriterion = () => {
     setCriteria((prev) => [
@@ -317,13 +349,6 @@ function CreateRuleModal({
     });
   };
 
-  const reset = () => {
-    setName("");
-    setPriority(0);
-    setCriteria([]);
-    setLevels([]);
-  };
-
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast.error("Informe o nome da regra");
@@ -341,16 +366,15 @@ function CreateRuleModal({
       toast.error("Todos os níveis devem ter um aprovador");
       return;
     }
-    setIsCreating(true);
+    setIsSaving(true);
     try {
-      await onCreate({ name, priority, criteria, levels });
-      toast.success("Regra criada com sucesso!");
-      reset();
+      await onSubmit({ name, priority, doc_type: docType, criteria, levels });
+      toast.success(editing ? "Regra atualizada com sucesso!" : "Regra criada com sucesso!");
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao criar regra");
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar regra");
     } finally {
-      setIsCreating(false);
+      setIsSaving(false);
     }
   };
 
@@ -360,18 +384,31 @@ function CreateRuleModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
-            Nova Regra de Aprovação
+            {editing ? "Editar Regra de Aprovação" : "Nova Regra de Aprovação"}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 mt-2">
           {/* Basic info */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-3 sm:col-span-1">
               <label className="text-xs text-muted-foreground mb-1 block">Nome da Regra *</label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Aprovação acima de R$ 10.000" />
             </div>
-            <div className="col-span-2 sm:col-span-1">
+            <div className="col-span-3 sm:col-span-1">
+              <label className="text-xs text-muted-foreground mb-1 block">Tipo de Documento</label>
+              <Select value={docType} onValueChange={(v) => setDocType(v as RuleDocType)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="both">Ambos (Compra e Venda)</SelectItem>
+                  <SelectItem value="purchase">Compra</SelectItem>
+                  <SelectItem value="sales">Venda</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-3 sm:col-span-1">
               <label className="text-xs text-muted-foreground mb-1 block">Prioridade</label>
               <Input type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} placeholder="0" />
               <p className="text-[10px] text-muted-foreground mt-1">Maior = mais prioritário</p>
@@ -472,10 +509,10 @@ function CreateRuleModal({
           </div>
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose} disabled={isCreating}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={isCreating} className="gap-1.5">
-              {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Criar Regra
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={isSaving} className="gap-1.5">
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {editing ? "Salvar Alterações" : "Criar Regra"}
             </Button>
           </div>
         </div>
@@ -489,14 +526,24 @@ function RuleCard({
   rule,
   onToggle,
   onDelete,
+  onEdit,
 }: {
   rule: ApprovalRule;
   onToggle: () => void;
   onDelete: () => void;
+  onEdit: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   const criteriaLabels = (rule.criteria || []).map(criterionSummary);
+  const dt: RuleDocType = (rule.doc_type as RuleDocType) || "both";
+  const docTypeBadge =
+    dt === "purchase"
+      ? { icon: ShoppingCart, cls: "bg-blue-500/15 text-blue-500" }
+      : dt === "sales"
+      ? { icon: Tag, cls: "bg-emerald-500/15 text-emerald-500" }
+      : { icon: Shield, cls: "bg-muted text-muted-foreground" };
+  const DocIcon = docTypeBadge.icon;
 
   return (
     <motion.div
@@ -506,10 +553,14 @@ function RuleCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h3 className="text-foreground font-semibold truncate">{rule.name}</h3>
             <Badge className={rule.is_active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}>
               {rule.is_active ? "Ativa" : "Inativa"}
+            </Badge>
+            <Badge className={`${docTypeBadge.cls} gap-1`}>
+              <DocIcon className="w-3 h-3" />
+              {DOC_TYPE_LABELS[dt]}
             </Badge>
             {rule.priority > 0 && (
               <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
@@ -556,7 +607,10 @@ function RuleCard({
 
         <div className="flex items-center gap-2 shrink-0">
           <Switch checked={rule.is_active} onCheckedChange={onToggle} />
-          <Button variant="ghost" size="icon" onClick={onDelete} className="h-8 w-8 text-muted-foreground hover:text-destructive">
+          <Button variant="ghost" size="icon" onClick={onEdit} className="h-8 w-8 text-muted-foreground hover:text-primary" title="Editar regra">
+            <Pencil className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onDelete} className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Excluir regra">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
@@ -569,10 +623,11 @@ function RuleCard({
 export default function ApprovalRulesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { rules, isLoading, error, refresh, createRule, toggleRule, deleteRule } = useApprovalRules();
+  const { rules, isLoading, error, refresh, createRule, updateRule, toggleRule, deleteRule } = useApprovalRules();
   const { users: sapUsers, isLoading: sapUsersLoading } = useSapUsers();
   const { getLabel } = useCompanies(true);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingRule, setEditingRule] = useState<ApprovalRule | null>(null);
 
   if (!session) {
     navigate("/");
@@ -581,8 +636,25 @@ export default function ApprovalRulesPage() {
 
   const companyLabel = getLabel(session?.companyDB || "");
 
-  const handleCreate = async (input: CreateRuleInput) => {
-    await createRule(input, session.userName);
+  const openCreate = () => {
+    setEditingRule(null);
+    setShowForm(true);
+  };
+  const openEdit = (rule: ApprovalRule) => {
+    setEditingRule(rule);
+    setShowForm(true);
+  };
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingRule(null);
+  };
+
+  const handleSubmit = async (input: CreateRuleInput) => {
+    if (editingRule) {
+      await updateRule(editingRule.id, input, session.userName);
+    } else {
+      await createRule(input, session.userName);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -642,7 +714,7 @@ export default function ApprovalRulesPage() {
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
-          <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+          <Button onClick={openCreate} className="gap-1.5">
             <Plus className="w-4 h-4" /> Nova Regra
           </Button>
         </div>
@@ -680,7 +752,7 @@ export default function ApprovalRulesPage() {
             <Shield className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <p className="text-muted-foreground mb-2">Nenhuma regra de aprovação configurada</p>
             <p className="text-xs text-muted-foreground mb-4">Crie regras para definir a cadeia de aprovadores com base em critérios</p>
-            <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+            <Button onClick={openCreate} className="gap-1.5">
               <Plus className="w-4 h-4" /> Criar primeira regra
             </Button>
           </div>
@@ -692,18 +764,20 @@ export default function ApprovalRulesPage() {
                 rule={rule}
                 onToggle={() => handleToggle(rule.id, rule.is_active)}
                 onDelete={() => handleDelete(rule.id)}
+                onEdit={() => openEdit(rule)}
               />
             ))}
           </div>
         )}
       </main>
 
-      <CreateRuleModal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        onCreate={handleCreate}
+      <RuleFormModal
+        open={showForm}
+        onClose={closeForm}
+        onSubmit={handleSubmit}
         sapUsers={sapUsers}
         sapUsersLoading={sapUsersLoading}
+        editing={editingRule}
       />
     </div>
   );

@@ -152,6 +152,7 @@ function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean 
 async function findMatchingRule(
   ctx: Record<string, any>,
   companyDb: string | null,
+  docType: ExpenseDocType,
 ): Promise<{ rule: RuleRow; firstApprover?: { name: string; email: string | null } } | null> {
   let q = supabase
     .from("approval_rules")
@@ -169,7 +170,14 @@ async function findMatchingRule(
   const { data: rules } = await q;
   if (!rules || rules.length === 0) return null;
 
-  for (const r of rules as any[]) {
+  // Filter by doc_type: rule applies when matching type, "both", or null (legacy)
+  const filtered = (rules as any[]).filter((r) => {
+    const rdt = r.doc_type;
+    return !rdt || rdt === "both" || rdt === docType;
+  });
+  if (filtered.length === 0) return null;
+
+  for (const r of filtered) {
     const criteria: RuleCriterion[] = Array.isArray(r.criteria) ? r.criteria : [];
     if (criteria.length === 0) continue;
     const allMatch = criteria.every((c) => evaluateCriterion(c, ctx));
@@ -266,9 +274,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           requester_name: session.userName,
           supplier_name: input.supplier_name,
           currency: input.currency || "BRL",
-          doc_type: "expense",
+          doc_type: docType,
         };
-        const match = await findMatchingRule(ctx, session.companyDB || null);
+        const match = await findMatchingRule(ctx, session.companyDB || null, docType);
         if (match) {
           status = "pendente_aprovacao";
           currentApprover = match.firstApprover?.name || null;
