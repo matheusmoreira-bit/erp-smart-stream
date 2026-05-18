@@ -377,7 +377,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       await fetchExpenses();
       return { expense, status, origin };
     },
-    [session, fetchExpenses]
+    [session, fetchExpenses, docType]
   );
 
   const submitForApproval = useCallback(
