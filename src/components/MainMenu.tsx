@@ -54,6 +54,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-success/20 to-success/5",
     moduleKey: "expenses",
   },
+  sales: {
+    title: "Vendas",
+    description: "Crie e acompanhe pedidos de venda com fluxo de aprovação e integração SAP.",
+    icon: Wallet,
+    path: "/sales",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    moduleKey: "sales",
+  },
   approvals: {
     title: "Aprovações",
     description: "Documentos pendentes de aprovação com detalhes de valor, fornecedor, aprovador e vencimento.",
