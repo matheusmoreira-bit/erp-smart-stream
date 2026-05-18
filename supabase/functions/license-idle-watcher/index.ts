@@ -388,24 +388,36 @@ Deno.serve(async (req) => {
       status: "success",
       recipients_count: sentCount,
       error_message: null,
-      details: { idle_total: allIdle.length, week: weekKey },
+      details: { idle_total: allIdle.length, week: weekKey, forced: forceWeek },
     });
-    return new Response(JSON.stringify({ ok: true, idle_total: allIdle.length, alerts_sent: sentCount, week: weekKey }, null, 2), {
+    return { ok: true, idle_total: allIdle.length, alerts_sent: sentCount, week: weekKey };
+    } catch (e) {
+      console.error("license-idle-watcher error:", e);
+      try {
+        await sb.from("notification_send_runs").insert({
+          function_name: "license-idle-watcher",
+          status: "error",
+          recipients_count: 0,
+          error_message: (e as Error).message,
+          details: {},
+        });
+      } catch { /* ignore */ }
+      return { error: (e as Error).message };
+    }
+  };
+
+  if (isAsync) {
+    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
+    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work());
+    else work();
+    return new Response(JSON.stringify({ ok: true, queued: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    console.error("license-idle-watcher error:", e);
-    try {
-      await sb.from("notification_send_runs").insert({
-        function_name: "license-idle-watcher",
-        status: "error",
-        recipients_count: 0,
-        error_message: (e as Error).message,
-        details: {},
-      });
-    } catch { /* ignore */ }
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   }
+
+  const result = await work();
+  const status = (result as { error?: string }).error ? 500 : 200;
+  return new Response(JSON.stringify(result, null, 2), {
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 });
