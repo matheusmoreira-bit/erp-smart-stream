@@ -411,6 +411,234 @@ function approverMatches(approver: string, userName: string): boolean {
   return allIn(uTokens, aTokens) || allIn(aTokens, uTokens);
 }
 
+function StatusBadge({ status, label }: { status: MyRequestDoc["status"] | ApprovalHistoryEntry["status"]; label: string }) {
+  const styles: Record<string, string> = {
+    pending: "bg-amber-500/10 text-amber-500 border-amber-500/30",
+    approved: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
+    rejected: "bg-destructive/10 text-destructive border-destructive/30",
+    cancelled: "bg-muted text-muted-foreground border-border",
+    generated: "bg-primary/10 text-primary border-primary/30",
+    without_decision: "bg-muted text-muted-foreground border-border",
+  };
+  return (
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border uppercase tracking-wider ${styles[status] || styles.pending}`}>
+      {label}
+    </span>
+  );
+}
+
+function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null; open: boolean; onClose: () => void }) {
+  if (!doc) return null;
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+            <span className="font-mono">#{doc.docNum}</span>
+            <StatusBadge status={doc.status} label={doc.statusLabel} />
+            <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Fornecedor</p>
+              <p className="text-foreground font-medium">{doc.cardName}</p>
+              <p className="text-xs text-muted-foreground font-mono">{doc.cardCode}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Modelo de Aprovação</p>
+              <p className="text-foreground text-sm">{doc.approvalModel || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Criado em</p>
+              <p className="text-foreground">{formatDate(doc.creationDate)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Última atualização</p>
+              <p className="text-foreground">{formatDate(doc.updateDate)}</p>
+            </div>
+          </div>
+
+          {doc.remarks && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Observações</p>
+              <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{doc.remarks}</p>
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" /> Histórico de Aprovações
+            </p>
+            {doc.history.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">Nenhuma etapa de aprovação encontrada.</p>
+            ) : (
+              <div className="space-y-2">
+                {doc.history.map((h, i) => (
+                  <div key={i} className="flex items-start gap-3 border border-border rounded-lg p-3 bg-muted/20">
+                    <div className="mt-0.5">
+                      {h.status === "approved" ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      ) : h.status === "rejected" ? (
+                        <XOctagon className="w-4 h-4 text-destructive" />
+                      ) : (
+                        <Clock className="w-4 h-4 text-amber-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-foreground">{h.stageName}</span>
+                        <StatusBadge status={h.status} label={h.statusLabel} />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <span className="text-foreground font-medium">{h.approverName}</span>
+                        {h.approverEmail && <span> · {h.approverEmail}</span>}
+                      </p>
+                      {h.date && (
+                        <p className="text-xs text-muted-foreground mt-0.5 font-mono">{formatDate(h.date)}</p>
+                      )}
+                      {h.remarks && (
+                        <p className="text-xs text-foreground bg-background/60 rounded p-2 mt-2">{h.remarks}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MyRequestsTab() {
+  const { requests, isLoading, error, refresh } = useMyRequests();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | MyRequestDoc["status"]>("all");
+  const [selected, setSelected] = useState<MyRequestDoc | null>(null);
+
+  const filtered = requests.filter((r) => {
+    if (statusFilter !== "all" && r.status !== statusFilter) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      String(r.docNum).includes(q) ||
+      r.cardName.toLowerCase().includes(q) ||
+      r.docTypeName.toLowerCase().includes(q) ||
+      r.approvalModel.toLowerCase().includes(q)
+    );
+  });
+
+  const counts = {
+    all: requests.length,
+    pending: requests.filter((r) => r.status === "pending").length,
+    approved: requests.filter((r) => r.status === "approved").length,
+    rejected: requests.filter((r) => r.status === "rejected").length,
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nº, fornecedor, tipo..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 bg-muted/30 border-border"
+          />
+        </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          {([
+            ["all", `Todos (${counts.all})`],
+            ["pending", `Pendentes (${counts.pending})`],
+            ["approved", `Aprovados (${counts.approved})`],
+            ["rejected", `Rejeitados (${counts.rejected})`],
+          ] as const).map(([key, lbl]) => (
+            <button
+              key={key}
+              onClick={() => setStatusFilter(key as typeof statusFilter)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                statusFilter === key
+                  ? "bg-primary/10 text-primary border-primary/30"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+        <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading}>
+          <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+        </Button>
+      </div>
+
+      {error && (
+        <div className="glass-card p-4 border-destructive/30 bg-destructive/10 text-sm text-destructive">{error}</div>
+      )}
+
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">Carregando seus pedidos...</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="glass-card p-12 text-center">
+          <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+          <p className="text-foreground font-medium">Nenhum pedido encontrado</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {search || statusFilter !== "all" ? "Ajuste os filtros para ver mais resultados." : "Você ainda não criou nenhum pedido."}
+          </p>
+        </div>
+      ) : (
+        <div className="glass-card p-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Tipo</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Nº Doc</th>
+                <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Fornecedor</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Modelo</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Criado</th>
+                <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Histórico</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((doc) => (
+                <tr key={doc.approvalRequestId} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-3">
+                    <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+                  </td>
+                  <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">#{doc.docNum}</td>
+                  <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
+                  <td className="py-3 px-3 text-foreground">{doc.cardName}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{doc.approvalModel || "—"}</td>
+                  <td className="py-3 px-3"><StatusBadge status={doc.status} label={doc.statusLabel} /></td>
+                  <td className="py-3 px-3 text-muted-foreground font-mono text-xs">{formatDate(doc.creationDate)}</td>
+                  <td className="py-3 px-3 text-center">
+                    <Button variant="ghost" size="sm" onClick={() => setSelected(doc)} className="text-primary hover:text-primary/80 gap-1">
+                      <History className="w-4 h-4" />
+                      <span className="text-xs">{doc.history.length}</span>
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <MyRequestDetailModal doc={selected} open={!!selected} onClose={() => setSelected(null)} />
+    </div>
+  );
+}
+
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
