@@ -274,9 +274,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           requester_name: session.userName,
           supplier_name: input.supplier_name,
           currency: input.currency || "BRL",
-          doc_type: "expense",
+          doc_type: docType,
         };
-        const match = await findMatchingRule(ctx, session.companyDB || null);
+        const match = await findMatchingRule(ctx, session.companyDB || null, docType);
         if (match) {
           status = "pendente_aprovacao";
           currentApprover = match.firstApprover?.name || null;
