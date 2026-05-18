@@ -488,9 +488,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
             <DollarSign className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-            <p className="text-muted-foreground">Nenhuma despesa encontrada</p>
+            <p className="text-muted-foreground">{emptyLabel}</p>
             <Button onClick={() => setShowCreate(true)} className="mt-4 gap-1.5">
-              <Plus className="w-4 h-4" /> Criar primeira despesa
+              <Plus className="w-4 h-4" /> {emptyCta}
             </Button>
           </div>
         ) : (
