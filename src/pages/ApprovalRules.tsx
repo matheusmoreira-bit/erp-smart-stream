@@ -509,10 +509,10 @@ function RuleFormModal({
           </div>
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose} disabled={isCreating}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={isCreating} className="gap-1.5">
-              {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Criar Regra
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={isSaving} className="gap-1.5">
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {editing ? "Salvar Alterações" : "Criar Regra"}
             </Button>
           </div>
         </div>
