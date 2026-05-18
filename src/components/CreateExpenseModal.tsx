@@ -625,7 +625,7 @@ export function CreateExpenseModal({
               isLoading={suppliersLoading}
               value={supplier}
               onChange={handleSupplierChange}
-              placeholder="Digite nome, código ou CNPJ do fornecedor..."
+              placeholder={`Digite nome, código ou CNPJ do ${bpLabel.toLowerCase()}...`}
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
             />
