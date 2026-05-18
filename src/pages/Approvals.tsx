@@ -940,6 +940,12 @@ export default function ApprovalsPage() {
             </table>
           </div>
         )}
+          </TabsContent>
+
+          <TabsContent value="my-requests" className="mt-0">
+            <MyRequestsTab />
+          </TabsContent>
+        </Tabs>
       </main>
 
       <ApprovalDetailModal
