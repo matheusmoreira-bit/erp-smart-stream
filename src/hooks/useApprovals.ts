@@ -379,7 +379,10 @@ async function fetchDraftsByEntries(session: SapSession, entries: number[]): Pro
   return map;
 }
 
-async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<ApprovalDoc[]> {
+async function fetchApprovalsViaServiceLayer(
+  session: SapSession,
+  excludeRequestIds?: Set<number>,
+): Promise<ApprovalDoc[]> {
   let reqRes = await sapQuery(
     session,
     "ApprovalRequests?$filter=Status eq 'arsPending'&$select=Code,OriginatorID,DraftEntry,DocumentEntry,ObjectType,Status,RemarksFromOriginator,CreationDate,UpdateDate,ApprovalTemplatesID&$expand=ApprovalRequestDecisions,ApprovalRequestLines&$top=200",
@@ -395,9 +398,13 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
     );
   }
   const reqData = reqRes.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
-  const requests: SLApprovalRequest[] = Array.isArray(reqData)
+  let requests: SLApprovalRequest[] = Array.isArray(reqData)
     ? (reqData as SLApprovalRequest[])
     : (reqData?.value || []);
+
+  if (excludeRequestIds?.size) {
+    requests = requests.filter((r) => !excludeRequestIds.has(Number(r.Code || 0)));
+  }
 
   if (!requests.length) return [];
 
@@ -540,9 +547,19 @@ export function useApprovals() {
     const hanaDocs = detailedView.data
       .map(mapHanaApproval)
       .filter((doc) => doc.approvalRequestId > 0);
-    if (hanaDocs.length > 0) return hanaDocs;
-    return await fetchApprovalsViaServiceLayer(session as SapSession);
+
+    // Sempre complementar com Service Layer para cobrir aprovações que a view HANA
+    // não retorna (ex.: documentos recém-criados ou fora do filtro da view).
+    const knownIds = new Set(hanaDocs.map((d) => d.approvalRequestId));
+    try {
+      const slDocs = await fetchApprovalsViaServiceLayer(session as SapSession, knownIds);
+      if (slDocs.length) return [...hanaDocs, ...slDocs];
+    } catch (e) {
+      console.warn("SL fallback merge failed (mantendo apenas HANA):", e);
+    }
+    return hanaDocs;
   }, [session]);
+
 
   const fetchApprovals = useCallback(async (opts?: { force?: boolean }) => {
     if (!session || session.erpType !== "sap") return;
