@@ -523,10 +523,8 @@ export function useApprovals() {
     const hanaDocs = detailedView.data
       .map(mapHanaApproval)
       .filter((doc) => doc.approvalRequestId > 0);
-    const serviceLayerDocs = await fetchApprovalsViaServiceLayer(session as SapSession).catch(() => []);
-    const hanaIds = new Set(hanaDocs.map((doc) => doc.approvalRequestId));
-    const missingFromView = serviceLayerDocs.filter((doc) => !hanaIds.has(doc.approvalRequestId));
-    return [...hanaDocs, ...missingFromView];
+    if (hanaDocs.length > 0) return hanaDocs;
+    return await fetchApprovalsViaServiceLayer(session as SapSession);
   }, [session]);
 
   const fetchApprovals = useCallback(async (opts?: { force?: boolean }) => {
