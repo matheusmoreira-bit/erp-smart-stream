@@ -59,6 +59,8 @@ export interface Expense {
   attachments?: ExpenseAttachment[];
 }
 
+export type ExpenseDocType = "purchase" | "sales";
+
 export interface CreateExpenseInput {
   supplier_code?: string;
   supplier_name: string;
@@ -70,6 +72,7 @@ export interface CreateExpenseInput {
   initialStatus?: ExpenseStatus;
   skipRules?: boolean;
   branch_id?: number;
+  doc_type?: ExpenseDocType;
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
 }
