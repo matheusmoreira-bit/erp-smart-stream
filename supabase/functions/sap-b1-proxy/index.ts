@@ -275,7 +275,7 @@ Deno.serve(async (req) => {
       }
 
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
-      const sapResp = await fetch(fullUrl, {
+      const sapResp = await fetchWithTimeout(fullUrl, {
         method: "GET",
         headers: { "Content-Type": "application/json", Cookie: cookies },
       });
@@ -354,7 +354,7 @@ Deno.serve(async (req) => {
         let lastErr: unknown = null;
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            sapResp = await fetch(fullUrl, {
+            sapResp = await fetchWithTimeout(fullUrl, {
               method: "GET",
               headers: { "Content-Type": "application/json", Cookie: cookies },
             });
@@ -467,7 +467,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const viewResp = await fetch(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
+      const viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
