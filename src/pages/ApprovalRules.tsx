@@ -266,25 +266,52 @@ function CriterionRow({
   );
 }
 
-/* ─── Create Rule Modal ─── */
-function CreateRuleModal({
+/* ─── Rule Form Modal (create + edit) ─── */
+function RuleFormModal({
   open,
   onClose,
-  onCreate,
+  onSubmit,
   sapUsers,
   sapUsersLoading,
+  editing,
 }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (input: CreateRuleInput) => Promise<void>;
+  onSubmit: (input: CreateRuleInput) => Promise<void>;
   sapUsers: SapUser[];
   sapUsersLoading: boolean;
+  editing?: ApprovalRule | null;
 }) {
-  const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(0);
+  const [docType, setDocType] = useState<RuleDocType>("both");
   const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
   const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
+
+  // Hydrate form when opening / switching between create and edit
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setName(editing.name);
+      setPriority(editing.priority || 0);
+      setDocType((editing.doc_type as RuleDocType) || "both");
+      setCriteria(editing.criteria || []);
+      setLevels(
+        (editing.levels || []).map((l) => ({
+          level_order: l.level_order,
+          approver_name: l.approver_name,
+          approver_email: l.approver_email || "",
+        }))
+      );
+    } else {
+      setName("");
+      setPriority(0);
+      setDocType("both");
+      setCriteria([]);
+      setLevels([]);
+    }
+  }, [open, editing]);
 
   const addCriterion = () => {
     setCriteria((prev) => [
