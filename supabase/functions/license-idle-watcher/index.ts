@@ -33,6 +33,27 @@ function normalizeBaseUrl(url: string): string {
   return u;
 }
 
+function pickField<T = unknown>(row: Record<string, unknown>, ...keys: string[]): T | undefined {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k] as T;
+    const upper = k.toUpperCase();
+    if (row[upper] !== undefined && row[upper] !== null && row[upper] !== "") return row[upper] as T;
+    const lower = k.toLowerCase();
+    if (row[lower] !== undefined && row[lower] !== null && row[lower] !== "") return row[lower] as T;
+  }
+  return undefined;
+}
+
+function normalizeUsr5(r: Record<string, unknown>): Usr5 {
+  return {
+    UserCode: String(pickField<string>(r, "UserCode", "USER_CODE", "USERCODE", "user_code") ?? "").trim(),
+    Action: String(pickField<string>(r, "Action", "ACTION") ?? "").trim(),
+    Date: String(pickField<string>(r, "Date", "DATE") ?? "").trim(),
+    Time: Number(pickField(r, "Time", "TIME") ?? 0),
+    SessionID: Number(pickField(r, "SessionID", "SESSIONID", "Session_ID") ?? 0),
+  };
+}
+
 function tsToDate(r: Usr5): Date | null {
   const d = (r.Date || "").replace(/-/g, "");
   if (d.length !== 8) return null;
@@ -48,6 +69,33 @@ function tsToDate(r: Usr5): Date | null {
 
 function isSuccessfulLogin(r: Usr5): boolean {
   return (r.Action === "I" || r.Action === "W") && Number(r.SessionID) >= 0;
+}
+
+async function fetchSapUsersFresh(baseUrl: string, session: { sessionId: string; routeId: string }): Promise<Array<{ UserCode: string; UserName?: string; Locked?: string }>> {
+  const cookie = `B1SESSION=${session.sessionId}${session.routeId ? `; B1ROUTEID=${session.routeId}` : ""}`;
+  const all: Array<{ UserCode: string; UserName?: string; Locked?: string }> = [];
+  let next: string | null = `${baseUrl}/Users?$select=UserCode,UserName,Locked&$top=200`;
+  while (next) {
+    const resp = await fetch(next, { headers: { Cookie: cookie, Prefer: "odata.maxpagesize=200" } });
+    if (!resp.ok) throw new Error(`Service Layer Users falhou: ${resp.status}`);
+    const json = await resp.json();
+    for (const u of json.value || []) all.push(u);
+    if (json["odata.nextLink"]) {
+      next = `${baseUrl}/${json["odata.nextLink"]}`;
+    } else {
+      next = null;
+    }
+  }
+  return all;
+}
+
+async function refreshUsersCache(sb: ReturnType<typeof createClient>, companyDb: string, users: Array<{ UserCode: string; UserName?: string; Locked?: string }>) {
+  if (users.length === 0) return;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  await sb.from("sap_cache").upsert(
+    { cache_key: "users", company_db: companyDb, data: users as unknown, expires_at: expiresAt, updated_at: new Date().toISOString() },
+    { onConflict: "cache_key,company_db" },
+  );
 }
 
 function isoWeekKey(d: Date): string {
