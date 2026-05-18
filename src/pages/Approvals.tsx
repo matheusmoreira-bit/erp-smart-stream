@@ -797,7 +797,7 @@ function MyRequestsTab() {
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { approvals, isLoading, error, refresh } = useApprovals();
+  const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache } = useApprovals();
   const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense } = useExpenses("purchase");
   const { expenses: salesExpenses, refresh: refreshSales } = useExpenses("sales");
   const expenses = [...purchaseExpenses, ...salesExpenses];
@@ -1011,8 +1011,24 @@ export default function ApprovalsPage() {
               <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
               Conectado
             </div>
-            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground">
+            {lastUpdatedAt && (
+              <span className="text-xs text-muted-foreground hidden md:inline">
+                Cache: {new Date(lastUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground" title="Recarregar">
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { refreshCache(); }}
+              disabled={isRefreshing}
+              className="gap-2"
+              title="Buscar dados atualizados do ERP e atualizar o cache"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              Atualizar cache
             </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
