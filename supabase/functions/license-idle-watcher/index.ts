@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
       credByCompany.get(row.company_db)![row.credential_key] = row.credential_value;
     }
 
-    const weekKey = isoWeekKey(new Date());
+    const weekKey = forceWeek ? `${isoWeekKey(new Date())}-force-${Date.now()}` : isoWeekKey(new Date());
     const cutoff = Date.now() - IDLE_DAYS * 86400000;
     const allIdle: Array<{ company_db: string; display_name: string; user_code: string; user_name: string; license_type: string; days_idle: number; last_login: string | null }> = [];
 
