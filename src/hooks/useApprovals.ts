@@ -496,49 +496,127 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
   }).filter((d) => d.approvalRequestId > 0);
 }
 
+const APPROVALS_CACHE_KEY = "approvals:detailed";
+const APPROVALS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
+async function readApprovalsCache(companyDB: string): Promise<{ docs: ApprovalDoc[]; updatedAt: string } | null> {
+  const { data, error } = await supabase
+    .from("sap_cache")
+    .select("data, updated_at, expires_at")
+    .eq("company_db", companyDB)
+    .eq("cache_key", APPROVALS_CACHE_KEY)
+    .maybeSingle();
+  if (error || !data) return null;
+  const docs = (data.data as unknown as ApprovalDoc[]) || [];
+  return { docs, updatedAt: data.updated_at };
+}
+
+async function writeApprovalsCache(companyDB: string, docs: ApprovalDoc[]): Promise<void> {
+  const now = new Date();
+  const expires = new Date(now.getTime() + APPROVALS_CACHE_TTL_MS);
+  await supabase.from("sap_cache").upsert(
+    {
+      company_db: companyDB,
+      cache_key: APPROVALS_CACHE_KEY,
+      data: docs as unknown as any,
+      updated_at: now.toISOString(),
+      expires_at: expires.toISOString(),
+    },
+    { onConflict: "company_db,cache_key" },
+  );
+}
+
 export function useApprovals() {
   const { session } = useSap();
   const [approvals, setApprovals] = useState<ApprovalDoc[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
 
-  const fetchApprovals = useCallback(async () => {
+  const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[]> => {
+    if (!session || session.erpType !== "sap") return [];
+    const detailedView = await sapQueryView<HanaApprovalViewRow>(
+      session,
+      `${session.companyDB}.VW_APROVACOES_DETALHADAS`,
+      undefined,
+      false,
+    );
+
+    if (detailedView.hanaDisabled) {
+      return await fetchApprovalsViaServiceLayer(session as SapSession);
+    }
+    const hanaDocs = detailedView.data
+      .map(mapHanaApproval)
+      .filter((doc) => doc.approvalRequestId > 0);
+    const serviceLayerDocs = await fetchApprovalsViaServiceLayer(session as SapSession).catch(() => []);
+    const hanaIds = new Set(hanaDocs.map((doc) => doc.approvalRequestId));
+    const missingFromView = serviceLayerDocs.filter((doc) => !hanaIds.has(doc.approvalRequestId));
+    return [...hanaDocs, ...missingFromView];
+  }, [session]);
+
+  const fetchApprovals = useCallback(async (opts?: { force?: boolean }) => {
     if (!session || session.erpType !== "sap") return;
-    setIsLoading(true);
+    const force = !!opts?.force;
+    const companyDB = session.companyDB;
     setError(null);
 
-    try {
-      const detailedView = await sapQueryView<HanaApprovalViewRow>(
-        session,
-        `${session.companyDB}.VW_APROVACOES_DETALHADAS`,
-        undefined,
-        false,
-      );
-
-      if (detailedView.hanaDisabled) {
-        // Empresa sem middleware HANA — buscar tudo via Service Layer
-        const docs = await fetchApprovalsViaServiceLayer(session as SapSession);
-        setApprovals(docs);
-      } else {
-        const hanaDocs = detailedView.data
-          .map(mapHanaApproval)
-          .filter((doc) => doc.approvalRequestId > 0);
-        const serviceLayerDocs = await fetchApprovalsViaServiceLayer(session as SapSession).catch(() => []);
-        const hanaIds = new Set(hanaDocs.map((doc) => doc.approvalRequestId));
-        const missingFromView = serviceLayerDocs.filter((doc) => !hanaIds.has(doc.approvalRequestId));
-        setApprovals([...hanaDocs, ...missingFromView]);
+    // 1) Try cache first (unless forced)
+    if (!force) {
+      try {
+        const cached = await readApprovalsCache(companyDB);
+        if (cached) {
+          setApprovals(cached.docs);
+          setLastUpdatedAt(cached.updatedAt);
+          setIsLoading(false);
+          const age = Date.now() - new Date(cached.updatedAt).getTime();
+          if (age < APPROVALS_CACHE_TTL_MS) return; // fresh, skip SAP
+          // stale: fall through to refresh in background
+        }
+      } catch (e) {
+        console.warn("approvals cache read failed:", e);
       }
+    }
+
+    const hasData = approvals.length > 0;
+    if (force || !hasData) setIsLoading(true);
+    setIsRefreshing(true);
+    try {
+      const docs = await fetchFromSap();
+      setApprovals(docs);
+      const now = new Date().toISOString();
+      setLastUpdatedAt(now);
+      writeApprovalsCache(companyDB, docs).catch((e) => console.warn("approvals cache write failed:", e));
     } catch (e) {
       console.error("Error fetching approvals:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar aprovações");
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }, [session]);
+  }, [session, fetchFromSap, approvals.length]);
 
   useEffect(() => {
     fetchApprovals();
-  }, [fetchApprovals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.companyDB, session?.erpType]);
 
-  return { approvals, isLoading, error, refresh: fetchApprovals };
+  // Auto-refresh every 5 minutes while the page is open
+  useEffect(() => {
+    if (!session || session.erpType !== "sap") return;
+    const id = setInterval(() => {
+      fetchApprovals({ force: true });
+    }, APPROVALS_CACHE_TTL_MS);
+    return () => clearInterval(id);
+  }, [session, fetchApprovals]);
+
+  return {
+    approvals,
+    isLoading,
+    isRefreshing,
+    error,
+    lastUpdatedAt,
+    refresh: () => fetchApprovals({ force: false }),
+    refreshCache: () => fetchApprovals({ force: true }),
+  };
 }
