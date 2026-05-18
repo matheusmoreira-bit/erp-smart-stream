@@ -73,7 +73,7 @@ function extractTableName(table: string): string {
 }
 
 function validateEndpoint(endpoint: string): boolean {
-  if (!endpoint || typeof endpoint !== "string" || endpoint.length > 500) return false;
+  if (!endpoint || typeof endpoint !== "string" || endpoint.length > 4000) return false;
   if (endpoint.includes("..") || endpoint.startsWith("http")) return false;
   return true;
 }
