@@ -15,6 +15,7 @@ import {
   Send,
   X as XIcon,
   RotateCw,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -46,6 +47,7 @@ import {
   type Expense,
 } from "@/hooks/useExpenses";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
+import { EditExpenseModal } from "@/components/EditExpenseModal";
 import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -70,7 +72,9 @@ function ExpenseDetailModal({
   onSubmit,
   onCancel,
   onRetrySap,
+  onEdit,
   canCancel,
+  canEdit,
   canRetrySap,
   isSubmitting,
   isCancelling,
@@ -82,7 +86,9 @@ function ExpenseDetailModal({
   onSubmit: (id: string) => void;
   onCancel: (id: string) => void;
   onRetrySap: (id: string) => void;
+  onEdit: (expense: Expense) => void;
   canCancel: boolean;
+  canEdit: boolean;
   canRetrySap: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
@@ -93,6 +99,7 @@ function ExpenseDetailModal({
 
   const showSubmit = expense.status === "rascunho";
   const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
+  const showEdit = canEdit && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
 
   return (
@@ -180,9 +187,19 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            {(showSubmit || showCancel || showRetrySap) && (
-              <div className="border-t border-border pt-4 flex justify-end gap-3">
+            {(showSubmit || showCancel || showRetrySap || showEdit) && (
+              <div className="border-t border-border pt-4 flex justify-end gap-3 flex-wrap">
                 <Button variant="outline" onClick={onClose}>Fechar</Button>
+                {showEdit && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onEdit(expense)}
+                    className="gap-1.5"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Editar
+                  </Button>
+                )}
                 {showCancel && (
                   <Button
                     variant="destructive"
@@ -281,10 +298,11 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
 export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" | "sales" } = {}) {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses(mode);
+  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -513,11 +531,24 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onSubmit={handleSubmitForApproval}
         onCancel={handleCancel}
         onRetrySap={handleRetrySap}
+        onEdit={(exp) => { setSelectedExpense(null); setEditingExpense(exp); }}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
+        canEdit={selectedExpense ? canCancel(selectedExpense) : false}
         canRetrySap={session.erpType === "sap" && (isAdmin || (selectedExpense ? canCancel(selectedExpense) : false))}
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
         isRetrying={isRetrying}
+      />
+
+      <EditExpenseModal
+        expense={editingExpense}
+        open={!!editingExpense}
+        onClose={() => setEditingExpense(null)}
+        mode={mode}
+        onSave={async (input) => {
+          if (!editingExpense) return;
+          await updateExpense(editingExpense.id, input);
+        }}
       />
 
       <CreateExpenseModal
