@@ -379,7 +379,10 @@ async function fetchDraftsByEntries(session: SapSession, entries: number[]): Pro
   return map;
 }
 
-async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<ApprovalDoc[]> {
+async function fetchApprovalsViaServiceLayer(
+  session: SapSession,
+  excludeRequestIds?: Set<number>,
+): Promise<ApprovalDoc[]> {
   let reqRes = await sapQuery(
     session,
     "ApprovalRequests?$filter=Status eq 'arsPending'&$select=Code,OriginatorID,DraftEntry,DocumentEntry,ObjectType,Status,RemarksFromOriginator,CreationDate,UpdateDate,ApprovalTemplatesID&$expand=ApprovalRequestDecisions,ApprovalRequestLines&$top=200",
@@ -395,9 +398,13 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
     );
   }
   const reqData = reqRes.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
-  const requests: SLApprovalRequest[] = Array.isArray(reqData)
+  let requests: SLApprovalRequest[] = Array.isArray(reqData)
     ? (reqData as SLApprovalRequest[])
     : (reqData?.value || []);
+
+  if (excludeRequestIds?.size) {
+    requests = requests.filter((r) => !excludeRequestIds.has(Number(r.Code || 0)));
+  }
 
   if (!requests.length) return [];
 
