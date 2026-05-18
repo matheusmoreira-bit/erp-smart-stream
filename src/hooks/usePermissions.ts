@@ -25,7 +25,7 @@ export interface UserAssignment {
 export const ALL_MODULES = [
   { key: "analytics", label: "Analytics (Fluxo)" },
   { key: "analytics_payments", label: "Analytics (Pagamentos)" },
-  { key: "expenses", label: "Despesas" },
+  { key: "expenses", label: "Compras" },
   { key: "sales", label: "Vendas" },
   { key: "approvals", label: "Aprovações" },
   { key: "approval_rules", label: "Regras de Aprovação" },

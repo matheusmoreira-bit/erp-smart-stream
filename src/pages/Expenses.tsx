@@ -297,10 +297,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   }
 
   const isSales = mode === "sales";
-  const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Despesas";
-  const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Despesa";
-  const emptyLabel = isSales ? "Nenhum pedido de venda encontrado" : "Nenhuma despesa encontrada";
-  const emptyCta = isSales ? "Criar primeiro pedido" : "Criar primeira despesa";
+  const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Compras";
+  const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Compra";
+  const emptyLabel = isSales ? "Nenhum pedido de venda encontrado" : "Nenhuma compra encontrada";
+  const emptyCta = isSales ? "Criar primeiro pedido" : "Criar primeira compra";
   const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
 
   const companyLabel = getLabel(session?.companyDB || "");
