@@ -355,13 +355,45 @@ async function getStageApprovers(session: SapSession, stageCode: number): Promis
   }
 }
 
+async function fetchDraftsByEntries(session: SapSession, entries: number[]): Promise<Map<number, SLDraft>> {
+  const map = new Map<number, SLDraft>();
+  const uniqueEntries = Array.from(new Set(entries.filter((entry) => Number.isFinite(entry) && entry > 0)));
+  const CHUNK = 20;
+
+  for (let i = 0; i < uniqueEntries.length; i += CHUNK) {
+    const chunk = uniqueEntries.slice(i, i + CHUNK);
+    const filter = chunk.map((entry) => `DocEntry eq ${entry}`).join(" or ");
+    const path = `Drafts?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,DocumentLines&$filter=${encodeURIComponent(filter)}&$top=${chunk.length}`;
+    try {
+      const res = await sapQuery(session, path, undefined, true);
+      const data = res.data as { value?: SLDraft[] } | SLDraft[] | null;
+      const list = Array.isArray(data) ? data : (data?.value || []);
+      for (const draft of list) {
+        if (typeof draft.DocEntry === "number") map.set(draft.DocEntry, draft);
+      }
+    } catch (e) {
+      console.warn(`Drafts batch [${chunk.join(",")}] falhou:`, e);
+    }
+  }
+
+  return map;
+}
+
 async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<ApprovalDoc[]> {
-  const reqRes = await sapQuery(
+  let reqRes = await sapQuery(
     session,
-    "ApprovalRequests?$filter=Status eq 'arsPending'&$select=Code,OriginatorID,DraftEntry,DocumentEntry,ObjectType,Status,RemarksFromOriginator,CreationDate,UpdateDate,ApprovalTemplatesID,ApprovalRequestDecisions,ApprovalRequestLines&$top=200",
+    "ApprovalRequests?$filter=Status eq 'arsPending'&$select=Code,OriginatorID,DraftEntry,DocumentEntry,ObjectType,Status,RemarksFromOriginator,CreationDate,UpdateDate,ApprovalTemplatesID&$expand=ApprovalRequestDecisions,ApprovalRequestLines&$top=200",
     undefined,
     true,
   );
+  if (!reqRes.data) {
+    reqRes = await sapQuery(
+      session,
+      "ApprovalRequests?$filter=Status eq 'arsPending'&$top=200",
+      undefined,
+      true,
+    );
+  }
   const reqData = reqRes.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
   const requests: SLApprovalRequest[] = Array.isArray(reqData)
     ? (reqData as SLApprovalRequest[])
@@ -376,28 +408,13 @@ async function fetchApprovalsViaServiceLayer(session: SapSession): Promise<Appro
     getStages(session),
   ]);
 
-  const runLimited = async <T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> => {
-    const results: R[] = [];
-    for (let i = 0; i < items.length; i += limit) {
-      const chunk = items.slice(i, i + limit);
-      results.push(...await Promise.all(chunk.map(worker)));
-    }
-    return results;
-  };
-
-  // Evita tempestade de chamadas ao Service Layer: decisões vêm no request;
-  // apenas drafts são carregados em pequenos lotes e com cache do proxy.
-  const enriched = await runLimited(requests, 6, async (r) => {
-    const draft = r.DraftEntry
-      ? await sapQuery(
-          session,
-          `Drafts(${r.DraftEntry})?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,DocumentLines`,
-          undefined,
-          true,
-        ).then((d) => d.data as SLDraft).catch(() => null)
-      : null;
-    return { r, decisions: r.ApprovalRequestDecisions || [], draft: draft || ({} as SLDraft) };
-  });
+  // Evita tempestade de chamadas ao Service Layer: drafts são carregados em lotes.
+  const draftsByEntry = await fetchDraftsByEntries(session, requests.map((r) => Number(r.DraftEntry || 0)));
+  const enriched = requests.map((r) => ({
+    r,
+    decisions: r.ApprovalRequestDecisions || [],
+    draft: r.DraftEntry ? (draftsByEntry.get(Number(r.DraftEntry)) || {} as SLDraft) : ({} as SLDraft),
+  }));
 
   // Buscar approvers das etapas pendentes (com cache por etapa)
   const pendingStageCodes = new Set<number>();
