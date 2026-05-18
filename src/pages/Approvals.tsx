@@ -793,6 +793,17 @@ export default function ApprovalsPage() {
           </div>
         </div>
 
+        <Tabs defaultValue="to-approve" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="to-approve" className="gap-2">
+              <CheckCircle className="w-4 h-4" /> Para Aprovar
+            </TabsTrigger>
+            <TabsTrigger value="my-requests" className="gap-2">
+              <FileText className="w-4 h-4" /> Meus Pedidos
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="to-approve" className="space-y-6 mt-0">
         {/* Summary bar */}
         <div className="flex flex-wrap gap-4">
           <div className="glass-card px-4 py-3 flex items-center gap-3">
