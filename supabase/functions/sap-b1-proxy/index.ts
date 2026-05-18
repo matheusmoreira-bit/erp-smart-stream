@@ -283,10 +283,20 @@ Deno.serve(async (req) => {
       }
 
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
-      const sapResp = await fetchWithTimeout(fullUrl, {
-        method: "GET",
-        headers: { "Content-Type": "application/json", Cookie: cookies },
-      });
+      let sapResp: Response;
+      try {
+        sapResp = await fetchWithTimeout(fullUrl, {
+          method: "GET",
+          headers: { "Content-Type": "application/json", Cookie: cookies },
+        });
+      } catch (e) {
+        if (isAbortError(e)) {
+          return new Response(JSON.stringify({ data: null, fromCache: false, timedOut: true }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw e;
+      }
 
       if (!sapResp.ok) {
         const errorText = await sapResp.text();
@@ -296,8 +306,8 @@ Deno.serve(async (req) => {
           const parsed = JSON.parse(errorText);
           errorMsg = parsed?.error?.message?.value || errorMsg;
         } catch { /* ignore */ }
-        return new Response(JSON.stringify({ error: errorMsg }), {
-          status: sapResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ data: null, fromCache: false, sapStatus: sapResp.status, warning: errorMsg }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
