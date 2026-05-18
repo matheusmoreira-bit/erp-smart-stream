@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
   const forceWeek = url.searchParams.get("force") === "1";
 
   const work = async () => {
+    try {
     const { data: companies } = await sb
       .from("companies")
       .select("company_db, display_name")
