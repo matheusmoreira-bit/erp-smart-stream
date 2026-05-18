@@ -244,7 +244,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     } finally {
       setIsLoading(false);
     }
-  }, [session?.companyDB]);
+  }, [session?.companyDB, docType]);
 
   const createExpense = useCallback(
     async (input: CreateExpenseInput) => {
