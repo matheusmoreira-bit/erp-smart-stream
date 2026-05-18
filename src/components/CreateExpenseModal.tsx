@@ -41,6 +41,8 @@ export interface PagCorpPrefill {
   triggerAI?: boolean;
 }
 
+export type ExpenseMode = "purchase" | "sales";
+
 export function CreateExpenseModal({
   open,
   onClose,
@@ -50,6 +52,7 @@ export function CreateExpenseModal({
   title,
   origin = "manual",
   skipRules = false,
+  mode = "purchase",
 }: {
   open: boolean;
   onClose: () => void;
@@ -59,7 +62,10 @@ export function CreateExpenseModal({
   title?: string;
   origin?: "manual" | "pagcorp";
   skipRules?: boolean;
+  mode?: ExpenseMode;
 }) {
+  const isSales = mode === "sales";
+  const bpLabel = isSales ? "Cliente" : "Fornecedor";
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
