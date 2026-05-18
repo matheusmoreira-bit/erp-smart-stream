@@ -1116,7 +1116,114 @@ export default function ApprovalsPage() {
               <p className="text-xs text-muted-foreground">Valor Total</p>
               <p className="text-lg font-bold font-mono text-foreground">{formatCurrency(totalValue)}</p>
             </div>
+        </div>
+
+        {/* Advanced filters */}
+        <div className="glass-card px-4 py-3 flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Tipo</Label>
+            <div className="flex items-center gap-1">
+              {([
+                ["all", "Todos"],
+                ["purchase", "Compra"],
+                ["sales", "Venda"],
+              ] as const).map(([key, lbl]) => (
+                <button
+                  key={key}
+                  onClick={() => setTypeFilter(key)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    typeFilter === key
+                      ? "bg-primary/10 text-primary border-primary/30"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
           </div>
+
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Valor mín.</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={minValue}
+              onChange={(e) => setMinValue(e.target.value)}
+              className="h-9 w-28 bg-muted/30 border-border"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Valor máx.</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={maxValue}
+              onChange={(e) => setMaxValue(e.target.value)}
+              className="h-9 w-28 bg-muted/30 border-border"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Criado de</Label>
+            <Input
+              type="date"
+              value={createdFrom}
+              onChange={(e) => setCreatedFrom(e.target.value)}
+              className="h-9 w-40 bg-muted/30 border-border"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Criado até</Label>
+            <Input
+              type="date"
+              value={createdTo}
+              onChange={(e) => setCreatedTo(e.target.value)}
+              className="h-9 w-40 bg-muted/30 border-border"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Vence de</Label>
+            <Input
+              type="date"
+              value={dueFrom}
+              onChange={(e) => setDueFrom(e.target.value)}
+              className="h-9 w-40 bg-muted/30 border-border"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Vence até</Label>
+            <Input
+              type="date"
+              value={dueTo}
+              onChange={(e) => setDueTo(e.target.value)}
+              className="h-9 w-40 bg-muted/30 border-border"
+            />
+          </div>
+
+          {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setTypeFilter("all");
+                setMinValue("");
+                setMaxValue("");
+                setCreatedFrom("");
+                setCreatedTo("");
+                setDueFrom("");
+                setDueTo("");
+              }}
+              className="text-muted-foreground hover:text-foreground gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              Limpar filtros
+            </Button>
+          )}
+        </div>
           {overdueCount > 0 && (
             <div className="glass-card px-4 py-3 flex items-center gap-3 border-destructive/30">
               <Calendar className="w-4 h-4 text-destructive" />
