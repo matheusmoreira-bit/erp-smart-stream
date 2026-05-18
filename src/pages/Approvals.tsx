@@ -839,7 +839,42 @@ export default function ApprovalsPage() {
     ? allApprovals
     : allApprovals.filter((a) => approverMatches(a.currentApprover, session.userName));
 
+  const minV = minValue ? parseFloat(minValue.replace(",", ".")) : null;
+  const maxV = maxValue ? parseFloat(maxValue.replace(",", ".")) : null;
+  const createdFromD = createdFrom ? new Date(createdFrom).getTime() : null;
+  const createdToD = createdTo ? new Date(createdTo).getTime() + 86399999 : null;
+  const dueFromD = dueFrom ? new Date(dueFrom).getTime() : null;
+  const dueToD = dueTo ? new Date(dueTo).getTime() + 86399999 : null;
+
   const filtered = userApprovals.filter((a) => {
+    // Type filter (purchase vs sales) — based on docTypeName keyword
+    if (typeFilter !== "all") {
+      const name = (a.docTypeName || "").toLowerCase();
+      const isPurchase = name.includes("compra");
+      const isSales = name.includes("venda");
+      if (typeFilter === "purchase" && !isPurchase) return false;
+      if (typeFilter === "sales" && !isSales) return false;
+    }
+
+    // Value range
+    if (minV !== null && !Number.isNaN(minV) && a.docTotal < minV) return false;
+    if (maxV !== null && !Number.isNaN(maxV) && a.docTotal > maxV) return false;
+
+    // Created date range
+    if (createdFromD !== null || createdToD !== null) {
+      const t = a.docDate ? new Date(a.docDate).getTime() : NaN;
+      if (Number.isNaN(t)) return false;
+      if (createdFromD !== null && t < createdFromD) return false;
+      if (createdToD !== null && t > createdToD) return false;
+    }
+
+    // Due date range
+    if (dueFromD !== null || dueToD !== null) {
+      const t = a.dueDate ? new Date(a.dueDate).getTime() : NaN;
+      if (Number.isNaN(t)) return false;
+      if (dueFromD !== null && t < dueFromD) return false;
+      if (dueToD !== null && t > dueToD) return false;
+    }
 
     if (!search) return true;
     const q = search.toLowerCase();
