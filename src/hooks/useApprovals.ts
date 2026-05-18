@@ -510,6 +510,8 @@ export function useApprovals() {
       const detailedView = await sapQueryView<HanaApprovalViewRow>(
         session,
         `${session.companyDB}.VW_APROVACOES_DETALHADAS`,
+        undefined,
+        false,
       );
 
       if (detailedView.hanaDisabled) {
@@ -517,10 +519,13 @@ export function useApprovals() {
         const docs = await fetchApprovalsViaServiceLayer(session as SapSession);
         setApprovals(docs);
       } else {
-        const docs = detailedView.data
+        const hanaDocs = detailedView.data
           .map(mapHanaApproval)
           .filter((doc) => doc.approvalRequestId > 0);
-        setApprovals(docs);
+        const serviceLayerDocs = await fetchApprovalsViaServiceLayer(session as SapSession).catch(() => []);
+        const hanaIds = new Set(hanaDocs.map((doc) => doc.approvalRequestId));
+        const missingFromView = serviceLayerDocs.filter((doc) => !hanaIds.has(doc.approvalRequestId));
+        setApprovals([...hanaDocs, ...missingFromView]);
       }
     } catch (e) {
       console.error("Error fetching approvals:", e);
