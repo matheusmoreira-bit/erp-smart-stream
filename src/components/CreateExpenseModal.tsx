@@ -520,7 +520,7 @@ export function CreateExpenseModal({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{title || "Nova Despesa"}</DialogTitle>
+          <DialogTitle>{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
