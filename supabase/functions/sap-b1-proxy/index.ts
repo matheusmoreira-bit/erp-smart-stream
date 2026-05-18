@@ -314,10 +314,15 @@ Deno.serve(async (req) => {
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
       const allResults: unknown[] = [];
       let skip = 0;
-      const top = 20;
+      const top = 100;
       let hasMore = true;
+      const deadline = Date.now() + 120_000; // hard wall-clock budget < proxy idle 150s
 
       while (hasMore) {
+        if (Date.now() > deadline) {
+          console.warn(`SAP queryAll: deadline reached, returning ${allResults.length} partial results.`);
+          break;
+        }
         const queryParams = new URLSearchParams();
         if (params) {
           for (const [key, value] of Object.entries(params)) {
