@@ -107,6 +107,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 25_0
   }
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.name === "AbortError" ||
+    error.message.toLowerCase().includes("aborted") ||
+    error.message.toLowerCase().includes("signal")
+  );
+}
+
 async function getSapBaseUrl(companyDB?: string): Promise<string> {
   if (!companyDB) return DEFAULT_SAP_BASE_URL;
   try {
