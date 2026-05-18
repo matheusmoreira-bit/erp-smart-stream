@@ -278,10 +278,10 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
 }
 
 /* ─── Main Page ─── */
-export default function ExpensesPage() {
+export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" | "sales" } = {}) {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses();
+  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -295,6 +295,13 @@ export default function ExpensesPage() {
     navigate("/");
     return null;
   }
+
+  const isSales = mode === "sales";
+  const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Despesas";
+  const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Despesa";
+  const emptyLabel = isSales ? "Nenhum pedido de venda encontrado" : "Nenhuma despesa encontrada";
+  const emptyCta = isSales ? "Criar primeiro pedido" : "Criar primeira despesa";
+  const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
 
   const companyLabel = getLabel(session?.companyDB || "");
   const isAdmin = !!session.isSuperUser;
