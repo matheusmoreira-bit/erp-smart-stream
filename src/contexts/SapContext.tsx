@@ -25,10 +25,43 @@ interface ErpContextType {
 
 const ErpContext = createContext<ErpContextType | null>(null); // stable ref
 
+const ERP_SESSION_STORAGE_KEY = "erp_session_v1";
+
+function loadStoredSession(): ErpSession | null {
+  try {
+    const raw = sessionStorage.getItem(ERP_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ErpSession;
+  } catch {
+    return null;
+  }
+}
+
+function persistSession(session: ErpSession | null) {
+  try {
+    if (session) {
+      sessionStorage.setItem(ERP_SESSION_STORAGE_KEY, JSON.stringify(session));
+    } else {
+      sessionStorage.removeItem(ERP_SESSION_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function SapProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<ErpSession | null>(null);
+  const [session, setSessionState] = useState<ErpSession | null>(() => loadStoredSession());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const setSession = useCallback((next: ErpSession | null | ((prev: ErpSession | null) => ErpSession | null)) => {
+    setSessionState((prev) => {
+      const resolved = typeof next === "function" ? (next as (p: ErpSession | null) => ErpSession | null)(prev) : next;
+      persistSession(resolved);
+      return resolved;
+    });
+  }, []);
+
 
   const login = useCallback(async (userName: string, password: string, companyDB: string, erpType: ErpType = "sap") => {
     setIsLoading(true);
