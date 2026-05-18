@@ -906,6 +906,85 @@ export default function ApprovalsPage() {
     }
   };
 
+  const handleDelegate = async (params: { userInternalKey: number; userName: string; userEmail: string; reason: string }) => {
+    if (!session || !delegationDoc) return;
+    if (!isSuperUser) {
+      toast.error("Apenas super-usuários podem delegar aprovações.");
+      return;
+    }
+    setIsDelegating(true);
+    try {
+      const code = delegationDoc.approvalRequestId;
+
+      // Fetch current pending decision to know which step to reassign
+      const reqRes = await sapQuery(
+        session,
+        `ApprovalRequests(${code})?$select=Code,Status&$expand=ApprovalRequestDecisions`,
+        undefined,
+        false,
+      );
+      const reqData = (reqRes.data ?? {}) as {
+        ApprovalRequestDecisions?: Array<{ Status?: string; UserID?: number; ApprovalRequestStep?: number }>;
+      };
+      const decisions = reqData.ApprovalRequestDecisions || [];
+      const pending = decisions.find(
+        (d) => d.Status === "asWithoutDecision" || d.Status === "asPending",
+      );
+
+      if (!pending) {
+        throw new Error("Nenhuma decisão pendente encontrada para esta aprovação.");
+      }
+
+      // Reassign approver via PATCH (update UserID for the pending decision step)
+      await sapAction(session, `ApprovalRequests(${code})`, "PATCH", {
+        ApprovalRequestDecisions: [
+          {
+            ApprovalRequestStep: pending.ApprovalRequestStep,
+            UserID: params.userInternalKey,
+          },
+        ],
+      });
+
+      clearClientCache();
+
+      const { logAuditAction } = await import("@/hooks/useAuditLog");
+      await logAuditAction({
+        action: "delegate_approval",
+        entity_type: "approval_request",
+        entity_id: String(code),
+        actor_email: session.userName,
+        company_db: session.companyDB,
+        details: {
+          docNum: delegationDoc.docNum,
+          docType: delegationDoc.docTypeName,
+          cardName: delegationDoc.cardName,
+          docTotal: delegationDoc.docTotal,
+          currency: delegationDoc.currency,
+          previousApprover: delegationDoc.currentApprover,
+          previousApproverEmail: delegationDoc.approverEmail,
+          newApproverName: params.userName,
+          newApproverEmail: params.userEmail,
+          newApproverInternalKey: params.userInternalKey,
+          reason: params.reason,
+          delegatedBy: session.userName,
+          isSuperUser: true,
+        },
+      });
+
+      toast.success(`Aprovação delegada para ${params.userName}.`);
+      setDelegationDoc(null);
+      setSelectedDoc(null);
+      refresh();
+    } catch (e) {
+      console.error("Delegation error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao delegar aprovação");
+    } finally {
+      setIsDelegating(false);
+    }
+  };
+
+
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
