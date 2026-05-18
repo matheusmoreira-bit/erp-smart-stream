@@ -495,6 +495,42 @@ Deno.serve(async (req) => {
       });
     }
 
+    // APPROVALS CACHE (service-role proxy so SAP-authenticated users can use the shared cache)
+    if (action === "readApprovalsCache" || action === "writeApprovalsCache") {
+      if (!companyDB || typeof companyDB !== "string") {
+        return new Response(JSON.stringify({ error: "companyDB é obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+      if (action === "readApprovalsCache") {
+        const { data, error } = await sb
+          .from("sap_cache")
+          .select("data, updated_at, expires_at")
+          .eq("company_db", companyDB)
+          .eq("cache_key", APPROVALS_CACHE_KEY)
+          .maybeSingle();
+        if (error) throw new Error(`Cache read failed: ${error.message}`);
+        return new Response(JSON.stringify({ data: data?.data ?? null, updatedAt: data?.updated_at ?? null, expiresAt: data?.expires_at ?? null }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const docs = Array.isArray(reqBody.data) ? reqBody.data : [];
+      const ttlMs = Number.isFinite(Number(reqBody.ttlMs)) ? Math.min(Math.max(Number(reqBody.ttlMs), 60_000), 60 * 60_000) : CACHE_TTL;
+      const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+      const { error } = await sb.from("sap_cache").upsert(
+        { company_db: companyDB, cache_key: APPROVALS_CACHE_KEY, data: docs, expires_at: expiresAt },
+        { onConflict: "cache_key,company_db" },
+      );
+      if (error) throw new Error(`Cache write failed: ${error.message}`);
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // LOGOUT
     if (action === "logout") {
       if (sessionId) {
