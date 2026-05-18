@@ -26,10 +26,14 @@ import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useAp
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useNavigate } from "react-router-dom";
-import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History } from "lucide-react";
+import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
-import { sapAction, clearClientCache } from "@/lib/sap-client";
+import { sapAction, sapQuery, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
+import { useSapUsers } from "@/hooks/useSapUsers";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 import {
   Dialog,
@@ -128,11 +132,150 @@ function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void })
   );
 }
 
+function DelegationDialog({
+  open,
+  onClose,
+  doc,
+  onConfirm,
+  isSubmitting,
+}: {
+  open: boolean;
+  onClose: () => void;
+  doc: ApprovalDoc | null;
+  onConfirm: (params: { userInternalKey: number; userName: string; userEmail: string; reason: string }) => Promise<void>;
+  isSubmitting: boolean;
+}) {
+  const { users, isLoading } = useSapUsers();
+  const [selectedKey, setSelectedKey] = useState<number | null>(null);
+  const [reason, setReason] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Reset state when reopened
+  const resetAndClose = () => {
+    setSelectedKey(null);
+    setReason("");
+    setPickerOpen(false);
+    onClose();
+  };
+
+  const selectedUser = users.find((u) => u.InternalKey === selectedKey);
+  const eligibleUsers = users.filter((u) => u.Locked !== "tYES" && (u.UserName || u.UserCode));
+
+  const handleConfirm = async () => {
+    if (!selectedUser || !selectedKey) {
+      toast.error("Selecione um usuário para delegar.");
+      return;
+    }
+    await onConfirm({
+      userInternalKey: selectedKey,
+      userName: selectedUser.UserName || selectedUser.UserCode,
+      userEmail: selectedUser.eMail || "",
+      reason: reason.trim(),
+    });
+    resetAndClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) resetAndClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserCog className="w-5 h-5 text-primary" />
+            Delegar aprovação
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+          <div className="text-sm bg-muted/30 rounded-lg p-3 space-y-1">
+            <p className="text-muted-foreground text-xs">Documento</p>
+            <p className="text-foreground font-medium">
+              <span className="font-mono">#{doc?.docNum}</span> · {doc?.docTypeName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Aprovador atual: <span className="text-foreground">{doc?.currentApprover}</span>
+            </p>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Novo aprovador *</Label>
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between font-normal"
+                  disabled={isLoading || isSubmitting}
+                >
+                  {selectedUser
+                    ? `${selectedUser.UserName || selectedUser.UserCode}${selectedUser.eMail ? ` (${selectedUser.eMail})` : ""}`
+                    : isLoading ? "Carregando usuários..." : "Selecionar usuário..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar por nome ou e-mail..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {eligibleUsers.map((u) => (
+                        <CommandItem
+                          key={u.InternalKey}
+                          value={`${u.UserName} ${u.UserCode} ${u.eMail || ""}`}
+                          onSelect={() => {
+                            setSelectedKey(u.InternalKey);
+                            setPickerOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", selectedKey === u.InternalKey ? "opacity-100" : "opacity-0")} />
+                          <div className="flex flex-col">
+                            <span className="text-sm">{u.UserName || u.UserCode}</span>
+                            {u.eMail && <span className="text-xs text-muted-foreground">{u.eMail}</span>}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Motivo da delegação</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Ex.: Aprovador em férias, transferência de responsabilidade..."
+              className="bg-muted/30 border-border text-sm"
+              rows={3}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-300">
+            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Esta ação será registrada no log de auditoria.</span>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2 border-t border-border">
+            <Button variant="outline" onClick={resetAndClose} disabled={isSubmitting}>Cancelar</Button>
+            <Button onClick={handleConfirm} disabled={isSubmitting || !selectedKey} className="gap-1.5">
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCog className="w-4 h-4" />}
+              Delegar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ApprovalDetailModal({
   doc,
   open,
   onClose,
   onAction,
+  onDelegate,
   isActioning,
   isSuperUser,
   currentUserName,
@@ -141,6 +284,7 @@ function ApprovalDetailModal({
   open: boolean;
   onClose: () => void;
   onAction: (code: number, action: "approve" | "reject", remarks: string) => Promise<void>;
+  onDelegate: (doc: ApprovalDoc) => void;
   isActioning: boolean;
   isSuperUser: boolean;
   currentUserName: string;
@@ -301,7 +445,7 @@ function ApprovalDetailModal({
                   rows={2}
                 />
               </div>
-              <div className="flex gap-3 justify-end">
+              <div className="flex gap-2 justify-end flex-wrap">
                 <Button
                   variant="outline"
                   onClick={onClose}
@@ -309,6 +453,17 @@ function ApprovalDetailModal({
                 >
                   Cancelar
                 </Button>
+                {isSuperUser && doc.approvalRequestId > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onDelegate(doc)}
+                    disabled={isActioning}
+                    className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                  >
+                    <UserCog className="w-4 h-4" />
+                    Delegar
+                  </Button>
+                )}
                 <Button
                   variant="destructive"
                   onClick={() => handleAction("reject")}
@@ -650,6 +805,8 @@ export default function ApprovalsPage() {
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
   const [isActioning, setIsActioning] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
+  const [isDelegating, setIsDelegating] = useState(false);
 
   // Redirect to login if no session
   if (!session) {
@@ -748,6 +905,85 @@ export default function ApprovalsPage() {
       setIsActioning(false);
     }
   };
+
+  const handleDelegate = async (params: { userInternalKey: number; userName: string; userEmail: string; reason: string }) => {
+    if (!session || !delegationDoc) return;
+    if (!isSuperUser) {
+      toast.error("Apenas super-usuários podem delegar aprovações.");
+      return;
+    }
+    setIsDelegating(true);
+    try {
+      const code = delegationDoc.approvalRequestId;
+
+      // Fetch current pending decision to know which step to reassign
+      const reqRes = await sapQuery(
+        session,
+        `ApprovalRequests(${code})?$select=Code,Status&$expand=ApprovalRequestDecisions`,
+        undefined,
+        false,
+      );
+      const reqData = (reqRes.data ?? {}) as {
+        ApprovalRequestDecisions?: Array<{ Status?: string; UserID?: number; ApprovalRequestStep?: number }>;
+      };
+      const decisions = reqData.ApprovalRequestDecisions || [];
+      const pending = decisions.find(
+        (d) => d.Status === "asWithoutDecision" || d.Status === "asPending",
+      );
+
+      if (!pending) {
+        throw new Error("Nenhuma decisão pendente encontrada para esta aprovação.");
+      }
+
+      // Reassign approver via PATCH (update UserID for the pending decision step)
+      await sapAction(session, `ApprovalRequests(${code})`, "PATCH", {
+        ApprovalRequestDecisions: [
+          {
+            ApprovalRequestStep: pending.ApprovalRequestStep,
+            UserID: params.userInternalKey,
+          },
+        ],
+      });
+
+      clearClientCache();
+
+      const { logAuditAction } = await import("@/hooks/useAuditLog");
+      await logAuditAction({
+        action: "delegate_approval",
+        entity_type: "approval_request",
+        entity_id: String(code),
+        actor_email: session.userName,
+        company_db: session.companyDB,
+        details: {
+          docNum: delegationDoc.docNum,
+          docType: delegationDoc.docTypeName,
+          cardName: delegationDoc.cardName,
+          docTotal: delegationDoc.docTotal,
+          currency: delegationDoc.currency,
+          previousApprover: delegationDoc.currentApprover,
+          previousApproverEmail: delegationDoc.approverEmail,
+          newApproverName: params.userName,
+          newApproverEmail: params.userEmail,
+          newApproverInternalKey: params.userInternalKey,
+          reason: params.reason,
+          delegatedBy: session.userName,
+          isSuperUser: true,
+        },
+      });
+
+      toast.success(`Aprovação delegada para ${params.userName}.`);
+      setDelegationDoc(null);
+      setSelectedDoc(null);
+      refresh();
+    } catch (e) {
+      console.error("Delegation error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao delegar aprovação");
+    } finally {
+      setIsDelegating(false);
+    }
+  };
+
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -953,9 +1189,18 @@ export default function ApprovalsPage() {
         open={!!selectedDoc}
         onClose={() => setSelectedDoc(null)}
         onAction={handleApprovalAction}
+        onDelegate={(d) => setDelegationDoc(d)}
         isActioning={isActioning}
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
+      />
+
+      <DelegationDialog
+        open={!!delegationDoc}
+        onClose={() => setDelegationDoc(null)}
+        doc={delegationDoc}
+        onConfirm={handleDelegate}
+        isSubmitting={isDelegating}
       />
     </div>
   );
