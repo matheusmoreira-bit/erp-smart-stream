@@ -26,6 +26,7 @@ export const ALL_MODULES = [
   { key: "analytics", label: "Analytics (Fluxo)" },
   { key: "analytics_payments", label: "Analytics (Pagamentos)" },
   { key: "expenses", label: "Despesas" },
+  { key: "sales", label: "Vendas" },
   { key: "approvals", label: "Aprovações" },
   { key: "approval_rules", label: "Regras de Aprovação" },
   { key: "pagcorp", label: "PagCorp" },

@@ -59,6 +59,8 @@ export interface Expense {
   attachments?: ExpenseAttachment[];
 }
 
+export type ExpenseDocType = "purchase" | "sales";
+
 export interface CreateExpenseInput {
   supplier_code?: string;
   supplier_name: string;
@@ -70,6 +72,7 @@ export interface CreateExpenseInput {
   initialStatus?: ExpenseStatus;
   skipRules?: boolean;
   branch_id?: number;
+  doc_type?: ExpenseDocType;
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
 }
@@ -189,7 +192,7 @@ async function findMatchingRule(
 
 /* ───────────────── Hook ───────────────── */
 
-export function useExpenses() {
+export function useExpenses(docType: ExpenseDocType = "purchase") {
   const { session } = useSap();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -199,18 +202,17 @@ export function useExpenses() {
     setIsLoading(true);
     setError(null);
     try {
-      // Always scope expenses to the active company. If there is no session,
-      // return nothing instead of leaking other companies' data.
       const activeCompanyDb = session?.companyDB;
       if (!activeCompanyDb) {
         setExpenses([]);
         return;
       }
 
-      const { data, error: err } = await supabase
-        .from("expenses")
+      const { data, error: err } = await (supabase
+        .from("expenses") as any)
         .select("*")
         .eq("company_db", activeCompanyDb)
+        .eq("doc_type", docType)
         .order("created_at", { ascending: false });
 
       if (err) throw err;
@@ -242,7 +244,7 @@ export function useExpenses() {
     } finally {
       setIsLoading(false);
     }
-  }, [session?.companyDB]);
+  }, [session?.companyDB, docType]);
 
   const createExpense = useCallback(
     async (input: CreateExpenseInput) => {
@@ -295,6 +297,7 @@ export function useExpenses() {
           origin,
           company_db: session.companyDB,
           branch_id: input.branch_id ?? 1,
+          doc_type: input.doc_type || docType,
         } as any)
         .select()
         .single();
@@ -374,7 +377,7 @@ export function useExpenses() {
       await fetchExpenses();
       return { expense, status, origin };
     },
-    [session, fetchExpenses]
+    [session, fetchExpenses, docType]
   );
 
   const submitForApproval = useCallback(

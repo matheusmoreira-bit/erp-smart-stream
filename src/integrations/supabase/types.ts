@@ -448,6 +448,7 @@ export type Database = {
           created_by_email: string | null
           currency: string
           current_approver: string | null
+          doc_type: string
           id: string
           origin: string
           project: string | null
@@ -476,6 +477,7 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           current_approver?: string | null
+          doc_type?: string
           id?: string
           origin?: string
           project?: string | null
@@ -504,6 +506,7 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           current_approver?: string | null
+          doc_type?: string
           id?: string
           origin?: string
           project?: string | null

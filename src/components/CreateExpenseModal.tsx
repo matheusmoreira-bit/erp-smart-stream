@@ -41,6 +41,8 @@ export interface PagCorpPrefill {
   triggerAI?: boolean;
 }
 
+export type ExpenseMode = "purchase" | "sales";
+
 export function CreateExpenseModal({
   open,
   onClose,
@@ -50,6 +52,7 @@ export function CreateExpenseModal({
   title,
   origin = "manual",
   skipRules = false,
+  mode = "purchase",
 }: {
   open: boolean;
   onClose: () => void;
@@ -59,7 +62,10 @@ export function CreateExpenseModal({
   title?: string;
   origin?: "manual" | "pagcorp";
   skipRules?: boolean;
+  mode?: ExpenseMode;
 }) {
+  const isSales = mode === "sales";
+  const bpLabel = isSales ? "Cliente" : "Fornecedor";
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
@@ -86,19 +92,29 @@ export function CreateExpenseModal({
     currency: row.Currency || "",
   } as SapSearchOption & { currency: string }), []);
   const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
-    cacheKey: "suppliers",
+    cacheKey: isSales ? "customers" : "suppliers",
     endpoint: "BusinessPartners",
-    params: { $select: "CardCode,CardName,FederalTaxID,Currency" },
+    params: isSales
+      ? { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer'" }
+      : { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier'" },
     mapRow: supplierMapRow,
   });
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
-  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+  const { options: itemOptionsRaw, isLoading: itemsLoading } = useSapCachedList({
     cacheKey: "items_active",
     endpoint: "Items",
     params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
     mapRow: itemMapRow,
   });
+  // For sales, only items whose code starts with SV or PV are eligible.
+  const itemOptions = useMemo(
+    () =>
+      isSales
+        ? itemOptionsRaw.filter((o) => /^(SV|PV)/i.test(o.code || ""))
+        : itemOptionsRaw,
+    [itemOptionsRaw, isSales]
+  );
 
   const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const { options: rawCostCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
@@ -123,7 +139,7 @@ export function CreateExpenseModal({
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiEnabled, setAiEnabled] = useState(!isSales);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -482,12 +498,11 @@ export function CreateExpenseModal({
         remarks: remarks || undefined,
         origin,
         skipRules,
-        // Filial não é mais editável aqui — a edge function de integração
-        // SAP usa o `default_branch_id` configurado no cadastro da empresa.
+        doc_type: mode,
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });
-      toast.success("Despesa criada com sucesso!");
+      toast.success(isSales ? "Pedido de venda criado com sucesso!" : "Despesa criada com sucesso!");
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar despesa");
@@ -505,7 +520,7 @@ export function CreateExpenseModal({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{title || "Nova Despesa"}</DialogTitle>
+          <DialogTitle>{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
@@ -605,21 +620,21 @@ export function CreateExpenseModal({
           {/* Supplier */}
           <div>
             <CachedSearchCombobox
-              label="Fornecedor *"
+              label={`${bpLabel} *`}
               options={supplierOptions}
               isLoading={suppliersLoading}
               value={supplier}
               onChange={handleSupplierChange}
-              placeholder="Digite nome, código ou CNPJ do fornecedor..."
+              placeholder={`Digite nome, código ou CNPJ do ${bpLabel.toLowerCase()}...`}
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
             />
-            {!supplier && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
+            {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
               <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
                 <span className="text-amber-600 dark:text-amber-400 text-sm">⚠️</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-foreground">
-                    Fornecedor não encontrado no SAP
+                    {bpLabel} não encontrado no SAP
                     {aiSupplierData?.card_name ? `: "${aiSupplierData.card_name}"` : ""}
                     {aiSupplierData?.federal_tax_id ? ` (CNPJ ${aiSupplierData.federal_tax_id})` : ""}
                   </p>
@@ -630,7 +645,7 @@ export function CreateExpenseModal({
                   onClick={() => setShowSupplierForm(true)}
                   className="gap-1.5 text-xs h-7 shrink-0"
                 >
-                  <UserPlus className="w-3.5 h-3.5" /> Cadastrar Fornecedor
+                  <UserPlus className="w-3.5 h-3.5" /> Cadastrar {bpLabel}
                 </Button>
               </div>
             )}
@@ -799,7 +814,7 @@ export function CreateExpenseModal({
             <Button variant="outline" onClick={onClose} disabled={isCreating}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="gap-1.5">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Criar Despesa
+              {isSales ? "Criar Pedido de Venda" : "Criar Despesa"}
             </Button>
           </div>
         </div>

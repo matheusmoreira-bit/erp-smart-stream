@@ -278,10 +278,10 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
 }
 
 /* ─── Main Page ─── */
-export default function ExpensesPage() {
+export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" | "sales" } = {}) {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses();
+  const { expenses, isLoading, error, refresh, createExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -295,6 +295,13 @@ export default function ExpensesPage() {
     navigate("/");
     return null;
   }
+
+  const isSales = mode === "sales";
+  const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Despesas";
+  const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Despesa";
+  const emptyLabel = isSales ? "Nenhum pedido de venda encontrado" : "Nenhuma despesa encontrada";
+  const emptyCta = isSales ? "Criar primeiro pedido" : "Criar primeira despesa";
+  const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
 
   const companyLabel = getLabel(session?.companyDB || "");
   const isAdmin = !!session.isSuperUser;
@@ -388,7 +395,7 @@ export default function ExpensesPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
-              <p className="text-xs text-muted-foreground">Gestão de Despesas</p>
+              <p className="text-xs text-muted-foreground">{pageTitle}</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -418,7 +425,7 @@ export default function ExpensesPage() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
           <Button onClick={() => setShowCreate(true)} className="gap-1.5">
-            <Plus className="w-4 h-4" /> Nova Despesa
+            <Plus className="w-4 h-4" /> {newButtonLabel}
           </Button>
         </div>
 
@@ -445,7 +452,7 @@ export default function ExpensesPage() {
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar por fornecedor, solicitante..."
+              placeholder={searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-muted/30 border-border"
@@ -481,9 +488,9 @@ export default function ExpensesPage() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
             <DollarSign className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-            <p className="text-muted-foreground">Nenhuma despesa encontrada</p>
+            <p className="text-muted-foreground">{emptyLabel}</p>
             <Button onClick={() => setShowCreate(true)} className="mt-4 gap-1.5">
-              <Plus className="w-4 h-4" /> Criar primeira despesa
+              <Plus className="w-4 h-4" /> {emptyCta}
             </Button>
           </div>
         ) : (
@@ -518,6 +525,7 @@ export default function ExpensesPage() {
         onClose={() => setShowCreate(false)}
         onCreate={handleCreate}
         sapSession={session}
+        mode={mode}
       />
     </div>
   );

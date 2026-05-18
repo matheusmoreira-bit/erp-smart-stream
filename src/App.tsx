@@ -9,6 +9,7 @@ import Index from "./pages/Index.tsx";
 import AnalyticsPage from "./pages/Analytics.tsx";
 import Approvals from "./pages/Approvals.tsx";
 import Expenses from "./pages/Expenses.tsx";
+import Sales from "./pages/Sales.tsx";
 import ApprovalRules from "./pages/ApprovalRules.tsx";
 import PagCorp from "./pages/PagCorp.tsx";
 import PagCorpMapping from "./pages/PagCorpMapping.tsx";
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/expenses" element={<Expenses />} />
+              <Route path="/sales" element={<Sales />} />
               <Route path="/approval-rules" element={<ApprovalRules />} />
               <Route path="/pagcorp" element={<PagCorp />} />
               <Route path="/pagcorp/mapping" element={<PagCorpMapping />} />
