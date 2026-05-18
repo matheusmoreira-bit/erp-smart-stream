@@ -103,6 +103,7 @@ const REQUEST_STATUS_MAP: Record<string, { key: MyRequestDoc["status"]; label: s
   arsPending: { key: "pending", label: "Pendente" },
   arsApproved: { key: "approved", label: "Aprovado" },
   arsWasNotApproved: { key: "rejected", label: "Rejeitado" },
+  arsNotApproved: { key: "rejected", label: "Rejeitado" },
   arsCancelled: { key: "cancelled", label: "Cancelado" },
   arsGenerated: { key: "generated", label: "Gerado" },
 };
@@ -110,6 +111,10 @@ const REQUEST_STATUS_MAP: Record<string, { key: MyRequestDoc["status"]; label: s
 const DECISION_STATUS_MAP: Record<string, { key: ApprovalHistoryEntry["status"]; label: string }> = {
   ardApproved: { key: "approved", label: "Aprovado" },
   ardNotApproved: { key: "rejected", label: "Rejeitado" },
+  ardWasNotApproved: { key: "rejected", label: "Rejeitado" },
+  arsNotApproved: { key: "rejected", label: "Rejeitado" },
+  arsWasNotApproved: { key: "rejected", label: "Rejeitado" },
+  arsApproved: { key: "approved", label: "Aprovado" },
   ardPending: { key: "pending", label: "Pendente" },
   asPending: { key: "pending", label: "Pendente" },
   asWithoutDecision: { key: "without_decision", label: "Sem decisão" },
