@@ -250,7 +250,23 @@ Deno.serve(async (req) => {
       catch (e) { console.error(`SAP login ${co.company_db}:`, (e as Error).message); continue; }
 
       try {
-        const records = await fetchUsr5(dbName, session.sessionId);
+        // 1. Limpa cache de usuários e recarrega lista fresca via Service Layer
+        let freshUsers: Array<{ UserCode: string; UserName?: string; Locked?: string }> = [];
+        try {
+          await sb.from("sap_cache").delete().eq("cache_key", "users").eq("company_db", co.company_db);
+          freshUsers = await fetchSapUsersFresh(baseUrl, session);
+          await refreshUsersCache(sb, co.company_db, freshUsers);
+        } catch (e) {
+          console.warn(`Refresh users ${co.company_db} falhou, prosseguindo com user_licenses:`, (e as Error).message);
+        }
+        const validUserCodes = new Set(freshUsers.map((u) => String(u.UserCode || "").toLowerCase()).filter(Boolean));
+        const lockedSet = new Set(
+          freshUsers.filter((u) => u.Locked === "tYES" || u.Locked === "Y").map((u) => String(u.UserCode).toLowerCase()),
+        );
+
+        // 2. Carrega USR5 (normalizado para tolerar variações de campos)
+        const rawRecords = await fetchHanaTable<Record<string, unknown>>(dbName, session.sessionId, "USR5");
+        const records = rawRecords.map(normalizeUsr5).filter((r) => r.UserCode);
         const lastLoginByUser = new Map<string, Date>();
         for (const r of records) {
           if (!isSuccessfulLogin(r)) continue;
@@ -261,7 +277,7 @@ Deno.serve(async (req) => {
           if (!cur || d > cur) lastLoginByUser.set(key, d);
         }
 
-        // Reforça com OUSR.LastLoginDate (USR5 pode estar truncado por retenção)
+        // 3. Reforça com OUSR.LastLoginDate (USR5 pode estar truncado por retenção)
         try {
           const ousr = await fetchHanaTable<OusrRow>(dbName, session.sessionId, "OUSR");
           for (const row of ousr) {
@@ -283,10 +299,16 @@ Deno.serve(async (req) => {
           .in("license_type", ["PRO", "CRM"]);
 
         for (const lic of licenses || []) {
-          if (lic.is_locked) continue;
-          const last = lastLoginByUser.get(lic.user_code.toLowerCase());
+          const codeKey = lic.user_code.toLowerCase();
+          // Pula se travado (no licenças ou em SAP fresco)
+          if (lic.is_locked || lockedSet.has(codeKey)) continue;
+          // Pula se usuário não existe mais no SAP (evita falso "nunca logou")
+          if (validUserCodes.size > 0 && !validUserCodes.has(codeKey)) continue;
+          const last = lastLoginByUser.get(codeKey);
           const lastTs = last ? last.getTime() : 0;
           if (lastTs > cutoff) continue;
+          // Sem dado de login confiável (USR5+OUSR vazios): não dispara alerta "nunca logou"
+          if (!last && lastLoginByUser.size === 0) continue;
           const daysIdle = last ? Math.floor((Date.now() - lastTs) / 86400000) : 9999;
           allIdle.push({
             company_db: co.company_db,
@@ -298,6 +320,7 @@ Deno.serve(async (req) => {
             last_login: last ? last.toISOString() : null,
           });
         }
+
       } catch (e) {
         console.error(`fetchUsr5 ${co.company_db}:`, (e as Error).message);
       } finally {
