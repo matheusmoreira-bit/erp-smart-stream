@@ -92,19 +92,29 @@ export function CreateExpenseModal({
     currency: row.Currency || "",
   } as SapSearchOption & { currency: string }), []);
   const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
-    cacheKey: "suppliers",
+    cacheKey: isSales ? "customers" : "suppliers",
     endpoint: "BusinessPartners",
-    params: { $select: "CardCode,CardName,FederalTaxID,Currency" },
+    params: isSales
+      ? { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer'" }
+      : { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier'" },
     mapRow: supplierMapRow,
   });
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
-  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+  const { options: itemOptionsRaw, isLoading: itemsLoading } = useSapCachedList({
     cacheKey: "items_active",
     endpoint: "Items",
     params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
     mapRow: itemMapRow,
   });
+  // For sales, only items whose code starts with SV or PV are eligible.
+  const itemOptions = useMemo(
+    () =>
+      isSales
+        ? itemOptionsRaw.filter((o) => /^(SV|PV)/i.test(o.code || ""))
+        : itemOptionsRaw,
+    [itemOptionsRaw, isSales]
+  );
 
   const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const { options: rawCostCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
