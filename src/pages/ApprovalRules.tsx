@@ -714,7 +714,7 @@ export default function ApprovalRulesPage() {
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
-          <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+          <Button onClick={openCreate} className="gap-1.5">
             <Plus className="w-4 h-4" /> Nova Regra
           </Button>
         </div>
