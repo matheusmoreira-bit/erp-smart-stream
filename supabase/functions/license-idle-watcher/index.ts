@@ -213,7 +213,11 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  try {
+  const url = new URL(req.url);
+  const isAsync = url.searchParams.get("async") === "1";
+  const forceWeek = url.searchParams.get("force") === "1";
+
+  const work = async () => {
     const { data: companies } = await sb
       .from("companies")
       .select("company_db, display_name")
