@@ -797,7 +797,7 @@ function MyRequestsTab() {
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { approvals, isLoading, error, refresh } = useApprovals();
+  const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache } = useApprovals();
   const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense } = useExpenses("purchase");
   const { expenses: salesExpenses, refresh: refreshSales } = useExpenses("sales");
   const expenses = [...purchaseExpenses, ...salesExpenses];
