@@ -382,7 +382,7 @@ Deno.serve(async (req) => {
           break;
         }
 
-        let pageData: any;
+        let pageData: { value?: unknown[]; "odata.nextLink"?: string };
         try {
           pageData = await sapResp.json();
         } catch (e) {
