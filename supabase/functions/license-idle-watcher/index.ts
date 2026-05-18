@@ -33,6 +33,27 @@ function normalizeBaseUrl(url: string): string {
   return u;
 }
 
+function pickField<T = unknown>(row: Record<string, unknown>, ...keys: string[]): T | undefined {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k] as T;
+    const upper = k.toUpperCase();
+    if (row[upper] !== undefined && row[upper] !== null && row[upper] !== "") return row[upper] as T;
+    const lower = k.toLowerCase();
+    if (row[lower] !== undefined && row[lower] !== null && row[lower] !== "") return row[lower] as T;
+  }
+  return undefined;
+}
+
+function normalizeUsr5(r: Record<string, unknown>): Usr5 {
+  return {
+    UserCode: String(pickField<string>(r, "UserCode", "USER_CODE", "USERCODE", "user_code") ?? "").trim(),
+    Action: String(pickField<string>(r, "Action", "ACTION") ?? "").trim(),
+    Date: String(pickField<string>(r, "Date", "DATE") ?? "").trim(),
+    Time: Number(pickField(r, "Time", "TIME") ?? 0),
+    SessionID: Number(pickField(r, "SessionID", "SESSIONID", "Session_ID") ?? 0),
+  };
+}
+
 function tsToDate(r: Usr5): Date | null {
   const d = (r.Date || "").replace(/-/g, "");
   if (d.length !== 8) return null;
@@ -48,6 +69,33 @@ function tsToDate(r: Usr5): Date | null {
 
 function isSuccessfulLogin(r: Usr5): boolean {
   return (r.Action === "I" || r.Action === "W") && Number(r.SessionID) >= 0;
+}
+
+async function fetchSapUsersFresh(baseUrl: string, session: { sessionId: string; routeId: string }): Promise<Array<{ UserCode: string; UserName?: string; Locked?: string }>> {
+  const cookie = `B1SESSION=${session.sessionId}${session.routeId ? `; B1ROUTEID=${session.routeId}` : ""}`;
+  const all: Array<{ UserCode: string; UserName?: string; Locked?: string }> = [];
+  let next: string | null = `${baseUrl}/Users?$select=UserCode,UserName,Locked&$top=200`;
+  while (next) {
+    const resp = await fetch(next, { headers: { Cookie: cookie, Prefer: "odata.maxpagesize=200" } });
+    if (!resp.ok) throw new Error(`Service Layer Users falhou: ${resp.status}`);
+    const json = await resp.json();
+    for (const u of json.value || []) all.push(u);
+    if (json["odata.nextLink"]) {
+      next = `${baseUrl}/${json["odata.nextLink"]}`;
+    } else {
+      next = null;
+    }
+  }
+  return all;
+}
+
+async function refreshUsersCache(sb: ReturnType<typeof createClient>, companyDb: string, users: Array<{ UserCode: string; UserName?: string; Locked?: string }>) {
+  if (users.length === 0) return;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  await sb.from("sap_cache").upsert(
+    { cache_key: "users", company_db: companyDb, data: users as unknown, expires_at: expiresAt, updated_at: new Date().toISOString() },
+    { onConflict: "cache_key,company_db" },
+  );
 }
 
 function isoWeekKey(d: Date): string {
@@ -202,7 +250,23 @@ Deno.serve(async (req) => {
       catch (e) { console.error(`SAP login ${co.company_db}:`, (e as Error).message); continue; }
 
       try {
-        const records = await fetchUsr5(dbName, session.sessionId);
+        // 1. Limpa cache de usuários e recarrega lista fresca via Service Layer
+        let freshUsers: Array<{ UserCode: string; UserName?: string; Locked?: string }> = [];
+        try {
+          await sb.from("sap_cache").delete().eq("cache_key", "users").eq("company_db", co.company_db);
+          freshUsers = await fetchSapUsersFresh(baseUrl, session);
+          await refreshUsersCache(sb, co.company_db, freshUsers);
+        } catch (e) {
+          console.warn(`Refresh users ${co.company_db} falhou, prosseguindo com user_licenses:`, (e as Error).message);
+        }
+        const validUserCodes = new Set(freshUsers.map((u) => String(u.UserCode || "").toLowerCase()).filter(Boolean));
+        const lockedSet = new Set(
+          freshUsers.filter((u) => u.Locked === "tYES" || u.Locked === "Y").map((u) => String(u.UserCode).toLowerCase()),
+        );
+
+        // 2. Carrega USR5 (normalizado para tolerar variações de campos)
+        const rawRecords = await fetchHanaTable<Record<string, unknown>>(dbName, session.sessionId, "USR5");
+        const records = rawRecords.map(normalizeUsr5).filter((r) => r.UserCode);
         const lastLoginByUser = new Map<string, Date>();
         for (const r of records) {
           if (!isSuccessfulLogin(r)) continue;
@@ -213,7 +277,7 @@ Deno.serve(async (req) => {
           if (!cur || d > cur) lastLoginByUser.set(key, d);
         }
 
-        // Reforça com OUSR.LastLoginDate (USR5 pode estar truncado por retenção)
+        // 3. Reforça com OUSR.LastLoginDate (USR5 pode estar truncado por retenção)
         try {
           const ousr = await fetchHanaTable<OusrRow>(dbName, session.sessionId, "OUSR");
           for (const row of ousr) {
@@ -235,10 +299,16 @@ Deno.serve(async (req) => {
           .in("license_type", ["PRO", "CRM"]);
 
         for (const lic of licenses || []) {
-          if (lic.is_locked) continue;
-          const last = lastLoginByUser.get(lic.user_code.toLowerCase());
+          const codeKey = lic.user_code.toLowerCase();
+          // Pula se travado (no licenças ou em SAP fresco)
+          if (lic.is_locked || lockedSet.has(codeKey)) continue;
+          // Pula se usuário não existe mais no SAP (evita falso "nunca logou")
+          if (validUserCodes.size > 0 && !validUserCodes.has(codeKey)) continue;
+          const last = lastLoginByUser.get(codeKey);
           const lastTs = last ? last.getTime() : 0;
           if (lastTs > cutoff) continue;
+          // Sem dado de login confiável (USR5+OUSR vazios): não dispara alerta "nunca logou"
+          if (!last && lastLoginByUser.size === 0) continue;
           const daysIdle = last ? Math.floor((Date.now() - lastTs) / 86400000) : 9999;
           allIdle.push({
             company_db: co.company_db,
@@ -250,6 +320,7 @@ Deno.serve(async (req) => {
             last_login: last ? last.toISOString() : null,
           });
         }
+
       } catch (e) {
         console.error(`fetchUsr5 ${co.company_db}:`, (e as Error).message);
       } finally {
