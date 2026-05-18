@@ -8,6 +8,7 @@ const corsHeaders = {
 // Use env vars instead of hardcoded URLs
 const DEFAULT_SAP_BASE_URL = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
 const HANA_VIEWS_URL = Deno.env.get("HANA_VIEWS_URL") || "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+const APPROVALS_CACHE_KEY = "approvals:detailed";
 
 // In-memory cache with TTL
 const cache = new Map<string, { data: unknown; expiry: number }>();
@@ -94,6 +95,16 @@ function extractSapErrorMessage(payload: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 25_000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
 }
 
 async function getSapBaseUrl(companyDB?: string): Promise<string> {
