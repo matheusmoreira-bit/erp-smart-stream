@@ -265,22 +265,23 @@ async function fetchUsersByIds(session: SapSession, ids: number[]): Promise<void
     slUsersMem.set(session.companyDB, map);
     return;
   }
-  await Promise.all(
-    missing.map(async (id) => {
-      try {
-        const res = await sapQuery(
-          session,
-          `Users(${id})?$select=InternalKey,UserCode,UserName,eMail`,
-          undefined,
-          true,
-        );
-        const u = res.data as SLUser;
+  // Batch via $filter to avoid one-request-per-id (which causes SAP 504s).
+  const CHUNK = 20;
+  for (let i = 0; i < missing.length; i += CHUNK) {
+    const chunk = missing.slice(i, i + CHUNK);
+    const filter = chunk.map((id) => `InternalKey eq ${id}`).join(" or ");
+    const path = `Users?$select=InternalKey,UserCode,UserName,eMail&$filter=${encodeURIComponent(filter)}&$top=${chunk.length}`;
+    try {
+      const res = await sapQuery(session, path, undefined, true);
+      const data = res.data as { value?: SLUser[] } | SLUser[];
+      const list = Array.isArray(data) ? data : (data?.value || []);
+      for (const u of list) {
         if (u && typeof u.InternalKey === "number") map.set(u.InternalKey, u);
-      } catch (e) {
-        console.warn(`Users(${id}) falhou:`, e);
       }
-    }),
-  );
+    } catch (e) {
+      console.warn(`Users batch [${chunk.join(",")}] falhou:`, e);
+    }
+  }
   slUsersMem.set(session.companyDB, map);
 }
 
