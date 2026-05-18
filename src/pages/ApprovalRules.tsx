@@ -623,10 +623,11 @@ function RuleCard({
 export default function ApprovalRulesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
-  const { rules, isLoading, error, refresh, createRule, toggleRule, deleteRule } = useApprovalRules();
+  const { rules, isLoading, error, refresh, createRule, updateRule, toggleRule, deleteRule } = useApprovalRules();
   const { users: sapUsers, isLoading: sapUsersLoading } = useSapUsers();
   const { getLabel } = useCompanies(true);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingRule, setEditingRule] = useState<ApprovalRule | null>(null);
 
   if (!session) {
     navigate("/");
@@ -635,8 +636,25 @@ export default function ApprovalRulesPage() {
 
   const companyLabel = getLabel(session?.companyDB || "");
 
-  const handleCreate = async (input: CreateRuleInput) => {
-    await createRule(input, session.userName);
+  const openCreate = () => {
+    setEditingRule(null);
+    setShowForm(true);
+  };
+  const openEdit = (rule: ApprovalRule) => {
+    setEditingRule(rule);
+    setShowForm(true);
+  };
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingRule(null);
+  };
+
+  const handleSubmit = async (input: CreateRuleInput) => {
+    if (editingRule) {
+      await updateRule(editingRule.id, input, session.userName);
+    } else {
+      await createRule(input, session.userName);
+    }
   };
 
   const handleDelete = async (id: string) => {
