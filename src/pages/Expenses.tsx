@@ -15,6 +15,7 @@ import {
   Send,
   X as XIcon,
   RotateCw,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
