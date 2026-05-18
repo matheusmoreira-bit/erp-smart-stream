@@ -187,9 +187,19 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            {(showSubmit || showCancel || showRetrySap) && (
-              <div className="border-t border-border pt-4 flex justify-end gap-3">
+            {(showSubmit || showCancel || showRetrySap || showEdit) && (
+              <div className="border-t border-border pt-4 flex justify-end gap-3 flex-wrap">
                 <Button variant="outline" onClick={onClose}>Fechar</Button>
+                {showEdit && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onEdit(expense)}
+                    className="gap-1.5"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Editar
+                  </Button>
+                )}
                 {showCancel && (
                   <Button
                     variant="destructive"
