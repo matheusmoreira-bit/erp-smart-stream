@@ -629,12 +629,12 @@ export function CreateExpenseModal({
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
             />
-            {!supplier && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
+            {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
               <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
                 <span className="text-amber-600 dark:text-amber-400 text-sm">⚠️</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-foreground">
-                    Fornecedor não encontrado no SAP
+                    {bpLabel} não encontrado no SAP
                     {aiSupplierData?.card_name ? `: "${aiSupplierData.card_name}"` : ""}
                     {aiSupplierData?.federal_tax_id ? ` (CNPJ ${aiSupplierData.federal_tax_id})` : ""}
                   </p>
@@ -645,7 +645,7 @@ export function CreateExpenseModal({
                   onClick={() => setShowSupplierForm(true)}
                   className="gap-1.5 text-xs h-7 shrink-0"
                 >
-                  <UserPlus className="w-3.5 h-3.5" /> Cadastrar Fornecedor
+                  <UserPlus className="w-3.5 h-3.5" /> Cadastrar {bpLabel}
                 </Button>
               </div>
             )}
