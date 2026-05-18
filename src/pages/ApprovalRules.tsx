@@ -526,14 +526,24 @@ function RuleCard({
   rule,
   onToggle,
   onDelete,
+  onEdit,
 }: {
   rule: ApprovalRule;
   onToggle: () => void;
   onDelete: () => void;
+  onEdit: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   const criteriaLabels = (rule.criteria || []).map(criterionSummary);
+  const dt: RuleDocType = (rule.doc_type as RuleDocType) || "both";
+  const docTypeBadge =
+    dt === "purchase"
+      ? { icon: ShoppingCart, cls: "bg-blue-500/15 text-blue-500" }
+      : dt === "sales"
+      ? { icon: Tag, cls: "bg-emerald-500/15 text-emerald-500" }
+      : { icon: Shield, cls: "bg-muted text-muted-foreground" };
+  const DocIcon = docTypeBadge.icon;
 
   return (
     <motion.div
@@ -543,10 +553,14 @@ function RuleCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h3 className="text-foreground font-semibold truncate">{rule.name}</h3>
             <Badge className={rule.is_active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}>
               {rule.is_active ? "Ativa" : "Inativa"}
+            </Badge>
+            <Badge className={`${docTypeBadge.cls} gap-1`}>
+              <DocIcon className="w-3 h-3" />
+              {DOC_TYPE_LABELS[dt]}
             </Badge>
             {rule.priority > 0 && (
               <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
@@ -593,7 +607,10 @@ function RuleCard({
 
         <div className="flex items-center gap-2 shrink-0">
           <Switch checked={rule.is_active} onCheckedChange={onToggle} />
-          <Button variant="ghost" size="icon" onClick={onDelete} className="h-8 w-8 text-muted-foreground hover:text-destructive">
+          <Button variant="ghost" size="icon" onClick={onEdit} className="h-8 w-8 text-muted-foreground hover:text-primary" title="Editar regra">
+            <Pencil className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onDelete} className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Excluir regra">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
