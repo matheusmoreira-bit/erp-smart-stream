@@ -525,6 +525,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onClose={() => setShowCreate(false)}
         onCreate={handleCreate}
         sapSession={session}
+        mode={mode}
       />
     </div>
   );
