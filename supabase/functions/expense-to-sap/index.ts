@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
       DocDueDate: today,
       TaxDate: today,
       BPL_IDAssignedToInvoice: branchId,
-      Comments: `Despesa interna #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
+      Comments: `${isSales ? "Pedido de venda" : "Despesa interna"} #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
       ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
       ...headerCustom,
       DocumentLines: items.map((it: any) => {
@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
     // header at insert time.
     let sapResult;
     try {
-      sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, "PurchaseOrders");
+      sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
       lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
       if (attachmentEntry !== null) attachmentLinkStatus = "success";
@@ -361,7 +361,7 @@ Deno.serve(async (req) => {
       p_entity_id: expenseId,
       p_company_db: expense.company_db || null,
       p_details: {
-        sap_endpoint: "PurchaseOrders",
+        sap_endpoint: sapEndpoint,
         sap_doc_entry: sapResult.docEntry,
         sap_doc_num: sapResult.docNum,
         sap_attachment_entry: attachmentEntry,
