@@ -752,7 +752,7 @@ export default function ApprovalRulesPage() {
             <Shield className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <p className="text-muted-foreground mb-2">Nenhuma regra de aprovação configurada</p>
             <p className="text-xs text-muted-foreground mb-4">Crie regras para definir a cadeia de aprovadores com base em critérios</p>
-            <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+            <Button onClick={openCreate} className="gap-1.5">
               <Plus className="w-4 h-4" /> Criar primeira regra
             </Button>
           </div>
@@ -764,18 +764,20 @@ export default function ApprovalRulesPage() {
                 rule={rule}
                 onToggle={() => handleToggle(rule.id, rule.is_active)}
                 onDelete={() => handleDelete(rule.id)}
+                onEdit={() => openEdit(rule)}
               />
             ))}
           </div>
         )}
       </main>
 
-      <CreateRuleModal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        onCreate={handleCreate}
+      <RuleFormModal
+        open={showForm}
+        onClose={closeForm}
+        onSubmit={handleSubmit}
         sapUsers={sapUsers}
         sapUsersLoading={sapUsersLoading}
+        editing={editingRule}
       />
     </div>
   );
