@@ -297,6 +297,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           origin,
           company_db: session.companyDB,
           branch_id: input.branch_id ?? 1,
+          doc_type: input.doc_type || docType,
         } as any)
         .select()
         .single();
