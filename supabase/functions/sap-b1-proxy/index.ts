@@ -107,6 +107,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 25_0
   }
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.name === "AbortError" ||
+    error.message.toLowerCase().includes("aborted") ||
+    error.message.toLowerCase().includes("signal")
+  );
+}
+
 async function getSapBaseUrl(companyDB?: string): Promise<string> {
   if (!companyDB) return DEFAULT_SAP_BASE_URL;
   try {
@@ -275,10 +283,20 @@ Deno.serve(async (req) => {
       }
 
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
-      const sapResp = await fetchWithTimeout(fullUrl, {
-        method: "GET",
-        headers: { "Content-Type": "application/json", Cookie: cookies },
-      });
+      let sapResp: Response;
+      try {
+        sapResp = await fetchWithTimeout(fullUrl, {
+          method: "GET",
+          headers: { "Content-Type": "application/json", Cookie: cookies },
+        });
+      } catch (e) {
+        if (isAbortError(e)) {
+          return new Response(JSON.stringify({ data: null, fromCache: false, timedOut: true }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw e;
+      }
 
       if (!sapResp.ok) {
         const errorText = await sapResp.text();
@@ -288,8 +306,8 @@ Deno.serve(async (req) => {
           const parsed = JSON.parse(errorText);
           errorMsg = parsed?.error?.message?.value || errorMsg;
         } catch { /* ignore */ }
-        return new Response(JSON.stringify({ error: errorMsg }), {
-          status: sapResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ data: null, fromCache: false, sapStatus: sapResp.status, warning: errorMsg }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -467,10 +485,20 @@ Deno.serve(async (req) => {
         }
       }
 
-      const viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
+      let viewResp: Response;
+      try {
+        viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        if (isAbortError(e)) {
+          return new Response(JSON.stringify({ data: [], fromCache: false, hanaDisabled: true, timedOut: true }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw e;
+      }
 
       const payload = await parseResponseBody(viewResp);
 
