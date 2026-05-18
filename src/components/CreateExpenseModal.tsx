@@ -498,12 +498,11 @@ export function CreateExpenseModal({
         remarks: remarks || undefined,
         origin,
         skipRules,
-        // Filial não é mais editável aqui — a edge function de integração
-        // SAP usa o `default_branch_id` configurado no cadastro da empresa.
+        doc_type: mode,
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });
-      toast.success("Despesa criada com sucesso!");
+      toast.success(isSales ? "Pedido de venda criado com sucesso!" : "Despesa criada com sucesso!");
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar despesa");
