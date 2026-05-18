@@ -805,6 +805,8 @@ export default function ApprovalsPage() {
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
   const [isActioning, setIsActioning] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
+  const [isDelegating, setIsDelegating] = useState(false);
 
   // Redirect to login if no session
   if (!session) {
