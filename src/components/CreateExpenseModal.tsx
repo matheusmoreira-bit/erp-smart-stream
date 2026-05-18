@@ -92,11 +92,11 @@ export function CreateExpenseModal({
     currency: row.Currency || "",
   } as SapSearchOption & { currency: string }), []);
   const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
-    cacheKey: isSales ? "customers" : "suppliers",
+    cacheKey: isSales ? "customers_active" : "suppliers_active",
     endpoint: "BusinessPartners",
     params: isSales
-      ? { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer'" }
-      : { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier'" },
+      ? { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer' and Frozen eq 'tNO'" }
+      : { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
     mapRow: supplierMapRow,
   });
 
