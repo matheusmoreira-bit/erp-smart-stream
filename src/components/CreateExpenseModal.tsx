@@ -139,7 +139,7 @@ export function CreateExpenseModal({
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiEnabled, setAiEnabled] = useState(!isSales);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
