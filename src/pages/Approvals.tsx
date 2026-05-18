@@ -445,7 +445,7 @@ function ApprovalDetailModal({
                   rows={2}
                 />
               </div>
-              <div className="flex gap-3 justify-end">
+              <div className="flex gap-2 justify-end flex-wrap">
                 <Button
                   variant="outline"
                   onClick={onClose}
@@ -453,6 +453,17 @@ function ApprovalDetailModal({
                 >
                   Cancelar
                 </Button>
+                {isSuperUser && doc.approvalRequestId > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onDelegate(doc)}
+                    disabled={isActioning}
+                    className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                  >
+                    <UserCog className="w-4 h-4" />
+                    Delegar
+                  </Button>
+                )}
                 <Button
                   variant="destructive"
                   onClick={() => handleAction("reject")}
