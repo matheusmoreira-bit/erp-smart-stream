@@ -168,8 +168,12 @@ Deno.serve(async (req) => {
     if (itemsErr) throw new Error(`Erro ao carregar itens: ${itemsErr.message}`);
     if (!items || items.length === 0) throw new Error("Despesa sem itens — não é possível lançar no SAP");
 
+    const isSales = (expense as any).doc_type === "sales";
+    const sapEndpoint = isSales ? "Orders" : "PurchaseOrders";
+    const bpLabel = isSales ? "Cliente" : "Fornecedor";
+
     if (!expense.supplier_code) {
-      throw new Error("Fornecedor (CardCode) não informado na despesa");
+      throw new Error(`${bpLabel} (CardCode) não informado`);
     }
 
     // 2. SAP login
