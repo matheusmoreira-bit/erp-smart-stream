@@ -177,7 +177,7 @@ async function findMatchingRule(
   });
   if (filtered.length === 0) return null;
 
-  for (const r of rules as any[]) {
+  for (const r of filtered) {
     const criteria: RuleCriterion[] = Array.isArray(r.criteria) ? r.criteria : [];
     if (criteria.length === 0) continue;
     const allMatch = criteria.every((c) => evaluateCriterion(c, ctx));
