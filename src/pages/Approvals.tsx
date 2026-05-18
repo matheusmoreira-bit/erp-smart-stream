@@ -1189,9 +1189,18 @@ export default function ApprovalsPage() {
         open={!!selectedDoc}
         onClose={() => setSelectedDoc(null)}
         onAction={handleApprovalAction}
+        onDelegate={(d) => setDelegationDoc(d)}
         isActioning={isActioning}
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
+      />
+
+      <DelegationDialog
+        open={!!delegationDoc}
+        onClose={() => setDelegationDoc(null)}
+        doc={delegationDoc}
+        onConfirm={handleDelegate}
+        isSubmitting={isDelegating}
       />
     </div>
   );
