@@ -101,20 +101,17 @@ export function CreateExpenseModal({
   });
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
-  const { options: itemOptionsRaw, isLoading: itemsLoading } = useSapCachedList({
-    cacheKey: "items_active",
+  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+    cacheKey: isSales ? "items_sales_active" : "items_purchase_active",
     endpoint: "Items",
-    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    params: {
+      $filter: isSales
+        ? "Valid eq 'tYES' and Frozen eq 'tNO' and SalesItem eq 'tYES'"
+        : "Valid eq 'tYES' and Frozen eq 'tNO' and PurchaseItem eq 'tYES'",
+      $select: "ItemCode,ItemName",
+    },
     mapRow: itemMapRow,
   });
-  // For sales, only items whose code starts with SV or PV are eligible.
-  const itemOptions = useMemo(
-    () =>
-      isSales
-        ? itemOptionsRaw.filter((o) => /^(SV|PV)/i.test(o.code || ""))
-        : itemOptionsRaw,
-    [itemOptionsRaw, isSales]
-  );
 
   const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const { options: rawCostCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
