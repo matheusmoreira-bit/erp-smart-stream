@@ -22,6 +22,7 @@ import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
+import UserProductivity from "./pages/UserProductivity.tsx";
 import IdpSync from "./pages/IdpSync.tsx";
 import LicenseAnalysis from "./pages/LicenseAnalysis.tsx";
 import LicenseImport from "./pages/LicenseImport.tsx";
