@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQueryView } from "@/lib/sap-client";
+import { sapQuery, sapQueryAll } from "@/lib/sap-client";
 
 /**
  * Productivity hook — consumes two HANA views:
@@ -99,54 +99,136 @@ export function useUserProductivity() {
       setIsLoading(true);
       setError(null);
       try {
-        const [prod, edits] = await Promise.all([
-          sapQueryView<ProdRawRow>(session, "VW_USER_PRODUCTIVITY", undefined, !forceRefresh).catch(() => ({
-            data: [] as ProdRawRow[],
-            fromCache: false,
-            hanaDisabled: true,
-          })),
-          sapQueryView<EditsRawRow>(session, "VW_USER_DOC_EDITS", undefined, !forceRefresh).catch(() => ({
-            data: [] as EditsRawRow[],
-            fromCache: false,
-            hanaDisabled: true,
-          })),
+        // Janela: últimos 180 dias
+        const since = new Date();
+        since.setDate(since.getDate() - 180);
+        const sinceIso = since.toISOString().slice(0, 10);
+
+        // Carrega usuários e departamentos para resolver nomes
+        const [usersRes, deptsRes] = await Promise.all([
+          sapQuery(
+            session,
+            "Users?$select=UserCode,UserName,Department&$top=2000",
+            undefined,
+            !forceRefresh,
+          ).catch(() => ({ data: { value: [] } })),
+          sapQuery(
+            session,
+            "Departments?$select=Code,Name&$top=2000",
+            undefined,
+            !forceRefresh,
+          ).catch(() => ({ data: { value: [] } })),
         ]);
         if (signal?.aborted) return;
 
-        setHanaDisabled(!!prod.hanaDisabled && !!edits.hanaDisabled);
+        type RawUser = { UserCode?: string; UserName?: string; Department?: number | string };
+        type RawDept = { Code?: number | string; Name?: string };
+        const usersArr: RawUser[] = Array.isArray((usersRes.data as { value?: unknown })?.value)
+          ? ((usersRes.data as { value: RawUser[] }).value)
+          : [];
+        const deptsArr: RawDept[] = Array.isArray((deptsRes.data as { value?: unknown })?.value)
+          ? ((deptsRes.data as { value: RawDept[] }).value)
+          : [];
 
-        // index edits by (UserCode|DocType|Periodo)
-        const editsIdx = new Map<string, EditsRawRow>();
-        for (const e of edits.data || []) {
-          const k = `${e.UserCode}|${e.DocType}|${e.Periodo ?? ""}`;
-          editsIdx.set(k, e);
+        const deptNameByCode = new Map<string, string>();
+        for (const d of deptsArr) {
+          if (d.Code !== undefined && d.Code !== null) {
+            deptNameByCode.set(String(d.Code), d.Name || `Dept ${d.Code}`);
+          }
+        }
+        const userInfo = new Map<string, { name: string; department: string }>();
+        for (const u of usersArr) {
+          if (!u.UserCode) continue;
+          const deptName =
+            u.Department !== undefined && u.Department !== null && u.Department !== ""
+              ? deptNameByCode.get(String(u.Department)) || `Dept ${u.Department}`
+              : "Sem departamento";
+          userInfo.set(u.UserCode, { name: u.UserName || u.UserCode, department: deptName });
         }
 
-        const merged: UserProductivityRow[] = (prod.data || []).map((r) => {
-          const k = `${r.UserCode}|${r.DocType}|${r.Periodo ?? ""}`;
-          const e = editsIdx.get(k);
-          const criados = toNum(r.DocsCriados);
-          const valor = toNum(r.ValorTotalBRL);
-          const cancelados = toNum(r.DocsCancelados);
-          const edicoes = toNum(e?.EdicoesFeitas);
-          const editadosUnicos = toNum(e?.DocsEditadosUnicos);
+        // Documentos a buscar
+        const endpoints: { code: string; ep: string }[] = [
+          { code: "PC", ep: "PurchaseOrders" },
+          { code: "PV", ep: "Orders" },
+          { code: "NFE", ep: "PurchaseInvoices" },
+          { code: "NFS", ep: "Invoices" },
+        ];
+
+        const select = "$select=DocEntry,UserSign,DocTotal,DocTotalSys,DocDate,Cancelled,DocumentStatus";
+        const filter = `$filter=DocDate ge '${sinceIso}'`;
+
+        const docResults = await Promise.all(
+          endpoints.map((e) =>
+            sapQueryAll(session, `${e.ep}?${select}&${filter}`, undefined, !forceRefresh)
+              .then((r) => ({ code: e.code, value: (r.data?.value as RawDoc[]) || [] }))
+              .catch((err) => {
+                console.warn(`Falha ao buscar ${e.ep}:`, err);
+                return { code: e.code, value: [] as RawDoc[] };
+              }),
+          ),
+        );
+        if (signal?.aborted) return;
+
+        type RawDoc = {
+          DocEntry?: number;
+          UserSign?: number | string;
+          DocTotal?: number | string;
+          DocTotalSys?: number | string;
+          DocDate?: string;
+          Cancelled?: string;
+          DocumentStatus?: string;
+        };
+
+        // Agrega por (UserCode, DocType, Periodo)
+        type Agg = {
+          docsCriados: number;
+          valorTotalBRL: number;
+          docsCancelados: number;
+        };
+        const agg = new Map<string, Agg & { userCode: string; docType: string; periodo: string }>();
+
+        for (const { code: docType, value } of docResults) {
+          for (const d of value) {
+            const userCode = d.UserSign !== undefined && d.UserSign !== null ? String(d.UserSign) : "";
+            if (!userCode) continue;
+            const periodo = (d.DocDate || "").slice(0, 7); // YYYY-MM
+            const k = `${userCode}|${docType}|${periodo}`;
+            const cur =
+              agg.get(k) ??
+              { userCode, docType, periodo, docsCriados: 0, valorTotalBRL: 0, docsCancelados: 0 };
+            const cancelled = d.Cancelled === "tYES" || d.Cancelled === "Y";
+            cur.docsCriados += 1;
+            if (cancelled) cur.docsCancelados += 1;
+            const valor = toNum(d.DocTotalSys ?? d.DocTotal);
+            cur.valorTotalBRL += valor;
+            agg.set(k, cur);
+          }
+        }
+
+        const merged: UserProductivityRow[] = Array.from(agg.values()).map((r) => {
+          const info = userInfo.get(r.userCode);
+          const criados = r.docsCriados;
+          const valor = r.valorTotalBRL;
+          const cancelados = r.docsCancelados;
+          const edicoes = 0; // sem fonte ADOC via OData — fica 0 até view dedicada existir
           return {
-            userCode: r.UserCode,
-            userName: r.UserName || r.UserCode,
-            department: (r.Department || "Sem departamento").trim() || "Sem departamento",
-            docType: r.DocType,
-            periodo: r.Periodo || "",
+            userCode: r.userCode,
+            userName: info?.name || r.userCode,
+            department: info?.department || "Sem departamento",
+            docType: r.docType,
+            periodo: r.periodo,
             docsCriados: criados,
             valorTotalBRL: valor,
             docsCancelados: cancelados,
             edicoesFeitas: edicoes,
-            docsEditadosUnicos: editadosUnicos,
+            docsEditadosUnicos: 0,
             retrabalhoPct: criados > 0 ? ((edicoes + cancelados) / criados) * 100 : 0,
             ticketMedio: criados > 0 ? valor / criados : 0,
             score: computeScore(criados, valor, edicoes, cancelados),
           };
         });
 
+        setHanaDisabled(false);
         setRows(merged);
       } catch (e) {
         if (signal?.aborted) return;

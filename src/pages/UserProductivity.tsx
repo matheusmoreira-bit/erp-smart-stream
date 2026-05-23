@@ -268,8 +268,8 @@ export default function UserProductivityPage() {
             </h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               {hanaDisabled
-                ? "As views HANA VW_USER_PRODUCTIVITY e VW_USER_DOC_EDITS ainda não estão disponíveis nesta empresa. Solicite ao time de banco a criação para liberar a análise."
-                : "Nenhum registro encontrado para os filtros atuais."}
+                ? "As views de produtividade não estão disponíveis nesta empresa."
+                : "Nenhum documento encontrado nos últimos 180 dias para os filtros atuais."}
             </p>
           </div>
         ) : (
