@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQueryView } from "@/lib/sap-client";
+import { sapQuery, sapQueryAll } from "@/lib/sap-client";
 
 /**
  * Productivity hook — consumes two HANA views:
