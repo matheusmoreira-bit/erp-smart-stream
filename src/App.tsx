@@ -65,6 +65,7 @@ const App = () => (
               <Route path="/intercompany" element={<Intercompany />} />
               <Route path="/financial-review" element={<FinancialReview />} />
               <Route path="/users/activity" element={<UserActivity />} />
+              <Route path="/users/productivity" element={<UserProductivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />
               <Route path="/users/license-analysis" element={<LicenseAnalysis />} />
               <Route path="/users/license-import" element={<LicenseImport />} />
