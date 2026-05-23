@@ -195,6 +195,10 @@ export default function UsersPage() {
               <BarChart3 className="w-4 h-4 mr-2" />
               Atividade
             </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/users/productivity")}>
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Produtividade
+            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/users/idp-sync")}>
               <Users className="w-4 h-4 mr-2" />
               IdP Sync
