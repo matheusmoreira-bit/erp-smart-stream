@@ -31,6 +31,7 @@ export const ALL_MODULES = [
   { key: "approval_rules", label: "Regras de Aprovação" },
   { key: "pagcorp", label: "PagCorp" },
   { key: "users", label: "Usuários" },
+  { key: "users_productivity", label: "Produtividade de Usuários" },
   { key: "suppliers", label: "Fornecedores" },
   { key: "synapse", label: "Synapse" },
   { key: "credentials", label: "Credenciais" },

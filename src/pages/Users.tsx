@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -194,6 +194,10 @@ export default function UsersPage() {
             <Button variant="outline" size="sm" onClick={() => navigate("/users/activity")}>
               <BarChart3 className="w-4 h-4 mr-2" />
               Atividade
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/users/productivity")}>
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Produtividade
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/users/idp-sync")}>
               <Users className="w-4 h-4 mr-2" />

@@ -22,6 +22,7 @@ import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
+import UserProductivity from "./pages/UserProductivity.tsx";
 import IdpSync from "./pages/IdpSync.tsx";
 import LicenseAnalysis from "./pages/LicenseAnalysis.tsx";
 import LicenseImport from "./pages/LicenseImport.tsx";
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/intercompany" element={<Intercompany />} />
               <Route path="/financial-review" element={<FinancialReview />} />
               <Route path="/users/activity" element={<UserActivity />} />
+              <Route path="/users/productivity" element={<UserProductivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />
               <Route path="/users/license-analysis" element={<LicenseAnalysis />} />
               <Route path="/users/license-import" element={<LicenseImport />} />
