@@ -507,6 +507,7 @@ async function fetchApprovalsViaServiceLayer(
       remarks: r.RemarksFromOriginator || draft.Comments || "",
       approvalModel: templateName !== "—" ? templateName : "",
       daysOpen: daysBetween(r.CreationDate),
+      attachmentEntry: Number(draft.AttachmentEntry || 0),
       attachmentNames: "",
       documentLines: Array.isArray(draft.DocumentLines)
         ? (draft.DocumentLines as unknown as DocumentLine[])
