@@ -444,14 +444,33 @@ function ApprovalDetailModal({
                   <Paperclip className="w-3 h-3" /> Anexos
                 </p>
                 <div className="space-y-1">
-                  {doc.attachmentNames.split("|").map((name, i) => (
-                    <p key={i} className="text-xs text-muted-foreground bg-muted/20 px-3 py-1.5 rounded">
-                      {name.trim()}
-                    </p>
-                  ))}
+                  {doc.attachmentNames.split("|").map((raw, i) => {
+                    const name = raw.trim();
+                    if (!name) return null;
+                    const canDownload = doc.attachmentEntry > 0;
+                    const isLoading = downloadingName === name;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={!canDownload || isLoading}
+                        onClick={() => handleDownloadAttachment(name)}
+                        className="w-full text-left text-xs bg-muted/20 hover:bg-muted/40 disabled:opacity-60 disabled:cursor-not-allowed px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
+                        title={canDownload ? "Baixar anexo" : "Anexo indisponível"}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                        ) : (
+                          <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="truncate text-foreground">{name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
+
 
             {/* Super-user warning */}
             {isOtherApprover && (
