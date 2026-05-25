@@ -160,6 +160,7 @@ interface SLDraft {
   DocDate?: string;
   DocDueDate?: string;
   Comments?: string;
+  AttachmentEntry?: number;
   DocumentLines?: Array<Record<string, unknown>>;
 }
 
