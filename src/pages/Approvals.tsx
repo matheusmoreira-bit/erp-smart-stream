@@ -302,15 +302,15 @@ function ApprovalDetailModal({
     }
     setDownloadingName(name);
     try {
-      const { blob, filename } = await sapDownloadAttachment(session, doc.attachmentEntry, name);
+      const { blob } = await sapDownloadAttachment(session, doc.attachmentEntry, name);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename || name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      if (!win) {
+        toast.error("Pop-up bloqueado. Permita pop-ups para visualizar o anexo.");
+      }
+      // Revoga a URL depois de um tempo para permitir o carregamento na nova aba
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
     } catch (e) {
       console.error("Erro ao baixar anexo:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao baixar anexo");
