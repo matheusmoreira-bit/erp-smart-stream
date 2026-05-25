@@ -24,8 +24,10 @@ export interface ApprovalDoc {
   remarks: string;
   approvalModel: string;
   daysOpen: number;
+  attachmentEntry: number;
   attachmentNames: string;
   documentLines: DocumentLine[];
+
 }
 
 export interface DocumentLine {
