@@ -24,8 +24,10 @@ export interface ApprovalDoc {
   remarks: string;
   approvalModel: string;
   daysOpen: number;
+  attachmentEntry: number;
   attachmentNames: string;
   documentLines: DocumentLine[];
+
 }
 
 export interface DocumentLine {
@@ -104,6 +106,7 @@ function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
     remarks: row.Observações || "",
     approvalModel: row["Modelo de aprovação"] || "",
     daysOpen: Number(row["Dias em aberto"] || 0),
+    attachmentEntry: Number(row["Id do anexo"] || 0),
     attachmentNames: row["Nome do(s) anexo(s)"] || "",
     documentLines: parseDocumentLines(row.DocumentLines),
   };
@@ -157,6 +160,7 @@ interface SLDraft {
   DocDate?: string;
   DocDueDate?: string;
   Comments?: string;
+  AttachmentEntry?: number;
   DocumentLines?: Array<Record<string, unknown>>;
 }
 
@@ -363,7 +367,7 @@ async function fetchDraftsByEntries(session: SapSession, entries: number[]): Pro
   for (let i = 0; i < uniqueEntries.length; i += CHUNK) {
     const chunk = uniqueEntries.slice(i, i + CHUNK);
     const filter = chunk.map((entry) => `DocEntry eq ${entry}`).join(" or ");
-    const path = `Drafts?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,DocumentLines&$filter=${encodeURIComponent(filter)}&$top=${chunk.length}`;
+    const path = `Drafts?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,AttachmentEntry,DocumentLines&$filter=${encodeURIComponent(filter)}&$top=${chunk.length}`;
     try {
       const res = await sapQuery(session, path, undefined, true);
       const data = res.data as { value?: SLDraft[] } | SLDraft[] | null;
@@ -503,6 +507,7 @@ async function fetchApprovalsViaServiceLayer(
       remarks: r.RemarksFromOriginator || draft.Comments || "",
       approvalModel: templateName !== "—" ? templateName : "",
       daysOpen: daysBetween(r.CreationDate),
+      attachmentEntry: Number(draft.AttachmentEntry || 0),
       attachmentNames: "",
       documentLines: Array.isArray(draft.DocumentLines)
         ? (draft.DocumentLines as unknown as DocumentLine[])

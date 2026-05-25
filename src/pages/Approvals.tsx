@@ -29,7 +29,7 @@ import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/h
 import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
-import { sapAction, sapQuery, clearClientCache } from "@/lib/sap-client";
+import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -292,6 +292,33 @@ function ApprovalDetailModal({
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
+  const [downloadingName, setDownloadingName] = useState<string | null>(null);
+  const { session } = useSap();
+
+  const handleDownloadAttachment = async (name: string) => {
+    if (!doc || !doc.attachmentEntry || !session || session.erpType !== "sap") {
+      toast.error("Anexo indisponível");
+      return;
+    }
+    setDownloadingName(name);
+    try {
+      const { blob, filename } = await sapDownloadAttachment(session, doc.attachmentEntry, name);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Erro ao baixar anexo:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao baixar anexo");
+    } finally {
+      setDownloadingName(null);
+    }
+  };
+
 
   if (!doc) return null;
 
@@ -417,14 +444,33 @@ function ApprovalDetailModal({
                   <Paperclip className="w-3 h-3" /> Anexos
                 </p>
                 <div className="space-y-1">
-                  {doc.attachmentNames.split("|").map((name, i) => (
-                    <p key={i} className="text-xs text-muted-foreground bg-muted/20 px-3 py-1.5 rounded">
-                      {name.trim()}
-                    </p>
-                  ))}
+                  {doc.attachmentNames.split("|").map((raw, i) => {
+                    const name = raw.trim();
+                    if (!name) return null;
+                    const canDownload = doc.attachmentEntry > 0;
+                    const isLoading = downloadingName === name;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={!canDownload || isLoading}
+                        onClick={() => handleDownloadAttachment(name)}
+                        className="w-full text-left text-xs bg-muted/20 hover:bg-muted/40 disabled:opacity-60 disabled:cursor-not-allowed px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
+                        title={canDownload ? "Baixar anexo" : "Anexo indisponível"}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                        ) : (
+                          <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="truncate text-foreground">{name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
+
 
             {/* Super-user warning */}
             {isOtherApprover && (

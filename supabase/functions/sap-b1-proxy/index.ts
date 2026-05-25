@@ -626,7 +626,68 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Ação inválida. Use: login, query, queryAll, queryView, sapAction, logout" }), {
+    // DOWNLOAD ATTACHMENT — fetches a binary file from SAP Attachments2
+    if (action === "downloadAttachment") {
+      const attachmentEntry = Number(reqBody.attachmentEntry);
+      const filename = typeof reqBody.filename === "string" ? reqBody.filename : "";
+      if (!sessionId || !Number.isFinite(attachmentEntry) || attachmentEntry <= 0) {
+        return new Response(JSON.stringify({ error: "sessionId e attachmentEntry são obrigatórios" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
+      const qs = filename ? `?filename='${encodeURIComponent(filename).replace(/'/g, "%27")}'` : "";
+      const fullUrl = `${SAP_BASE_URL}/Attachments2(${attachmentEntry})/$value${qs}`;
+
+      let sapResp: Response;
+      try {
+        sapResp = await fetchWithTimeout(fullUrl, {
+          method: "GET",
+          headers: { Cookie: cookies },
+        }, 60_000);
+      } catch (e) {
+        if (isAbortError(e)) {
+          return new Response(JSON.stringify({ error: "Tempo esgotado ao baixar anexo" }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw e;
+      }
+
+      if (!sapResp.ok) {
+        const errorText = await sapResp.text();
+        console.error("SAP attachment download error:", sapResp.status, errorText.slice(0, 500));
+        let errorMsg = "Erro ao baixar anexo do SAP";
+        try {
+          const parsed = JSON.parse(errorText);
+          errorMsg = parsed?.error?.message?.value || errorMsg;
+        } catch { /* binary or html */ }
+        return new Response(JSON.stringify({ error: errorMsg, sapStatus: sapResp.status }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const buf = new Uint8Array(await sapResp.arrayBuffer());
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < buf.length; i += chunk) {
+        binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+      }
+      const base64 = btoa(binary);
+      const contentType = sapResp.headers.get("content-type") || "application/octet-stream";
+
+      return new Response(JSON.stringify({
+        data: base64,
+        contentType,
+        filename,
+        size: buf.length,
+      }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Ação inválida. Use: login, query, queryAll, queryView, sapAction, downloadAttachment, logout" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

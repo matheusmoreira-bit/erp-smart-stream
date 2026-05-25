@@ -154,7 +154,31 @@ export async function sapAction(
   return { data: result.data };
 }
 
+export async function sapDownloadAttachment(
+  session: SapSession,
+  attachmentEntry: number,
+  filename: string,
+): Promise<{ blob: Blob; contentType: string; filename: string }> {
+  const result = await callProxy({
+    action: "downloadAttachment",
+    sessionId: session.sessionId,
+    routeId: session.routeId,
+    companyDB: session.companyDB,
+    attachmentEntry,
+    filename,
+  });
+  if (!result?.data || typeof result.data !== "string") {
+    throw new Error(result?.error || "Falha ao baixar anexo");
+  }
+  const binary = atob(result.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const contentType = result.contentType || "application/octet-stream";
+  return { blob: new Blob([bytes], { type: contentType }), contentType, filename: result.filename || filename };
+}
+
 export async function sapQueryView<T = unknown>(
+
   session: SapSession,
   table: string,
   params?: Record<string, string | number>,
