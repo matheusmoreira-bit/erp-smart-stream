@@ -113,8 +113,8 @@ async function loadSapDocs(
   source: ProductivityDocSource,
   sinceIso: string,
   useCache: boolean,
-): Promise<{ source: ProductivityDocSource; rows: RawSapDoc[] }> {
-  if (!session) return { source, rows: [] };
+): Promise<{ source: ProductivityDocSource; rows: RawSapDoc[]; sapDown: boolean }> {
+  if (!session) return { source, rows: [], sapDown: false };
 
   const baseParams = { $filter: buildDateFilter(sinceIso) };
   const attempts: Array<Record<string, string>> = [
@@ -124,11 +124,12 @@ async function loadSapDocs(
     { ...baseParams, $select: ABSOLUTE_MIN_DOC_SELECT },
   ];
 
+  let sapDown = false;
   for (const params of attempts) {
     try {
       const res = await sapQueryAll(session, source.endpoint, params, useCache);
       const rows = asArray<RawSapDoc>(res.data);
-      if (rows.length > 0) return { source, rows };
+      if (rows.length > 0) return { source, rows, sapDown: false };
     } catch (err) {
       console.warn(`Falha ao buscar ${source.endpoint} com select ${params.$select}:`, err);
     }
@@ -143,14 +144,19 @@ async function loadSapDocs(
         { $select: select, $orderby: "DocDate desc", $top: 100 },
         useCache,
       );
+      const payload = res.data as { sapStatus?: number } | null;
+      if (payload && typeof payload === "object" && !Array.isArray(payload) && typeof payload.sapStatus === "number" && payload.sapStatus >= 500) {
+        sapDown = true;
+        continue;
+      }
       const rows = asArray<RawSapDoc>(res.data);
-      if (rows.length > 0) return { source, rows };
+      if (rows.length > 0) return { source, rows, sapDown: false };
     } catch (err) {
       console.warn(`Fallback recente falhou para ${source.endpoint} com select ${select}:`, err);
     }
   }
 
-  return { source, rows: [] };
+  return { source, rows: [], sapDown };
 }
 
 function computeScore(criados: number, valor: number, edicoes: number, cancelados: number): number {
