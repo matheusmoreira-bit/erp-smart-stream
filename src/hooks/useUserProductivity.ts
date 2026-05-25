@@ -2,41 +2,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { sapQuery, sapQueryAll } from "@/lib/sap-client";
 
-/**
- * Productivity hook — consumes two HANA views:
- *  - VW_USER_PRODUCTIVITY: one row per (UserCode, DocType, Periodo)
- *  - VW_USER_DOC_EDITS:    one row per (UserCode, DocType, Periodo) — rework
- *
- * Expected columns (string/number tolerant):
- *  VW_USER_PRODUCTIVITY:
- *    UserCode, UserName, Department, DocType, DocsCriados,
- *    ValorTotalBRL, DocsCancelados, Periodo (YYYY-MM)
- *  VW_USER_DOC_EDITS:
- *    UserCode, Department, DocType, EdicoesFeitas, DocsEditadosUnicos, Periodo
- *
- * When the HANA views are not yet deployed, the hook returns empty
- * arrays + `hanaDisabled` flag so the UI can show a friendly message.
- */
-
-export interface ProdRawRow {
-  UserCode: string;
+type RawUser = {
+  InternalKey?: number | string;
+  UserCode?: string;
   UserName?: string;
-  Department?: string;
-  DocType: string;
-  DocsCriados?: number | string;
-  ValorTotalBRL?: number | string;
-  DocsCancelados?: number | string;
-  Periodo?: string;
-}
+  Department?: number | string | null;
+};
 
-export interface EditsRawRow {
-  UserCode: string;
-  Department?: string;
-  DocType: string;
-  EdicoesFeitas?: number | string;
-  DocsEditadosUnicos?: number | string;
-  Periodo?: string;
-}
+type RawDept = { Code?: number | string; Name?: string };
+
+type RawSapDoc = {
+  DocEntry?: number | string;
+  DocDate?: string;
+  UserSign?: number | string | null;
+  DocTotal?: number | string | null;
+  Cancelled?: string | null;
+};
+
+type ProductivityDocSource = {
+  code: string;
+  endpoint: string;
+};
 
 export interface UserProductivityRow {
   userCode: string;
@@ -79,6 +65,94 @@ const toNum = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const DOC_SOURCES: ProductivityDocSource[] = [
+  { code: "PC", endpoint: "PurchaseOrders" },
+  { code: "PV", endpoint: "Orders" },
+  { code: "NFE", endpoint: "PurchaseInvoices" },
+  { code: "NFS", endpoint: "Invoices" },
+  { code: "REQ", endpoint: "PurchaseRequests" },
+  { code: "COT", endpoint: "PurchaseQuotations" },
+  { code: "PAG", endpoint: "VendorPayments" },
+  { code: "REC", endpoint: "IncomingPayments" },
+];
+
+const CORE_DOC_SELECT = "DocEntry,DocDate,UserSign,DocTotal";
+const DOC_SELECT_WITH_CANCEL = `${CORE_DOC_SELECT},Cancelled`;
+const USER_ONLY_DOC_SELECT = "DocEntry,DocDate,UserSign";
+const ABSOLUTE_MIN_DOC_SELECT = "DocEntry,DocDate";
+
+const asArray = <T,>(data: unknown): T[] => {
+  if (Array.isArray(data)) return data as T[];
+  const value = (data as { value?: unknown })?.value;
+  return Array.isArray(value) ? (value as T[]) : [];
+};
+
+const buildDateFilter = (sinceIso: string) => `DocDate ge '${sinceIso}'`;
+
+const normalizePeriod = (docDate?: string): string => {
+  if (!docDate) return "Sem data";
+  return docDate.slice(0, 7) || "Sem data";
+};
+
+const isCancelled = (value: unknown): boolean => {
+  const normalized = String(value ?? "").toUpperCase();
+  return normalized === "TYES" || normalized === "Y" || normalized === "YES";
+};
+
+const userLookupKeys = (user: RawUser): string[] => {
+  const keys = new Set<string>();
+  if (user.InternalKey !== undefined && user.InternalKey !== null && user.InternalKey !== "") {
+    keys.add(String(user.InternalKey));
+  }
+  if (user.UserCode) keys.add(user.UserCode);
+  return Array.from(keys);
+};
+
+async function loadSapDocs(
+  session: ReturnType<typeof useSap>["session"],
+  source: ProductivityDocSource,
+  sinceIso: string,
+  useCache: boolean,
+): Promise<{ source: ProductivityDocSource; rows: RawSapDoc[] }> {
+  if (!session) return { source, rows: [] };
+
+  const baseParams = { $filter: buildDateFilter(sinceIso) };
+  const attempts: Array<Record<string, string>> = [
+    { ...baseParams, $select: DOC_SELECT_WITH_CANCEL },
+    { ...baseParams, $select: CORE_DOC_SELECT },
+    { ...baseParams, $select: USER_ONLY_DOC_SELECT },
+    { ...baseParams, $select: ABSOLUTE_MIN_DOC_SELECT },
+  ];
+
+  for (const params of attempts) {
+    try {
+      const res = await sapQueryAll(session, source.endpoint, params, useCache);
+      const rows = asArray<RawSapDoc>(res.data);
+      if (rows.length > 0) return { source, rows };
+    } catch (err) {
+      console.warn(`Falha ao buscar ${source.endpoint} com select ${params.$select}:`, err);
+    }
+  }
+
+  const recentAttempts = [DOC_SELECT_WITH_CANCEL, CORE_DOC_SELECT, USER_ONLY_DOC_SELECT, ABSOLUTE_MIN_DOC_SELECT];
+  for (const select of recentAttempts) {
+    try {
+      const res = await sapQuery(
+        session,
+        source.endpoint,
+        { $select: select, $orderby: "DocDate desc", $top: 100 },
+        useCache,
+      );
+      const rows = asArray<RawSapDoc>(res.data);
+      if (rows.length > 0) return { source, rows };
+    } catch (err) {
+      console.warn(`Fallback recente falhou para ${source.endpoint} com select ${select}:`, err);
+    }
+  }
+
+  return { source, rows: [] };
+}
+
 function computeScore(criados: number, valor: number, edicoes: number, cancelados: number): number {
   return Math.max(0, Math.round(criados * 1 + valor / 10000 - edicoes * 0.3 - cancelados * 1));
 }
@@ -99,36 +173,29 @@ export function useUserProductivity() {
       setIsLoading(true);
       setError(null);
       try {
-        // Janela: últimos 180 dias
         const since = new Date();
         since.setDate(since.getDate() - 180);
         const sinceIso = since.toISOString().slice(0, 10);
+        const useCache = !forceRefresh;
 
-        // Carrega usuários e departamentos para resolver nomes
         const [usersRes, deptsRes] = await Promise.all([
           sapQuery(
             session,
-            "Users?$select=UserCode,UserName,Department&$top=2000",
-            undefined,
-            !forceRefresh,
+            "Users",
+            { $select: "InternalKey,UserCode,UserName,Department", $top: 2000 },
+            useCache,
           ).catch(() => ({ data: { value: [] } })),
           sapQuery(
             session,
-            "Departments?$select=Code,Name&$top=2000",
-            undefined,
-            !forceRefresh,
+            "Departments",
+            { $select: "Code,Name", $top: 2000 },
+            useCache,
           ).catch(() => ({ data: { value: [] } })),
         ]);
         if (signal?.aborted) return;
 
-        type RawUser = { UserCode?: string; UserName?: string; Department?: number | string };
-        type RawDept = { Code?: number | string; Name?: string };
-        const usersArr: RawUser[] = Array.isArray((usersRes.data as { value?: unknown })?.value)
-          ? ((usersRes.data as { value: RawUser[] }).value)
-          : [];
-        const deptsArr: RawDept[] = Array.isArray((deptsRes.data as { value?: unknown })?.value)
-          ? ((deptsRes.data as { value: RawDept[] }).value)
-          : [];
+        const usersArr = asArray<RawUser>(usersRes.data);
+        const deptsArr = asArray<RawDept>(deptsRes.data);
 
         const deptNameByCode = new Map<string, string>();
         for (const d of deptsArr) {
@@ -136,72 +203,49 @@ export function useUserProductivity() {
             deptNameByCode.set(String(d.Code), d.Name || `Dept ${d.Code}`);
           }
         }
+
         const userInfo = new Map<string, { name: string; department: string }>();
         for (const u of usersArr) {
-          if (!u.UserCode) continue;
+          const userName = u.UserName || u.UserCode || (u.InternalKey ? String(u.InternalKey) : "Usuário SAP");
           const deptName =
             u.Department !== undefined && u.Department !== null && u.Department !== ""
               ? deptNameByCode.get(String(u.Department)) || `Dept ${u.Department}`
               : "Sem departamento";
-          userInfo.set(u.UserCode, { name: u.UserName || u.UserCode, department: deptName });
+
+          for (const key of userLookupKeys(u)) {
+            userInfo.set(key, { name: userName, department: deptName });
+          }
         }
 
-        // Documentos a buscar
-        const endpoints: { code: string; ep: string }[] = [
-          { code: "PC", ep: "PurchaseOrders" },
-          { code: "PV", ep: "Orders" },
-          { code: "NFE", ep: "PurchaseInvoices" },
-          { code: "NFS", ep: "Invoices" },
-        ];
-
-        const select = "$select=DocEntry,UserSign,DocTotal,DocTotalSys,DocDate,Cancelled,DocumentStatus";
-        const filter = `$filter=DocDate ge '${sinceIso}'`;
-
         const docResults = await Promise.all(
-          endpoints.map((e) =>
-            sapQueryAll(session, `${e.ep}?${select}&${filter}`, undefined, !forceRefresh)
-              .then((r) => ({ code: e.code, value: (r.data?.value as RawDoc[]) || [] }))
-              .catch((err) => {
-                console.warn(`Falha ao buscar ${e.ep}:`, err);
-                return { code: e.code, value: [] as RawDoc[] };
-              }),
-          ),
+          DOC_SOURCES.map((source) => loadSapDocs(session, source, sinceIso, useCache)),
         );
         if (signal?.aborted) return;
 
-        type RawDoc = {
-          DocEntry?: number;
-          UserSign?: number | string;
-          DocTotal?: number | string;
-          DocTotalSys?: number | string;
-          DocDate?: string;
-          Cancelled?: string;
-          DocumentStatus?: string;
-        };
-
-        // Agrega por (UserCode, DocType, Periodo)
         type Agg = {
+          userCode: string;
+          docType: string;
+          periodo: string;
           docsCriados: number;
           valorTotalBRL: number;
           docsCancelados: number;
         };
-        const agg = new Map<string, Agg & { userCode: string; docType: string; periodo: string }>();
 
-        for (const { code: docType, value } of docResults) {
-          for (const d of value) {
-            const userCode = d.UserSign !== undefined && d.UserSign !== null ? String(d.UserSign) : "";
-            if (!userCode) continue;
-            const periodo = (d.DocDate || "").slice(0, 7); // YYYY-MM
-            const k = `${userCode}|${docType}|${periodo}`;
+        const agg = new Map<string, Agg>();
+
+        for (const { source, rows: docs } of docResults) {
+          for (const d of docs) {
+            const userCode = d.UserSign !== undefined && d.UserSign !== null && d.UserSign !== "" ? String(d.UserSign) : "Sem usuário";
+            const periodo = normalizePeriod(d.DocDate);
+            const key = `${userCode}|${source.code}|${periodo}`;
             const cur =
-              agg.get(k) ??
-              { userCode, docType, periodo, docsCriados: 0, valorTotalBRL: 0, docsCancelados: 0 };
-            const cancelled = d.Cancelled === "tYES" || d.Cancelled === "Y";
+              agg.get(key) ??
+              { userCode, docType: source.code, periodo, docsCriados: 0, valorTotalBRL: 0, docsCancelados: 0 };
+
             cur.docsCriados += 1;
-            if (cancelled) cur.docsCancelados += 1;
-            const valor = toNum(d.DocTotalSys ?? d.DocTotal);
-            cur.valorTotalBRL += valor;
-            agg.set(k, cur);
+            cur.valorTotalBRL += toNum(d.DocTotal);
+            if (isCancelled(d.Cancelled)) cur.docsCancelados += 1;
+            agg.set(key, cur);
           }
         }
 
@@ -210,7 +254,7 @@ export function useUserProductivity() {
           const criados = r.docsCriados;
           const valor = r.valorTotalBRL;
           const cancelados = r.docsCancelados;
-          const edicoes = 0; // sem fonte ADOC via OData — fica 0 até view dedicada existir
+          const edicoes = 0;
           return {
             userCode: r.userCode,
             userName: info?.name || r.userCode,
