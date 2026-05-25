@@ -292,6 +292,33 @@ function ApprovalDetailModal({
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
+  const [downloadingName, setDownloadingName] = useState<string | null>(null);
+  const { session } = useSap();
+
+  const handleDownloadAttachment = async (name: string) => {
+    if (!doc || !doc.attachmentEntry || !session || session.erpType !== "sap") {
+      toast.error("Anexo indisponível");
+      return;
+    }
+    setDownloadingName(name);
+    try {
+      const { blob, filename } = await sapDownloadAttachment(session, doc.attachmentEntry, name);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Erro ao baixar anexo:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao baixar anexo");
+    } finally {
+      setDownloadingName(null);
+    }
+  };
+
 
   if (!doc) return null;
 
