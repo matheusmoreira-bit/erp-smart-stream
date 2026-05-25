@@ -279,6 +279,10 @@ export function useUserProductivity() {
         });
 
         setHanaDisabled(false);
+        const allDown = docResults.length > 0 && docResults.every((r) => r.rows.length === 0 && r.sapDown);
+        if (allDown && merged.length === 0) {
+          setError("SAP B1 Service Layer indisponível (HTTP 503). Tente novamente em alguns instantes.");
+        }
         setRows(merged);
       } catch (e) {
         if (signal?.aborted) return;
