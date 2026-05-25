@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.synapse-po-notify]
 verify_jwt = false
+
+[functions.external-approvals-api]
+verify_jwt = false
