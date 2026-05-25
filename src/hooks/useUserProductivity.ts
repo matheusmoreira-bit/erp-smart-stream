@@ -22,7 +22,6 @@ type RawSapDoc = {
 type ProductivityDocSource = {
   code: string;
   endpoint: string;
-  label: string;
 };
 
 export interface UserProductivityRow {
@@ -67,16 +66,20 @@ const toNum = (v: unknown): number => {
 };
 
 const DOC_SOURCES: ProductivityDocSource[] = [
-  { code: "PC", endpoint: "PurchaseOrders", label: "Pedido de Compra" },
-  { code: "PV", endpoint: "Orders", label: "Pedido de Venda" },
-  { code: "NFE", endpoint: "PurchaseInvoices", label: "NF Entrada" },
-  { code: "NFS", endpoint: "Invoices", label: "NF Saída" },
-  { code: "REQ", endpoint: "PurchaseRequests", label: "Requisição" },
-  { code: "COT", endpoint: "PurchaseQuotations", label: "Cotação" },
+  { code: "PC", endpoint: "PurchaseOrders" },
+  { code: "PV", endpoint: "Orders" },
+  { code: "NFE", endpoint: "PurchaseInvoices" },
+  { code: "NFS", endpoint: "Invoices" },
+  { code: "REQ", endpoint: "PurchaseRequests" },
+  { code: "COT", endpoint: "PurchaseQuotations" },
+  { code: "PAG", endpoint: "VendorPayments" },
+  { code: "REC", endpoint: "IncomingPayments" },
 ];
 
 const CORE_DOC_SELECT = "DocEntry,DocDate,UserSign,DocTotal";
 const DOC_SELECT_WITH_CANCEL = `${CORE_DOC_SELECT},Cancelled`;
+const USER_ONLY_DOC_SELECT = "DocEntry,DocDate,UserSign";
+const ABSOLUTE_MIN_DOC_SELECT = "DocEntry,DocDate";
 
 const asArray = <T,>(data: unknown): T[] => {
   if (Array.isArray(data)) return data as T[];
@@ -117,6 +120,8 @@ async function loadSapDocs(
   const attempts: Array<Record<string, string>> = [
     { ...baseParams, $select: DOC_SELECT_WITH_CANCEL },
     { ...baseParams, $select: CORE_DOC_SELECT },
+    { ...baseParams, $select: USER_ONLY_DOC_SELECT },
+    { ...baseParams, $select: ABSOLUTE_MIN_DOC_SELECT },
   ];
 
   for (const params of attempts) {
