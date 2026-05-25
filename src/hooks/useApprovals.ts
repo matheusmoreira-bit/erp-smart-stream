@@ -106,6 +106,7 @@ function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
     remarks: row.Observações || "",
     approvalModel: row["Modelo de aprovação"] || "",
     daysOpen: Number(row["Dias em aberto"] || 0),
+    attachmentEntry: Number(row["Id do anexo"] || 0),
     attachmentNames: row["Nome do(s) anexo(s)"] || "",
     documentLines: parseDocumentLines(row.DocumentLines),
   };
