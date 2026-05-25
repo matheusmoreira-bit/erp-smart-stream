@@ -134,6 +134,22 @@ async function loadSapDocs(
     }
   }
 
+  const recentAttempts = [DOC_SELECT_WITH_CANCEL, CORE_DOC_SELECT, USER_ONLY_DOC_SELECT, ABSOLUTE_MIN_DOC_SELECT];
+  for (const select of recentAttempts) {
+    try {
+      const res = await sapQuery(
+        session,
+        source.endpoint,
+        { $select: select, $orderby: "DocDate desc", $top: 100 },
+        useCache,
+      );
+      const rows = asArray<RawSapDoc>(res.data);
+      if (rows.length > 0) return { source, rows };
+    } catch (err) {
+      console.warn(`Fallback recente falhou para ${source.endpoint} com select ${select}:`, err);
+    }
+  }
+
   return { source, rows: [] };
 }
 
