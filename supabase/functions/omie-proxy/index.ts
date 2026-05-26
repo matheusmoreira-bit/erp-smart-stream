@@ -147,12 +147,9 @@ Deno.serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
-    if (e instanceof Error && e.message === "UNAUTHORIZED") {
-      return new Response(
-        JSON.stringify({ error: "Não autenticado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const authResp = authErrorResponse(e, corsHeaders);
+    if (authResp) return authResp;
+
     console.error("omie-proxy error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erro interno" }),
