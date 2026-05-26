@@ -16,13 +16,13 @@ Deno.serve(async (req) => {
   }
 
   try {
+    await requireUser(req);
+
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
 
-    // OMIE proxy handles its own auth via app_key/app_secret from system_credentials.
-    // No Supabase user auth required — credentials are validated per-company below.
-
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
 
     if (!action || typeof action !== "string") {
       return new Response(
