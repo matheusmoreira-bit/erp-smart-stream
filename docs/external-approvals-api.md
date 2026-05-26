@@ -21,6 +21,19 @@ POST https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/external-approvals-ap
 Toda comunicação é `POST` com `Content-Type: application/json`. O corpo
 informa qual operação executar via campo `op`.
 
+> ⚠️ **Importante — não use o domínio customizado**
+>
+> Use **sempre** a URL `https://ryxlofwbyhkqcvzavbwn.supabase.co/...` acima.
+>
+> O domínio `https://erp-flow.cactuscorporation.com` está protegido por
+> **Cloudflare Access** (SSO Google Workspace) e bloqueia chamadas
+> server-to-server, retornando uma página HTML de login que o cliente
+> interpreta como `HTTP 500 — Service Unavailable` (ou similar).
+>
+> A URL `*.supabase.co` aponta direto para a infra do Lovable Cloud,
+> não passa pelo Cloudflare e aceita a autenticação via `X-API-Key`
+> normalmente. Nenhum header extra (`CF-Access-*`) é necessário.
+
 ---
 
 ## 2. Autenticação
