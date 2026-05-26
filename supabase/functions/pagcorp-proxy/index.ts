@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireUser, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,20 +9,6 @@ const corsHeaders = {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-async function requireAuth(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new Error("UNAUTHORIZED");
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("UNAUTHORIZED");
-  return user;
-}
 
 function base64ToUint8Array(b64: string): Uint8Array {
   const binary = atob(b64);
