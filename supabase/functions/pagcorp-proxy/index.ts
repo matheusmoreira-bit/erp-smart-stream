@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireUser, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,20 +9,6 @@ const corsHeaders = {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-async function requireAuth(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new Error("UNAUTHORIZED");
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("UNAUTHORIZED");
-  return user;
-}
 
 function base64ToUint8Array(b64: string): Uint8Array {
   const binary = atob(b64);
@@ -218,8 +205,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authentication is handled by PagCorp's own API (client key + login).
-    // Supabase JWT auth is not required here.
+    await requireUser(req);
+
+
 
     const url = new URL(req.url);
     const startDate = url.searchParams.get("startDate") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
@@ -242,11 +230,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const authResp = authErrorResponse(error, corsHeaders);
+    if (authResp) return authResp;
+
     console.error("PagCorp proxy error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {

@@ -3,6 +3,8 @@
 // stored in `system_credentials` (system_name = 'sap'). Best-effort with a
 // per-company report.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -244,10 +246,19 @@ async function forEachCompany<T>(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  try {
+    await requireAdmin(req);
+  } catch (err) {
+    const r = authErrorResponse(err, corsHeaders);
+    if (r) return r;
+    throw err;
+  }
+
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
 
   let body: any;
   try {

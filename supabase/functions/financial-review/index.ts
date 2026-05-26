@@ -2,6 +2,8 @@
 // in SAP B1 (AR + AP) and exposes actions to link them to invoices, perform
 // internal reconciliation, or cancel the payment.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -449,10 +451,19 @@ async function listInvoicesWithAdvances(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  try {
+    await requireUser(req);
+  } catch (err) {
+    const r = authErrorResponse(err, corsHeaders);
+    if (r) return r;
+    throw err;
+  }
+
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
 
   let body: any;
   try {

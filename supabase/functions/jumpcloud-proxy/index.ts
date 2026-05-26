@@ -1,9 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
 
 async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>) {
   const { data, error } = await supabase
@@ -29,7 +31,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    await requireAdmin(req);
     const supabase = createClient(
+
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
@@ -123,7 +127,10 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    const authResp = authErrorResponse(error, corsHeaders);
+    if (authResp) return authResp;
     const message = error instanceof Error ? error.message : "Erro desconhecido";
+
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

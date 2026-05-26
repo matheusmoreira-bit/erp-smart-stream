@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { requireUser, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,25 +9,6 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-async function requireAuth(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new Error("UNAUTHORIZED");
-
-  const token = authHeader.replace("Bearer ", "");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-  const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
-
-  // Allow anon/publishable key access (for ERP login before Supabase user auth exists)
-  if (token === anonKey || token === publishableKey) return null;
-
-  const supabase = createClient(SUPABASE_URL, anonKey || publishableKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("UNAUTHORIZED");
-  return user;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -34,13 +16,13 @@ Deno.serve(async (req) => {
   }
 
   try {
+    await requireUser(req);
+
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
 
-    // OMIE proxy handles its own auth via app_key/app_secret from system_credentials.
-    // No Supabase user auth required — credentials are validated per-company below.
-
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
 
     if (!action || typeof action !== "string") {
       return new Response(
@@ -165,12 +147,9 @@ Deno.serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
-    if (e instanceof Error && e.message === "UNAUTHORIZED") {
-      return new Response(
-        JSON.stringify({ error: "Não autenticado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const authResp = authErrorResponse(e, corsHeaders);
+    if (authResp) return authResp;
+
     console.error("omie-proxy error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erro interno" }),

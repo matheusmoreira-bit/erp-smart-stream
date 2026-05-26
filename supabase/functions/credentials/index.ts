@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +19,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    await requireAdmin(req);
     const adminClient = getServiceClient();
+
 
     const url = new URL(req.url);
     const systemName = url.searchParams.get("system");
@@ -109,16 +112,9 @@ Deno.serve(async (req) => {
       status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (error instanceof Error && error.message === "FORBIDDEN") {
-      return new Response(JSON.stringify({ error: "Acesso negado — apenas administradores" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const authResp = authErrorResponse(error, corsHeaders);
+    if (authResp) return authResp;
+
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
