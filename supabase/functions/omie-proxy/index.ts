@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { requireUser, authErrorResponse, AuthError } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,25 +9,6 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-async function requireAuth(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new Error("UNAUTHORIZED");
-
-  const token = authHeader.replace("Bearer ", "");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-  const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
-
-  // Allow anon/publishable key access (for ERP login before Supabase user auth exists)
-  if (token === anonKey || token === publishableKey) return null;
-
-  const supabase = createClient(SUPABASE_URL, anonKey || publishableKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("UNAUTHORIZED");
-  return user;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
