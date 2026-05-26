@@ -28,11 +28,12 @@ export async function requireUser(req: Request) {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     anonKey || publishableKey,
+    { global: { headers: { Authorization: `Bearer ${token}` } } },
   );
 
-  const { data, error } = await supabase.auth.getClaims(token);
-  if (error || !data?.claims?.sub) throw new AuthError("Não autenticado", 401);
-  return { id: data.claims.sub as string, email: (data.claims.email as string) || null };
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) throw new AuthError("Não autenticado", 401);
+  return { id: data.user.id, email: data.user.email || null };
 }
 
 /**
