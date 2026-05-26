@@ -153,6 +153,26 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
   return DEFAULT_SAP_BASE_URL;
 }
 
+async function getConfiguredSapCompanyDb(companyDB: string): Promise<string> {
+  try {
+    const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data, error } = await sb
+      .from("system_credentials")
+      .select("credential_value")
+      .eq("company_db", companyDB)
+      .eq("system_name", "sap")
+      .eq("credential_key", "company_db")
+      .maybeSingle();
+
+    if (error) throw error;
+    const configured = data?.credential_value;
+    return typeof configured === "string" && configured.trim() ? configured.trim() : companyDB;
+  } catch (e) {
+    console.error("Failed to fetch configured SAP CompanyDB:", e);
+    return companyDB;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -182,13 +202,15 @@ Deno.serve(async (req) => {
         });
       }
 
+      const effectiveCompanyDB = await getConfiguredSapCompanyDb(companyDB || credentials.CompanyDB);
+
       const loginResp = await fetch(`${SAP_BASE_URL}/Login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           UserName: credentials.UserName,
           Password: credentials.Password,
-          CompanyDB: credentials.CompanyDB,
+          CompanyDB: effectiveCompanyDB,
         }),
       });
 
@@ -207,7 +229,7 @@ Deno.serve(async (req) => {
         const passwordLength = typeof credentials.Password === "string" ? credentials.Password.length : 0;
         const safePayload = {
           selectedCompany: companyDB || credentials.CompanyDB,
-          effectiveCompanyDB: credentials.CompanyDB,
+          effectiveCompanyDB,
           UserName: credentials.UserName,
           Password: passwordLength > 0 ? `***(${passwordLength} chars)` : "(vazio)",
           baseUrl: SAP_BASE_URL,
