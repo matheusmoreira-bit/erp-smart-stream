@@ -5,7 +5,8 @@ const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 /**
  * Fetch wrapper that automatically uses the user's JWT for Authorization.
- * Falls back to anon key if no session exists.
+ * Falls back to anon key for edge functions that intentionally validate
+ * their own non-Lovable auth context, such as the SAP session proxy.
  */
 export async function authFetch(
   path: string,
