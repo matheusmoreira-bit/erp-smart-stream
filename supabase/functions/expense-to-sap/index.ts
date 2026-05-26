@@ -108,6 +108,16 @@ async function uploadAttachmentsToSap(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  try {
+    await requireUser(req);
+  } catch (err) {
+    const r = authErrorResponse(err, corsHeaders);
+    if (r) return r;
+    throw err;
+  }
+
+
+
   // Track stage status across the whole request so we can persist progress
   // even when later stages fail. These are flushed on success and on error.
   let attachmentStatus: StageStatus = "not_applicable";
