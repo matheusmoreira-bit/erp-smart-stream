@@ -2,6 +2,8 @@
 // Endpoint: POST /functions/v1/expense-to-sap
 // Body: { expense_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
