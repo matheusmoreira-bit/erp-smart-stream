@@ -3,6 +3,8 @@
 // stored in `system_credentials` (system_name = 'sap'). Best-effort with a
 // per-company report.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
