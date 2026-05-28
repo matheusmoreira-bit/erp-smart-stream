@@ -1571,6 +1571,7 @@ export default function ApprovalsPage() {
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
         approverCCs={getCostCentersForEmail(selectedDoc?.approverEmail || "")}
+        formatCostCenter={formatCostCenter}
       />
 
       <DelegationDialog
