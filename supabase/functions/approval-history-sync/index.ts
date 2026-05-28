@@ -188,35 +188,98 @@ async function loadUsersIndex(
   return idx;
 }
 
+type DraftInfo = {
+  doc_num: number | null;
+  doc_total: number | null;
+  currency: string | null;
+  card_code: string | null;
+  card_name: string | null;
+  doc_date: string | null;
+};
+
+async function fetchDraftInfo(
+  creds: SapCreds,
+  sessionId: string,
+  routeId: string,
+  draftEntry: number,
+): Promise<DraftInfo | null> {
+  try {
+    const res = await fetch(
+      `${creds.service_layer_url}/Drafts(${draftEntry})?$select=DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate`,
+      {
+        method: "GET",
+        headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
+      },
+    );
+    if (!res.ok) return null;
+    const d: any = await res.json();
+    return {
+      doc_num: Number.isFinite(Number(d?.DocNum)) ? Number(d.DocNum) : null,
+      doc_total: Number.isFinite(Number(d?.DocTotal)) ? Number(d.DocTotal) : null,
+      currency: d?.DocCurrency || null,
+      card_code: d?.CardCode || null,
+      card_name: d?.CardName || null,
+      doc_date: d?.DocDate || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function combineDateTime(date: unknown, time: unknown): string | null {
+  if (!date) return null;
+  try {
+    const baseDate = new Date(String(date));
+    if (!Number.isFinite(baseDate.getTime())) return null;
+    if (time && typeof time === "string" && /^\d{1,2}:\d{2}/.test(time)) {
+      const [h, m] = time.split(":").map((v) => parseInt(v, 10));
+      baseDate.setUTCHours(h || 0, m || 0, 0, 0);
+    }
+    return baseDate.toISOString();
+  } catch {
+    return null;
+  }
+}
+
 function buildRowsFromRequest(
   req: any,
   company_db: string,
   users: Map<number, { code: string; name: string; email: string | null }>,
+  draftInfo: DraftInfo | null,
 ) {
-  const decisions: any[] = Array.isArray(req?.ApprovalRequestDecisions)
-    ? req.ApprovalRequestDecisions
-    : [];
-  const objectType = String(req?.ObjectType || "");
+  const lines: any[] = Array.isArray(req?.ApprovalRequestLines)
+    ? req.ApprovalRequestLines
+    : Array.isArray(req?.ApprovalRequestDecisions)
+      ? req.ApprovalRequestDecisions
+      : [];
+  const objectType = String(req?.ObjectType || req?.DraftType || "");
   const requester = users.get(Number(req?.OriginatorID));
-  const baseExternal = `${req?.Code ?? req?.DocEntry ?? req?.DraftEntry ?? ""}`;
+  const baseExternal = `${req?.Code ?? req?.DraftEntry ?? ""}`;
+  const docEntry = Number.isFinite(Number(req?.ObjectEntry))
+    ? Number(req.ObjectEntry)
+    : Number.isFinite(Number(req?.DraftEntry))
+      ? Number(req.DraftEntry)
+      : null;
 
-  // Se não houver decisões, ainda registramos a solicitação como pendente.
-  const items = decisions.length > 0 ? decisions : [null];
+  const items = lines.length > 0 ? lines : [null];
 
   return items.map((d: any, idx: number) => {
     const approver = d ? users.get(Number(d.UserID)) : undefined;
-    const stepRaw = d?.Step ?? d?.StageID ?? idx + 1;
+    const stepRaw = d?.StageCode ?? d?.Step ?? d?.StageID ?? idx + 1;
     const step = Number.isFinite(Number(stepRaw)) ? Number(stepRaw) : idx + 1;
     const decisionStatus = d
       ? DECISION_STATUS_MAP[String(d.Status)] || String(d.Status || "P")
-      : "P";
-    const decisionDate = d?.UpdateDate || req?.UpdateDate || null;
+      : DECISION_STATUS_MAP[String(req?.Status)] || "P";
+    const decisionDate =
+      combineDateTime(d?.UpdateDate, d?.UpdateTime) ||
+      combineDateTime(d?.CreationDate, d?.CreationTime) ||
+      combineDateTime(req?.CreationDate, req?.CreationTime);
 
     return {
       external_id: `${baseExternal}-${step}-${d?.UserID ?? "x"}`,
       company_db,
       decision: decisionStatus,
-      decision_date: decisionDate ? new Date(decisionDate).toISOString() : null,
+      decision_date: decisionDate,
       approver_code: approver?.code || (d?.UserID ? String(d.UserID) : null),
       approver_name: approver?.name || null,
       approver_email: approver?.email || null,
@@ -224,18 +287,36 @@ function buildRowsFromRequest(
       requester_name: requester?.name || null,
       doc_object_type: objectType || null,
       doc_type_name: OBJECT_CODE_TO_NAME[objectType] || (objectType ? `Documento (${objectType})` : null),
-      doc_entry: Number.isFinite(Number(req?.DocumentEntry)) ? Number(req.DocumentEntry) : null,
-      doc_num: null,
-      doc_total: null,
-      currency: null,
-      card_code: null,
-      card_name: null,
-      remarks: req?.RemarksFromOriginator || d?.Remarks || null,
-      stage_name: d?.StageID ? `Estágio ${d.StageID}` : null,
+      doc_entry: docEntry,
+      doc_num: draftInfo?.doc_num ?? null,
+      doc_total: draftInfo?.doc_total ?? null,
+      currency: draftInfo?.currency ?? null,
+      card_code: draftInfo?.card_code ?? null,
+      card_name: draftInfo?.card_name ?? null,
+      remarks: req?.Remarks || d?.Remarks || null,
+      stage_name: stepRaw ? `Estágio ${step}` : null,
       step,
-      raw: { request: req, decision: d },
+      raw: { request: req, decision: d, draft: draftInfo },
     };
   });
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 async function syncCompany(
