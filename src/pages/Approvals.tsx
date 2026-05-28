@@ -1000,13 +1000,7 @@ export default function ApprovalsPage() {
   const [dueFrom, setDueFrom] = useState<string>("");
   const [dueTo, setDueTo] = useState<string>("");
 
-  // Redirect to login if no session
-  if (!session) {
-    navigate("/");
-    return null;
-  }
-
-  const isSuperUser = session.isSuperUser;
+  const isSuperUser = session?.isSuperUser ?? false;
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
 
@@ -1024,6 +1018,12 @@ export default function ApprovalsPage() {
     [allApprovals],
   );
   const { formatCostCenter } = useCostCenterNames(allCostCenterCodes);
+
+  // Redirect to login if no session (after all hooks)
+  useEffect(() => {
+    if (!session) navigate("/");
+  }, [session, navigate]);
+  if (!session) return null;
 
   // Filter: by default show only approvals assigned to current user; toggle to view all
   const userApprovals = showAll
