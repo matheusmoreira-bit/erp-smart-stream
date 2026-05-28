@@ -262,37 +262,48 @@ async function fetchDocsBulk(
 ): Promise<Map<number, DraftInfo>> {
   const out = new Map<number, DraftInfo>();
   if (docEntries.length === 0) return out;
-  const batchSize = 40;
+  const batchSize = 20;
   for (let i = 0; i < docEntries.length; i += batchSize) {
     const batch = docEntries.slice(i, i + batchSize);
     const filter = batch.map((e) => `DocEntry eq ${e}`).join(" or ");
-    const url =
+    let url: string | null =
       `${creds.service_layer_url}/${collection}` +
       `?$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
-    try {
-      const res = await fetch(url, {
-        method: "GET",
-        headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
-      });
-      if (!res.ok) {
-        console.warn(`fetchDocsBulk ${collection} falhou:`, res.status, (await res.text()).slice(0, 200));
-        continue;
-      }
-      const body: any = await res.json();
-      for (const d of body?.value || []) {
-        const entry = Number(d?.DocEntry);
-        if (!Number.isFinite(entry)) continue;
-        out.set(entry, {
-          doc_num: Number.isFinite(Number(d?.DocNum)) ? Number(d.DocNum) : null,
-          doc_total: Number.isFinite(Number(d?.DocTotal)) ? Number(d.DocTotal) : null,
-          currency: d?.DocCurrency || null,
-          card_code: d?.CardCode || null,
-          card_name: d?.CardName || null,
-          doc_date: d?.DocDate || null,
+    let safety = 5;
+    while (url && safety-- > 0) {
+      try {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: {
+            Cookie: buildCookie(sessionId, routeId),
+            Accept: "application/json",
+            Prefer: "odata.maxpagesize=100",
+          },
         });
+        if (!res.ok) {
+          console.warn(`fetchDocsBulk ${collection} falhou:`, res.status, (await res.text()).slice(0, 200));
+          break;
+        }
+        const body: any = await res.json();
+        for (const d of body?.value || []) {
+          const entry = Number(d?.DocEntry);
+          if (!Number.isFinite(entry)) continue;
+          out.set(entry, {
+            doc_num: Number.isFinite(Number(d?.DocNum)) ? Number(d.DocNum) : null,
+            doc_total: Number.isFinite(Number(d?.DocTotal)) ? Number(d.DocTotal) : null,
+            currency: d?.DocCurrency || null,
+            card_code: d?.CardCode || null,
+            card_name: d?.CardName || null,
+            doc_date: d?.DocDate || null,
+          });
+        }
+        url = body?.["@odata.nextLink"]
+          ? `${creds.service_layer_url}/${body["@odata.nextLink"]}`
+          : null;
+      } catch (e) {
+        console.warn(`fetchDocsBulk ${collection} erro:`, e instanceof Error ? e.message : e);
+        break;
       }
-    } catch (e) {
-      console.warn(`fetchDocsBulk ${collection} erro:`, e instanceof Error ? e.message : e);
     }
   }
   return out;
