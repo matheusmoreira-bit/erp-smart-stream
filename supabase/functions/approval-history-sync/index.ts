@@ -1,23 +1,25 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-const EXTERNAL_API_URL =
-  "https://sap-b1-approval-hub-761741690592.us-west1.run.app/api/approval-history";
+/**
+ * approval-history-sync
+ * --------------------------------------------------------------
+ * Sincroniza o histórico de aprovações direto do SAP B1 Service Layer
+ * (endpoint /ApprovalRequests) para a tabela local public.approval_history.
+ *
+ * Cada decisão (linha de ApprovalRequestDecisions) vira uma linha em
+ * approval_history, identificada de forma única por (company_db, external_id).
+ *
+ * Roda para todas as empresas ativas que possuem credenciais SAP
+ * configuradas em system_credentials, ou para uma empresa específica
+ * quando o body informa { companyDb }.
+ */
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-class ExternalApiError extends Error {
-  status: number;
-
-  constructor(message: string, status = 502) {
-    super(message);
-    this.status = status;
-  }
 }
 
 const OBJECT_CODE_TO_NAME: Record<string, string> = {
@@ -34,86 +36,238 @@ const OBJECT_CODE_TO_NAME: Record<string, string> = {
   "540000006": "Pagamento Efetuado",
 };
 
-function pick<T = unknown>(obj: Record<string, any>, keys: string[]): T | undefined {
-  for (const k of keys) {
-    if (obj?.[k] !== undefined && obj?.[k] !== null && obj?.[k] !== "") return obj[k] as T;
-  }
-  return undefined;
+const DECISION_STATUS_MAP: Record<string, string> = {
+  asaApproved: "Y",
+  asaRejected: "N",
+  asaPending: "P",
+  asaNoDecision: "P",
+};
+
+interface SapCreds {
+  service_layer_url: string;
+  company_db: string;
+  username: string;
+  password: string;
 }
 
-function toNumber(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
-  return Number.isFinite(n) ? n : null;
+function normalizeSlUrl(url: string): string {
+  let u = url.replace(/\/+$/, "");
+  if (u.includes("/b1s/v1")) u = u.replace("/b1s/v1", "/b1s/v2");
+  else if (!u.includes("/b1s/v2")) u = `${u}/b1s/v2`;
+  return u;
 }
 
-function toInt(v: unknown): number | null {
-  const n = toNumber(v);
-  return n === null ? null : Math.trunc(n);
-}
-
-function toDate(v: unknown): string | null {
-  if (!v) return null;
-  const d = new Date(String(v));
-  return Number.isFinite(d.getTime()) ? d.toISOString() : null;
-}
-
-function normalizeDecision(v: unknown): string | null {
-  if (!v) return null;
-  const s = String(v).trim().toUpperCase();
-  if (s === "Y" || s === "APPROVED" || s === "APROVADO") return "Y";
-  if (s === "N" || s === "REJECTED" || s === "REJEITADO" || s === "NOT_APPROVED") return "N";
-  return s;
-}
-
-function normalizeRow(row: Record<string, any>) {
-  const company_db = String(
-    pick(row, ["dbName", "DbName", "db_name", "company_db", "CompanyDB"]) || "",
-  );
-  const external_id = String(
-    pick(row, [
-      "id",
-      "_id",
-      "uuid",
-      "audit_id",
-      "auditId",
-      "approval_id",
-      "approvalId",
-      "approval_request_id",
-      "approvalRequestId",
-    ]) ||
-      `${company_db}-${pick(row, ["DocEntry", "doc_entry"]) || ""}-${
-        pick(row, ["ApprovalRequestStep", "step"]) || ""
-      }-${pick(row, ["UpdateDate", "decision_date"]) || ""}`,
-  );
-
-  const doc_object_type = String(pick(row, ["ObjectType", "doc_object_type", "object_type"]) || "");
-  const doc_type_name = OBJECT_CODE_TO_NAME[doc_object_type] ||
-    String(pick(row, ["doc_type_name", "docTypeName"]) || (doc_object_type ? `Documento (${doc_object_type})` : ""));
-
+async function loadCompanyCreds(
+  supabase: ReturnType<typeof createClient>,
+  companyDb: string,
+): Promise<SapCreds | null> {
+  const { data, error } = await supabase
+    .from("system_credentials")
+    .select("credential_key,credential_value")
+    .eq("company_db", companyDb)
+    .eq("system_name", "sap");
+  if (error) throw new Error(error.message);
+  const map = new Map((data || []).map((r: any) => [r.credential_key, r.credential_value as string]));
+  const service_layer_url = map.get("service_layer_url");
+  const username = map.get("username");
+  const password = map.get("password");
+  const company_db = map.get("company_db") || companyDb;
+  if (!service_layer_url || !username || !password) return null;
   return {
-    external_id,
+    service_layer_url: normalizeSlUrl(service_layer_url),
     company_db,
-    decision: normalizeDecision(pick(row, ["Status", "decision", "status"])),
-    decision_date: toDate(pick(row, ["UpdateDate", "decision_date", "DecisionDate", "decided_at", "CreateDate"])),
-    approver_code: String(pick(row, ["approver_user_code", "approverCode", "approver_code", "UserCode"]) || "") || null,
-    approver_name: String(pick(row, ["approver_name", "approverName", "UserName"]) || "") || null,
-    approver_email: String(pick(row, ["approver_email", "approverEmail", "eMail", "email"]) || "") || null,
-    requester_code: String(pick(row, ["requester_user_code", "requesterCode", "originator_code"]) || "") || null,
-    requester_name: String(pick(row, ["requester_name", "requesterName", "OriginatorName"]) || "") || null,
-    doc_object_type: doc_object_type || null,
-    doc_type_name: doc_type_name || null,
-    doc_entry: toInt(pick(row, ["DocEntry", "doc_entry", "DraftEntry"])),
-    doc_num: toInt(pick(row, ["DocNum", "doc_num"])),
-    doc_total: toNumber(pick(row, ["DocTotal", "doc_total", "Total"])),
-    currency: String(pick(row, ["DocCurrency", "currency", "Currency"]) || "BRL"),
-    card_code: String(pick(row, ["CardCode", "card_code"]) || "") || null,
-    card_name: String(pick(row, ["CardName", "card_name"]) || "") || null,
-    remarks: String(pick(row, ["Remarks", "remarks", "RemarksFromOriginator"]) || "") || null,
-    stage_name: String(pick(row, ["StageName", "stage_name", "stage"]) || "") || null,
-    step: toInt(pick(row, ["ApprovalRequestStep", "step", "Step"])),
-    raw: row,
+    username,
+    password,
   };
+}
+
+async function sapLogin(creds: SapCreds): Promise<{ sessionId: string; routeId: string }> {
+  const res = await fetch(`${creds.service_layer_url}/Login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      UserName: creds.username,
+      Password: creds.password,
+      CompanyDB: creds.company_db,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`SAP Login falhou (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const setCookie = res.headers.get("set-cookie") || "";
+  const sessionMatch = setCookie.match(/B1SESSION=([^;]+)/);
+  const routeMatch = setCookie.match(/ROUTEID=([^;]+)/);
+  const body = await res.json().catch(() => ({} as any));
+  return {
+    sessionId: sessionMatch?.[1] || body.SessionId || "",
+    routeId: routeMatch?.[1] || "",
+  };
+}
+
+function buildCookie(sessionId: string, routeId: string) {
+  const parts = [`B1SESSION=${sessionId}`];
+  if (routeId) parts.push(`ROUTEID=${routeId}`);
+  return parts.join("; ");
+}
+
+async function fetchApprovalRequests(
+  creds: SapCreds,
+  sessionId: string,
+  routeId: string,
+): Promise<any[]> {
+  const all: any[] = [];
+  let url: string | null =
+    `${creds.service_layer_url}/ApprovalRequests?$orderby=UpdateDate desc&$top=200`;
+  let safety = 10; // máximo 2000 registros por sync por empresa
+  while (url && safety-- > 0) {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Cookie: buildCookie(sessionId, routeId),
+        Accept: "application/json",
+        Prefer: "odata.maxpagesize=200",
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`GET /ApprovalRequests falhou (${res.status}): ${text.slice(0, 300)}`);
+    }
+    const body: any = await res.json();
+    const items: any[] = Array.isArray(body?.value) ? body.value : [];
+    all.push(...items);
+    url = body?.["@odata.nextLink"]
+      ? `${creds.service_layer_url}/${body["@odata.nextLink"]}`
+      : null;
+  }
+  return all;
+}
+
+/**
+ * Cache leve de Users por sessão para resolver UserID -> UserCode/UserName/E-mail.
+ */
+async function loadUsersIndex(
+  creds: SapCreds,
+  sessionId: string,
+  routeId: string,
+): Promise<Map<number, { code: string; name: string; email: string | null }>> {
+  const idx = new Map<number, { code: string; name: string; email: string | null }>();
+  try {
+    let url: string | null =
+      `${creds.service_layer_url}/Users?$select=InternalKey,UserCode,UserName,eMail&$top=500`;
+    let safety = 6;
+    while (url && safety-- > 0) {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
+      });
+      if (!res.ok) break;
+      const body: any = await res.json();
+      for (const u of body?.value || []) {
+        const id = Number(u.InternalKey);
+        if (!Number.isFinite(id)) continue;
+        idx.set(id, {
+          code: String(u.UserCode || ""),
+          name: String(u.UserName || u.UserCode || ""),
+          email: u.eMail ? String(u.eMail) : null,
+        });
+      }
+      url = body?.["@odata.nextLink"]
+        ? `${creds.service_layer_url}/${body["@odata.nextLink"]}`
+        : null;
+    }
+  } catch (e) {
+    console.warn("loadUsersIndex falhou:", e instanceof Error ? e.message : e);
+  }
+  return idx;
+}
+
+function buildRowsFromRequest(
+  req: any,
+  company_db: string,
+  users: Map<number, { code: string; name: string; email: string | null }>,
+) {
+  const decisions: any[] = Array.isArray(req?.ApprovalRequestDecisions)
+    ? req.ApprovalRequestDecisions
+    : [];
+  const objectType = String(req?.ObjectType || "");
+  const requester = users.get(Number(req?.OriginatorID));
+  const baseExternal = `${req?.Code ?? req?.DocEntry ?? req?.DraftEntry ?? ""}`;
+
+  // Se não houver decisões, ainda registramos a solicitação como pendente.
+  const items = decisions.length > 0 ? decisions : [null];
+
+  return items.map((d: any, idx: number) => {
+    const approver = d ? users.get(Number(d.UserID)) : undefined;
+    const stepRaw = d?.Step ?? d?.StageID ?? idx + 1;
+    const step = Number.isFinite(Number(stepRaw)) ? Number(stepRaw) : idx + 1;
+    const decisionStatus = d
+      ? DECISION_STATUS_MAP[String(d.Status)] || String(d.Status || "P")
+      : "P";
+    const decisionDate = d?.UpdateDate || req?.UpdateDate || null;
+
+    return {
+      external_id: `${baseExternal}-${step}-${d?.UserID ?? "x"}`,
+      company_db,
+      decision: decisionStatus,
+      decision_date: decisionDate ? new Date(decisionDate).toISOString() : null,
+      approver_code: approver?.code || (d?.UserID ? String(d.UserID) : null),
+      approver_name: approver?.name || null,
+      approver_email: approver?.email || null,
+      requester_code: requester?.code || (req?.OriginatorID ? String(req.OriginatorID) : null),
+      requester_name: requester?.name || null,
+      doc_object_type: objectType || null,
+      doc_type_name: OBJECT_CODE_TO_NAME[objectType] || (objectType ? `Documento (${objectType})` : null),
+      doc_entry: Number.isFinite(Number(req?.DocumentEntry)) ? Number(req.DocumentEntry) : null,
+      doc_num: null,
+      doc_total: null,
+      currency: null,
+      card_code: null,
+      card_name: null,
+      remarks: req?.RemarksFromOriginator || d?.Remarks || null,
+      stage_name: d?.StageID ? `Estágio ${d.StageID}` : null,
+      step,
+      raw: { request: req, decision: d },
+    };
+  });
+}
+
+async function syncCompany(
+  supabase: ReturnType<typeof createClient>,
+  companyDb: string,
+): Promise<{ companyDb: string; received: number; upserted: number; error?: string }> {
+  try {
+    const creds = await loadCompanyCreds(supabase, companyDb);
+    if (!creds) {
+      return { companyDb, received: 0, upserted: 0, error: "Credenciais SAP não configuradas" };
+    }
+    const { sessionId, routeId } = await sapLogin(creds);
+    const [users, requests] = await Promise.all([
+      loadUsersIndex(creds, sessionId, routeId),
+      fetchApprovalRequests(creds, sessionId, routeId),
+    ]);
+
+    const rows = requests.flatMap((r) => buildRowsFromRequest(r, companyDb, users));
+
+    let upserted = 0;
+    const chunkSize = 500;
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const { error } = await supabase
+        .from("approval_history")
+        .upsert(chunk, { onConflict: "company_db,external_id" });
+      if (error) throw new Error(error.message);
+      upserted += chunk.length;
+    }
+    return { companyDb, received: requests.length, upserted };
+  } catch (e) {
+    return {
+      companyDb,
+      received: 0,
+      upserted: 0,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
 }
 
 Deno.serve(async (req) => {
@@ -127,78 +281,57 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const token = Deno.env.get("API_AUDIT_HISTORY_TOKEN");
-    if (!token) {
-      throw new Error("API_AUDIT_HISTORY_TOKEN não configurado");
-    }
-
+    let bodyIn: any = {};
+    try { bodyIn = await req.json(); } catch { /* sem body */ }
     const url = new URL(req.url);
-    const dbName = url.searchParams.get("dbName") || undefined;
-    const status = url.searchParams.get("status") || undefined;
+    const targetCompany = bodyIn?.companyDb || url.searchParams.get("companyDb") || null;
 
-    const apiUrl = new URL(EXTERNAL_API_URL);
-    if (dbName) apiUrl.searchParams.set("dbName", dbName);
-    if (status) apiUrl.searchParams.set("status", status);
-
-    const apiRes = await fetch(apiUrl.toString(), {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "X-API-Token": token,
-        Accept: "application/json",
-      },
-      redirect: "follow",
-    });
-
-    const ct = apiRes.headers.get("content-type") || "";
-    if (!apiRes.ok || !ct.includes("json")) {
-      const text = await apiRes.text();
-      console.error("approval-history-sync external API invalid response:", {
-        url: apiUrl.toString(),
-        status: apiRes.status,
-        contentType: ct,
-        body: text.slice(0, 500),
-      });
-      const message = !apiRes.ok
-        ? `API externa retornou ${apiRes.status}`
-        : "A API externa retornou HTML em vez de JSON. Verifique se a rota /api/approval-history está ativa no SAP Approval Hub.";
-      throw new ExternalApiError(message, 502);
-    }
-
-    const body = await apiRes.json();
-    const data: Record<string, any>[] = Array.isArray(body)
-      ? body
-      : Array.isArray(body?.data)
-        ? body.data
-        : Array.isArray(body?.history)
-          ? body.history
-          : [];
-
-    const rows = data
-      .map(normalizeRow)
-      .filter((r) => r.external_id && r.company_db);
-
-    let upserted = 0;
-    const chunkSize = 500;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
-      const { error } = await supabase
-        .from("approval_history")
-        .upsert(chunk, { onConflict: "company_db,external_id" });
+    let companies: string[];
+    if (targetCompany) {
+      companies = [targetCompany];
+    } else {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("company_db,is_active,erp_type")
+        .eq("is_active", true)
+        .eq("erp_type", "sap");
       if (error) throw new Error(error.message);
-      upserted += chunk.length;
+      companies = (data || []).map((c: any) => c.company_db);
     }
+
+    const perCompany: Awaited<ReturnType<typeof syncCompany>>[] = [];
+    let received = 0;
+    let upserted = 0;
+    const errors: string[] = [];
+    for (const db of companies) {
+      const r = await syncCompany(supabase, db);
+      perCompany.push(r);
+      received += r.received;
+      upserted += r.upserted;
+      if (r.error) errors.push(`${db}: ${r.error}`);
+    }
+
+    const message = errors.length
+      ? `Importados ${upserted} registros (${received} recebidos). ${errors.length} empresa(s) com erro: ${errors.join(" | ").slice(0, 500)}`
+      : `Importados ${upserted} registros (${received} recebidos) de ${companies.length} empresa(s).`;
 
     await supabase.from("approval_history_sync_state").upsert({
       id: 1,
       last_sync_at: new Date().toISOString(),
-      last_status: "success",
-      last_message: `Importados ${upserted} registros (recebidos ${data.length}).`,
+      last_status: errors.length && upserted === 0 ? "error" : (errors.length ? "partial" : "success"),
+      last_message: message,
       last_count: upserted,
       updated_at: new Date().toISOString(),
     });
 
-    return jsonResponse({ success: true, received: data.length, upserted });
+    return jsonResponse({
+      success: errors.length === 0 || upserted > 0,
+      received,
+      upserted,
+      companies: companies.length,
+      perCompany,
+      errors: errors.length ? errors : undefined,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase.from("approval_history_sync_state").upsert({
@@ -209,9 +342,6 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     });
     console.error("approval-history-sync error:", msg);
-    return jsonResponse(
-      { success: false, error: msg },
-      e instanceof ExternalApiError ? e.status : 500,
-    );
+    return jsonResponse({ success: false, error: msg }, 500);
   }
 });
