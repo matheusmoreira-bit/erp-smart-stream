@@ -2,7 +2,23 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const EXTERNAL_API_URL =
-  "https://sap-b1-approval-hub-761741690592.us-west1.run.app/api/external/approval-history";
+  "https://sap-b1-approval-hub-761741690592.us-west1.run.app/api/approval-history";
+
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+class ExternalApiError extends Error {
+  status: number;
+
+  constructor(message: string, status = 502) {
+    super(message);
+    this.status = status;
+  }
+}
 
 const OBJECT_CODE_TO_NAME: Record<string, string> = {
   "13": "Nota Fiscal de Saída",
@@ -134,15 +150,19 @@ Deno.serve(async (req) => {
       redirect: "follow",
     });
 
-    if (!apiRes.ok) {
-      const text = await apiRes.text();
-      throw new Error(`API externa retornou ${apiRes.status}: ${text.slice(0, 500)}`);
-    }
-
     const ct = apiRes.headers.get("content-type") || "";
-    if (!ct.includes("json")) {
+    if (!apiRes.ok || !ct.includes("json")) {
       const text = await apiRes.text();
-      throw new Error(`Resposta inesperada (${ct}): ${text.slice(0, 200)}`);
+      console.error("approval-history-sync external API invalid response:", {
+        url: apiUrl.toString(),
+        status: apiRes.status,
+        contentType: ct,
+        body: text.slice(0, 500),
+      });
+      const message = !apiRes.ok
+        ? `API externa retornou ${apiRes.status}`
+        : "A API externa retornou HTML em vez de JSON. Verifique se a rota /api/approval-history está ativa no SAP Approval Hub.";
+      throw new ExternalApiError(message, 502);
     }
 
     const body = await apiRes.json();
@@ -178,10 +198,7 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     });
 
-    return new Response(
-      JSON.stringify({ success: true, received: data.length, upserted }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ success: true, received: data.length, upserted });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase.from("approval_history_sync_state").upsert({
@@ -192,9 +209,9 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     });
     console.error("approval-history-sync error:", msg);
-    return new Response(JSON.stringify({ success: false, error: msg }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(
+      { success: false, error: msg },
+      e instanceof ExternalApiError ? e.status : 500,
+    );
   }
 });
