@@ -496,7 +496,7 @@ function ApprovalDetailModal({
                           }}
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-foreground font-medium truncate">{cc.code}</p>
+                          <p className="text-sm text-foreground font-medium truncate">{formatCostCenter(cc.code)}</p>
                           <p className="text-[11px] text-muted-foreground">
                             {cc.pct.toFixed(1)}% do documento
                           </p>
