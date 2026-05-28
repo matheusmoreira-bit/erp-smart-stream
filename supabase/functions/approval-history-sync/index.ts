@@ -197,33 +197,51 @@ type DraftInfo = {
   doc_date: string | null;
 };
 
-async function fetchDraftInfo(
+async function fetchDraftsBulk(
   creds: SapCreds,
   sessionId: string,
   routeId: string,
-  draftEntry: number,
-): Promise<DraftInfo | null> {
-  try {
-    const res = await fetch(
-      `${creds.service_layer_url}/Drafts(${draftEntry})?$select=DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate`,
-      {
+  draftEntries: number[],
+): Promise<Map<number, DraftInfo>> {
+  const out = new Map<number, DraftInfo>();
+  if (draftEntries.length === 0) return out;
+
+  // Service Layer aceita filtros longos, mas vamos quebrar em lotes de 50
+  // para manter URLs gerenciáveis. Uma única requisição por lote.
+  const batchSize = 50;
+  for (let i = 0; i < draftEntries.length; i += batchSize) {
+    const batch = draftEntries.slice(i, i + batchSize);
+    const filter = batch.map((e) => `DocEntry eq ${e}`).join(" or ");
+    const url =
+      `${creds.service_layer_url}/Drafts?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate` +
+      `&$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
+    try {
+      const res = await fetch(url, {
         method: "GET",
         headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
-      },
-    );
-    if (!res.ok) return null;
-    const d: any = await res.json();
-    return {
-      doc_num: Number.isFinite(Number(d?.DocNum)) ? Number(d.DocNum) : null,
-      doc_total: Number.isFinite(Number(d?.DocTotal)) ? Number(d.DocTotal) : null,
-      currency: d?.DocCurrency || null,
-      card_code: d?.CardCode || null,
-      card_name: d?.CardName || null,
-      doc_date: d?.DocDate || null,
-    };
-  } catch {
-    return null;
+      });
+      if (!res.ok) {
+        console.warn("fetchDraftsBulk batch falhou:", res.status, (await res.text()).slice(0, 200));
+        continue;
+      }
+      const body: any = await res.json();
+      for (const d of body?.value || []) {
+        const entry = Number(d?.DocEntry);
+        if (!Number.isFinite(entry)) continue;
+        out.set(entry, {
+          doc_num: Number.isFinite(Number(d?.DocNum)) ? Number(d.DocNum) : null,
+          doc_total: Number.isFinite(Number(d?.DocTotal)) ? Number(d.DocTotal) : null,
+          currency: d?.DocCurrency || null,
+          card_code: d?.CardCode || null,
+          card_name: d?.CardName || null,
+          doc_date: d?.DocDate || null,
+        });
+      }
+    } catch (e) {
+      console.warn("fetchDraftsBulk erro:", e instanceof Error ? e.message : e);
+    }
   }
+  return out;
 }
 
 function combineDateTime(date: unknown, time: unknown): string | null {
