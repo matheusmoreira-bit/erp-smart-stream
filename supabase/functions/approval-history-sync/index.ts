@@ -124,8 +124,8 @@ async function fetchApprovalRequests(
 ): Promise<any[]> {
   const all: any[] = [];
   let url: string | null =
-    `${creds.service_layer_url}/ApprovalRequests?$orderby=Code desc&$top=200`;
-  let safety = 10; // máximo 2000 registros por sync por empresa
+    `${creds.service_layer_url}/ApprovalRequests?$orderby=Code desc&$top=100`;
+  let safety = 1; // limita a 100 registros mais recentes por sync (performance)
   while (url && safety-- > 0) {
     const res = await fetch(url, {
       method: "GET",
