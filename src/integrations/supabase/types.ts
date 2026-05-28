@@ -165,6 +165,36 @@ export type Database = {
         }
         Relationships: []
       }
+      approver_cost_centers: {
+        Row: {
+          company_db: string
+          cost_center: string
+          cost_center_name: string | null
+          created_at: string
+          id: string
+          sap_email: string
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          cost_center: string
+          cost_center_name?: string | null
+          created_at?: string
+          id?: string
+          sap_email: string
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          cost_center?: string
+          cost_center_name?: string | null
+          created_at?: string
+          id?: string
+          sap_email?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string

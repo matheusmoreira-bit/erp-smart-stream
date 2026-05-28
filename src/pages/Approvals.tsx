@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Clock,
@@ -35,6 +35,10 @@ import { useSapUsers } from "@/hooks/useSapUsers";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Split } from "lucide-react";
+import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
+import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import {
   Dialog,
@@ -78,8 +82,27 @@ function isOverdue(dueDate: string): boolean {
   return new Date(dueDate) < new Date();
 }
 
-function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void }) {
+function ApprovalCard({
+  doc,
+  onOpen,
+  approverCCs,
+}: {
+  doc: ApprovalDoc;
+  onOpen: () => void;
+  approverCCs: Set<string>;
+}) {
   const overdue = isOverdue(doc.dueDate);
+  const { show: showRateio, info } = shouldShowRateio(doc);
+
+  // Centros de custo mapeados que aparecem neste documento
+  const matchedCCs = showRateio
+    ? info.byCC.filter((cc) => approverCCs.has(cc.code))
+    : [];
+  const approverShare = matchedCCs.reduce((s, cc) => s + cc.amount, 0);
+  const hasAutoShare = matchedCCs.length > 0;
+
+  // Centro de custo "principal" para exibir no card (igual ao print)
+  const primaryCC = hasAutoShare ? matchedCCs[0] : showRateio ? info.byCC[0] : null;
 
   return (
     <motion.div
@@ -110,6 +133,16 @@ function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void })
           <Building2 className="w-3.5 h-3.5 text-primary/70" />
           <span className="truncate">{doc.cardName}</span>
         </div>
+        {primaryCC && (
+          <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+            <Split className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">C. Custo</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 rounded-full px-1.5 py-0.5 shrink-0">
+              Rateado
+            </span>
+            <span className="text-foreground font-medium truncate">{primaryCC.code}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="w-3.5 h-3.5 text-primary/70" />
           <span>Aprovador: <span className="text-foreground font-medium">{doc.currentApprover}</span></span>
@@ -128,6 +161,14 @@ function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void })
             {formatDate(doc.dueDate)}
           </div>
         </div>
+        {hasAutoShare && approverShare > 0 && approverShare < info.total && (
+          <div className="mt-1 pt-2 border-t border-border/50 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Sob sua alçada</span>
+            <span className="text-sm font-bold font-mono text-emerald-600">
+              {formatCurrency(approverShare, doc.currency)}
+            </span>
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -280,6 +321,7 @@ function ApprovalDetailModal({
   isActioning,
   isSuperUser,
   currentUserName,
+  approverCCs,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -289,11 +331,26 @@ function ApprovalDetailModal({
   isActioning: boolean;
   isSuperUser: boolean;
   currentUserName: string;
+  approverCCs: Set<string>;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
   const { session } = useSap();
+
+  // Rateio — sempre derivado do doc atual
+  const rateio = doc ? shouldShowRateio(doc) : { show: false, info: { isSplit: false, byCC: [], total: 0 } as RateioInfo };
+  const [selectedCCs, setSelectedCCs] = useState<Set<string>>(new Set());
+
+  // Sempre que troca de documento, pré-seleciona CCs mapeados (ou nenhum se não houver mapping)
+  useEffect(() => {
+    if (!doc) return;
+    const preselected = rateio.info.byCC
+      .map((cc) => cc.code)
+      .filter((code) => approverCCs.has(code));
+    setSelectedCCs(new Set(preselected));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc?.approvalRequestId]);
 
   const handleDownloadAttachment = async (name: string) => {
     if (!doc || !doc.attachmentEntry || !session || session.erpType !== "sap") {
@@ -401,6 +458,59 @@ function ApprovalDetailModal({
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Observações</p>
                 <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{doc.remarks}</p>
+              </div>
+            )}
+
+            {/* Painel de Rateio entre Centros de Custo */}
+            {rateio.show && (
+              <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Split className="w-4 h-4 text-emerald-500" />
+                  <h4 className="text-sm font-semibold text-foreground">Documento Rateado entre Centros de Custo</h4>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Assinale os centros de custo que correspondem à sua alçada de aprovação para calcular o valor do rateio em aprovação.
+                </p>
+                <div className="space-y-1.5">
+                  {rateio.info.byCC.map((cc) => {
+                    const checked = selectedCCs.has(cc.code);
+                    return (
+                      <label
+                        key={cc.code}
+                        className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-background/40 hover:bg-background/70 cursor-pointer transition-colors"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            setSelectedCCs((prev) => {
+                              const next = new Set(prev);
+                              if (v) next.add(cc.code);
+                              else next.delete(cc.code);
+                              return next;
+                            });
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-foreground font-medium truncate">{cc.code}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {cc.pct.toFixed(1)}% do documento
+                          </p>
+                        </div>
+                        <span className="text-sm font-mono font-semibold text-foreground">
+                          {formatCurrency(cc.amount, doc.currency)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Sua alçada de aprovação para este documento
+                  </span>
+                  <span className="text-lg font-bold font-mono text-emerald-600">
+                    {formatCurrency(sumSelectedShare(rateio.info, selectedCCs), doc.currency)}
+                  </span>
+                </div>
               </div>
             )}
 
@@ -893,6 +1003,7 @@ export default function ApprovalsPage() {
 
   const isSuperUser = session.isSuperUser;
   const companyLabel = getLabel(session?.companyDB || "");
+  const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
 
   // Merge SAP approvals with internal pending expenses
   const internalPending = (expenses || [])
@@ -1384,7 +1495,7 @@ export default function ApprovalsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((doc, i) => (
               <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <ApprovalCard doc={doc} onOpen={() => setSelectedDoc(doc)} />
+                <ApprovalCard doc={doc} onOpen={() => setSelectedDoc(doc)} approverCCs={getCostCentersForEmail(doc.approverEmail)} />
               </motion.div>
             ))}
           </div>
@@ -1455,6 +1566,7 @@ export default function ApprovalsPage() {
         isActioning={isActioning}
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
+        approverCCs={getCostCentersForEmail(selectedDoc?.approverEmail || "")}
       />
 
       <DelegationDialog
