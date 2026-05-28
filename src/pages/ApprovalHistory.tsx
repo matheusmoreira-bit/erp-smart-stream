@@ -34,10 +34,7 @@ export default function ApprovalHistory() {
   const [scope, setScope] = useState<"mine" | "all">("mine");
 
   const myKeys = useMemo(() => {
-    const list = [
-      (session?.userName || "").toLowerCase(),
-      (session?.email || "").toLowerCase(),
-    ].filter(Boolean);
+    const list = [(session?.userName || "").toLowerCase()].filter(Boolean);
     return new Set(list);
   }, [session]);
 
