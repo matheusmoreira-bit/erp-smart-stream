@@ -160,12 +160,16 @@ async function loadUsersIndex(
   const idx = new Map<number, { code: string; name: string; email: string | null }>();
   try {
     let url: string | null =
-      `${creds.service_layer_url}/Users?$select=InternalKey,UserCode,UserName,eMail&$top=500`;
-    let safety = 6;
+      `${creds.service_layer_url}/Users?$select=InternalKey,UserCode,UserName,eMail&$top=1000`;
+    let safety = 30;
     while (url && safety-- > 0) {
       const res = await fetch(url, {
         method: "GET",
-        headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
+        headers: {
+          Cookie: buildCookie(sessionId, routeId),
+          Accept: "application/json",
+          Prefer: "odata.maxpagesize=1000",
+        },
       });
       if (!res.ok) break;
       const body: any = await res.json();
@@ -186,6 +190,45 @@ async function loadUsersIndex(
     console.warn("loadUsersIndex falhou:", e instanceof Error ? e.message : e);
   }
   return idx;
+}
+
+async function fetchUsersByIds(
+  creds: SapCreds,
+  sessionId: string,
+  routeId: string,
+  ids: number[],
+  idx: Map<number, { code: string; name: string; email: string | null }>,
+): Promise<void> {
+  const missing = Array.from(new Set(ids.filter((id) => Number.isFinite(id) && id > 0 && !idx.has(id))));
+  if (missing.length === 0) return;
+  const batchSize = 25;
+  for (let i = 0; i < missing.length; i += batchSize) {
+    const batch = missing.slice(i, i + batchSize);
+    const filter = batch.map((id) => `InternalKey eq ${id}`).join(" or ");
+    const url = `${creds.service_layer_url}/Users?$select=InternalKey,UserCode,UserName,eMail&$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
+      });
+      if (!res.ok) {
+        console.warn("fetchUsersByIds falhou:", res.status, (await res.text()).slice(0, 200));
+        continue;
+      }
+      const body: any = await res.json();
+      for (const u of body?.value || []) {
+        const id = Number(u.InternalKey);
+        if (!Number.isFinite(id)) continue;
+        idx.set(id, {
+          code: String(u.UserCode || ""),
+          name: String(u.UserName || u.UserCode || ""),
+          email: u.eMail ? String(u.eMail) : null,
+        });
+      }
+    } catch (e) {
+      console.warn("fetchUsersByIds erro:", e instanceof Error ? e.message : e);
+    }
+  }
 }
 
 type DraftInfo = {
@@ -219,37 +262,48 @@ async function fetchDocsBulk(
 ): Promise<Map<number, DraftInfo>> {
   const out = new Map<number, DraftInfo>();
   if (docEntries.length === 0) return out;
-  const batchSize = 40;
+  const batchSize = 20;
   for (let i = 0; i < docEntries.length; i += batchSize) {
     const batch = docEntries.slice(i, i + batchSize);
     const filter = batch.map((e) => `DocEntry eq ${e}`).join(" or ");
-    const url =
-      `${creds.service_layer_url}/${collection}?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate` +
-      `&$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
-    try {
-      const res = await fetch(url, {
-        method: "GET",
-        headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
-      });
-      if (!res.ok) {
-        console.warn(`fetchDocsBulk ${collection} falhou:`, res.status, (await res.text()).slice(0, 200));
-        continue;
-      }
-      const body: any = await res.json();
-      for (const d of body?.value || []) {
-        const entry = Number(d?.DocEntry);
-        if (!Number.isFinite(entry)) continue;
-        out.set(entry, {
-          doc_num: Number.isFinite(Number(d?.DocNum)) ? Number(d.DocNum) : null,
-          doc_total: Number.isFinite(Number(d?.DocTotal)) ? Number(d.DocTotal) : null,
-          currency: d?.DocCurrency || null,
-          card_code: d?.CardCode || null,
-          card_name: d?.CardName || null,
-          doc_date: d?.DocDate || null,
+    let url: string | null =
+      `${creds.service_layer_url}/${collection}` +
+      `?$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
+    let safety = 5;
+    while (url && safety-- > 0) {
+      try {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: {
+            Cookie: buildCookie(sessionId, routeId),
+            Accept: "application/json",
+            Prefer: "odata.maxpagesize=100",
+          },
         });
+        if (!res.ok) {
+          console.warn(`fetchDocsBulk ${collection} falhou:`, res.status, (await res.text()).slice(0, 200));
+          break;
+        }
+        const body: any = await res.json();
+        for (const d of body?.value || []) {
+          const entry = Number(d?.DocEntry);
+          if (!Number.isFinite(entry)) continue;
+          out.set(entry, {
+            doc_num: Number.isFinite(Number(d?.DocNum)) ? Number(d.DocNum) : null,
+            doc_total: Number.isFinite(Number(d?.DocTotal)) ? Number(d.DocTotal) : null,
+            currency: d?.DocCurrency || null,
+            card_code: d?.CardCode || null,
+            card_name: d?.CardName || null,
+            doc_date: d?.DocDate || null,
+          });
+        }
+        url = body?.["@odata.nextLink"]
+          ? `${creds.service_layer_url}/${body["@odata.nextLink"]}`
+          : null;
+      } catch (e) {
+        console.warn(`fetchDocsBulk ${collection} erro:`, e instanceof Error ? e.message : e);
+        break;
       }
-    } catch (e) {
-      console.warn(`fetchDocsBulk ${collection} erro:`, e instanceof Error ? e.message : e);
     }
   }
   return out;
@@ -393,9 +447,48 @@ async function syncCompany(
       }
     }
 
+    // Fallback: para requests cujo ObjectEntry não retornou no documento final
+    // (ex.: PO cancelado/excluído), tenta enriquecer via Drafts pelo DraftEntry.
+    const draftFallbackEntries: number[] = [];
+    const draftFallbackByCode = new Map<string | number, number>();
+    for (const r of requests) {
+      const key = docKeyByRequestCode.get(r?.Code);
+      if (!key) continue;
+      if (key.collection === "Drafts") continue;
+      if (docInfoByKey.has(`${key.collection}:${key.entry}`)) continue;
+      const draftEntry = Number(r?.DraftEntry);
+      if (!Number.isFinite(draftEntry) || draftEntry <= 0) continue;
+      draftFallbackEntries.push(draftEntry);
+      draftFallbackByCode.set(r?.Code, draftEntry);
+    }
+    if (draftFallbackEntries.length > 0) {
+      const draftMap = await fetchDocsBulk(creds, sessionId, routeId, "Drafts", draftFallbackEntries);
+      for (const [entry, info] of draftMap.entries()) {
+        docInfoByKey.set(`Drafts:${entry}`, info);
+      }
+    }
+
+
+    // Busca sob demanda os usuários (originador/aprovador) ausentes do cache inicial
+    const neededUserIds: number[] = [];
+    for (const r of requests) {
+      const oid = Number(r?.OriginatorID);
+      if (Number.isFinite(oid)) neededUserIds.push(oid);
+      const lines = Array.isArray(r?.ApprovalRequestLines) ? r.ApprovalRequestLines : [];
+      for (const l of lines) {
+        const uid = Number(l?.UserID);
+        if (Number.isFinite(uid)) neededUserIds.push(uid);
+      }
+    }
+    await fetchUsersByIds(creds, sessionId, routeId, neededUserIds, users);
+
     const rows = requests.flatMap((r) => {
       const key = docKeyByRequestCode.get(r?.Code);
-      const info = key ? docInfoByKey.get(`${key.collection}:${key.entry}`) ?? null : null;
+      let info = key ? docInfoByKey.get(`${key.collection}:${key.entry}`) ?? null : null;
+      if (!info) {
+        const draftEntry = draftFallbackByCode.get(r?.Code);
+        if (draftEntry) info = docInfoByKey.get(`Drafts:${draftEntry}`) ?? null;
+      }
       return buildRowsFromRequest(r, companyDb, users, info);
     });
 
