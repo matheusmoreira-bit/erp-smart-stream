@@ -447,6 +447,28 @@ async function syncCompany(
       }
     }
 
+    // Fallback: para requests cujo ObjectEntry não retornou no documento final
+    // (ex.: PO cancelado/excluído), tenta enriquecer via Drafts pelo DraftEntry.
+    const draftFallbackEntries: number[] = [];
+    const draftFallbackByCode = new Map<string | number, number>();
+    for (const r of requests) {
+      const key = docKeyByRequestCode.get(r?.Code);
+      if (!key) continue;
+      if (key.collection === "Drafts") continue;
+      if (docInfoByKey.has(`${key.collection}:${key.entry}`)) continue;
+      const draftEntry = Number(r?.DraftEntry);
+      if (!Number.isFinite(draftEntry) || draftEntry <= 0) continue;
+      draftFallbackEntries.push(draftEntry);
+      draftFallbackByCode.set(r?.Code, draftEntry);
+    }
+    if (draftFallbackEntries.length > 0) {
+      const draftMap = await fetchDocsBulk(creds, sessionId, routeId, "Drafts", draftFallbackEntries);
+      for (const [entry, info] of draftMap.entries()) {
+        docInfoByKey.set(`Drafts:${entry}`, info);
+      }
+    }
+
+
     // Busca sob demanda os usuários (originador/aprovador) ausentes do cache inicial
     const neededUserIds: number[] = [];
     for (const r of requests) {
