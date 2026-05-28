@@ -325,6 +325,7 @@ function ApprovalDetailModal({
   isSuperUser,
   currentUserName,
   approverCCs,
+  formatCostCenter,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -335,6 +336,7 @@ function ApprovalDetailModal({
   isSuperUser: boolean;
   currentUserName: string;
   approverCCs: Set<string>;
+  formatCostCenter: (code?: string | null) => string;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
