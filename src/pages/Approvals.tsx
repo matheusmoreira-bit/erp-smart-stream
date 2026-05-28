@@ -82,8 +82,27 @@ function isOverdue(dueDate: string): boolean {
   return new Date(dueDate) < new Date();
 }
 
-function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void }) {
+function ApprovalCard({
+  doc,
+  onOpen,
+  approverCCs,
+}: {
+  doc: ApprovalDoc;
+  onOpen: () => void;
+  approverCCs: Set<string>;
+}) {
   const overdue = isOverdue(doc.dueDate);
+  const { show: showRateio, info } = shouldShowRateio(doc);
+
+  // Centros de custo mapeados que aparecem neste documento
+  const matchedCCs = showRateio
+    ? info.byCC.filter((cc) => approverCCs.has(cc.code))
+    : [];
+  const approverShare = matchedCCs.reduce((s, cc) => s + cc.amount, 0);
+  const hasAutoShare = matchedCCs.length > 0;
+
+  // Centro de custo "principal" para exibir no card (igual ao print)
+  const primaryCC = hasAutoShare ? matchedCCs[0] : showRateio ? info.byCC[0] : null;
 
   return (
     <motion.div
@@ -114,6 +133,16 @@ function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void })
           <Building2 className="w-3.5 h-3.5 text-primary/70" />
           <span className="truncate">{doc.cardName}</span>
         </div>
+        {primaryCC && (
+          <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+            <Split className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">C. Custo</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 rounded-full px-1.5 py-0.5 shrink-0">
+              Rateado
+            </span>
+            <span className="text-foreground font-medium truncate">{primaryCC.code}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="w-3.5 h-3.5 text-primary/70" />
           <span>Aprovador: <span className="text-foreground font-medium">{doc.currentApprover}</span></span>
@@ -132,6 +161,14 @@ function ApprovalCard({ doc, onOpen }: { doc: ApprovalDoc; onOpen: () => void })
             {formatDate(doc.dueDate)}
           </div>
         </div>
+        {hasAutoShare && approverShare > 0 && approverShare < info.total && (
+          <div className="mt-1 pt-2 border-t border-border/50 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Sob sua alçada</span>
+            <span className="text-sm font-bold font-mono text-emerald-600">
+              {formatCurrency(approverShare, doc.currency)}
+            </span>
+          </div>
+        )}
       </div>
     </motion.div>
   );
