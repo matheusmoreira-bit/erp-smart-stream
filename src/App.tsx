@@ -8,6 +8,7 @@ import { SapProvider } from "@/contexts/SapContext";
 import Index from "./pages/Index.tsx";
 import AnalyticsPage from "./pages/Analytics.tsx";
 import Approvals from "./pages/Approvals.tsx";
+import ApprovalHistory from "./pages/ApprovalHistory.tsx";
 import Expenses from "./pages/Expenses.tsx";
 import Sales from "./pages/Sales.tsx";
 import ApprovalRules from "./pages/ApprovalRules.tsx";
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/approvals" element={<Approvals />} />
+              <Route path="/approvals/history" element={<ApprovalHistory />} />
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/sales" element={<Sales />} />
               <Route path="/approval-rules" element={<ApprovalRules />} />

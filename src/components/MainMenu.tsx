@@ -5,6 +5,7 @@ import {
   BarChart3,
   ShoppingCart,
   ClipboardCheck,
+  History,
   Activity,
   ArrowRight,
   Shield,
@@ -72,6 +73,15 @@ const modules: Record<string, ModuleCard> = {
     color: "text-warning",
     bgGlow: "from-warning/20 to-warning/5",
     moduleKey: "approvals",
+  },
+  approval_history: {
+    title: "Histórico de Aprovações",
+    description: "Aprovações já decididas em todas as empresas, sincronizadas com o SAP Approval Hub.",
+    icon: History,
+    path: "/approvals/history",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    moduleKey: "approval_history",
   },
   approval_rules: {
     title: "Regras de Aprovação",
@@ -178,7 +188,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
   [
     {
       title: "Geral",
-      keys: ["analytics", "expenses", "sales", "approvals", "suppliers"],
+      keys: ["analytics", "expenses", "sales", "approvals", "approval_history", "suppliers"],
     },
     {
       title: "Financeiro / Contábil",

@@ -28,6 +28,7 @@ export const ALL_MODULES = [
   { key: "expenses", label: "Compras" },
   { key: "sales", label: "Vendas" },
   { key: "approvals", label: "Aprovações" },
+  { key: "approval_history", label: "Histórico de Aprovações" },
   { key: "approval_rules", label: "Regras de Aprovação" },
   { key: "pagcorp", label: "PagCorp" },
   { key: "users", label: "Usuários" },
