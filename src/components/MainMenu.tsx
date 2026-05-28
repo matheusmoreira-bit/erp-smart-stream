@@ -163,6 +163,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "audit_log",
   },
+  notifications: {
+    title: "Notificações",
+    description: "Central de notificações, preferências, auditoria e histórico de envios (WhatsApp, e-mail).",
+    icon: Bell,
+    path: "/notifications",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    moduleKey: "notifications",
+  },
 };
 
 const moduleGroups: { title: string; keys: string[] }[] = (
