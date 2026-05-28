@@ -186,7 +186,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Admin",
-      keys: ["approval_rules", "users", "synapse", "integration_history", "credentials", "audit_log"],
+      keys: ["approval_rules", "users", "synapse", "integration_history", "credentials", "audit_log", "notifications"],
     },
   ] as { title: string; keys: string[] }[]
 ).map((g) => ({
