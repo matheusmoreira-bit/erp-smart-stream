@@ -160,12 +160,16 @@ async function loadUsersIndex(
   const idx = new Map<number, { code: string; name: string; email: string | null }>();
   try {
     let url: string | null =
-      `${creds.service_layer_url}/Users?$select=InternalKey,UserCode,UserName,eMail&$top=500`;
-    let safety = 6;
+      `${creds.service_layer_url}/Users?$select=InternalKey,UserCode,UserName,eMail&$top=1000`;
+    let safety = 30;
     while (url && safety-- > 0) {
       const res = await fetch(url, {
         method: "GET",
-        headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
+        headers: {
+          Cookie: buildCookie(sessionId, routeId),
+          Accept: "application/json",
+          Prefer: "odata.maxpagesize=1000",
+        },
       });
       if (!res.ok) break;
       const body: any = await res.json();
@@ -186,6 +190,45 @@ async function loadUsersIndex(
     console.warn("loadUsersIndex falhou:", e instanceof Error ? e.message : e);
   }
   return idx;
+}
+
+async function fetchUsersByIds(
+  creds: SapCreds,
+  sessionId: string,
+  routeId: string,
+  ids: number[],
+  idx: Map<number, { code: string; name: string; email: string | null }>,
+): Promise<void> {
+  const missing = Array.from(new Set(ids.filter((id) => Number.isFinite(id) && id > 0 && !idx.has(id))));
+  if (missing.length === 0) return;
+  const batchSize = 25;
+  for (let i = 0; i < missing.length; i += batchSize) {
+    const batch = missing.slice(i, i + batchSize);
+    const filter = batch.map((id) => `InternalKey eq ${id}`).join(" or ");
+    const url = `${creds.service_layer_url}/Users?$select=InternalKey,UserCode,UserName,eMail&$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
+      });
+      if (!res.ok) {
+        console.warn("fetchUsersByIds falhou:", res.status, (await res.text()).slice(0, 200));
+        continue;
+      }
+      const body: any = await res.json();
+      for (const u of body?.value || []) {
+        const id = Number(u.InternalKey);
+        if (!Number.isFinite(id)) continue;
+        idx.set(id, {
+          code: String(u.UserCode || ""),
+          name: String(u.UserName || u.UserCode || ""),
+          email: u.eMail ? String(u.eMail) : null,
+        });
+      }
+    } catch (e) {
+      console.warn("fetchUsersByIds erro:", e instanceof Error ? e.message : e);
+    }
+  }
 }
 
 type DraftInfo = {
