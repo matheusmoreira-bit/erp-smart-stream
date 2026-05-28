@@ -35,6 +35,10 @@ import { useSapUsers } from "@/hooks/useSapUsers";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Split } from "lucide-react";
+import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
+import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import {
   Dialog,
