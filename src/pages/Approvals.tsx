@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Clock,
@@ -1009,7 +1009,6 @@ export default function ApprovalsPage() {
   const isSuperUser = session.isSuperUser;
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
-  const { formatCostCenter } = useCostCenterNames();
 
   // Merge SAP approvals with internal pending expenses
   const internalPending = (expenses || [])
@@ -1017,6 +1016,14 @@ export default function ApprovalsPage() {
     .map(mapInternalExpense);
 
   const allApprovals: ApprovalDoc[] = [...internalPending, ...approvals];
+  const allCostCenterCodes = useMemo(
+    () => new Set(allApprovals.flatMap((doc) => {
+      const rateio = shouldShowRateio(doc);
+      return rateio.show ? rateio.info.byCC.map((cc) => cc.code) : [];
+    })),
+    [allApprovals],
+  );
+  const { formatCostCenter } = useCostCenterNames(allCostCenterCodes);
 
   // Filter: by default show only approvals assigned to current user; toggle to view all
   const userApprovals = showAll
