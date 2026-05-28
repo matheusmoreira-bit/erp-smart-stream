@@ -267,8 +267,8 @@ async function fetchDocsBulk(
     const batch = docEntries.slice(i, i + batchSize);
     const filter = batch.map((e) => `DocEntry eq ${e}`).join(" or ");
     const url =
-      `${creds.service_layer_url}/${collection}?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate` +
-      `&$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
+      `${creds.service_layer_url}/${collection}` +
+      `?$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
     try {
       const res = await fetch(url, {
         method: "GET",
