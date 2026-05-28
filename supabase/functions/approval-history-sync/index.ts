@@ -484,7 +484,11 @@ async function syncCompany(
 
     const rows = requests.flatMap((r) => {
       const key = docKeyByRequestCode.get(r?.Code);
-      const info = key ? docInfoByKey.get(`${key.collection}:${key.entry}`) ?? null : null;
+      let info = key ? docInfoByKey.get(`${key.collection}:${key.entry}`) ?? null : null;
+      if (!info) {
+        const draftEntry = draftFallbackByCode.get(r?.Code);
+        if (draftEntry) info = docInfoByKey.get(`Drafts:${draftEntry}`) ?? null;
+      }
       return buildRowsFromRequest(r, companyDb, users, info);
     });
 
