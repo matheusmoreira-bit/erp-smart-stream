@@ -12,9 +12,9 @@ export function useCostCenterNames() {
   );
 
   const { options, isLoading } = useSapCachedList({
-    cacheKey: "cost_centers",
+    cacheKey: "cost_centers_all",
     endpoint: "ProfitCenters",
-    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    params: { $select: "CenterCode,CenterName" },
     mapRow,
   });
 
