@@ -1003,6 +1003,7 @@ export default function ApprovalsPage() {
 
   const isSuperUser = session.isSuperUser;
   const companyLabel = getLabel(session?.companyDB || "");
+  const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
 
   // Merge SAP approvals with internal pending expenses
   const internalPending = (expenses || [])
