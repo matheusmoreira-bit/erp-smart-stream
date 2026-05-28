@@ -321,6 +321,7 @@ function ApprovalDetailModal({
   isActioning,
   isSuperUser,
   currentUserName,
+  approverCCs,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -330,11 +331,26 @@ function ApprovalDetailModal({
   isActioning: boolean;
   isSuperUser: boolean;
   currentUserName: string;
+  approverCCs: Set<string>;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
   const { session } = useSap();
+
+  // Rateio — sempre derivado do doc atual
+  const rateio = doc ? shouldShowRateio(doc) : { show: false, info: { isSplit: false, byCC: [], total: 0 } as RateioInfo };
+  const [selectedCCs, setSelectedCCs] = useState<Set<string>>(new Set());
+
+  // Sempre que troca de documento, pré-seleciona CCs mapeados (ou nenhum se não houver mapping)
+  useEffect(() => {
+    if (!doc) return;
+    const preselected = rateio.info.byCC
+      .map((cc) => cc.code)
+      .filter((code) => approverCCs.has(code));
+    setSelectedCCs(new Set(preselected));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc?.approvalRequestId]);
 
   const handleDownloadAttachment = async (name: string) => {
     if (!doc || !doc.attachmentEntry || !session || session.erpType !== "sap") {
