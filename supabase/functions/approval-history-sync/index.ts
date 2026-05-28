@@ -334,7 +334,25 @@ async function syncCompany(
       fetchApprovalRequests(creds, sessionId, routeId),
     ]);
 
-    const rows = requests.flatMap((r) => buildRowsFromRequest(r, companyDb, users));
+    // Enriquecimento: busca dados do rascunho (DocNum, DocTotal, Fornecedor) em paralelo
+    const draftEntries = Array.from(
+      new Set(
+        requests
+          .map((r) => Number(r?.DraftEntry))
+          .filter((n) => Number.isFinite(n) && n > 0),
+      ),
+    );
+    const draftInfoByEntry = new Map<number, DraftInfo | null>();
+    await mapWithConcurrency(draftEntries, 8, async (entry) => {
+      const info = await fetchDraftInfo(creds, sessionId, routeId, entry);
+      draftInfoByEntry.set(entry, info);
+    });
+
+    const rows = requests.flatMap((r) => {
+      const draftEntry = Number(r?.DraftEntry);
+      const info = Number.isFinite(draftEntry) ? draftInfoByEntry.get(draftEntry) ?? null : null;
+      return buildRowsFromRequest(r, companyDb, users, info);
+    });
 
     let upserted = 0;
     const chunkSize = 500;
