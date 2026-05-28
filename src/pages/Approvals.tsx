@@ -1495,7 +1495,7 @@ export default function ApprovalsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((doc, i) => (
               <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <ApprovalCard doc={doc} onOpen={() => setSelectedDoc(doc)} />
+                <ApprovalCard doc={doc} onOpen={() => setSelectedDoc(doc)} approverCCs={getCostCentersForEmail(doc.approverEmail)} />
               </motion.div>
             ))}
           </div>
