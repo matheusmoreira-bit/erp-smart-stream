@@ -17,6 +17,7 @@ import {
   Lock,
   Building2,
   Wallet,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -162,6 +163,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "audit_log",
   },
+  notifications: {
+    title: "Notificações",
+    description: "Central de notificações, preferências, auditoria e histórico de envios (WhatsApp, e-mail).",
+    icon: Bell,
+    path: "/notifications",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    moduleKey: "notifications",
+  },
 };
 
 const moduleGroups: { title: string; keys: string[] }[] = (
@@ -176,7 +186,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Admin",
-      keys: ["approval_rules", "users", "synapse", "integration_history", "credentials", "audit_log"],
+      keys: ["approval_rules", "users", "synapse", "integration_history", "credentials", "audit_log", "notifications"],
     },
   ] as { title: string; keys: string[] }[]
 ).map((g) => ({
