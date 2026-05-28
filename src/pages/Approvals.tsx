@@ -142,7 +142,7 @@ function ApprovalCard({
             <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 rounded-full px-1.5 py-0.5 shrink-0">
               Rateado
             </span>
-            <span className="text-foreground font-medium truncate">{primaryCC.code}</span>
+            <span className="text-foreground font-medium truncate">{formatCostCenter(primaryCC.code)}</span>
           </div>
         )}
         <div className="flex items-center gap-2 text-muted-foreground">
