@@ -363,19 +363,39 @@ async function syncCompany(
       fetchApprovalRequests(creds, sessionId, routeId),
     ]);
 
-    // Enriquecimento: busca dados do rascunho (DocNum, DocTotal, Fornecedor) em paralelo
-    const draftEntries = Array.from(
-      new Set(
-        requests
-          .map((r) => Number(r?.DraftEntry))
-          .filter((n) => Number.isFinite(n) && n > 0),
-      ),
-    );
-    const draftInfoByEntry = await fetchDraftsBulk(creds, sessionId, routeId, draftEntries);
+    // Enriquecimento: agrupa cada solicitação por coleção SL (PurchaseOrders,
+    // PurchaseRequests, Drafts, etc.) com base no ObjectType, e faz UMA consulta
+    // em lote por coleção para trazer DocNum, DocTotal, CardCode/Name e moeda.
+    type DocKey = { collection: string; entry: number };
+    const docKeyByRequestCode = new Map<string | number, DocKey>();
+    const entriesByCollection = new Map<string, Set<number>>();
+
+    for (const r of requests) {
+      const objectType = String(r?.ObjectType || "");
+      const objectEntry = Number(r?.ObjectEntry);
+      const draftEntry = Number(r?.DraftEntry);
+      const hasObjectEntry = Number.isFinite(objectEntry) && objectEntry > 0;
+      const collection = hasObjectEntry
+        ? OBJECT_TYPE_TO_COLLECTION[objectType] || "Drafts"
+        : "Drafts";
+      const entry = hasObjectEntry ? objectEntry : draftEntry;
+      if (!Number.isFinite(entry) || entry <= 0) continue;
+      docKeyByRequestCode.set(r?.Code, { collection, entry });
+      if (!entriesByCollection.has(collection)) entriesByCollection.set(collection, new Set());
+      entriesByCollection.get(collection)!.add(entry);
+    }
+
+    const docInfoByKey = new Map<string, DraftInfo>();
+    for (const [collection, set] of entriesByCollection.entries()) {
+      const infoMap = await fetchDocsBulk(creds, sessionId, routeId, collection, Array.from(set));
+      for (const [entry, info] of infoMap.entries()) {
+        docInfoByKey.set(`${collection}:${entry}`, info);
+      }
+    }
 
     const rows = requests.flatMap((r) => {
-      const draftEntry = Number(r?.DraftEntry);
-      const info = Number.isFinite(draftEntry) ? draftInfoByEntry.get(draftEntry) ?? null : null;
+      const key = docKeyByRequestCode.get(r?.Code);
+      const info = key ? docInfoByKey.get(`${key.collection}:${key.entry}`) ?? null : null;
       return buildRowsFromRequest(r, companyDb, users, info);
     });
 
