@@ -436,6 +436,19 @@ async function syncCompany(
       }
     }
 
+    // Busca sob demanda os usuários (originador/aprovador) ausentes do cache inicial
+    const neededUserIds: number[] = [];
+    for (const r of requests) {
+      const oid = Number(r?.OriginatorID);
+      if (Number.isFinite(oid)) neededUserIds.push(oid);
+      const lines = Array.isArray(r?.ApprovalRequestLines) ? r.ApprovalRequestLines : [];
+      for (const l of lines) {
+        const uid = Number(l?.UserID);
+        if (Number.isFinite(uid)) neededUserIds.push(uid);
+      }
+    }
+    await fetchUsersByIds(creds, sessionId, routeId, neededUserIds, users);
+
     const rows = requests.flatMap((r) => {
       const key = docKeyByRequestCode.get(r?.Code);
       const info = key ? docInfoByKey.get(`${key.collection}:${key.entry}`) ?? null : null;
