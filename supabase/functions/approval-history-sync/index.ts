@@ -360,11 +360,7 @@ async function syncCompany(
           .filter((n) => Number.isFinite(n) && n > 0),
       ),
     );
-    const draftInfoByEntry = new Map<number, DraftInfo | null>();
-    await mapWithConcurrency(draftEntries, 8, async (entry) => {
-      const info = await fetchDraftInfo(creds, sessionId, routeId, entry);
-      draftInfoByEntry.set(entry, info);
-    });
+    const draftInfoByEntry = await fetchDraftsBulk(creds, sessionId, routeId, draftEntries);
 
     const rows = requests.flatMap((r) => {
       const draftEntry = Number(r?.DraftEntry);
