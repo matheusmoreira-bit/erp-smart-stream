@@ -197,23 +197,34 @@ type DraftInfo = {
   doc_date: string | null;
 };
 
-async function fetchDraftsBulk(
+const OBJECT_TYPE_TO_COLLECTION: Record<string, string> = {
+  "13": "Invoices",
+  "15": "DeliveryNotes",
+  "17": "Orders",
+  "18": "PurchaseInvoices",
+  "19": "PurchaseCreditNotes",
+  "20": "PurchaseDeliveryNotes",
+  "22": "PurchaseOrders",
+  "23": "Quotations",
+  "112": "VendorPayments",
+  "1470000113": "PurchaseRequests",
+};
+
+async function fetchDocsBulk(
   creds: SapCreds,
   sessionId: string,
   routeId: string,
-  draftEntries: number[],
+  collection: string,
+  docEntries: number[],
 ): Promise<Map<number, DraftInfo>> {
   const out = new Map<number, DraftInfo>();
-  if (draftEntries.length === 0) return out;
-
-  // Service Layer aceita filtros longos, mas vamos quebrar em lotes de 50
-  // para manter URLs gerenciáveis. Uma única requisição por lote.
-  const batchSize = 50;
-  for (let i = 0; i < draftEntries.length; i += batchSize) {
-    const batch = draftEntries.slice(i, i + batchSize);
+  if (docEntries.length === 0) return out;
+  const batchSize = 40;
+  for (let i = 0; i < docEntries.length; i += batchSize) {
+    const batch = docEntries.slice(i, i + batchSize);
     const filter = batch.map((e) => `DocEntry eq ${e}`).join(" or ");
     const url =
-      `${creds.service_layer_url}/Drafts?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate` +
+      `${creds.service_layer_url}/${collection}?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate` +
       `&$filter=${encodeURIComponent(filter)}&$top=${batchSize}`;
     try {
       const res = await fetch(url, {
@@ -221,7 +232,7 @@ async function fetchDraftsBulk(
         headers: { Cookie: buildCookie(sessionId, routeId), Accept: "application/json" },
       });
       if (!res.ok) {
-        console.warn("fetchDraftsBulk batch falhou:", res.status, (await res.text()).slice(0, 200));
+        console.warn(`fetchDocsBulk ${collection} falhou:`, res.status, (await res.text()).slice(0, 200));
         continue;
       }
       const body: any = await res.json();
@@ -238,7 +249,7 @@ async function fetchDraftsBulk(
         });
       }
     } catch (e) {
-      console.warn("fetchDraftsBulk erro:", e instanceof Error ? e.message : e);
+      console.warn(`fetchDocsBulk ${collection} erro:`, e instanceof Error ? e.message : e);
     }
   }
   return out;
