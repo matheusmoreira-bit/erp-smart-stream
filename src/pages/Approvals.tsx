@@ -1017,7 +1017,10 @@ export default function ApprovalsPage() {
 
   const allApprovals: ApprovalDoc[] = [...internalPending, ...approvals];
   const allCostCenterCodes = useMemo(
-    () => new Set(allApprovals.flatMap((doc) => doc.documentLines.map((line) => line.CostingCode).filter(Boolean))),
+    () => new Set(allApprovals.flatMap((doc) => {
+      const rateio = shouldShowRateio(doc);
+      return rateio.show ? rateio.info.byCC.map((cc) => cc.code) : [];
+    })),
     [allApprovals],
   );
   const { formatCostCenter } = useCostCenterNames(allCostCenterCodes);
