@@ -37,6 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { Split } from "lucide-react";
 import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
+import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -86,10 +87,12 @@ function ApprovalCard({
   doc,
   onOpen,
   approverCCs,
+  formatCostCenter,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
   approverCCs: Set<string>;
+  formatCostCenter: (code?: string | null) => string;
 }) {
   const overdue = isOverdue(doc.dueDate);
   const { show: showRateio, info } = shouldShowRateio(doc);
@@ -140,7 +143,7 @@ function ApprovalCard({
             <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 rounded-full px-1.5 py-0.5 shrink-0">
               Rateado
             </span>
-            <span className="text-foreground font-medium truncate">{primaryCC.code}</span>
+            <span className="text-foreground font-medium truncate">{formatCostCenter(primaryCC.code)}</span>
           </div>
         )}
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -322,6 +325,7 @@ function ApprovalDetailModal({
   isSuperUser,
   currentUserName,
   approverCCs,
+  formatCostCenter,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -332,6 +336,7 @@ function ApprovalDetailModal({
   isSuperUser: boolean;
   currentUserName: string;
   approverCCs: Set<string>;
+  formatCostCenter: (code?: string | null) => string;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
@@ -491,7 +496,7 @@ function ApprovalDetailModal({
                           }}
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-foreground font-medium truncate">{cc.code}</p>
+                          <p className="text-sm text-foreground font-medium truncate">{formatCostCenter(cc.code)}</p>
                           <p className="text-[11px] text-muted-foreground">
                             {cc.pct.toFixed(1)}% do documento
                           </p>
@@ -1004,6 +1009,7 @@ export default function ApprovalsPage() {
   const isSuperUser = session.isSuperUser;
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
+  const { formatCostCenter } = useCostCenterNames();
 
   // Merge SAP approvals with internal pending expenses
   const internalPending = (expenses || [])
@@ -1495,7 +1501,7 @@ export default function ApprovalsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((doc, i) => (
               <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <ApprovalCard doc={doc} onOpen={() => setSelectedDoc(doc)} approverCCs={getCostCentersForEmail(doc.approverEmail)} />
+                <ApprovalCard doc={doc} onOpen={() => setSelectedDoc(doc)} approverCCs={getCostCentersForEmail(doc.approverEmail)} formatCostCenter={formatCostCenter} />
               </motion.div>
             ))}
           </div>
@@ -1567,6 +1573,7 @@ export default function ApprovalsPage() {
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
         approverCCs={getCostCentersForEmail(selectedDoc?.approverEmail || "")}
+        formatCostCenter={formatCostCenter}
       />
 
       <DelegationDialog
