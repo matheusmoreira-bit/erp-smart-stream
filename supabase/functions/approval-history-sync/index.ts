@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const EXTERNAL_API_URL =
-  "https://ais-dev-z4wd3ovzqmx7onv26rzp3v-257022220655.us-west2.run.app/api/external/approval-history";
+  "https://sap-b1-approval-hub-761741690592.us-west1.run.app/api/external/approval-history";
 
 const OBJECT_CODE_TO_NAME: Record<string, string> = {
   "13": "Nota Fiscal de Saída",
