@@ -86,10 +86,12 @@ function ApprovalCard({
   doc,
   onOpen,
   approverCCs,
+  formatCostCenter,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
   approverCCs: Set<string>;
+  formatCostCenter: (code?: string | null) => string;
 }) {
   const overdue = isOverdue(doc.dueDate);
   const { show: showRateio, info } = shouldShowRateio(doc);
