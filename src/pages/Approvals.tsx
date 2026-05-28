@@ -461,6 +461,59 @@ function ApprovalDetailModal({
               </div>
             )}
 
+            {/* Painel de Rateio entre Centros de Custo */}
+            {rateio.show && (
+              <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Split className="w-4 h-4 text-emerald-500" />
+                  <h4 className="text-sm font-semibold text-foreground">Documento Rateado entre Centros de Custo</h4>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Assinale os centros de custo que correspondem à sua alçada de aprovação para calcular o valor do rateio em aprovação.
+                </p>
+                <div className="space-y-1.5">
+                  {rateio.info.byCC.map((cc) => {
+                    const checked = selectedCCs.has(cc.code);
+                    return (
+                      <label
+                        key={cc.code}
+                        className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-background/40 hover:bg-background/70 cursor-pointer transition-colors"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            setSelectedCCs((prev) => {
+                              const next = new Set(prev);
+                              if (v) next.add(cc.code);
+                              else next.delete(cc.code);
+                              return next;
+                            });
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-foreground font-medium truncate">{cc.code}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {cc.pct.toFixed(1)}% do documento
+                          </p>
+                        </div>
+                        <span className="text-sm font-mono font-semibold text-foreground">
+                          {formatCurrency(cc.amount, doc.currency)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Sua alçada de aprovação para este documento
+                  </span>
+                  <span className="text-lg font-bold font-mono text-emerald-600">
+                    {formatCurrency(sumSelectedShare(rateio.info, selectedCCs), doc.currency)}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Document Lines */}
             {doc.documentLines.length > 0 && (
               <div>
