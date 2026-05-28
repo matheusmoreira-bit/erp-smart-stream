@@ -76,6 +76,117 @@ export type Database = {
         }
         Relationships: []
       }
+      approval_history: {
+        Row: {
+          approver_code: string | null
+          approver_email: string | null
+          approver_name: string | null
+          card_code: string | null
+          card_name: string | null
+          company_db: string
+          created_at: string
+          currency: string | null
+          decision: string | null
+          decision_date: string | null
+          doc_entry: number | null
+          doc_num: number | null
+          doc_object_type: string | null
+          doc_total: number | null
+          doc_type_name: string | null
+          external_id: string
+          id: string
+          raw: Json
+          remarks: string | null
+          requester_code: string | null
+          requester_name: string | null
+          stage_name: string | null
+          step: number | null
+          synced_at: string
+          updated_at: string
+        }
+        Insert: {
+          approver_code?: string | null
+          approver_email?: string | null
+          approver_name?: string | null
+          card_code?: string | null
+          card_name?: string | null
+          company_db: string
+          created_at?: string
+          currency?: string | null
+          decision?: string | null
+          decision_date?: string | null
+          doc_entry?: number | null
+          doc_num?: number | null
+          doc_object_type?: string | null
+          doc_total?: number | null
+          doc_type_name?: string | null
+          external_id: string
+          id?: string
+          raw?: Json
+          remarks?: string | null
+          requester_code?: string | null
+          requester_name?: string | null
+          stage_name?: string | null
+          step?: number | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          approver_code?: string | null
+          approver_email?: string | null
+          approver_name?: string | null
+          card_code?: string | null
+          card_name?: string | null
+          company_db?: string
+          created_at?: string
+          currency?: string | null
+          decision?: string | null
+          decision_date?: string | null
+          doc_entry?: number | null
+          doc_num?: number | null
+          doc_object_type?: string | null
+          doc_total?: number | null
+          doc_type_name?: string | null
+          external_id?: string
+          id?: string
+          raw?: Json
+          remarks?: string | null
+          requester_code?: string | null
+          requester_name?: string | null
+          stage_name?: string | null
+          step?: number | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      approval_history_sync_state: {
+        Row: {
+          id: number
+          last_count: number | null
+          last_message: string | null
+          last_status: string | null
+          last_sync_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          last_count?: number | null
+          last_message?: string | null
+          last_status?: string | null
+          last_sync_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          last_count?: number | null
+          last_message?: string | null
+          last_status?: string | null
+          last_sync_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       approval_rule_levels: {
         Row: {
           approver_email: string | null
