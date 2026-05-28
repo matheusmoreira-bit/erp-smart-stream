@@ -37,6 +37,12 @@ const OBJECT_CODE_TO_NAME: Record<string, string> = {
 };
 
 const DECISION_STATUS_MAP: Record<string, string> = {
+  // ApprovalRequestLines (linhas de decisão por aprovador)
+  ardApproved: "Y",
+  ardRejected: "N",
+  ardPending: "P",
+  ardNoDecision: "P",
+  // Alguns ambientes usam a nomenclatura legada
   asaApproved: "Y",
   asaRejected: "N",
   asaPending: "P",
