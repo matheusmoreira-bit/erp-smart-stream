@@ -17,6 +17,7 @@ import {
   Lock,
   Building2,
   Wallet,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
