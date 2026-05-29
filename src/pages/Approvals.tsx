@@ -1030,10 +1030,17 @@ export default function ApprovalsPage() {
   }, [session, navigate]);
   if (!session) return null;
 
-  // Filter: by default show only approvals assigned to current user; toggle to view all
-  const userApprovals = showAll
+  // Filter: por padrão mostra apenas aprovações em que o usuário é aprovador OU solicitante.
+  // Admin pode usar o toggle "Ver todas" para visualizar todos os lançamentos.
+  const effectiveShowAll = isAdmin && showAll;
+  const userApprovals = effectiveShowAll
     ? allApprovals
-    : allApprovals.filter((a) => approverMatches(a.currentApprover, session.userName));
+    : allApprovals.filter(
+        (a) =>
+          approverMatches(a.currentApprover, session.userName) ||
+          approverMatches(a.requester, session.userName),
+      );
+
 
   const minV = minValue ? parseFloat(minValue.replace(",", ".")) : null;
   const maxV = maxValue ? parseFloat(maxValue.replace(",", ".")) : null;
