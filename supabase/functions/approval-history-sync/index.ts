@@ -62,6 +62,7 @@ function normalizeCurrency(v: unknown): string | null {
 }
 
 interface WebhookRow {
+  Empresa?: string;
   Code?: number;
   Aprovador?: string;
   "Email do aprovador"?: string;
