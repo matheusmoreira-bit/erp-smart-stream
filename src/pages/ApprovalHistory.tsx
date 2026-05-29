@@ -1,14 +1,16 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useApprovalHistory, type ApprovalHistoryRow } from "@/hooks/useApprovalHistory";
 import { useCompanies } from "@/hooks/useCompanies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 function formatCurrency(value?: number | null, currency = "BRL") {
   const n = Number(value || 0);
