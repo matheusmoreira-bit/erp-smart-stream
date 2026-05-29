@@ -29,6 +29,7 @@ import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/h
 import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
+import { useAuth } from "@/hooks/useAuth";
 import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useSapUsers } from "@/hooks/useSapUsers";
@@ -978,6 +979,7 @@ function MyRequestsTab() {
 
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
+  const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache } = useApprovals();
   const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense } = useExpenses("purchase");
@@ -989,7 +991,11 @@ export default function ApprovalsPage() {
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
   const [isActioning, setIsActioning] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const isSuperUser = session?.isSuperUser ?? false;
+  const isAdmin = isLovableAdmin || isSuperUser;
+  // Admins veem tudo por padrão (toggle ligado); demais usuários só veem o que aprovam/criaram.
+  const [showAll, setShowAll] = useState<boolean>(isAdmin);
+  useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [isDelegating, setIsDelegating] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
@@ -1000,7 +1006,6 @@ export default function ApprovalsPage() {
   const [dueFrom, setDueFrom] = useState<string>("");
   const [dueTo, setDueTo] = useState<string>("");
 
-  const isSuperUser = session?.isSuperUser ?? false;
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
 
@@ -1025,10 +1030,17 @@ export default function ApprovalsPage() {
   }, [session, navigate]);
   if (!session) return null;
 
-  // Filter: by default show only approvals assigned to current user; toggle to view all
-  const userApprovals = showAll
+  // Filter: por padrão mostra apenas aprovações em que o usuário é aprovador OU solicitante.
+  // Admin pode usar o toggle "Ver todas" para visualizar todos os lançamentos.
+  const effectiveShowAll = isAdmin && showAll;
+  const userApprovals = effectiveShowAll
     ? allApprovals
-    : allApprovals.filter((a) => approverMatches(a.currentApprover, session.userName));
+    : allApprovals.filter(
+        (a) =>
+          approverMatches(a.currentApprover, session.userName) ||
+          approverMatches(a.requester, session.userName),
+      );
+
 
   const minV = minValue ? parseFloat(minValue.replace(",", ".")) : null;
   const maxV = maxValue ? parseFloat(maxValue.replace(",", ".")) : null;
@@ -1344,13 +1356,16 @@ export default function ApprovalsPage() {
               className="pl-9 bg-muted/30 border-border"
             />
           </div>
-          <div className="flex items-center gap-2 glass-card px-3 py-2">
-            <ShieldAlert className="w-4 h-4 text-amber-400" />
-            <Label htmlFor="show-all" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-              Ver todas as aprovações
-            </Label>
-            <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
-          </div>
+          {isAdmin && (
+            <div className="flex items-center gap-2 glass-card px-3 py-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <Label htmlFor="show-all" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                Ver todas as aprovações
+              </Label>
+              <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
+            </div>
+          )}
+
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">

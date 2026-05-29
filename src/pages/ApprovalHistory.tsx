@@ -1,14 +1,16 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useApprovalHistory, type ApprovalHistoryRow } from "@/hooks/useApprovalHistory";
 import { useCompanies } from "@/hooks/useCompanies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 function formatCurrency(value?: number | null, currency = "BRL") {
   const n = Number(value || 0);
@@ -26,25 +28,35 @@ function formatDate(iso?: string | null) {
 export default function ApprovalHistory() {
   const navigate = useNavigate();
   const { session } = useSap();
+  const { isAdmin: isLovableAdmin } = useAuth();
+  const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { getLabel } = useCompanies(true);
   const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
 
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
-  const [scope, setScope] = useState<"mine" | "all">("mine");
+  // Admin vê tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
+  const [scope, setScope] = useState<"mine" | "all">(isAdmin ? "all" : "mine");
+  useEffect(() => { setScope(isAdmin ? "all" : "mine"); }, [isAdmin]);
 
   const myKeys = useMemo(() => {
     const list = [(session?.userName || "").toLowerCase()].filter(Boolean);
     return new Set(list);
   }, [session]);
 
+  const effectiveScope: "mine" | "all" = isAdmin ? scope : "mine";
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
       // Apenas decisões finalizadas (aprovado/rejeitado). Pendentes (W) ficam fora do histórico.
       if (r.decision !== "Y" && r.decision !== "N") return false;
-      if (scope === "mine") {
-        const hit = [r.approver_code, r.approver_email, r.approver_name]
+      if (effectiveScope === "mine") {
+        const candidates = [
+          r.approver_code, r.approver_email, r.approver_name,
+          r.requester_code, r.requester_name,
+        ];
+        const hit = candidates
           .filter(Boolean)
           .some((v) => myKeys.has(String(v).toLowerCase()));
         if (!hit) return false;
@@ -56,7 +68,8 @@ export default function ApprovalHistory() {
         r.doc_type_name, String(r.doc_num || ""), r.remarks, r.stage_name,
       ].some((v) => (v || "").toString().toLowerCase().includes(q));
     });
-  }, [rows, query, decision, scope, myKeys]);
+  }, [rows, query, decision, effectiveScope, myKeys]);
+
 
 
   const handleSync = async () => {
@@ -104,13 +117,16 @@ export default function ApprovalHistory() {
               className="pl-9"
             />
           </div>
-          <Select value={scope} onValueChange={(v) => setScope(v as "mine" | "all")}>
-            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="mine">Minhas decisões</SelectItem>
-              <SelectItem value="all">Todas as decisões</SelectItem>
-            </SelectContent>
-          </Select>
+          {isAdmin && (
+            <Select value={scope} onValueChange={(v) => setScope(v as "mine" | "all")}>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mine">Minhas decisões/pedidos</SelectItem>
+                <SelectItem value="all">Todas as decisões</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+
           <Select value={decision} onValueChange={(v) => setDecision(v as "all" | "Y" | "N")}>
             <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
