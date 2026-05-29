@@ -114,6 +114,24 @@ function combineDateTime(date?: string | null, time?: string | null): string | n
   return d.toISOString();
 }
 
+function normalizeName(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function resolveCompanyDb(
+  empresa: string | undefined,
+  lookup: Map<string, string>,
+  fallback: string,
+): string {
+  if (!empresa) return fallback;
+  const key = normalizeName(empresa);
+  return lookup.get(key) || fallback;
+}
+
 function mapRow(r: WebhookRow, companyDb: string) {
   const code = r.Code != null ? String(r.Code) : "";
   const email = (r["Email do aprovador"] || "").toLowerCase().trim();
@@ -159,6 +177,7 @@ function mapRow(r: WebhookRow, companyDb: string) {
     synced_at: new Date().toISOString(),
   };
 }
+
 
 async function updateSyncState(
   supabase: ReturnType<typeof createClient>,
