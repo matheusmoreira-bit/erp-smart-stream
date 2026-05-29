@@ -539,25 +539,32 @@ export function useApprovals() {
 
   const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[]> => {
     if (!session || session.erpType !== "sap") return [];
-    const detailedView = await sapQueryView<HanaApprovalViewRow>(
-      session,
-      `${session.companyDB}.VW_APROVACOES_DETALHADAS`,
-      undefined,
-      false,
-    );
-
-    if (detailedView.hanaDisabled) {
-      return await fetchApprovalsViaServiceLayer(session as SapSession);
+    // Fonte única de aprovações em aberto: webhook n8n (middleware HANA).
+    // O Service Layer e a consulta direta à VW_APROVACOES_DETALHADAS não são
+    // mais usados aqui — o n8n centraliza a lógica e devolve um array onde
+    // cada item corresponde a um schema/companyDB.
+    const resp = await fetch(PENDING_APPROVALS_WEBHOOK_URL, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!resp.ok) {
+      throw new Error(`Webhook de aprovações retornou ${resp.status}`);
     }
-    // A view HANA é a fonte de verdade para aprovações em aberto.
-    // O Service Layer não é mais usado como complemento porque retornava
-    // ApprovalRequests com Status='arsPending' órfãos (documentos já resolvidos
-    // no SAP mas com a request nunca fechada), inflando a lista.
-    // Histórico/dados antigos vivem em approval_history e não devem aparecer aqui.
-    return detailedView.data
+    const payload = (await resp.json()) as
+      | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
+      | { schema?: string; data?: HanaApprovalViewRow[] };
+    const groups = Array.isArray(payload) ? payload : [payload];
+    const companyDb = session.companyDB?.toUpperCase();
+    const rows: HanaApprovalViewRow[] = [];
+    for (const group of groups) {
+      if (!group?.data) continue;
+      const schema = (group.schema || "").toUpperCase();
+      if (companyDb && schema && schema !== companyDb) continue;
+      rows.push(...group.data);
+    }
+    return rows
       .map(mapHanaApproval)
       .filter((doc) => doc.approvalRequestId > 0);
-
   }, [session]);
 
 
