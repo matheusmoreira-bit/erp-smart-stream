@@ -518,6 +518,8 @@ async function fetchApprovalsViaServiceLayer(
 
 const APPROVALS_CACHE_KEY = "approvals:detailed";
 const APPROVALS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+const PENDING_APPROVALS_WEBHOOK_URL =
+  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
 async function readApprovalsCache(session: SapSession): Promise<{ docs: ApprovalDoc[]; updatedAt: string } | null> {
   const data = await sapReadApprovalsCache<ApprovalDoc[]>(session);
