@@ -549,20 +549,15 @@ export function useApprovals() {
     if (detailedView.hanaDisabled) {
       return await fetchApprovalsViaServiceLayer(session as SapSession);
     }
-    const hanaDocs = detailedView.data
+    // A view HANA é a fonte de verdade para aprovações em aberto.
+    // O Service Layer não é mais usado como complemento porque retornava
+    // ApprovalRequests com Status='arsPending' órfãos (documentos já resolvidos
+    // no SAP mas com a request nunca fechada), inflando a lista.
+    // Histórico/dados antigos vivem em approval_history e não devem aparecer aqui.
+    return detailedView.data
       .map(mapHanaApproval)
       .filter((doc) => doc.approvalRequestId > 0);
 
-    // Sempre complementar com Service Layer para cobrir aprovações que a view HANA
-    // não retorna (ex.: documentos recém-criados ou fora do filtro da view).
-    const knownIds = new Set(hanaDocs.map((d) => d.approvalRequestId));
-    try {
-      const slDocs = await fetchApprovalsViaServiceLayer(session as SapSession, knownIds);
-      if (slDocs.length) return [...hanaDocs, ...slDocs];
-    } catch (e) {
-      console.warn("SL fallback merge failed (mantendo apenas HANA):", e);
-    }
-    return hanaDocs;
   }, [session]);
 
 
