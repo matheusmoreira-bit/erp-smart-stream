@@ -243,14 +243,26 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, received: 0, upserted: 0 });
     }
 
-    // Deduplica por external_id (mantém o último)
+    // Mapa empresa (display_name normalizado) -> company_db
+    const { data: companiesData } = await supabase
+      .from("companies")
+      .select("company_db,display_name");
+    const companyLookup = new Map<string, string>();
+    for (const c of (companiesData || []) as Array<{ company_db: string; display_name: string }>) {
+      companyLookup.set(normalizeName(c.display_name), c.company_db);
+      companyLookup.set(normalizeName(c.company_db), c.company_db);
+    }
+
+    // Deduplica por (company_db, external_id)
     const mapped = new Map<string, ReturnType<typeof mapRow>>();
     for (const r of rows) {
-      const row = mapRow(r, companyDb);
+      const resolved = resolveCompanyDb(r.Empresa, companyLookup, companyDb);
+      const row = mapRow(r, resolved);
       if (row.external_id.startsWith("::")) continue;
-      mapped.set(row.external_id, row);
+      mapped.set(`${row.company_db}::${row.external_id}`, row);
     }
     const payload = Array.from(mapped.values());
+
 
     // Upsert em lotes para evitar payloads gigantes
     const BATCH = 200;
