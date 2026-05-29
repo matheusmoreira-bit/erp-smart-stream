@@ -630,7 +630,7 @@ export function useApprovals() {
     isRefreshing,
     error,
     lastUpdatedAt,
-    refresh: () => fetchApprovals({ force: false }),
+    refresh: () => fetchApprovals({ force: true }),
     refreshCache: () => fetchApprovals({ force: true }),
   };
 }
