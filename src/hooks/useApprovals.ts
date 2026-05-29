@@ -541,55 +541,40 @@ export function useApprovals() {
 
   const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[]> => {
     if (!session || session.erpType !== "sap") return [];
-    // Fonte principal: webhook n8n (middleware HANA). Se o webhook não trouxer
-    // o schema da empresa atual, faz fallback consultando direto a view HANA
-    // VW_APROVACOES_DETALHADAS via Service Layer proxy.
-    const companyDb = session.companyDB?.toUpperCase();
-    let schemaFound = false;
+    // Fonte única: webhook n8n (middleware HANA). Passamos DB/View/SessionId
+    // via querystring para que o n8n consulte a VW_APROVACOES_DETALHADAS do
+    // schema correto (ANA Gaming, Cactus, etc).
+    const companyDb = session.companyDB;
+    const url = new URL(PENDING_APPROVALS_WEBHOOK_URL);
+    url.searchParams.set("SessionId", session.sessionId || "");
+    url.searchParams.set("DB", companyDb);
+    url.searchParams.set("View", "VW_APROVACOES_DETALHADAS");
+    url.searchParams.set("_t", String(Date.now()));
+
+    const resp = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!resp.ok) {
+      throw new Error(`Webhook de aprovações retornou ${resp.status}`);
+    }
+    const payload = (await resp.json()) as
+      | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
+      | { schema?: string; data?: HanaApprovalViewRow[] };
+    const groups = Array.isArray(payload) ? payload : [payload];
+    const expected = companyDb.toUpperCase();
     const rows: HanaApprovalViewRow[] = [];
-    try {
-      const resp = await fetch(PENDING_APPROVALS_WEBHOOK_URL, {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      });
-      if (resp.ok) {
-        const payload = (await resp.json()) as
-          | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
-          | { schema?: string; data?: HanaApprovalViewRow[] };
-        const groups = Array.isArray(payload) ? payload : [payload];
-        for (const group of groups) {
-          if (!group?.data) continue;
-          const schema = (group.schema || "").toUpperCase();
-          if (companyDb && schema && schema !== companyDb) continue;
-          schemaFound = true;
-          rows.push(...group.data);
-        }
-      } else {
-        console.warn(`Webhook de aprovações retornou ${resp.status}`);
-      }
-    } catch (e) {
-      console.warn("Webhook de aprovações falhou:", e);
+    for (const group of groups) {
+      if (!group?.data) continue;
+      const schema = (group.schema || "").toUpperCase();
+      if (schema && schema !== expected) continue;
+      rows.push(...group.data);
     }
-
-    if (!schemaFound) {
-      // Fallback: consulta direta à view HANA para a empresa atual.
-      try {
-        const view = await sapQueryView<HanaApprovalViewRow>(
-          session as SapSession,
-          "VW_APROVACOES_DETALHADAS",
-          undefined,
-          false,
-        );
-        if (view.data?.length) rows.push(...view.data);
-      } catch (e) {
-        console.warn("Fallback VW_APROVACOES_DETALHADAS falhou:", e);
-      }
-    }
-
     return rows
       .map(mapHanaApproval)
       .filter((doc) => doc.approvalRequestId > 0);
   }, [session]);
+
 
 
 
