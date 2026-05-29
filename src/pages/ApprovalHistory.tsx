@@ -28,25 +28,35 @@ function formatDate(iso?: string | null) {
 export default function ApprovalHistory() {
   const navigate = useNavigate();
   const { session } = useSap();
+  const { isAdmin: isLovableAdmin } = useAuth();
+  const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { getLabel } = useCompanies(true);
   const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
 
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
-  const [scope, setScope] = useState<"mine" | "all">("mine");
+  // Admin vê tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
+  const [scope, setScope] = useState<"mine" | "all">(isAdmin ? "all" : "mine");
+  useEffect(() => { setScope(isAdmin ? "all" : "mine"); }, [isAdmin]);
 
   const myKeys = useMemo(() => {
     const list = [(session?.userName || "").toLowerCase()].filter(Boolean);
     return new Set(list);
   }, [session]);
 
+  const effectiveScope: "mine" | "all" = isAdmin ? scope : "mine";
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
       // Apenas decisões finalizadas (aprovado/rejeitado). Pendentes (W) ficam fora do histórico.
       if (r.decision !== "Y" && r.decision !== "N") return false;
-      if (scope === "mine") {
-        const hit = [r.approver_code, r.approver_email, r.approver_name]
+      if (effectiveScope === "mine") {
+        const candidates = [
+          r.approver_code, r.approver_email, r.approver_name,
+          r.requester_code, r.requester_name,
+        ];
+        const hit = candidates
           .filter(Boolean)
           .some((v) => myKeys.has(String(v).toLowerCase()));
         if (!hit) return false;
@@ -58,7 +68,8 @@ export default function ApprovalHistory() {
         r.doc_type_name, String(r.doc_num || ""), r.remarks, r.stage_name,
       ].some((v) => (v || "").toString().toLowerCase().includes(q));
     });
-  }, [rows, query, decision, scope, myKeys]);
+  }, [rows, query, decision, effectiveScope, myKeys]);
+
 
 
   const handleSync = async () => {
