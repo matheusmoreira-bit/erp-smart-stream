@@ -978,6 +978,7 @@ function MyRequestsTab() {
 
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
+  const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache } = useApprovals();
   const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense } = useExpenses("purchase");
@@ -989,7 +990,11 @@ export default function ApprovalsPage() {
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
   const [isActioning, setIsActioning] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const isSuperUser = session?.isSuperUser ?? false;
+  const isAdmin = isLovableAdmin || isSuperUser;
+  // Admins veem tudo por padrão (toggle ligado); demais usuários só veem o que aprovam/criaram.
+  const [showAll, setShowAll] = useState<boolean>(isAdmin);
+  useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [isDelegating, setIsDelegating] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
@@ -1000,7 +1005,6 @@ export default function ApprovalsPage() {
   const [dueFrom, setDueFrom] = useState<string>("");
   const [dueTo, setDueTo] = useState<string>("");
 
-  const isSuperUser = session?.isSuperUser ?? false;
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
 
