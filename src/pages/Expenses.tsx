@@ -513,7 +513,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </button>
             ))}
           </div>
+          {isAdmin && (
+            <div className="flex items-center gap-2 glass-card px-3 py-2 ml-auto">
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <Label htmlFor="show-all-expenses" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                Ver todos os lançamentos
+              </Label>
+              <Switch id="show-all-expenses" checked={showAll} onCheckedChange={setShowAll} />
+            </div>
+          )}
         </div>
+
 
         {/* Content */}
         {isLoading ? (
