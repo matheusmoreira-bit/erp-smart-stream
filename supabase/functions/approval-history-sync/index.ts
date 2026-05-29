@@ -65,6 +65,11 @@ interface WebhookRow {
   Code?: number;
   Aprovador?: string;
   "Email do aprovador"?: string;
+  "Código da resposta do aprovador"?: string;
+  "Resposta do aprovador"?: string;
+  "Comentário do aprovador"?: string | null;
+  "Data da resposta do aprovador"?: string | null;
+  "Hora da resposta do aprovador"?: string | null;
   "Tipo de solicitação"?: string;
   "Draft DocEntry"?: number;
   "Nº do documento"?: number;
@@ -81,6 +86,33 @@ interface WebhookRow {
   "Modelo de aprovação"?: string;
 }
 
+// W = Waiting/Pending, Y = Approved, N = Rejected
+function mapDecision(code: unknown): string {
+  const s = (code == null ? "" : String(code)).trim().toUpperCase();
+  if (s === "Y" || s === "A") return "Y";
+  if (s === "N" || s === "R") return "N";
+  return "P";
+}
+
+function combineDateTime(date?: string | null, time?: string | null): string | null {
+  if (!date) return null;
+  const baseIso = toIsoDate(date);
+  if (!baseIso) return null;
+  if (!time) return baseIso;
+  let hh = 0, mm = 0, ss = 0;
+  const t = String(time).trim();
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(t)) {
+    const parts = t.split(":").map((p) => parseInt(p, 10));
+    hh = parts[0] || 0; mm = parts[1] || 0; ss = parts[2] || 0;
+  } else if (/^\d{3,4}$/.test(t)) {
+    const n = parseInt(t, 10);
+    hh = Math.floor(n / 100); mm = n % 100;
+  }
+  const d = new Date(baseIso);
+  d.setUTCHours(hh, mm, ss, 0);
+  return d.toISOString();
+}
+
 function mapRow(r: WebhookRow, companyDb: string) {
   const code = r.Code != null ? String(r.Code) : "";
   const email = (r["Email do aprovador"] || "").toLowerCase().trim();
@@ -89,12 +121,23 @@ function mapRow(r: WebhookRow, companyDb: string) {
   const total =
     toNumber(r["Valor total"]) ??
     toNumber(r["Valor do documento na moeda original"]);
+  const decision = mapDecision(r["Código da resposta do aprovador"]);
+  const decisionDate =
+    decision === "P"
+      ? null
+      : combineDateTime(
+          r["Data da resposta do aprovador"],
+          r["Hora da resposta do aprovador"],
+        );
+  const comment = (r["Comentário do aprovador"] || "").trim() || null;
+  const obs = (r.Observações || "").trim() || null;
+  const remarks = [comment, obs].filter(Boolean).join("\n\n") || null;
 
   return {
     external_id: `${code}::${email || "unknown"}`,
     company_db: companyDb,
-    decision: "P",
-    decision_date: null,
+    decision,
+    decision_date: decisionDate,
     approver_code: null,
     approver_name: r.Aprovador || null,
     approver_email: r["Email do aprovador"] || null,
@@ -108,7 +151,7 @@ function mapRow(r: WebhookRow, companyDb: string) {
     currency: normalizeCurrency(r["Código da moeda original"]),
     card_code: r["Código PN/Fornecedor"] || null,
     card_name: r["Fornecedor / Parceiro"] || null,
-    remarks: r.Observações || null,
+    remarks,
     stage_name: r["Modelo de aprovação"] || null,
     step: null,
     raw: r as unknown as Record<string, unknown>,
