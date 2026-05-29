@@ -1299,7 +1299,11 @@ export default function ApprovalsPage() {
             <TabsTrigger value="my-requests" className="gap-2">
               <FileText className="w-4 h-4" /> Meus Pedidos
             </TabsTrigger>
+            <TabsTrigger value="history" className="gap-2" onClick={() => navigate("/approvals/history")}>
+              <History className="w-4 h-4" /> Histórico
+            </TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="to-approve" className="space-y-6 mt-0">
         {/* Summary bar */}
