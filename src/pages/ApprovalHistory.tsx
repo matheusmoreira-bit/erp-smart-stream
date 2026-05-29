@@ -41,6 +41,8 @@ export default function ApprovalHistory() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
+      // Apenas decisões finalizadas (aprovado/rejeitado). Pendentes (W) ficam fora do histórico.
+      if (r.decision !== "Y" && r.decision !== "N") return false;
       if (scope === "mine") {
         const hit = [r.approver_code, r.approver_email, r.approver_name]
           .filter(Boolean)
@@ -55,6 +57,7 @@ export default function ApprovalHistory() {
       ].some((v) => (v || "").toString().toLowerCase().includes(q));
     });
   }, [rows, query, decision, scope, myKeys]);
+
 
   const handleSync = async () => {
     try {
