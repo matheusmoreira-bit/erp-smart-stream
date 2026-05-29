@@ -1263,6 +1263,16 @@ export default function ApprovalsPage() {
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
               Atualizar cache
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/approvals/history")}
+              className="gap-2"
+              title="Ver histórico de aprovações"
+            >
+              <History className="w-4 h-4" />
+              Histórico
+            </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
               <LogOut className="w-4 h-4" />
