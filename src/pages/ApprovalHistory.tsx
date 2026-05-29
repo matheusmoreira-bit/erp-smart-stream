@@ -117,13 +117,16 @@ export default function ApprovalHistory() {
               className="pl-9"
             />
           </div>
-          <Select value={scope} onValueChange={(v) => setScope(v as "mine" | "all")}>
-            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="mine">Minhas decisões</SelectItem>
-              <SelectItem value="all">Todas as decisões</SelectItem>
-            </SelectContent>
-          </Select>
+          {isAdmin && (
+            <Select value={scope} onValueChange={(v) => setScope(v as "mine" | "all")}>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mine">Minhas decisões/pedidos</SelectItem>
+                <SelectItem value="all">Todas as decisões</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+
           <Select value={decision} onValueChange={(v) => setDecision(v as "all" | "Y" | "N")}>
             <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
