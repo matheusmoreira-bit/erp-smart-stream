@@ -297,6 +297,7 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
 /* ─── Main Page ─── */
 export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" | "sales" } = {}) {
   const { session, logout } = useSap();
+  const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
@@ -322,8 +323,22 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
 
   const companyLabel = getLabel(session?.companyDB || "");
-  const isAdmin = !!session.isSuperUser;
+  const isAdmin = isLovableAdmin || !!session.isSuperUser;
   const userIdentifier = session.userName.toLowerCase();
+  // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
+  const [showAll, setShowAll] = useState<boolean>(isAdmin);
+  useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
+
+  const isMine = (e: Expense) => {
+    const owner = (e.created_by_email || e.requester_email || e.requester_name || "").toLowerCase();
+    const approver = (e.current_approver || "").toLowerCase();
+    return (
+      owner === userIdentifier ||
+      owner.startsWith(userIdentifier + "@") ||
+      approver === userIdentifier ||
+      approver.includes(userIdentifier)
+    );
+  };
 
   const canCancel = (expense: Expense) => {
     if (isAdmin) return true;
@@ -331,7 +346,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     return owner === userIdentifier || owner.startsWith(userIdentifier + "@");
   };
 
+  const effectiveShowAll = isAdmin && showAll;
   const filtered = expenses.filter((e) => {
+    if (!effectiveShowAll && !isMine(e)) return false;
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
@@ -341,6 +358,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       (e.remarks || "").toLowerCase().includes(q)
     );
   });
+
 
   const totalValue = filtered.reduce((sum, e) => sum + e.total_amount, 0);
 
