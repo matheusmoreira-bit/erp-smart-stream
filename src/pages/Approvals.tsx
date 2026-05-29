@@ -1356,13 +1356,16 @@ export default function ApprovalsPage() {
               className="pl-9 bg-muted/30 border-border"
             />
           </div>
-          <div className="flex items-center gap-2 glass-card px-3 py-2">
-            <ShieldAlert className="w-4 h-4 text-amber-400" />
-            <Label htmlFor="show-all" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-              Ver todas as aprovações
-            </Label>
-            <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
-          </div>
+          {isAdmin && (
+            <div className="flex items-center gap-2 glass-card px-3 py-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <Label htmlFor="show-all" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                Ver todas as aprovações
+              </Label>
+              <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
+            </div>
+          )}
+
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
