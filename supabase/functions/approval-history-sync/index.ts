@@ -62,6 +62,7 @@ function normalizeCurrency(v: unknown): string | null {
 }
 
 interface WebhookRow {
+  Empresa?: string;
   Code?: number;
   Aprovador?: string;
   "Email do aprovador"?: string;
@@ -113,6 +114,24 @@ function combineDateTime(date?: string | null, time?: string | null): string | n
   return d.toISOString();
 }
 
+function normalizeName(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function resolveCompanyDb(
+  empresa: string | undefined,
+  lookup: Map<string, string>,
+  fallback: string,
+): string {
+  if (!empresa) return fallback;
+  const key = normalizeName(empresa);
+  return lookup.get(key) || fallback;
+}
+
 function mapRow(r: WebhookRow, companyDb: string) {
   const code = r.Code != null ? String(r.Code) : "";
   const email = (r["Email do aprovador"] || "").toLowerCase().trim();
@@ -158,6 +177,7 @@ function mapRow(r: WebhookRow, companyDb: string) {
     synced_at: new Date().toISOString(),
   };
 }
+
 
 async function updateSyncState(
   supabase: ReturnType<typeof createClient>,
@@ -223,14 +243,26 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, received: 0, upserted: 0 });
     }
 
-    // Deduplica por external_id (mantém o último)
+    // Mapa empresa (display_name normalizado) -> company_db
+    const { data: companiesData } = await supabase
+      .from("companies")
+      .select("company_db,display_name");
+    const companyLookup = new Map<string, string>();
+    for (const c of (companiesData || []) as Array<{ company_db: string; display_name: string }>) {
+      companyLookup.set(normalizeName(c.display_name), c.company_db);
+      companyLookup.set(normalizeName(c.company_db), c.company_db);
+    }
+
+    // Deduplica por (company_db, external_id)
     const mapped = new Map<string, ReturnType<typeof mapRow>>();
     for (const r of rows) {
-      const row = mapRow(r, companyDb);
+      const resolved = resolveCompanyDb(r.Empresa, companyLookup, companyDb);
+      const row = mapRow(r, resolved);
       if (row.external_id.startsWith("::")) continue;
-      mapped.set(row.external_id, row);
+      mapped.set(`${row.company_db}::${row.external_id}`, row);
     }
     const payload = Array.from(mapped.values());
+
 
     // Upsert em lotes para evitar payloads gigantes
     const BATCH = 200;
