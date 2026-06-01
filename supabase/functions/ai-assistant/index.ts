@@ -149,6 +149,13 @@ const tools = [
 ];
 
 // ---------- Tool runners ----------
+async function isAdmin(sb: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await sb.rpc("has_role", { _user_id: userId, _role: "admin" });
+    return !error && data === true;
+  } catch { return false; }
+}
+
 async function runTool(name: string, args: Record<string, unknown>, sb: ReturnType<typeof createClient>, userId: string) {
   switch (name) {
     case "list_companies": {
