@@ -149,6 +149,13 @@ const tools = [
 ];
 
 // ---------- Tool runners ----------
+async function isAdmin(sb: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await sb.rpc("has_role", { _user_id: userId, _role: "admin" });
+    return !error && data === true;
+  } catch { return false; }
+}
+
 async function runTool(name: string, args: Record<string, unknown>, sb: ReturnType<typeof createClient>, userId: string) {
   switch (name) {
     case "list_companies": {
@@ -245,6 +252,7 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return data;
     }
     case "pagcorp_integration_stats": {
+      if (!(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
       const days = Number(args.days || 7);
       const since = new Date(Date.now() - days * 86400000).toISOString();
       const { data, error } = await sb.from("pagcorp_integration_log")
@@ -258,6 +266,7 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return { period_days: days, counts, total: data?.length || 0 };
     }
     case "audit_log_recent": {
+      if (!(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
       const limit = Number(args.limit || 20);
       let q = sb.from("audit_log").select("created_at, actor_email, action, entity_type, entity_id, company_db, details")
         .order("created_at", { ascending: false }).limit(limit);
@@ -281,6 +290,7 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return { unread, recent: data };
     }
     case "idle_license_alerts": {
+      if (!(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
       const limit = Number(args.limit || 20);
       let q = sb.from("license_idle_alerts")
         .select("user_code, company_db, license_type, days_idle, alert_week, sent_at")
