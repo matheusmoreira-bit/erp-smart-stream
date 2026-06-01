@@ -210,6 +210,13 @@ Deno.serve(async (req) => {
   );
 
   try {
+    try {
+      await requireAdmin(req);
+    } catch (err) {
+      const r = authErrorResponse(err, corsHeaders);
+      if (r) return r;
+      throw err;
+    }
     let body: { companyDb?: string } = {};
     try { body = await req.json(); } catch { /* no body */ }
     const companyDb = body.companyDb || DEFAULT_COMPANY_DB;
