@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, type SapSession, clearClientCache } from "@/lib/sap-client";
 
@@ -153,6 +153,19 @@ export function SapProvider({ children }: { children: ReactNode }) {
     clearClientCache();
     setSession(null);
   }, [session]);
+
+  // Listen for SAP Service Layer session-expired events emitted by sap-client.
+  // Don't try to silently relogin with cached credentials — clear state so the
+  // user is sent back to the login screen.
+  useEffect(() => {
+    const handler = () => {
+      clearClientCache();
+      setSession(null);
+      setError("Sua sessão expirou. Faça login novamente.");
+    };
+    window.addEventListener("erp:session-expired", handler);
+    return () => window.removeEventListener("erp:session-expired", handler);
+  }, [setSession]);
 
   return (
     <ErpContext.Provider value={{ session, isLoading, error, login, logout }}>
