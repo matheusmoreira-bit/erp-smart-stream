@@ -548,8 +548,11 @@ Deno.serve(async (req) => {
     // APPROVALS CACHE (service-role proxy so SAP-authenticated users can use the shared cache)
     if (action === "readApprovalsCache" || action === "writeApprovalsCache") {
       try { await requireAuth(req); } catch {
-        return new Response(JSON.stringify({ error: "UNAUTHORIZED" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        const payload = action === "readApprovalsCache"
+          ? { data: null, updatedAt: null, expiresAt: null, authSkipped: true }
+          : { success: false, authSkipped: true };
+        return new Response(JSON.stringify(payload), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (!companyDB || typeof companyDB !== "string") {
