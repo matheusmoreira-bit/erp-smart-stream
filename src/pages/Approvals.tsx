@@ -1029,7 +1029,10 @@ export default function ApprovalsPage() {
   const allCostCenterCodes = useMemo(
     () => new Set(allApprovals.flatMap((doc) => {
       const rateio = shouldShowRateio(doc);
-      return rateio.show ? rateio.info.byCC.map((cc) => cc.code) : [];
+      if (rateio.show) return rateio.info.byCC.map((cc) => cc.code);
+      return (doc.documentLines || [])
+        .map((l) => (l.CostingCode || "").trim())
+        .filter((c) => c.length > 0);
     })),
     [allApprovals],
   );
