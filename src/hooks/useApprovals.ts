@@ -85,6 +85,12 @@ function parseDocumentLines(raw?: string): DocumentLine[] {
 
 function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
   const docTypeName = row["Tipo de solicitação"] || "Documento";
+  const currency = normalizeCurrency(row["Código da moeda original"]);
+  const valorOriginal = Number(row["Valor do documento na moeda original"] || 0);
+  const valorTotal = Number(row["Valor total"] || 0);
+  // Quando a moeda do documento for diferente de BRL, "Valor total" vem convertido para BRL
+  // pelo SAP. Para refletir corretamente, usamos o valor na moeda original quando disponível.
+  const docTotal = currency !== "BRL" && valorOriginal > 0 ? valorOriginal : valorTotal;
 
   return {
     approvalRequestId: Number(row.Code || 0),
@@ -92,8 +98,8 @@ function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
     docTypeName,
     docNum: Number(row["Nº do documento"] || 0),
     docEntry: Number(row["Draft DocEntry"] || 0),
-    docTotal: Number(row["Valor total"] || 0),
-    currency: normalizeCurrency(row["Código da moeda original"]),
+    docTotal,
+    currency,
     cardCode: row["Código PN/Fornecedor"] || "",
     cardName: row["Fornecedor / Parceiro"] || "—",
     requester: row.Solicitante || "—",
