@@ -194,17 +194,23 @@ export async function sapQueryView<T = unknown>(
 export async function sapReadApprovalsCache<T = unknown>(
   session: SapSession,
 ): Promise<{ data: T | null; updatedAt: string | null; expiresAt: string | null }> {
-  const result = await callProxy({
-    action: "readApprovalsCache",
-    sessionId: session.sessionId,
-    routeId: session.routeId,
-    companyDB: session.companyDB,
-  });
-  return {
-    data: (result.data ?? null) as T | null,
-    updatedAt: result.updatedAt ?? null,
-    expiresAt: result.expiresAt ?? null,
-  };
+  try {
+    const result = await callProxy({
+      action: "readApprovalsCache",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      companyDB: session.companyDB,
+    });
+    return {
+      data: (result.data ?? null) as T | null,
+      updatedAt: result.updatedAt ?? null,
+      expiresAt: result.expiresAt ?? null,
+    };
+  } catch (e) {
+    // Cache is an optimization — degrade silently if unauthenticated/unavailable
+    console.warn("readApprovalsCache skipped:", (e as Error).message);
+    return { data: null, updatedAt: null, expiresAt: null };
+  }
 }
 
 export async function sapWriteApprovalsCache<T = unknown>(
@@ -212,14 +218,18 @@ export async function sapWriteApprovalsCache<T = unknown>(
   docs: T,
   ttlMs: number,
 ): Promise<void> {
-  await callProxy({
-    action: "writeApprovalsCache",
-    sessionId: session.sessionId,
-    routeId: session.routeId,
-    companyDB: session.companyDB,
-    data: docs,
-    ttlMs,
-  });
+  try {
+    await callProxy({
+      action: "writeApprovalsCache",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      companyDB: session.companyDB,
+      data: docs,
+      ttlMs,
+    });
+  } catch (e) {
+    console.warn("writeApprovalsCache skipped:", (e as Error).message);
+  }
 }
 
 export async function sapQueryAll(
