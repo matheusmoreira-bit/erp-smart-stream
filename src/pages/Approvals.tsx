@@ -542,8 +542,8 @@ function ApprovalDetailModal({
                           <td className="py-2 px-3 font-mono text-muted-foreground">{line.ItemCode}</td>
                           <td className="py-2 px-3 text-foreground">{line.Description}</td>
                           <td className="py-2 px-3 text-right font-mono">{line.Quantity}</td>
-                          <td className="py-2 px-3 text-right font-mono">{formatCurrency(line.UnitPrice)}</td>
-                          <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(line.LineTotal)}</td>
+                          <td className="py-2 px-3 text-right font-mono">{formatCurrency(doc.currency !== "BRL" && line.PriceFC ? line.PriceFC : line.UnitPrice, doc.currency)}</td>
+                          <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(doc.currency !== "BRL" && line.LineTotalFC ? line.LineTotalFC : line.LineTotal, doc.currency)}</td>
                           <td className="py-2 px-3 text-muted-foreground">{line.Project || "—"}</td>
                         </tr>
                       ))}

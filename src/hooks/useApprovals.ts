@@ -36,6 +36,8 @@ export interface DocumentLine {
   Quantity: number;
   UnitPrice: number;
   LineTotal: number;
+  PriceFC?: number;
+  LineTotalFC?: number;
   CostingCode: string;
   Project: string;
 }
