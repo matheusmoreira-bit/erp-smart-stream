@@ -1,3 +1,4 @@
+import { supabase } from "@/integrations/supabase/client";
 import { authFetch } from "@/lib/auth-fetch";
 
 const FUNCTION_URL = "sap-b1-proxy";
@@ -45,6 +46,11 @@ async function callProxy(body: Record<string, unknown>) {
     throw new Error(data?.error || `Erro HTTP ${resp.status}`);
   }
   return data;
+}
+
+async function hasLovableSession(): Promise<boolean> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return Boolean(session?.access_token);
 }
 
 export async function sapLogin(userName: string, password: string, companyDB: string): Promise<SapSession> {
@@ -195,6 +201,10 @@ export async function sapReadApprovalsCache<T = unknown>(
   session: SapSession,
 ): Promise<{ data: T | null; updatedAt: string | null; expiresAt: string | null }> {
   try {
+    if (!(await hasLovableSession())) {
+      return { data: null, updatedAt: null, expiresAt: null };
+    }
+
     const result = await callProxy({
       action: "readApprovalsCache",
       sessionId: session.sessionId,
@@ -219,6 +229,10 @@ export async function sapWriteApprovalsCache<T = unknown>(
   ttlMs: number,
 ): Promise<void> {
   try {
+    if (!(await hasLovableSession())) {
+      return;
+    }
+
     await callProxy({
       action: "writeApprovalsCache",
       sessionId: session.sessionId,
