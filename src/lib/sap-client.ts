@@ -34,6 +34,27 @@ export function clearClientCache() {
   clientCache.clear();
 }
 
+export class SapSessionExpiredError extends Error {
+  constructor(message = "Sessão SAP expirada. Faça login novamente.") {
+    super(message);
+    this.name = "SapSessionExpiredError";
+  }
+}
+
+function looksLikeSessionExpired(payload: { sapStatus?: number; warning?: string; error?: string } | null | undefined): boolean {
+  if (!payload) return false;
+  if (payload.sapStatus === 401) return true;
+  const msg = `${payload.warning || ""} ${payload.error || ""}`.toLowerCase();
+  return /invalid session|session expired|session has expired|not logged in|login again|-304\b/.test(msg);
+}
+
+function notifySessionExpired() {
+  clearClientCache();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("erp:session-expired"));
+  }
+}
+
 async function callProxy(body: Record<string, unknown>) {
   const resp = await authFetch(FUNCTION_URL, {
     method: "POST",
@@ -42,6 +63,14 @@ async function callProxy(body: Record<string, unknown>) {
   });
 
   const data = await resp.json();
+
+  // Skip expiry detection on the login action itself — wrong creds shouldn't trigger a global logout
+  const action = typeof body?.action === "string" ? body.action : "";
+  if (action !== "login" && looksLikeSessionExpired(data)) {
+    notifySessionExpired();
+    throw new SapSessionExpiredError();
+  }
+
   if (!resp.ok || data?.error) {
     throw new Error(data?.error || `Erro HTTP ${resp.status}`);
   }
