@@ -106,7 +106,16 @@ function ApprovalCard({
   const hasAutoShare = matchedCCs.length > 0;
 
   // Centro de custo "principal" para exibir no card (igual ao print)
-  const primaryCC = hasAutoShare ? matchedCCs[0] : showRateio ? info.byCC[0] : null;
+  const primaryCC = hasAutoShare
+    ? matchedCCs[0]
+    : showRateio
+      ? info.byCC[0]
+      : (() => {
+          const code = (doc.documentLines || [])
+            .map((l) => (l.CostingCode || "").trim())
+            .find((c) => c.length > 0);
+          return code ? { code, amount: doc.docTotal, percent: 100 } : null;
+        })();
 
   return (
     <motion.div
@@ -141,9 +150,11 @@ function ApprovalCard({
           <div className="flex items-center gap-2 text-muted-foreground min-w-0">
             <Split className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             <span className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">C. Custo</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 rounded-full px-1.5 py-0.5 shrink-0">
-              Rateado
-            </span>
+            {showRateio && (
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 rounded-full px-1.5 py-0.5 shrink-0">
+                Rateado
+              </span>
+            )}
             <span className="text-foreground font-medium truncate">{formatCostCenter(primaryCC.code)}</span>
           </div>
         )}
