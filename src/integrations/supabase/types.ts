@@ -1628,6 +1628,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      is_sap_user_admin: { Args: { _sap_username: string }; Returns: boolean }
       move_to_dlq: {
         Args: {
           dlq_name: string
