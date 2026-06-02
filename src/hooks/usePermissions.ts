@@ -228,6 +228,16 @@ export function useModuleAccess(moduleKey?: string) {
         }
       }
 
+      // Also check if the SAP username matches a backoffice admin (by email/email prefix)
+      const { data: isAdminBySap } = await supabase.rpc("is_sap_user_admin", {
+        _sap_username: identifier,
+      });
+      if (isAdminBySap) {
+        setUserModules(allKeys);
+        setLoading(false);
+        return;
+      }
+
       // Get assignments for this user filtered by current company
       let query = supabase
         .from("user_group_assignments")
