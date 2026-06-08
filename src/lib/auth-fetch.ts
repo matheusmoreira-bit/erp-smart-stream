@@ -18,18 +18,20 @@ function tokenHasSub(token: string): boolean {
 }
 
 async function getValidAccessToken(): Promise<string | null> {
-  let { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
   if (session?.access_token && tokenHasSub(session.access_token)) {
     return session.access_token;
   }
-  // Try to refresh — stale tokens (e.g. signed by old keys) won't have a sub claim
-  const { data, error } = await supabase.auth.refreshSession();
-  if (error || !data.session?.access_token || !tokenHasSub(data.session.access_token)) {
-    // Stale/invalid session — clear it so the app re-prompts login cleanly
-    try { await supabase.auth.signOut(); } catch { /* ignore */ }
-    return null;
-  }
-  return data.session.access_token;
+  // Try a non-destructive refresh. NEVER call signOut() here — that wipes the
+  // user's Lovable Cloud session globally and breaks every subsequent
+  // supabase.from() call (which would then run as anon and 401).
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (!error && data.session?.access_token && tokenHasSub(data.session.access_token)) {
+      return data.session.access_token;
+    }
+  } catch { /* ignore */ }
+  return null;
 }
 
 export async function authFetch(
