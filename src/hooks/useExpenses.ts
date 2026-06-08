@@ -510,7 +510,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // Trigger SAP integration immediately (only for SAP companies)
       if (session?.erpType === "sap") {
         try {
-          const { data, error: fnErr } = await supabase.functions.invoke("expense-to-sap", {
+          const { data, error: fnErr } = await invokeFn("expense-to-sap", {
             body: { expense_id: expenseId },
           });
           if (fnErr) throw fnErr;
@@ -530,7 +530,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
   const retrySapIntegration = useCallback(
     async (expenseId: string) => {
-      const { data, error: fnErr } = await supabase.functions.invoke("expense-to-sap", {
+      const { data, error: fnErr } = await invokeFn("expense-to-sap", {
         body: { expense_id: expenseId },
       });
       if (fnErr) throw fnErr;
