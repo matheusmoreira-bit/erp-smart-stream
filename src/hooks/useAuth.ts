@@ -9,13 +9,34 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const tokenHasSub = (token?: string | null) => {
+      if (!token) return false;
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1] || ""));
+        return typeof payload?.sub === "string" && payload.sub.length > 0;
+      } catch {
+        return false;
+      }
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        // Defensive: a session whose access_token lacks `sub` is corrupt
+        // (legacy/anon JWT). It causes every protected edge function to 401
+        // with "Não autenticado". Force a clean signOut so the user re-logs.
+        if (session && !tokenHasSub(session.access_token)) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          setIsAdmin(false);
+          setLoading(false);
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Check admin role - use setTimeout to avoid deadlock with auth state change
           setTimeout(async () => {
             const { data } = await supabase
               .from("user_roles")
@@ -33,7 +54,14 @@ export function useAuth() {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session && !tokenHasSub(session.access_token)) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
       setSession(session);
       setUser(session?.user ?? null);
       if (!session) setLoading(false);
