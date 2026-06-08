@@ -86,6 +86,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           sessionId: sapSess.sessionId,
           routeId: sapSess.routeId,
           isSuperUser: sapSess.isSuperUser,
+          expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
         });
       } else if (erpType === "omie") {
         // OMIE login — validate credentials via edge function
