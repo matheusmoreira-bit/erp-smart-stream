@@ -12,6 +12,10 @@ export interface ErpSession {
   sessionId?: string;
   routeId?: string;
   isSuperUser?: boolean;
+  // Expiry timestamp (ms epoch). User session is capped at 30min
+  // to mirror SAP Service Layer's SessionTimeout. After that, any
+  // user-scoped request must re-authenticate via the login screen.
+  expiresAt?: number;
   // OMIE-specific (stateless — uses app_key/app_secret stored in system_credentials)
 }
 
@@ -31,7 +35,13 @@ function loadStoredSession(): ErpSession | null {
   try {
     const raw = sessionStorage.getItem(ERP_SESSION_STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as ErpSession;
+    const parsed = JSON.parse(raw) as ErpSession;
+    // Drop expired sessions on load so user is forced through the login screen.
+    if (parsed?.expiresAt && Date.now() >= parsed.expiresAt) {
+      sessionStorage.removeItem(ERP_SESSION_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -76,6 +86,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           sessionId: sapSess.sessionId,
           routeId: sapSess.routeId,
           isSuperUser: sapSess.isSuperUser,
+          expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
         });
       } else if (erpType === "omie") {
         // OMIE login — validate credentials via edge function
@@ -99,6 +110,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           erpType: "omie",
           companyDB,
           userName: userName || "omie",
+          expiresAt: Date.now() + 30 * 60 * 1000,
         });
       } else if (erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite") {
         // S/4HANA & TOTVS — stateless, credentials stored in system_credentials
@@ -120,6 +132,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           erpType,
           companyDB,
           userName: userName || erpType,
+          expiresAt: Date.now() + 30 * 60 * 1000,
         });
       }
 
@@ -167,6 +180,25 @@ export function SapProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("erp:session-expired", handler);
   }, [setSession]);
 
+  // Hard cap: any user session expires after at most 30 minutes (matching SAP
+  // Service Layer's SessionTimeout). Once that window elapses, dispatch the
+  // expiry event so the user is returned to the login screen. After login the
+  // SessionID issued by /Login is reused for every subsequent user-scoped
+  // request — service-account requests use the Apiuser flow on the server.
+  useEffect(() => {
+    const exp = session?.expiresAt;
+    if (!exp) return;
+    const ms = exp - Date.now();
+    if (ms <= 0) {
+      window.dispatchEvent(new CustomEvent("erp:session-expired"));
+      return;
+    }
+    const t = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("erp:session-expired"));
+    }, ms);
+    return () => window.clearTimeout(t);
+  }, [session?.expiresAt]);
+
   return (
     <ErpContext.Provider value={{ session, isLoading, error, login, logout }}>
       {children}
@@ -189,6 +221,7 @@ export function useSap() {
         userName: ctx.session.userName,
         isSuperUser: ctx.session.isSuperUser || false,
         erpType: "sap",
+        expiresAt: ctx.session.expiresAt,
       };
     }
 
