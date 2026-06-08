@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
+import { invokeFn } from "@/lib/invoke-fn";
 import {
   CreditCard,
   RefreshCw,
@@ -330,7 +331,7 @@ export default function PagCorp() {
       let sapPayloadFromFn: any = null;
       let sapResponseFromFn: any = null;
       try {
-        const { data, error: fnErr } = await supabase.functions.invoke("expense-to-sap", {
+        const { data, error: fnErr } = await invokeFn("expense-to-sap", {
           body: { expense_id: (expense as any).id },
         });
         if (fnErr) throw fnErr;
