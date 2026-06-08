@@ -180,6 +180,25 @@ export function SapProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("erp:session-expired", handler);
   }, [setSession]);
 
+  // Hard cap: any user session expires after at most 30 minutes (matching SAP
+  // Service Layer's SessionTimeout). Once that window elapses, dispatch the
+  // expiry event so the user is returned to the login screen. After login the
+  // SessionID issued by /Login is reused for every subsequent user-scoped
+  // request — service-account requests use the Apiuser flow on the server.
+  useEffect(() => {
+    const exp = session?.expiresAt;
+    if (!exp) return;
+    const ms = exp - Date.now();
+    if (ms <= 0) {
+      window.dispatchEvent(new CustomEvent("erp:session-expired"));
+      return;
+    }
+    const t = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("erp:session-expired"));
+    }, ms);
+    return () => window.clearTimeout(t);
+  }, [session?.expiresAt]);
+
   return (
     <ErpContext.Provider value={{ session, isLoading, error, login, logout }}>
       {children}
