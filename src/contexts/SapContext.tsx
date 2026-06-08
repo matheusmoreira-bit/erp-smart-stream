@@ -12,6 +12,10 @@ export interface ErpSession {
   sessionId?: string;
   routeId?: string;
   isSuperUser?: boolean;
+  // Expiry timestamp (ms epoch). User session is capped at 30min
+  // to mirror SAP Service Layer's SessionTimeout. After that, any
+  // user-scoped request must re-authenticate via the login screen.
+  expiresAt?: number;
   // OMIE-specific (stateless — uses app_key/app_secret stored in system_credentials)
 }
 
