@@ -56,6 +56,16 @@ export function useAuth() {
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session && !tokenHasSub(session.access_token)) {
+        // Token is corrupt (missing `sub`) — try a non-destructive refresh
+        // before forcing the user to re-login.
+        try {
+          const { data, error } = await supabase.auth.refreshSession();
+          if (!error && data.session && tokenHasSub(data.session.access_token)) {
+            setSession(data.session);
+            setUser(data.session.user ?? null);
+            return;
+          }
+        } catch { /* ignore */ }
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
