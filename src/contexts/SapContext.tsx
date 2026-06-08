@@ -35,7 +35,13 @@ function loadStoredSession(): ErpSession | null {
   try {
     const raw = sessionStorage.getItem(ERP_SESSION_STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as ErpSession;
+    const parsed = JSON.parse(raw) as ErpSession;
+    // Drop expired sessions on load so user is forced through the login screen.
+    if (parsed?.expiresAt && Date.now() >= parsed.expiresAt) {
+      sessionStorage.removeItem(ERP_SESSION_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
