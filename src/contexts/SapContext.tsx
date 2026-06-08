@@ -132,6 +132,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           erpType,
           companyDB,
           userName: userName || erpType,
+          expiresAt: Date.now() + 30 * 60 * 1000,
         });
       }
 
