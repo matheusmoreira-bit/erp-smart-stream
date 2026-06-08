@@ -137,6 +137,13 @@ async function processCompany(
     result.error = "Credenciais SAP incompletas";
     return result;
   }
+  // Safety: watcher só pode autenticar com a conta de serviço "Apiuser".
+  // Logar com um usuário real bloqueia a conta após poucas falhas.
+  if ((creds.username || "").trim().toLowerCase() !== "apiuser") {
+    result.status = "skipped";
+    result.error = "Watcher desativado: usuário SAP não é Apiuser";
+    return result;
+  }
 
   const baseUrl = normalizeBaseUrl(creds.service_layer_url);
   const dbName = creds.company_db || company.company_db;
