@@ -139,6 +139,13 @@ Deno.serve(async (req) => {
           results.push({ companyDb, status: "skipped", reason: "credenciais incompletas" });
           continue;
         }
+        // Safety: watchers must only authenticate with the dedicated "Apiuser"
+        // service account. Logging in with a real person's SAP user causes
+        // their account to be blocked after a few failed attempts.
+        if ((creds.username || "").trim().toLowerCase() !== "apiuser") {
+          results.push({ companyDb, status: "skipped", reason: "watcher desativado: usuário SAP não é Apiuser" });
+          continue;
+        }
 
         const stats = await refreshCompany(sb, companyDb, creds);
         results.push({ companyDb, status: "success", ...stats });
