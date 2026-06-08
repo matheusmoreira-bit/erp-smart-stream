@@ -221,6 +221,7 @@ export function useSap() {
         userName: ctx.session.userName,
         isSuperUser: ctx.session.isSuperUser || false,
         erpType: "sap",
+        expiresAt: ctx.session.expiresAt,
       };
     }
 
