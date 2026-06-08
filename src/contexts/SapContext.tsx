@@ -110,6 +110,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           erpType: "omie",
           companyDB,
           userName: userName || "omie",
+          expiresAt: Date.now() + 30 * 60 * 1000,
         });
       } else if (erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite") {
         // S/4HANA & TOTVS — stateless, credentials stored in system_credentials
