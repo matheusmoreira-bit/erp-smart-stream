@@ -312,7 +312,63 @@ export default function PagCorp() {
     }
   };
 
-  /**
+  const openConsolidateDialog = () => {
+    if (!checkSapCredentials()) return;
+    const list = selectableTransactions.filter((t) => selectedIds.has(t.id));
+    if (list.length < 2) {
+      toast.info("Selecione 2 ou mais transações para consolidar");
+      return;
+    }
+    setConsolidateDialog({ open: true, transactions: list });
+  };
+
+  const handleConfirmConsolidate = async (supplier: SapSearchOption) => {
+    const txs = consolidateDialog.transactions;
+    if (txs.length === 0 || !session?.companyDB) return;
+    try {
+      const result = await integrateConsolidated(
+        txs,
+        session.companyDB,
+        supplier.code,
+        supplier.name,
+        session.userName || undefined,
+      );
+      toast.success("Pedido de Compra consolidado criado no SAP", {
+        description: `PC #${result.purchaseOrder?.DocNum} • ${txs.length} transações`,
+      });
+      setConsolidateDialog({ open: false, transactions: [] });
+      setSelectedIds(new Set());
+      await fetchTransactions(startDate, endDate, session.companyDB);
+    } catch (e) {
+      toast.error("Falha na integração consolidada", {
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+        action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
+      });
+      throw e;
+    }
+  };
+
+  const openAttachments = (t: PagCorpTransaction) => {
+    const sources: any[] = [
+      ...(Array.isArray(t.receipts) ? t.receipts : []),
+      ...(Array.isArray(t.attachments) ? t.attachments : []),
+    ];
+    const urls = sources
+      .map((r: any) => r?.url || r?.fileUrl || r?.link || r?.downloadUrl)
+      .filter((u: any): u is string => typeof u === "string" && u.length > 0);
+    if (urls.length === 0) {
+      toast.info("Nenhum anexo disponível para esta transação");
+      return;
+    }
+    urls.forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
+  };
+
+  const handleGeneratePresentation = () => {
+    toast.info("Modelo de apresentação ainda não configurado", {
+      description: "Envie o modelo PDF para que possamos gerar o relatório.",
+    });
+  };
+
    * Accountability flow: opens the same form as a manual expense (items, cost
    * centers, projects, attachments) and creates an internal expense with origin
    * "pagcorp", skipping approval rules. SAP integration runs immediately, and we
