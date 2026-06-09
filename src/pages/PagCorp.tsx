@@ -666,10 +666,10 @@ export default function PagCorp() {
             Consolidar em 1 PC{selectedIds.size > 1 ? ` (${selectedIds.size})` : ""}
           </Button>
           <Button
-            onClick={handleGeneratePresentation}
+            onClick={() => setPresentationDialogOpen(true)}
             variant="outline"
             className="gap-2"
-            title="Gera relatório PDF a partir do modelo configurado"
+            title="Gera apresentação .pptx com resumo do período"
           >
             <FileText className="w-4 h-4" />
             Gerar Apresentação
