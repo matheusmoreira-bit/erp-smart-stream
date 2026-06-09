@@ -336,6 +336,7 @@ export default function PagCorp() {
             expense_id: (expense as any).id,
             sap_session_id: session.sessionId,
             sap_route_id: session.routeId,
+            sap_company_db: session.companyDB,
             sap_session_expires_at: session.expiresAt,
           },
         });
