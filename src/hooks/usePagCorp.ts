@@ -193,5 +193,37 @@ export function usePagCorp() {
     return result;
   }, []);
 
-  return { transactions, isLoading, error, fetchTransactions, logIntegration, integrateDirect };
+  /**
+   * Consolidated integration: many PagCorp transactions → ONE SAP Purchase Order
+   * with one line per transaction, all under the same supplier.
+   */
+  const integrateConsolidated = useCallback(async (
+    transactions: PagCorpTransaction[],
+    companyDb: string,
+    supplierCode: string,
+    supplierName?: string,
+    integratedBy?: string,
+  ) => {
+    const { authFetch } = await import("@/lib/auth-fetch");
+    // All as "generic" (skip accountability per-tx flow); receipts still merged on the edge fn
+    const res = await authFetch("pagcorp-to-sap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transactions,
+        companyDb,
+        integrationType: "generic",
+        supplierCode,
+        supplierName,
+        integratedBy,
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.success === false) {
+      throw new Error(result.error || `Erro ${res.status}`);
+    }
+    return result;
+  }, []);
+
+  return { transactions, isLoading, error, fetchTransactions, logIntegration, integrateDirect, integrateConsolidated };
 }
