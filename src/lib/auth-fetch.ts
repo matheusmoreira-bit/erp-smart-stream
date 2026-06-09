@@ -4,9 +4,8 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 /**
- * Fetch wrapper that automatically uses the user's JWT for Authorization.
- * Falls back to anon key for edge functions that intentionally validate
- * their own non-Lovable auth context, such as the SAP session proxy.
+ * Fetch wrapper for protected edge functions. It only sends a real user JWT;
+ * public/SAP-session functions must use publicFunctionFetch instead.
  */
 function tokenHasSub(token: string): boolean {
   try {
