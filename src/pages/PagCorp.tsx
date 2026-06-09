@@ -17,6 +17,8 @@ import {
   Clock,
   History,
   Layers,
+  Paperclip,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -45,6 +47,7 @@ import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
+import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { useExpenses } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
@@ -75,7 +78,7 @@ function formatDate(dateStr: string) {
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions, integrateDirect, logIntegration } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated, logIntegration } = usePagCorp();
   const { createExpense } = useExpenses();
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
@@ -115,6 +118,10 @@ export default function PagCorp() {
   const [batchQueue, setBatchQueue] = useState<PagCorpTransaction[]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
   const [batchActive, setBatchActive] = useState(false);
+  const [consolidateDialog, setConsolidateDialog] = useState<{
+    open: boolean;
+    transactions: PagCorpTransaction[];
+  }>({ open: false, transactions: [] });
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
 
@@ -305,6 +312,63 @@ export default function PagCorp() {
     }
   };
 
+  const openConsolidateDialog = () => {
+    if (!checkSapCredentials()) return;
+    const list = selectableTransactions.filter((t) => selectedIds.has(t.id));
+    if (list.length < 2) {
+      toast.info("Selecione 2 ou mais transações para consolidar");
+      return;
+    }
+    setConsolidateDialog({ open: true, transactions: list });
+  };
+
+  const handleConfirmConsolidate = async (supplier: SapSearchOption) => {
+    const txs = consolidateDialog.transactions;
+    if (txs.length === 0 || !session?.companyDB) return;
+    try {
+      const result = await integrateConsolidated(
+        txs,
+        session.companyDB,
+        supplier.code,
+        supplier.name,
+        session.userName || undefined,
+      );
+      toast.success("Pedido de Compra consolidado criado no SAP", {
+        description: `PC #${result.purchaseOrder?.DocNum} • ${txs.length} transações`,
+      });
+      setConsolidateDialog({ open: false, transactions: [] });
+      setSelectedIds(new Set());
+      await fetchTransactions(startDate, endDate, session.companyDB);
+    } catch (e) {
+      toast.error("Falha na integração consolidada", {
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+        action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
+      });
+      throw e;
+    }
+  };
+
+  const openAttachments = (t: PagCorpTransaction) => {
+    const sources: any[] = [
+      ...(Array.isArray(t.receipts) ? t.receipts : []),
+      ...(Array.isArray(t.attachments) ? t.attachments : []),
+    ];
+    const urls = sources
+      .map((r: any) => r?.url || r?.fileUrl || r?.link || r?.downloadUrl)
+      .filter((u: any): u is string => typeof u === "string" && u.length > 0);
+    if (urls.length === 0) {
+      toast.info("Nenhum anexo disponível para esta transação");
+      return;
+    }
+    urls.forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
+  };
+
+  const handleGeneratePresentation = () => {
+    toast.info("Modelo de apresentação ainda não configurado", {
+      description: "Envie o modelo PDF para que possamos gerar o relatório.",
+    });
+  };
+
   /**
    * Accountability flow: opens the same form as a manual expense (items, cost
    * centers, projects, attachments) and creates an internal expense with origin
@@ -480,6 +544,25 @@ export default function PagCorp() {
             <Layers className="w-4 h-4" />
             Integrar em lote{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
           </Button>
+          <Button
+            onClick={openConsolidateDialog}
+            disabled={selectedIds.size < 2 || batchActive}
+            variant="secondary"
+            className="gap-2"
+            title="Cria 1 único Pedido de Compra com várias linhas, todas para o mesmo fornecedor"
+          >
+            <Layers className="w-4 h-4" />
+            Consolidar em 1 PC{selectedIds.size > 1 ? ` (${selectedIds.size})` : ""}
+          </Button>
+          <Button
+            onClick={handleGeneratePresentation}
+            variant="outline"
+            className="gap-2"
+            title="Gera relatório PDF a partir do modelo configurado"
+          >
+            <FileText className="w-4 h-4" />
+            Gerar Apresentação
+          </Button>
         </div>
       </div>
 
@@ -594,15 +677,36 @@ export default function PagCorp() {
                           {formatCurrency(t.amount, t.currency)}
                         </TableCell>
                         <TableCell className="text-center">
-                          {t.hasAccountability ? (
-                            t.accountabilityApproved ? (
-                              <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
+                          {(() => {
+                            const receiptCount =
+                              (Array.isArray(t.receipts) ? t.receipts.length : 0) +
+                              (Array.isArray(t.attachments) ? t.attachments.length : 0);
+                            const StatusIcon = t.hasAccountability ? (
+                              t.accountabilityApproved ? (
+                                <CheckCircle2 className="w-4 h-4 text-success" />
+                              ) : (
+                                <Clock className="w-4 h-4 text-warning" />
+                              )
                             ) : (
-                              <Clock className="w-4 h-4 text-warning mx-auto" />
-                            )
-                          ) : (
-                            <XCircle className="w-4 h-4 text-destructive/60 mx-auto" />
-                          )}
+                              <XCircle className="w-4 h-4 text-destructive/60" />
+                            );
+                            return (
+                              <div className="flex items-center justify-center gap-2">
+                                {StatusIcon}
+                                {receiptCount > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openAttachments(t)}
+                                    title={`Abrir ${receiptCount} anexo(s) em nova aba`}
+                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                  >
+                                    <Paperclip className="w-3.5 h-3.5" />
+                                    {receiptCount}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-center">
                           {t.integrated ? (
@@ -700,6 +804,13 @@ export default function PagCorp() {
               }
             : undefined
         }
+      />
+
+      <PagCorpConsolidateDialog
+        open={consolidateDialog.open}
+        onClose={() => setConsolidateDialog({ open: false, transactions: [] })}
+        transactions={consolidateDialog.transactions}
+        onConfirm={handleConfirmConsolidate}
       />
     </div>
   );
