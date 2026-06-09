@@ -332,7 +332,12 @@ export default function PagCorp() {
       let sapResponseFromFn: any = null;
       try {
         const { data, error: fnErr } = await invokeFn("expense-to-sap", {
-          body: { expense_id: (expense as any).id },
+          body: {
+            expense_id: (expense as any).id,
+            sap_session_id: session.sessionId,
+            sap_route_id: session.routeId,
+            sap_session_expires_at: session.expiresAt,
+          },
         });
         if (fnErr) throw fnErr;
         sapPayloadFromFn = data?.sapPayload ?? null;
