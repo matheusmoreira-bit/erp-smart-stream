@@ -544,6 +544,25 @@ export default function PagCorp() {
             <Layers className="w-4 h-4" />
             Integrar em lote{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
           </Button>
+          <Button
+            onClick={openConsolidateDialog}
+            disabled={selectedIds.size < 2 || batchActive}
+            variant="secondary"
+            className="gap-2"
+            title="Cria 1 único Pedido de Compra com várias linhas, todas para o mesmo fornecedor"
+          >
+            <Layers className="w-4 h-4" />
+            Consolidar em 1 PC{selectedIds.size > 1 ? ` (${selectedIds.size})` : ""}
+          </Button>
+          <Button
+            onClick={handleGeneratePresentation}
+            variant="outline"
+            className="gap-2"
+            title="Gera relatório PDF a partir do modelo configurado"
+          >
+            <FileText className="w-4 h-4" />
+            Gerar Apresentação
+          </Button>
         </div>
       </div>
 
