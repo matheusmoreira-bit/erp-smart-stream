@@ -314,11 +314,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isRetrying, setIsRetrying] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  if (!session) {
-    navigate("/");
-    return null;
-  }
-
   const isSales = mode === "sales";
   const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Compras";
   const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Compra";
@@ -327,11 +322,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
 
   const companyLabel = getLabel(session?.companyDB || "");
-  const isAdmin = isLovableAdmin || !!session.isSuperUser;
-  const userIdentifier = session.userName.toLowerCase();
+  const isAdmin = isLovableAdmin || !!session?.isSuperUser;
+  const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
   const [showAll, setShowAll] = useState<boolean>(isAdmin);
   useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
+
+  useEffect(() => {
+    if (!session) navigate("/");
+  }, [session, navigate]);
+
+  if (!session) {
+    return null;
+  }
 
   const isMine = (e: Expense) => {
     const owner = (e.created_by_email || e.requester_email || e.requester_name || "").toLowerCase();
