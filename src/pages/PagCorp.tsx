@@ -923,6 +923,13 @@ export default function PagCorp() {
         transactions={consolidateDialog.transactions}
         onConfirm={handleConfirmConsolidate}
       />
+
+      <PagCorpPresentationDialog
+        open={presentationDialogOpen}
+        onClose={() => setPresentationDialogOpen(false)}
+        companyLabel={companyLabel || session?.companyDB || ""}
+        onGenerate={handleGeneratePresentation}
+      />
     </div>
   );
 }
