@@ -9,7 +9,9 @@ const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
  */
 function tokenHasSub(token: string): boolean {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1] || ""));
+    const rawPayload = token.split(".")[1] || "";
+    const base64 = rawPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(base64));
     return typeof payload?.sub === "string" && payload.sub.length > 0;
   } catch {
     return false;

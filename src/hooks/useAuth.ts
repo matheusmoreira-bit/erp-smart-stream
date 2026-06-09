@@ -12,7 +12,9 @@ export function useAuth() {
     const tokenHasSub = (token?: string | null) => {
       if (!token) return false;
       try {
-        const payload = JSON.parse(atob(token.split(".")[1] || ""));
+        const rawPayload = token.split(".")[1] || "";
+        const base64 = rawPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
+        const payload = JSON.parse(atob(base64));
         return typeof payload?.sub === "string" && payload.sub.length > 0;
       } catch {
         return false;
