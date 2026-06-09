@@ -53,7 +53,7 @@ export async function authFetch(
     ...options,
     headers: {
       ...options.headers,
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${authToken}`,
       apikey: ANON_KEY,
     },
   });
