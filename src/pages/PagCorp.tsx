@@ -677,15 +677,36 @@ export default function PagCorp() {
                           {formatCurrency(t.amount, t.currency)}
                         </TableCell>
                         <TableCell className="text-center">
-                          {t.hasAccountability ? (
-                            t.accountabilityApproved ? (
-                              <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
+                          {(() => {
+                            const receiptCount =
+                              (Array.isArray(t.receipts) ? t.receipts.length : 0) +
+                              (Array.isArray(t.attachments) ? t.attachments.length : 0);
+                            const StatusIcon = t.hasAccountability ? (
+                              t.accountabilityApproved ? (
+                                <CheckCircle2 className="w-4 h-4 text-success" />
+                              ) : (
+                                <Clock className="w-4 h-4 text-warning" />
+                              )
                             ) : (
-                              <Clock className="w-4 h-4 text-warning mx-auto" />
-                            )
-                          ) : (
-                            <XCircle className="w-4 h-4 text-destructive/60 mx-auto" />
-                          )}
+                              <XCircle className="w-4 h-4 text-destructive/60" />
+                            );
+                            return (
+                              <div className="flex items-center justify-center gap-2">
+                                {StatusIcon}
+                                {receiptCount > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openAttachments(t)}
+                                    title={`Abrir ${receiptCount} anexo(s) em nova aba`}
+                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                  >
+                                    <Paperclip className="w-3.5 h-3.5" />
+                                    {receiptCount}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-center">
                           {t.integrated ? (
