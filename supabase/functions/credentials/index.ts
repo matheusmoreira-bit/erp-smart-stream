@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
@@ -18,6 +18,22 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // DEBUG: log incoming auth header presence (first chars only)
+  const authHeader = req.headers.get("Authorization") || "";
+  console.log("[credentials] incoming", {
+    method: req.method,
+    hasAuth: !!authHeader,
+    authPrefix: authHeader.slice(0, 20),
+    authLen: authHeader.length,
+  });
+
+  // DEBUG marker: prove this code is running
+  if (req.headers.get("x-debug-marker") === "1") {
+    return new Response(JSON.stringify({ debug: "v2-running", authPrefix: authHeader.slice(0, 20) }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     await requireAdmin(req);
     const adminClient = getServiceClient();
@@ -28,7 +44,7 @@ Deno.serve(async (req) => {
     const companyDb = url.searchParams.get("company_db");
 
     if (req.method === "GET") {
-      const includeKeys = url.searchParams.get("keys"); // comma-separated keys to return values for
+      const includeKeys = url.searchParams.get("keys");
       const selectCols = includeKeys
         ? "id, system_name, credential_key, credential_value, updated_at, company_db"
         : "id, system_name, credential_key, updated_at, company_db";
@@ -82,7 +98,7 @@ Deno.serve(async (req) => {
           .from("system_credentials")
           .upsert(
             { system_name, credential_key: cred.key, credential_value: cred.value, company_db: company_db || null },
-            { onConflict: "company_db,system_name,credential_key" }
+            { onConflict: "system_name,credential_key,company_db" },
           );
         if (error) throw error;
       }
@@ -93,15 +109,16 @@ Deno.serve(async (req) => {
     }
 
     if (req.method === "DELETE") {
-      const { system_name, company_db } = await req.json();
-      if (!system_name || typeof system_name !== "string") {
+      const body = await req.json();
+      const { system_name, company_db } = body as { system_name: string; company_db?: string };
+      if (!system_name) {
         return new Response(JSON.stringify({ error: "system_name é obrigatório" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      let query = adminClient.from("system_credentials").delete().eq("system_name", system_name);
-      if (company_db) query = query.eq("company_db", company_db);
-      const { error } = await query;
+      let q = adminClient.from("system_credentials").delete().eq("system_name", system_name);
+      q = company_db ? q.eq("company_db", company_db) : q.is("company_db", null);
+      const { error } = await q;
       if (error) throw error;
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -111,12 +128,11 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
-    const authResp = authErrorResponse(error, corsHeaders);
+  } catch (err) {
+    console.error("[credentials] error:", err instanceof Error ? err.message : String(err));
+    const authResp = authErrorResponse(err, corsHeaders);
     if (authResp) return authResp;
-
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

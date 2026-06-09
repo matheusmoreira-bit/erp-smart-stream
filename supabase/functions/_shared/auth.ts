@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 
 export class AuthError extends Error {
   status: number;
@@ -10,6 +10,10 @@ export class AuthError extends Error {
 
 /**
  * Require an authenticated Supabase user. Throws AuthError on failure.
+ *
+ * Prefers local JWT verification via getClaims()/JWKS to avoid intermittent
+ * 401s caused by network/rate-limit issues calling /auth/v1/user. Falls back
+ * to getUser() when getClaims() is unavailable.
  */
 export async function requireUser(req: Request) {
   const authHeader = req.headers.get("Authorization");
@@ -21,18 +25,53 @@ export async function requireUser(req: Request) {
   // Reject anon/publishable keys — they don't represent a user
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
   const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
-  if (token === anonKey || token === publishableKey) {
+  if (!token || token === anonKey || token === publishableKey) {
     throw new AuthError("Não autenticado", 401);
   }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     anonKey || publishableKey,
-    { global: { headers: { Authorization: `Bearer ${token}` } } },
   );
 
+  // 1) Local JWKS verification (preferred, no network round-trip).
+  try {
+    const anyAuth = supabase.auth as unknown as {
+      getClaims?: (
+        jwt: string,
+      ) => Promise<{
+        data: { claims?: { sub?: string; email?: string } } | null;
+        error: unknown;
+      }>;
+    };
+    if (typeof anyAuth.getClaims === "function") {
+      const { data, error } = await anyAuth.getClaims(token);
+      const sub = data?.claims?.sub;
+      if (!error && sub) {
+        return { id: sub, email: data?.claims?.email || null };
+      }
+      console.warn("[requireUser] getClaims failed", {
+        error: error ? String((error as Error).message || error) : null,
+        hasData: !!data,
+      });
+    } else {
+      console.warn("[requireUser] getClaims not available on supabase.auth");
+    }
+  } catch (e) {
+    console.warn("[requireUser] getClaims threw", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  // 2) Fallback: server-side validation via /auth/v1/user.
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) throw new AuthError("Não autenticado", 401);
+  if (error || !data?.user) {
+    console.warn("[requireUser] getUser failed", {
+      error: error ? String((error as Error).message || error) : null,
+      tokenPrefix: token.slice(0, 24),
+    });
+    throw new AuthError("Não autenticado", 401);
+  }
   return { id: data.user.id, email: data.user.email || null };
 }
 
