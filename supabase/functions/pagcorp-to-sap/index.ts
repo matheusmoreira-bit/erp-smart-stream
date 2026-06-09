@@ -311,42 +311,54 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Upload attachments (only for accountability with receipts)
+    // 4. Upload attachments (only for accountability with receipts) — merge from all transactions
     let attachmentEntry: number | null = null;
-    if (integrationType === "accountability" && Array.isArray(transaction.receipts) && transaction.receipts.length > 0) {
-      stages.attachment_upload = "pending";
-      try {
-        const files = await downloadReceipts(transaction.receipts);
-        if (files.length > 0) {
-          attachmentEntry = await uploadAttachmentsToSap(sap, files);
-          stages.attachment_upload = attachmentEntry ? "success" : "failed";
-        } else {
-          stages.attachment_upload = "skipped";
+    if (integrationType === "accountability") {
+      const allReceipts = transactions.flatMap((t) =>
+        Array.isArray(t.receipts) ? t.receipts : [],
+      );
+      if (allReceipts.length > 0) {
+        stages.attachment_upload = "pending";
+        try {
+          const files = await downloadReceipts(allReceipts);
+          if (files.length > 0) {
+            attachmentEntry = await uploadAttachmentsToSap(sap, files);
+            stages.attachment_upload = attachmentEntry ? "success" : "failed";
+          } else {
+            stages.attachment_upload = "skipped";
+          }
+        } catch (e) {
+          stages.attachment_upload = "failed";
+          throw new Error(`Anexos: ${e instanceof Error ? e.message : String(e)}`);
         }
-      } catch (e) {
-        stages.attachment_upload = "failed";
-        throw new Error(`Anexos: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 
-    // 5. Build common document payload
+    // 5. Build common document payload using first transaction as header reference
     const txDate = transaction.date
       ? new Date(transaction.date).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
-    const amount = Number(transaction.amount) || 0;
-    const description =
-      `PagCorp #${transaction.id} - ${transaction.description || ""}`.slice(0, 254);
+    const description = isConsolidated
+      ? `PagCorp consolidado: ${transactions.length} transações (${transactions.map((t) => `#${t.id}`).join(", ")})`.slice(0, 254)
+      : `PagCorp #${transaction.id} - ${transaction.description || ""}`.slice(0, 254);
 
-    const docLine: Record<string, unknown> = {
-      ItemCode: itemCode,
-      ItemDescription: (transaction.description || "PagCorp").slice(0, 100),
-      Quantity: 1,
-      UnitPrice: amount,
-      ...lineCustom,
-    };
-    if (acctMapping?.cost_center) docLine.CostingCode = acctMapping.cost_center;
-    if (acctMapping?.project) docLine.ProjectCode = acctMapping.project;
+    const documentLines = lineMappings.map(({ tx, acctMapping, itemCode }) => {
+      const line: Record<string, unknown> = {
+        ItemCode: itemCode!,
+        ItemDescription: (
+          isConsolidated
+            ? `[#${tx.id}] ${tx.description || "PagCorp"}`
+            : (tx.description || "PagCorp")
+        ).slice(0, 100),
+        Quantity: 1,
+        UnitPrice: Number(tx.amount) || 0,
+        ...lineCustom,
+      };
+      if (acctMapping?.cost_center) line.CostingCode = acctMapping.cost_center;
+      if (acctMapping?.project) line.ProjectCode = acctMapping.project;
+      return line;
+    });
 
     const baseDoc = {
       CardCode: supplierCode,
@@ -355,7 +367,7 @@ Deno.serve(async (req) => {
       TaxDate: txDate,
       BPL_IDAssignedToInvoice: branchId,
       Comments: description,
-      DocumentLines: [docLine],
+      DocumentLines: documentLines,
       ...headerCustom,
     };
 
@@ -371,7 +383,7 @@ Deno.serve(async (req) => {
       throw e;
     }
 
-    // 7. Persist final success log (apenas Pedido de Compra)
+    // 7. Persist final success log for every transaction in the consolidation
     await supabase
       .from("pagcorp_integration_log")
       .update({
@@ -379,21 +391,22 @@ Deno.serve(async (req) => {
         sap_doc_entry: poResult.docEntry,
         sap_doc_num: poResult.docNum,
         sap_payload: sapPayloads as any,
-        sap_response: { ...sapResponses, supplierCode, supplierName, stages, attachmentEntry } as any,
+        sap_response: { ...sapResponses, supplierCode, supplierName, stages, attachmentEntry, consolidated: isConsolidated, consolidatedCount: transactions.length } as any,
       } as any)
-      .eq("id", logId!);
+      .in("id", consolidatedLogIds);
 
     // Audit
     await supabase.rpc("insert_audit_log", {
-      p_action: "pagcorp_integrated",
+      p_action: isConsolidated ? "pagcorp_integrated_consolidated" : "pagcorp_integrated",
       p_entity_type: "pagcorp_transaction",
-      p_entity_id: String(transaction.id),
+      p_entity_id: transactions.map((t) => String(t.id)).join(","),
       p_company_db: companyDb,
       p_actor_email: integratedBy || undefined,
       p_details: {
         integration_type: integrationType,
         purchase_order: poResult,
         stages,
+        consolidated_ids: transactions.map((t) => t.id),
       } as any,
     });
 
