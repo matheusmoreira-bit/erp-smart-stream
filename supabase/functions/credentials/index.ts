@@ -27,6 +27,13 @@ Deno.serve(async (req) => {
     authLen: authHeader.length,
   });
 
+  // DEBUG marker: prove this code is running
+  if (req.headers.get("x-debug-marker") === "1") {
+    return new Response(JSON.stringify({ debug: "v2-running", authPrefix: authHeader.slice(0, 20) }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     await requireAdmin(req);
     const adminClient = getServiceClient();
