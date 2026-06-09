@@ -39,13 +39,12 @@ export async function authFetch(
   options: RequestInit = {}
 ): Promise<Response> {
   const token = await getValidAccessToken();
-
-  // If no valid user JWT, fall back to anon key. The called edge function
-  // will decide whether the operation requires a real user and return its
-  // own auth error — do NOT redirect or sign the user out here, since
-  // many flows (e.g. SAP-only login) legitimately run without a Supabase
-  // user session at first.
-  const authToken = token || ANON_KEY;
+  if (!token) {
+    return new Response(JSON.stringify({ error: "Faça login no Backoffice para acessar esta função." }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const url = path.startsWith("http") ? path : `${SUPABASE_URL}/functions/v1/${path}`;
 
@@ -53,7 +52,7 @@ export async function authFetch(
     ...options,
     headers: {
       ...options.headers,
-      Authorization: `Bearer ${authToken}`,
+      Authorization: `Bearer ${token}`,
       apikey: ANON_KEY,
     },
   });
