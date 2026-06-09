@@ -367,11 +367,118 @@ export default function PagCorp() {
     urls.forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
   };
 
-  const handleGeneratePresentation = () => {
-    toast.info("Modelo de apresentação ainda não configurado", {
-      description: "Envie o modelo PDF para que possamos gerar o relatório.",
-    });
+  const handleGeneratePresentation = async (period: PresentationPeriod) => {
+    if (!session?.companyDB) {
+      toast.error("Empresa não selecionada");
+      return;
+    }
+    const monthsBack = period === "monthly" ? 1 : period === "quarterly" ? 3 : 6;
+    const today = new Date();
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const start = new Date(end);
+    start.setMonth(start.getMonth() - monthsBack);
+
+    const toIso = (d: Date) => d.toISOString().slice(0, 10);
+
+    // Fetch in 30-day chunks (PagCorp proxy limit)
+    const chunks: { start: string; end: string }[] = [];
+    let cursor = new Date(start);
+    while (cursor < end) {
+      const chunkEnd = new Date(cursor);
+      chunkEnd.setDate(chunkEnd.getDate() + 29);
+      if (chunkEnd > end) chunkEnd.setTime(end.getTime());
+      chunks.push({ start: toIso(cursor), end: toIso(chunkEnd) });
+      cursor = new Date(chunkEnd);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    const tId = toast.loading(`Buscando transações em ${chunks.length} bloco(s)…`);
+    try {
+      const allItems: PagCorpTransaction[] = [];
+      for (const c of chunks) {
+        const qs = new URLSearchParams({
+          startDate: c.start,
+          endDate: c.end,
+          companyDb: session.companyDB,
+        }).toString();
+        const res = await authFetch(`pagcorp-proxy?${qs}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Erro ${res.status}`);
+        }
+        const json = await res.json();
+        const items = (json.items || []).map((item: any, idx: number) => ({
+          id: item.id || item.expenseId || `${c.start}-${idx}`,
+          date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
+          description: item.description || item.expenseDescription || "—",
+          amount: item.amount || item.value || item.expenseValue || 0,
+          currency: item.currencyCode || item.currency || "BRL",
+          accountCode: item.accountCode || item.account || "",
+          accountName: item.accountName || "",
+          accountAlias: item.accountAlias || "",
+          cardName: item.cardName || item.card_name || "",
+          cardLastDigits: item.cardLastDigits || item.lastDigits || "",
+          hasAccountability: (item.receipts || []).length > 0,
+          accountabilityApproved: (item.receipts || []).some((r: any) => r.statusId === 3),
+          attachments: item.attachments || [],
+          receipts: item.receipts || [],
+          integrated: false,
+        }));
+        allItems.push(...items as any);
+      }
+
+      // mark which are integrated
+      const ids = allItems.map((t) => Number(t.id)).filter((n) => !Number.isNaN(n));
+      if (ids.length) {
+        const { data: logs } = await supabase
+          .from("pagcorp_integration_log")
+          .select("pagcorp_expense_id")
+          .in("pagcorp_expense_id", ids)
+          .eq("status", "success");
+        const set = new Set((logs || []).map((l: any) => l.pagcorp_expense_id));
+        allItems.forEach((t) => {
+          if (set.has(Number(t.id))) t.integrated = true;
+        });
+      }
+
+      // cost center map from pagcorp_account_mapping
+      const codes = [...new Set(allItems.map((t) => t.accountCode).filter(Boolean))] as string[];
+      const ccMap: Record<string, { costCenter?: string | null; accountName?: string | null }> = {};
+      if (codes.length) {
+        const { data: maps } = await supabase
+          .from("pagcorp_account_mapping")
+          .select("account_code, account_name, cost_center")
+          .in("account_code", codes);
+        (maps || []).forEach((m: any) => {
+          ccMap[m.account_code] = { costCenter: m.cost_center, accountName: m.account_name };
+        });
+      }
+
+      toast.dismiss(tId);
+      toast.loading("Gerando apresentação…", { id: tId });
+
+      await generatePagCorpPresentation({
+        companyLabel: companyLabel || session.companyDB,
+        companyDb: session.companyDB,
+        period,
+        startDate: toIso(start),
+        endDate: toIso(end),
+        transactions: allItems,
+        costCenterMap: ccMap,
+      });
+
+      toast.dismiss(tId);
+      toast.success("Apresentação gerada", {
+        description: `${allItems.length} transações em ${chunks.length} bloco(s).`,
+      });
+    } catch (e) {
+      toast.dismiss(tId);
+      toast.error("Falha ao gerar apresentação", {
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+      });
+    }
   };
+
 
   /**
    * Accountability flow: opens the same form as a manual expense (items, cost
