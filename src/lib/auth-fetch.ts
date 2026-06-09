@@ -47,9 +47,8 @@ export async function authFetch(
     try {
       await supabase.auth.signOut({ scope: "local" });
     } catch { /* ignore */ }
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      const next = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.replace(`/login?next=${next}`);
+    if (typeof window !== "undefined" && window.location.pathname !== "/") {
+      window.location.replace("/");
     }
     throw new Error("Sessão expirada. Faça login novamente.");
   }
