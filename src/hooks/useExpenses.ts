@@ -512,7 +512,12 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       if (session?.erpType === "sap") {
         try {
           const { data, error: fnErr } = await invokeFn("expense-to-sap", {
-            body: { expense_id: expenseId },
+            body: {
+              expense_id: expenseId,
+              sap_session_id: session.sessionId,
+              sap_route_id: session.routeId,
+              sap_session_expires_at: session.expiresAt,
+            },
           });
           if (fnErr) throw fnErr;
           if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
@@ -531,15 +536,21 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
   const retrySapIntegration = useCallback(
     async (expenseId: string) => {
+      if (!session || session.erpType !== "sap") throw new Error("Faça login no SAP pela tela antes de integrar.");
       const { data, error: fnErr } = await invokeFn("expense-to-sap", {
-        body: { expense_id: expenseId },
+        body: {
+          expense_id: expenseId,
+          sap_session_id: session.sessionId,
+          sap_route_id: session.routeId,
+          sap_session_expires_at: session.expiresAt,
+        },
       });
       if (fnErr) throw fnErr;
       if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
       await fetchExpenses();
       return data;
     },
-    [fetchExpenses]
+    [fetchExpenses, session]
   );
 
   const rejectExpense = useCallback(
