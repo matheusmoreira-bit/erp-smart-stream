@@ -125,6 +125,7 @@ export default function PagCorp() {
     open: boolean;
     transactions: PagCorpTransaction[];
   }>({ open: false, transactions: [] });
+  const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
 
