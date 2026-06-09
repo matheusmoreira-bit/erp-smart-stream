@@ -40,18 +40,12 @@ export async function authFetch(
 ): Promise<Response> {
   const token = await getValidAccessToken();
 
-  if (!token) {
-    // Session expired or revoked. Signing out so the auth guard redirects
-    // to /login on the next render instead of looping on 401s against
-    // every edge function with the anon key.
-    try {
-      await supabase.auth.signOut({ scope: "local" });
-    } catch { /* ignore */ }
-    if (typeof window !== "undefined" && window.location.pathname !== "/") {
-      window.location.replace("/");
-    }
-    throw new Error("Sessão expirada. Faça login novamente.");
-  }
+  // If no valid user JWT, fall back to anon key. The called edge function
+  // will decide whether the operation requires a real user and return its
+  // own auth error — do NOT redirect or sign the user out here, since
+  // many flows (e.g. SAP-only login) legitimately run without a Supabase
+  // user session at first.
+  const authToken = token || ANON_KEY;
 
   const url = path.startsWith("http") ? path : `${SUPABASE_URL}/functions/v1/${path}`;
 
