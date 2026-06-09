@@ -421,7 +421,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro desconhecido";
     console.error("pagcorp-to-sap error:", msg);
-    if (supabase && logId) {
+    if (supabase && consolidatedLogIds.length > 0) {
       await supabase
         .from("pagcorp_integration_log")
         .update({
@@ -430,7 +430,7 @@ Deno.serve(async (req) => {
           sap_payload: sapPayloads as any,
           sap_response: { stages, ...sapResponses } as any,
         } as any)
-        .eq("id", logId);
+        .in("id", consolidatedLogIds);
     }
     return new Response(
       JSON.stringify({ success: false, error: msg, stages }),
