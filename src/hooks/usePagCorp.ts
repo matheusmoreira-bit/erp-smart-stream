@@ -48,13 +48,24 @@ export function usePagCorp() {
       }
 
       const result = await res.json();
+      const seenIds = new Set<string | number>();
       const items: PagCorpTransaction[] = (result.items || []).map((item: any, index: number) => {
         const receipts = item.receipts || [];
         const hasAccountability = receipts.length > 0;
         const accountabilityApproved = receipts.some((r: any) => r.statusId === 3);
 
+        // Resolve a STABLE + UNIQUE id. Spread item LAST would otherwise let an
+        // undefined item.id overwrite our computed id, and duplicate ids would
+        // make a single checkbox click toggle multiple rows.
+        let resolvedId: string | number = item.id ?? item.expenseId ?? index;
+        if (seenIds.has(resolvedId)) {
+          resolvedId = `${resolvedId}-${index}`;
+        }
+        seenIds.add(resolvedId);
+
         return {
-          id: item.id || item.expenseId || index,
+          ...item,
+          id: resolvedId,
           date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
           description: item.description || item.expenseDescription || "—",
           amount: item.amount || item.value || item.expenseValue || 0,
@@ -71,7 +82,6 @@ export function usePagCorp() {
           attachments: item.attachments || [],
           receipts,
           integrated: false,
-          ...item,
         };
       });
 
