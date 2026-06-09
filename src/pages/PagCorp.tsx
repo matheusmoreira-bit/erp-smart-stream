@@ -805,6 +805,13 @@ export default function PagCorp() {
             : undefined
         }
       />
+
+      <PagCorpConsolidateDialog
+        open={consolidateDialog.open}
+        onClose={() => setConsolidateDialog({ open: false, transactions: [] })}
+        transactions={consolidateDialog.transactions}
+        onConfirm={handleConfirmConsolidate}
+      />
     </div>
   );
 }
