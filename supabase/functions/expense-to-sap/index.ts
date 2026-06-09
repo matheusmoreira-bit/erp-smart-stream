@@ -19,6 +19,10 @@ const corsHeaders = {
 //   "failed"         — stage failed (see sap_integration_error)
 type StageStatus = "not_applicable" | "pending" | "success" | "failed";
 
+function buildSapCookies(sessionId: string, routeId?: string) {
+  return `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
+}
+
 async function getSapCredentials(
   supabase: ReturnType<typeof createClient>,
   companyDb?: string,
@@ -59,6 +63,14 @@ async function loginSap(sapCreds: Record<string, string>) {
   }
   const cookies = loginResp.headers.get("set-cookie") || "";
   return { baseUrl, cookies };
+}
+
+function getSapBaseUrl(sapCreds: Record<string, string>) {
+  let baseUrl = (sapCreds.service_layer_url || sapCreds.base_url || sapCreds.url || "").replace(/\/+$/, "");
+  if (!baseUrl) throw new Error("URL do SAP B1 não configurada");
+  if (baseUrl.includes("/b1s/v1")) baseUrl = baseUrl.replace("/b1s/v1", "/b1s/v2");
+  else if (!baseUrl.includes("/b1s/v2")) baseUrl = `${baseUrl}/b1s/v2`;
+  return baseUrl;
 }
 
 async function postSapDocument(
