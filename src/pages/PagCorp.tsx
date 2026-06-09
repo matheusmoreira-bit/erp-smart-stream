@@ -369,6 +369,7 @@ export default function PagCorp() {
     });
   };
 
+  /**
    * Accountability flow: opens the same form as a manual expense (items, cost
    * centers, projects, attachments) and creates an internal expense with origin
    * "pagcorp", skipping approval rules. SAP integration runs immediately, and we
