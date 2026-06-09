@@ -50,15 +50,26 @@ export async function requireUser(req: Request) {
       if (!error && sub) {
         return { id: sub, email: data?.claims?.email || null };
       }
+      console.warn("[requireUser] getClaims failed", {
+        error: error ? String((error as Error).message || error) : null,
+        hasData: !!data,
+      });
+    } else {
+      console.warn("[requireUser] getClaims not available on supabase.auth");
     }
-  } catch (_e) {
-    // fall through to getUser
+  } catch (e) {
+    console.warn("[requireUser] getClaims threw", {
+      error: e instanceof Error ? e.message : String(e),
+    });
   }
 
   // 2) Fallback: server-side validation via /auth/v1/user.
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {
-    console.warn("[requireUser] getUser failed", { error: (error as Error | null)?.message || String(error) });
+    console.warn("[requireUser] getUser failed", {
+      error: error ? String((error as Error).message || error) : null,
+      tokenPrefix: token.slice(0, 24),
+    });
     throw new AuthError("Não autenticado", 401);
   }
   return { id: data.user.id, email: data.user.email || null };
