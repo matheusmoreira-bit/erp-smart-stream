@@ -30,37 +30,39 @@ export function useSapCachedList({
   const paramsRef = useRef(params);
   paramsRef.current = params;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
     if (!enabled || loadedRef.current) return;
     setIsLoading(true);
     loadedRef.current = true;
 
     try {
-      // 1. Always try Supabase cache first (works without SAP session)
-      const { data: cached } = await supabase
-        .from("sap_cache")
-        .select("data, expires_at")
-        .eq("cache_key", cacheKey)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // 1. Try Supabase cache first (works without SAP session), unless forced refresh
+      if (!forceRefresh) {
+        const { data: cached } = await supabase
+          .from("sap_cache")
+          .select("data, expires_at")
+          .eq("cache_key", cacheKey)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (cached) {
-        const cachedData = cached.data as any[];
-        const isExpired = new Date(cached.expires_at) <= new Date();
+        if (cached) {
+          const cachedData = cached.data as any[];
+          const isExpired = new Date(cached.expires_at) <= new Date();
 
-        if (cachedData && cachedData.length > 0) {
-          setOptions(cachedData.map(mapRowRef.current));
+          if (cachedData && cachedData.length > 0) {
+            setOptions(cachedData.map(mapRowRef.current));
 
-          // If cache is still valid or no SAP session to refresh, stop here
-          if (!isExpired || !session) {
-            setIsLoading(false);
-            return;
+            // If cache is still valid or no SAP session to refresh, stop here
+            if (!isExpired || !session) {
+              setIsLoading(false);
+              return;
+            }
           }
         }
       }
 
-      // 2. If no cache hit (or expired) and we have a SAP session, fetch from SAP
+      // 2. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP
       if (!session || session.erpType !== "sap") {
         setIsLoading(false);
         return;
@@ -105,7 +107,7 @@ export function useSapCachedList({
 
   const reload = useCallback(() => {
     loadedRef.current = false;
-    load();
+    load(true);
   }, [load]);
 
   return { options, isLoading, reload };
