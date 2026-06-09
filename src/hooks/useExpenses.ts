@@ -516,6 +516,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
               expense_id: expenseId,
               sap_session_id: session.sessionId,
               sap_route_id: session.routeId,
+              sap_company_db: session.companyDB,
               sap_session_expires_at: session.expiresAt,
             },
           });
@@ -542,6 +543,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           expense_id: expenseId,
           sap_session_id: session.sessionId,
           sap_route_id: session.routeId,
+          sap_company_db: session.companyDB,
           sap_session_expires_at: session.expiresAt,
         },
       });
