@@ -69,6 +69,62 @@ async function postSapDocument(
   return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
 }
 
+async function getSapDocumentAttachmentEntry(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  docEntry: number,
+): Promise<number | null> {
+  const res = await fetch(`${sapBaseUrl}/${endpoint}(${docEntry})?$select=AttachmentEntry`, {
+    method: "GET",
+    headers: { Cookie: cookies },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.error?.message?.value || JSON.stringify(body);
+    throw new Error(`SAP ${endpoint} attachment check failed [${res.status}]: ${msg}`);
+  }
+  const value = Number(body?.AttachmentEntry);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+async function patchSapDocumentAttachmentEntry(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  docEntry: number,
+  attachmentEntry: number,
+): Promise<void> {
+  const res = await fetch(`${sapBaseUrl}/${endpoint}(${docEntry})`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: cookies },
+    body: JSON.stringify({ AttachmentEntry: attachmentEntry }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.error?.message?.value || JSON.stringify(body);
+    throw new Error(`SAP ${endpoint} attachment link failed [${res.status}]: ${msg}`);
+  }
+}
+
+async function ensureSapDocumentAttachmentLinked(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  docEntry: number,
+  attachmentEntry: number,
+): Promise<void> {
+  const current = await getSapDocumentAttachmentEntry(sapBaseUrl, cookies, endpoint, docEntry);
+  if (current === attachmentEntry) return;
+
+  await patchSapDocumentAttachmentEntry(sapBaseUrl, cookies, endpoint, docEntry, attachmentEntry);
+
+  const updated = await getSapDocumentAttachmentEntry(sapBaseUrl, cookies, endpoint, docEntry);
+  if (updated !== attachmentEntry) {
+    throw new Error(`SAP não confirmou o vínculo do anexo ${attachmentEntry} no documento ${docEntry}`);
+  }
+}
+
 // Upload attachments to SAP B1 Attachments2 endpoint. Returns AbsoluteEntry to link in document.
 async function uploadAttachmentsToSap(
   sapBaseUrl: string,
@@ -338,7 +394,10 @@ Deno.serve(async (req) => {
       sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
       lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
-      if (attachmentEntry !== null) attachmentLinkStatus = "success";
+      if (attachmentEntry !== null) {
+        await ensureSapDocumentAttachmentLinked(sap.baseUrl, sap.cookies, sapEndpoint, sapResult.docEntry, attachmentEntry);
+        attachmentLinkStatus = "success";
+      }
     } catch (e) {
       purchaseOrderStatus = "failed";
       // If the PO failed, the attachment was uploaded but never linked to a
