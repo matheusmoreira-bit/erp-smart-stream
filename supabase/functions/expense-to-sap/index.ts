@@ -2,7 +2,7 @@
 // Endpoint: POST /functions/v1/expense-to-sap
 // Body: { expense_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+import { requireUser } from "../_shared/auth.ts";
 
 
 const corsHeaders = {
@@ -40,29 +40,6 @@ async function getSapCredentials(
   const creds: Record<string, string> = {};
   for (const row of data) creds[row.credential_key] = row.credential_value;
   return creds;
-}
-
-async function loginSap(sapCreds: Record<string, string>) {
-  let baseUrl = (sapCreds.service_layer_url || sapCreds.base_url || sapCreds.url || "").replace(/\/+$/, "");
-  if (!baseUrl) throw new Error("URL do SAP B1 não configurada");
-  if (baseUrl.includes("/b1s/v1")) baseUrl = baseUrl.replace("/b1s/v1", "/b1s/v2");
-  else if (!baseUrl.includes("/b1s/v2")) baseUrl = `${baseUrl}/b1s/v2`;
-
-  const companyDB = sapCreds.company_db || sapCreds.CompanyDB;
-  const userName = sapCreds.username || sapCreds.UserName;
-  const password = sapCreds.password || sapCreds.Password;
-
-  const loginResp = await fetch(`${baseUrl}/Login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ CompanyDB: companyDB, UserName: userName, Password: password }),
-  });
-  if (!loginResp.ok) {
-    const body = await loginResp.text().catch(() => "");
-    throw new Error(`SAP Login falhou (HTTP ${loginResp.status}): ${body.slice(0, 200)}`);
-  }
-  const cookies = loginResp.headers.get("set-cookie") || "";
-  return { baseUrl, cookies };
 }
 
 function getSapBaseUrl(sapCreds: Record<string, string>) {
