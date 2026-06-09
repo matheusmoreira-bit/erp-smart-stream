@@ -14,28 +14,23 @@ function tokenHasSub(token?: string | null): boolean {
 }
 
 /**
- * Wrapper around supabase.functions.invoke that guarantees the JWT sent to
- * the edge function has a valid `sub` claim. If the cached session token is
- * corrupt, it attempts a non-destructive refresh before invoking — preventing
- * spurious 401 "Não autenticado" errors from requireUser().
+ * Calls an edge function with the current Lovable Cloud user JWT when present.
+ * If this app session is absent/corrupt, fall back to the anon key so functions
+ * that validate another screen-auth context (ex: SAP B1SESSION) can still run.
  */
 export async function invokeFn<T = any>(
   name: string,
   options?: Parameters<typeof supabase.functions.invoke>[1],
 ) {
   let { data: { session } } = await supabase.auth.getSession();
+  let authToken = session?.access_token && tokenHasSub(session.access_token) ? session.access_token : null;
+
   if (!session?.access_token || !tokenHasSub(session.access_token)) {
     try {
       const refreshed = await supabase.auth.refreshSession();
       session = refreshed.data.session;
+      authToken = session?.access_token && tokenHasSub(session.access_token) ? session.access_token : null;
     } catch { /* ignore — invoke will fail below if still bad */ }
-  }
-
-  if (!session?.access_token || !tokenHasSub(session.access_token)) {
-    return {
-      data: null,
-      error: new Error("Sessão inválida ou expirada. Faça login pela tela antes de integrar."),
-    };
   }
 
   const response = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
@@ -43,14 +38,19 @@ export async function invokeFn<T = any>(
     headers: {
       "Content-Type": "application/json",
       ...(options?.headers ?? {}),
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${authToken ?? ANON_KEY}`,
       apikey: ANON_KEY,
     },
     body: options?.body ? JSON.stringify(options.body) : undefined,
   });
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) as T : null;
+  let data: T | null = null;
+  try {
+    data = text ? JSON.parse(text) as T : null;
+  } catch {
+    data = null;
+  }
 
   return {
     data,
