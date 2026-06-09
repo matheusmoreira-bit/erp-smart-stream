@@ -38,7 +38,21 @@ export async function authFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const token = (await getValidAccessToken()) || ANON_KEY;
+  const token = await getValidAccessToken();
+
+  if (!token) {
+    // Session expired or revoked. Signing out so the auth guard redirects
+    // to /login on the next render instead of looping on 401s against
+    // every edge function with the anon key.
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch { /* ignore */ }
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.replace(`/login?next=${next}`);
+    }
+    throw new Error("Sessão expirada. Faça login novamente.");
+  }
 
   const url = path.startsWith("http") ? path : `${SUPABASE_URL}/functions/v1/${path}`;
 
