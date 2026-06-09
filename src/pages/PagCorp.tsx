@@ -78,7 +78,7 @@ function formatDate(dateStr: string) {
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions, integrateDirect, logIntegration } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated, logIntegration } = usePagCorp();
   const { createExpense } = useExpenses();
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
