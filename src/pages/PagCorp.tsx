@@ -47,6 +47,7 @@ import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
+import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { useExpenses } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
