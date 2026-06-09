@@ -6,7 +6,9 @@ const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 function tokenHasSub(token?: string | null): boolean {
   if (!token) return false;
   try {
-    const payload = JSON.parse(atob(token.split(".")[1] || ""));
+    const rawPayload = token.split(".")[1] || "";
+    const base64 = rawPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(base64));
     return typeof payload?.sub === "string" && payload.sub.length > 0;
   } catch {
     return false;
@@ -14,9 +16,8 @@ function tokenHasSub(token?: string | null): boolean {
 }
 
 /**
- * Calls an edge function with the current Lovable Cloud user JWT when present.
- * If this app session is absent/corrupt, fall back to the anon key so functions
- * that validate another screen-auth context (ex: SAP B1SESSION) can still run.
+ * Calls a protected edge function with the current Lovable Cloud user JWT.
+ * Public/SAP-session functions should use publicFunctionFetch from auth-fetch.
  */
 export async function invokeFn<T = any>(
   name: string,
@@ -33,12 +34,19 @@ export async function invokeFn<T = any>(
     } catch { /* ignore — invoke will fail below if still bad */ }
   }
 
+  if (!authToken) {
+    return {
+      data: null,
+      error: new Error("Faça login no Backoffice para acessar esta função."),
+    };
+  }
+
   const response = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(options?.headers ?? {}),
-      Authorization: `Bearer ${authToken ?? ANON_KEY}`,
+      Authorization: `Bearer ${authToken}`,
       apikey: ANON_KEY,
     },
     body: options?.body ? JSON.stringify(options.body) : undefined,

@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { authFetch } from "@/lib/auth-fetch";
+import { publicFunctionFetch } from "@/lib/auth-fetch";
 
 const FUNCTION_URL = "sap-b1-proxy";
 
@@ -57,7 +57,7 @@ function notifySessionExpired() {
 }
 
 async function callProxy(body: Record<string, unknown>) {
-  const resp = await authFetch(FUNCTION_URL, {
+  const resp = await publicFunctionFetch(FUNCTION_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
