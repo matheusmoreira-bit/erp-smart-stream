@@ -178,81 +178,114 @@ Deno.serve(async (req) => {
   let sapPayloads: Record<string, unknown> = {};
   let sapResponses: Record<string, unknown> = {};
 
+  // For consolidated mode we need to update multiple log rows on error
+  const consolidatedLogIds: string[] = [];
+
   try {
     const body = await req.json();
-    const transaction = body.transaction;
     const companyDb: string = body.companyDb;
     const integrationType: "generic" | "accountability" = body.integrationType || "generic";
     const supplierCode: string = body.supplierCode;
     const supplierName: string | undefined = body.supplierName;
     const integratedBy: string | null = body.integratedBy || null;
 
-    if (!transaction || !transaction.id) throw new Error("transaction inválido");
+    // Accept either single `transaction` or `transactions[]` for consolidated mode
+    const rawList: any[] = Array.isArray(body.transactions)
+      ? body.transactions
+      : body.transaction
+        ? [body.transaction]
+        : [];
+    const isConsolidated = Array.isArray(body.transactions) && body.transactions.length > 1;
+
+    if (rawList.length === 0) throw new Error("transaction(s) inválido(s)");
     if (!companyDb) throw new Error("companyDb obrigatório");
     if (!supplierCode) throw new Error("supplierCode (CardCode) obrigatório");
+    for (const t of rawList) {
+      if (!t?.id) throw new Error("toda transação precisa de id");
+    }
 
     supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // 0. Idempotency: skip if already integrated successfully
-    const { data: existing } = await supabase
+    // 0. Idempotency: filter out already-integrated transactions
+    const ids = rawList.map((t) => Number(t.id));
+    const { data: existingLogs } = await supabase
       .from("pagcorp_integration_log")
-      .select("id, status, sap_doc_entry, sap_doc_num")
-      .eq("pagcorp_expense_id", Number(transaction.id))
-      .eq("status", "success")
-      .maybeSingle();
-    if (existing) {
+      .select("id, pagcorp_expense_id, status, sap_doc_entry, sap_doc_num")
+      .in("pagcorp_expense_id", ids)
+      .eq("status", "success");
+    const alreadyIntegratedIds = new Set((existingLogs || []).map((r: any) => r.pagcorp_expense_id));
+    const transactions = rawList.filter((t) => !alreadyIntegratedIds.has(Number(t.id)));
+
+    if (transactions.length === 0) {
+      const first = (existingLogs || [])[0] as any;
       return new Response(
         JSON.stringify({
           success: true,
           alreadyIntegrated: true,
-          docEntry: existing.sap_doc_entry,
-          docNum: existing.sap_doc_num,
+          docEntry: first?.sap_doc_entry,
+          docNum: first?.sap_doc_num,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // 1. Insert pending log row early so we have logId for any failure path
-    const initialLog = await supabase
-      .from("pagcorp_integration_log")
-      .insert({
-        pagcorp_expense_id: Number(transaction.id),
-        pagcorp_data: {
-          description: transaction.description,
-          amount: transaction.amount,
-          currency: transaction.currency,
-          date: transaction.date,
-          accountAlias: transaction.accountAlias,
-          accountCode: transaction.accountCode,
-          accountName: transaction.accountName,
-          cardName: transaction.cardName,
-          cardLastDigits: transaction.cardLastDigits,
-          hasAccountability: transaction.hasAccountability,
-          accountabilityApproved: transaction.accountabilityApproved,
-          receipts: transaction.receipts,
-        } as any,
-        integration_type: integrationType,
-        status: "pending",
-        company_db: companyDb,
-        integrated_by: integratedBy,
-      } as any)
-      .select("id")
-      .single();
-    if (initialLog.error) throw new Error(`Falha ao criar log: ${initialLog.error.message}`);
-    logId = (initialLog.data as any).id;
+    // 1. Insert pending log row(s) early so we have logId(s) for any failure path
+    for (const transaction of transactions) {
+      const initialLog = await supabase
+        .from("pagcorp_integration_log")
+        .insert({
+          pagcorp_expense_id: Number(transaction.id),
+          pagcorp_data: {
+            description: transaction.description,
+            amount: transaction.amount,
+            currency: transaction.currency,
+            date: transaction.date,
+            accountAlias: transaction.accountAlias,
+            accountCode: transaction.accountCode,
+            accountName: transaction.accountName,
+            cardName: transaction.cardName,
+            cardLastDigits: transaction.cardLastDigits,
+            hasAccountability: transaction.hasAccountability,
+            accountabilityApproved: transaction.accountabilityApproved,
+            receipts: transaction.receipts,
+            consolidated: isConsolidated,
+            consolidatedWith: isConsolidated ? transactions.map((x) => x.id) : undefined,
+          } as any,
+          integration_type: integrationType,
+          status: "pending",
+          company_db: companyDb,
+          integrated_by: integratedBy,
+        } as any)
+        .select("id")
+        .single();
+      if (initialLog.error) throw new Error(`Falha ao criar log: ${initialLog.error.message}`);
+      consolidatedLogIds.push((initialLog.data as any).id);
+    }
+    logId = consolidatedLogIds[0];
+
+    // Use first transaction as the "header reference"
+    const transaction = transactions[0];
 
     // 2. SAP login
     const sapCreds = await getSapCredentials(supabase, companyDb);
     const sap = await loginSap(sapCreds);
 
-    // 3. Resolve mappings
-    const acctMapping = await resolveAccountMapping(supabase, transaction.accountCode || null);
-    const itemCode = await resolveItemCode(supabase, transaction.accountCode || null);
-    if (!itemCode) {
-      throw new Error("Nenhum item mapeado encontrado (cadastre um item fallback em Mapeamento PagCorp)");
+    // 3. Resolve mappings (per transaction so each line can have its own cost center/item)
+    const lineMappings = await Promise.all(
+      transactions.map(async (t) => {
+        const acctMapping = await resolveAccountMapping(supabase!, t.accountCode || null);
+        const itemCode = await resolveItemCode(supabase!, t.accountCode || null);
+        return { tx: t, acctMapping, itemCode };
+      }),
+    );
+    const missing = lineMappings.find((m) => !m.itemCode);
+    if (missing) {
+      throw new Error(
+        `Nenhum item mapeado para a conta "${missing.tx.accountCode || "(sem conta)"}" (cadastre item fallback em Mapeamento PagCorp)`,
+      );
     }
 
     // (Pagamento desabilitado: integração agora cria apenas o Pedido de Compra)
