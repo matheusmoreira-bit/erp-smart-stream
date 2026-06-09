@@ -365,9 +365,10 @@ Deno.serve(async (req) => {
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
       const allResults: unknown[] = [];
       let skip = 0;
-      const top = 100;
+      const top = 500;
       let hasMore = true;
-      const deadline = Date.now() + 120_000; // hard wall-clock budget < proxy idle 150s
+      const deadline = Date.now() + 140_000; // hard wall-clock budget < proxy idle 150s
+      const HARD_CAP = 50_000;
 
       while (hasMore) {
         if (Date.now() > deadline) {
@@ -396,7 +397,12 @@ Deno.serve(async (req) => {
           try {
             sapResp = await fetchWithTimeout(fullUrl, {
               method: "GET",
-              headers: { "Content-Type": "application/json", Cookie: cookies },
+              headers: {
+                "Content-Type": "application/json",
+                Cookie: cookies,
+                // Ask SL to honor large page size (default PageSize is often 20)
+                Prefer: "odata.maxpagesize=500",
+              },
             });
             break;
           } catch (e) {
@@ -435,10 +441,14 @@ Deno.serve(async (req) => {
         const items = pageData.value || [];
         allResults.push(...items);
 
-        hasMore = !!pageData["odata.nextLink"] || items.length === top;
-        skip += top;
+        // SAP B1 Service Layer enforces its own PageSize (often 20), so
+        // `items.length < top` does NOT mean we're done. Continue while the
+        // page is non-empty OR an explicit nextLink is provided.
+        const pageSize = items.length;
+        hasMore = !!pageData["odata.nextLink"] || pageSize > 0;
+        skip += pageSize > 0 ? pageSize : top;
 
-        if (allResults.length > 5000) hasMore = false;
+        if (allResults.length >= HARD_CAP) hasMore = false;
       }
 
       const result = { value: allResults, totalCount: allResults.length };
