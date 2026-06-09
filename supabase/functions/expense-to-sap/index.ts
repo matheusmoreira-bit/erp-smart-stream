@@ -209,13 +209,6 @@ Deno.serve(async (req) => {
       .single();
     if (expErr || !expense) throw new Error(`Despesa não encontrada: ${expErr?.message ?? ""}`);
 
-    if (expense.sap_doc_entry) {
-      return new Response(
-        JSON.stringify({ message: "Despesa já integrada", docEntry: expense.sap_doc_entry, docNum: expense.sap_doc_num }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
     const { data: items, error: itemsErr } = await supabase
       .from("expense_items")
       .select("*")
@@ -246,6 +239,40 @@ Deno.serve(async (req) => {
       throw new Error("Sessão SAP pertence a outra empresa. Faça login na empresa da despesa.");
     }
     const sap = { baseUrl: getSapBaseUrl(sapCreds), cookies: buildSapCookies(sapSessionId, sapRouteId) };
+
+    if (expense.sap_doc_entry) {
+      const existingAttachmentEntry = Number(expense.sap_attachment_entry || 0);
+      if (existingAttachmentEntry > 0) {
+        attachmentStatus = "success";
+        purchaseOrderStatus = "success";
+        attachmentLinkStatus = "pending";
+        await ensureSapDocumentAttachmentLinked(
+          sap.baseUrl,
+          sap.cookies,
+          sapEndpoint,
+          Number(expense.sap_doc_entry),
+          existingAttachmentEntry,
+        );
+        attachmentLinkStatus = "success";
+        await persistStatus({ sap_integration_error: null });
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          alreadyIntegrated: true,
+          docEntry: expense.sap_doc_entry,
+          docNum: expense.sap_doc_num,
+          attachmentEntry: existingAttachmentEntry || null,
+          stages: {
+            attachment: attachmentStatus,
+            purchase_order: purchaseOrderStatus,
+            attachment_link: attachmentLinkStatus,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // 3. Build Purchase Order payload
     const today = new Date().toISOString().slice(0, 10);
