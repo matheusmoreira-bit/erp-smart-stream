@@ -322,8 +322,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
 
   const companyLabel = getLabel(session?.companyDB || "");
-  const isAdmin = isLovableAdmin || !!session.isSuperUser;
-  const userIdentifier = session.userName.toLowerCase();
+  const isAdmin = isLovableAdmin || !!session?.isSuperUser;
+  const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
   const [showAll, setShowAll] = useState<boolean>(isAdmin);
   useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
