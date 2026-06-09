@@ -57,3 +57,21 @@ export async function authFetch(
     },
   });
 }
+
+export async function publicFunctionFetch(
+  path: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const token = await getValidAccessToken();
+  const authToken = token || ANON_KEY;
+  const url = path.startsWith("http") ? path : `${SUPABASE_URL}/functions/v1/${path}`;
+
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      Authorization: `Bearer ${authToken}`,
+      apikey: ANON_KEY,
+    },
+  });
+}
