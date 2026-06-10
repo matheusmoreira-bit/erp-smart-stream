@@ -181,6 +181,11 @@ export default function PagCorp() {
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
+    // Nondeductible visibility: off = hide nondeductible cards
+    if (!showNondeductible) {
+      list = list.filter((t) => !t.isNondeductible);
+    }
+
     if (accountabilityFilter === "yes") {
       list = list.filter((t) => t.hasAccountability);
     } else if (accountabilityFilter === "no") {
@@ -197,7 +202,58 @@ export default function PagCorp() {
     }
 
     return list;
-  }, [transactions, search, accountabilityFilter]);
+  }, [transactions, search, accountabilityFilter, showNondeductible]);
+
+  const nondeductiblePending = useMemo(
+    () => transactions.filter((t) => t.isNondeductible && !t.integrated),
+    [transactions],
+  );
+
+  const integrateAllNondeductible = async () => {
+    if (!session?.companyDB) return;
+    if (!checkSapCredentials()) return;
+    if (nondeductiblePending.length === 0) {
+      toast.info("Nenhuma transação indedutível pendente no período");
+      return;
+    }
+    // Group by supplier_code mapped on the card
+    const groups = new Map<string, { name?: string; txs: PagCorpTransaction[] }>();
+    nondeductiblePending.forEach((t) => {
+      const code = t.nondeductibleSupplierCode!;
+      if (!groups.has(code)) groups.set(code, { name: t.nondeductibleSupplierName, txs: [] });
+      groups.get(code)!.txs.push(t);
+    });
+
+    setIntegratingNondeductible(true);
+    const tId = toast.loading(`Integrando ${nondeductiblePending.length} transações em ${groups.size} PC(s)…`);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const [code, g] of groups) {
+        try {
+          const result = await integrateConsolidated(
+            g.txs,
+            session.companyDB,
+            code,
+            g.name,
+            session.userName || undefined,
+          );
+          ok++;
+          toast.success(`PC consolidado #${result.purchaseOrder?.DocNum} (${g.txs.length} itens)`);
+        } catch (e) {
+          fail++;
+          toast.error(`Falha no fornecedor ${code}`, {
+            description: e instanceof Error ? e.message : "Erro",
+          });
+        }
+      }
+      toast.dismiss(tId);
+      toast.success(`Concluído: ${ok} PC(s) criados${fail ? `, ${fail} com falha` : ""}`);
+      await fetchTransactions(startDate, endDate, session.companyDB);
+    } finally {
+      setIntegratingNondeductible(false);
+    }
+  };
 
   // Group totals by currency
   const totalsByCurrency = useMemo(() => {
