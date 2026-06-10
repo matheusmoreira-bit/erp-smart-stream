@@ -623,26 +623,8 @@ export default function PagCorp() {
         sapError = sapErr instanceof Error ? sapErr.message : "Erro SAP desconhecido";
       }
 
-      // Log into pagcorp_integration_log so the list reflects integrated state.
-      // Persist the real payload sent to SAP (returned by the edge function) so
-      // the History screen can display it instead of just the expense_id.
       if (!pagcorpLoggedByFn) {
-        try {
-          await logIntegration(
-            t,
-            "accountability",
-            sapError ? "error" : "success",
-            session.companyDB,
-            session.userName || undefined,
-            sapDocEntry,
-            sapDocNum,
-            sapError,
-            sapPayloadFromFn ?? { expense_id: (expense as any).id },
-            sapResponseFromFn ?? undefined,
-          );
-        } catch (logErr) {
-          console.warn("Falha ao registrar log PagCorp; mantendo resultado SAP original", logErr);
-        }
+        console.warn("Função não confirmou registro do log PagCorp; mantendo resultado SAP original");
       }
 
       if (sapError) throw new Error(sapError);
