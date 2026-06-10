@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireUser(req);
+    await requireUserOrSapSession(req);
 
 
 
