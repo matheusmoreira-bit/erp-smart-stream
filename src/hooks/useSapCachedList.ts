@@ -67,12 +67,11 @@ export function useSapCachedList({
       }
 
       // 2. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP
-      if (!session || session.erpType !== "sap") {
+      if (!session || session.erpType !== "sap" || !companyDB) {
         setIsLoading(false);
         return;
       }
 
-      const companyDB = session.companyDB;
       const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
       const rows = data?.value || [];
 
