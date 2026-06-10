@@ -446,7 +446,14 @@ export default function PagCorp() {
           console.warn("Falha ao baixar anexo:", err);
           continue;
         }
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const payload = await res.json().catch(() => ({}));
+          console.warn("Anexo indisponível no PagCorp:", payload);
+          continue;
+        }
         const blob = await res.blob();
+        if (blob.size === 0) continue;
         const blobUrl = URL.createObjectURL(blob);
         window.open(blobUrl, "_blank", "noopener,noreferrer");
         setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
@@ -454,7 +461,9 @@ export default function PagCorp() {
       }
       toast.dismiss(tId);
       if (opened === 0) {
-        toast.error("Não foi possível abrir os anexos");
+        toast.error("Recibo não disponível no PagCorp", {
+          description: "O PagCorp negou o download deste anexo para a credencial configurada.",
+        });
       }
     } catch (e) {
       toast.dismiss(tId);
