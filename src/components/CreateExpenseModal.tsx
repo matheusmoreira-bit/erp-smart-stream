@@ -73,6 +73,8 @@ export function CreateExpenseModal({
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [currency, setCurrency] = useState("");
   const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
+  const [currencyOptions, setCurrencyOptions] = useState<string[] | null>(null);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [remarks, setRemarks] = useState("");
