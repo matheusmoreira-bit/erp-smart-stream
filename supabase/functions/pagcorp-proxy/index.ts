@@ -224,15 +224,53 @@ Deno.serve(async (req) => {
       }
       const creds = await getCredentials(companyDb);
       const apiToken = await getAuthToken(creds);
-      const fileUrl = directUrl || `${creds.api_base_url}Receipt/${receiptId}/File`;
-      const fileRes = await fetch(fileUrl, { headers: { Authorization: `Bearer ${apiToken}` } });
-      if (!fileRes.ok) {
-        const body = await fileRes.text().catch(() => "");
-        return new Response(JSON.stringify({ error: `Falha ao baixar recibo [${fileRes.status}]: ${body.slice(0, 200)}` }), {
-          status: fileRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+      const candidates: string[] = [];
+      if (directUrl) {
+        candidates.push(directUrl);
+      } else if (receiptId) {
+        const base = creds.api_base_url;
+        candidates.push(
+          `${base}Receipt/${receiptId}/File`,
+          `${base}Receipt/${receiptId}`,
+          `${base}Receipt/Image/${receiptId}`,
+          `${base}Receipt/Download/${receiptId}`,
+          `${base}Expense/Account/${creds.account_id}/Receipt/${receiptId}`,
+          `${base}Expense/Account/${creds.account_id}/Receipt/${receiptId}/File`,
+        );
+      }
+
+      let fileRes: Response | null = null;
+      let lastStatus = 0;
+      let lastBody = "";
+      for (const u of candidates) {
+        const r = await fetch(u, { headers: { Authorization: `Bearer ${apiToken}` } });
+        if (r.ok) { fileRes = r; break; }
+        lastStatus = r.status;
+        lastBody = await r.text().catch(() => "");
+        console.warn(`[pagcorp receipt] ${r.status} ${u} ${lastBody.slice(0, 120)}`);
+      }
+      if (!fileRes) {
+        return new Response(JSON.stringify({ error: `Falha ao baixar recibo [${lastStatus}]: ${lastBody.slice(0, 200)}` }), {
+          status: lastStatus || 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const contentType = fileRes.headers.get("content-type") || "application/octet-stream";
+      // Some PagCorp endpoints return JSON { url: "https://..." } — follow it.
+      if (contentType.includes("application/json")) {
+        const j = await fileRes.json().catch(() => null) as any;
+        const follow = j?.url || j?.fileUrl || j?.downloadUrl || j?.link;
+        if (follow) {
+          const r2 = await fetch(follow, { headers: { Authorization: `Bearer ${apiToken}` } });
+          if (r2.ok) {
+            const ct2 = r2.headers.get("content-type") || "application/octet-stream";
+            const buf2 = await r2.arrayBuffer();
+            return new Response(buf2, {
+              headers: { ...corsHeaders, "Content-Type": ct2, "Content-Disposition": "inline" },
+            });
+          }
+        }
+      }
       const buf = await fileRes.arrayBuffer();
       return new Response(buf, {
         headers: { ...corsHeaders, "Content-Type": contentType, "Content-Disposition": "inline" },
