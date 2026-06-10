@@ -719,13 +719,30 @@ export function CreateExpenseModal({
           {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Moeda *</label>
-              <Input
-                value={currency}
-                readOnly
-                placeholder="Definida pelo fornecedor"
-                className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
-              />
+              <label className="text-xs text-muted-foreground mb-1 block">
+                Moeda *{loadingCurrencies && <span className="ml-1 text-muted-foreground">(carregando…)</span>}
+              </label>
+              {currencyOptions ? (
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger
+                    className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+                  >
+                    <SelectValue placeholder="Selecione a moeda" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencyOptions.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={currency}
+                  readOnly
+                  placeholder="Definida pelo fornecedor"
+                  className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+                />
+              )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Data do Documento *</label>
