@@ -23,6 +23,11 @@ function buildSapCookies(sessionId: string, routeId?: string) {
   return `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
 }
 
+function truncateSapText(value: unknown, maxLength: number): string {
+  const text = String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
 async function getSapCredentials(
   supabase: ReturnType<typeof createClient>,
   companyDb?: string,
@@ -381,7 +386,10 @@ Deno.serve(async (req) => {
       DocDueDate: today,
       TaxDate: today,
       BPL_IDAssignedToInvoice: branchId,
-      Comments: `${isSales ? "Pedido de venda" : "Despesa interna"} #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
+      Comments: truncateSapText(
+        `${isSales ? "Pedido de venda" : "Despesa interna"} #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
+        190,
+      ),
       ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
       ...headerCustom,
       DocumentLines: items.map((it: any) => {
@@ -395,7 +403,7 @@ Deno.serve(async (req) => {
           unit = lineTotal / qty;
         }
         const line: Record<string, unknown> = {
-          ItemDescription: it.description,
+          ItemDescription: truncateSapText(it.description, 100),
           Quantity: qty,
           UnitPrice: unit,
           ...lineCustom,
