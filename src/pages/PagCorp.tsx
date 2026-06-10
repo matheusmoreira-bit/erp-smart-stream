@@ -401,7 +401,7 @@ export default function PagCorp() {
           endDate: c.end,
           companyDb: session.companyDB,
         }).toString();
-        const res = await authFetch(`pagcorp-proxy?${qs}`);
+        const res = await sapFunctionFetch(`pagcorp-proxy?${qs}`);
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || `Erro ${res.status}`);
