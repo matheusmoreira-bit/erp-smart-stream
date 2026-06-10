@@ -159,6 +159,41 @@ export async function requireAdminOrSapAdmin(req: Request) {
   }
 }
 
+/**
+ * Validate that the caller has a valid SAP B1 session (any user). Used by
+ * ERP-facing edge functions where the user may not have a Lovable Cloud
+ * account at all (e.g. PagCorp listing).
+ */
+async function validateSapSession(req: Request) {
+  const sapSession = req.headers.get("x-sap-session")?.trim();
+  const routeId = req.headers.get("x-sap-route")?.trim() || "";
+  const sapUser = req.headers.get("x-sap-user")?.trim();
+  const companyDB = req.headers.get("x-company-db")?.trim();
+  if (!sapSession || !sapUser || !companyDB) return null;
+
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  const baseUrl = await getSapBaseUrl(admin, companyDB);
+  // Cheap session-scoped check: list one user. Any valid B1SESSION succeeds.
+  const resp = await fetch(`${baseUrl}/Users?$top=1&$select=UserCode`, {
+    headers: { Cookie: `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}` },
+  });
+  if (!resp.ok) return null;
+  return { id: `sap:${companyDB}:${sapUser}`, email: sapUser };
+}
+
+export async function requireUserOrSapSession(req: Request) {
+  try {
+    return await requireUser(req);
+  } catch (err) {
+    const sap = await validateSapSession(req);
+    if (sap) return sap;
+    throw err;
+  }
+}
+
 export function authErrorResponse(err: unknown, corsHeaders: Record<string, string>) {
   if (err instanceof AuthError) {
     return new Response(JSON.stringify({ error: err.message }), {
