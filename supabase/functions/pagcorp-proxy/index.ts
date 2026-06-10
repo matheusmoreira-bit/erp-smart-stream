@@ -190,6 +190,10 @@ async function fetchExpenses(apiToken: string, baseUrl: string, accountId: strin
       const data = await res.json();
       const items = data.items || [];
       if (items.length === 0) break;
+      if (page === 1 && allItems.length === 0 && items[0]) {
+        console.log("[pagcorp] sample item keys:", Object.keys(items[0]));
+        console.log("[pagcorp] sample item:", JSON.stringify(items[0]).slice(0, 2000));
+      }
       allItems.push(...items);
       if (data.currentPage >= data.totalPages) break;
       page++;
