@@ -128,6 +128,11 @@ interface AccountMapping {
   project: string | null;
 }
 
+function truncateSapText(value: unknown, maxLength: number): string {
+  const text = String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
 async function resolveAccountMapping(
   supabase: ReturnType<typeof createClient>,
   accountCode: string | null,
@@ -339,9 +344,12 @@ Deno.serve(async (req) => {
       ? new Date(transaction.date).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
-    const description = isConsolidated
-      ? `PagCorp consolidado: ${transactions.length} transações (${transactions.map((t) => `#${t.id}`).join(", ")})`.slice(0, 254)
-      : `PagCorp #${transaction.id} - ${transaction.description || ""}`.slice(0, 254);
+    const description = truncateSapText(
+      isConsolidated
+        ? `PagCorp consolidado: ${transactions.length} transações (${transactions.map((t) => `#${t.id}`).join(", ")})`
+        : `PagCorp #${transaction.id} - ${transaction.description || ""}`,
+      190,
+    );
 
     const documentLines = lineMappings.map(({ tx, acctMapping, itemCode }) => {
       const line: Record<string, unknown> = {
