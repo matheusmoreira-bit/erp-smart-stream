@@ -452,13 +452,46 @@ export function CreateExpenseModal({
 
   const total = items.reduce((sum, item) => sum + item.line_total, 0);
 
+  const DEFAULT_MULTI_CURRENCIES = ["BRL", "EUR", "USD", "CAD", "CHF", "GBP"];
+
+  const fetchSupplierCurrencies = useCallback(async (cardCode: string) => {
+    setLoadingCurrencies(true);
+    try {
+      if (!sapSession) throw new Error("no session");
+      const { data } = await sapQuery(
+        sapSession,
+        `BusinessPartners('${encodeURIComponent(cardCode)}')/BPCurrencies`,
+        { $select: "Currency" },
+      );
+      const rows = (data as any)?.value || (data as any) || [];
+      const list = Array.from(
+        new Set(
+          (Array.isArray(rows) ? rows : [])
+            .map((r: any) => String(r.Currency || "").trim().toUpperCase())
+            .filter((c: string) => /^[A-Z]{3}$/.test(c)),
+        ),
+      );
+      setCurrencyOptions(list.length > 0 ? list : DEFAULT_MULTI_CURRENCIES);
+    } catch {
+      setCurrencyOptions(DEFAULT_MULTI_CURRENCIES);
+    } finally {
+      setLoadingCurrencies(false);
+    }
+  }, [sapSession]);
+
   const handleSupplierChange = (val: SapSearchOption | null) => {
     setSupplier(val);
     setCurrencyWarning(null);
+    setCurrencyOptions(null);
     if (val) {
-      const supplierCurrency = (val as any).currency;
-      if (supplierCurrency) {
+      const supplierCurrency = ((val as any).currency || "").trim();
+      if (supplierCurrency && supplierCurrency !== "##") {
         setCurrency(supplierCurrency);
+      } else if (supplierCurrency === "##") {
+        // Multi-currency supplier: let user choose
+        setCurrency("");
+        if (val.code) void fetchSupplierCurrencies(val.code);
+        else setCurrencyOptions(DEFAULT_MULTI_CURRENCIES);
       } else {
         setCurrency("");
         setCurrencyWarning(`O fornecedor "${val.name}" não possui moeda configurada no cadastro do SAP. O lançamento não poderá ser realizado até que essa inconsistência seja corrigida.`);
