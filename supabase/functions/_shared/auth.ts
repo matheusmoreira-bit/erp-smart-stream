@@ -94,6 +94,71 @@ export async function requireAdmin(req: Request) {
   return user;
 }
 
+async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
+  const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
+  const { data } = await admin
+    .from("system_credentials")
+    .select("credential_value")
+    .eq("company_db", companyDB)
+    .eq("system_name", "sap")
+    .eq("credential_key", "service_layer_url")
+    .maybeSingle();
+
+  const rawUrl = typeof data?.credential_value === "string" && data.credential_value.trim()
+    ? data.credential_value.trim()
+    : fallback;
+  let url = rawUrl.replace(/\/+$/, "");
+  if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
+  else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
+  return url;
+}
+
+async function validateSapAdmin(req: Request) {
+  const sapSession = req.headers.get("x-sap-session")?.trim();
+  const routeId = req.headers.get("x-sap-route")?.trim() || "";
+  const sapUser = req.headers.get("x-sap-user")?.trim();
+  const companyDB = req.headers.get("x-company-db")?.trim();
+  if (!sapSession || !sapUser || !companyDB) return null;
+
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  const { data: isAdminByMapping } = await admin.rpc("is_sap_user_admin", {
+    _sap_username: sapUser.toLowerCase(),
+  });
+  const isManager = sapUser.toLowerCase() === "manager";
+
+  const escapedUser = sapUser.replace(/'/g, "''");
+  const baseUrl = await getSapBaseUrl(admin, companyDB);
+  const params = new URLSearchParams({
+    "$filter": `UserCode eq '${escapedUser}'`,
+    "$select": "UserCode,Superuser",
+  });
+  const sapResp = await fetch(
+    `${baseUrl}/Users?${params.toString()}`,
+    { headers: { Cookie: `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}` } },
+  );
+  if (!sapResp.ok) return null;
+
+  const payload = await sapResp.json().catch(() => null) as { value?: { Superuser?: string }[] } | null;
+  const isSapSuperUser = payload?.value?.some((row) => row.Superuser === "tYES") === true;
+  if (!isManager && !isSapSuperUser && isAdminByMapping !== true) return null;
+
+  return { id: `sap:${companyDB}:${sapUser}`, email: sapUser };
+}
+
+export async function requireAdminOrSapAdmin(req: Request) {
+  try {
+    return await requireAdmin(req);
+  } catch (err) {
+    const sapAdmin = await validateSapAdmin(req);
+    if (sapAdmin) return sapAdmin;
+    throw err;
+  }
+}
+
 export function authErrorResponse(err: unknown, corsHeaders: Record<string, string>) {
   if (err instanceof AuthError) {
     return new Response(JSON.stringify({ error: err.message }), {
