@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { authFetch } from "@/lib/auth-fetch";
+import { publicFunctionFetch } from "@/lib/auth-fetch";
+import { useSap } from "@/contexts/SapContext";
 
 interface CredentialMeta {
   id: string;
@@ -10,9 +11,30 @@ interface CredentialMeta {
 }
 
 export function useCredentials() {
+  const { session } = useSap();
   const [credentials, setCredentials] = useState<CredentialMeta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const getSapHeaders = useCallback(() => {
+    if (session?.erpType !== "sap" || !session.sessionId || !session.companyDB || !session.userName) return {};
+    return {
+      "x-sap-session": session.sessionId,
+      "x-sap-route": session.routeId || "",
+      "x-sap-user": session.userName,
+      "x-company-db": session.companyDB,
+    };
+  }, [session?.companyDB, session?.erpType, session?.routeId, session?.sessionId, session?.userName]);
+
+  const credentialsFetch = useCallback((path: string, options: RequestInit = {}) => {
+    return publicFunctionFetch(path, {
+      ...options,
+      headers: {
+        ...getSapHeaders(),
+        ...options.headers,
+      },
+    });
+  }, [getSapHeaders]);
 
   const fetchCredentials = useCallback(async (companyDb?: string, system?: string) => {
     setIsLoading(true);
@@ -22,7 +44,7 @@ export function useCredentials() {
       if (system) params.set("system", system);
       if (companyDb) params.set("company_db", companyDb);
       const qs = params.toString() ? `?${params.toString()}` : "";
-      const res = await authFetch(`credentials${qs}`);
+      const res = await credentialsFetch(`credentials${qs}`);
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json();
       setCredentials(data.credentials || []);
@@ -31,13 +53,13 @@ export function useCredentials() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [credentialsFetch]);
 
   const saveCredentials = useCallback(async (systemName: string, creds: { key: string; value: string }[], companyDb?: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await authFetch("credentials", {
+      const res = await credentialsFetch("credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ system_name: systemName, credentials: creds, company_db: companyDb }),
@@ -64,7 +86,7 @@ export function useCredentials() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await authFetch("credentials", {
+      const res = await credentialsFetch("credentials", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ system_name: systemName, company_db: companyDb }),
@@ -95,7 +117,7 @@ export function useCredentials() {
         params.set("system", systemName);
         params.set("keys", keys.join(","));
         if (companyDb) params.set("company_db", companyDb);
-        const res = await authFetch(`credentials?${params.toString()}`);
+        const res = await credentialsFetch(`credentials?${params.toString()}`);
         if (!res.ok) return {};
         const data = await res.json();
         const map: Record<string, string> = {};
@@ -107,7 +129,7 @@ export function useCredentials() {
         return {};
       }
     },
-    []
+    [credentialsFetch]
   );
 
   return { credentials, isLoading, error, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials, fetchCredentialValues };
