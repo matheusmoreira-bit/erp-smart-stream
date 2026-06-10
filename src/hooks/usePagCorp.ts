@@ -111,6 +111,30 @@ export function usePagCorp() {
         });
       }
 
+      // Annotate nondeductible cards (mapped by company)
+      if (companyDb) {
+        const { data: nondeductible } = await supabase
+          .from("pagcorp_nondeductible_cards" as any)
+          .select("card_identifier, supplier_code, supplier_name")
+          .eq("company_db", companyDb);
+        if (nondeductible && nondeductible.length) {
+          const map = new Map<string, { code: string; name?: string }>();
+          (nondeductible as any[]).forEach((c) =>
+            map.set(String(c.card_identifier), { code: c.supplier_code, name: c.supplier_name }),
+          );
+          items.forEach((t) => {
+            const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+              (t.cardName && String(t.cardName).trim()) || "";
+            const hit = key ? map.get(key) : undefined;
+            if (hit) {
+              t.isNondeductible = true;
+              t.nondeductibleSupplierCode = hit.code;
+              t.nondeductibleSupplierName = hit.name;
+            }
+          });
+        }
+      }
+
       setTransactions(items);
     } catch (e) {
       console.error("PagCorp fetch error:", e);
