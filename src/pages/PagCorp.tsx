@@ -169,7 +169,7 @@ export default function PagCorp() {
   useEffect(() => {
     if (!session?.companyDB) return;
     fetchTransactions(startDate, endDate, session.companyDB);
-  }, [fetchTransactions, session?.companyDB, startDate, endDate]);
+  }, [fetchTransactions, session?.companyDB]);
 
   const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
 
