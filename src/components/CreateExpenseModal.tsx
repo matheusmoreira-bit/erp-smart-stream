@@ -106,12 +106,12 @@ export function CreateExpenseModal({
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
   const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
-    cacheKey: isSales ? "items_sales_active" : "items_purchase_active",
+    cacheKey: isSales ? "items_sales_v2" : "items_purchase_v2",
     endpoint: "Items",
     params: {
       $filter: isSales
-        ? "Valid eq 'tYES' and Frozen eq 'tNO' and SalesItem eq 'tYES'"
-        : "Valid eq 'tYES' and Frozen eq 'tNO' and PurchaseItem eq 'tYES'",
+        ? "Frozen eq 'tNO' and SalesItem eq 'tYES'"
+        : "Frozen eq 'tNO' and PurchaseItem eq 'tYES'",
       $select: "ItemCode,ItemName",
     },
     mapRow: itemMapRow,
