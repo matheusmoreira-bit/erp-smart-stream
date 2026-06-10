@@ -131,8 +131,12 @@ async function validateSapAdmin(req: Request) {
 
   const escapedUser = sapUser.replace(/'/g, "''");
   const baseUrl = await getSapBaseUrl(admin, companyDB);
+  const params = new URLSearchParams({
+    "$filter": `UserCode eq '${escapedUser}'`,
+    "$select": "UserCode,Superuser",
+  });
   const sapResp = await fetch(
-    `${baseUrl}/Users?$filter=UserCode eq '${encodeURIComponent(escapedUser)}'&$select=UserCode,Superuser`,
+    `${baseUrl}/Users?${params.toString()}`,
     { headers: { Cookie: `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}` } },
   );
   if (!sapResp.ok) return null;
