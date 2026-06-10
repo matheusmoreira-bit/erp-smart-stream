@@ -31,20 +31,24 @@ export function useSapCachedList({
   paramsRef.current = params;
 
   const load = useCallback(async (forceRefresh = false) => {
-    if (!enabled || loadedRef.current) return;
+    if (!enabled || (!forceRefresh && loadedRef.current)) return;
     setIsLoading(true);
     loadedRef.current = true;
 
     try {
+      const companyDB = session?.companyDB;
       // 1. Try Supabase cache first (works without SAP session), unless forced refresh
       if (!forceRefresh) {
-        const { data: cached } = await supabase
+        let cacheQuery = supabase
           .from("sap_cache")
           .select("data, expires_at")
           .eq("cache_key", cacheKey)
           .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
+
+        if (companyDB) cacheQuery = cacheQuery.eq("company_db", companyDB);
+
+        const { data: cached } = await cacheQuery.maybeSingle();
 
         if (cached) {
           const cachedData = cached.data as any[];
@@ -63,12 +67,11 @@ export function useSapCachedList({
       }
 
       // 2. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP
-      if (!session || session.erpType !== "sap") {
+      if (!session || session.erpType !== "sap" || !companyDB) {
         setIsLoading(false);
         return;
       }
 
-      const companyDB = session.companyDB;
       const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
       const rows = data?.value || [];
 
@@ -94,12 +97,12 @@ export function useSapCachedList({
     } finally {
       setIsLoading(false);
     }
-  }, [session?.sessionId, enabled, cacheKey, endpoint]);
+  }, [session?.sessionId, session?.companyDB, enabled, cacheKey, endpoint]);
 
   // Reset loaded flag when session changes
   useEffect(() => {
     loadedRef.current = false;
-  }, [session?.sessionId, cacheKey]);
+  }, [session?.sessionId, session?.companyDB, cacheKey]);
 
   useEffect(() => {
     load();

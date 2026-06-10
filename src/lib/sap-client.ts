@@ -138,7 +138,7 @@ export async function sapQuery(
   params?: Record<string, string | number>,
   useCache = true,
 ): Promise<{ data: unknown; fromCache: boolean }> {
-  const cacheKey = `${endpoint}:${JSON.stringify(params || {})}`;
+  const cacheKey = `${session.companyDB}:${endpoint}:${JSON.stringify(params || {})}`;
 
   if (useCache) {
     const cached = getClientCache(cacheKey);
@@ -287,7 +287,7 @@ export async function sapQueryAll(
   params?: Record<string, string | number>,
   useCache = true,
 ): Promise<{ data: { value: unknown[]; totalCount: number }; fromCache: boolean }> {
-  const cacheKey = `all:${endpoint}:${JSON.stringify(params || {})}`;
+  const cacheKey = `all:${session.companyDB}:${endpoint}:${JSON.stringify(params || {})}`;
 
   if (useCache) {
     const cached = getClientCache(cacheKey);

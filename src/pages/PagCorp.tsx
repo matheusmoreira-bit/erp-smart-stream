@@ -83,7 +83,7 @@ function formatDate(dateStr: string) {
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated, logIntegration } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated } = usePagCorp();
   const { createExpense } = useExpenses();
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
@@ -592,6 +592,7 @@ export default function PagCorp() {
       let sapError: string | undefined;
       let sapPayloadFromFn: any = null;
       let sapResponseFromFn: any = null;
+      let pagcorpLoggedByFn = false;
       try {
         const res = await sapFunctionFetch("expense-to-sap", {
           method: "POST",
@@ -602,12 +603,19 @@ export default function PagCorp() {
             sap_route_id: session.routeId,
             sap_company_db: session.companyDB,
             sap_session_expires_at: session.expiresAt,
+            pagcorp_log: {
+              transaction: t,
+              integrationType: "accountability",
+              companyDb: session.companyDB,
+              integratedBy: session.userName || undefined,
+            },
           }),
         });
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error || `Edge function returned ${res.status}`);
         sapPayloadFromFn = data?.sapPayload ?? null;
         sapResponseFromFn = data?.sapResponse ?? null;
+        pagcorpLoggedByFn = data?.pagcorpLogged === true;
         if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
         sapDocEntry = data?.docEntry;
         sapDocNum = data?.docNum;
@@ -615,21 +623,9 @@ export default function PagCorp() {
         sapError = sapErr instanceof Error ? sapErr.message : "Erro SAP desconhecido";
       }
 
-      // Log into pagcorp_integration_log so the list reflects integrated state.
-      // Persist the real payload sent to SAP (returned by the edge function) so
-      // the History screen can display it instead of just the expense_id.
-      await logIntegration(
-        t,
-        "accountability",
-        sapError ? "error" : "success",
-        session.companyDB,
-        session.userName || undefined,
-        sapDocEntry,
-        sapDocNum,
-        sapError,
-        sapPayloadFromFn ?? { expense_id: (expense as any).id },
-        sapResponseFromFn ?? undefined,
-      );
+      if (!pagcorpLoggedByFn) {
+        console.warn("Função não confirmou registro do log PagCorp; mantendo resultado SAP original");
+      }
 
       if (sapError) throw new Error(sapError);
 
