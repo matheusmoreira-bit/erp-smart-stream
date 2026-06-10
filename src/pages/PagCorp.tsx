@@ -685,6 +685,9 @@ export default function PagCorp() {
             <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/mapping")} className="gap-2">
               <MapPin className="w-4 h-4" /> Mapeamento
             </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/nondeductible")} className="gap-2">
+              <ShieldOff className="w-4 h-4" /> Indedutíveis
+            </Button>
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{companyLabel}</p>
               <p className="text-xs text-muted-foreground">{session?.userName}</p>
@@ -769,6 +772,32 @@ export default function PagCorp() {
             <FileText className="w-4 h-4" />
             Gerar Apresentação
           </Button>
+          <div className="flex items-center gap-2 pl-2 border-l border-border ml-1">
+            <Switch
+              id="show-nondeductible"
+              checked={showNondeductible}
+              onCheckedChange={setShowNondeductible}
+            />
+            <Label htmlFor="show-nondeductible" className="text-xs text-muted-foreground cursor-pointer">
+              Mostrar indedutíveis
+            </Label>
+          </div>
+          {showNondeductible && nondeductiblePending.length > 0 && (
+            <Button
+              onClick={integrateAllNondeductible}
+              disabled={integratingNondeductible || batchActive}
+              variant="secondary"
+              className="gap-2"
+              title="Integra todas as indedutíveis pendentes consolidadas por fornecedor mapeado"
+            >
+              {integratingNondeductible ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ShieldOff className="w-4 h-4" />
+              )}
+              Integrar indedutíveis ({nondeductiblePending.length})
+            </Button>
+          )}
         </div>
       </div>
 
