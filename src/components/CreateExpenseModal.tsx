@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { sapQuery } from "@/lib/sap-client";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
   Dialog,
