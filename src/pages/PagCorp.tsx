@@ -900,7 +900,15 @@ export default function PagCorp() {
                           {formatDate(t.date)}
                         </TableCell>
                         <TableCell className="text-sm text-foreground max-w-[250px] truncate">
-                          {t.description}
+                          <div className="flex items-center gap-2">
+                            <span className="truncate">{t.description}</span>
+                            {t.isNondeductible && (
+                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide gap-1 shrink-0">
+                                <ShieldOff className="w-3 h-3" />
+                                Indedutível
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {t.accountAlias || t.accountName || "—"}
