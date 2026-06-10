@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { AuthError, requireAdminOrSapAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,16 +35,24 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireAdminOrSapAdmin(req);
-    const adminClient = getServiceClient();
-
-
     const url = new URL(req.url);
     const systemName = url.searchParams.get("system");
-    const companyDb = url.searchParams.get("company_db");
+    let companyDb = url.searchParams.get("company_db");
+    const includeKeys = url.searchParams.get("keys");
+    const metadataOnlyGet = req.method === "GET" && !includeKeys;
+    const caller = metadataOnlyGet ? await requireAdminOrSapSession(req) : await requireAdminOrSapAdmin(req);
+    const callerCompanyDb = typeof (caller as { companyDB?: unknown }).companyDB === "string"
+      ? (caller as { companyDB: string }).companyDB
+      : null;
+    if (metadataOnlyGet && callerCompanyDb) {
+      if (companyDb && companyDb !== callerCompanyDb) {
+        throw new AuthError("Acesso negado para esta empresa", 403);
+      }
+      companyDb = callerCompanyDb;
+    }
+    const adminClient = getServiceClient();
 
     if (req.method === "GET") {
-      const includeKeys = url.searchParams.get("keys");
       const selectCols = includeKeys
         ? "id, system_name, credential_key, credential_value, updated_at, company_db"
         : "id, system_name, credential_key, updated_at, company_db";

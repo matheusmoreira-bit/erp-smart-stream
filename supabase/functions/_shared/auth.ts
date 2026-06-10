@@ -146,7 +146,7 @@ async function validateSapAdmin(req: Request) {
   const isSapSuperUser = payload?.value?.some((row) => row.Superuser === "tYES") === true;
   if (!isManager && !isSapSuperUser && isAdminByMapping !== true) return null;
 
-  return { id: `sap:${companyDB}:${sapUser}`, email: sapUser };
+  return { id: `sap:${companyDB}:${sapUser}`, email: sapUser, companyDB, userName: sapUser, source: "sap_admin" as const };
 }
 
 export async function requireAdminOrSapAdmin(req: Request) {
@@ -159,12 +159,23 @@ export async function requireAdminOrSapAdmin(req: Request) {
   }
 }
 
+export async function requireAdminOrSapSession(req: Request) {
+  try {
+    const user = await requireAdmin(req);
+    return { ...user, source: "cloud_admin" as const };
+  } catch (err) {
+    const sap = await validateSapSession(req);
+    if (sap) return sap;
+    throw err;
+  }
+}
+
 /**
  * Validate that the caller has a valid SAP B1 session (any user). Used by
  * ERP-facing edge functions where the user may not have a Lovable Cloud
  * account at all (e.g. PagCorp listing).
  */
-async function validateSapSession(req: Request) {
+export async function validateSapSession(req: Request) {
   const sapSession = req.headers.get("x-sap-session")?.trim();
   const routeId = req.headers.get("x-sap-route")?.trim() || "";
   const sapUser = req.headers.get("x-sap-user")?.trim();
@@ -181,7 +192,7 @@ async function validateSapSession(req: Request) {
     headers: { Cookie: `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}` },
   });
   if (!resp.ok) return null;
-  return { id: `sap:${companyDB}:${sapUser}`, email: sapUser };
+  return { id: `sap:${companyDB}:${sapUser}`, email: sapUser, companyDB, userName: sapUser, source: "sap_session" as const };
 }
 
 export async function requireUserOrSapSession(req: Request) {

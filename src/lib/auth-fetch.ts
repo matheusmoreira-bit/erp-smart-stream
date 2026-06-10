@@ -35,6 +35,15 @@ async function getValidAccessToken(): Promise<string | null> {
   return null;
 }
 
+function mergeHeaders(...headersList: Array<HeadersInit | undefined>): Record<string, string> {
+  const headers = new Headers();
+  for (const headersInit of headersList) {
+    if (!headersInit) continue;
+    new Headers(headersInit).forEach((value, key) => headers.set(key, value));
+  }
+  return Object.fromEntries(headers.entries());
+}
+
 export async function authFetch(
   path: string,
   options: RequestInit = {}
@@ -51,11 +60,10 @@ export async function authFetch(
 
   return fetch(url, {
     ...options,
-    headers: {
-      ...options.headers,
+    headers: mergeHeaders(options.headers, {
       Authorization: `Bearer ${token}`,
       apikey: ANON_KEY,
-    },
+    }),
   });
 }
 
@@ -69,11 +77,10 @@ export async function publicFunctionFetch(
 
   return fetch(url, {
     ...options,
-    headers: {
-      ...options.headers,
+    headers: mergeHeaders(options.headers, {
       Authorization: `Bearer ${authToken}`,
       apikey: ANON_KEY,
-    },
+    }),
   });
 }
 
@@ -105,10 +112,7 @@ export async function sapFunctionFetch(
 ): Promise<Response> {
   return publicFunctionFetch(path, {
     ...options,
-    headers: {
-      ...readSapHeaders(),
-      ...options.headers,
-    },
+    headers: mergeHeaders(readSapHeaders(), options.headers),
   });
 }
 

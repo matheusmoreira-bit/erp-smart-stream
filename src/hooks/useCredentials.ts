@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
-import { publicFunctionFetch } from "@/lib/auth-fetch";
-import { useSap } from "@/contexts/SapContext";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 interface CredentialMeta {
   id: string;
@@ -11,30 +10,13 @@ interface CredentialMeta {
 }
 
 export function useCredentials() {
-  const { session } = useSap();
   const [credentials, setCredentials] = useState<CredentialMeta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getSapHeaders = useCallback(() => {
-    if (session?.erpType !== "sap" || !session.sessionId || !session.companyDB || !session.userName) return {};
-    return {
-      "x-sap-session": session.sessionId,
-      "x-sap-route": session.routeId || "",
-      "x-sap-user": session.userName,
-      "x-company-db": session.companyDB,
-    };
-  }, [session?.companyDB, session?.erpType, session?.routeId, session?.sessionId, session?.userName]);
-
   const credentialsFetch = useCallback((path: string, options: RequestInit = {}) => {
-    return publicFunctionFetch(path, {
-      ...options,
-      headers: {
-        ...getSapHeaders(),
-        ...options.headers,
-      },
-    });
-  }, [getSapHeaders]);
+    return sapFunctionFetch(path, options);
+  }, []);
 
   const fetchCredentials = useCallback(async (companyDb?: string, system?: string) => {
     setIsLoading(true);
@@ -80,7 +62,7 @@ export function useCredentials() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchCredentials]);
+  }, [credentialsFetch, fetchCredentials]);
 
   const deleteCredentials = useCallback(async (systemName: string, companyDb?: string) => {
     setIsLoading(true);
@@ -104,7 +86,7 @@ export function useCredentials() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchCredentials]);
+  }, [credentialsFetch, fetchCredentials]);
 
   const hasCredentials = useCallback((system: string) => {
     return credentials.some(c => c.system_name === system);
