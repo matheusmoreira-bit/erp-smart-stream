@@ -76,3 +76,39 @@ export async function publicFunctionFetch(
     },
   });
 }
+
+/**
+ * Fetch for edge functions that should work for SAP-authenticated users even
+ * when there's no Lovable Cloud session. Injects SAP session headers when
+ * available so the server can validate via SAP Service Layer.
+ */
+function readSapHeaders(): Record<string, string> {
+  try {
+    const raw = sessionStorage.getItem("erp_session_v1");
+    if (!raw) return {};
+    const s = JSON.parse(raw);
+    if (s?.erpType !== "sap" || !s.sessionId || !s.userName || !s.companyDB) return {};
+    return {
+      "x-sap-session": s.sessionId,
+      "x-sap-route": s.routeId || "",
+      "x-sap-user": s.userName,
+      "x-company-db": s.companyDB,
+    };
+  } catch {
+    return {};
+  }
+}
+
+export async function sapFunctionFetch(
+  path: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  return publicFunctionFetch(path, {
+    ...options,
+    headers: {
+      ...readSapHeaders(),
+      ...options.headers,
+    },
+  });
+}
+
