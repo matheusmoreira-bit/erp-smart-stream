@@ -18,22 +18,6 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // DEBUG: log incoming auth header presence (first chars only)
-  const authHeader = req.headers.get("Authorization") || "";
-  console.log("[credentials] incoming", {
-    method: req.method,
-    hasAuth: !!authHeader,
-    authPrefix: authHeader.slice(0, 20),
-    authLen: authHeader.length,
-  });
-
-  // DEBUG marker: prove this code is running
-  if (req.headers.get("x-debug-marker") === "1") {
-    return new Response(JSON.stringify({ debug: "v2-running", authPrefix: authHeader.slice(0, 20) }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   try {
     const url = new URL(req.url);
     const systemName = url.searchParams.get("system");
