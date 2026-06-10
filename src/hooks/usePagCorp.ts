@@ -20,6 +20,9 @@ export interface PagCorpTransaction {
   receipts?: any[];
   integrated?: boolean;
   integrationLogId?: string;
+  isNondeductible?: boolean;
+  nondeductibleSupplierCode?: string;
+  nondeductibleSupplierName?: string;
   [key: string]: unknown;
 }
 
