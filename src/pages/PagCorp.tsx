@@ -54,7 +54,7 @@ import { useExpenses } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { generatePagCorpPresentation, type PresentationPeriod } from "@/lib/pagcorp-presentation";
-import { authFetch } from "@/lib/auth-fetch";
+import { authFetch, sapFunctionFetch } from "@/lib/auth-fetch";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
