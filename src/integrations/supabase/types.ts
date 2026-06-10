@@ -991,6 +991,45 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_nondeductible_cards: {
+        Row: {
+          card_holder: string | null
+          card_identifier: string
+          card_label: string | null
+          company_db: string
+          created_at: string
+          created_by: string | null
+          id: string
+          supplier_code: string
+          supplier_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          card_holder?: string | null
+          card_identifier: string
+          card_label?: string | null
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          supplier_code: string
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          card_holder?: string | null
+          card_identifier?: string
+          card_label?: string | null
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          supplier_code?: string
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pagcorp_supplier_links: {
         Row: {
           card_code: string | null
