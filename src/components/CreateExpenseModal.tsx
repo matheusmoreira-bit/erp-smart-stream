@@ -182,6 +182,7 @@ export function CreateExpenseModal({
       setSupplier(null);
       setCurrency("");
       setCurrencyWarning(null);
+      setCurrencyOptions(null);
       setDocDate("");
       setDueDate("");
       setRemarks("");
