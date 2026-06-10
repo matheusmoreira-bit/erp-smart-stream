@@ -19,7 +19,10 @@ import {
   Layers,
   Paperclip,
   FileText,
+  ShieldOff,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -129,6 +132,8 @@ export default function PagCorp() {
     transactions: PagCorpTransaction[];
   }>({ open: false, transactions: [] });
   const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
+  const [showNondeductible, setShowNondeductible] = useState(false);
+  const [integratingNondeductible, setIntegratingNondeductible] = useState(false);
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
 
@@ -176,6 +181,11 @@ export default function PagCorp() {
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
+    // Nondeductible visibility: off = hide nondeductible cards
+    if (!showNondeductible) {
+      list = list.filter((t) => !t.isNondeductible);
+    }
+
     if (accountabilityFilter === "yes") {
       list = list.filter((t) => t.hasAccountability);
     } else if (accountabilityFilter === "no") {
@@ -192,7 +202,58 @@ export default function PagCorp() {
     }
 
     return list;
-  }, [transactions, search, accountabilityFilter]);
+  }, [transactions, search, accountabilityFilter, showNondeductible]);
+
+  const nondeductiblePending = useMemo(
+    () => transactions.filter((t) => t.isNondeductible && !t.integrated),
+    [transactions],
+  );
+
+  const integrateAllNondeductible = async () => {
+    if (!session?.companyDB) return;
+    if (!checkSapCredentials()) return;
+    if (nondeductiblePending.length === 0) {
+      toast.info("Nenhuma transação indedutível pendente no período");
+      return;
+    }
+    // Group by supplier_code mapped on the card
+    const groups = new Map<string, { name?: string; txs: PagCorpTransaction[] }>();
+    nondeductiblePending.forEach((t) => {
+      const code = t.nondeductibleSupplierCode!;
+      if (!groups.has(code)) groups.set(code, { name: t.nondeductibleSupplierName, txs: [] });
+      groups.get(code)!.txs.push(t);
+    });
+
+    setIntegratingNondeductible(true);
+    const tId = toast.loading(`Integrando ${nondeductiblePending.length} transações em ${groups.size} PC(s)…`);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const [code, g] of groups) {
+        try {
+          const result = await integrateConsolidated(
+            g.txs,
+            session.companyDB,
+            code,
+            g.name,
+            session.userName || undefined,
+          );
+          ok++;
+          toast.success(`PC consolidado #${result.purchaseOrder?.DocNum} (${g.txs.length} itens)`);
+        } catch (e) {
+          fail++;
+          toast.error(`Falha no fornecedor ${code}`, {
+            description: e instanceof Error ? e.message : "Erro",
+          });
+        }
+      }
+      toast.dismiss(tId);
+      toast.success(`Concluído: ${ok} PC(s) criados${fail ? `, ${fail} com falha` : ""}`);
+      await fetchTransactions(startDate, endDate, session.companyDB);
+    } finally {
+      setIntegratingNondeductible(false);
+    }
+  };
 
   // Group totals by currency
   const totalsByCurrency = useMemo(() => {
@@ -624,6 +685,9 @@ export default function PagCorp() {
             <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/mapping")} className="gap-2">
               <MapPin className="w-4 h-4" /> Mapeamento
             </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/nondeductible")} className="gap-2">
+              <ShieldOff className="w-4 h-4" /> Indedutíveis
+            </Button>
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{companyLabel}</p>
               <p className="text-xs text-muted-foreground">{session?.userName}</p>
@@ -708,6 +772,32 @@ export default function PagCorp() {
             <FileText className="w-4 h-4" />
             Gerar Apresentação
           </Button>
+          <div className="flex items-center gap-2 pl-2 border-l border-border ml-1">
+            <Switch
+              id="show-nondeductible"
+              checked={showNondeductible}
+              onCheckedChange={setShowNondeductible}
+            />
+            <Label htmlFor="show-nondeductible" className="text-xs text-muted-foreground cursor-pointer">
+              Mostrar indedutíveis
+            </Label>
+          </div>
+          {showNondeductible && nondeductiblePending.length > 0 && (
+            <Button
+              onClick={integrateAllNondeductible}
+              disabled={integratingNondeductible || batchActive}
+              variant="secondary"
+              className="gap-2"
+              title="Integra todas as indedutíveis pendentes consolidadas por fornecedor mapeado"
+            >
+              {integratingNondeductible ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ShieldOff className="w-4 h-4" />
+              )}
+              Integrar indedutíveis ({nondeductiblePending.length})
+            </Button>
+          )}
         </div>
       </div>
 
@@ -810,7 +900,15 @@ export default function PagCorp() {
                           {formatDate(t.date)}
                         </TableCell>
                         <TableCell className="text-sm text-foreground max-w-[250px] truncate">
-                          {t.description}
+                          <div className="flex items-center gap-2">
+                            <span className="truncate">{t.description}</span>
+                            {t.isNondeductible && (
+                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide gap-1 shrink-0">
+                                <ShieldOff className="w-3 h-3" />
+                                Indedutível
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {t.accountAlias || t.accountName || "—"}
