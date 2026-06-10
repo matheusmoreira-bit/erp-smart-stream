@@ -86,7 +86,10 @@ export default function PagCorp() {
   const { credentials, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
 
-  useEffect(() => { fetchCredentials(session?.companyDB, "sap"); }, [fetchCredentials, session?.companyDB]);
+  useEffect(() => {
+    if (!session?.companyDB) return;
+    fetchCredentials(session.companyDB, "sap");
+  }, [fetchCredentials, session?.companyDB]);
 
   const hasSapCredentials = credentials.some((c) => c.system_name === "sap" && c.company_db === session?.companyDB);
 
@@ -164,8 +167,9 @@ export default function PagCorp() {
   };
 
   useEffect(() => {
-    fetchTransactions(startDate, endDate, session?.companyDB);
-  }, []);
+    if (!session?.companyDB) return;
+    fetchTransactions(startDate, endDate, session.companyDB);
+  }, [fetchTransactions, session?.companyDB]);
 
   const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
 
