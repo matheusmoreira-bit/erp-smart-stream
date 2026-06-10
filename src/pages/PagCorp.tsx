@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
-import { invokeFn } from "@/lib/invoke-fn";
 import {
   CreditCard,
   RefreshCw,
@@ -57,7 +56,7 @@ import { useExpenses } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { generatePagCorpPresentation, type PresentationPeriod } from "@/lib/pagcorp-presentation";
-import { authFetch, sapFunctionFetch } from "@/lib/auth-fetch";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -594,16 +593,19 @@ export default function PagCorp() {
       let sapPayloadFromFn: any = null;
       let sapResponseFromFn: any = null;
       try {
-        const { data, error: fnErr } = await invokeFn("expense-to-sap", {
-          body: {
+        const res = await sapFunctionFetch("expense-to-sap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             expense_id: (expense as any).id,
             sap_session_id: session.sessionId,
             sap_route_id: session.routeId,
             sap_company_db: session.companyDB,
             sap_session_expires_at: session.expiresAt,
-          },
+          }),
         });
-        if (fnErr) throw fnErr;
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || `Edge function returned ${res.status}`);
         sapPayloadFromFn = data?.sapPayload ?? null;
         sapResponseFromFn = data?.sapResponse ?? null;
         if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
