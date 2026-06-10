@@ -19,7 +19,10 @@ import {
   Layers,
   Paperclip,
   FileText,
+  ShieldOff,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -129,6 +132,8 @@ export default function PagCorp() {
     transactions: PagCorpTransaction[];
   }>({ open: false, transactions: [] });
   const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
+  const [showNondeductible, setShowNondeductible] = useState(false);
+  const [integratingNondeductible, setIntegratingNondeductible] = useState(false);
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
 
