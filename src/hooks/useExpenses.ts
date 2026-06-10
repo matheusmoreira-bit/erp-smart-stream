@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { invokeFn } from "@/lib/invoke-fn";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
 
 export type ExpenseStatus =
@@ -103,6 +103,18 @@ const STATUS_COLORS: Record<ExpenseStatus, string> = {
 };
 
 export { STATUS_LABELS, STATUS_COLORS };
+
+async function invokeExpenseToSap(body: Record<string, unknown>) {
+  const res = await sapFunctionFetch("expense-to-sap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || `Edge function returned ${res.status}`);
+  if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
+  return data;
+}
 
 /* ───────────────── Rule Evaluation ───────────────── */
 
@@ -511,17 +523,13 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // Trigger SAP integration immediately (only for SAP companies)
       if (session?.erpType === "sap") {
         try {
-          const { data, error: fnErr } = await invokeFn("expense-to-sap", {
-            body: {
-              expense_id: expenseId,
-              sap_session_id: session.sessionId,
-              sap_route_id: session.routeId,
-              sap_company_db: session.companyDB,
-              sap_session_expires_at: session.expiresAt,
-            },
+          await invokeExpenseToSap({
+            expense_id: expenseId,
+            sap_session_id: session.sessionId,
+            sap_route_id: session.routeId,
+            sap_company_db: session.companyDB,
+            sap_session_expires_at: session.expiresAt,
           });
-          if (fnErr) throw fnErr;
-          if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
         } catch (sapErr) {
           await fetchExpenses();
           throw new Error(
@@ -538,17 +546,13 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   const retrySapIntegration = useCallback(
     async (expenseId: string) => {
       if (!session || session.erpType !== "sap") throw new Error("Faça login no SAP pela tela antes de integrar.");
-      const { data, error: fnErr } = await invokeFn("expense-to-sap", {
-        body: {
-          expense_id: expenseId,
-          sap_session_id: session.sessionId,
-          sap_route_id: session.routeId,
-          sap_company_db: session.companyDB,
-          sap_session_expires_at: session.expiresAt,
-        },
+      const data = await invokeExpenseToSap({
+        expense_id: expenseId,
+        sap_session_id: session.sessionId,
+        sap_route_id: session.routeId,
+        sap_company_db: session.companyDB,
+        sap_session_expires_at: session.expiresAt,
       });
-      if (fnErr) throw fnErr;
-      if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
       await fetchExpenses();
       return data;
     },
