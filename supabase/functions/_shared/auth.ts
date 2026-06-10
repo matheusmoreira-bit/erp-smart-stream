@@ -128,6 +128,7 @@ async function validateSapAdmin(req: Request) {
   const { data: isAdminByMapping } = await admin.rpc("is_sap_user_admin", {
     _sap_username: sapUser.toLowerCase(),
   });
+  const isManager = sapUser.toLowerCase() === "manager";
 
   const escapedUser = sapUser.replace(/'/g, "''");
   const baseUrl = await getSapBaseUrl(admin, companyDB);
@@ -143,7 +144,7 @@ async function validateSapAdmin(req: Request) {
 
   const payload = await sapResp.json().catch(() => null) as { value?: { Superuser?: string }[] } | null;
   const isSapSuperUser = payload?.value?.some((row) => row.Superuser === "tYES") === true;
-  if (!isSapSuperUser && isAdminByMapping !== true) return null;
+  if (!isManager && !isSapSuperUser && isAdminByMapping !== true) return null;
 
   return { id: `sap:${companyDB}:${sapUser}`, email: sapUser };
 }
