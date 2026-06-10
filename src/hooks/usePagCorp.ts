@@ -37,10 +37,10 @@ export function usePagCorp() {
       if (endDate) params.endDate = endDate;
       if (companyDb) params.companyDb = companyDb;
 
-      const { authFetch } = await import("@/lib/auth-fetch");
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
       const queryString = new URLSearchParams(params).toString();
       const url = `pagcorp-proxy${queryString ? `?${queryString}` : ""}`;
-      const res = await authFetch(url);
+      const res = await sapFunctionFetch(url);
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -183,8 +183,8 @@ export function usePagCorp() {
     supplierName?: string,
     integratedBy?: string,
   ) => {
-    const { authFetch } = await import("@/lib/auth-fetch");
-    const res = await authFetch("pagcorp-to-sap", {
+    const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+    const res = await sapFunctionFetch("pagcorp-to-sap", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -214,9 +214,9 @@ export function usePagCorp() {
     supplierName?: string,
     integratedBy?: string,
   ) => {
-    const { authFetch } = await import("@/lib/auth-fetch");
+    const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     // All as "generic" (skip accountability per-tx flow); receipts still merged on the edge fn
-    const res = await authFetch("pagcorp-to-sap", {
+    const res = await sapFunctionFetch("pagcorp-to-sap", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
