@@ -176,6 +176,8 @@ Deno.serve(async (req) => {
   let attachmentLinkStatus: StageStatus = "not_applicable";
   let expenseId: string | null = null;
   let supabase: ReturnType<typeof createClient> | null = null;
+  let pagcorpLog: any = null;
+  let pagcorpLogWritten = false;
   // Captured outside the try/catch so the error path can return the same
   // payload that was actually sent to SAP (used by the integration log UI).
   let lastSapPayload: Record<string, unknown> | null = null;
@@ -199,9 +201,51 @@ Deno.serve(async (req) => {
     }
   };
 
+  const writePagCorpLog = async (
+    status: "success" | "error",
+    errorMessage?: string,
+    sapDocEntry?: number,
+    sapDocNum?: number,
+    sapPayload?: unknown,
+    sapResponse?: unknown,
+  ) => {
+    if (!supabase || !pagcorpLog?.transaction || pagcorpLogWritten) return;
+    const tx = pagcorpLog.transaction;
+    try {
+      await supabase.from("pagcorp_integration_log").insert({
+        pagcorp_expense_id: Number(tx.id),
+        pagcorp_data: {
+          description: tx.description,
+          amount: tx.amount,
+          currency: tx.currency,
+          date: tx.date,
+          accountAlias: tx.accountAlias,
+          accountCode: tx.accountCode,
+          hasAccountability: tx.hasAccountability,
+          accountabilityApproved: tx.accountabilityApproved,
+          receipts: tx.receipts,
+          internalExpenseId: expenseId,
+        },
+        integration_type: pagcorpLog.integrationType || "accountability",
+        status,
+        company_db: pagcorpLog.companyDb || null,
+        integrated_by: pagcorpLog.integratedBy || null,
+        sap_doc_entry: sapDocEntry || null,
+        sap_doc_num: sapDocNum || null,
+        error_message: errorMessage || null,
+        sap_payload: sapPayload || null,
+        sap_response: sapResponse || null,
+      } as any);
+      pagcorpLogWritten = true;
+    } catch (e) {
+      console.warn("Falha ao registrar log PagCorp na função:", e);
+    }
+  };
+
   try {
     const body = await req.json();
     expenseId = body.expense_id;
+    pagcorpLog = body.pagcorp_log || null;
     if (!expenseId) throw new Error("expense_id obrigatório");
 
     supabase = createClient(
@@ -481,6 +525,8 @@ Deno.serve(async (req) => {
       },
     });
 
+    await writePagCorpLog("success", undefined, sapResult.docEntry, sapResult.docNum, sapPayload, sapResult.response);
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -488,6 +534,7 @@ Deno.serve(async (req) => {
         docNum: sapResult.docNum,
         sapPayload,
         sapResponse: sapResult.response,
+        pagcorpLogged: pagcorpLogWritten,
         stages: {
           attachment: attachmentStatus,
           purchase_order: purchaseOrderStatus,
@@ -501,12 +548,14 @@ Deno.serve(async (req) => {
     console.error("expense-to-sap error:", msg);
     // Best-effort: persist whatever stage statuses we collected before the throw.
     await persistStatus({ sap_integration_error: msg });
+    await writePagCorpLog("error", msg, undefined, undefined, lastSapPayload, lastSapResponse);
     return new Response(
       JSON.stringify({
         success: false,
         error: msg,
         sapPayload: lastSapPayload,
         sapResponse: lastSapResponse,
+        pagcorpLogged: pagcorpLogWritten,
         stages: {
           attachment: attachmentStatus,
           purchase_order: purchaseOrderStatus,
