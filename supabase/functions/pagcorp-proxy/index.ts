@@ -251,8 +251,21 @@ Deno.serve(async (req) => {
         console.warn(`[pagcorp receipt] ${r.status} ${u} ${lastBody.slice(0, 120)}`);
       }
       if (!fileRes) {
-        return new Response(JSON.stringify({ error: `Falha ao baixar recibo [${lastStatus}]: ${lastBody.slice(0, 200)}` }), {
-          status: lastStatus || 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        const isPermissionDenied = lastStatus === 401 || lastStatus === 403;
+        return new Response(JSON.stringify({
+          success: false,
+          error: isPermissionDenied
+            ? "RECEIPT_ACCESS_DENIED"
+            : "RECEIPT_DOWNLOAD_FAILED",
+          message: isPermissionDenied
+            ? "O PagCorp não autorizou o download deste recibo. A transação continua disponível para integração, mas o anexo não pode ser aberto por esta credencial."
+            : `Falha ao baixar recibo [${lastStatus || "sem status"}]: ${lastBody.slice(0, 200)}`,
+          status: lastStatus || 502,
+          fallback: false,
+        }), {
+          // Keep 200 so the browser/Supabase client does not treat PagCorp's
+          // external 403 as an application crash/runtime error.
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const contentType = fileRes.headers.get("content-type") || "application/octet-stream";
