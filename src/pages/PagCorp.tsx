@@ -602,6 +602,12 @@ export default function PagCorp() {
             sap_route_id: session.routeId,
             sap_company_db: session.companyDB,
             sap_session_expires_at: session.expiresAt,
+            pagcorp_log: {
+              transaction: t,
+              integrationType: "accountability",
+              companyDb: session.companyDB,
+              integratedBy: session.userName || undefined,
+            },
           }),
         });
         const data = await res.json().catch(() => null);
@@ -618,21 +624,23 @@ export default function PagCorp() {
       // Log into pagcorp_integration_log so the list reflects integrated state.
       // Persist the real payload sent to SAP (returned by the edge function) so
       // the History screen can display it instead of just the expense_id.
-      try {
-        await logIntegration(
-          t,
-          "accountability",
-          sapError ? "error" : "success",
-          session.companyDB,
-          session.userName || undefined,
-          sapDocEntry,
-          sapDocNum,
-          sapError,
-          sapPayloadFromFn ?? { expense_id: (expense as any).id },
-          sapResponseFromFn ?? undefined,
-        );
-      } catch (logErr) {
-        console.warn("Falha ao registrar log PagCorp; mantendo resultado SAP original", logErr);
+      if (!sapResponseFromFn?.pagcorpLogged) {
+        try {
+          await logIntegration(
+            t,
+            "accountability",
+            sapError ? "error" : "success",
+            session.companyDB,
+            session.userName || undefined,
+            sapDocEntry,
+            sapDocNum,
+            sapError,
+            sapPayloadFromFn ?? { expense_id: (expense as any).id },
+            sapResponseFromFn ?? undefined,
+          );
+        } catch (logErr) {
+          console.warn("Falha ao registrar log PagCorp; mantendo resultado SAP original", logErr);
+        }
       }
 
       if (sapError) throw new Error(sapError);
