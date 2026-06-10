@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { sapQuery } from "@/lib/sap-client";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
   Dialog,
@@ -71,6 +73,8 @@ export function CreateExpenseModal({
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [currency, setCurrency] = useState("");
   const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
+  const [currencyOptions, setCurrencyOptions] = useState<string[] | null>(null);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -178,6 +182,7 @@ export function CreateExpenseModal({
       setSupplier(null);
       setCurrency("");
       setCurrencyWarning(null);
+      setCurrencyOptions(null);
       setDocDate("");
       setDueDate("");
       setRemarks("");
@@ -448,13 +453,46 @@ export function CreateExpenseModal({
 
   const total = items.reduce((sum, item) => sum + item.line_total, 0);
 
+  const DEFAULT_MULTI_CURRENCIES = ["BRL", "EUR", "USD", "CAD", "CHF", "GBP"];
+
+  const fetchSupplierCurrencies = useCallback(async (cardCode: string) => {
+    setLoadingCurrencies(true);
+    try {
+      if (!sapSession) throw new Error("no session");
+      const { data } = await sapQuery(
+        sapSession,
+        `BusinessPartners('${encodeURIComponent(cardCode)}')/BPCurrencies`,
+        { $select: "Currency" },
+      );
+      const rows = (data as any)?.value || (data as any) || [];
+      const list = Array.from(
+        new Set(
+          (Array.isArray(rows) ? rows : [])
+            .map((r: any) => String(r.Currency || "").trim().toUpperCase())
+            .filter((c: string) => /^[A-Z]{3}$/.test(c)),
+        ),
+      );
+      setCurrencyOptions(list.length > 0 ? list : DEFAULT_MULTI_CURRENCIES);
+    } catch {
+      setCurrencyOptions(DEFAULT_MULTI_CURRENCIES);
+    } finally {
+      setLoadingCurrencies(false);
+    }
+  }, [sapSession]);
+
   const handleSupplierChange = (val: SapSearchOption | null) => {
     setSupplier(val);
     setCurrencyWarning(null);
+    setCurrencyOptions(null);
     if (val) {
-      const supplierCurrency = (val as any).currency;
-      if (supplierCurrency) {
+      const supplierCurrency = ((val as any).currency || "").trim();
+      if (supplierCurrency && supplierCurrency !== "##") {
         setCurrency(supplierCurrency);
+      } else if (supplierCurrency === "##") {
+        // Multi-currency supplier: let user choose
+        setCurrency("");
+        if (val.code) void fetchSupplierCurrencies(val.code);
+        else setCurrencyOptions(DEFAULT_MULTI_CURRENCIES);
       } else {
         setCurrency("");
         setCurrencyWarning(`O fornecedor "${val.name}" não possui moeda configurada no cadastro do SAP. O lançamento não poderá ser realizado até que essa inconsistência seja corrigida.`);
@@ -682,13 +720,30 @@ export function CreateExpenseModal({
           {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Moeda *</label>
-              <Input
-                value={currency}
-                readOnly
-                placeholder="Definida pelo fornecedor"
-                className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
-              />
+              <label className="text-xs text-muted-foreground mb-1 block">
+                Moeda *{loadingCurrencies && <span className="ml-1 text-muted-foreground">(carregando…)</span>}
+              </label>
+              {currencyOptions ? (
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger
+                    className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+                  >
+                    <SelectValue placeholder="Selecione a moeda" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencyOptions.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={currency}
+                  readOnly
+                  placeholder="Definida pelo fornecedor"
+                  className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+                />
+              )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Data do Documento *</label>
