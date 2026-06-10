@@ -422,52 +422,36 @@ export default function PagCorp() {
       ...(Array.isArray(t.receipts) ? t.receipts : []),
       ...(Array.isArray(t.attachments) ? t.attachments : []),
     ];
-    if (sources.length === 0) {
+
+    // Receipts from PagCorp expose public URLs in `files[]`. Use them directly.
+    const urls: string[] = [];
+    for (const r of sources) {
+      if (Array.isArray(r?.files)) {
+        for (const f of r.files) {
+          if (typeof f === "string") urls.push(f);
+          else if (f?.url) urls.push(f.url);
+        }
+      }
+      const direct =
+        r?.url || r?.fileUrl || r?.link || r?.downloadUrl || r?.receiptUrl || r?.imageUrl || r?.file?.url;
+      if (direct) urls.push(direct);
+    }
+    const unique = Array.from(new Set(urls));
+
+    if (unique.length === 0) {
       toast.info("Nenhum anexo disponível para esta transação");
       return;
     }
-    const companyDb = session?.companyDB;
-    const tId = toast.loading(`Carregando ${sources.length} anexo(s)…`);
-    let opened = 0;
-    try {
-      for (const r of sources) {
-        const directUrl: string | undefined =
-          r?.url || r?.fileUrl || r?.link || r?.downloadUrl || r?.receiptUrl || r?.imageUrl || r?.file?.url;
-        const receiptId = r?.id || r?.receiptId;
-        const qs = new URLSearchParams({ action: "receipt" });
-        if (companyDb) qs.set("companyDb", companyDb);
-        if (directUrl) qs.set("url", directUrl);
-        else if (receiptId) qs.set("receiptId", String(receiptId));
-        else continue;
 
-        const res = await sapFunctionFetch(`pagcorp-proxy?${qs.toString()}`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          console.warn("Falha ao baixar anexo:", err);
-          continue;
-        }
-        const contentType = res.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const payload = await res.json().catch(() => ({}));
-          console.warn("Anexo indisponível no PagCorp:", payload);
-          continue;
-        }
-        const blob = await res.blob();
-        if (blob.size === 0) continue;
-        const blobUrl = URL.createObjectURL(blob);
-        window.open(blobUrl, "_blank", "noopener,noreferrer");
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-        opened++;
-      }
-      toast.dismiss(tId);
-      if (opened === 0) {
-        toast.error("Recibo não disponível no PagCorp", {
-          description: "O PagCorp negou o download deste anexo para a credencial configurada.",
-        });
-      }
-    } catch (e) {
-      toast.dismiss(tId);
-      toast.error(e instanceof Error ? e.message : "Erro ao abrir anexos");
+    let opened = 0;
+    for (const u of unique) {
+      const w = window.open(u, "_blank", "noopener,noreferrer");
+      if (w) opened++;
+    }
+    if (opened === 0) {
+      toast.error("Não foi possível abrir os anexos", {
+        description: "Verifique se o navegador está bloqueando pop-ups.",
+      });
     }
   };
 
