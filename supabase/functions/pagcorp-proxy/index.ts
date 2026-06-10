@@ -210,9 +210,37 @@ Deno.serve(async (req) => {
 
 
     const url = new URL(req.url);
+    const action = url.searchParams.get("action");
+    const companyDb = url.searchParams.get("companyDb") || undefined;
+
+    // ── Receipt file proxy: ?action=receipt&receiptId=X&companyDb=Y ──
+    if (action === "receipt") {
+      const receiptId = url.searchParams.get("receiptId");
+      const directUrl = url.searchParams.get("url");
+      if (!receiptId && !directUrl) {
+        return new Response(JSON.stringify({ error: "receiptId ou url obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const creds = await getCredentials(companyDb);
+      const apiToken = await getAuthToken(creds);
+      const fileUrl = directUrl || `${creds.api_base_url}Receipt/${receiptId}/File`;
+      const fileRes = await fetch(fileUrl, { headers: { Authorization: `Bearer ${apiToken}` } });
+      if (!fileRes.ok) {
+        const body = await fileRes.text().catch(() => "");
+        return new Response(JSON.stringify({ error: `Falha ao baixar recibo [${fileRes.status}]: ${body.slice(0, 200)}` }), {
+          status: fileRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const contentType = fileRes.headers.get("content-type") || "application/octet-stream";
+      const buf = await fileRes.arrayBuffer();
+      return new Response(buf, {
+        headers: { ...corsHeaders, "Content-Type": contentType, "Content-Disposition": "inline" },
+      });
+    }
+
     const startDate = url.searchParams.get("startDate") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
     const endDate = url.searchParams.get("endDate") || new Date().toISOString().slice(0, 10);
-    const companyDb = url.searchParams.get("companyDb") || undefined;
 
     // Validate date format
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;

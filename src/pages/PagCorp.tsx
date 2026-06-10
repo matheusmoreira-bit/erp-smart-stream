@@ -356,19 +356,49 @@ export default function PagCorp() {
     }
   };
 
-  const openAttachments = (t: PagCorpTransaction) => {
+  const openAttachments = async (t: PagCorpTransaction) => {
     const sources: any[] = [
       ...(Array.isArray(t.receipts) ? t.receipts : []),
       ...(Array.isArray(t.attachments) ? t.attachments : []),
     ];
-    const urls = sources
-      .map((r: any) => r?.url || r?.fileUrl || r?.link || r?.downloadUrl)
-      .filter((u: any): u is string => typeof u === "string" && u.length > 0);
-    if (urls.length === 0) {
+    if (sources.length === 0) {
       toast.info("Nenhum anexo disponível para esta transação");
       return;
     }
-    urls.forEach((u) => window.open(u, "_blank", "noopener,noreferrer"));
+    const companyDb = session?.companyDB;
+    const tId = toast.loading(`Carregando ${sources.length} anexo(s)…`);
+    let opened = 0;
+    try {
+      for (const r of sources) {
+        const directUrl: string | undefined =
+          r?.url || r?.fileUrl || r?.link || r?.downloadUrl || r?.receiptUrl || r?.imageUrl || r?.file?.url;
+        const receiptId = r?.id || r?.receiptId;
+        const qs = new URLSearchParams({ action: "receipt" });
+        if (companyDb) qs.set("companyDb", companyDb);
+        if (directUrl) qs.set("url", directUrl);
+        else if (receiptId) qs.set("receiptId", String(receiptId));
+        else continue;
+
+        const res = await sapFunctionFetch(`pagcorp-proxy?${qs.toString()}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.warn("Falha ao baixar anexo:", err);
+          continue;
+        }
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank", "noopener,noreferrer");
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+        opened++;
+      }
+      toast.dismiss(tId);
+      if (opened === 0) {
+        toast.error("Não foi possível abrir os anexos");
+      }
+    } catch (e) {
+      toast.dismiss(tId);
+      toast.error(e instanceof Error ? e.message : "Erro ao abrir anexos");
+    }
   };
 
   const handleGeneratePresentation = async (period: PresentationPeriod) => {
