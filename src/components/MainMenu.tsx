@@ -198,7 +198,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
   [
     {
       title: "Geral",
-      keys: ["analytics", "expenses", "sales", "approvals", "approval_history", "suppliers"],
+      keys: ["analytics", "expenses", "sales", "approvals", "approval_history", "suppliers", "items"],
     },
     {
       title: "Financeiro / Contábil",
