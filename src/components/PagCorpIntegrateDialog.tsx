@@ -30,6 +30,7 @@ function formatCurrency(value: number, currency: string = "BRL") {
 export interface PagCorpLineOverride {
   costCenter?: string | null;
   project?: string | null;
+  item?: string | null;
 }
 
 interface Props {
