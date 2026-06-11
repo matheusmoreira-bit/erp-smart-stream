@@ -790,6 +790,32 @@ export function CreateExpenseModal({
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
           </div>
 
+          {/* Header-level defaults: cascade to all items, user can override per line */}
+          <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+            <CachedSearchCombobox
+              label="Centro de Custo (padrão p/ itens)"
+              options={costCenterOptions}
+              isLoading={costCentersLoading}
+              value={headerCostCenter}
+              onChange={applyHeaderCostCenter}
+              placeholder="Aplica a todos os itens…"
+              portalContainer={dialogContainer}
+            />
+            <CachedSearchCombobox
+              label="Projeto (padrão p/ itens)"
+              options={projectOptions}
+              isLoading={projectsLoading}
+              value={headerProject}
+              onChange={applyHeaderProject}
+              placeholder="Aplica a todos os itens…"
+              portalContainer={dialogContainer}
+            />
+            <p className="col-span-2 text-[11px] text-muted-foreground">
+              Definir aqui preenche todas as linhas. Você pode ajustar item a item abaixo — a
+              integração usa sempre o valor de cada linha.
+            </p>
+          </div>
+
           {/* Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
