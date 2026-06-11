@@ -148,8 +148,15 @@
   }
 
   /* Cabeçalho de tabela sempre visível (logo abaixo da barra superior).
-     Usa um fundo sólido distinto + sombra inferior para se diferenciar das linhas
-     de dados e cobrir o conteúdo que rola atrás. */
+     Fundo sólido em thead + tr + th para cobrir as linhas que rolam por baixo. */
+  table > thead {
+    position: relative;
+    z-index: 20;
+    background-color: hsl(var(--card));
+  }
+  table > thead > tr {
+    background-color: hsl(var(--card));
+  }
   table > thead > tr > th {
     position: sticky;
     top: var(--app-header-h);
@@ -158,10 +165,5 @@
     box-shadow: inset 0 -1px 0 0 hsl(var(--border));
   }
 
-  /* Em containers com overflow-hidden (ex.: glass-card), o sticky pode falhar
-     visualmente. Mantém o cabeçalho da tabela acima do conteúdo. */
-  .glass-card > .relative > table > thead > tr > th {
-    background-color: hsl(var(--card));
-  }
 }
 
