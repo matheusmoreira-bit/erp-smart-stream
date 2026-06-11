@@ -72,7 +72,15 @@ export function usePagCorp() {
           date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
           description: item.description || item.expenseDescription || "—",
           amount: item.amount || item.value || item.expenseValue || 0,
-          currency: item.currencyCode || item.currency || "BRL",
+          currency: (() => {
+            const explicit = item.currencyCode || item.currency;
+            if (explicit && explicit !== "##") return explicit;
+            const classification = String(item.eventClassification || "").toLowerCase();
+            if (classification.includes("dolar") || classification.includes("dólar") || classification.includes("dollar") || classification.includes("usd")) {
+              return "USD";
+            }
+            return "BRL";
+          })(),
           accountCode: item.accountCode || item.account || "",
           accountName: item.accountName || "",
           accountAlias: item.accountAlias || "",
