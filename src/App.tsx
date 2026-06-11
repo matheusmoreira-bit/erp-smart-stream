@@ -37,6 +37,7 @@ import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
+import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
         <Sonner />
         <SapProvider>
           <BrowserRouter>
+            <StickyHeaderMeasure />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
