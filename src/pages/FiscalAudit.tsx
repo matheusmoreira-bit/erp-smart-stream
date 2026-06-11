@@ -145,18 +145,12 @@ export default function FiscalAudit() {
   }, [session?.companyDB]);
 
 
-  // === Analysis tab ===
-  const cutoff = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - threshold);
-    return d;
-  }, [today, threshold]);
-
+  // === Analysis tab — todas as notas em aberto no período ===
   const oldOpen = useMemo(() => {
     return invoices
-      .filter((i) => i.DocumentStatus === "bost_Open" && new Date(i.DocDate) <= cutoff)
+      .filter((i) => i.DocumentStatus === "bost_Open")
       .sort((a, b) => new Date(a.DocDate).getTime() - new Date(b.DocDate).getTime());
-  }, [invoices, cutoff]);
+  }, [invoices]);
 
   const oldOpenTotalByCurrency = useMemo(() => {
     const m = new Map<string, number>();
