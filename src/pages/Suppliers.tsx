@@ -67,12 +67,19 @@ export default function Suppliers() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return suppliers;
-    return suppliers.filter(
-      (s) =>
-        s.card_name.toLowerCase().includes(q) ||
-        (s.card_code || "").toLowerCase().includes(q) ||
-        (s.federal_tax_id || "").includes(q.replace(/\D/g, "")),
-    );
+    const qDigits = q.replace(/\D/g, "");
+    return suppliers.filter((s) => {
+      if (s.card_name.toLowerCase().includes(q)) return true;
+      if ((s.card_code || "").toLowerCase().includes(q)) return true;
+      if ((s.email || "").toLowerCase().includes(q)) return true;
+      if (qDigits.length >= 3) {
+        const taxDigits = (s.federal_tax_id || "").replace(/\D/g, "");
+        if (taxDigits.includes(qDigits)) return true;
+        const phoneDigits = `${s.phone1 || ""}${s.phone2 || ""}`.replace(/\D/g, "");
+        if (phoneDigits.includes(qDigits)) return true;
+      }
+      return false;
+    });
   }, [suppliers, search]);
 
   const handleToggle = async (s: Supplier) => {
