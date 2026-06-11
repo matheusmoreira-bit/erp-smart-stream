@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,14 +27,20 @@ function formatCurrency(value: number, currency: string = "BRL") {
   }
 }
 
+export interface PagCorpLineOverride {
+  costCenter?: string | null;
+  project?: string | null;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
-  onConfirm: (supplier: SapSearchOption) => Promise<void>;
+  onConfirm: (supplier: SapSearchOption, override: PagCorpLineOverride) => Promise<void>;
 }
+
 
 export function PagCorpIntegrateDialog({
   open,
