@@ -49,6 +49,7 @@ const App = () => (
         <Sonner />
         <SapProvider>
           <BrowserRouter>
+            <StickyHeaderMeasure />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
