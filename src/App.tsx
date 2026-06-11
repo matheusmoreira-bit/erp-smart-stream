@@ -20,6 +20,7 @@ import IntegrationsMonitor from "./pages/IntegrationsMonitor.tsx";
 import Credentials from "./pages/Credentials.tsx";
 import UsersPage from "./pages/Users.tsx";
 import Suppliers from "./pages/Suppliers.tsx";
+import Items from "./pages/Items.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
