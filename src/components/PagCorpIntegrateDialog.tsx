@@ -273,7 +273,35 @@ export function PagCorpIntegrateDialog({
                 suggestedQuery={!supplier && aiResult?.card_name ? aiResult.card_name : undefined}
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Centro de Custo
+                </label>
+                <CachedSearchCombobox
+                  options={ccOptions}
+                  isLoading={ccLoading}
+                  value={costCenter}
+                  onChange={setCostCenter}
+                  placeholder="Padrão da conta…"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Projeto
+                </label>
+                <CachedSearchCombobox
+                  options={prOptions}
+                  isLoading={prLoading}
+                  value={project}
+                  onChange={setProject}
+                  placeholder="Padrão da conta…"
+                />
+              </div>
+            </div>
           </div>
+
 
           <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={submitting}>
