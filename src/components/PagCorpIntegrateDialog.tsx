@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,14 +27,20 @@ function formatCurrency(value: number, currency: string = "BRL") {
   }
 }
 
+export interface PagCorpLineOverride {
+  costCenter?: string | null;
+  project?: string | null;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
-  onConfirm: (supplier: SapSearchOption) => Promise<void>;
+  onConfirm: (supplier: SapSearchOption, override: PagCorpLineOverride) => Promise<void>;
 }
+
 
 export function PagCorpIntegrateDialog({
   open,
@@ -43,12 +51,30 @@ export function PagCorpIntegrateDialog({
   onConfirm,
 }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
+  const [costCenter, setCostCenter] = useState<SapSearchOption | null>(null);
+  const [project, setProject] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [supplierFormOpen, setSupplierFormOpen] = useState(false);
+
+  const ccMap = (row: any) => ({ code: row.CenterCode, name: row.CenterName });
+  const prMap = (row: any) => ({ code: row.Code, name: row.Name });
+  const { options: ccOptions, isLoading: ccLoading } = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "ProfitCenters",
+    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    mapRow: ccMap,
+  });
+  const { options: prOptions, isLoading: prLoading } = useSapCachedList({
+    cacheKey: "projects",
+    endpoint: "Projects",
+    params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
+    mapRow: prMap,
+  });
+
 
   const runAi = useCallback(async (tx: PagCorpTransaction) => {
     if (!companyDb) return;
@@ -110,6 +136,8 @@ export function PagCorpIntegrateDialog({
   useEffect(() => {
     if (!open || !transaction) return;
     setSupplier(null);
+    setCostCenter(null);
+    setProject(null);
     setSubmitting(false);
     setAiTried(false);
     setAiResult(null);
@@ -121,17 +149,22 @@ export function PagCorpIntegrateDialog({
     void runAi(transaction);
   }, [open, transaction?.id, runAi, transaction]);
 
+
   if (!transaction) return null;
 
   const handleSubmit = async () => {
     if (!supplier) return;
     setSubmitting(true);
     try {
-      await onConfirm(supplier);
+      await onConfirm(supplier, {
+        costCenter: costCenter?.code || null,
+        project: project?.code || null,
+      });
     } finally {
       setSubmitting(false);
     }
   };
+
 
   const handleSupplierSaved = (s: Supplier) => {
     if (s.card_code) {
@@ -240,7 +273,35 @@ export function PagCorpIntegrateDialog({
                 suggestedQuery={!supplier && aiResult?.card_name ? aiResult.card_name : undefined}
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Centro de Custo
+                </label>
+                <CachedSearchCombobox
+                  options={ccOptions}
+                  isLoading={ccLoading}
+                  value={costCenter}
+                  onChange={setCostCenter}
+                  placeholder="Padrão da conta…"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Projeto
+                </label>
+                <CachedSearchCombobox
+                  options={prOptions}
+                  isLoading={prLoading}
+                  value={project}
+                  onChange={setProject}
+                  placeholder="Padrão da conta…"
+                />
+              </div>
+            </div>
           </div>
+
 
           <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={submitting}>

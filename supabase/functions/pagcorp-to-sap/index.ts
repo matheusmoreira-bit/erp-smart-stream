@@ -193,6 +193,9 @@ Deno.serve(async (req) => {
     const supplierCode: string = body.supplierCode;
     const supplierName: string | undefined = body.supplierName;
     const integratedBy: string | null = body.integratedBy || null;
+    // Optional per-line overrides from integrate modal: { [txId]: { costCenter?, project? } }
+    const lineOverrides: Record<string, { costCenter?: string | null; project?: string | null }> =
+      body.lineOverrides && typeof body.lineOverrides === "object" ? body.lineOverrides : {};
 
     // Accept either single `transaction` or `transactions[]` for consolidated mode
     const rawList: any[] = Array.isArray(body.transactions)
@@ -208,6 +211,7 @@ Deno.serve(async (req) => {
     for (const t of rawList) {
       if (!t?.id) throw new Error("toda transação precisa de id");
     }
+
 
     supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -352,6 +356,9 @@ Deno.serve(async (req) => {
     );
 
     const documentLines = lineMappings.map(({ tx, acctMapping, itemCode }) => {
+      const override = lineOverrides[String(tx.id)] || {};
+      const finalCostCenter = override.costCenter ?? acctMapping?.cost_center ?? null;
+      const finalProject = override.project ?? acctMapping?.project ?? null;
       const line: Record<string, unknown> = {
         ItemCode: itemCode!,
         ItemDescription: (
@@ -363,12 +370,16 @@ Deno.serve(async (req) => {
         UnitPrice: Number(tx.amount) || 0,
         ...lineCustom,
       };
-      if (acctMapping?.cost_center) line.CostingCode = acctMapping.cost_center;
-      if (acctMapping?.project) line.ProjectCode = acctMapping.project;
+      if (finalCostCenter) line.CostingCode = finalCostCenter;
+      if (finalProject) line.ProjectCode = finalProject;
       return line;
     });
 
-    const baseDoc = {
+    // Currency from the (already detected) transaction. Without DocCurrency,
+    // SAP assumes local currency (BRL) even when the PagCorp expense is in USD.
+    const headerCurrency = String(transaction.currency || "").toUpperCase();
+
+    const baseDoc: Record<string, unknown> = {
       CardCode: supplierCode,
       DocDate: txDate,
       DocDueDate: today,
@@ -378,6 +389,9 @@ Deno.serve(async (req) => {
       DocumentLines: documentLines,
       ...headerCustom,
     };
+    if (headerCurrency && /^[A-Z]{3}$/.test(headerCurrency)) {
+      baseDoc.DocCurrency = headerCurrency;
+    }
 
     // 6. Create Purchase Order
     sapPayloads.purchase_order = { ...baseDoc, ...(attachmentEntry ? { AttachmentEntry: attachmentEntry } : {}) };

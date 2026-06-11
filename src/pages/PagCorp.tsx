@@ -343,13 +343,20 @@ export default function PagCorp() {
     setBatchIndex(0);
   };
 
-  const handleConfirmIntegrate = async (supplier: SapSearchOption) => {
+  const handleConfirmIntegrate = async (
+    supplier: SapSearchOption,
+    override: { costCenter?: string | null; project?: string | null } = {},
+  ) => {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
     setIntegrating(t.id);
     programmaticCloseRef.current = true;
     setIntegrateDialog({ open: false, tx: null, type: "generic" });
     try {
+      const lineOverrides =
+        override.costCenter || override.project
+          ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null } }
+          : undefined;
       const result = await integrateDirect(
         t,
         integrateDialog.type,
@@ -357,6 +364,7 @@ export default function PagCorp() {
         supplier.code,
         supplier.name,
         session.userName || undefined,
+        lineOverrides,
       );
       if (result.alreadyIntegrated) {
         toast.info("Transação já estava integrada no SAP", {
@@ -380,6 +388,7 @@ export default function PagCorp() {
     }
   };
 
+
   const openConsolidateDialog = () => {
     if (!checkSapCredentials()) return;
     const list = selectableTransactions.filter((t) => selectedIds.has(t.id));
@@ -390,7 +399,10 @@ export default function PagCorp() {
     setConsolidateDialog({ open: true, transactions: list });
   };
 
-  const handleConfirmConsolidate = async (supplier: SapSearchOption) => {
+  const handleConfirmConsolidate = async (
+    supplier: SapSearchOption,
+    lineOverrides: Record<string, { costCenter?: string | null; project?: string | null }> = {},
+  ) => {
     const txs = consolidateDialog.transactions;
     if (txs.length === 0 || !session?.companyDB) return;
     try {
@@ -400,6 +412,7 @@ export default function PagCorp() {
         supplier.code,
         supplier.name,
         session.userName || undefined,
+        lineOverrides,
       );
       toast.success("Pedido de Compra consolidado criado no SAP", {
         description: `PC #${result.purchaseOrder?.DocNum} • ${txs.length} transações`,
@@ -415,6 +428,7 @@ export default function PagCorp() {
       throw e;
     }
   };
+
 
   const openAttachments = async (t: PagCorpTransaction) => {
     const sources: any[] = [
