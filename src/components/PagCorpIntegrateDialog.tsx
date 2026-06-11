@@ -136,6 +136,8 @@ export function PagCorpIntegrateDialog({
   useEffect(() => {
     if (!open || !transaction) return;
     setSupplier(null);
+    setCostCenter(null);
+    setProject(null);
     setSubmitting(false);
     setAiTried(false);
     setAiResult(null);
@@ -146,6 +148,7 @@ export function PagCorpIntegrateDialog({
     setAiTried(true);
     void runAi(transaction);
   }, [open, transaction?.id, runAi, transaction]);
+
 
   if (!transaction) return null;
 
