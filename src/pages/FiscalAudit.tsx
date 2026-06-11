@@ -182,10 +182,57 @@ export default function FiscalAudit() {
       const prev = m.get(key) || { count: 0, total: 0 };
       m.set(key, { count: prev.count + 1, total: prev.total + (Number(i.DocTotal) || 0) });
     });
-    return Array.from(m.entries())
+    const base = Array.from(m.entries())
       .map(([k, v]) => ({ period: k, count: v.count, total: v.total }))
       .sort((a, b) => a.period.localeCompare(b.period));
+
+    // Average and linear trend (least squares on count over index)
+    const n = base.length;
+    const avg = n ? base.reduce((s, b) => s + b.count, 0) / n : 0;
+    let slope = 0, intercept = avg;
+    if (n > 1) {
+      const xs = base.map((_, i) => i);
+      const ys = base.map((b) => b.count);
+      const mx = xs.reduce((a, b) => a + b, 0) / n;
+      const my = ys.reduce((a, b) => a + b, 0) / n;
+      let num = 0, den = 0;
+      for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2; }
+      slope = den ? num / den : 0;
+      intercept = my - slope * mx;
+    }
+
+    let acc = 0;
+    return base.map((b, i) => {
+      acc += b.count;
+      return {
+        ...b,
+        acumulado: acc,
+        media: avg,
+        tendencia: intercept + slope * i,
+        valor_grafico: b.count,
+      };
+    });
   }, [invoices, groupBy]);
+
+  const exportQuantitativoCsv = () => {
+    const header = ["Periodo", "Quantidade_Mes", "Acumulado", "Media", "Tendencia", "Valor_Grafico"];
+    const rows = buckets.map((b) => [
+      b.period,
+      b.count,
+      (b as any).acumulado,
+      (b as any).media.toFixed(6),
+      (b as any).tendencia.toFixed(6),
+      (b as any).valor_grafico,
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `auditoria-fiscal-quantitativo-${startDate}_${endDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // === Per user report (entrada + saída) ===
   type UserStat = {
@@ -401,62 +448,85 @@ export default function FiscalAudit() {
 
           {/* === Quantitativo === */}
           <TabsContent value="quantitative" className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Label className="text-xs">Agrupar por</Label>
-              <Select value={groupBy} onValueChange={(v) => setGroupBy(v as any)}>
-                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">Dia</SelectItem>
-                  <SelectItem value="month">Mês</SelectItem>
-                  <SelectItem value="quarter">Trimestre</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="ml-auto text-sm text-muted-foreground flex items-center gap-1">
-                <Calendar className="w-4 h-4" /> {invoices.length} notas no período
+            <div className="glass-card p-4">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="space-y-1">
+                  <div className="text-sm text-foreground">
+                    <span className="font-semibold">{session?.companyDB}</span>: gráfico de NF(s) de entrada lançada(s) por{" "}
+                    {groupBy === "day" ? "dia" : groupBy === "quarter" ? "trimestre" : "mês"} desde{" "}
+                    <span className="font-semibold">{fmtDate(startDate)}</span>.
+                  </div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-3">
+                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {invoices.length} notas no período</span>
+                    <span>{buckets.length} linha(s) retornada(s)</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select value={groupBy} onValueChange={(v) => setGroupBy(v as any)}>
+                    <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="day">Dia</SelectItem>
+                      <SelectItem value="month">Mês</SelectItem>
+                      <SelectItem value="quarter">Trimestre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={exportQuantitativoCsv} disabled={buckets.length === 0}>
+                    <Download className="w-4 h-4 mr-2" /> Exportar CSV
+                  </Button>
+                </div>
               </div>
             </div>
 
-            <div className="glass-card p-4 h-[360px]">
+            <div className="glass-card p-4 h-[380px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={buckets}>
+                <LineChart data={buckets} margin={{ top: 10, right: 20, left: 0, bottom: 30 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                  <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={11} angle={-25} textAnchor="end" height={60} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
                   <RTooltip
                     contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                    formatter={(v: any, n: string) => n === "total" ? fmtMoney(Number(v)) : v}
+                    formatter={(v: any) => typeof v === "number" ? v.toFixed(2) : v}
                   />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" name="Qtde" />
-                </BarChart>
+                  <Line type="monotone" dataKey="valor_grafico" stroke="hsl(var(--primary))" strokeWidth={2.5} name="Valor_Grafico" dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="media" stroke="hsl(var(--success))" strokeWidth={1.5} strokeDasharray="5 5" name="Média" dot={false} />
+                  <Line type="monotone" dataKey="tendencia" stroke="hsl(var(--warning))" strokeWidth={1.5} strokeDasharray="3 3" name="Tendência" dot={false} />
+                </LineChart>
               </ResponsiveContainer>
             </div>
 
             <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+              <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-card z-10">
                     <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                       <th className="px-4 py-3 text-left">Período</th>
-                      <th className="px-4 py-3 text-right">Quantidade</th>
-                      <th className="px-4 py-3 text-right">Valor total (BRL aprox.)</th>
+                      <th className="px-4 py-3 text-right">Quantidade_Mes</th>
+                      <th className="px-4 py-3 text-right">Acumulado</th>
+                      <th className="px-4 py-3 text-right">Media</th>
+                      <th className="px-4 py-3 text-right">Tendência</th>
+                      <th className="px-4 py-3 text-right">Valor_Grafico</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {buckets.map((b) => (
+                    {buckets.map((b: any) => (
                       <tr key={b.period} className="border-b border-border hover:bg-muted/20">
                         <td className="px-4 py-2.5 font-mono">{b.period}</td>
-                        <td className="px-4 py-2.5 text-right">{b.count}</td>
-                        <td className="px-4 py-2.5 text-right">{fmtMoney(b.total)}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold">{b.count}</td>
+                        <td className="px-4 py-2.5 text-right">{b.acumulado}</td>
+                        <td className="px-4 py-2.5 text-right text-muted-foreground">{b.media.toFixed(6)}</td>
+                        <td className="px-4 py-2.5 text-right text-muted-foreground">{b.tendencia.toFixed(6)}</td>
+                        <td className="px-4 py-2.5 text-right text-primary">{b.valor_grafico}</td>
                       </tr>
                     ))}
                     {buckets.length === 0 && (
-                      <tr><td colSpan={3} className="text-center text-muted-foreground py-8">Sem dados</td></tr>
+                      <tr><td colSpan={6} className="text-center text-muted-foreground py-8">Sem dados</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
           </TabsContent>
+
 
           {/* === Por usuário === */}
           <TabsContent value="byuser" className="space-y-4">
