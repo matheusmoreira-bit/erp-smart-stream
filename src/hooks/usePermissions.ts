@@ -42,6 +42,7 @@ export const ALL_MODULES = [
   { key: "integration_history", label: "Monitor de Integrações" },
   { key: "intercompany", label: "Intercompany" },
   { key: "financial_review", label: "Avaliação Financeira" },
+  { key: "fiscal_audit", label: "Auditoria Fiscal" },
 ] as const;
 
 // Legacy compat aliases

@@ -20,6 +20,7 @@ import {
   Box,
   Wallet,
   Bell,
+  FileSearch,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -192,6 +193,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-primary/20 to-primary/5",
     moduleKey: "notifications",
   },
+  fiscal_audit: {
+    title: "Auditoria Fiscal",
+    description: "Análise de notas fiscais de entrada antigas em aberto e relatório de lançamentos por usuário.",
+    icon: FileSearch,
+    path: "/fiscal-audit",
+    color: "text-warning",
+    bgGlow: "from-warning/20 to-warning/5",
+    moduleKey: "fiscal_audit",
+  },
 };
 
 const moduleGroups: { title: string; keys: string[] }[] = (
@@ -202,7 +212,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Financeiro / Contábil",
-      keys: ["pagcorp", "integration_history", "financial_review", "intercompany"],
+      keys: ["pagcorp", "integration_history", "financial_review", "intercompany", "fiscal_audit"],
     },
     {
       title: "Admin",
