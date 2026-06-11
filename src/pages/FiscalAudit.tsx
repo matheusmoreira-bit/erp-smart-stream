@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, FileSearch, Loader2, AlertTriangle, Calendar, Users as UsersIcon } from "lucide-react";
+import { ArrowLeft, RefreshCw, FileSearch, Loader2, AlertTriangle, Calendar, Download, Trophy } from "lucide-react";
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip as RTooltip,
   ResponsiveContainer,
 } from "recharts";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,6 +81,7 @@ export default function FiscalAudit() {
 
   const [loading, setLoading] = useState(false);
   const [invoices, setInvoices] = useState<SapInvoice[]>([]);
+  const [salesInvoices, setSalesInvoices] = useState<SapInvoice[]>([]);
   const [users, setUsers] = useState<Map<number, SapUser>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
@@ -88,15 +92,17 @@ export default function FiscalAudit() {
     try {
       const filter = `DocDate ge '${startDate}' and DocDate le '${endDate}'`;
       const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,DocCurrency,DocumentStatus,UserSign,CreationDate";
-      const endpoint = `PurchaseInvoices?$select=${select}&$filter=${encodeURIComponent(filter)}&$orderby=DocDate desc`;
+      const purchaseEndpoint = `PurchaseInvoices?$select=${select}&$filter=${encodeURIComponent(filter)}&$orderby=DocDate desc`;
+      const salesEndpoint = `Invoices?$select=${select}&$filter=${encodeURIComponent(filter)}&$orderby=DocDate desc`;
 
-      const [invResp, usrResp] = await Promise.all([
-        sapQueryAll(session, endpoint, undefined, false),
+      const [invResp, salesResp, usrResp] = await Promise.all([
+        sapQueryAll(session, purchaseEndpoint, undefined, false),
+        sapQueryAll(session, salesEndpoint, undefined, false),
         sapQuery(session, "Users?$select=UserCode,UserName,InternalKey", undefined, true),
       ]);
 
-      const value = (invResp.data?.value as SapInvoice[]) || [];
-      setInvoices(value);
+      setInvoices((invResp.data?.value as SapInvoice[]) || []);
+      setSalesInvoices((salesResp.data?.value as SapInvoice[]) || []);
 
       const usrValue: SapUser[] = (() => {
         const d = usrResp.data as any;
@@ -118,6 +124,7 @@ export default function FiscalAudit() {
     if (session) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.companyDB]);
+
 
   // === Analysis tab ===
   const cutoff = useMemo(() => {
@@ -161,30 +168,77 @@ export default function FiscalAudit() {
       .sort((a, b) => a.period.localeCompare(b.period));
   }, [invoices, groupBy]);
 
-  // === Per user report ===
-  const perUser = useMemo(() => {
-    const m = new Map<number, { count: number; total: number; lastDate: string }>();
-    invoices.forEach((i) => {
-      const prev = m.get(i.UserSign) || { count: 0, total: 0, lastDate: i.DocDate };
-      const lastDate = new Date(i.DocDate) > new Date(prev.lastDate) ? i.DocDate : prev.lastDate;
-      m.set(i.UserSign, {
-        count: prev.count + 1,
-        total: prev.total + (Number(i.DocTotal) || 0),
-        lastDate,
-      });
-    });
-    return Array.from(m.entries())
-      .map(([userSign, v]) => {
-        const u = users.get(userSign);
-        return {
-          userSign,
-          userCode: u?.UserCode || `#${userSign}`,
-          userName: u?.UserName || "—",
-          ...v,
+  // === Per user report (entrada + saída) ===
+  type UserStat = {
+    userSign: number;
+    userCode: string;
+    userName: string;
+    entrada: number;
+    saida: number;
+    total: number;
+    valor: number;
+  };
+
+  const perUser = useMemo<UserStat[]>(() => {
+    const m = new Map<number, UserStat>();
+    const ensure = (sign: number): UserStat => {
+      let s = m.get(sign);
+      if (!s) {
+        const u = users.get(sign);
+        s = {
+          userSign: sign,
+          userCode: u?.UserCode || `#${sign}`,
+          userName: u?.UserName || u?.UserCode || `#${sign}`,
+          entrada: 0,
+          saida: 0,
+          total: 0,
+          valor: 0,
         };
-      })
-      .sort((a, b) => b.count - a.count);
-  }, [invoices, users]);
+        m.set(sign, s);
+      }
+      return s;
+    };
+    invoices.forEach((i) => {
+      const s = ensure(i.UserSign);
+      s.entrada += 1;
+      s.total += 1;
+      s.valor += Number(i.DocTotal) || 0;
+    });
+    salesInvoices.forEach((i) => {
+      const s = ensure(i.UserSign);
+      s.saida += 1;
+      s.total += 1;
+      s.valor += Number(i.DocTotal) || 0;
+    });
+    return Array.from(m.values()).sort((a, b) => b.total - a.total);
+  }, [invoices, salesInvoices, users]);
+
+  const perUserTotals = useMemo(() => {
+    const totalNotes = perUser.reduce((s, u) => s + u.total, 0);
+    const leader = perUser[0];
+    return { totalNotes, leader };
+  }, [perUser]);
+
+  const exportPerUserCsv = () => {
+    const header = ["Usuario", "Nome_Usuario", "Total_Notas", "Notas_Entrada", "Notas_Saida", "Valor_Total"];
+    const rows = perUser.map((u) => [
+      u.userCode,
+      u.userName,
+      u.total,
+      u.entrada,
+      u.saida,
+      (u.valor || 0).toFixed(2),
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `auditoria-fiscal-por-usuario-${startDate}_${endDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
 
   if (!permLoading && !hasAccess) {
     return (
@@ -387,38 +441,76 @@ export default function FiscalAudit() {
 
           {/* === Por usuário === */}
           <TabsContent value="byuser" className="space-y-4">
-            <div className="text-sm text-muted-foreground flex items-center gap-1">
-              <UsersIcon className="w-4 h-4" /> {perUser.length} usuários lançaram notas no período
+            <div className="glass-card p-4">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="space-y-1">
+                  <div className="text-sm text-foreground">
+                    <span className="font-semibold">{session?.companyDB}</span>: ranking dos usuários que mais lançaram notas no período. Total:{" "}
+                    <span className="font-semibold text-primary">{perUserTotals.totalNotes}</span> nota(s).
+                  </div>
+                  {perUserTotals.leader && (
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Trophy className="w-4 h-4 text-warning" />
+                      Líder: <span className="font-semibold text-foreground">{perUserTotals.leader.userName}</span> com{" "}
+                      <span className="font-semibold text-foreground">{perUserTotals.leader.total}</span> nota(s).
+                    </div>
+                  )}
+                </div>
+                <Button variant="outline" size="sm" onClick={exportPerUserCsv} disabled={perUser.length === 0}>
+                  <Download className="w-4 h-4 mr-2" /> Exportar CSV
+                </Button>
+              </div>
             </div>
+
+            <div className="glass-card p-4">
+              <div className="text-xs text-muted-foreground mb-2">{perUser.length} linha(s) retornada(s)</div>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={perUser.slice(0, 25)}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="userCode" stroke="hsl(var(--muted-foreground))" fontSize={11} angle={-25} textAnchor="end" height={60} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <RTooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                    />
+                    <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} name="Total_Notas" dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-card z-10">
                     <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                      <th className="px-4 py-3 text-left">Usuário</th>
-                      <th className="px-4 py-3 text-left">Código</th>
-                      <th className="px-4 py-3 text-right">Notas lançadas</th>
-                      <th className="px-4 py-3 text-right">Valor total (BRL aprox.)</th>
-                      <th className="px-4 py-3 text-left">Último lançamento</th>
+                      <th className="px-4 py-3 text-left">Usuario</th>
+                      <th className="px-4 py-3 text-left">Nome_Usuario</th>
+                      <th className="px-4 py-3 text-right">Total_Notas</th>
+                      <th className="px-4 py-3 text-right">Notas_Entrada</th>
+                      <th className="px-4 py-3 text-right">Notas_Saida</th>
+                      <th className="px-4 py-3 text-right">Valor_Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {perUser.map((u) => (
                       <tr key={u.userSign} className="border-b border-border hover:bg-muted/20">
+                        <td className="px-4 py-2.5 font-mono text-xs">{u.userCode}</td>
                         <td className="px-4 py-2.5 font-medium">{u.userName}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{u.userCode}</td>
-                        <td className="px-4 py-2.5 text-right">{u.count}</td>
-                        <td className="px-4 py-2.5 text-right">{fmtMoney(u.total)}</td>
-                        <td className="px-4 py-2.5">{fmtDate(u.lastDate)}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold">{u.total}</td>
+                        <td className="px-4 py-2.5 text-right text-success">{u.entrada}</td>
+                        <td className="px-4 py-2.5 text-right text-primary">{u.saida}</td>
+                        <td className="px-4 py-2.5 text-right">{fmtMoney(u.valor)}</td>
                       </tr>
                     ))}
                     {perUser.length === 0 && (
-                      <tr><td colSpan={5} className="text-center text-muted-foreground py-8">Sem dados</td></tr>
+                      <tr><td colSpan={6} className="text-center text-muted-foreground py-8">Sem dados</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
+
           </TabsContent>
         </Tabs>
       </main>
