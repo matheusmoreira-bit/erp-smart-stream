@@ -290,10 +290,13 @@ Deno.serve(async (req) => {
         return { tx: t, acctMapping, itemCode };
       }),
     );
-    const missing = lineMappings.find((m) => !m.itemCode);
+    const missing = lineMappings.find((m) => {
+      const ov = lineOverrides[String(m.tx.id)] || {};
+      return !ov.item && !m.itemCode;
+    });
     if (missing) {
       throw new Error(
-        `Nenhum item mapeado para a conta "${missing.tx.accountCode || "(sem conta)"}" (cadastre item fallback em Mapeamento PagCorp)`,
+        `Nenhum item mapeado para a conta "${missing.tx.accountCode || "(sem conta)"}" (cadastre item fallback em Mapeamento PagCorp ou escolha um Item no diálogo)`,
       );
     }
 
