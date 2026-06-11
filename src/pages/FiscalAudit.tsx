@@ -76,7 +76,7 @@ export default function FiscalAudit() {
 
   const [startDate, setStartDate] = useState<string>(toISODate(defaultStart));
   const [endDate, setEndDate] = useState<string>(toISODate(today));
-  const [groupBy2, _unused] = useState<null>(null); void groupBy2; void _unused;
+  
   const [groupBy, setGroupBy] = useState<"day" | "month" | "quarter">("month");
 
   const [loading, setLoading] = useState(false);
