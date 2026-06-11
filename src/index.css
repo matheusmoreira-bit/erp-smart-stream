@@ -147,20 +147,22 @@
     background-color: hsl(var(--background));
   }
 
-  /* Cabeçalho de tabela sempre visível (logo abaixo da barra superior).
-     Fundo sólido em thead + tr + th para cobrir as linhas que rolam por baixo. */
+  /* Cabeçalho de tabela sempre visível sem encavalar sobre a primeira linha.
+     O sticky fica no thead inteiro, não em cada célula. */
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
   table > thead {
-    position: relative;
-    z-index: 20;
+    position: sticky;
+    top: 0;
+    z-index: 30;
     background-color: hsl(var(--card));
   }
   table > thead > tr {
     background-color: hsl(var(--card));
   }
   table > thead > tr > th {
-    position: sticky;
-    top: var(--app-header-h);
-    z-index: 20;
     background-color: hsl(var(--card));
     box-shadow: inset 0 -1px 0 0 hsl(var(--border));
   }
