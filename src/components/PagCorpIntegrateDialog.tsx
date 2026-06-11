@@ -54,6 +54,7 @@ export function PagCorpIntegrateDialog({
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [costCenter, setCostCenter] = useState<SapSearchOption | null>(null);
   const [project, setProject] = useState<SapSearchOption | null>(null);
+  const [item, setItem] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
@@ -63,6 +64,7 @@ export function PagCorpIntegrateDialog({
 
   const ccMap = (row: any) => ({ code: row.CenterCode, name: row.CenterName });
   const prMap = (row: any) => ({ code: row.Code, name: row.Name });
+  const itMap = (row: any) => ({ code: row.ItemCode, name: row.ItemName });
   const { options: ccOptions, isLoading: ccLoading } = useSapCachedList({
     cacheKey: "cost_centers",
     endpoint: "ProfitCenters",
@@ -74,6 +76,12 @@ export function PagCorpIntegrateDialog({
     endpoint: "Projects",
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: prMap,
+  });
+  const { options: itOptions, isLoading: itLoading } = useSapCachedList({
+    cacheKey: "items_active_v2",
+    endpoint: "Items",
+    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    mapRow: itMap,
   });
 
 
