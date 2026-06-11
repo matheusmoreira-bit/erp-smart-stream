@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, FileSearch, Loader2, AlertTriangle, Calendar, Users as UsersIcon, Download, Trophy } from "lucide-react";
+import { ArrowLeft, RefreshCw, FileSearch, Loader2, AlertTriangle, Calendar, Download, Trophy } from "lucide-react";
 import {
   BarChart,
   Bar,
