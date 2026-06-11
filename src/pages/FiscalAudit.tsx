@@ -441,38 +441,76 @@ export default function FiscalAudit() {
 
           {/* === Por usuário === */}
           <TabsContent value="byuser" className="space-y-4">
-            <div className="text-sm text-muted-foreground flex items-center gap-1">
-              <UsersIcon className="w-4 h-4" /> {perUser.length} usuários lançaram notas no período
+            <div className="glass-card p-4">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="space-y-1">
+                  <div className="text-sm text-foreground">
+                    <span className="font-semibold">{session?.companyDB}</span>: ranking dos usuários que mais lançaram notas no período. Total:{" "}
+                    <span className="font-semibold text-primary">{perUserTotals.totalNotes}</span> nota(s).
+                  </div>
+                  {perUserTotals.leader && (
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Trophy className="w-4 h-4 text-warning" />
+                      Líder: <span className="font-semibold text-foreground">{perUserTotals.leader.userName}</span> com{" "}
+                      <span className="font-semibold text-foreground">{perUserTotals.leader.total}</span> nota(s).
+                    </div>
+                  )}
+                </div>
+                <Button variant="outline" size="sm" onClick={exportPerUserCsv} disabled={perUser.length === 0}>
+                  <Download className="w-4 h-4 mr-2" /> Exportar CSV
+                </Button>
+              </div>
             </div>
+
+            <div className="glass-card p-4">
+              <div className="text-xs text-muted-foreground mb-2">{perUser.length} linha(s) retornada(s)</div>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={perUser.slice(0, 25)}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="userCode" stroke="hsl(var(--muted-foreground))" fontSize={11} angle={-25} textAnchor="end" height={60} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <RTooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                    />
+                    <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} name="Total_Notas" dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-card z-10">
                     <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                      <th className="px-4 py-3 text-left">Usuário</th>
-                      <th className="px-4 py-3 text-left">Código</th>
-                      <th className="px-4 py-3 text-right">Notas lançadas</th>
-                      <th className="px-4 py-3 text-right">Valor total (BRL aprox.)</th>
-                      <th className="px-4 py-3 text-left">Último lançamento</th>
+                      <th className="px-4 py-3 text-left">Usuario</th>
+                      <th className="px-4 py-3 text-left">Nome_Usuario</th>
+                      <th className="px-4 py-3 text-right">Total_Notas</th>
+                      <th className="px-4 py-3 text-right">Notas_Entrada</th>
+                      <th className="px-4 py-3 text-right">Notas_Saida</th>
+                      <th className="px-4 py-3 text-right">Valor_Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {perUser.map((u) => (
                       <tr key={u.userSign} className="border-b border-border hover:bg-muted/20">
+                        <td className="px-4 py-2.5 font-mono text-xs">{u.userCode}</td>
                         <td className="px-4 py-2.5 font-medium">{u.userName}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{u.userCode}</td>
-                        <td className="px-4 py-2.5 text-right">{u.count}</td>
-                        <td className="px-4 py-2.5 text-right">{fmtMoney(u.total)}</td>
-                        <td className="px-4 py-2.5">{fmtDate(u.lastDate)}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold">{u.total}</td>
+                        <td className="px-4 py-2.5 text-right text-success">{u.entrada}</td>
+                        <td className="px-4 py-2.5 text-right text-primary">{u.saida}</td>
+                        <td className="px-4 py-2.5 text-right">{fmtMoney(u.valor)}</td>
                       </tr>
                     ))}
                     {perUser.length === 0 && (
-                      <tr><td colSpan={5} className="text-center text-muted-foreground py-8">Sem dados</td></tr>
+                      <tr><td colSpan={6} className="text-center text-muted-foreground py-8">Sem dados</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
+
           </TabsContent>
         </Tabs>
       </main>
