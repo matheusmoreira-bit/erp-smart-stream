@@ -108,16 +108,18 @@ export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
     }
     setSaving(true);
     try {
+      const data = parsed.data as ItemInput;
       if (editing) {
-        await updateItem(editing.item_code, parsed.data, session);
+        await updateItem(editing.item_code, data, session);
         toast.success("Item atualizado no SAP");
       } else {
-        await createItem(parsed.data, session);
+        await createItem(data, session);
         toast.success("Item criado no SAP");
       }
       onSaved();
     } catch (e) {
-      toast.error("Erro ao salvar no SAP", { description: parseSapError(e) });
+      const err = parseSapError(e);
+      toast.error(err.title || "Erro ao salvar no SAP", { description: err.description });
     } finally {
       setSaving(false);
     }
