@@ -182,10 +182,57 @@ export default function FiscalAudit() {
       const prev = m.get(key) || { count: 0, total: 0 };
       m.set(key, { count: prev.count + 1, total: prev.total + (Number(i.DocTotal) || 0) });
     });
-    return Array.from(m.entries())
+    const base = Array.from(m.entries())
       .map(([k, v]) => ({ period: k, count: v.count, total: v.total }))
       .sort((a, b) => a.period.localeCompare(b.period));
+
+    // Average and linear trend (least squares on count over index)
+    const n = base.length;
+    const avg = n ? base.reduce((s, b) => s + b.count, 0) / n : 0;
+    let slope = 0, intercept = avg;
+    if (n > 1) {
+      const xs = base.map((_, i) => i);
+      const ys = base.map((b) => b.count);
+      const mx = xs.reduce((a, b) => a + b, 0) / n;
+      const my = ys.reduce((a, b) => a + b, 0) / n;
+      let num = 0, den = 0;
+      for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2; }
+      slope = den ? num / den : 0;
+      intercept = my - slope * mx;
+    }
+
+    let acc = 0;
+    return base.map((b, i) => {
+      acc += b.count;
+      return {
+        ...b,
+        acumulado: acc,
+        media: avg,
+        tendencia: intercept + slope * i,
+        valor_grafico: b.count,
+      };
+    });
   }, [invoices, groupBy]);
+
+  const exportQuantitativoCsv = () => {
+    const header = ["Periodo", "Quantidade_Mes", "Acumulado", "Media", "Tendencia", "Valor_Grafico"];
+    const rows = buckets.map((b) => [
+      b.period,
+      b.count,
+      (b as any).acumulado,
+      (b as any).media.toFixed(6),
+      (b as any).tendencia.toFixed(6),
+      (b as any).valor_grafico,
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `auditoria-fiscal-quantitativo-${startDate}_${endDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // === Per user report (entrada + saída) ===
   type UserStat = {
