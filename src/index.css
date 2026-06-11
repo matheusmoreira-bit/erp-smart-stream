@@ -147,9 +147,16 @@
     background-color: hsl(var(--background));
   }
 
-  /* Cabeçalho de tabela sempre visível dentro do próprio bloco da tabela.
-     O sticky fica no thead, não nas células, para não encavalar sobre a primeira linha. */
+  /* Cabeçalho de tabela sempre visível sem encavalar sobre a primeira linha.
+     O sticky fica no thead inteiro, não em cada célula. */
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
   table > thead {
+    position: sticky;
+    top: var(--app-header-h);
+    z-index: 30;
     background-color: hsl(var(--card));
   }
   table > thead > tr {
