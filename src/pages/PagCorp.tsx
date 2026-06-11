@@ -399,7 +399,10 @@ export default function PagCorp() {
     setConsolidateDialog({ open: true, transactions: list });
   };
 
-  const handleConfirmConsolidate = async (supplier: SapSearchOption) => {
+  const handleConfirmConsolidate = async (
+    supplier: SapSearchOption,
+    lineOverrides: Record<string, { costCenter?: string | null; project?: string | null }> = {},
+  ) => {
     const txs = consolidateDialog.transactions;
     if (txs.length === 0 || !session?.companyDB) return;
     try {
@@ -409,6 +412,7 @@ export default function PagCorp() {
         supplier.code,
         supplier.name,
         session.userName || undefined,
+        lineOverrides,
       );
       toast.success("Pedido de Compra consolidado criado no SAP", {
         description: `PC #${result.purchaseOrder?.DocNum} • ${txs.length} transações`,
@@ -424,6 +428,7 @@ export default function PagCorp() {
       throw e;
     }
   };
+
 
   const openAttachments = async (t: PagCorpTransaction) => {
     const sources: any[] = [
