@@ -97,7 +97,7 @@ export default function FiscalAudit() {
       const [invSettled, salesSettled, usrSettled] = await Promise.allSettled([
         sapQueryAll(session, "PurchaseInvoices", invoiceParams, false),
         sapQueryAll(session, "Invoices", invoiceParams, false),
-        sapQuery(session, "Users", { $select: "UserCode,UserName,InternalKey" }, true),
+        sapQueryAll(session, "Users", { $select: "UserCode,UserName,InternalKey" }, true),
       ]);
 
       if (invSettled.status === "rejected") {
@@ -116,9 +116,14 @@ export default function FiscalAudit() {
 
       const map = new Map<number, SapUser>();
       if (usrSettled.status === "fulfilled") {
-        const d = usrSettled.value.data as any;
+        const d: any = usrSettled.value.data;
         const usrValue: SapUser[] = Array.isArray(d) ? d : (d?.value || []);
-        usrValue.forEach((u) => map.set(u.InternalKey, u));
+        usrValue.forEach((u) => {
+          if (u.InternalKey != null) map.set(Number(u.InternalKey), u);
+        });
+        console.log(`[FiscalAudit] Users carregados: ${usrValue.length}`);
+      } else {
+        console.warn("Users failed:", usrSettled.reason);
       }
       setUsers(map);
 
