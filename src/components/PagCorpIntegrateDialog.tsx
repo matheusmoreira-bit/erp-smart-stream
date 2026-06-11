@@ -169,6 +169,7 @@ export function PagCorpIntegrateDialog({
       await onConfirm(supplier, {
         costCenter: costCenter?.code || null,
         project: project?.code || null,
+        item: item?.code || null,
       });
     } finally {
       setSubmitting(false);
