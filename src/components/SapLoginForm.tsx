@@ -87,8 +87,46 @@ export function SapLoginForm() {
       await login(userName, password, companyDB, erpType as ErpType);
       toast.success(`Conectado ao ${erpInfo.label}!`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha no login. Verifique suas credenciais.";
-      toast.error(message);
+      const raw = error instanceof Error ? error.message : String(error ?? "");
+      const lower = raw.toLowerCase();
+
+      const isInvalidCreds =
+        lower.includes("user name or password") ||
+        lower.includes("invalid username or password") ||
+        lower.includes("invalid credentials") ||
+        lower.includes("senha incorreta") ||
+        lower.includes("usuário ou senha") ||
+        lower.includes("usuario ou senha") ||
+        lower.includes("-304") ||
+        lower.includes(" 401");
+
+      const isLocked =
+        lower.includes("locked") || lower.includes("bloquead") || lower.includes("-131");
+
+      const isNetwork =
+        lower.includes("failed to fetch") ||
+        lower.includes("networkerror") ||
+        lower.includes("timeout") ||
+        lower.includes("econn") ||
+        lower.includes("getaddrinfo");
+
+      if (isInvalidCreds) {
+        toast.error("Usuário ou senha incorretos", {
+          description: "Verifique suas credenciais e tente novamente.",
+        });
+      } else if (isLocked) {
+        toast.error("Usuário bloqueado no ERP", {
+          description: "Procure o administrador para desbloquear seu acesso.",
+        });
+      } else if (isNetwork) {
+        toast.error("Não foi possível conectar ao ERP", {
+          description: "Verifique sua conexão ou se o servidor está disponível.",
+        });
+      } else {
+        toast.error("Não foi possível entrar", {
+          description: raw || "Tente novamente em instantes.",
+        });
+      }
     }
   };
 
