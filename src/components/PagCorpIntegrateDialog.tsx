@@ -51,12 +51,30 @@ export function PagCorpIntegrateDialog({
   onConfirm,
 }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
+  const [costCenter, setCostCenter] = useState<SapSearchOption | null>(null);
+  const [project, setProject] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [supplierFormOpen, setSupplierFormOpen] = useState(false);
+
+  const ccMap = (row: any) => ({ code: row.CenterCode, name: row.CenterName });
+  const prMap = (row: any) => ({ code: row.Code, name: row.Name });
+  const { options: ccOptions, isLoading: ccLoading } = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "ProfitCenters",
+    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    mapRow: ccMap,
+  });
+  const { options: prOptions, isLoading: prLoading } = useSapCachedList({
+    cacheKey: "projects",
+    endpoint: "Projects",
+    params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
+    mapRow: prMap,
+  });
+
 
   const runAi = useCallback(async (tx: PagCorpTransaction) => {
     if (!companyDb) return;
@@ -135,11 +153,15 @@ export function PagCorpIntegrateDialog({
     if (!supplier) return;
     setSubmitting(true);
     try {
-      await onConfirm(supplier);
+      await onConfirm(supplier, {
+        costCenter: costCenter?.code || null,
+        project: project?.code || null,
+      });
     } finally {
       setSubmitting(false);
     }
   };
+
 
   const handleSupplierSaved = (s: Supplier) => {
     if (s.card_code) {
