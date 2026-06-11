@@ -17,6 +17,7 @@ import {
   ScrollText,
   Lock,
   Building2,
+  Box,
   Wallet,
   Bell,
   type LucideIcon,
