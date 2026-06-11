@@ -343,13 +343,20 @@ export default function PagCorp() {
     setBatchIndex(0);
   };
 
-  const handleConfirmIntegrate = async (supplier: SapSearchOption) => {
+  const handleConfirmIntegrate = async (
+    supplier: SapSearchOption,
+    override: { costCenter?: string | null; project?: string | null } = {},
+  ) => {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
     setIntegrating(t.id);
     programmaticCloseRef.current = true;
     setIntegrateDialog({ open: false, tx: null, type: "generic" });
     try {
+      const lineOverrides =
+        override.costCenter || override.project
+          ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null } }
+          : undefined;
       const result = await integrateDirect(
         t,
         integrateDialog.type,
@@ -357,6 +364,7 @@ export default function PagCorp() {
         supplier.code,
         supplier.name,
         session.userName || undefined,
+        lineOverrides,
       );
       if (result.alreadyIntegrated) {
         toast.info("Transação já estava integrada no SAP", {
@@ -379,6 +387,7 @@ export default function PagCorp() {
       setIntegrating(null);
     }
   };
+
 
   const openConsolidateDialog = () => {
     if (!checkSapCredentials()) return;
