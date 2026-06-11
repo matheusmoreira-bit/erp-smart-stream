@@ -87,6 +87,8 @@ export function CreateExpenseModal({
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
+  const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
+  const [headerProject, setHeaderProject] = useState<SapSearchOption | null>(null);
 
   // Cached SAP lists
   const supplierMapRow = useCallback((row: any) => ({
@@ -194,6 +196,8 @@ export function CreateExpenseModal({
       setFiles([]);
       setAiConfidence(null);
       setPendingPrefill(null);
+      setHeaderCostCenter(null);
+      setHeaderProject(null);
     }
   }, [open, initialized]);
 
@@ -443,7 +447,34 @@ export function CreateExpenseModal({
   };
 
   const addItem = () => {
-    setItems((prev) => [...prev, { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
+    setItems((prev) => [...prev, {
+      description: "",
+      quantity: 1,
+      unit_price: 0,
+      line_total: 0,
+      cost_center: headerCostCenter?.code || "",
+      project: headerProject?.code || "",
+      sapCostCenter: headerCostCenter || null,
+      sapProject: headerProject || null,
+    }]);
+  };
+
+  const applyHeaderCostCenter = (val: SapSearchOption | null) => {
+    setHeaderCostCenter(val);
+    setItems((prev) => prev.map((it) => ({
+      ...it,
+      sapCostCenter: val,
+      cost_center: val?.code || "",
+    })));
+  };
+
+  const applyHeaderProject = (val: SapSearchOption | null) => {
+    setHeaderProject(val);
+    setItems((prev) => prev.map((it) => ({
+      ...it,
+      sapProject: val,
+      project: val?.code || "",
+    })));
   };
 
   const removeItem = (index: number) => {
@@ -757,6 +788,32 @@ export function CreateExpenseModal({
 
           <div>
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
+          </div>
+
+          {/* Header-level defaults: cascade to all items, user can override per line */}
+          <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+            <CachedSearchCombobox
+              label="Centro de Custo (padrão p/ itens)"
+              options={costCenterOptions}
+              isLoading={costCentersLoading}
+              value={headerCostCenter}
+              onChange={applyHeaderCostCenter}
+              placeholder="Aplica a todos os itens…"
+              portalContainer={dialogContainer}
+            />
+            <CachedSearchCombobox
+              label="Projeto (padrão p/ itens)"
+              options={projectOptions}
+              isLoading={projectsLoading}
+              value={headerProject}
+              onChange={applyHeaderProject}
+              placeholder="Aplica a todos os itens…"
+              portalContainer={dialogContainer}
+            />
+            <p className="col-span-2 text-[11px] text-muted-foreground">
+              Definir aqui preenche todas as linhas. Você pode ajustar item a item abaixo — a
+              integração usa sempre o valor de cada linha.
+            </p>
           </div>
 
           {/* Items */}
