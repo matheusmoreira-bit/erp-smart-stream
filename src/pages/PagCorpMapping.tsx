@@ -64,9 +64,12 @@ export default function PagCorpMapping() {
     mapRow: (r: any) => ({ code: r.Code, name: r.Name, extra: "" }),
   });
   const itemCache = useSapCachedList({
-    cacheKey: "items",
+    cacheKey: "items_active_v2",
     endpoint: "Items",
-    params: { $select: "ItemCode,ItemName" },
+    params: {
+      $filter: "Valid eq 'tYES' and Frozen eq 'tNO'",
+      $select: "ItemCode,ItemName",
+    },
     mapRow: (r: any) => ({ code: r.ItemCode, name: r.ItemName, extra: "" }),
   });
 
