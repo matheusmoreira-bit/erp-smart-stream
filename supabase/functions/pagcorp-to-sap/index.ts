@@ -320,9 +320,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Upload attachments (only for accountability with receipts) — merge from all transactions
+    // 4. Upload attachments — sempre que houver receipts em qualquer transação,
+    // independente do integrationType. 0 receipts = integra sem anexo.
     let attachmentEntry: number | null = null;
-    if (integrationType === "accountability") {
+    {
       const allReceipts = transactions.flatMap((t) =>
         Array.isArray(t.receipts) ? t.receipts : [],
       );
