@@ -447,7 +447,34 @@ export function CreateExpenseModal({
   };
 
   const addItem = () => {
-    setItems((prev) => [...prev, { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
+    setItems((prev) => [...prev, {
+      description: "",
+      quantity: 1,
+      unit_price: 0,
+      line_total: 0,
+      cost_center: headerCostCenter?.code || "",
+      project: headerProject?.code || "",
+      sapCostCenter: headerCostCenter || null,
+      sapProject: headerProject || null,
+    }]);
+  };
+
+  const applyHeaderCostCenter = (val: SapSearchOption | null) => {
+    setHeaderCostCenter(val);
+    setItems((prev) => prev.map((it) => ({
+      ...it,
+      sapCostCenter: val,
+      cost_center: val?.code || "",
+    })));
+  };
+
+  const applyHeaderProject = (val: SapSearchOption | null) => {
+    setHeaderProject(val);
+    setItems((prev) => prev.map((it) => ({
+      ...it,
+      sapProject: val,
+      project: val?.code || "",
+    })));
   };
 
   const removeItem = (index: number) => {
