@@ -311,6 +311,19 @@ export function PagCorpIntegrateDialog({
                 />
               </div>
             </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Item
+              </label>
+              <CachedSearchCombobox
+                options={itOptions}
+                isLoading={itLoading}
+                value={item}
+                onChange={setItem}
+                placeholder="Padrão do mapeamento…"
+              />
+            </div>
           </div>
 
 
