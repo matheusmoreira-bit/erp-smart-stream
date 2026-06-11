@@ -90,27 +90,41 @@ export default function FiscalAudit() {
     setLoading(true);
     setError(null);
     try {
-      const filter = `DocDate ge '${startDate}' and DocDate le '${endDate}'`;
       const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,DocCurrency,DocumentStatus,UserSign,CreationDate";
-      const purchaseEndpoint = `PurchaseInvoices?$select=${select}&$filter=${encodeURIComponent(filter)}&$orderby=DocDate desc`;
-      const salesEndpoint = `Invoices?$select=${select}&$filter=${encodeURIComponent(filter)}&$orderby=DocDate desc`;
+      const filter = `DocDate ge '${startDate}' and DocDate le '${endDate}'`;
+      const invoiceParams = { $select: select, $filter: filter, $orderby: "DocDate desc" };
 
-      const [invResp, salesResp, usrResp] = await Promise.all([
-        sapQueryAll(session, purchaseEndpoint, undefined, false),
-        sapQueryAll(session, salesEndpoint, undefined, false),
-        sapQuery(session, "Users?$select=UserCode,UserName,InternalKey", undefined, true),
+      const [invSettled, salesSettled, usrSettled] = await Promise.allSettled([
+        sapQueryAll(session, "PurchaseInvoices", invoiceParams, false),
+        sapQueryAll(session, "Invoices", invoiceParams, false),
+        sapQuery(session, "Users", { $select: "UserCode,UserName,InternalKey" }, true),
       ]);
 
-      setInvoices((invResp.data?.value as SapInvoice[]) || []);
-      setSalesInvoices((salesResp.data?.value as SapInvoice[]) || []);
+      if (invSettled.status === "rejected") {
+        console.error("PurchaseInvoices failed:", invSettled.reason);
+        throw invSettled.reason;
+      }
+      const purchases = (invSettled.value.data?.value as SapInvoice[]) || [];
+      setInvoices(purchases);
 
-      const usrValue: SapUser[] = (() => {
-        const d = usrResp.data as any;
-        return Array.isArray(d) ? d : (d?.value || []);
-      })();
+      if (salesSettled.status === "fulfilled") {
+        setSalesInvoices((salesSettled.value.data?.value as SapInvoice[]) || []);
+      } else {
+        console.warn("Invoices (saída) failed — continuando só com entrada:", salesSettled.reason);
+        setSalesInvoices([]);
+      }
+
       const map = new Map<number, SapUser>();
-      usrValue.forEach((u) => map.set(u.InternalKey, u));
+      if (usrSettled.status === "fulfilled") {
+        const d = usrSettled.value.data as any;
+        const usrValue: SapUser[] = Array.isArray(d) ? d : (d?.value || []);
+        usrValue.forEach((u) => map.set(u.InternalKey, u));
+      }
       setUsers(map);
+
+      if (purchases.length === 0) {
+        toast.info(`Nenhuma nota de entrada entre ${startDate} e ${endDate}.`);
+      }
     } catch (e: any) {
       const msg = e?.message || "Falha ao consultar notas no SAP";
       setError(msg);
