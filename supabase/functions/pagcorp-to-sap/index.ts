@@ -363,8 +363,10 @@ Deno.serve(async (req) => {
       const override = lineOverrides[String(tx.id)] || {};
       const finalCostCenter = override.costCenter ?? acctMapping?.cost_center ?? null;
       const finalProject = override.project ?? acctMapping?.project ?? null;
+      const finalItem = override.item || itemCode!;
+      const lineCurrency = String(tx.currency || "").toUpperCase();
       const line: Record<string, unknown> = {
-        ItemCode: itemCode!,
+        ItemCode: finalItem,
         ItemDescription: (
           isConsolidated
             ? `[#${tx.id}] ${tx.description || "PagCorp"}`
@@ -374,6 +376,9 @@ Deno.serve(async (req) => {
         UnitPrice: Number(tx.amount) || 0,
         ...lineCustom,
       };
+      if (lineCurrency && /^[A-Z]{3}$/.test(lineCurrency)) {
+        line.Currency = lineCurrency;
+      }
       if (finalCostCenter) line.CostingCode = finalCostCenter;
       if (finalProject) line.ProjectCode = finalProject;
       return line;
