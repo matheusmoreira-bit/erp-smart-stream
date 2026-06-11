@@ -87,6 +87,8 @@ export function CreateExpenseModal({
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
+  const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
+  const [headerProject, setHeaderProject] = useState<SapSearchOption | null>(null);
 
   // Cached SAP lists
   const supplierMapRow = useCallback((row: any) => ({
