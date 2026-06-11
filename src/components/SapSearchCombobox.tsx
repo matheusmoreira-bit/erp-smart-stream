@@ -83,7 +83,10 @@ export function SapSearchCombobox({
       }
       setIsLoading(true);
       try {
-        const filter = filterTemplate.replace(/\{q\}/g, term.replace(/'/g, "''"));
+        const safeTerm = term.replace(/'/g, "''");
+        const filter = filterTemplate
+          .replace(/\{qLower\}/g, safeTerm.toLowerCase())
+          .replace(/\{q\}/g, safeTerm);
         const { data } = await sapQuery(session, endpoint, {
           $filter: filter,
           $select: selectFields,
