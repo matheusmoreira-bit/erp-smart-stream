@@ -196,6 +196,8 @@ export function CreateExpenseModal({
       setFiles([]);
       setAiConfidence(null);
       setPendingPrefill(null);
+      setHeaderCostCenter(null);
+      setHeaderProject(null);
     }
   }, [open, initialized]);
 
