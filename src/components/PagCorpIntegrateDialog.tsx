@@ -30,6 +30,7 @@ function formatCurrency(value: number, currency: string = "BRL") {
 export interface PagCorpLineOverride {
   costCenter?: string | null;
   project?: string | null;
+  item?: string | null;
 }
 
 interface Props {
@@ -53,6 +54,7 @@ export function PagCorpIntegrateDialog({
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [costCenter, setCostCenter] = useState<SapSearchOption | null>(null);
   const [project, setProject] = useState<SapSearchOption | null>(null);
+  const [item, setItem] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
@@ -62,6 +64,7 @@ export function PagCorpIntegrateDialog({
 
   const ccMap = (row: any) => ({ code: row.CenterCode, name: row.CenterName });
   const prMap = (row: any) => ({ code: row.Code, name: row.Name });
+  const itMap = (row: any) => ({ code: row.ItemCode, name: row.ItemName });
   const { options: ccOptions, isLoading: ccLoading } = useSapCachedList({
     cacheKey: "cost_centers",
     endpoint: "ProfitCenters",
@@ -73,6 +76,12 @@ export function PagCorpIntegrateDialog({
     endpoint: "Projects",
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: prMap,
+  });
+  const { options: itOptions, isLoading: itLoading } = useSapCachedList({
+    cacheKey: "items_active_v2",
+    endpoint: "Items",
+    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    mapRow: itMap,
   });
 
 
@@ -138,6 +147,7 @@ export function PagCorpIntegrateDialog({
     setSupplier(null);
     setCostCenter(null);
     setProject(null);
+    setItem(null);
     setSubmitting(false);
     setAiTried(false);
     setAiResult(null);
@@ -159,6 +169,7 @@ export function PagCorpIntegrateDialog({
       await onConfirm(supplier, {
         costCenter: costCenter?.code || null,
         project: project?.code || null,
+        item: item?.code || null,
       });
     } finally {
       setSubmitting(false);
@@ -299,6 +310,19 @@ export function PagCorpIntegrateDialog({
                   placeholder="Padrão da conta…"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Item
+              </label>
+              <CachedSearchCombobox
+                options={itOptions}
+                isLoading={itLoading}
+                value={item}
+                onChange={setItem}
+                placeholder="Padrão do mapeamento…"
+              />
             </div>
           </div>
 

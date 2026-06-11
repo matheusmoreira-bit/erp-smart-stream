@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
     const supplierName: string | undefined = body.supplierName;
     const integratedBy: string | null = body.integratedBy || null;
     // Optional per-line overrides from integrate modal: { [txId]: { costCenter?, project? } }
-    const lineOverrides: Record<string, { costCenter?: string | null; project?: string | null }> =
+    const lineOverrides: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }> =
       body.lineOverrides && typeof body.lineOverrides === "object" ? body.lineOverrides : {};
 
     // Accept either single `transaction` or `transactions[]` for consolidated mode
@@ -290,10 +290,13 @@ Deno.serve(async (req) => {
         return { tx: t, acctMapping, itemCode };
       }),
     );
-    const missing = lineMappings.find((m) => !m.itemCode);
+    const missing = lineMappings.find((m) => {
+      const ov = lineOverrides[String(m.tx.id)] || {};
+      return !ov.item && !m.itemCode;
+    });
     if (missing) {
       throw new Error(
-        `Nenhum item mapeado para a conta "${missing.tx.accountCode || "(sem conta)"}" (cadastre item fallback em Mapeamento PagCorp)`,
+        `Nenhum item mapeado para a conta "${missing.tx.accountCode || "(sem conta)"}" (cadastre item fallback em Mapeamento PagCorp ou escolha um Item no diálogo)`,
       );
     }
 
@@ -360,8 +363,10 @@ Deno.serve(async (req) => {
       const override = lineOverrides[String(tx.id)] || {};
       const finalCostCenter = override.costCenter ?? acctMapping?.cost_center ?? null;
       const finalProject = override.project ?? acctMapping?.project ?? null;
+      const finalItem = override.item || itemCode!;
+      const lineCurrency = String(tx.currency || "").toUpperCase();
       const line: Record<string, unknown> = {
-        ItemCode: itemCode!,
+        ItemCode: finalItem,
         ItemDescription: (
           isConsolidated
             ? `[#${tx.id}] ${tx.description || "PagCorp"}`
@@ -371,6 +376,9 @@ Deno.serve(async (req) => {
         UnitPrice: Number(tx.amount) || 0,
         ...lineCustom,
       };
+      if (lineCurrency && /^[A-Z]{3}$/.test(lineCurrency)) {
+        line.Currency = lineCurrency;
+      }
       if (finalCostCenter) line.CostingCode = finalCostCenter;
       if (finalProject) line.ProjectCode = finalProject;
       return line;

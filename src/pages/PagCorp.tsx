@@ -345,7 +345,7 @@ export default function PagCorp() {
 
   const handleConfirmIntegrate = async (
     supplier: SapSearchOption,
-    override: { costCenter?: string | null; project?: string | null } = {},
+    override: { costCenter?: string | null; project?: string | null; item?: string | null } = {},
   ) => {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
@@ -354,8 +354,8 @@ export default function PagCorp() {
     setIntegrateDialog({ open: false, tx: null, type: "generic" });
     try {
       const lineOverrides =
-        override.costCenter || override.project
-          ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null } }
+        override.costCenter || override.project || override.item
+          ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null, item: override.item ?? null } }
           : undefined;
       const result = await integrateDirect(
         t,

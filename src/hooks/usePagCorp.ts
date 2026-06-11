@@ -217,7 +217,7 @@ export function usePagCorp() {
     supplierCode: string,
     supplierName?: string,
     integratedBy?: string,
-    lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null }>,
+    lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }>,
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const res = await sapFunctionFetch("pagcorp-to-sap", {
@@ -251,7 +251,7 @@ export function usePagCorp() {
     supplierCode: string,
     supplierName?: string,
     integratedBy?: string,
-    lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null }>,
+    lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }>,
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const res = await sapFunctionFetch("pagcorp-to-sap", {
