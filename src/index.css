@@ -136,7 +136,7 @@
 
 @layer components {
   :root {
-    --app-header-h: 4.5rem;
+    --app-header-h: 5.25rem;
   }
 
   /* Barra superior do sistema sempre visível */
@@ -147,11 +147,21 @@
     background-color: hsl(var(--background));
   }
 
-  /* Cabeçalho de tabela sempre visível (logo abaixo da barra superior) */
+  /* Cabeçalho de tabela sempre visível (logo abaixo da barra superior).
+     Usa um fundo sólido distinto + sombra inferior para se diferenciar das linhas
+     de dados e cobrir o conteúdo que rola atrás. */
   table > thead > tr > th {
     position: sticky;
     top: var(--app-header-h);
     z-index: 20;
-    background-color: hsl(var(--background));
+    background-color: hsl(var(--card));
+    box-shadow: inset 0 -1px 0 0 hsl(var(--border));
+  }
+
+  /* Em containers com overflow-hidden (ex.: glass-card), o sticky pode falhar
+     visualmente. Mantém o cabeçalho da tabela acima do conteúdo. */
+  .glass-card > .relative > table > thead > tr > th {
+    background-color: hsl(var(--card));
   }
 }
+
