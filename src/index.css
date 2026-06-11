@@ -133,3 +133,25 @@
     @apply h-0.5 bg-gradient-to-r from-primary/60 to-primary/10;
   }
 }
+
+@layer components {
+  :root {
+    --app-header-h: 4.5rem;
+  }
+
+  /* Barra superior do sistema sempre visível */
+  header.border-b {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background-color: hsl(var(--background));
+  }
+
+  /* Cabeçalho de tabela sempre visível (logo abaixo da barra superior) */
+  table > thead > tr > th {
+    position: sticky;
+    top: var(--app-header-h);
+    z-index: 20;
+    background-color: hsl(var(--background));
+  }
+}
