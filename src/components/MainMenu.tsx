@@ -120,6 +120,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-success/20 to-success/5",
     moduleKey: "suppliers",
   },
+  items: {
+    title: "Itens",
+    description: "Cadastro de itens (OITM) com sincronização direta no SAP — criar, editar e ativar/inativar.",
+    icon: Box,
+    path: "/items",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    moduleKey: "items",
+  },
   synapse: {
     title: "Synapse",
     description: "Central de automações e integrações entre sistemas (JumpCloud, SAP, IdP).",
