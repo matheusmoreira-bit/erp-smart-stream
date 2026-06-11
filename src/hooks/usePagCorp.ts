@@ -217,6 +217,7 @@ export function usePagCorp() {
     supplierCode: string,
     supplierName?: string,
     integratedBy?: string,
+    lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null }>,
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const res = await sapFunctionFetch("pagcorp-to-sap", {
@@ -229,6 +230,7 @@ export function usePagCorp() {
         supplierCode,
         supplierName,
         integratedBy,
+        lineOverrides: lineOverrides || {},
       }),
     });
     const result = await res.json().catch(() => ({}));
@@ -237,6 +239,7 @@ export function usePagCorp() {
     }
     return result;
   }, []);
+
 
   /**
    * Consolidated integration: many PagCorp transactions → ONE SAP Purchase Order
@@ -248,9 +251,9 @@ export function usePagCorp() {
     supplierCode: string,
     supplierName?: string,
     integratedBy?: string,
+    lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null }>,
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
-    // All as "generic" (skip accountability per-tx flow); receipts still merged on the edge fn
     const res = await sapFunctionFetch("pagcorp-to-sap", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -261,6 +264,7 @@ export function usePagCorp() {
         supplierCode,
         supplierName,
         integratedBy,
+        lineOverrides: lineOverrides || {},
       }),
     });
     const result = await res.json().catch(() => ({}));
@@ -269,6 +273,7 @@ export function usePagCorp() {
     }
     return result;
   }, []);
+
 
   return { transactions, isLoading, error, fetchTransactions, logIntegration, integrateDirect, integrateConsolidated };
 }
