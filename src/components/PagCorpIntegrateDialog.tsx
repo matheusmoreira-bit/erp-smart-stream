@@ -147,6 +147,7 @@ export function PagCorpIntegrateDialog({
     setSupplier(null);
     setCostCenter(null);
     setProject(null);
+    setItem(null);
     setSubmitting(false);
     setAiTried(false);
     setAiResult(null);
