@@ -34,6 +34,7 @@ export const ALL_MODULES = [
   { key: "users", label: "Usuários" },
   { key: "users_productivity", label: "Produtividade de Usuários" },
   { key: "suppliers", label: "Fornecedores" },
+  { key: "items", label: "Itens" },
   { key: "synapse", label: "Synapse" },
   { key: "credentials", label: "Credenciais" },
   { key: "audit_log", label: "Logs de Auditoria" },
