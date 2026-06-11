@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
     const supplierName: string | undefined = body.supplierName;
     const integratedBy: string | null = body.integratedBy || null;
     // Optional per-line overrides from integrate modal: { [txId]: { costCenter?, project? } }
-    const lineOverrides: Record<string, { costCenter?: string | null; project?: string | null }> =
+    const lineOverrides: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }> =
       body.lineOverrides && typeof body.lineOverrides === "object" ? body.lineOverrides : {};
 
     // Accept either single `transaction` or `transactions[]` for consolidated mode
