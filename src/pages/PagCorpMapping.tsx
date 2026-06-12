@@ -7,11 +7,10 @@ import {
   Trash2,
   Loader2,
   MapPin,
-  Package,
   CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Table,
@@ -42,15 +41,6 @@ interface AccountMapping {
   isNew?: boolean;
 }
 
-/* ── Account → Item mapping ── */
-interface ItemMapping {
-  id?: string;
-  account_code: string | null;
-  account_name: string | null;
-  item_code: string;
-  is_fallback: boolean;
-  isNew?: boolean;
-}
 
 /* ── Card → defaults mapping ── */
 interface CardMappingRow {
@@ -198,77 +188,6 @@ export default function PagCorpMapping() {
     return accountCodeOptions.filter((o) => !mapped.has(o.code));
   }, [accountCodeOptions, mappings]);
 
-  /* ════════════════════════════════════════════
-     TAB 2 – Item Mapping (independent)
-     ════════════════════════════════════════════ */
-  const [itemMappings, setItemMappings] = useState<ItemMapping[]>([]);
-  const [isLoadingItems, setIsLoadingItems] = useState(true);
-  const [isSavingItems, setIsSavingItems] = useState(false);
-
-  useEffect(() => { loadItemMappings(); }, []);
-
-  async function loadItemMappings() {
-    setIsLoadingItems(true);
-    const { data, error } = await supabase
-      .from("pagcorp_item_mapping")
-      .select("*")
-      .order("is_fallback", { ascending: false });
-    if (error) { toast.error("Erro ao carregar mapeamento de itens"); console.error(error); }
-    else {
-      setItemMappings((data || []).map((r: any) => ({
-        id: r.id, account_code: r.account_code, account_name: r.account_name,
-        item_code: r.item_code || "", is_fallback: r.is_fallback || false,
-      })));
-    }
-    setIsLoadingItems(false);
-  }
-
-  function addItemRow() {
-    setItemMappings((p) => [...p, { account_code: "", account_name: "", item_code: "", is_fallback: false, isNew: true }]);
-  }
-
-  function removeItemRow(i: number) {
-    const m = itemMappings[i];
-    if (m.id) deleteItemRow(m.id, i);
-    else setItemMappings((p) => p.filter((_, idx) => idx !== i));
-  }
-
-  async function deleteItemRow(id: string, i: number) {
-    const { error } = await supabase.from("pagcorp_item_mapping").delete().eq("id", id);
-    if (error) toast.error("Erro ao excluir");
-    else { setItemMappings((p) => p.filter((_, idx) => idx !== i)); toast.success("Excluído"); }
-  }
-
-  async function saveItemMappings() {
-    setIsSavingItems(true);
-    try {
-      for (const m of itemMappings) {
-        if (!m.item_code) continue;
-        const payload: any = {
-          account_code: m.is_fallback ? null : (m.account_code || null),
-          account_name: m.is_fallback ? "Fallback (padrão)" : (m.account_name || null),
-          item_code: m.item_code,
-          is_fallback: m.is_fallback,
-        };
-        if (m.id) {
-          const { error } = await supabase.from("pagcorp_item_mapping").update(payload).eq("id", m.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from("pagcorp_item_mapping").insert(payload);
-          if (error) throw error;
-        }
-      }
-      toast.success("Mapeamento de itens salvo"); loadItemMappings();
-    } catch (e: any) { toast.error(e.message || "Erro ao salvar"); }
-    finally { setIsSavingItems(false); }
-  }
-
-  const hasFallback = itemMappings.some((m) => m.is_fallback);
-
-  const availableItemAccountCodes = useMemo(() => {
-    const mapped = new Set(itemMappings.filter((m) => m.id && m.account_code).map((m) => m.account_code));
-    return accountCodeOptions.filter((o) => !mapped.has(o.code));
-  }, [accountCodeOptions, itemMappings]);
 
   /* ════════════════════════════════════════════
      TAB 3 – Card → defaults mapping
@@ -401,7 +320,6 @@ export default function PagCorpMapping() {
           <Tabs defaultValue="costcenter" className="space-y-4">
             <TabsList>
               <TabsTrigger value="costcenter" className="gap-2"><MapPin className="w-4 h-4" /> Centro de Custo / Projeto</TabsTrigger>
-              <TabsTrigger value="items" className="gap-2"><Package className="w-4 h-4" /> Itens Genéricos</TabsTrigger>
               <TabsTrigger value="cards" className="gap-2"><CreditCard className="w-4 h-4" /> Cartões</TabsTrigger>
             </TabsList>
 
@@ -491,104 +409,13 @@ export default function PagCorpMapping() {
               )}
             </TabsContent>
 
-            {/* ── TAB: Item Mapping ── */}
-            <TabsContent value="items" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Mapeie tipos de despesa a itens genéricos do SAP. O <Badge variant="secondary">Fallback</Badge> será usado para despesas sem mapeamento específico.
-                </p>
-                <div className="flex gap-2">
-                  {!hasFallback && (
-                    <Button variant="outline" onClick={() => setItemMappings((p) => [
-                      { account_code: null, account_name: "Fallback (padrão)", item_code: "", is_fallback: true, isNew: true }, ...p
-                    ])} className="gap-2">
-                      <Plus className="w-4 h-4" /> Fallback
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={addItemRow} className="gap-2"><Plus className="w-4 h-4" /> Adicionar</Button>
-                  <Button onClick={saveItemMappings} disabled={isSavingItems} className="gap-2">
-                    {isSavingItems ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
-                  </Button>
-                </div>
-              </div>
-              {isLoadingItems ? (
-                <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
-              ) : itemMappings.length === 0 ? (
-                <div className="text-center py-20 text-muted-foreground">
-                  <Package className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p className="text-lg font-medium">Nenhum mapeamento de item configurado</p>
-                  <p className="text-sm mt-1">Adicione um fallback e/ou mapeamentos por tipo de despesa</p>
-                  <Button onClick={() => setItemMappings([{ account_code: null, account_name: "Fallback (padrão)", item_code: "", is_fallback: true, isNew: true }])} variant="outline" className="mt-4 gap-2">
-                    <Plus className="w-4 h-4" /> Criar fallback
-                  </Button>
-                </div>
-              ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-visible">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground">Tipo de Despesa</TableHead>
-                        <TableHead className="text-muted-foreground">Item Genérico SAP</TableHead>
-                        <TableHead className="text-muted-foreground w-12"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {itemMappings.map((m, i) => (
-                        <TableRow key={m.id || `new-item-${i}`} className="border-border">
-                          <TableCell>
-                            {m.is_fallback ? (
-                              <Badge variant="secondary" className="text-sm">Fallback (padrão)</Badge>
-                            ) : m.id ? (
-                              <div className="text-sm">
-                                <span className="font-medium text-foreground">{m.account_name || m.account_code}</span>
-                                <span className="ml-2 text-xs text-muted-foreground">{m.account_code}</span>
-                              </div>
-                            ) : (
-                              <CachedSearchCombobox
-                                options={availableItemAccountCodes}
-                                isLoading={false}
-                                value={findOption(accountCodeOptions, m.account_code || "")}
-                                onChange={(opt) => {
-                                  setItemMappings((p) => p.map((row, idx) => idx === i
-                                    ? { ...row, account_code: opt?.code || "", account_name: opt?.name || "" } : row));
-                                }}
-                                placeholder="Buscar tipo de despesa..."
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {m.id ? (
-                              <div className="text-sm font-medium text-foreground">
-                                {m.item_code || <span className="text-muted-foreground italic">—</span>}
-                              </div>
-                            ) : (
-                              <CachedSearchCombobox options={itemCache.options} isLoading={itemCache.isLoading}
-                                value={findOption(itemCache.options, m.item_code)}
-                                onChange={(opt) => setItemMappings((p) => p.map((row, idx) => idx === i ? { ...row, item_code: opt?.code || "" } : row))}
-                                placeholder="Selecione item SAP..." />
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => removeItemRow(i)} className="text-destructive hover:text-destructive">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </motion.div>
-              )}
-            </TabsContent>
 
-            {/* ── TAB: Card → defaults ── */}
             <TabsContent value="cards" className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <p className="text-sm text-muted-foreground">
-                  Cartões pertencem a centros de custo e costumam comprar sempre o mesmo item.
-                  Defina aqui o centro de custo, projeto e item <strong>padrão</strong> por cartão.
+                  Defina o centro de custo, projeto e item <strong>padrão</strong> por cartão.
                   O <Badge variant="secondary">Fallback</Badge> é o padrão da empresa quando o cartão não está mapeado
-                  (use, por exemplo, para fixar o projeto <em>ANA GAMING</em> em todas as compras de cartão).
+                  (ex.: fixar o projeto <em>ANA GAMING</em> em todas as compras de cartão).
                   Empresa atual: <strong>{companyDB || "(nenhuma selecionada)"}</strong>
                 </p>
                 <div className="flex gap-2 shrink-0">
@@ -618,7 +445,9 @@ export default function PagCorpMapping() {
                 <div className="text-center py-20 text-muted-foreground">
                   <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-30" />
                   <p className="text-lg font-medium">Nenhum cartão mapeado</p>
-                  <p className="text-sm mt-1">Adicione cartões ou um fallback de empresa para definir defaults.</p>
+                  <Button onClick={addCardRow} variant="outline" className="mt-4 gap-2">
+                    <Plus className="w-4 h-4" /> Adicionar
+                  </Button>
                 </div>
               ) : (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-visible">
@@ -626,7 +455,6 @@ export default function PagCorpMapping() {
                     <TableHeader>
                       <TableRow className="border-border hover:bg-transparent">
                         <TableHead className="text-muted-foreground">Cartão</TableHead>
-                        <TableHead className="text-muted-foreground">Rótulo</TableHead>
                         <TableHead className="text-muted-foreground">Centro de Custo</TableHead>
                         <TableHead className="text-muted-foreground">Projeto</TableHead>
                         <TableHead className="text-muted-foreground">Item Padrão</TableHead>
@@ -645,67 +473,68 @@ export default function PagCorpMapping() {
                                 <Badge variant="secondary" className="text-sm">Fallback (padrão da empresa)</Badge>
                               ) : m.id ? (
                                 <div className="text-sm">
-                                  <span className="font-medium text-foreground">{m.card_identifier}</span>
+                                  <span className="font-medium text-foreground">{m.card_label || m.card_identifier}</span>
+                                  {m.card_label && (
+                                    <span className="ml-2 text-xs text-muted-foreground">{m.card_identifier}</span>
+                                  )}
                                 </div>
                               ) : (
-                                <div className="flex flex-col gap-1">
-                                  <CachedSearchCombobox
-                                    options={cardOptions}
-                                    isLoading={false}
-                                    value={cardOptions.find((o) => o.code === m.card_identifier) || null}
-                                    onChange={(opt) => updateCardRow(i, {
-                                      card_identifier: opt?.code || "",
-                                      card_label: m.card_label || opt?.name || "",
-                                    })}
-                                    placeholder="Selecione um cartão das transações recentes…"
-                                  />
-                                  <Input
-                                    value={m.card_identifier}
-                                    onChange={(e) => updateCardRow(i, { card_identifier: e.target.value })}
-                                    placeholder="ou digite o identificador (últimos 4 dígitos ou nome)"
-                                    className="h-8 text-xs"
-                                  />
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {m.is_fallback ? (
-                                <span className="text-xs text-muted-foreground italic">—</span>
-                              ) : (
-                                <Input
-                                  value={m.card_label}
-                                  onChange={(e) => updateCardRow(i, { card_label: e.target.value })}
-                                  placeholder="Ex.: Cartão Marketing"
-                                  className="h-8 text-sm"
+                                <CachedSearchCombobox
+                                  options={cardOptions}
+                                  isLoading={false}
+                                  value={cardOptions.find((o) => o.code === m.card_identifier) || null}
+                                  onChange={(opt) => updateCardRow(i, {
+                                    card_identifier: opt?.code || "",
+                                    card_label: opt?.name || "",
+                                  })}
+                                  placeholder="Buscar cartão das transações recentes…"
                                 />
                               )}
                             </TableCell>
                             <TableCell>
-                              <CachedSearchCombobox
-                                options={costCenterCache.options}
-                                isLoading={costCenterCache.isLoading}
-                                value={findOption(costCenterCache.options, m.cost_center)}
-                                onChange={(opt) => updateCardRow(i, { cost_center: opt?.code || "" })}
-                                placeholder="Selecione…"
-                              />
+                              {m.id ? (
+                                <div className="text-sm font-medium text-foreground">
+                                  {m.cost_center || <span className="text-muted-foreground italic">—</span>}
+                                </div>
+                              ) : (
+                                <CachedSearchCombobox
+                                  options={costCenterCache.options}
+                                  isLoading={costCenterCache.isLoading}
+                                  value={findOption(costCenterCache.options, m.cost_center)}
+                                  onChange={(opt) => updateCardRow(i, { cost_center: opt?.code || "" })}
+                                  placeholder="Selecione…"
+                                />
+                              )}
                             </TableCell>
                             <TableCell>
-                              <CachedSearchCombobox
-                                options={projectCache.options}
-                                isLoading={projectCache.isLoading}
-                                value={findOption(projectCache.options, m.project)}
-                                onChange={(opt) => updateCardRow(i, { project: opt?.code || "" })}
-                                placeholder="Selecione…"
-                              />
+                              {m.id ? (
+                                <div className="text-sm font-medium text-foreground">
+                                  {m.project || <span className="text-muted-foreground italic">—</span>}
+                                </div>
+                              ) : (
+                                <CachedSearchCombobox
+                                  options={projectCache.options}
+                                  isLoading={projectCache.isLoading}
+                                  value={findOption(projectCache.options, m.project)}
+                                  onChange={(opt) => updateCardRow(i, { project: opt?.code || "" })}
+                                  placeholder="Selecione…"
+                                />
+                              )}
                             </TableCell>
                             <TableCell>
-                              <CachedSearchCombobox
-                                options={itemCache.options}
-                                isLoading={itemCache.isLoading}
-                                value={findOption(itemCache.options, m.item_code)}
-                                onChange={(opt) => updateCardRow(i, { item_code: opt?.code || "" })}
-                                placeholder="Selecione item SAP…"
-                              />
+                              {m.id ? (
+                                <div className="text-sm font-medium text-foreground">
+                                  {m.item_code || <span className="text-muted-foreground italic">—</span>}
+                                </div>
+                              ) : (
+                                <CachedSearchCombobox
+                                  options={itemCache.options}
+                                  isLoading={itemCache.isLoading}
+                                  value={findOption(itemCache.options, m.item_code)}
+                                  onChange={(opt) => updateCardRow(i, { item_code: opt?.code || "" })}
+                                  placeholder="Selecione item SAP…"
+                                />
+                              )}
                             </TableCell>
                             <TableCell>
                               <Button variant="ghost" size="icon" onClick={() => removeCardRow(i)} className="text-destructive hover:text-destructive">
