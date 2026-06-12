@@ -236,7 +236,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Análise & Monitoramento",
-      keys: ["analytics", "integration_history"],
+      keys: ["analytics", "audit_console", "integration_history"],
     },
     {
       title: "Financeiro",
