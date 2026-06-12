@@ -142,6 +142,8 @@ export function PagCorpIntegrateDialog({
     }
   }, [companyDb]);
 
+  const storageKey = transaction ? `pagcorp:integrate:${transaction.id}` : null;
+
   useEffect(() => {
     if (!open || !transaction) return;
     setSupplier(null);
@@ -154,8 +156,23 @@ export function PagCorpIntegrateDialog({
     setAiNotice(null);
     setSupplierFormOpen(false);
 
-    // If the card is mapped as nondeductible, pre-select that supplier and skip AI
-    if (transaction.nondeductibleSupplierCode) {
+    // Restore last in-progress selections for this transaction, if any
+    let restored = false;
+    if (storageKey) {
+      try {
+        const raw = sessionStorage.getItem(storageKey);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (saved.supplier) setSupplier(saved.supplier);
+          if (saved.costCenter) setCostCenter(saved.costCenter);
+          if (saved.project) setProject(saved.project);
+          if (saved.item) setItem(saved.item);
+          restored = !!saved.supplier;
+        }
+      } catch {/* ignore */}
+    }
+
+    if (!restored && transaction.nondeductibleSupplierCode) {
       setSupplier({
         code: String(transaction.nondeductibleSupplierCode),
         name: String(transaction.nondeductibleSupplierName || transaction.nondeductibleSupplierCode),
@@ -163,10 +180,23 @@ export function PagCorpIntegrateDialog({
       return;
     }
 
+    if (restored) return;
+
     // Auto-trigger AI extraction
     setAiTried(true);
     void runAi(transaction);
-  }, [open, transaction?.id, runAi, transaction]);
+  }, [open, transaction?.id, runAi, transaction, storageKey]);
+
+  // Persist selections so an accidental close doesn't lose work
+  useEffect(() => {
+    if (!open || !storageKey) return;
+    try {
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({ supplier, costCenter, project, item }),
+      );
+    } catch {/* ignore quota */}
+  }, [open, storageKey, supplier, costCenter, project, item]);
 
 
   if (!transaction) return null;
