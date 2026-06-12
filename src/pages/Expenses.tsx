@@ -540,6 +540,37 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     return result;
   };
 
+  const handleApprove = async (expense: Expense) => {
+    setIsActioning(true);
+    try {
+      await approveExpense(expense.id);
+      toast.success("Despesa aprovada!");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao aprovar");
+    } finally {
+      setIsActioning(false);
+    }
+  };
+
+  const handleReject = async (expense: Expense) => {
+    setIsActioning(true);
+    try {
+      await rejectExpense(expense.id);
+      toast.success("Despesa rejeitada.");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao rejeitar");
+    } finally {
+      setIsActioning(false);
+    }
+  };
+
+  const handleViewIntegration = () => {
+    setSelectedExpense(null);
+    navigate("/integrations-monitor");
+  };
+
   const statusOptions = [
     { value: "all", label: "Todos" },
     { value: "rascunho", label: "Rascunho" },
