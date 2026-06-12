@@ -169,6 +169,45 @@ async function resolveItemCode(
   return (fb?.item_code as string) || null;
 }
 
+interface CardMapping {
+  cost_center: string | null;
+  project: string | null;
+  item_code: string | null;
+}
+
+/** Same resolution as the client uses to identify cards. */
+function resolveCardKey(tx: { cardLastDigits?: unknown; cardName?: unknown }): string | null {
+  const last = tx.cardLastDigits ? String(tx.cardLastDigits).trim() : "";
+  if (last) return last;
+  const name = tx.cardName ? String(tx.cardName).trim() : "";
+  return name || null;
+}
+
+async function resolveCardMapping(
+  supabase: ReturnType<typeof createClient>,
+  companyDb: string,
+  cardKey: string | null,
+): Promise<CardMapping | null> {
+  if (cardKey) {
+    const { data } = await supabase
+      .from("pagcorp_card_mapping")
+      .select("cost_center, project, item_code")
+      .eq("company_db", companyDb)
+      .eq("card_identifier", cardKey)
+      .eq("is_fallback", false)
+      .maybeSingle();
+    if (data) return data as CardMapping;
+  }
+  // Per-company fallback (e.g. ANA Gaming default project)
+  const { data: fb } = await supabase
+    .from("pagcorp_card_mapping")
+    .select("cost_center, project, item_code")
+    .eq("company_db", companyDb)
+    .eq("is_fallback", true)
+    .maybeSingle();
+  return (fb as CardMapping) || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -286,8 +325,14 @@ Deno.serve(async (req) => {
     const lineMappings = await Promise.all(
       transactions.map(async (t) => {
         const acctMapping = await resolveAccountMapping(supabase!, t.accountCode || null);
-        const itemCode = await resolveItemCode(supabase!, t.accountCode || null);
-        return { tx: t, acctMapping, itemCode };
+        const cardMapping = await resolveCardMapping(
+          supabase!,
+          companyDb,
+          resolveCardKey(t),
+        );
+        const itemCode =
+          cardMapping?.item_code || (await resolveItemCode(supabase!, t.accountCode || null));
+        return { tx: t, acctMapping, cardMapping, itemCode };
       }),
     );
     const missing = lineMappings.find((m) => {
@@ -359,10 +404,13 @@ Deno.serve(async (req) => {
       190,
     );
 
-    const documentLines = lineMappings.map(({ tx, acctMapping, itemCode }) => {
+    const documentLines = lineMappings.map(({ tx, acctMapping, cardMapping, itemCode }) => {
       const override = lineOverrides[String(tx.id)] || {};
-      const finalCostCenter = override.costCenter ?? acctMapping?.cost_center ?? null;
-      const finalProject = override.project ?? acctMapping?.project ?? null;
+      // Priority: per-line override > card mapping > account mapping
+      const finalCostCenter =
+        override.costCenter ?? cardMapping?.cost_center ?? acctMapping?.cost_center ?? null;
+      const finalProject =
+        override.project ?? cardMapping?.project ?? acctMapping?.project ?? null;
       const finalItem = override.item || itemCode!;
       const lineCurrency = String(tx.currency || "").toUpperCase();
       const line: Record<string, unknown> = {

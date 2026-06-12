@@ -8,8 +8,10 @@ import {
   Loader2,
   MapPin,
   Package,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Table,
@@ -27,6 +29,7 @@ import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { usePagCorp } from "@/hooks/usePagCorp";
+import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 /* ── Account → Cost Center / Project mapping ── */
@@ -49,8 +52,23 @@ interface ItemMapping {
   isNew?: boolean;
 }
 
+/* ── Card → defaults mapping ── */
+interface CardMappingRow {
+  id?: string;
+  company_db: string;
+  card_identifier: string;
+  card_label: string;
+  cost_center: string;
+  project: string;
+  item_code: string;
+  is_fallback: boolean;
+  isNew?: boolean;
+}
+
 export default function PagCorpMapping() {
   const navigate = useNavigate();
+  const { session } = useSap();
+  const companyDB = session?.companyDB || "";
 
   /* ── SAP caches ── */
   const costCenterCache = useSapCachedList({
@@ -78,8 +96,12 @@ export default function PagCorpMapping() {
   useEffect(() => {
     const today = new Date();
     const ago = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
-    fetchTransactions(ago.toISOString().slice(0, 10), today.toISOString().slice(0, 10));
-  }, []);
+    fetchTransactions(
+      ago.toISOString().slice(0, 10),
+      today.toISOString().slice(0, 10),
+      companyDB || undefined,
+    );
+  }, [companyDB]);
 
   const accountCodeOptions: SapSearchOption[] = useMemo(() => {
     const map = new Map<string, string>();
@@ -89,6 +111,20 @@ export default function PagCorpMapping() {
       if (code && !map.has(code)) map.set(code, name);
     });
     return Array.from(map.entries()).map(([code, name]) => ({ code, name, extra: "" }));
+  }, [recentTransactions]);
+
+  /* Card identifiers detected in recent transactions */
+  const cardSuggestions = useMemo(() => {
+    const map = new Map<string, { identifier: string; label: string }>();
+    recentTransactions.forEach((t) => {
+      const id = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+        (t.cardName && String(t.cardName).trim()) || "";
+      if (!id || map.has(id)) return;
+      const label = [t.cardName, t.cardLastDigits ? `•••• ${t.cardLastDigits}` : null]
+        .filter(Boolean).join(" ");
+      map.set(id, { identifier: id, label: label || id });
+    });
+    return Array.from(map.values());
   }, [recentTransactions]);
 
   /* ════════════════════════════════════════════
@@ -234,6 +270,106 @@ export default function PagCorpMapping() {
     return accountCodeOptions.filter((o) => !mapped.has(o.code));
   }, [accountCodeOptions, itemMappings]);
 
+  /* ════════════════════════════════════════════
+     TAB 3 – Card → defaults mapping
+     ════════════════════════════════════════════ */
+  const [cardMappings, setCardMappings] = useState<CardMappingRow[]>([]);
+  const [isLoadingCards, setIsLoadingCards] = useState(true);
+  const [isSavingCards, setIsSavingCards] = useState(false);
+
+  useEffect(() => {
+    if (!companyDB) {
+      setCardMappings([]);
+      setIsLoadingCards(false);
+      return;
+    }
+    loadCardMappings();
+  }, [companyDB]);
+
+  async function loadCardMappings() {
+    setIsLoadingCards(true);
+    const { data, error } = await (supabase as any)
+      .from("pagcorp_card_mapping")
+      .select("*")
+      .eq("company_db", companyDB)
+      .order("is_fallback", { ascending: false });
+    if (error) { toast.error("Erro ao carregar mapeamento de cartões"); console.error(error); }
+    else {
+      setCardMappings((data || []).map((r: any) => ({
+        id: r.id, company_db: r.company_db,
+        card_identifier: r.card_identifier || "",
+        card_label: r.card_label || "",
+        cost_center: r.cost_center || "",
+        project: r.project || "",
+        item_code: r.item_code || "",
+        is_fallback: !!r.is_fallback,
+      })));
+    }
+    setIsLoadingCards(false);
+  }
+
+  function addCardRow() {
+    setCardMappings((p) => [...p, {
+      company_db: companyDB, card_identifier: "", card_label: "",
+      cost_center: "", project: "", item_code: "", is_fallback: false, isNew: true,
+    }]);
+  }
+
+  function addCardFallback() {
+    setCardMappings((p) => [{
+      company_db: companyDB, card_identifier: "", card_label: "Fallback (padrão da empresa)",
+      cost_center: "", project: "", item_code: "", is_fallback: true, isNew: true,
+    }, ...p]);
+  }
+
+  function updateCardRow(i: number, patch: Partial<CardMappingRow>) {
+    setCardMappings((p) => p.map((m, idx) => idx === i ? { ...m, ...patch } : m));
+  }
+
+  function removeCardRow(i: number) {
+    const m = cardMappings[i];
+    if (m.id) deleteCardRow(m.id, i);
+    else setCardMappings((p) => p.filter((_, idx) => idx !== i));
+  }
+
+  async function deleteCardRow(id: string, i: number) {
+    const { error } = await (supabase as any).from("pagcorp_card_mapping").delete().eq("id", id);
+    if (error) toast.error("Erro ao excluir");
+    else { setCardMappings((p) => p.filter((_, idx) => idx !== i)); toast.success("Excluído"); }
+  }
+
+  async function saveCardMappings() {
+    if (!companyDB) { toast.error("Selecione uma empresa antes de salvar"); return; }
+    setIsSavingCards(true);
+    try {
+      for (const m of cardMappings) {
+        if (!m.is_fallback && !m.card_identifier) continue;
+        const payload: any = {
+          company_db: companyDB,
+          card_identifier: m.is_fallback ? null : m.card_identifier,
+          card_label: m.card_label || null,
+          cost_center: m.cost_center || null,
+          project: m.project || null,
+          item_code: m.item_code || null,
+          is_fallback: m.is_fallback,
+        };
+        if (m.id) {
+          const { error } = await (supabase as any).from("pagcorp_card_mapping").update(payload).eq("id", m.id);
+          if (error) throw error;
+        } else {
+          const { error } = await (supabase as any).from("pagcorp_card_mapping").insert(payload);
+          if (error) throw error;
+        }
+      }
+      toast.success("Mapeamento de cartões salvo");
+      loadCardMappings();
+    } catch (e: any) { toast.error(e.message || "Erro ao salvar"); }
+    finally { setIsSavingCards(false); }
+  }
+
+  const hasCardFallback = cardMappings.some((m) => m.is_fallback);
+
+
   /* ── helpers ── */
   function findOption(options: SapSearchOption[], code: string): SapSearchOption | null {
     if (!code) return null;
@@ -266,6 +402,7 @@ export default function PagCorpMapping() {
             <TabsList>
               <TabsTrigger value="costcenter" className="gap-2"><MapPin className="w-4 h-4" /> Centro de Custo / Projeto</TabsTrigger>
               <TabsTrigger value="items" className="gap-2"><Package className="w-4 h-4" /> Itens Genéricos</TabsTrigger>
+              <TabsTrigger value="cards" className="gap-2"><CreditCard className="w-4 h-4" /> Cartões</TabsTrigger>
             </TabsList>
 
             {/* ── TAB: Cost Center / Project ── */}
@@ -438,6 +575,146 @@ export default function PagCorpMapping() {
                           </TableCell>
                         </TableRow>
                       ))}
+                    </TableBody>
+                  </Table>
+                </motion.div>
+              )}
+            </TabsContent>
+
+            {/* ── TAB: Card → defaults ── */}
+            <TabsContent value="cards" className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-muted-foreground">
+                  Cartões pertencem a centros de custo e costumam comprar sempre o mesmo item.
+                  Defina aqui o centro de custo, projeto e item <strong>padrão</strong> por cartão.
+                  O <Badge variant="secondary">Fallback</Badge> é o padrão da empresa quando o cartão não está mapeado
+                  (use, por exemplo, para fixar o projeto <em>ANA GAMING</em> em todas as compras de cartão).
+                  Empresa atual: <strong>{companyDB || "(nenhuma selecionada)"}</strong>
+                </p>
+                <div className="flex gap-2 shrink-0">
+                  {!hasCardFallback && companyDB && (
+                    <Button variant="outline" onClick={addCardFallback} className="gap-2">
+                      <Plus className="w-4 h-4" /> Fallback
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={addCardRow} disabled={!companyDB} className="gap-2">
+                    <Plus className="w-4 h-4" /> Adicionar
+                  </Button>
+                  <Button onClick={saveCardMappings} disabled={isSavingCards || !companyDB} className="gap-2">
+                    {isSavingCards ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
+                  </Button>
+                </div>
+              </div>
+
+              {!companyDB ? (
+                <div className="text-center py-20 text-muted-foreground">
+                  <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                  <p className="text-lg font-medium">Selecione uma empresa</p>
+                  <p className="text-sm mt-1">O mapeamento de cartões é por empresa.</p>
+                </div>
+              ) : isLoadingCards ? (
+                <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+              ) : cardMappings.length === 0 ? (
+                <div className="text-center py-20 text-muted-foreground">
+                  <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                  <p className="text-lg font-medium">Nenhum cartão mapeado</p>
+                  <p className="text-sm mt-1">Adicione cartões ou um fallback de empresa para definir defaults.</p>
+                </div>
+              ) : (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-visible">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="text-muted-foreground">Cartão</TableHead>
+                        <TableHead className="text-muted-foreground">Rótulo</TableHead>
+                        <TableHead className="text-muted-foreground">Centro de Custo</TableHead>
+                        <TableHead className="text-muted-foreground">Projeto</TableHead>
+                        <TableHead className="text-muted-foreground">Item Padrão</TableHead>
+                        <TableHead className="text-muted-foreground w-12"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cardMappings.map((m, i) => {
+                        const cardOptions: SapSearchOption[] = cardSuggestions.map((c) => ({
+                          code: c.identifier, name: c.label, extra: "",
+                        }));
+                        return (
+                          <TableRow key={m.id || `new-card-${i}`} className="border-border">
+                            <TableCell>
+                              {m.is_fallback ? (
+                                <Badge variant="secondary" className="text-sm">Fallback (padrão da empresa)</Badge>
+                              ) : m.id ? (
+                                <div className="text-sm">
+                                  <span className="font-medium text-foreground">{m.card_identifier}</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-1">
+                                  <CachedSearchCombobox
+                                    options={cardOptions}
+                                    isLoading={false}
+                                    value={cardOptions.find((o) => o.code === m.card_identifier) || null}
+                                    onChange={(opt) => updateCardRow(i, {
+                                      card_identifier: opt?.code || "",
+                                      card_label: m.card_label || opt?.name || "",
+                                    })}
+                                    placeholder="Selecione um cartão das transações recentes…"
+                                  />
+                                  <Input
+                                    value={m.card_identifier}
+                                    onChange={(e) => updateCardRow(i, { card_identifier: e.target.value })}
+                                    placeholder="ou digite o identificador (últimos 4 dígitos ou nome)"
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {m.is_fallback ? (
+                                <span className="text-xs text-muted-foreground italic">—</span>
+                              ) : (
+                                <Input
+                                  value={m.card_label}
+                                  onChange={(e) => updateCardRow(i, { card_label: e.target.value })}
+                                  placeholder="Ex.: Cartão Marketing"
+                                  className="h-8 text-sm"
+                                />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <CachedSearchCombobox
+                                options={costCenterCache.options}
+                                isLoading={costCenterCache.isLoading}
+                                value={findOption(costCenterCache.options, m.cost_center)}
+                                onChange={(opt) => updateCardRow(i, { cost_center: opt?.code || "" })}
+                                placeholder="Selecione…"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <CachedSearchCombobox
+                                options={projectCache.options}
+                                isLoading={projectCache.isLoading}
+                                value={findOption(projectCache.options, m.project)}
+                                onChange={(opt) => updateCardRow(i, { project: opt?.code || "" })}
+                                placeholder="Selecione…"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <CachedSearchCombobox
+                                options={itemCache.options}
+                                isLoading={itemCache.isLoading}
+                                value={findOption(itemCache.options, m.item_code)}
+                                onChange={(opt) => updateCardRow(i, { item_code: opt?.code || "" })}
+                                placeholder="Selecione item SAP…"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="icon" onClick={() => removeCardRow(i)} className="text-destructive hover:text-destructive">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </motion.div>
