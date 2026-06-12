@@ -327,6 +327,36 @@ export default function PagCorp() {
     openBatchItem(queue[0]);
   };
 
+  /**
+   * Unified "Integrar em lote": decide between consolidate (single PC with N
+   * lines) and sequential per-transaction batch based on the selection.
+   *
+   *  - 1 selected            → open single integrate dialog
+   *  - ≥2 selected, all sem prestação → consolidar em 1 PC
+   *  - ≥2 selected, mixed/com prestação → percorrer em lote (uma por uma)
+   */
+  const handleIntegrateBatchUnified = () => {
+    if (!checkSapCredentials()) return;
+    const selected = selectableTransactions.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) {
+      toast.info("Selecione ao menos uma transação");
+      return;
+    }
+    if (selected.length === 1) {
+      const t = selected[0];
+      openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic");
+      return;
+    }
+    const allGeneric = selected.every((t) => !t.hasAccountability);
+    if (allGeneric) {
+      setConsolidateDialog({ open: true, transactions: selected });
+      return;
+    }
+    // Mixed → percorrer uma a uma
+    toast.info("Seleção contém prestações de contas — integrando uma a uma");
+    startBatch();
+  };
+
   const advanceBatch = () => {
     const next = batchIndex + 1;
     if (next >= batchQueue.length) {
@@ -742,7 +772,7 @@ export default function PagCorp() {
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
                 <SelectItem value="review">Em análise</SelectItem>
-                <SelectItem value="done">Finalizado</SelectItem>
+                <SelectItem value="done">Aprovado</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -763,23 +793,14 @@ export default function PagCorp() {
             Buscar
           </Button>
           <Button
-            onClick={startBatch}
+            onClick={handleIntegrateBatchUnified}
             disabled={selectedIds.size === 0 || batchActive}
             variant="secondary"
             className="gap-2"
+            title="Quando todas as transações forem do mesmo tipo sem prestação, consolida em 1 único Pedido de Compra; caso contrário, integra uma a uma"
           >
             <Layers className="w-4 h-4" />
             Integrar em lote{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-          </Button>
-          <Button
-            onClick={openConsolidateDialog}
-            disabled={selectedIds.size < 2 || batchActive}
-            variant="secondary"
-            className="gap-2"
-            title="Cria 1 único Pedido de Compra com várias linhas, todas para o mesmo fornecedor"
-          >
-            <Layers className="w-4 h-4" />
-            Consolidar em 1 PC{selectedIds.size > 1 ? ` (${selectedIds.size})` : ""}
           </Button>
           <Button
             onClick={() => setPresentationDialogOpen(true)}
@@ -841,14 +862,30 @@ export default function PagCorp() {
               <DollarSign className="w-5 h-5 text-warning" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Valor Total</p>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(totalsByCurrency).map(([cur, total]) => (
-                  <p key={cur} className="text-lg font-bold text-foreground">{formatCurrency(total, cur)}</p>
-                ))}
-                {Object.keys(totalsByCurrency).length === 0 && (
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(0)}</p>
-                )}
+              <p className="text-xs text-muted-foreground mb-0.5">Valor Total</p>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground w-8">BRL</span>
+                  <p className="text-base font-bold text-foreground tabular-nums">
+                    {formatCurrency(totalsByCurrency["BRL"] || 0, "BRL")}
+                  </p>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground w-8">USD</span>
+                  <p className="text-base font-bold text-foreground tabular-nums">
+                    {formatCurrency(totalsByCurrency["USD"] || 0, "USD")}
+                  </p>
+                </div>
+                {Object.keys(totalsByCurrency)
+                  .filter((c) => c !== "BRL" && c !== "USD")
+                  .map((cur) => (
+                    <div key={cur} className="flex items-baseline gap-2">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground w-8">{cur}</span>
+                      <p className="text-base font-bold text-foreground tabular-nums">
+                        {formatCurrency(totalsByCurrency[cur], cur)}
+                      </p>
+                    </div>
+                  ))}
               </div>
             </div>
           </motion.div>

@@ -115,28 +115,43 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-2">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">
-              Fornecedor SAP <span className="text-destructive">*</span>
-            </label>
-            <SapSearchCombobox
-              endpoint="BusinessPartners"
-              filterTemplate="CardType eq 'cSupplier' and Frozen eq 'tNO' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}') or contains(tolower(AliasName),'{qLower}') or contains(FederalTaxID,'{q}'))"
-              selectFields="CardCode,CardName,AliasName,FederalTaxID"
-              mapRow={(row: any) => ({
-                code: row.CardCode,
-                name: row.CardName,
-                extra: row.FederalTaxID || undefined,
-                details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
-              })}
-              value={supplier}
-              onChange={setSupplier}
-              placeholder="Buscar por código, razão social, nome fantasia ou CNPJ…"
-            />
+        <div className="space-y-4 py-2">
+          {/* ====== Cabeçalho da Integração ====== */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Cabeçalho da Integração
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Fornecedor SAP <span className="text-destructive">*</span>
+              </label>
+              <SapSearchCombobox
+                endpoint="BusinessPartners"
+                filterTemplate="CardType eq 'cSupplier' and Frozen eq 'tNO' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}') or contains(tolower(AliasName),'{qLower}') or contains(FederalTaxID,'{q}'))"
+                selectFields="CardCode,CardName,AliasName,FederalTaxID"
+                mapRow={(row: any) => ({
+                  code: row.CardCode,
+                  name: row.CardName,
+                  extra: row.FederalTaxID || undefined,
+                  details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
+                })}
+                value={supplier}
+                onChange={setSupplier}
+                placeholder="Buscar por código, razão social, nome fantasia ou CNPJ…"
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+          {/* ====== Padrões aplicados ====== */}
+          <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
+            <div className="col-span-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Padrões aplicados a todas as linhas
+            </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">
                 Centro de Custo (padrão)
@@ -162,10 +177,20 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
               />
             </div>
             <p className="col-span-2 text-xs text-muted-foreground">
-              Os valores definidos aqui valem como padrão para todas as transações. Você pode
-              ajustar linha a linha abaixo.
+              Em branco = usa o mapeamento do cartão de cada transação (fallback automático).
+              Você pode ajustar linha a linha abaixo.
             </p>
           </div>
+
+          {/* ====== Linhas da Integração ====== */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Linhas da Integração ({transactions.length})
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
 
           <div className="rounded-lg border border-border max-h-80 overflow-y-auto">
             <table className="w-full text-sm">
@@ -219,6 +244,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
                 })}
               </tbody>
             </table>
+          </div>
           </div>
 
           <div className="flex justify-end text-sm">
