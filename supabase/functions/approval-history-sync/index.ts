@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
 
   try {
     try {
-      await requireAdmin(req);
+      await requireAdminOrSapSession(req);
     } catch (err) {
       const r = authErrorResponse(err, corsHeaders);
       if (r) return r;
