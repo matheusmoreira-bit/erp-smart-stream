@@ -52,15 +52,23 @@ interface ItemMapping {
   isNew?: boolean;
 }
 
+/* ── Card → defaults mapping ── */
+interface CardMappingRow {
+  id?: string;
+  company_db: string;
+  card_identifier: string;
+  card_label: string;
+  cost_center: string;
+  project: string;
+  item_code: string;
+  is_fallback: boolean;
+  isNew?: boolean;
+}
+
 export default function PagCorpMapping() {
   const navigate = useNavigate();
-
-  /* ── SAP caches ── */
-  const costCenterCache = useSapCachedList({
-    cacheKey: "cost_centers",
-    endpoint: "CostCenters",
-    mapRow: (r: any) => ({ code: r.CenterCode, name: r.CenterName, extra: "" }),
-  });
+  const { session } = useSap();
+  const companyDB = session?.companyDB || "";
   const projectCache = useSapCachedList({
     cacheKey: "projects",
     endpoint: "Projects",
