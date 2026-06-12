@@ -24,6 +24,7 @@ import Items from "./pages/Items.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import FiscalAudit from "./pages/FiscalAudit.tsx";
+import NfEntrada from "./pages/NfEntrada.tsx";
 import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
 import UserProductivity from "./pages/UserProductivity.tsx";
