@@ -245,6 +245,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
               </tbody>
             </table>
           </div>
+          </div>
 
           <div className="flex justify-end text-sm">
             <div className="text-right">
