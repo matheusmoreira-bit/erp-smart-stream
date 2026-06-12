@@ -359,6 +359,8 @@ export default function PagCorp() {
         override.costCenter || override.project || override.item
           ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null, item: override.item ?? null } }
           : undefined;
+      // Sem prestação ⇒ tratada como indedutível por padrão
+      const asNondeductible = integrateDialog.type === "generic";
       const result = await integrateDirect(
         t,
         integrateDialog.type,
@@ -367,13 +369,14 @@ export default function PagCorp() {
         supplier.name,
         session.userName || undefined,
         lineOverrides,
+        asNondeductible,
       );
       if (result.alreadyIntegrated) {
         toast.info("Transação já estava integrada no SAP", {
           description: `DocNum #${result.docNum}`,
         });
       } else {
-        toast.success("Pedido de Compra criado no SAP", {
+        toast.success(asNondeductible ? "PC indedutível criado no SAP" : "Pedido de Compra criado no SAP", {
           description: `PC #${result.purchaseOrder?.DocNum}`,
         });
       }
