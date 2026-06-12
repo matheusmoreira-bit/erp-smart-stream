@@ -1,86 +1,72 @@
-# Módulo: Integração de Notas Fiscais de Entrada
+## Objetivo
 
-Novo módulo independente, sem alterar os existentes. Reaproveita apenas `sap-b1-proxy`, `expense-attachments` bucket e padrões de auditoria já presentes.
+Embarcar o Silent Specter (plataforma de auditoria com IA sobre dados SAP) como uma seção dentro do módulo Analytics deste projeto, **criando todas as tabelas aqui** (Lovable Cloud do ERP Flow).
 
-## Antes de iniciar — preciso confirmar 4 pontos
+## Tamanho real do trabalho
 
-1. **API Master Tax**: você tem as credenciais (base URL, token/usuário/senha, método de auth)? Vou armazenar como secrets (`MASTERTAX_BASE_URL`, `MASTERTAX_TOKEN`, etc.). Se ainda não tem, sigo com um cliente "stub" preparado e você adiciona depois.
-2. **PDF da NF**: o PDF vem da própria Master Tax (mesmo payload/endpoint) ou de um portal separado (SEFAZ/Meu Danfe/MigrateDFe)? Isso muda o cliente de download.
-3. **Fornecedor / Item / Centro de custo**: quando o CNPJ/NCM da NF não existir cadastrado no SAP, devo (a) marcar como "Erro de integração — fornecedor não cadastrado", (b) criar fornecedor automaticamente, ou (c) deixar a despesa em rascunho aguardando vínculo manual? Padrão sugerido: (a)+(c) com tela de vínculo.
-4. **Frequência do polling** Master Tax e SAP: sugerido 15 min Master Tax, 10 min status SAP — ok?
+O Silent Specter tem:
+- ~30+ tabelas (`companies`, `audit_runs`, `audit_divergences`, `accounts_payable`, `approval_requests`, `approval_request_decisions`, `approval_templates`, `chat_messages`, `vendors`, `documents`, `divergence_rules`, `workflow_*`, `auth_failure_logs`, `allowed_emails`, etc.)
+- 14 rotas (dashboard, audit, audit-queue, audit-report, divergences, document-analysis, documents, vendors, approvals, companies, logs, settings, users)
+- Backend pesado: `runner.server.ts` (executa auditorias), `divergence-rules.server.ts`, integrações SAP, IA insights, chat
+- Roteador diferente (TanStack Router vs. nosso React Router)
+- Schema parcialmente conflitante: já temos `companies`, `suppliers`, `approval_history`, etc. — alguns campos diferem
 
-Implemento assumindo os defaults acima caso prefira não responder agora.
+**Não cabe em uma única migração nem em uma única resposta.** Vou propor um faseamento em quatro entregas, cada uma fechada e funcional.
 
-## Arquitetura
+## Conflitos de schema (precisam decisão antes do Fase 1)
 
-```text
-Master Tax API ──► edge: mastertax-pull (cron 15min)
-                        │ upsert
-                        ▼
-                  nf_entrada_imports ──► cria expense (esboço)
-                        │                       │
-                        │                aprovação ERP Flow (regra dedicada)
-                        ▼                       ▼
-                  nf_entrada_logs        edge: nf-entrada-to-sap
-                                                │ cria Draft PurchaseOrder
-                                                ▼
-                                         edge: sap-draft-watcher (cron 10min)
-                                                │ aprovado → cria Draft PurchaseInvoice
-                                                ▼
-                                            status final
-```
+| Tabela Silent Specter | Tabela já existente aqui | Decisão sugerida |
+|---|---|---|
+| `companies` (id uuid, name, sap_db, sap_url…) | `companies` (company_db PK, display_name, base_url…) | **Reusar a nossa**, mapear `company_id` ⇒ `company_db` |
+| `vendors` (sap-style) | `suppliers` | **Reusar `suppliers`**, audit aponta via `card_code` |
+| `approval_requests`/`_decisions`/`_templates` | `approval_history`/`approval_rules` | **Manter separado** (origem distinta: snapshot SAP × hub n8n) sob prefixo `audit_*` |
+| `chat_messages` | `ai_chat_messages`/`ai_chat_threads` | **Reusar os nossos** |
+| `allowed_emails`, `auth_failure_logs` | `user_roles` + auth nativa | **Descartar** — usaremos nosso RBAC |
+| `documents`, `accounts_payable`, `audit_*`, `divergence_rules`, `workflow_*`, `insights_*` | — | **Criar com prefixo `audit_`** |
 
-## Banco (migration única)
+## Fases
 
-Tabelas novas, todas com RLS + GRANTs:
+### Fase 1 — Fundação (schema + navegação)
+- Migration criando tabelas exclusivas do Silent Specter com prefixo `audit_`, RLS escopado por `company_db` + role, e GRANTs:
+  `audit_runs`, `audit_divergences`, `audit_divergence_rules`, `audit_documents`, `audit_accounts_payable`, `audit_approval_requests`, `audit_approval_decisions`, `audit_approval_templates`, `audit_workflow_steps`, `audit_workflow_runs`, `audit_insights`, `audit_logs`
+- Sub-rota `/analytics/audit` com sidebar interno (Dashboard, Audit Queue, Divergências, Documentos, Insights, Logs)
+- Item de menu já existente "Auditoria Fiscal" passa a apontar para essa estrutura (ou criamos novo `audit_console`)
+- Estilo "glass card / ambient bg / display font" portado para os tokens semânticos do projeto (sem quebrar o tema atual)
 
-- `nf_entrada_imports` — 1 linha por chave de acesso (UNIQUE: chave_acesso).
-  - identificação: chave_acesso, numero_nf, serie, cnpj_fornecedor, nome_fornecedor, data_emissao, valor_total, condicao_pagamento
-  - payload: xml_content (text), xml_storage_path, pdf_storage_path, itens (jsonb), impostos (jsonb), raw_mastertax (jsonb)
-  - vínculos: expense_id, sap_company_db, sap_po_draft_id, sap_invoice_draft_id, cost_center
-  - fluxo: status enum (`pending_expense`, `awaiting_erpflow_approval`, `erpflow_rejected`, `awaiting_sap`, `sap_rejected`, `awaiting_invoice`, `completed`, `integration_error`), rejection_reason, last_error
-  - auditoria: created_at, updated_at, last_poll_at
-- `nf_entrada_logs` — id, import_id, step, status_from, status_to, message, payload (jsonb), actor, created_at
-- `nf_entrada_settings` — chave/valor por empresa (mapeamentos CNPJ→BPCode, NCM→ItemCode opcional, regra de aprovação a usar)
+### Fase 2 — Telas read-only
+- Dashboard executivo (KPIs + gráficos + AI insights card)
+- Audit Queue (lista de runs)
+- Audit Report (`/runId`) com divergências
+- Página de divergências global com filtros
+- Hooks: `useAuditRuns`, `useAuditDivergences`, `useAuditInsights`
 
-RLS: admin total; usuário vê só registros das empresas que tem acesso (mesmo padrão de `expenses`). Storage: novo bucket privado `nf-entrada-files` para XML+PDF.
+### Fase 3 — Motor de auditoria
+- Edge function `audit-run` (porte do `runner.server.ts` + `divergence-rules.server.ts`) — dispara comparações SAP × dados internos
+- Edge function `audit-insights` (porte do `insights.functions.ts`) usando Lovable AI Gateway (não OpenAI direto)
+- Botão "Nova auditoria" + acompanhamento de progresso (`use-sync-progress` equivalente)
+- Tabela `audit_workflow_runs` recebe execuções
 
-## Edge functions novas
+### Fase 4 — Análise documental + chat
+- Página `document-analysis` + `documents` (upload + extração + confronto)
+- Floating chat / command palette portados, conectados ao nosso `ai_chat_*`
+- Workflow dialog + confront drawer
+- Limpeza: remover qualquer resíduo TanStack Router, padronizar com React Router v6
 
-1. `mastertax-pull` — cron 15min. Lista NFs novas, baixa XML+PDF, faz upsert por `chave_acesso` (idempotente), cria `expense` em rascunho com anexos, dispara regra de aprovação dedicada. Status → `awaiting_erpflow_approval`.
-2. `nf-entrada-to-sap` — disparada quando expense vinculada é aprovada (hook na aprovação OU polling de expenses aprovadas com `source='nf_entrada'`). Cria `Drafts` (ObjectCode 22 — Purchase Order) no SAP B1 via `sap-b1-proxy` reaproveitado. Grava `sap_po_draft_id`. Status → `awaiting_sap`.
-3. `sap-draft-watcher` — cron 10min. Para cada `awaiting_sap`, consulta status do Draft no SAP. Se rejeitado → `sap_rejected`. Se aprovado/convertido em PO → cria Draft de NF de Entrada (ObjectCode 18) baseada na PO + dados fiscais do XML (CFOP, CST, NCM, impostos). Grava `sap_invoice_draft_id`, status → `completed`.
+## Detalhes técnicos
 
-Todas as funções: logam em `nf_entrada_logs`, capturam erro → status `integration_error` + `last_error`, totalmente reprocessáveis pela tela.
+- **Roteamento**: tudo entra como sub-rotas do Analytics (`/analytics/audit/*`), usando React Router. Convertemos `createFileRoute(...)` em componentes normais.
+- **Auth**: usamos `useSap` + `useModuleAccess("audit_console")`. Sem `allowed_emails` paralelo.
+- **Segredos**: chaves de IA continuam em `LOVABLE_API_KEY`. Nenhum segredo do Silent Specter vai ao bundle.
+- **RLS**: toda tabela `audit_*` com policy `company_db = current setting` + `has_role(...)` para admin, escrita só por edge function (service role).
+- **Storage**: bucket novo `audit-documents` (privado) para uploads de NF/contratos analisados.
+- **Tipos**: `src/integrations/supabase/types.ts` é auto-gerado — não tocamos.
 
-Idempotência: `chave_acesso` UNIQUE; antes de criar PO/NF checa se `sap_po_draft_id`/`sap_invoice_draft_id` já existe.
+## Fora de escopo desta fusão
 
-## Regra de aprovação
+- Migração de **dados** existentes do Silent Specter (só schema + UI). Se quiser trazer dados, fazemos export CSV depois.
+- Sincronizar `auth.users` entre os dois projetos.
+- Manter o Silent Specter rodando em paralelo (assumimos que ele será aposentado).
 
-Não altero o módulo existente. Crio 1 linha em `approval_rules` com `source='nf_entrada'` (campo novo opcional, default null — não impacta regras atuais) ou marco a expense com tag/categoria reservada `__nf_entrada__` para casar na regra. Vou pelo caminho da tag para zero impacto no schema de approval_rules.
+## Próximo passo
 
-## Front-end
-
-Rota nova `/nf-entrada` em `src/App.tsx`. Item no `MainMenu`. Páginas:
-
-- `src/pages/NfEntrada.tsx` — tabela com filtros (status, empresa, período, fornecedor), colunas pedidas (NF, série, fornecedor, CNPJ, valor, data emissão, status, importação, expense_id, sap_po_draft_id, sap_invoice_draft_id), ações (ver XML, ver PDF, histórico, reprocessar, cancelar).
-- `src/pages/NfEntradaDetail.tsx` — drawer/modal com timeline a partir de `nf_entrada_logs`, payloads expandíveis, anexos.
-- Hooks: `useNfEntrada`, `useNfEntradaLogs`.
-- Botão "Buscar agora" chama `mastertax-pull` manualmente; "Reprocessar" reenvia conforme estado atual.
-
-## Secrets necessários
-`MASTERTAX_BASE_URL`, `MASTERTAX_TOKEN` (ou user/pass conforme item 2 acima), opcional `MASTERTAX_PDF_BASE_URL`.
-
-## Ordem de entrega
-1. Confirmar os 4 pontos acima.
-2. Migration (tabelas + bucket + GRANTs + RLS).
-3. Edge `mastertax-pull` + cron.
-4. Edge `nf-entrada-to-sap` + tag de approval rule.
-5. Edge `sap-draft-watcher` + cron.
-6. UI: rota, página lista, detail, menu.
-7. Teste end-to-end com 1 NF real.
-
-## Itens NÃO incluídos (confirmar se quer)
-- Geração de boleto/pagamento.
-- Alteração da tela atual de `Expenses` (mantida intacta; NFs aparecem lá apenas como expense comum filtrável por categoria).
-- Mapeamento automático de centro de custo via IA (posso adicionar depois reusando `supplier-ai-extract`).
+Se aprovar este plano, começo pela **Fase 1** (migration + navegação) na próxima mensagem.
