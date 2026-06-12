@@ -1547,6 +1547,45 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_card_mapping: {
+        Row: {
+          card_identifier: string | null
+          card_label: string | null
+          company_db: string
+          cost_center: string | null
+          created_at: string
+          id: string
+          is_fallback: boolean
+          item_code: string | null
+          project: string | null
+          updated_at: string
+        }
+        Insert: {
+          card_identifier?: string | null
+          card_label?: string | null
+          company_db: string
+          cost_center?: string | null
+          created_at?: string
+          id?: string
+          is_fallback?: boolean
+          item_code?: string | null
+          project?: string | null
+          updated_at?: string
+        }
+        Update: {
+          card_identifier?: string | null
+          card_label?: string | null
+          company_db?: string
+          cost_center?: string | null
+          created_at?: string
+          id?: string
+          is_fallback?: boolean
+          item_code?: string | null
+          project?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pagcorp_integration_log: {
         Row: {
           company_db: string | null
