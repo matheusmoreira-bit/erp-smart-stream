@@ -69,6 +69,13 @@ export default function PagCorpMapping() {
   const navigate = useNavigate();
   const { session } = useSap();
   const companyDB = session?.companyDB || "";
+
+  /* ── SAP caches ── */
+  const costCenterCache = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "CostCenters",
+    mapRow: (r: any) => ({ code: r.CenterCode, name: r.CenterName, extra: "" }),
+  });
   const projectCache = useSapCachedList({
     cacheKey: "projects",
     endpoint: "Projects",
