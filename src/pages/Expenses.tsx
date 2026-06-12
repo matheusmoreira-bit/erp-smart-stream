@@ -17,6 +17,10 @@ import {
   X as XIcon,
   RotateCw,
   Pencil,
+  CheckCircle2,
+  XCircle,
+  Link2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
