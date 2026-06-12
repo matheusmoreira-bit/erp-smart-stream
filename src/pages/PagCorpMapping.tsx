@@ -402,6 +402,7 @@ export default function PagCorpMapping() {
             <TabsList>
               <TabsTrigger value="costcenter" className="gap-2"><MapPin className="w-4 h-4" /> Centro de Custo / Projeto</TabsTrigger>
               <TabsTrigger value="items" className="gap-2"><Package className="w-4 h-4" /> Itens Genéricos</TabsTrigger>
+              <TabsTrigger value="cards" className="gap-2"><CreditCard className="w-4 h-4" /> Cartões</TabsTrigger>
             </TabsList>
 
             {/* ── TAB: Cost Center / Project ── */}
