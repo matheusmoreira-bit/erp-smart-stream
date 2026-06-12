@@ -270,6 +270,106 @@ export default function PagCorpMapping() {
     return accountCodeOptions.filter((o) => !mapped.has(o.code));
   }, [accountCodeOptions, itemMappings]);
 
+  /* ════════════════════════════════════════════
+     TAB 3 – Card → defaults mapping
+     ════════════════════════════════════════════ */
+  const [cardMappings, setCardMappings] = useState<CardMappingRow[]>([]);
+  const [isLoadingCards, setIsLoadingCards] = useState(true);
+  const [isSavingCards, setIsSavingCards] = useState(false);
+
+  useEffect(() => {
+    if (!companyDB) {
+      setCardMappings([]);
+      setIsLoadingCards(false);
+      return;
+    }
+    loadCardMappings();
+  }, [companyDB]);
+
+  async function loadCardMappings() {
+    setIsLoadingCards(true);
+    const { data, error } = await (supabase as any)
+      .from("pagcorp_card_mapping")
+      .select("*")
+      .eq("company_db", companyDB)
+      .order("is_fallback", { ascending: false });
+    if (error) { toast.error("Erro ao carregar mapeamento de cartões"); console.error(error); }
+    else {
+      setCardMappings((data || []).map((r: any) => ({
+        id: r.id, company_db: r.company_db,
+        card_identifier: r.card_identifier || "",
+        card_label: r.card_label || "",
+        cost_center: r.cost_center || "",
+        project: r.project || "",
+        item_code: r.item_code || "",
+        is_fallback: !!r.is_fallback,
+      })));
+    }
+    setIsLoadingCards(false);
+  }
+
+  function addCardRow() {
+    setCardMappings((p) => [...p, {
+      company_db: companyDB, card_identifier: "", card_label: "",
+      cost_center: "", project: "", item_code: "", is_fallback: false, isNew: true,
+    }]);
+  }
+
+  function addCardFallback() {
+    setCardMappings((p) => [{
+      company_db: companyDB, card_identifier: "", card_label: "Fallback (padrão da empresa)",
+      cost_center: "", project: "", item_code: "", is_fallback: true, isNew: true,
+    }, ...p]);
+  }
+
+  function updateCardRow(i: number, patch: Partial<CardMappingRow>) {
+    setCardMappings((p) => p.map((m, idx) => idx === i ? { ...m, ...patch } : m));
+  }
+
+  function removeCardRow(i: number) {
+    const m = cardMappings[i];
+    if (m.id) deleteCardRow(m.id, i);
+    else setCardMappings((p) => p.filter((_, idx) => idx !== i));
+  }
+
+  async function deleteCardRow(id: string, i: number) {
+    const { error } = await (supabase as any).from("pagcorp_card_mapping").delete().eq("id", id);
+    if (error) toast.error("Erro ao excluir");
+    else { setCardMappings((p) => p.filter((_, idx) => idx !== i)); toast.success("Excluído"); }
+  }
+
+  async function saveCardMappings() {
+    if (!companyDB) { toast.error("Selecione uma empresa antes de salvar"); return; }
+    setIsSavingCards(true);
+    try {
+      for (const m of cardMappings) {
+        if (!m.is_fallback && !m.card_identifier) continue;
+        const payload: any = {
+          company_db: companyDB,
+          card_identifier: m.is_fallback ? null : m.card_identifier,
+          card_label: m.card_label || null,
+          cost_center: m.cost_center || null,
+          project: m.project || null,
+          item_code: m.item_code || null,
+          is_fallback: m.is_fallback,
+        };
+        if (m.id) {
+          const { error } = await (supabase as any).from("pagcorp_card_mapping").update(payload).eq("id", m.id);
+          if (error) throw error;
+        } else {
+          const { error } = await (supabase as any).from("pagcorp_card_mapping").insert(payload);
+          if (error) throw error;
+        }
+      }
+      toast.success("Mapeamento de cartões salvo");
+      loadCardMappings();
+    } catch (e: any) { toast.error(e.message || "Erro ao salvar"); }
+    finally { setIsSavingCards(false); }
+  }
+
+  const hasCardFallback = cardMappings.some((m) => m.is_fallback);
+
+
   /* ── helpers ── */
   function findOption(options: SapSearchOption[], code: string): SapSearchOption | null {
     if (!code) return null;
