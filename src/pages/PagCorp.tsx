@@ -185,10 +185,12 @@ export default function PagCorp() {
       list = list.filter((t) => !t.isNondeductible);
     }
 
-    if (accountabilityFilter === "yes") {
-      list = list.filter((t) => t.hasAccountability);
-    } else if (accountabilityFilter === "no") {
+    if (statusFilter === "pending") {
       list = list.filter((t) => !t.hasAccountability);
+    } else if (statusFilter === "review") {
+      list = list.filter((t) => t.hasAccountability && !t.accountabilityApproved);
+    } else if (statusFilter === "done") {
+      list = list.filter((t) => t.hasAccountability && t.accountabilityApproved);
     }
 
     if (search.trim()) {
@@ -201,7 +203,7 @@ export default function PagCorp() {
     }
 
     return list;
-  }, [transactions, search, accountabilityFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, showNondeductible]);
 
   const nondeductiblePending = useMemo(
     () => transactions.filter((t) => t.isNondeductible && !t.integrated),
