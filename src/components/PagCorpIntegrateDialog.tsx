@@ -16,6 +16,7 @@ import { SupplierFormModal, type SupplierFormPrefill } from "@/components/Suppli
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 import { supabase } from "@/integrations/supabase/client";
 import { findSupplierByTaxId, type Supplier } from "@/hooks/useSuppliers";
+import { requestSupplierRegistration } from "@/lib/supplier-request-email";
 import { toast } from "sonner";
 
 function formatCurrency(value: number, currency: string = "BRL") {
