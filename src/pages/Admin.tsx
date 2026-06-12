@@ -439,7 +439,7 @@ export default function Admin() {
 
   const openEditCompany = async (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", default_currency: c.default_currency || "BRL", timezone: c.timezone || "America/Sao_Paulo", logo_url: c.logo_url || "", targets: c.targets || { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", default_currency: c.default_currency || "BRL", timezone: c.timezone || "America/Sao_Paulo", logo_url: c.logo_url || "", legal_name: c.legal_name || "", trade_name: c.trade_name || "", tax_id: c.tax_id || "", foreign_name: c.foreign_name || "", is_foreign: !!c.is_foreign, targets: c.targets || { ...DEFAULT_TARGETS } });
     setWizardStep(1);
     setShowWizardPasswords({});
     setWizardCreds({});
