@@ -932,18 +932,24 @@ export default function PagCorp() {
                             const receiptCount =
                               (Array.isArray(t.receipts) ? t.receipts.length : 0) +
                               (Array.isArray(t.attachments) ? t.attachments.length : 0);
-                            const StatusIcon = t.hasAccountability ? (
+                            const statusBadge = t.hasAccountability ? (
                               t.accountabilityApproved ? (
-                                <CheckCircle2 className="w-4 h-4 text-success" />
+                                <Badge variant="secondary" className="bg-success/15 text-success border-success/30 gap-1">
+                                  <CheckCircle2 className="w-3 h-3" /> Aprovado
+                                </Badge>
                               ) : (
-                                <Clock className="w-4 h-4 text-warning" />
+                                <Badge variant="secondary" className="bg-warning/15 text-warning border-warning/30 gap-1">
+                                  <Clock className="w-3 h-3" /> Em análise
+                                </Badge>
                               )
                             ) : (
-                              <XCircle className="w-4 h-4 text-destructive/60" />
+                              <Badge variant="outline" className="text-muted-foreground gap-1">
+                                <XCircle className="w-3 h-3" /> Pendente
+                              </Badge>
                             );
                             return (
                               <div className="flex items-center justify-center gap-2">
-                                {StatusIcon}
+                                {statusBadge}
                                 {receiptCount > 0 && (
                                   <button
                                     type="button"
