@@ -1,26 +1,27 @@
-import { useEffect, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
   ArrowLeft,
-  Building2,
   FileSearch,
   LayoutDashboard,
   ListChecks,
   Radar,
   ScrollText,
-  ShieldAlert,
   Sparkles,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useCompanies } from "@/hooks/useCompanies";
+import { AuditDashboard } from "@/components/audit-console/AuditDashboard";
+import { AuditRunsList } from "@/components/audit-console/AuditRunsList";
+import { AuditRunDetail } from "@/components/audit-console/AuditRunDetail";
+import { AuditDivergencesTable } from "@/components/audit-console/AuditDivergencesTable";
 
 /**
  * Console de Auditoria (porte do Silent Specter).
- * Fase 1: shell + sub-navegação. Telas de conteúdo entram em fases seguintes.
+ * Fase 2: dashboard real + lista de runs + detalhe + divergências.
  */
 function ComingSoon({ title, description }: { title: string; description: string }) {
   return (
@@ -28,88 +29,6 @@ function ComingSoon({ title, description }: { title: string; description: string
       <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
       <h3 className="text-lg font-semibold text-foreground">{title}</h3>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
-}
-
-function DashboardPlaceholder() {
-  const [now, setNow] = useState("");
-  useEffect(() => {
-    const tick = () => setNow(new Date().toLocaleString("pt-BR"));
-    tick();
-    const id = setInterval(tick, 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Painel Executivo
-          </div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">
-            Visão da diretoria
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Indicadores consolidados, divergências críticas e auditorias em andamento.
-          </p>
-        </div>
-        <div className="hidden flex-col items-end text-[11px] uppercase tracking-widest text-muted-foreground md:flex">
-          <span className="font-medium text-primary">Intelligence Grid</span>
-          <span className="font-mono">{now || "—"}</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Kpi icon={<Building2 className="h-4 w-4" />} label="Empresas monitoradas" value={0} />
-        <Kpi icon={<Radar className="h-4 w-4" />} label="Auditorias ativas" value={0} />
-        <Kpi
-          icon={<AlertTriangle className="h-4 w-4" />}
-          label="Divergências abertas"
-          value={0}
-          tone="warning"
-        />
-        <Kpi
-          icon={<ShieldAlert className="h-4 w-4" />}
-          label="Alertas de fraude"
-          value={0}
-          tone="destructive"
-        />
-      </div>
-
-      <ComingSoon
-        title="Gráficos e insights chegam na Fase 2"
-        description="A próxima entrega traz a série temporal de divergências, distribuição por tipo e o card de AI Insights conectado às novas tabelas audit_console_*."
-      />
-    </div>
-  );
-}
-
-function Kpi({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-  tone?: "warning" | "destructive";
-}) {
-  const toneClass =
-    tone === "destructive"
-      ? "text-destructive"
-      : tone === "warning"
-        ? "text-amber-400"
-        : "text-foreground";
-  return (
-    <div className="rounded-xl border border-border bg-card/60 p-4">
-      <div className="flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
-        <span>{label}</span>
-        <span className={toneClass}>{icon}</span>
-      </div>
-      <div className={`mt-3 font-mono text-3xl font-bold ${toneClass}`}>{value}</div>
     </div>
   );
 }
@@ -210,25 +129,10 @@ export default function AuditConsole() {
           >
             <Routes>
               <Route index element={<Navigate to="dashboard" replace />} />
-              <Route path="dashboard" element={<DashboardPlaceholder />} />
-              <Route
-                path="runs"
-                element={
-                  <ComingSoon
-                    title="Fila de auditorias"
-                    description="Lista das execuções (audit_console_runs) com status, progresso e atalho para o relatório detalhado. Disponível na Fase 2."
-                  />
-                }
-              />
-              <Route
-                path="divergences"
-                element={
-                  <ComingSoon
-                    title="Divergências"
-                    description="Tabela global de divergências detectadas, com filtros por severidade, tipo, fornecedor e flag de fraude."
-                  />
-                }
-              />
+              <Route path="dashboard" element={<AuditDashboard />} />
+              <Route path="runs" element={<AuditRunsList />} />
+              <Route path="runs/:runId" element={<AuditRunDetail />} />
+              <Route path="divergences" element={<AuditDivergencesTable />} />
               <Route
                 path="documents"
                 element={
@@ -252,7 +156,7 @@ export default function AuditConsole() {
                 element={
                   <ComingSoon
                     title="Regras de divergência"
-                    description="Configure tolerâncias, severidades padrão e regras customizadas por empresa."
+                    description="Configure tolerâncias, severidades padrão e regras customizadas por empresa. Fase 3."
                   />
                 }
               />
@@ -261,7 +165,7 @@ export default function AuditConsole() {
                 element={
                   <ComingSoon
                     title="Logs operacionais"
-                    description="Trace detalhado da execução de cada run do motor de auditoria."
+                    description="Trace detalhado da execução de cada run do motor de auditoria. Fase 3."
                   />
                 }
               />
