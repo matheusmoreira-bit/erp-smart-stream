@@ -222,7 +222,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Financeiro / Contábil",
-      keys: ["pagcorp", "integration_history", "financial_review", "intercompany", "fiscal_audit"],
+      keys: ["pagcorp", "integration_history", "financial_review", "intercompany", "fiscal_audit", "nf_entrada"],
     },
     {
       title: "Admin",
