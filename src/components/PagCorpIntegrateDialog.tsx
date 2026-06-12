@@ -154,6 +154,15 @@ export function PagCorpIntegrateDialog({
     setAiNotice(null);
     setSupplierFormOpen(false);
 
+    // If the card is mapped as nondeductible, pre-select that supplier and skip AI
+    if (transaction.nondeductibleSupplierCode) {
+      setSupplier({
+        code: String(transaction.nondeductibleSupplierCode),
+        name: String(transaction.nondeductibleSupplierName || transaction.nondeductibleSupplierCode),
+      });
+      return;
+    }
+
     // Auto-trigger AI extraction
     setAiTried(true);
     void runAi(transaction);
