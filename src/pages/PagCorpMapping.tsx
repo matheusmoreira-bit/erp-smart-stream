@@ -42,15 +42,6 @@ interface AccountMapping {
   isNew?: boolean;
 }
 
-/* ── Account → Item mapping ── */
-interface ItemMapping {
-  id?: string;
-  account_code: string | null;
-  account_name: string | null;
-  item_code: string;
-  is_fallback: boolean;
-  isNew?: boolean;
-}
 
 /* ── Card → defaults mapping ── */
 interface CardMappingRow {
