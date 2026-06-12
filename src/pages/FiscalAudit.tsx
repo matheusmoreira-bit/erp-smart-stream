@@ -370,7 +370,7 @@ export default function FiscalAudit() {
           <TabsContent value="analysis" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="glass-card p-4">
-                <div className="text-xs text-muted-foreground">Notas em aberto há mais de {threshold} dias</div>
+                <div className="text-xs text-muted-foreground">Notas em aberto no período</div>
                 <div className="text-3xl font-bold text-warning mt-1">{oldOpen.length}</div>
               </div>
               <div className="glass-card p-4 md:col-span-2">
