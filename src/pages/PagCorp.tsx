@@ -213,7 +213,10 @@ export default function PagCorp() {
   const integrateAllNondeductible = async () => {
     if (!session?.companyDB) return;
     if (!checkSapCredentials()) return;
-    if (nondeductiblePending.length === 0) {
+    // If the user has selected nondeductible rows, integrate just those; else all pending
+    const selectedNd = nondeductiblePending.filter((t) => selectedIds.has(t.id));
+    const targets = selectedNd.length > 0 ? selectedNd : nondeductiblePending;
+    if (targets.length === 0) {
       toast.info("Nenhuma transação indedutível pendente no período");
       return;
     }
