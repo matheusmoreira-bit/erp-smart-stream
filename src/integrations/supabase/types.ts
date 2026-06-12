@@ -831,12 +831,17 @@ export type Database = {
           default_currency: string
           display_name: string
           erp_type: string
+          foreign_name: string | null
           id: string
           is_active: boolean
+          is_foreign: boolean
+          legal_name: string | null
           logo_url: string | null
           service_layer_url: string | null
           targets: Json
+          tax_id: string | null
           timezone: string
+          trade_name: string | null
           updated_at: string
         }
         Insert: {
@@ -845,12 +850,17 @@ export type Database = {
           default_currency?: string
           display_name: string
           erp_type?: string
+          foreign_name?: string | null
           id?: string
           is_active?: boolean
+          is_foreign?: boolean
+          legal_name?: string | null
           logo_url?: string | null
           service_layer_url?: string | null
           targets?: Json
+          tax_id?: string | null
           timezone?: string
+          trade_name?: string | null
           updated_at?: string
         }
         Update: {
@@ -859,12 +869,17 @@ export type Database = {
           default_currency?: string
           display_name?: string
           erp_type?: string
+          foreign_name?: string | null
           id?: string
           is_active?: boolean
+          is_foreign?: boolean
+          legal_name?: string | null
           logo_url?: string | null
           service_layer_url?: string | null
           targets?: Json
+          tax_id?: string | null
           timezone?: string
+          trade_name?: string | null
           updated_at?: string
         }
         Relationships: []
