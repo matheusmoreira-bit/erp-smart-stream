@@ -245,7 +245,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
           </Button>
           <Button onClick={handleSubmit} disabled={!supplier || submitting}>
             {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-            Integrar consolidado
+            Integrar ao ERP
           </Button>
         </DialogFooter>
       </DialogContent>
