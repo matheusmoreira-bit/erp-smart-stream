@@ -981,7 +981,7 @@ export default function PagCorp() {
                               onClick={() => openIntegrateDialog(t, "accountability")}
                             >
                               <Sparkles className="w-3 h-3" />
-                              Integrar (Prest.)
+                              Integrar ao ERP
                             </Button>
                           ) : (
                             <Button
@@ -991,7 +991,7 @@ export default function PagCorp() {
                               onClick={() => openIntegrateDialog(t, "generic")}
                             >
                               <Upload className="w-3 h-3" />
-                              Integrar SAP
+                              Integrar ao ERP
                             </Button>
                           )}
                         </TableCell>
