@@ -236,6 +236,11 @@ export function PagCorpIntegrateDialog({
   }, [open, storageKey, supplier, costCenter, project, item]);
 
 
+  const attachmentList = useMemo(
+    () => (transaction ? collectAttachments(transaction.receipts, transaction.attachments as any[]) : []),
+    [transaction],
+  );
+
   if (!transaction) return null;
 
   const handleSubmit = async () => {
@@ -304,6 +309,33 @@ export function PagCorpIntegrateDialog({
                 </p>
               </div>
             </div>
+
+            {attachmentList.length > 0 && (
+              <div className="rounded-lg border border-border bg-card p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Paperclip className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs font-semibold text-foreground">
+                    Anexos ({attachmentList.length})
+                  </span>
+                </div>
+                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                  {attachmentList.map((a, idx) => (
+                    <li key={`${a.url}-${idx}`}>
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs text-primary hover:underline truncate"
+                        title={a.name}
+                      >
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{a.name}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {aiBusy && (
               <div className="rounded-md bg-primary/10 border border-primary/30 p-3 flex items-center gap-2 text-sm">
