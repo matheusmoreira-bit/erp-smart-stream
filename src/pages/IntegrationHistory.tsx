@@ -166,6 +166,64 @@ export default function IntegrationHistory() {
     }
   };
 
+  const openRetry = (log: IntegrationLog) => {
+    if (!session?.companyDB) {
+      toast.error("Selecione uma empresa para retentar a integração");
+      return;
+    }
+    const d = log.pagcorp_data || {};
+    const tx: PagCorpTransaction = {
+      id: log.pagcorp_expense_id,
+      date: d.date || "",
+      description: d.description || "—",
+      amount: Number(d.amount) || 0,
+      currency: d.currency || "BRL",
+      accountAlias: d.accountAlias,
+      accountCode: d.accountCode,
+      hasAccountability: !!d.hasAccountability,
+      accountabilityApproved: !!d.accountabilityApproved,
+      receipts: d.receipts || [],
+      attachments: [],
+    };
+    setRetryDialog({ open: true, log, transaction: tx });
+  };
+
+  const handleRetryConfirm = async (supplier: SapSearchOption, override: { costCenter?: string | null; project?: string | null; item?: string | null }) => {
+    const { log, transaction } = retryDialog;
+    if (!log || !transaction || !session?.companyDB) return;
+    try {
+      const lineOverrides = (override.costCenter || override.project || override.item)
+        ? { [String(transaction.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null, item: override.item ?? null } }
+        : undefined;
+      const isNondeductible = log.integration_type === "generic";
+      const result = await integrateDirect(
+        transaction,
+        log.integration_type as "generic" | "accountability",
+        session.companyDB,
+        supplier.code,
+        supplier.name,
+        session.userName || undefined,
+        lineOverrides,
+        isNondeductible,
+      );
+      // Mark old failed log as cancelled to keep history clean
+      await supabase
+        .from("pagcorp_integration_log")
+        .update({ status: "cancelled", error_message: `Reintegrado em nova tentativa` } as any)
+        .eq("id", log.id);
+      toast.success("Integração reenviada com sucesso", {
+        description: result.purchaseOrder?.DocNum ? `PC #${result.purchaseOrder.DocNum}` : undefined,
+      });
+      setRetryDialog({ open: false, log: null, transaction: null });
+      fetchLogs();
+    } catch (e) {
+      toast.error("Falha ao reintegrar", {
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+      });
+      throw e;
+    }
+  };
+
 
   useEffect(() => {
     fetchLogs();
