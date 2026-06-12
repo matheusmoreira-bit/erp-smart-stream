@@ -8,6 +8,11 @@ export interface SapSearchOption {
   code: string;
   name: string;
   extra?: string; // e.g. CNPJ, group
+  /** Optional extra columns (e.g. fantasyName, taxId) — when present, dropdown renders in columns */
+  details?: {
+    fantasyName?: string;
+    taxId?: string;
+  };
 }
 
 interface SapSearchComboboxProps {
