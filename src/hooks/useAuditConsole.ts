@@ -203,7 +203,7 @@ export function useAuditDashboard() {
       return {
         totalRuns: runs.length,
         runsLast30d: runs.filter((r) => r.started_at >= sinceIso).length,
-        runningCount: runs.filter((r) => r.status === "running" || r.status === "queued").length,
+        runningCount: runs.filter((r) => r.status === "pending").length,
         totalDivergences: divs.length,
         openDivergences: divs.filter((d) => !d.is_reviewed).length,
         fraudFlags: divs.filter((d) => d.is_fraud_flag).length,
