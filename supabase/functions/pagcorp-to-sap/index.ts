@@ -397,10 +397,16 @@ Deno.serve(async (req) => {
       ? new Date(transaction.date).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
+    const holderName = (
+      (transaction.cardName as string | undefined) ||
+      (transaction.accountAlias as string | undefined) ||
+      (transaction.accountName as string | undefined) ||
+      ""
+    ).toString().trim();
     const description = truncateSapText(
       isConsolidated
-        ? `PagCorp consolidado: ${transactions.length} transações (${transactions.map((t) => `#${t.id}`).join(", ")})`
-        : `PagCorp #${transaction.id} - ${transaction.description || ""}`,
+        ? `PagCorp${holderName ? ` ${holderName}` : ""} — consolidado ${transactions.length} transações`
+        : `PagCorp${holderName ? ` ${holderName}` : ""} — ${transaction.description || ""}`,
       190,
     );
 

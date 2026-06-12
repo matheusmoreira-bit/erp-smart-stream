@@ -111,7 +111,7 @@ export default function PagCorp() {
   const [startDate, setStartDate] = useState(firstOfMonth.toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
-  const [accountabilityFilter, setAccountabilityFilter] = useState<"all" | "yes" | "no">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
   const [integrateDialog, setIntegrateDialog] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
@@ -185,10 +185,12 @@ export default function PagCorp() {
       list = list.filter((t) => !t.isNondeductible);
     }
 
-    if (accountabilityFilter === "yes") {
-      list = list.filter((t) => t.hasAccountability);
-    } else if (accountabilityFilter === "no") {
+    if (statusFilter === "pending") {
       list = list.filter((t) => !t.hasAccountability);
+    } else if (statusFilter === "review") {
+      list = list.filter((t) => t.hasAccountability && !t.accountabilityApproved);
+    } else if (statusFilter === "done") {
+      list = list.filter((t) => t.hasAccountability && t.accountabilityApproved);
     }
 
     if (search.trim()) {
@@ -201,7 +203,7 @@ export default function PagCorp() {
     }
 
     return list;
-  }, [transactions, search, accountabilityFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, showNondeductible]);
 
   const nondeductiblePending = useMemo(
     () => transactions.filter((t) => t.isNondeductible && !t.integrated),
@@ -721,15 +723,16 @@ export default function PagCorp() {
             <Input type="date" value={endDate} onChange={(e) => handleEndDateChange(e.target.value)} className="w-40 bg-card" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Prestação de Conta</label>
-            <Select value={accountabilityFilter} onValueChange={(v) => setAccountabilityFilter(v as "all" | "yes" | "no")}>
+            <label className="text-xs text-muted-foreground">Status</label>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
               <SelectTrigger className="w-44 bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="yes">Com prestação</SelectItem>
-                <SelectItem value="no">Sem prestação</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="review">Em análise</SelectItem>
+                <SelectItem value="done">Finalizado</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -929,18 +932,24 @@ export default function PagCorp() {
                             const receiptCount =
                               (Array.isArray(t.receipts) ? t.receipts.length : 0) +
                               (Array.isArray(t.attachments) ? t.attachments.length : 0);
-                            const StatusIcon = t.hasAccountability ? (
+                            const statusBadge = t.hasAccountability ? (
                               t.accountabilityApproved ? (
-                                <CheckCircle2 className="w-4 h-4 text-success" />
+                                <Badge variant="secondary" className="bg-success/15 text-success border-success/30 gap-1">
+                                  <CheckCircle2 className="w-3 h-3" /> Aprovado
+                                </Badge>
                               ) : (
-                                <Clock className="w-4 h-4 text-warning" />
+                                <Badge variant="secondary" className="bg-warning/15 text-warning border-warning/30 gap-1">
+                                  <Clock className="w-3 h-3" /> Em análise
+                                </Badge>
                               )
                             ) : (
-                              <XCircle className="w-4 h-4 text-destructive/60" />
+                              <Badge variant="outline" className="text-muted-foreground gap-1">
+                                <XCircle className="w-3 h-3" /> Pendente
+                              </Badge>
                             );
                             return (
                               <div className="flex items-center justify-center gap-2">
-                                {StatusIcon}
+                                {statusBadge}
                                 {receiptCount > 0 && (
                                   <button
                                     type="button"
@@ -972,7 +981,7 @@ export default function PagCorp() {
                               onClick={() => openIntegrateDialog(t, "accountability")}
                             >
                               <Sparkles className="w-3 h-3" />
-                              Integrar (Prest.)
+                              Integrar ao ERP
                             </Button>
                           ) : (
                             <Button
@@ -982,7 +991,7 @@ export default function PagCorp() {
                               onClick={() => openIntegrateDialog(t, "generic")}
                             >
                               <Upload className="w-3 h-3" />
-                              Integrar SAP
+                              Integrar ao ERP
                             </Button>
                           )}
                         </TableCell>

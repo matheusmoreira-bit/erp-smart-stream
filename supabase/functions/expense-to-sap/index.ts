@@ -434,7 +434,16 @@ Deno.serve(async (req) => {
       TaxDate: today,
       BPL_IDAssignedToInvoice: branchId,
       Comments: truncateSapText(
-        `${isSales ? "Pedido de venda" : "Despesa interna"} #${expense.id.slice(0, 8)} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`,
+        (() => {
+          const pcTx: any = (pagcorpLog as any)?.transaction || null;
+          const holder = pcTx
+            ? (pcTx.cardName || pcTx.accountAlias || pcTx.accountName || "").toString().trim()
+            : "";
+          const prefix = (expense as any).origin === "pagcorp" || pcTx
+            ? `PagCorp${holder ? ` ${holder}` : ""}`
+            : `${isSales ? "Pedido de venda" : "Despesa interna"} #${expense.id.slice(0, 8)}`;
+          return `${prefix} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`;
+        })(),
         190,
       ),
       ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
