@@ -81,12 +81,17 @@ function ExpenseDetailModal({
   onCancel,
   onRetrySap,
   onEdit,
+  onApprove,
+  onReject,
+  onViewIntegration,
   canCancel,
   canEdit,
   canRetrySap,
+  canApprove,
   isSubmitting,
   isCancelling,
   isRetrying,
+  isActioning,
 }: {
   expense: Expense | null;
   open: boolean;
@@ -95,12 +100,17 @@ function ExpenseDetailModal({
   onCancel: (id: string) => void;
   onRetrySap: (id: string) => void;
   onEdit: (expense: Expense) => void;
+  onApprove: (expense: Expense) => void;
+  onReject: (expense: Expense) => void;
+  onViewIntegration: () => void;
   canCancel: boolean;
   canEdit: boolean;
   canRetrySap: boolean;
+  canApprove: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
   isRetrying: boolean;
+  isActioning: boolean;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   if (!expense) return null;
@@ -109,6 +119,8 @@ function ExpenseDetailModal({
   const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
   const showEdit = canEdit && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
+  const showApproval = canApprove && expense.status === "pendente_aprovacao";
+  const hasIntegration = !!(expense.sap_doc_entry || expense.sap_doc_num || expense.sap_integration_error);
 
   return (
     <>
