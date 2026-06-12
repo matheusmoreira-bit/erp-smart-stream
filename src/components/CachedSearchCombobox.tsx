@@ -101,10 +101,13 @@ export function CachedSearchCombobox({
         const q = query.toLowerCase();
         const qDigits = query.replace(/\D/g, "");
         const extraDigits = (o.extra ?? "").replace(/\D/g, "");
+        const taxDigits = (o.details?.taxId ?? "").replace(/\D/g, "");
+        const fantasy = (o.details?.fantasyName ?? "").toLowerCase();
         return (o.code ?? "").toLowerCase().includes(q)
           || (o.name ?? "").toLowerCase().includes(q)
           || (o.extra ?? "").toLowerCase().includes(q)
-          || (qDigits.length >= 3 && extraDigits.includes(qDigits));
+          || fantasy.includes(q)
+          || (qDigits.length >= 3 && (extraDigits.includes(qDigits) || taxDigits.includes(qDigits)));
       }).slice(0, 50)
     : options.slice(0, 50);
 
