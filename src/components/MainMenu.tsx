@@ -22,6 +22,7 @@ import {
   Bell,
   FileSearch,
   FileInput,
+  Radar,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
