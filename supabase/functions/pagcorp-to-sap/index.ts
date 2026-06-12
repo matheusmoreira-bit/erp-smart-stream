@@ -169,6 +169,45 @@ async function resolveItemCode(
   return (fb?.item_code as string) || null;
 }
 
+interface CardMapping {
+  cost_center: string | null;
+  project: string | null;
+  item_code: string | null;
+}
+
+/** Same resolution as the client uses to identify cards. */
+function resolveCardKey(tx: { cardLastDigits?: unknown; cardName?: unknown }): string | null {
+  const last = tx.cardLastDigits ? String(tx.cardLastDigits).trim() : "";
+  if (last) return last;
+  const name = tx.cardName ? String(tx.cardName).trim() : "";
+  return name || null;
+}
+
+async function resolveCardMapping(
+  supabase: ReturnType<typeof createClient>,
+  companyDb: string,
+  cardKey: string | null,
+): Promise<CardMapping | null> {
+  if (cardKey) {
+    const { data } = await supabase
+      .from("pagcorp_card_mapping")
+      .select("cost_center, project, item_code")
+      .eq("company_db", companyDb)
+      .eq("card_identifier", cardKey)
+      .eq("is_fallback", false)
+      .maybeSingle();
+    if (data) return data as CardMapping;
+  }
+  // Per-company fallback (e.g. ANA Gaming default project)
+  const { data: fb } = await supabase
+    .from("pagcorp_card_mapping")
+    .select("cost_center, project, item_code")
+    .eq("company_db", companyDb)
+    .eq("is_fallback", true)
+    .maybeSingle();
+  return (fb as CardMapping) || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
