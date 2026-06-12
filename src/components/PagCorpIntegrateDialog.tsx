@@ -16,6 +16,7 @@ import { SupplierFormModal, type SupplierFormPrefill } from "@/components/Suppli
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 import { supabase } from "@/integrations/supabase/client";
 import { findSupplierByTaxId, type Supplier } from "@/hooks/useSuppliers";
+import { requestSupplierRegistration } from "@/lib/supplier-request-email";
 import { toast } from "sonner";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -354,10 +355,39 @@ export function PagCorpIntegrateDialog({
                       size="sm"
                       variant="secondary"
                       className="mt-2 gap-1.5"
-                      onClick={() => setSupplierFormOpen(true)}
+                      onClick={async () => {
+                        try {
+                          await requestSupplierRegistration({
+                            cardName: aiResult.card_name,
+                            federalTaxId: aiResult.federal_tax_id,
+                            email: aiResult.email,
+                            phone1: aiResult.phone1,
+                            phone2: aiResult.phone2,
+                            address: {
+                              street: aiResult.bill_to_street,
+                              zip: aiResult.bill_to_zip,
+                              city: aiResult.bill_to_city,
+                              state: aiResult.bill_to_state,
+                              block: aiResult.bill_to_block,
+                              building: aiResult.bill_to_building,
+                            },
+                            companyDb,
+                            context: "PagCorp — Integração",
+                            transaction: transaction ? {
+                              description: transaction.description,
+                              amount: Number(transaction.amount),
+                              currency: transaction.currency,
+                              date: transaction.date,
+                            } : undefined,
+                          });
+                          toast.success("Solicitação enviada para compras@anagaming.com.br");
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : "Falha ao enviar solicitação");
+                        }
+                      }}
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      Cadastrar fornecedor
+                      Solicitar cadastro de fornecedor
                     </Button>
                   )}
                 </div>
