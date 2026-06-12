@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink } from "lucide-react";
+import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
@@ -17,6 +18,8 @@ import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 import { supabase } from "@/integrations/supabase/client";
 import { findSupplierByTaxId, type Supplier } from "@/hooks/useSuppliers";
 import { requestSupplierRegistration } from "@/lib/supplier-request-email";
+import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
+import { hashUrls, withAiCache } from "@/lib/ai-file-cache";
 import { toast } from "sonner";
 
 function formatCurrency(value: number, currency: string = "BRL") {
