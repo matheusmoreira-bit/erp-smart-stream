@@ -486,6 +486,11 @@ export default function Admin() {
           timezone: companyForm.timezone,
           logo_url: companyForm.logo_url || null,
           targets: companyForm.targets,
+          legal_name: companyForm.legal_name || null,
+          trade_name: companyForm.trade_name || null,
+          tax_id: companyForm.tax_id || null,
+          foreign_name: companyForm.foreign_name || null,
+          is_foreign: companyForm.is_foreign,
         })
         .eq("id", editingCompany.id);
       if (error) { toast.error("Erro ao atualizar"); hasError = true; }
