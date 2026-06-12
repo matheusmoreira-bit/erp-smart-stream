@@ -96,14 +96,16 @@ export function usePagCorp() {
         };
       });
 
-      // Check which transactions are already integrated
+      // Check which transactions are already integrated NA EMPRESA ATUAL.
+      // Sem company_db, não marca como integrada (evita herdar status de outra base).
       const expenseIds = items.map((t) => Number(t.id)).filter((id) => !isNaN(id));
-      if (expenseIds.length > 0) {
+      if (expenseIds.length > 0 && companyDb) {
         const { data: logs } = await supabase
           .from("pagcorp_integration_log")
           .select("pagcorp_expense_id, id, status")
           .in("pagcorp_expense_id", expenseIds)
-          .eq("status", "success");
+          .eq("status", "success")
+          .eq("company_db", companyDb);
 
         const integratedMap = new Map<number, string>();
         (logs || []).forEach((log: any) => {

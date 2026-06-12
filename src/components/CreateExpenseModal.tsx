@@ -581,8 +581,6 @@ export function CreateExpenseModal({
       <DialogContent
         ref={setDialogContainer}
         className="max-w-2xl max-h-[85vh] overflow-y-auto"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>

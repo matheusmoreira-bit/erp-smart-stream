@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,43 @@ function formatCurrency(value: number, currency: string = "BRL") {
   } catch {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
   }
+}
+
+// Coleta TODOS os anexos da transação a partir das variações de payload
+// que o PagCorp pode retornar (receipts, attachments, files, file, etc.).
+function collectAttachments(
+  receipts: any[] | undefined,
+  attachments: any[] | undefined,
+): { name: string; url: string }[] {
+  const out: { name: string; url: string }[] = [];
+  const seen = new Set<string>();
+  const push = (rawUrl: unknown, rawName?: unknown) => {
+    if (typeof rawUrl !== "string") return;
+    const url = rawUrl.trim();
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    const name =
+      (typeof rawName === "string" && rawName.trim()) ||
+      url.split("/").pop()?.split("?")[0] ||
+      "Anexo";
+    out.push({ name, url });
+  };
+  const visit = (entry: any) => {
+    if (!entry || typeof entry !== "object") return;
+    push(entry.downloadUrl, entry.fileName || entry.name);
+    push(entry.receiptUrl, entry.fileName || entry.name);
+    push(entry.imageUrl, entry.fileName || entry.name);
+    push(entry.url, entry.fileName || entry.name);
+    if (entry.file && typeof entry.file === "object") {
+      push(entry.file.url, entry.file.name || entry.fileName);
+      push(entry.file.downloadUrl, entry.file.name || entry.fileName);
+    }
+    if (Array.isArray(entry.files)) entry.files.forEach(visit);
+    if (Array.isArray(entry.attachments)) entry.attachments.forEach(visit);
+  };
+  (receipts || []).forEach(visit);
+  (attachments || []).forEach(visit);
+  return out;
 }
 
 export interface PagCorpLineOverride {
@@ -199,6 +236,11 @@ export function PagCorpIntegrateDialog({
   }, [open, storageKey, supplier, costCenter, project, item]);
 
 
+  const attachmentList = useMemo(
+    () => (transaction ? collectAttachments(transaction.receipts, transaction.attachments as any[]) : []),
+    [transaction],
+  );
+
   if (!transaction) return null;
 
   const handleSubmit = async () => {
@@ -267,6 +309,33 @@ export function PagCorpIntegrateDialog({
                 </p>
               </div>
             </div>
+
+            {attachmentList.length > 0 && (
+              <div className="rounded-lg border border-border bg-card p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Paperclip className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs font-semibold text-foreground">
+                    Anexos ({attachmentList.length})
+                  </span>
+                </div>
+                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                  {attachmentList.map((a, idx) => (
+                    <li key={`${a.url}-${idx}`}>
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs text-primary hover:underline truncate"
+                        title={a.name}
+                      >
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{a.name}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {aiBusy && (
               <div className="rounded-md bg-primary/10 border border-primary/30 p-3 flex items-center gap-2 text-sm">
