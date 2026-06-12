@@ -170,8 +170,10 @@ export default function FiscalAudit() {
       (data || []).forEach((row: any) => {
         const p = row.data as FiscalCachePayload | null;
         if (!p) return;
-        sources++;
         const cdb = row.company_db as string;
+        // Ignora bases de teste (prefixo TST) no consolidado
+        if (cdb && cdb.toUpperCase().startsWith("TST")) return;
+        sources++;
         (p.invoices || []).forEach((i) => allInv.push({ ...i, _companyDB: cdb }));
         (p.salesInvoices || []).forEach((i) => allSal.push({ ...i, _companyDB: cdb }));
         (p.users || []).forEach((u) => {
