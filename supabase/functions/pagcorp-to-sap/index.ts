@@ -499,7 +499,7 @@ Deno.serve(async (req) => {
         sap_doc_entry: poResult.docEntry,
         sap_doc_num: poResult.docNum,
         sap_payload: sapPayloads as any,
-        sap_response: { ...sapResponses, supplierCode, supplierName, stages, attachmentEntry, consolidated: isConsolidated, consolidatedCount: transactions.length } as any,
+        sap_response: { ...sapResponses, supplierCode, supplierName, stages, attachmentEntry, consolidated: isConsolidated, consolidatedCount: transactions.length, nondeductible } as any,
       } as any)
       .in("id", consolidatedLogIds);
 
