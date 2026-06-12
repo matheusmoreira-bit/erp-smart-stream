@@ -58,6 +58,7 @@ const App = () => (
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/analytics/audit/*" element={<AuditConsole />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/approvals/history" element={<ApprovalHistory />} />
               <Route path="/expenses" element={<Expenses />} />
