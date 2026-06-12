@@ -541,13 +541,13 @@ export default function PagCorp() {
       // mark which are integrated NA EMPRESA ATUAL. Sem company_db não marca
       // (evita compartilhar status entre bases de teste e produção).
       const ids = allItems.map((t) => Number(t.id)).filter((n) => !Number.isNaN(n));
-      if (ids.length && companyDb) {
+      if (ids.length && session?.companyDB) {
         const { data: logs } = await supabase
           .from("pagcorp_integration_log")
           .select("pagcorp_expense_id")
           .in("pagcorp_expense_id", ids)
           .eq("status", "success")
-          .eq("company_db", companyDb);
+          .eq("company_db", session.companyDB);
         const set = new Set((logs || []).map((l: any) => l.pagcorp_expense_id));
         allItems.forEach((t) => {
           if (set.has(Number(t.id))) t.integrated = true;
