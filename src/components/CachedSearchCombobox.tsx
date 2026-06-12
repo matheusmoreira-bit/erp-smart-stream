@@ -101,10 +101,13 @@ export function CachedSearchCombobox({
         const q = query.toLowerCase();
         const qDigits = query.replace(/\D/g, "");
         const extraDigits = (o.extra ?? "").replace(/\D/g, "");
+        const taxDigits = (o.details?.taxId ?? "").replace(/\D/g, "");
+        const fantasy = (o.details?.fantasyName ?? "").toLowerCase();
         return (o.code ?? "").toLowerCase().includes(q)
           || (o.name ?? "").toLowerCase().includes(q)
           || (o.extra ?? "").toLowerCase().includes(q)
-          || (qDigits.length >= 3 && extraDigits.includes(qDigits));
+          || fantasy.includes(q)
+          || (qDigits.length >= 3 && (extraDigits.includes(qDigits) || taxDigits.includes(qDigits)));
       }).slice(0, 50)
     : options.slice(0, 50);
 
@@ -187,19 +190,37 @@ export function CachedSearchCombobox({
           style={dropdownStyle}
           className="z-[9999] max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md"
         >
-          {filtered.map((opt) => (
-            <button
-              key={opt.code}
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleSelect(opt); }}
-              className="flex w-full flex-col px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <span className="truncate font-medium text-foreground">{opt.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
-              </span>
-            </button>
-          ))}
+          {filtered.map((opt) => {
+            const hasColumns = !!(opt.details?.fantasyName || opt.details?.taxId);
+            return (
+              <button
+                key={opt.code}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleSelect(opt); }}
+                className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                {hasColumns ? (
+                  <div className="grid grid-cols-[80px_1fr_1fr_120px] gap-2 items-center">
+                    <span className="text-xs font-mono text-muted-foreground truncate">{opt.code}</span>
+                    <span className="font-medium text-foreground truncate" title={opt.name}>{opt.name}</span>
+                    <span className="text-xs text-muted-foreground truncate" title={opt.details?.fantasyName || ""}>
+                      {opt.details?.fantasyName || "—"}
+                    </span>
+                    <span className="text-xs text-muted-foreground tabular-nums truncate text-right" title={opt.details?.taxId || ""}>
+                      {opt.details?.taxId || "—"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    <span className="truncate font-medium text-foreground">{opt.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
+                    </span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>,
         portalContainer || document.body,
       )}

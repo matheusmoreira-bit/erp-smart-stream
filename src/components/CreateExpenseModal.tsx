@@ -96,13 +96,14 @@ export function CreateExpenseModal({
     name: row.CardName,
     extra: row.FederalTaxID || undefined,
     currency: row.Currency || "",
+    details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
   } as SapSearchOption & { currency: string }), []);
   const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
-    cacheKey: isSales ? "customers_active" : "suppliers_active",
+    cacheKey: isSales ? "customers_active_v2" : "suppliers_active_v2",
     endpoint: "BusinessPartners",
     params: isSales
-      ? { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer' and Frozen eq 'tNO'" }
-      : { $select: "CardCode,CardName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
+      ? { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer' and Frozen eq 'tNO'" }
+      : { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
     mapRow: supplierMapRow,
   });
 
