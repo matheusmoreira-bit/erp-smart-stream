@@ -34,6 +34,7 @@ import LicenseImport from "./pages/LicenseImport.tsx";
 import Synapse from "./pages/Synapse.tsx";
 import AuditLog from "./pages/AuditLog.tsx";
 import Notifications from "./pages/Notifications.tsx";
+import AuditConsole from "./pages/AuditConsole.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
