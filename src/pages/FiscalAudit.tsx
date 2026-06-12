@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, FileSearch, Loader2, AlertTriangle, Calendar, Download, Trophy } from "lucide-react";
+import { ArrowLeft, RefreshCw, FileSearch, Loader2, AlertTriangle, Calendar, Download, Trophy, Database } from "lucide-react";
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
@@ -22,7 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
-import { sapQueryAll, sapQuery } from "@/lib/sap-client";
+import { sapQueryAll } from "@/lib/sap-client";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface SapInvoice {
@@ -34,7 +33,7 @@ interface SapInvoice {
   CardName: string;
   DocTotal: number;
   DocCurrency: string;
-  DocumentStatus: string; // bost_Open | bost_Close
+  DocumentStatus: string;
   UserSign: number;
   CreationDate: string | null;
 }
@@ -45,8 +44,23 @@ interface SapUser {
   InternalKey: number;
 }
 
+interface FiscalCachePayload {
+  fetchStart: string;
+  fetchEnd: string;
+  invoices: SapInvoice[];
+  salesInvoices: SapInvoice[];
+  users: SapUser[];
+  fetchedAt: string;
+}
+
+const CACHE_KEY = "fiscal_audit_invoices";
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 const fmtDate = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
+
+const fmtDateTime = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString("pt-BR") : "—";
 
 const fmtMoney = (n: number, currency = "BRL") => {
   try {
@@ -66,7 +80,6 @@ export default function FiscalAudit() {
   const { session } = useSap();
   const { hasAccess, loading: permLoading } = useModuleAccess("fiscal_audit");
 
-  // Default range: last 365 days
   const today = useMemo(() => new Date(), []);
   const defaultStart = useMemo(() => {
     const d = new Date(today);
@@ -74,24 +87,63 @@ export default function FiscalAudit() {
     return d;
   }, [today]);
 
+  // Filtros visuais (somente client-side, atualizam o gráfico imediatamente)
   const [startDate, setStartDate] = useState<string>(toISODate(defaultStart));
   const [endDate, setEndDate] = useState<string>(toISODate(today));
-  
+
   const [groupBy, setGroupBy] = useState<"day" | "month" | "quarter">("month");
 
   const [loading, setLoading] = useState(false);
-  const [invoices, setInvoices] = useState<SapInvoice[]>([]);
-  const [salesInvoices, setSalesInvoices] = useState<SapInvoice[]>([]);
+  const [allInvoices, setAllInvoices] = useState<SapInvoice[]>([]);
+  const [allSalesInvoices, setAllSalesInvoices] = useState<SapInvoice[]>([]);
   const [users, setUsers] = useState<Map<number, SapUser>>(new Map());
   const [error, setError] = useState<string | null>(null);
+  const [cacheInfo, setCacheInfo] = useState<{ fetchedAt: string; fetchStart: string; fetchEnd: string } | null>(null);
 
-  const load = async () => {
+  // Aplica payload no estado local
+  const applyPayload = (p: FiscalCachePayload) => {
+    setAllInvoices(p.invoices || []);
+    setAllSalesInvoices(p.salesInvoices || []);
+    const map = new Map<number, SapUser>();
+    (p.users || []).forEach((u) => {
+      if (u.InternalKey != null) map.set(Number(u.InternalKey), u);
+    });
+    setUsers(map);
+    setCacheInfo({ fetchedAt: p.fetchedAt, fetchStart: p.fetchStart, fetchEnd: p.fetchEnd });
+    // Ajusta filtro para o range do cache se o atual estiver fora
+    if (p.fetchStart > startDate) setStartDate(p.fetchStart);
+    if (p.fetchEnd < endDate) setEndDate(p.fetchEnd);
+  };
+
+  // Carrega do cache (banco)
+  const loadFromCache = async (companyDB: string): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from("sap_cache")
+      .select("data, updated_at, expires_at")
+      .eq("cache_key", CACHE_KEY)
+      .eq("company_db", companyDB)
+      .maybeSingle();
+    if (error) {
+      console.warn("[FiscalAudit] cache read error:", error.message);
+      return false;
+    }
+    if (!data?.data) return false;
+    applyPayload(data.data as unknown as FiscalCachePayload);
+    return true;
+  };
+
+  // Busca no SAP e grava cache
+  const refreshFromSap = async () => {
     if (!session) return;
     setLoading(true);
     setError(null);
     try {
+      // Para um cache amplo, buscamos sempre o range maior já usado anteriormente OU o range atual
+      const fetchStart = cacheInfo?.fetchStart && cacheInfo.fetchStart < startDate ? cacheInfo.fetchStart : startDate;
+      const fetchEnd = cacheInfo?.fetchEnd && cacheInfo.fetchEnd > endDate ? cacheInfo.fetchEnd : endDate;
+
       const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,DocCurrency,DocumentStatus,UserSign,CreationDate";
-      const filter = `DocDate ge '${startDate}' and DocDate le '${endDate}'`;
+      const filter = `DocDate ge '${fetchStart}' and DocDate le '${fetchEnd}'`;
       const invoiceParams = { $select: select, $filter: filter, $orderby: "DocDate desc" };
 
       const [invSettled, salesSettled, usrSettled] = await Promise.allSettled([
@@ -105,30 +157,44 @@ export default function FiscalAudit() {
         throw invSettled.reason;
       }
       const purchases = (invSettled.value.data?.value as SapInvoice[]) || [];
-      setInvoices(purchases);
-
-      if (salesSettled.status === "fulfilled") {
-        setSalesInvoices((salesSettled.value.data?.value as SapInvoice[]) || []);
-      } else {
-        console.warn("Invoices (saída) failed — continuando só com entrada:", salesSettled.reason);
-        setSalesInvoices([]);
-      }
-
-      const map = new Map<number, SapUser>();
+      const sales = salesSettled.status === "fulfilled"
+        ? ((salesSettled.value.data?.value as SapInvoice[]) || [])
+        : [];
+      let usrValue: SapUser[] = [];
       if (usrSettled.status === "fulfilled") {
         const d: any = usrSettled.value.data;
-        const usrValue: SapUser[] = Array.isArray(d) ? d : (d?.value || []);
-        usrValue.forEach((u) => {
-          if (u.InternalKey != null) map.set(Number(u.InternalKey), u);
-        });
-        console.log(`[FiscalAudit] Users carregados: ${usrValue.length}`);
-      } else {
-        console.warn("Users failed:", usrSettled.reason);
+        usrValue = Array.isArray(d) ? d : (d?.value || []);
       }
-      setUsers(map);
+
+      const payload: FiscalCachePayload = {
+        fetchStart,
+        fetchEnd,
+        invoices: purchases,
+        salesInvoices: sales,
+        users: usrValue,
+        fetchedAt: new Date().toISOString(),
+      };
+
+      applyPayload(payload);
+
+      // Persistir no banco
+      const { error: upErr } = await supabase
+        .from("sap_cache")
+        .upsert(
+          {
+            cache_key: CACHE_KEY,
+            company_db: session.companyDB,
+            data: payload as any,
+            expires_at: new Date(Date.now() + CACHE_TTL_MS).toISOString(),
+          },
+          { onConflict: "cache_key,company_db" },
+        );
+      if (upErr) console.warn("[FiscalAudit] cache write error:", upErr.message);
 
       if (purchases.length === 0) {
-        toast.info(`Nenhuma nota de entrada entre ${startDate} e ${endDate}.`);
+        toast.info(`Nenhuma nota de entrada entre ${fetchStart} e ${fetchEnd}.`);
+      } else {
+        toast.success(`${purchases.length} nota(s) carregada(s) do SAP e salvas no cache.`);
       }
     } catch (e: any) {
       const msg = e?.message || "Falha ao consultar notas no SAP";
@@ -139,13 +205,26 @@ export default function FiscalAudit() {
     }
   };
 
+  // Inicial: cache primeiro; se vazio e tiver sessão, buscar SAP
   useEffect(() => {
-    if (session) load();
+    (async () => {
+      if (!session?.companyDB) return;
+      const hit = await loadFromCache(session.companyDB);
+      if (!hit) await refreshFromSap();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.companyDB]);
 
+  // === Filtro client-side por data — instantâneo ===
+  const invoices = useMemo(() => {
+    return allInvoices.filter((i) => i.DocDate >= startDate && i.DocDate <= endDate);
+  }, [allInvoices, startDate, endDate]);
 
-  // === Analysis tab — todas as notas em aberto no período ===
+  const salesInvoices = useMemo(() => {
+    return allSalesInvoices.filter((i) => i.DocDate >= startDate && i.DocDate <= endDate);
+  }, [allSalesInvoices, startDate, endDate]);
+
+  // === Análise — notas em aberto no período ===
   const oldOpen = useMemo(() => {
     return invoices
       .filter((i) => i.DocumentStatus === "bost_Open")
@@ -161,7 +240,7 @@ export default function FiscalAudit() {
     return Array.from(m.entries());
   }, [oldOpen]);
 
-  // === Quantitative ===
+  // === Quantitativo ===
   const buckets = useMemo(() => {
     const m = new Map<string, { count: number; total: number }>();
     invoices.forEach((i) => {
@@ -180,7 +259,6 @@ export default function FiscalAudit() {
       .map(([k, v]) => ({ period: k, count: v.count, total: v.total }))
       .sort((a, b) => a.period.localeCompare(b.period));
 
-    // Average and linear trend (least squares on count over index)
     const n = base.length;
     const avg = n ? base.reduce((s, b) => s + b.count, 0) / n : 0;
     let slope = 0, intercept = avg;
@@ -228,7 +306,7 @@ export default function FiscalAudit() {
     URL.revokeObjectURL(url);
   };
 
-  // === Per user report (entrada + saída) ===
+  // === Por usuário ===
   type UserStat = {
     userSign: number;
     userCode: string;
@@ -299,7 +377,6 @@ export default function FiscalAudit() {
     URL.revokeObjectURL(url);
   };
 
-
   if (!permLoading && !hasAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
@@ -328,9 +405,9 @@ export default function FiscalAudit() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={refreshFromSap} disabled={loading || !session}>
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-              Atualizar
+              Atualizar do SAP
             </Button>
           </div>
         </div>
@@ -347,10 +424,16 @@ export default function FiscalAudit() {
             <Label htmlFor="end" className="text-xs">Data final</Label>
             <Input id="end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
-          <Button onClick={load} disabled={loading}>
-            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Consultar SAP
-          </Button>
+          <div className="text-xs text-muted-foreground flex items-center gap-2">
+            <Database className="w-3.5 h-3.5" />
+            {cacheInfo ? (
+              <span>
+                Cache: {fmtDateTime(cacheInfo.fetchedAt)} · range {cacheInfo.fetchStart} → {cacheInfo.fetchEnd}
+              </span>
+            ) : (
+              <span>Sem cache local — clique em "Atualizar do SAP"</span>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -516,7 +599,6 @@ export default function FiscalAudit() {
               </div>
             </div>
           </TabsContent>
-
 
           {/* === Por usuário === */}
           <TabsContent value="byuser" className="space-y-4">
