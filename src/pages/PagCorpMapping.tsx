@@ -96,8 +96,12 @@ export default function PagCorpMapping() {
   useEffect(() => {
     const today = new Date();
     const ago = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
-    fetchTransactions(ago.toISOString().slice(0, 10), today.toISOString().slice(0, 10));
-  }, []);
+    fetchTransactions(
+      ago.toISOString().slice(0, 10),
+      today.toISOString().slice(0, 10),
+      companyDB || undefined,
+    );
+  }, [companyDB]);
 
   const accountCodeOptions: SapSearchOption[] = useMemo(() => {
     const map = new Map<string, string>();
@@ -107,6 +111,20 @@ export default function PagCorpMapping() {
       if (code && !map.has(code)) map.set(code, name);
     });
     return Array.from(map.entries()).map(([code, name]) => ({ code, name, extra: "" }));
+  }, [recentTransactions]);
+
+  /* Card identifiers detected in recent transactions */
+  const cardSuggestions = useMemo(() => {
+    const map = new Map<string, { identifier: string; label: string }>();
+    recentTransactions.forEach((t) => {
+      const id = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+        (t.cardName && String(t.cardName).trim()) || "";
+      if (!id || map.has(id)) return;
+      const label = [t.cardName, t.cardLastDigits ? `•••• ${t.cardLastDigits}` : null]
+        .filter(Boolean).join(" ");
+      map.set(id, { identifier: id, label: label || id });
+    });
+    return Array.from(map.values());
   }, [recentTransactions]);
 
   /* ════════════════════════════════════════════
