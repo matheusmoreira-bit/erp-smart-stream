@@ -699,7 +699,12 @@ export default function Admin() {
                             {ERP_TYPE_LABELS[c.erp_type]?.label || c.erp_type}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono">{c.company_db}</p>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {c.company_db}
+                          {c.is_foreign && c.foreign_name ? ` · ${c.foreign_name}` : ""}
+                          {!c.is_foreign && c.legal_name ? ` · ${c.legal_name}` : ""}
+                          {!c.is_foreign && c.tax_id ? ` · ${c.tax_id}` : ""}
+                        </p>
                       </div>
                       <Badge variant={c.is_active ? "default" : "secondary"}>
                         {c.is_active ? "Ativa" : "Inativa"}
