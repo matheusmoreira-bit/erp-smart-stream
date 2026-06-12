@@ -210,6 +210,9 @@ export function PagCorpIntegrateDialog({
         project: project?.code || null,
         item: item?.code || null,
       });
+      if (storageKey) {
+        try { sessionStorage.removeItem(storageKey); } catch {/* ignore */}
+      }
     } finally {
       setSubmitting(false);
     }
