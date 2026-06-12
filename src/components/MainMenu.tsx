@@ -21,6 +21,7 @@ import {
   Wallet,
   Bell,
   FileSearch,
+  FileInput,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
