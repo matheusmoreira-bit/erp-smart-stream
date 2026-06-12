@@ -209,11 +209,12 @@ export function PagCorpIntegrateDialog({
               ) : (
                 <Upload className="w-5 h-5 text-primary" />
               )}
-              Integrar no SAP
+              Integrar ao ERP
             </DialogTitle>
             <DialogDescription>
-              Será criado <strong>Pedido de Compra + NF de Entrada + Pagamento</strong> no SAP, sem passar
-              por aprovações.
+              {integrationType === "generic"
+                ? <>Transação <strong>sem prestação de contas</strong> será integrada como <strong>despesa indedutível</strong>.</>
+                : <>Será criado <strong>Pedido de Compra</strong> no SAP, sem passar por aprovações.</>}
             </DialogDescription>
           </DialogHeader>
 
