@@ -75,6 +75,7 @@ const App = () => (
               <Route path="/intercompany" element={<Intercompany />} />
               <Route path="/financial-review" element={<FinancialReview />} />
               <Route path="/fiscal-audit" element={<FiscalAudit />} />
+              <Route path="/nf-entrada" element={<NfEntrada />} />
               <Route path="/users/activity" element={<UserActivity />} />
               <Route path="/users/productivity" element={<UserProductivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />
