@@ -182,6 +182,19 @@ export const SYSTEMS: SystemConfig[] = [
       { key: "account_id", label: "Account ID", placeholder: "ID da conta PagCorp" },
     ],
   },
+  {
+    name: "mastertax",
+    label: "Master Tax",
+    description: "Captura automática de NFs/XMLs de entrada e PDFs (DANFE)",
+    icon: FileInput,
+    fields: [
+      { key: "base_url", label: "URL Base da API", placeholder: "https://api.mastertax.com.br/v1/" },
+      { key: "token", label: "Token de Acesso", type: "password", placeholder: "Bearer token" },
+      { key: "pdf_base_url", label: "URL Base do PDF (opcional)", placeholder: "https://portal.mastertax.com.br/danfe/" },
+      { key: "username", label: "Usuário (se aplicável)", placeholder: "usuario_api" },
+      { key: "password", label: "Senha (se aplicável)", type: "password", placeholder: "Senha do usuário" },
+    ],
+  },
 ];
 
 export const CATEGORY_LABELS: Record<string, string> = {
