@@ -323,6 +323,7 @@ Deno.serve(async (req) => {
             receipts: transaction.receipts,
             consolidated: isConsolidated,
             consolidatedWith: isConsolidated ? transactions.map((x) => x.id) : undefined,
+            nondeductible,
           } as any,
           integration_type: integrationType,
           status: "pending",
