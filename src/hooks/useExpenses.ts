@@ -50,6 +50,11 @@ export interface Expense {
   current_approver?: string;
   sap_doc_entry?: number;
   sap_doc_num?: number;
+  sap_integration_error?: string | null;
+  sap_attachment_status?: string | null;
+  sap_attachment_link_status?: string | null;
+  sap_purchase_order_status?: string | null;
+  sap_integration_last_attempt_at?: string | null;
   origin?: ExpenseOrigin;
   created_by_email?: string;
   company_db?: string;

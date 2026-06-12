@@ -17,6 +17,10 @@ import {
   X as XIcon,
   RotateCw,
   Pencil,
+  CheckCircle2,
+  XCircle,
+  Link2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -77,12 +81,17 @@ function ExpenseDetailModal({
   onCancel,
   onRetrySap,
   onEdit,
+  onApprove,
+  onReject,
+  onViewIntegration,
   canCancel,
   canEdit,
   canRetrySap,
+  canApprove,
   isSubmitting,
   isCancelling,
   isRetrying,
+  isActioning,
 }: {
   expense: Expense | null;
   open: boolean;
@@ -91,12 +100,17 @@ function ExpenseDetailModal({
   onCancel: (id: string) => void;
   onRetrySap: (id: string) => void;
   onEdit: (expense: Expense) => void;
+  onApprove: (expense: Expense) => void;
+  onReject: (expense: Expense) => void;
+  onViewIntegration: () => void;
   canCancel: boolean;
   canEdit: boolean;
   canRetrySap: boolean;
+  canApprove: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
   isRetrying: boolean;
+  isActioning: boolean;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   if (!expense) return null;
@@ -105,6 +119,8 @@ function ExpenseDetailModal({
   const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
   const showEdit = canEdit && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
+  const showApproval = canApprove && expense.status === "pendente_aprovacao";
+  const hasIntegration = !!(expense.sap_doc_entry || expense.sap_doc_num || expense.sap_integration_error);
 
   return (
     <>
@@ -191,9 +207,89 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            {(showSubmit || showCancel || showRetrySap || showEdit) && (
+            {hasIntegration && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                      Integração com ERP
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={onViewIntegration}
+                  >
+                    Ver detalhes
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {expense.sap_doc_num != null && (
+                    <div>
+                      <p className="text-muted-foreground">Documento ERP</p>
+                      <p className="text-foreground font-mono font-medium">
+                        #{expense.sap_doc_num}
+                        {expense.sap_doc_entry ? ` (entry ${expense.sap_doc_entry})` : ""}
+                      </p>
+                    </div>
+                  )}
+                  {expense.sap_purchase_order_status && (
+                    <div>
+                      <p className="text-muted-foreground">Status PC</p>
+                      <p className="text-foreground">{expense.sap_purchase_order_status}</p>
+                    </div>
+                  )}
+                  {expense.sap_attachment_status && (
+                    <div>
+                      <p className="text-muted-foreground">Anexo</p>
+                      <p className="text-foreground">{expense.sap_attachment_status}</p>
+                    </div>
+                  )}
+                  {expense.sap_integration_last_attempt_at && (
+                    <div>
+                      <p className="text-muted-foreground">Última tentativa</p>
+                      <p className="text-foreground">{formatDate(expense.sap_integration_last_attempt_at)}</p>
+                    </div>
+                  )}
+                </div>
+                {expense.sap_integration_error && (
+                  <div className="flex items-start gap-2 rounded bg-destructive/10 border border-destructive/30 p-2">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-destructive shrink-0" />
+                    <p className="text-xs text-destructive flex-1 break-words">
+                      {expense.sap_integration_error}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval) && (
               <div className="border-t border-border pt-4 flex justify-end gap-3 flex-wrap">
                 <Button variant="outline" onClick={onClose}>Fechar</Button>
+                {showApproval && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => onReject(expense)}
+                      disabled={isActioning}
+                      className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                    >
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                      Rejeitar
+                    </Button>
+                    <Button
+                      onClick={() => onApprove(expense)}
+                      disabled={isActioning}
+                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      Aprovar
+                    </Button>
+                  </>
+                )}
                 {showEdit && (
                   <Button
                     variant="outline"
@@ -303,7 +399,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const { session, logout } = useSap();
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses(mode);
+  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -312,6 +408,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isActioning, setIsActioning] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const isSales = mode === "sales";
@@ -351,6 +448,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (isAdmin) return true;
     const owner = (expense.created_by_email || expense.requester_email || expense.requester_name || "").toLowerCase();
     return owner === userIdentifier || owner.startsWith(userIdentifier + "@");
+  };
+
+  // Aprovador atual = usuário cujo nome/email "bate" com expense.current_approver.
+  // Admin/super-usuário também pode aprovar inline.
+  const canApprove = (expense: Expense) => {
+    if (expense.status !== "pendente_aprovacao") return false;
+    if (isAdmin) return true;
+    const approver = (expense.current_approver || "").toLowerCase().trim();
+    const me = userIdentifier;
+    if (!approver || !me) return false;
+    if (approver === me) return true;
+    if (approver.includes(me) || me.includes(approver.split("@")[0])) return true;
+    const meLogin = me.split("@")[0];
+    if (meLogin && approver.includes(meLogin)) return true;
+    // Match por tokens do nome (ex.: "matheus.moreira" ↔ "Matheus Moreira")
+    const tokenize = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/[.@]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean);
+    const approverTokens = new Set(tokenize(approver));
+    const meTokens = tokenize(me);
+    if (meTokens.length === 0) return false;
+    return meTokens.every((t) => approverTokens.has(t));
   };
 
   const effectiveShowAll = isAdmin && showAll;
@@ -416,6 +538,37 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       toast.success("Despesa aprovada (nenhuma regra aplicável).");
     }
     return result;
+  };
+
+  const handleApprove = async (expense: Expense) => {
+    setIsActioning(true);
+    try {
+      await approveExpense(expense.id);
+      toast.success("Despesa aprovada!");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao aprovar");
+    } finally {
+      setIsActioning(false);
+    }
+  };
+
+  const handleReject = async (expense: Expense) => {
+    setIsActioning(true);
+    try {
+      await rejectExpense(expense.id);
+      toast.success("Despesa rejeitada.");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao rejeitar");
+    } finally {
+      setIsActioning(false);
+    }
+  };
+
+  const handleViewIntegration = () => {
+    setSelectedExpense(null);
+    navigate("/integrations-monitor");
   };
 
   const statusOptions = [
@@ -567,12 +720,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onCancel={handleCancel}
         onRetrySap={handleRetrySap}
         onEdit={(exp) => { setSelectedExpense(null); setEditingExpense(exp); }}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onViewIntegration={handleViewIntegration}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         canEdit={selectedExpense ? canCancel(selectedExpense) : false}
         canRetrySap={session.erpType === "sap" && (isAdmin || (selectedExpense ? canCancel(selectedExpense) : false))}
+        canApprove={selectedExpense ? canApprove(selectedExpense) : false}
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
         isRetrying={isRetrying}
+        isActioning={isActioning}
       />
 
       <EditExpenseModal
