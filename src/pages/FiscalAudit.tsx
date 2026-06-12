@@ -407,7 +407,7 @@ export default function FiscalAudit() {
                     {loading ? (
                       <tr><td colSpan={7} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
                     ) : oldOpen.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto além de {threshold} dias 🎉</td></tr>
+                      <tr><td colSpan={7} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto no período 🎉</td></tr>
                     ) : oldOpen.map((i) => {
                       const days = daysBetween(new Date(i.DocDate), today);
                       const u = users.get(i.UserSign);
