@@ -100,6 +100,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function IntegrationHistory() {
   const navigate = useNavigate();
+  const { session } = useSap();
+  const { integrateDirect } = usePagCorp();
   const [logs, setLogs] = useState<IntegrationLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -107,6 +109,11 @@ export default function IntegrationHistory() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<IntegrationLog | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [retryDialog, setRetryDialog] = useState<{
+    open: boolean;
+    log: IntegrationLog | null;
+    transaction: PagCorpTransaction | null;
+  }>({ open: false, log: null, transaction: null });
 
   const today = new Date();
   const thirtyDaysAgo = new Date(today);
