@@ -125,22 +125,62 @@ export function PagCorpIntegrateDialog({
     mapRow: itMap,
   });
 
+  // Mapeamento por cartão (fallback) — usado para mostrar valores aplicados automaticamente
+  const { resolve: resolveCardMapping } = usePagCorpCardMapping(companyDb);
+  const cardDefaults = useMemo(
+    () => (transaction ? resolveCardMapping(transaction) : { costCenter: null, project: null, itemCode: null, source: null }),
+    [resolveCardMapping, transaction],
+  );
+  const cardDefaultCC = useMemo(
+    () => (cardDefaults.costCenter ? ccOptions.find((o) => o.code === cardDefaults.costCenter) || null : null),
+    [cardDefaults.costCenter, ccOptions],
+  );
+  const cardDefaultPR = useMemo(
+    () => (cardDefaults.project ? prOptions.find((o) => o.code === cardDefaults.project) || null : null),
+    [cardDefaults.project, prOptions],
+  );
+  const cardDefaultIT = useMemo(
+    () => (cardDefaults.itemCode ? itOptions.find((o) => o.code === cardDefaults.itemCode) || null : null),
+    [cardDefaults.itemCode, itOptions],
+  );
+
+  // Moeda inferida: BRL se transação for em BRL, senão USD
+  const inferredCurrency = useMemo(() => {
+    const c = String(transaction?.currency || "").toUpperCase();
+    return c === "BRL" ? "BRL" : "USD";
+  }, [transaction?.currency]);
 
   const runAi = useCallback(async (tx: PagCorpTransaction) => {
     if (!companyDb) return;
     setAiBusy(true);
     setAiNotice(null);
     try {
-      const { data, error } = await supabase.functions.invoke("supplier-ai-extract", {
-        body: {
-          description: tx.description,
-          amount: tx.amount,
-          receipts: tx.receipts || [],
-          attachments: (tx.attachments || []).slice(0, 5),
-          hint: tx.accountName || tx.accountAlias,
-        },
+      const urls: string[] = [];
+      for (const r of (tx.receipts || []) as any[]) {
+        if (Array.isArray(r?.files)) {
+          for (const f of r.files) {
+            if (typeof f === "string") urls.push(f);
+            else if (f?.url) urls.push(f.url);
+          }
+        }
+        const direct = r?.url || r?.fileUrl || r?.downloadUrl || r?.receiptUrl || r?.imageUrl;
+        if (typeof direct === "string") urls.push(direct);
+      }
+      // Cache de sessão: mesmo conjunto de anexos não chama IA de novo
+      const cacheKey = `supplier-ai-extract:${companyDb}:${hashUrls(urls)}:${tx.description}`;
+      const data = await withAiCache(cacheKey, async () => {
+        const res = await supabase.functions.invoke("supplier-ai-extract", {
+          body: {
+            description: tx.description,
+            amount: tx.amount,
+            receipts: tx.receipts || [],
+            attachments: (tx.attachments || []).slice(0, 5),
+            hint: tx.accountName || tx.accountAlias,
+          },
+        });
+        if (res.error) throw res.error;
+        return res.data;
       });
-      if (error) throw error;
       const extracted = (data as any)?.supplier;
       if (!extracted?.federal_tax_id || !extracted?.card_name) {
         setAiNotice("IA não conseguiu identificar o fornecedor neste documento.");
