@@ -775,6 +775,161 @@ export type Database = {
         }
         Relationships: []
       }
+      nf_entrada_imports: {
+        Row: {
+          chave_acesso: string
+          cnpj_fornecedor: string | null
+          condicao_pagamento: string | null
+          cost_center: string | null
+          created_at: string
+          data_emissao: string | null
+          expense_id: string | null
+          id: string
+          impostos: Json
+          itens: Json
+          last_error: string | null
+          last_poll_at: string | null
+          nome_fornecedor: string | null
+          numero_nf: string | null
+          pdf_storage_path: string | null
+          raw_mastertax: Json | null
+          rejection_reason: string | null
+          sap_company_db: string | null
+          sap_invoice_draft_id: string | null
+          sap_po_draft_id: string | null
+          serie: string | null
+          status: Database["public"]["Enums"]["nf_entrada_status"]
+          updated_at: string
+          valor_total: number | null
+          xml_storage_path: string | null
+        }
+        Insert: {
+          chave_acesso: string
+          cnpj_fornecedor?: string | null
+          condicao_pagamento?: string | null
+          cost_center?: string | null
+          created_at?: string
+          data_emissao?: string | null
+          expense_id?: string | null
+          id?: string
+          impostos?: Json
+          itens?: Json
+          last_error?: string | null
+          last_poll_at?: string | null
+          nome_fornecedor?: string | null
+          numero_nf?: string | null
+          pdf_storage_path?: string | null
+          raw_mastertax?: Json | null
+          rejection_reason?: string | null
+          sap_company_db?: string | null
+          sap_invoice_draft_id?: string | null
+          sap_po_draft_id?: string | null
+          serie?: string | null
+          status?: Database["public"]["Enums"]["nf_entrada_status"]
+          updated_at?: string
+          valor_total?: number | null
+          xml_storage_path?: string | null
+        }
+        Update: {
+          chave_acesso?: string
+          cnpj_fornecedor?: string | null
+          condicao_pagamento?: string | null
+          cost_center?: string | null
+          created_at?: string
+          data_emissao?: string | null
+          expense_id?: string | null
+          id?: string
+          impostos?: Json
+          itens?: Json
+          last_error?: string | null
+          last_poll_at?: string | null
+          nome_fornecedor?: string | null
+          numero_nf?: string | null
+          pdf_storage_path?: string | null
+          raw_mastertax?: Json | null
+          rejection_reason?: string | null
+          sap_company_db?: string | null
+          sap_invoice_draft_id?: string | null
+          sap_po_draft_id?: string | null
+          serie?: string | null
+          status?: Database["public"]["Enums"]["nf_entrada_status"]
+          updated_at?: string
+          valor_total?: number | null
+          xml_storage_path?: string | null
+        }
+        Relationships: []
+      }
+      nf_entrada_logs: {
+        Row: {
+          actor: string | null
+          created_at: string
+          id: string
+          import_id: string
+          message: string | null
+          payload: Json | null
+          status_from: Database["public"]["Enums"]["nf_entrada_status"] | null
+          status_to: Database["public"]["Enums"]["nf_entrada_status"] | null
+          step: string
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          id?: string
+          import_id: string
+          message?: string | null
+          payload?: Json | null
+          status_from?: Database["public"]["Enums"]["nf_entrada_status"] | null
+          status_to?: Database["public"]["Enums"]["nf_entrada_status"] | null
+          step: string
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          id?: string
+          import_id?: string
+          message?: string | null
+          payload?: Json | null
+          status_from?: Database["public"]["Enums"]["nf_entrada_status"] | null
+          status_to?: Database["public"]["Enums"]["nf_entrada_status"] | null
+          step?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_entrada_logs_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "nf_entrada_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nf_entrada_settings: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          key: string
+          updated_at?: string
+          value?: Json
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           category: string
@@ -1698,6 +1853,16 @@ export type Database = {
         | "pagamento"
         | "finalizado"
         | "cancelado"
+      nf_entrada_status:
+        | "pending_expense"
+        | "awaiting_erpflow_approval"
+        | "erpflow_rejected"
+        | "awaiting_sap"
+        | "sap_rejected"
+        | "awaiting_invoice"
+        | "completed"
+        | "integration_error"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1836,6 +2001,17 @@ export const Constants = {
         "pagamento",
         "finalizado",
         "cancelado",
+      ],
+      nf_entrada_status: [
+        "pending_expense",
+        "awaiting_erpflow_approval",
+        "erpflow_rejected",
+        "awaiting_sap",
+        "sap_rejected",
+        "awaiting_invoice",
+        "completed",
+        "integration_error",
+        "cancelled",
       ],
     },
   },

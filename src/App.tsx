@@ -24,6 +24,7 @@ import Items from "./pages/Items.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import FiscalAudit from "./pages/FiscalAudit.tsx";
+import NfEntrada from "./pages/NfEntrada.tsx";
 import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
 import UserActivity from "./pages/UserActivity.tsx";
 import UserProductivity from "./pages/UserProductivity.tsx";
@@ -74,6 +75,7 @@ const App = () => (
               <Route path="/intercompany" element={<Intercompany />} />
               <Route path="/financial-review" element={<FinancialReview />} />
               <Route path="/fiscal-audit" element={<FiscalAudit />} />
+              <Route path="/nf-entrada" element={<NfEntrada />} />
               <Route path="/users/activity" element={<UserActivity />} />
               <Route path="/users/productivity" element={<UserProductivity />} />
               <Route path="/users/idp-sync" element={<IdpSync />} />

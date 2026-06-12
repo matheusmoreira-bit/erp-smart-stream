@@ -21,6 +21,7 @@ import {
   Wallet,
   Bell,
   FileSearch,
+  FileInput,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -202,6 +203,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-warning/20 to-warning/5",
     moduleKey: "fiscal_audit",
   },
+  nf_entrada: {
+    title: "NF de Entrada (Master Tax)",
+    description: "Importa NFs da Master Tax, gera despesa no ERP Flow e cria esboços de PO e NF de Entrada no SAP B1.",
+    icon: FileInput,
+    path: "/nf-entrada",
+    color: "text-primary",
+    bgGlow: "from-primary/20 to-primary/5",
+    moduleKey: "nf_entrada",
+  },
 };
 
 const moduleGroups: { title: string; keys: string[] }[] = (
@@ -212,7 +222,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Financeiro / Contábil",
-      keys: ["pagcorp", "integration_history", "financial_review", "intercompany", "fiscal_audit"],
+      keys: ["pagcorp", "integration_history", "financial_review", "intercompany", "fiscal_audit", "nf_entrada"],
     },
     {
       title: "Admin",
