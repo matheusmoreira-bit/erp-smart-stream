@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { authFetch } from "@/lib/auth-fetch";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 export interface ApprovalHistoryRow {
   id: string;
@@ -71,7 +71,7 @@ export function useApprovalHistory(companyDb?: string | null) {
   const sync = useCallback(async () => {
     setIsSyncing(true);
     try {
-      const res = await authFetch("approval-history-sync", { method: "POST" });
+      const res = await sapFunctionFetch("approval-history-sync", { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || body?.success === false) {
         throw new Error(body?.error || `HTTP ${res.status}`);

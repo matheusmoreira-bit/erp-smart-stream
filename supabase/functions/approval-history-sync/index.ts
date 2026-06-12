@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 /**
  * approval-history-sync
@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
 
   try {
     try {
-      await requireAdmin(req);
+      await requireAdminOrSapSession(req);
     } catch (err) {
       const r = authErrorResponse(err, corsHeaders);
       if (r) return r;
