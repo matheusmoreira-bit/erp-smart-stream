@@ -259,7 +259,14 @@ export default function Credentials() {
 
   // Group systems by category, filtering ERPs by admin-enabled list
   const erpSystems = SYSTEMS.filter((s) => s.category === "erp" && enabledErpNames.includes(s.name));
-  const otherSystems = SYSTEMS.filter((s) => !s.category);
+  // Non-ERP integrations: shown by default; if there's a toggle row in enabled_erp_types and it's off, hide.
+  const otherSystems = SYSTEMS.filter((s) => {
+    if (s.category) return false;
+    if (erpTypesLoading) return true;
+    // If a toggle exists for this integration, respect it; otherwise always show.
+    const hasToggle = enabledErpNames !== undefined; // erpTypes is loaded; check by presence in raw list
+    return hasToggle ? enabledErpNames.includes(s.name) || !["mastertax"].includes(s.name) : true;
+  });
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

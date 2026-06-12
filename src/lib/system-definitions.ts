@@ -1,4 +1,4 @@
-import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, type LucideIcon } from "lucide-react";
+import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, FileInput, type LucideIcon } from "lucide-react";
 
 export interface SystemField {
   key: string;
@@ -180,6 +180,19 @@ export const SYSTEMS: SystemConfig[] = [
       { key: "aes_key", label: "Chave AES (Base64)", type: "password", placeholder: "Chave AES-256 em Base64" },
       { key: "hmac_key", label: "Chave HMAC (Base64)", type: "password", placeholder: "Chave HMAC-SHA256 em Base64" },
       { key: "account_id", label: "Account ID", placeholder: "ID da conta PagCorp" },
+    ],
+  },
+  {
+    name: "mastertax",
+    label: "Master Tax",
+    description: "Captura automática de NFs/XMLs de entrada e PDFs (DANFE)",
+    icon: FileInput,
+    fields: [
+      { key: "base_url", label: "URL Base da API", placeholder: "https://api.mastertax.com.br/v1/" },
+      { key: "token", label: "Token de Acesso", type: "password", placeholder: "Bearer token" },
+      { key: "pdf_base_url", label: "URL Base do PDF (opcional)", placeholder: "https://portal.mastertax.com.br/danfe/" },
+      { key: "username", label: "Usuário (se aplicável)", placeholder: "usuario_api" },
+      { key: "password", label: "Senha (se aplicável)", type: "password", placeholder: "Senha do usuário" },
     ],
   },
 ];

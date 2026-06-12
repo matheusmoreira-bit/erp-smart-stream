@@ -70,6 +70,19 @@ Deno.serve(async (req) => {
   const result = { fetched: 0, upserted: 0, skipped: 0, errors: 0 };
 
   try {
+    // Respect global enable toggle from Backoffice
+    const { data: toggle } = await supabase
+      .from("enabled_erp_types")
+      .select("is_active")
+      .eq("erp_type", "mastertax")
+      .maybeSingle();
+    if (!toggle?.is_active) {
+      return new Response(JSON.stringify({ ok: true, skipped: "mastertax integration disabled" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     const { data: stateRow } = await supabase
       .from("nf_entrada_settings")
       .select("value")
