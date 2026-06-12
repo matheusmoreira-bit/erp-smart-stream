@@ -1,72 +1,66 @@
-## Objetivo
+# Evoluções do Módulo PagCorp
 
-Embarcar o Silent Specter (plataforma de auditoria com IA sobre dados SAP) como uma seção dentro do módulo Analytics deste projeto, **criando todas as tabelas aqui** (Lovable Cloud do ERP Flow).
+Escopo grande — proponho executar em **4 fases** para validar incrementalmente. Confirme se aceita o ordenamento ou se quer outra prioridade.
 
-## Tamanho real do trabalho
+---
 
-O Silent Specter tem:
-- ~30+ tabelas (`companies`, `audit_runs`, `audit_divergences`, `accounts_payable`, `approval_requests`, `approval_request_decisions`, `approval_templates`, `chat_messages`, `vendors`, `documents`, `divergence_rules`, `workflow_*`, `auth_failure_logs`, `allowed_emails`, etc.)
-- 14 rotas (dashboard, audit, audit-queue, audit-report, divergences, document-analysis, documents, vendors, approvals, companies, logs, settings, users)
-- Backend pesado: `runner.server.ts` (executa auditorias), `divergence-rules.server.ts`, integrações SAP, IA insights, chat
-- Roteador diferente (TanStack Router vs. nosso React Router)
-- Schema parcialmente conflitante: já temos `companies`, `suppliers`, `approval_history`, etc. — alguns campos diferem
+## Fase 1 — Ajustes diretos na integração SAP e UI da lista
 
-**Não cabe em uma única migração nem em uma única resposta.** Vou propor um faseamento em quatro entregas, cada uma fechada e funcional.
+1. **Descrição enviada ao SAP** (`pagcorp-to-sap/index.ts`)
+   - Trocar `Despesa interna #<id>` por `PagCorp <Nome do Portador/Cartão>`.
+   - Portador = `cardName` ou `accountAlias` ou `accountName`.
+2. **Botão "Integrar ao ERP"** (`PagCorp.tsx`, `PagCorpIntegrateDialog.tsx`, `PagCorpConsolidateDialog.tsx`)
+   - Padronizar label nos dois fluxos (com e sem prestação).
+3. **Status textual da prestação de contas** (`PagCorp.tsx`)
+   - Coluna passa a exibir badge com texto: `Pendente` / `Em análise` / `Aprovado`.
+4. **Novo filtro de status** (`PagCorp.tsx`)
+   - Três opções: Pendente · Em análise · Finalizado, com regras:
+     - Pendente = sem prestação
+     - Em análise = prestação criada e não aprovada
+     - Finalizado = prestação aprovada
+5. **Remover aba duplicada "Centro de Custo / Projeto"** (`PagCorpMapping.tsx`)
+   - Toda configuração permanece na aba "Cartões".
 
-## Conflitos de schema (precisam decisão antes do Fase 1)
+## Fase 2 — Indedutíveis e integração em lote
 
-| Tabela Silent Specter | Tabela já existente aqui | Decisão sugerida |
-|---|---|---|
-| `companies` (id uuid, name, sap_db, sap_url…) | `companies` (company_db PK, display_name, base_url…) | **Reusar a nossa**, mapear `company_id` ⇒ `company_db` |
-| `vendors` (sap-style) | `suppliers` | **Reusar `suppliers`**, audit aponta via `card_code` |
-| `approval_requests`/`_decisions`/`_templates` | `approval_history`/`approval_rules` | **Manter separado** (origem distinta: snapshot SAP × hub n8n) sob prefixo `audit_*` |
-| `chat_messages` | `ai_chat_messages`/`ai_chat_threads` | **Reusar os nossos** |
-| `allowed_emails`, `auth_failure_logs` | `user_roles` + auth nativa | **Descartar** — usaremos nosso RBAC |
-| `documents`, `accounts_payable`, `audit_*`, `divergence_rules`, `workflow_*`, `insights_*` | — | **Criar com prefixo `audit_`** |
+6. **Integração sem prestação ⇒ Indedutível automático** (`PagCorp.tsx`, `pagcorp-to-sap`)
+   - Quando `hasAccountability=false`, marcar `nondeductible=true` no payload e pular obrigatoriedade de prestação.
+7. **Lote de indedutíveis em um único PC** (`PagCorp.tsx`, `pagcorp-to-sap`)
+   - Reusar `integrateConsolidated` adicionando flag `nondeductible`.
+8. **Lote de transações COM prestação em um único Pedido de Compra**
+   - Garantir que todos os anexos/receipts das transações sejam enviados ao SAP (atualizar `pagcorp-to-sap` para iterar receipts de cada linha e anexar todos).
 
-## Fases
+## Fase 3 — Consulta e reenvio de integrações
 
-### Fase 1 — Fundação (schema + navegação)
-- Migration criando tabelas exclusivas do Silent Specter com prefixo `audit_`, RLS escopado por `company_db` + role, e GRANTs:
-  `audit_runs`, `audit_divergences`, `audit_divergence_rules`, `audit_documents`, `audit_accounts_payable`, `audit_approval_requests`, `audit_approval_decisions`, `audit_approval_templates`, `audit_workflow_steps`, `audit_workflow_runs`, `audit_insights`, `audit_logs`
-- Sub-rota `/analytics/audit` com sidebar interno (Dashboard, Audit Queue, Divergências, Documentos, Insights, Logs)
-- Item de menu já existente "Auditoria Fiscal" passa a apontar para essa estrutura (ou criamos novo `audit_console`)
-- Estilo "glass card / ambient bg / display font" portado para os tokens semânticos do projeto (sem quebrar o tema atual)
+9. **Detalhe da integração concluída** (nova `PagCorpIntegrationDetailDialog.tsx`)
+   - Ao clicar em linha integrada, abrir modal com `pagcorp_integration_log` (sap_payload, sap_response, sap_doc_entry/num, anexos, status).
+   - Inspiração: `IntegrationsMonitor.tsx`.
+10. **Reenvio de integração com falha**
+    - Listar falhas (`pagcorp_integration_log` status=`error`) acessíveis a partir da própria linha.
+    - Permitir editar fornecedor / centro de custo / projeto / item e reenviar via `pagcorp-to-sap` reaproveitando `pagcorp_data`.
+11. **Persistência do modal durante a sessão**
+    - `sessionStorage` por transação id: fornecedor + overrides; restaurar ao reabrir.
 
-### Fase 2 — Telas read-only
-- Dashboard executivo (KPIs + gráficos + AI insights card)
-- Audit Queue (lista de runs)
-- Audit Report (`/runId`) com divergências
-- Página de divergências global com filtros
-- Hooks: `useAuditRuns`, `useAuditDivergences`, `useAuditInsights`
+## Fase 4 — Padronização de empresas (transversal)
 
-### Fase 3 — Motor de auditoria
-- Edge function `audit-run` (porte do `runner.server.ts` + `divergence-rules.server.ts`) — dispara comparações SAP × dados internos
-- Edge function `audit-insights` (porte do `insights.functions.ts`) usando Lovable AI Gateway (não OpenAI direto)
-- Botão "Nova auditoria" + acompanhamento de progresso (`use-sync-progress` equivalente)
-- Tabela `audit_workflow_runs` recebe execuções
+12. **Razão Social / Nome Fantasia / CNPJ (ou Nome Estrangeiro)**
+    - Adicionar colunas a `companies` se faltarem (`legal_name`, `trade_name`, `tax_id`, `foreign_name`, `is_foreign`).
+    - Atualizar telas que mostram empresa: seletor SAP, listas, filtros, headers.
+    - Migration + ajuste em `useCompanies.ts` + componentes consumidores.
 
-### Fase 4 — Análise documental + chat
-- Página `document-analysis` + `documents` (upload + extração + confronto)
-- Floating chat / command palette portados, conectados ao nosso `ai_chat_*`
-- Workflow dialog + confront drawer
-- Limpeza: remover qualquer resíduo TanStack Router, padronizar com React Router v6
+---
 
-## Detalhes técnicos
+## Detalhes técnicos chave
 
-- **Roteamento**: tudo entra como sub-rotas do Analytics (`/analytics/audit/*`), usando React Router. Convertemos `createFileRoute(...)` em componentes normais.
-- **Auth**: usamos `useSap` + `useModuleAccess("audit_console")`. Sem `allowed_emails` paralelo.
-- **Segredos**: chaves de IA continuam em `LOVABLE_API_KEY`. Nenhum segredo do Silent Specter vai ao bundle.
-- **RLS**: toda tabela `audit_*` com policy `company_db = current setting` + `has_role(...)` para admin, escrita só por edge function (service role).
-- **Storage**: bucket novo `audit-documents` (privado) para uploads de NF/contratos analisados.
-- **Tipos**: `src/integrations/supabase/types.ts` é auto-gerado — não tocamos.
+- **Backend tocado**: `supabase/functions/pagcorp-to-sap/index.ts` (descrição, indedutível, batch, multi-anexos).
+- **Sem mudança de schema** nas fases 1–3, exceto índice opcional em `pagcorp_integration_log(status)`.
+- **Fase 4** exige migration em `companies` + retipagem.
+- Detalhe/reenvio reaproveitam `pagcorp_integration_log` já existente — sem nova tabela.
 
-## Fora de escopo desta fusão
+---
 
-- Migração de **dados** existentes do Silent Specter (só schema + UI). Se quiser trazer dados, fazemos export CSV depois.
-- Sincronizar `auth.users` entre os dois projetos.
-- Manter o Silent Specter rodando em paralelo (assumimos que ele será aposentado).
+## Confirmações antes de começar
 
-## Próximo passo
-
-Se aprovar este plano, começo pela **Fase 1** (migration + navegação) na próxima mensagem.
+- Posso seguir nessa ordem (1 → 4) entregando fase a fase?
+- Na Fase 4, devo **adicionar** colunas novas em `companies` ou já existem campos equivalentes que devo reaproveitar? (vou inspecionar antes da migration)
+- "PC" no item 7 = **Pedido de Compra** consolidado com flag indedutível, certo? (não um documento contábil distinto)
