@@ -325,8 +325,14 @@ Deno.serve(async (req) => {
     const lineMappings = await Promise.all(
       transactions.map(async (t) => {
         const acctMapping = await resolveAccountMapping(supabase!, t.accountCode || null);
-        const itemCode = await resolveItemCode(supabase!, t.accountCode || null);
-        return { tx: t, acctMapping, itemCode };
+        const cardMapping = await resolveCardMapping(
+          supabase!,
+          companyDb,
+          resolveCardKey(t),
+        );
+        const itemCode =
+          cardMapping?.item_code || (await resolveItemCode(supabase!, t.accountCode || null));
+        return { tx: t, acctMapping, cardMapping, itemCode };
       }),
     );
     const missing = lineMappings.find((m) => {
