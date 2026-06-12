@@ -136,8 +136,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Central de automações e integrações entre sistemas (JumpCloud, SAP, IdP).",
     icon: Zap,
     path: "/synapse",
-    color: "text-fuchsia-400",
-    bgGlow: "from-fuchsia-500/20 to-fuchsia-500/5",
+    color: "text-violet-400",
+    bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "synapse",
   },
   integration_history: {
