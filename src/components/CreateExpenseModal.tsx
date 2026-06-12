@@ -707,10 +707,34 @@ export function CreateExpenseModal({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowSupplierForm(true)}
+                  onClick={async () => {
+                    try {
+                      await requestSupplierRegistration({
+                        cardName: aiSupplierData?.card_name || suggestedSupplierName || undefined,
+                        federalTaxId: aiSupplierData?.federal_tax_id,
+                        email: aiSupplierData?.email,
+                        phone1: aiSupplierData?.phone1,
+                        phone2: aiSupplierData?.phone2,
+                        address: {
+                          street: aiSupplierData?.bill_to_street,
+                          zip: aiSupplierData?.bill_to_zip,
+                          city: aiSupplierData?.bill_to_city,
+                          state: aiSupplierData?.bill_to_state,
+                          block: aiSupplierData?.bill_to_block,
+                          building: aiSupplierData?.bill_to_building,
+                        },
+                        companyDb: sapSession?.companyDB,
+                        context: `Compras — Criação de despesa (${bpLabel})`,
+                        requesterName: sapSession?.userName,
+                      });
+                      toast.success("Solicitação enviada para compras@anagaming.com.br");
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Falha ao enviar solicitação");
+                    }
+                  }}
                   className="gap-1.5 text-xs h-7 shrink-0"
                 >
-                  <UserPlus className="w-3.5 h-3.5" /> Cadastrar {bpLabel}
+                  <UserPlus className="w-3.5 h-3.5" /> Solicitar cadastro
                 </Button>
               </div>
             )}
