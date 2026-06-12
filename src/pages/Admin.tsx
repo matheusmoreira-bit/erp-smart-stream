@@ -894,13 +894,61 @@ export default function Admin() {
                 />
               </div>
 
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={companyForm.is_active}
-                  onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
-                />
-                <span className="text-sm text-foreground">Empresa ativa</span>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={companyForm.is_active}
+                    onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
+                  />
+                  <span className="text-sm text-foreground">Empresa ativa</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={companyForm.is_foreign}
+                    onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_foreign: v }))}
+                  />
+                  <span className="text-sm text-foreground">Empresa estrangeira</span>
+                </div>
               </div>
+
+              {/* Identificação fiscal */}
+              {companyForm.is_foreign ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Nome no exterior</label>
+                  <Input
+                    value={companyForm.foreign_name}
+                    onChange={(e) => setCompanyForm((f) => ({ ...f, foreign_name: e.target.value }))}
+                    placeholder="Foreign legal name"
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Razão Social</label>
+                    <Input
+                      value={companyForm.legal_name}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, legal_name: e.target.value }))}
+                      placeholder="Razão social"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Nome Fantasia</label>
+                    <Input
+                      value={companyForm.trade_name}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, trade_name: e.target.value }))}
+                      placeholder="Nome fantasia"
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <label className="text-sm font-medium text-foreground">CNPJ</label>
+                    <Input
+                      value={companyForm.tax_id}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, tax_id: e.target.value }))}
+                      placeholder="00.000.000/0000-00"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Currency & Timezone */}
               <div className="grid grid-cols-2 gap-4">
