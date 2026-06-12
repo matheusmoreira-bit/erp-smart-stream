@@ -306,6 +306,488 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_console_accounts_payable: {
+        Row: {
+          card_code: string | null
+          company_db: string
+          doc_date: string | null
+          due_date: string | null
+          id: string
+          linked_grpo_id: string | null
+          linked_invoice_id: string | null
+          payment_terms_code: string | null
+          raw_data: Json | null
+          sap_doc_entry: number
+          synced_at: string
+          total_amount: number | null
+        }
+        Insert: {
+          card_code?: string | null
+          company_db: string
+          doc_date?: string | null
+          due_date?: string | null
+          id?: string
+          linked_grpo_id?: string | null
+          linked_invoice_id?: string | null
+          payment_terms_code?: string | null
+          raw_data?: Json | null
+          sap_doc_entry: number
+          synced_at?: string
+          total_amount?: number | null
+        }
+        Update: {
+          card_code?: string | null
+          company_db?: string
+          doc_date?: string | null
+          due_date?: string | null
+          id?: string
+          linked_grpo_id?: string | null
+          linked_invoice_id?: string | null
+          payment_terms_code?: string | null
+          raw_data?: Json | null
+          sap_doc_entry?: number
+          synced_at?: string
+          total_amount?: number | null
+        }
+        Relationships: []
+      }
+      audit_console_approval_decisions: {
+        Row: {
+          approval_request_id: string | null
+          approver_user_id: number | null
+          company_db: string
+          decided_at: string | null
+          id: string
+          raw_data: Json | null
+          remarks: string | null
+          status: string | null
+          step_number: number | null
+          synced_at: string
+        }
+        Insert: {
+          approval_request_id?: string | null
+          approver_user_id?: number | null
+          company_db: string
+          decided_at?: string | null
+          id?: string
+          raw_data?: Json | null
+          remarks?: string | null
+          status?: string | null
+          step_number?: number | null
+          synced_at?: string
+        }
+        Update: {
+          approval_request_id?: string | null
+          approver_user_id?: number | null
+          company_db?: string
+          decided_at?: string | null
+          id?: string
+          raw_data?: Json | null
+          remarks?: string | null
+          status?: string | null
+          step_number?: number | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_console_approval_decisions_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "audit_console_approval_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_console_approval_requests: {
+        Row: {
+          company_db: string
+          doc_date_sap: string | null
+          doc_entry: number | null
+          doc_object_type: string | null
+          id: string
+          originator_user_id: number | null
+          raw_data: Json | null
+          remarks: string | null
+          sap_request_id: number
+          status: string | null
+          synced_at: string
+          template_id: number | null
+          update_date_sap: string | null
+        }
+        Insert: {
+          company_db: string
+          doc_date_sap?: string | null
+          doc_entry?: number | null
+          doc_object_type?: string | null
+          id?: string
+          originator_user_id?: number | null
+          raw_data?: Json | null
+          remarks?: string | null
+          sap_request_id: number
+          status?: string | null
+          synced_at?: string
+          template_id?: number | null
+          update_date_sap?: string | null
+        }
+        Update: {
+          company_db?: string
+          doc_date_sap?: string | null
+          doc_entry?: number | null
+          doc_object_type?: string | null
+          id?: string
+          originator_user_id?: number | null
+          raw_data?: Json | null
+          remarks?: string | null
+          sap_request_id?: number
+          status?: string | null
+          synced_at?: string
+          template_id?: number | null
+          update_date_sap?: string | null
+        }
+        Relationships: []
+      }
+      audit_console_divergences: {
+        Row: {
+          actual_value: number | null
+          audit_run_id: string | null
+          card_code: string | null
+          company_db: string
+          created_at: string
+          delta_value: number | null
+          description: string
+          divergence_type: Database["public"]["Enums"]["audit_console_divergence_type"]
+          expected_value: number | null
+          id: string
+          is_fraud_flag: boolean
+          is_reviewed: boolean
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewer_notes: string | null
+          severity: Database["public"]["Enums"]["audit_console_severity"]
+          source_id: string | null
+          source_table: string | null
+        }
+        Insert: {
+          actual_value?: number | null
+          audit_run_id?: string | null
+          card_code?: string | null
+          company_db: string
+          created_at?: string
+          delta_value?: number | null
+          description: string
+          divergence_type: Database["public"]["Enums"]["audit_console_divergence_type"]
+          expected_value?: number | null
+          id?: string
+          is_fraud_flag?: boolean
+          is_reviewed?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          severity?: Database["public"]["Enums"]["audit_console_severity"]
+          source_id?: string | null
+          source_table?: string | null
+        }
+        Update: {
+          actual_value?: number | null
+          audit_run_id?: string | null
+          card_code?: string | null
+          company_db?: string
+          created_at?: string
+          delta_value?: number | null
+          description?: string
+          divergence_type?: Database["public"]["Enums"]["audit_console_divergence_type"]
+          expected_value?: number | null
+          id?: string
+          is_fraud_flag?: boolean
+          is_reviewed?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          severity?: Database["public"]["Enums"]["audit_console_severity"]
+          source_id?: string | null
+          source_table?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_console_divergences_audit_run_id_fkey"
+            columns: ["audit_run_id"]
+            isOneToOne: false
+            referencedRelation: "audit_console_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_console_insights: {
+        Row: {
+          audit_run_id: string | null
+          body: string | null
+          category: string | null
+          company_db: string
+          created_at: string
+          headline: string
+          id: string
+          metadata: Json
+          severity: Database["public"]["Enums"]["audit_console_severity"]
+        }
+        Insert: {
+          audit_run_id?: string | null
+          body?: string | null
+          category?: string | null
+          company_db: string
+          created_at?: string
+          headline: string
+          id?: string
+          metadata?: Json
+          severity?: Database["public"]["Enums"]["audit_console_severity"]
+        }
+        Update: {
+          audit_run_id?: string | null
+          body?: string | null
+          category?: string | null
+          company_db?: string
+          created_at?: string
+          headline?: string
+          id?: string
+          metadata?: Json
+          severity?: Database["public"]["Enums"]["audit_console_severity"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_console_insights_audit_run_id_fkey"
+            columns: ["audit_run_id"]
+            isOneToOne: false
+            referencedRelation: "audit_console_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_console_logs: {
+        Row: {
+          audit_run_id: string | null
+          company_db: string
+          context: Json
+          created_at: string
+          id: string
+          level: string
+          message: string
+        }
+        Insert: {
+          audit_run_id?: string | null
+          company_db: string
+          context?: Json
+          created_at?: string
+          id?: string
+          level?: string
+          message: string
+        }
+        Update: {
+          audit_run_id?: string | null
+          company_db?: string
+          context?: Json
+          created_at?: string
+          id?: string
+          level?: string
+          message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_console_logs_audit_run_id_fkey"
+            columns: ["audit_run_id"]
+            isOneToOne: false
+            referencedRelation: "audit_console_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_console_rules: {
+        Row: {
+          company_db: string | null
+          config: Json
+          created_at: string
+          default_severity: Database["public"]["Enums"]["audit_console_severity"]
+          divergence_type: Database["public"]["Enums"]["audit_console_divergence_type"]
+          id: string
+          is_active: boolean
+          name: string
+          tolerance: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_db?: string | null
+          config?: Json
+          created_at?: string
+          default_severity?: Database["public"]["Enums"]["audit_console_severity"]
+          divergence_type: Database["public"]["Enums"]["audit_console_divergence_type"]
+          id?: string
+          is_active?: boolean
+          name: string
+          tolerance?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string | null
+          config?: Json
+          created_at?: string
+          default_severity?: Database["public"]["Enums"]["audit_console_severity"]
+          divergence_type?: Database["public"]["Enums"]["audit_console_divergence_type"]
+          id?: string
+          is_active?: boolean
+          name?: string
+          tolerance?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      audit_console_runs: {
+        Row: {
+          company_db: string
+          created_at: string
+          current_step: string | null
+          date_from: string | null
+          date_to: string | null
+          error_message: string | null
+          fetch_warnings: Json
+          finished_at: string | null
+          id: string
+          progress_pct: number
+          scope: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["audit_console_run_status"]
+          total_divergences: number
+          total_docs_analyzed: number
+          total_fraud_flags: number
+          triggered_by: string | null
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          current_step?: string | null
+          date_from?: string | null
+          date_to?: string | null
+          error_message?: string | null
+          fetch_warnings?: Json
+          finished_at?: string | null
+          id?: string
+          progress_pct?: number
+          scope?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["audit_console_run_status"]
+          total_divergences?: number
+          total_docs_analyzed?: number
+          total_fraud_flags?: number
+          triggered_by?: string | null
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          current_step?: string | null
+          date_from?: string | null
+          date_to?: string | null
+          error_message?: string | null
+          fetch_warnings?: Json
+          finished_at?: string | null
+          id?: string
+          progress_pct?: number
+          scope?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["audit_console_run_status"]
+          total_divergences?: number
+          total_docs_analyzed?: number
+          total_fraud_flags?: number
+          triggered_by?: string | null
+        }
+        Relationships: []
+      }
+      audit_console_workflow_runs: {
+        Row: {
+          audit_run_id: string | null
+          company_db: string
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          output: Json | null
+          started_at: string | null
+          status: string
+          step_id: string | null
+        }
+        Insert: {
+          audit_run_id?: string | null
+          company_db: string
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          output?: Json | null
+          started_at?: string | null
+          status?: string
+          step_id?: string | null
+        }
+        Update: {
+          audit_run_id?: string | null
+          company_db?: string
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          output?: Json | null
+          started_at?: string | null
+          status?: string
+          step_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_console_workflow_runs_audit_run_id_fkey"
+            columns: ["audit_run_id"]
+            isOneToOne: false
+            referencedRelation: "audit_console_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_console_workflow_runs_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "audit_console_workflow_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_console_workflow_steps: {
+        Row: {
+          company_db: string | null
+          config: Json
+          created_at: string
+          handler: string
+          id: string
+          is_active: boolean
+          name: string
+          step_order: number
+          updated_at: string
+        }
+        Insert: {
+          company_db?: string | null
+          config?: Json
+          created_at?: string
+          handler: string
+          id?: string
+          is_active?: boolean
+          name: string
+          step_order?: number
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string | null
+          config?: Json
+          created_at?: string
+          handler?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          step_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -1796,6 +2278,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_audit_console: {
+        Args: { _company_db: string }
+        Returns: boolean
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -1843,6 +2329,24 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      audit_console_divergence_type:
+        | "missing_order"
+        | "missing_grpo"
+        | "missing_ap"
+        | "value_mismatch"
+        | "vendor_mismatch"
+        | "payment_terms_mismatch"
+        | "document_mismatch"
+        | "date_anomaly"
+        | "duplicate_suspected"
+        | "fraud_flag"
+        | "missing_request"
+        | "missing_quotation"
+        | "missing_approval"
+        | "missing_invoice"
+        | "missing_payment"
+      audit_console_run_status: "pending" | "running" | "completed" | "failed"
+      audit_console_severity: "low" | "medium" | "high" | "critical"
       expense_status:
         | "rascunho"
         | "pendente_aprovacao"
@@ -1991,6 +2495,25 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      audit_console_divergence_type: [
+        "missing_order",
+        "missing_grpo",
+        "missing_ap",
+        "value_mismatch",
+        "vendor_mismatch",
+        "payment_terms_mismatch",
+        "document_mismatch",
+        "date_anomaly",
+        "duplicate_suspected",
+        "fraud_flag",
+        "missing_request",
+        "missing_quotation",
+        "missing_approval",
+        "missing_invoice",
+        "missing_payment",
+      ],
+      audit_console_run_status: ["pending", "running", "completed", "failed"],
+      audit_console_severity: ["low", "medium", "high", "critical"],
       expense_status: [
         "rascunho",
         "pendente_aprovacao",
