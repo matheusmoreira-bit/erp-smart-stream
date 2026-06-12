@@ -71,6 +71,11 @@ interface Company {
   default_currency: string;
   timezone: string;
   logo_url: string | null;
+  legal_name: string | null;
+  trade_name: string | null;
+  tax_id: string | null;
+  foreign_name: string | null;
+  is_foreign: boolean;
 }
 
 const ERP_TYPE_LABELS: Record<string, { label: string; icon: typeof Server }> = {
