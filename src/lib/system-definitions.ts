@@ -1,4 +1,4 @@
-import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, type LucideIcon } from "lucide-react";
+import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, FileInput, type LucideIcon } from "lucide-react";
 
 export interface SystemField {
   key: string;
