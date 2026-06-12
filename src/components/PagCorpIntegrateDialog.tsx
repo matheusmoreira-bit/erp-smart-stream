@@ -154,6 +154,15 @@ export function PagCorpIntegrateDialog({
     setAiNotice(null);
     setSupplierFormOpen(false);
 
+    // If the card is mapped as nondeductible, pre-select that supplier and skip AI
+    if (transaction.nondeductibleSupplierCode) {
+      setSupplier({
+        code: String(transaction.nondeductibleSupplierCode),
+        name: String(transaction.nondeductibleSupplierName || transaction.nondeductibleSupplierCode),
+      });
+      return;
+    }
+
     // Auto-trigger AI extraction
     setAiTried(true);
     void runAi(transaction);
@@ -200,11 +209,12 @@ export function PagCorpIntegrateDialog({
               ) : (
                 <Upload className="w-5 h-5 text-primary" />
               )}
-              Integrar no SAP
+              Integrar ao ERP
             </DialogTitle>
             <DialogDescription>
-              Será criado <strong>Pedido de Compra + NF de Entrada + Pagamento</strong> no SAP, sem passar
-              por aprovações.
+              {integrationType === "generic"
+                ? <>Transação <strong>sem prestação de contas</strong> será integrada como <strong>despesa indedutível</strong>.</>
+                : <>Será criado <strong>Pedido de Compra</strong> no SAP, sem passar por aprovações.</>}
             </DialogDescription>
           </DialogHeader>
 
@@ -333,7 +343,7 @@ export function PagCorpIntegrateDialog({
             </Button>
             <Button onClick={handleSubmit} disabled={!supplier || submitting}>
               {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Integrar agora
+              Integrar ao ERP
             </Button>
           </DialogFooter>
         </DialogContent>

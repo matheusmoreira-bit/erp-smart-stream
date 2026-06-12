@@ -100,22 +100,43 @@ async function uploadAttachmentsToSap(
   return body.AbsoluteEntry ?? null;
 }
 
+function collectReceiptUrls(receipts: any[]): { url: string; name?: string }[] {
+  const out: { url: string; name?: string }[] = [];
+  const seen = new Set<string>();
+  const push = (url: unknown, name?: unknown) => {
+    if (typeof url !== "string" || !url) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    out.push({ url, name: typeof name === "string" ? name : undefined });
+  };
+  for (const r of receipts || []) {
+    if (!r) continue;
+    if (Array.isArray(r.files)) {
+      for (const f of r.files) {
+        if (typeof f === "string") push(f);
+        else if (f && typeof f === "object") push(f.url || f.fileUrl || f.link, f.fileName || f.name);
+      }
+    }
+    push(r.url || r.fileUrl || r.link || r.downloadUrl || r.receiptUrl || r.imageUrl || r?.file?.url, r.fileName || r.name);
+  }
+  return out;
+}
+
 async function downloadReceipts(receipts: any[]): Promise<{ name: string; blob: Blob }[]> {
   const files: { name: string; blob: Blob }[] = [];
-  for (const r of receipts || []) {
-    const url: string | undefined = r?.url || r?.fileUrl || r?.link;
-    if (!url) continue;
+  const sources = collectReceiptUrls(receipts);
+  for (const src of sources) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(src.url);
       if (!res.ok) {
-        console.warn(`Falha ao baixar recibo ${url}: HTTP ${res.status}`);
+        console.warn(`Falha ao baixar recibo ${src.url}: HTTP ${res.status}`);
         continue;
       }
       const blob = await res.blob();
-      const name: string = r?.fileName || r?.name || `recibo_${files.length + 1}`;
+      const name = src.name || `recibo_${files.length + 1}`;
       files.push({ name, blob });
     } catch (e) {
-      console.warn(`Erro baixando recibo ${url}:`, e);
+      console.warn(`Erro baixando recibo ${src.url}:`, e);
     }
   }
   return files;
@@ -232,6 +253,7 @@ Deno.serve(async (req) => {
     const supplierCode: string = body.supplierCode;
     const supplierName: string | undefined = body.supplierName;
     const integratedBy: string | null = body.integratedBy || null;
+    const nondeductible: boolean = body.nondeductible === true;
     // Optional per-line overrides from integrate modal: { [txId]: { costCenter?, project? } }
     const lineOverrides: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }> =
       body.lineOverrides && typeof body.lineOverrides === "object" ? body.lineOverrides : {};
@@ -301,6 +323,7 @@ Deno.serve(async (req) => {
             receipts: transaction.receipts,
             consolidated: isConsolidated,
             consolidatedWith: isConsolidated ? transactions.map((x) => x.id) : undefined,
+            nondeductible,
           } as any,
           integration_type: integrationType,
           status: "pending",
@@ -476,7 +499,7 @@ Deno.serve(async (req) => {
         sap_doc_entry: poResult.docEntry,
         sap_doc_num: poResult.docNum,
         sap_payload: sapPayloads as any,
-        sap_response: { ...sapResponses, supplierCode, supplierName, stages, attachmentEntry, consolidated: isConsolidated, consolidatedCount: transactions.length } as any,
+        sap_response: { ...sapResponses, supplierCode, supplierName, stages, attachmentEntry, consolidated: isConsolidated, consolidatedCount: transactions.length, nondeductible } as any,
       } as any)
       .in("id", consolidatedLogIds);
 

@@ -213,20 +213,23 @@ export default function PagCorp() {
   const integrateAllNondeductible = async () => {
     if (!session?.companyDB) return;
     if (!checkSapCredentials()) return;
-    if (nondeductiblePending.length === 0) {
+    // If the user has selected nondeductible rows, integrate just those; else all pending
+    const selectedNd = nondeductiblePending.filter((t) => selectedIds.has(t.id));
+    const targets = selectedNd.length > 0 ? selectedNd : nondeductiblePending;
+    if (targets.length === 0) {
       toast.info("Nenhuma transação indedutível pendente no período");
       return;
     }
     // Group by supplier_code mapped on the card
     const groups = new Map<string, { name?: string; txs: PagCorpTransaction[] }>();
-    nondeductiblePending.forEach((t) => {
+    targets.forEach((t) => {
       const code = t.nondeductibleSupplierCode!;
       if (!groups.has(code)) groups.set(code, { name: t.nondeductibleSupplierName, txs: [] });
       groups.get(code)!.txs.push(t);
     });
 
     setIntegratingNondeductible(true);
-    const tId = toast.loading(`Integrando ${nondeductiblePending.length} transações em ${groups.size} PC(s)…`);
+    const tId = toast.loading(`Integrando ${targets.length} transações em ${groups.size} PC(s)…`);
     let ok = 0;
     let fail = 0;
     try {
@@ -238,6 +241,8 @@ export default function PagCorp() {
             code,
             g.name,
             session.userName || undefined,
+            undefined,
+            true,
           );
           ok++;
           toast.success(`PC consolidado #${result.purchaseOrder?.DocNum} (${g.txs.length} itens)`);
@@ -359,6 +364,8 @@ export default function PagCorp() {
         override.costCenter || override.project || override.item
           ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null, item: override.item ?? null } }
           : undefined;
+      // Sem prestação ⇒ tratada como indedutível por padrão
+      const asNondeductible = integrateDialog.type === "generic";
       const result = await integrateDirect(
         t,
         integrateDialog.type,
@@ -367,13 +374,14 @@ export default function PagCorp() {
         supplier.name,
         session.userName || undefined,
         lineOverrides,
+        asNondeductible,
       );
       if (result.alreadyIntegrated) {
         toast.info("Transação já estava integrada no SAP", {
           description: `DocNum #${result.docNum}`,
         });
       } else {
-        toast.success("Pedido de Compra criado no SAP", {
+        toast.success(asNondeductible ? "PC indedutível criado no SAP" : "Pedido de Compra criado no SAP", {
           description: `PC #${result.purchaseOrder?.DocNum}`,
         });
       }
@@ -803,7 +811,12 @@ export default function PagCorp() {
               ) : (
                 <ShieldOff className="w-4 h-4" />
               )}
-              Integrar indedutíveis ({nondeductiblePending.length})
+              {(() => {
+                const selCount = nondeductiblePending.filter((t) => selectedIds.has(t.id)).length;
+                return selCount > 0
+                  ? `Integrar selecionadas (${selCount})`
+                  : `Integrar indedutíveis (${nondeductiblePending.length})`;
+              })()}
             </Button>
           )}
         </div>
