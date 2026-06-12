@@ -661,6 +661,13 @@ export default function Admin() {
             <ShieldCheck className="w-4 h-4 inline mr-1.5" />
             Administradores
           </button>
+          <button
+            onClick={() => navigate("/backoffice/sap-users")}
+            className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Users className="w-4 h-4 inline mr-1.5" />
+            Usuários SAP
+          </button>
         </div>
 
         {activeTab === "companies" && (

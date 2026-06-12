@@ -38,6 +38,7 @@ import AuditConsole from "./pages/AuditConsole.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
+import SapUsersAdmin from "./pages/SapUsersAdmin.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
@@ -57,6 +58,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
+              <Route path="/backoffice/sap-users" element={<AdminRoute><SapUsersAdmin /></AdminRoute>} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/analytics/audit/*" element={<AuditConsole />} />
               <Route path="/approvals" element={<Approvals />} />
