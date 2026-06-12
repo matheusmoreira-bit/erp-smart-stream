@@ -811,7 +811,12 @@ export default function PagCorp() {
               ) : (
                 <ShieldOff className="w-4 h-4" />
               )}
-              Integrar indedutíveis ({nondeductiblePending.length})
+              {(() => {
+                const selCount = nondeductiblePending.filter((t) => selectedIds.has(t.id)).length;
+                return selCount > 0
+                  ? `Integrar selecionadas (${selCount})`
+                  : `Integrar indedutíveis (${nondeductiblePending.length})`;
+              })()}
             </Button>
           )}
         </div>
