@@ -709,22 +709,37 @@ export function CreateExpenseModal({
                   size="sm"
                   onClick={async () => {
                     try {
+                      const prefillAtts = (prefill?.receipts || []).flatMap((r: any) => {
+                        const url = typeof r === "string" ? r : r?.url || r?.fileUrl || r?.href;
+                        if (!url) return [];
+                        const name = (typeof r === "object" && (r.name || r.filename)) || url.split("/").pop()?.split("?")[0] || "anexo";
+                        return [{ name, url }];
+                      });
                       await requestSupplierRegistration({
                         cardName: aiSupplierData?.card_name || suggestedSupplierName || undefined,
                         federalTaxId: aiSupplierData?.federal_tax_id,
                         email: aiSupplierData?.email,
                         phone1: aiSupplierData?.phone1,
                         phone2: aiSupplierData?.phone2,
+                        currency: aiSupplierData?.currency,
                         address: {
                           street: aiSupplierData?.bill_to_street,
                           zip: aiSupplierData?.bill_to_zip,
                           city: aiSupplierData?.bill_to_city,
                           state: aiSupplierData?.bill_to_state,
+                          country: aiSupplierData?.bill_to_country,
                           block: aiSupplierData?.bill_to_block,
                           building: aiSupplierData?.bill_to_building,
                         },
                         companyDb: sapSession?.companyDB,
                         context: `Compras — Criação de despesa (${bpLabel})`,
+                        transaction: prefill ? {
+                          description: prefill.description,
+                          amount: prefill.amount,
+                          currency: prefill.currency,
+                          accountAlias: prefill.accountAlias,
+                        } : undefined,
+                        attachments: prefillAtts,
                         requesterName: sapSession?.userName,
                       });
                       toast.success("Solicitação enviada para compras@anagaming.com.br");

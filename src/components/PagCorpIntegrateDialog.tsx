@@ -363,22 +363,28 @@ export function PagCorpIntegrateDialog({
                             email: aiResult.email,
                             phone1: aiResult.phone1,
                             phone2: aiResult.phone2,
+                            currency: aiResult.currency,
                             address: {
                               street: aiResult.bill_to_street,
                               zip: aiResult.bill_to_zip,
                               city: aiResult.bill_to_city,
                               state: aiResult.bill_to_state,
+                              country: aiResult.bill_to_country,
                               block: aiResult.bill_to_block,
                               building: aiResult.bill_to_building,
                             },
                             companyDb,
                             context: "PagCorp — Integração",
                             transaction: transaction ? {
+                              id: (transaction as any).id ?? (transaction as any).transactionId ?? null,
                               description: transaction.description,
                               amount: Number(transaction.amount),
                               currency: transaction.currency,
                               date: transaction.date,
+                              accountAlias: (transaction as any).accountAlias,
+                              accountName: (transaction as any).accountName,
                             } : undefined,
+                            attachments: attachmentList.map((a) => ({ name: a.name, url: a.url })),
                           });
                           toast.success("Solicitação enviada para compras@anagaming.com.br");
                         } catch (err) {
