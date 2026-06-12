@@ -82,8 +82,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Aprovações já decididas em todas as empresas, sincronizadas com o SAP Approval Hub.",
     icon: History,
     path: "/approvals/history",
-    color: "text-amber-400",
-    bgGlow: "from-amber-500/20 to-amber-500/5",
+    color: "text-emerald-400",
+    bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "approval_history",
   },
   approval_rules: {
