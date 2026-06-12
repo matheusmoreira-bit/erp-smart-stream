@@ -109,8 +109,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Gerencie usuários SAP: bloqueio, desbloqueio e redefinição de senhas.",
     icon: Users,
     path: "/users",
-    color: "text-rose-400",
-    bgGlow: "from-rose-500/20 to-rose-500/5",
+    color: "text-violet-400",
+    bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "users",
   },
   suppliers: {
