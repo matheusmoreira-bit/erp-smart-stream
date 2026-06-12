@@ -46,8 +46,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Visão geral de métricas, tempos por etapa e insights de performance do fluxo de compras.",
     icon: BarChart3,
     path: "/analytics",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
     moduleKey: "analytics",
   },
   expenses: {
@@ -55,8 +55,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Crie e acompanhe solicitações de compras com fluxo de aprovação e integração SAP.",
     icon: ShoppingCart,
     path: "/expenses",
-    color: "text-success",
-    bgGlow: "from-success/20 to-success/5",
+    color: "text-emerald-400",
+    bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "expenses",
   },
   sales: {
@@ -64,8 +64,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Crie e acompanhe pedidos de venda com fluxo de aprovação e integração SAP.",
     icon: Wallet,
     path: "/sales",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-emerald-400",
+    bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "sales",
   },
   approvals: {
@@ -73,8 +73,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Documentos pendentes de aprovação com detalhes de valor, fornecedor, aprovador e vencimento.",
     icon: ClipboardCheck,
     path: "/approvals",
-    color: "text-warning",
-    bgGlow: "from-warning/20 to-warning/5",
+    color: "text-amber-400",
+    bgGlow: "from-amber-500/20 to-amber-500/5",
     moduleKey: "approvals",
   },
   approval_history: {
@@ -82,8 +82,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Aprovações já decididas em todas as empresas, sincronizadas com o SAP Approval Hub.",
     icon: History,
     path: "/approvals/history",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-amber-400",
+    bgGlow: "from-amber-500/20 to-amber-500/5",
     moduleKey: "approval_history",
   },
   approval_rules: {
@@ -91,8 +91,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Configure regras de aprovação em N níveis com critérios de valor, centro de custo e tipo de documento.",
     icon: Shield,
     path: "/approval-rules",
-    color: "text-destructive",
-    bgGlow: "from-destructive/20 to-destructive/5",
+    color: "text-rose-400",
+    bgGlow: "from-rose-500/20 to-rose-500/5",
     moduleKey: "approval_rules",
   },
   pagcorp: {
@@ -100,8 +100,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Transações de cartões corporativos com filtro de prestação de conta e lançamento no SAP.",
     icon: CreditCard,
     path: "/pagcorp",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-cyan-400",
+    bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "pagcorp",
   },
   users: {
@@ -109,8 +109,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Gerencie usuários SAP: bloqueio, desbloqueio e redefinição de senhas.",
     icon: Users,
     path: "/users",
-    color: "text-warning",
-    bgGlow: "from-warning/20 to-warning/5",
+    color: "text-rose-400",
+    bgGlow: "from-rose-500/20 to-rose-500/5",
     moduleKey: "users",
   },
   suppliers: {
@@ -118,8 +118,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Cadastro de fornecedores com sincronização SAP e extração via IA a partir de notas fiscais.",
     icon: Building2,
     path: "/suppliers",
-    color: "text-success",
-    bgGlow: "from-success/20 to-success/5",
+    color: "text-indigo-400",
+    bgGlow: "from-indigo-500/20 to-indigo-500/5",
     moduleKey: "suppliers",
   },
   items: {
@@ -127,8 +127,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Cadastro de itens (OITM) com sincronização direta no SAP — criar, editar e ativar/inativar.",
     icon: Box,
     path: "/items",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-indigo-400",
+    bgGlow: "from-indigo-500/20 to-indigo-500/5",
     moduleKey: "items",
   },
   synapse: {
@@ -136,8 +136,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Central de automações e integrações entre sistemas (JumpCloud, SAP, IdP).",
     icon: Zap,
     path: "/synapse",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-fuchsia-400",
+    bgGlow: "from-fuchsia-500/20 to-fuchsia-500/5",
     moduleKey: "synapse",
   },
   integration_history: {
@@ -145,8 +145,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Acompanhamento unificado de todas as integrações com o SAP (despesas manuais e PagCorp), com status detalhado por estágio.",
     icon: Radio,
     path: "/integrations/monitor",
-    color: "text-success",
-    bgGlow: "from-success/20 to-success/5",
+    color: "text-fuchsia-400",
+    bgGlow: "from-fuchsia-500/20 to-fuchsia-500/5",
     moduleKey: "integration_history",
   },
   intercompany: {
@@ -154,8 +154,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Plano de contas e centros de custo consolidados entre empresas, com criação simultânea em todas.",
     icon: Building2,
     path: "/intercompany",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-cyan-400",
+    bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "intercompany",
   },
   financial_review: {
@@ -163,8 +163,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Adiantamentos em aberto (clientes/fornecedores) sem vínculo a notas, com passo a passo de reconciliação.",
     icon: Wallet,
     path: "/financial-review",
-    color: "text-success",
-    bgGlow: "from-success/20 to-success/5",
+    color: "text-cyan-400",
+    bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "financial_review",
   },
   credentials: {
@@ -172,8 +172,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Gerencie conexões com sistemas externos (PagCorp, SAP) de forma segura.",
     icon: Key,
     path: "/credentials",
-    color: "text-muted-foreground",
-    bgGlow: "from-muted/20 to-muted/5",
+    color: "text-slate-300",
+    bgGlow: "from-slate-500/20 to-slate-500/5",
     moduleKey: "credentials",
   },
   audit_log: {
@@ -190,8 +190,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Central de notificações, preferências, auditoria e histórico de envios (WhatsApp, e-mail).",
     icon: Bell,
     path: "/notifications",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-violet-400",
+    bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "notifications",
   },
   fiscal_audit: {
@@ -199,8 +199,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Análise de notas fiscais de entrada antigas em aberto e relatório de lançamentos por usuário.",
     icon: FileSearch,
     path: "/fiscal-audit",
-    color: "text-warning",
-    bgGlow: "from-warning/20 to-warning/5",
+    color: "text-orange-400",
+    bgGlow: "from-orange-500/20 to-orange-500/5",
     moduleKey: "fiscal_audit",
   },
   nf_entrada: {
@@ -208,8 +208,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Importa NFs da Master Tax, gera despesa no ERP Flow e cria esboços de PO e NF de Entrada no SAP B1.",
     icon: FileInput,
     path: "/nf-entrada",
-    color: "text-primary",
-    bgGlow: "from-primary/20 to-primary/5",
+    color: "text-orange-400",
+    bgGlow: "from-orange-500/20 to-orange-500/5",
     moduleKey: "nf_entrada",
   },
 };
@@ -217,16 +217,28 @@ const modules: Record<string, ModuleCard> = {
 const moduleGroups: { title: string; keys: string[] }[] = (
   [
     {
-      title: "Geral",
-      keys: ["analytics", "expenses", "sales", "approvals", "approval_history", "suppliers", "items"],
+      title: "Fluxo Operacional",
+      keys: ["expenses", "sales", "approvals", "approval_history"],
     },
     {
-      title: "Financeiro / Contábil",
-      keys: ["pagcorp", "integration_history", "financial_review", "intercompany", "fiscal_audit", "nf_entrada"],
+      title: "Cadastros",
+      keys: ["suppliers", "items", "intercompany"],
     },
     {
-      title: "Admin",
-      keys: ["approval_rules", "users", "synapse", "integration_history", "credentials", "audit_log", "notifications"],
+      title: "Análise & Monitoramento",
+      keys: ["analytics", "integration_history"],
+    },
+    {
+      title: "Financeiro",
+      keys: ["pagcorp", "financial_review"],
+    },
+    {
+      title: "Fiscal",
+      keys: ["fiscal_audit", "nf_entrada"],
+    },
+    {
+      title: "Administração",
+      keys: ["approval_rules", "users", "synapse", "credentials", "audit_log", "notifications"],
     },
   ] as { title: string; keys: string[] }[]
 ).map((g) => ({
