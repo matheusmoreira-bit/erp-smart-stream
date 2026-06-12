@@ -723,15 +723,16 @@ export default function PagCorp() {
             <Input type="date" value={endDate} onChange={(e) => handleEndDateChange(e.target.value)} className="w-40 bg-card" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Prestação de Conta</label>
-            <Select value={accountabilityFilter} onValueChange={(v) => setAccountabilityFilter(v as "all" | "yes" | "no")}>
+            <label className="text-xs text-muted-foreground">Status</label>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
               <SelectTrigger className="w-44 bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="yes">Com prestação</SelectItem>
-                <SelectItem value="no">Sem prestação</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="review">Em análise</SelectItem>
+                <SelectItem value="done">Finalizado</SelectItem>
               </SelectContent>
             </Select>
           </div>
