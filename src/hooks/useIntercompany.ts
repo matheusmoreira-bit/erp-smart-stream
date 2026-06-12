@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { authFetch } from "@/lib/auth-fetch";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 export interface PerCompanyResult<T = unknown> {
   company_db: string;
@@ -56,7 +56,7 @@ export interface SapUserRow {
 }
 
 async function callIntercompany<T>(body: Record<string, unknown>): Promise<T> {
-  const resp = await authFetch("intercompany", {
+  const resp = await sapFunctionFetch("intercompany", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
