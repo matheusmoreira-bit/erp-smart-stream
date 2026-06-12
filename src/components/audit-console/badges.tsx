@@ -9,17 +9,17 @@ const sevMap: Record<Severity, { label: string; cls: string }> = {
   high: { label: "Alta", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
   medium: { label: "Média", cls: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30" },
   low: { label: "Baixa", cls: "bg-sky-500/10 text-sky-400 border-sky-500/30" },
-  info: { label: "Info", cls: "bg-muted text-muted-foreground border-border" },
 };
 
 const statusMap: Record<RunStatus, { label: string; cls: string }> = {
-  pending: { label: "Em execução", cls: "bg-sky-500/15 text-sky-400 border-sky-500/30" },
+  pending: { label: "Aguardando", cls: "bg-muted text-muted-foreground border-border" },
+  running: { label: "Em execução", cls: "bg-sky-500/15 text-sky-400 border-sky-500/30" },
   completed: { label: "Concluída", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
   failed: { label: "Falhou", cls: "bg-destructive/15 text-destructive border-destructive/30" },
 };
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
-  const s = sevMap[severity] ?? sevMap.info;
+  const s = sevMap[severity] ?? sevMap.low;
   return (
     <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${s.cls}`}>
       <AlertTriangle className="h-3 w-3" />

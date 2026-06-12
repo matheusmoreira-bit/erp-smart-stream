@@ -17,7 +17,7 @@ interface Props {
   embedded?: boolean;
 }
 
-const SEVERITIES: DivergenceFilters["severity"][] = ["critical", "high", "medium", "low", "info"];
+const SEVERITIES: DivergenceFilters["severity"][] = ["critical", "high", "medium", "low"];
 
 export function AuditDivergencesTable({ runId, embedded = false }: Props) {
   const [filters, setFilters] = useState<DivergenceFilters>({});
