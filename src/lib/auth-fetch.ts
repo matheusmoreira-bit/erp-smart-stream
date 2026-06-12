@@ -110,9 +110,25 @@ export async function sapFunctionFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
+  const sapHeaders = readSapHeaders();
+  const hasSapSession = !!sapHeaders["x-sap-session"];
+  // PagCorp / SAP-bound functions don't work with Lovable Cloud auth alone.
+  // If the user isn't logged into SAP, fail fast with a clear message instead
+  // of sending the anon key and getting a generic 401 "Não autenticado".
+  if (!hasSapSession) {
+    const userToken = await getValidAccessToken();
+    if (!userToken) {
+      return new Response(
+        JSON.stringify({
+          error: "Sessão SAP não encontrada. Faça login no SAP novamente para usar este módulo.",
+        }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }
   return publicFunctionFetch(path, {
     ...options,
-    headers: mergeHeaders(readSapHeaders(), options.headers),
+    headers: mergeHeaders(sapHeaders, options.headers),
   });
 }
 
