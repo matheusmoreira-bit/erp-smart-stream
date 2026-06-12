@@ -327,6 +327,36 @@ export default function PagCorp() {
     openBatchItem(queue[0]);
   };
 
+  /**
+   * Unified "Integrar em lote": decide between consolidate (single PC with N
+   * lines) and sequential per-transaction batch based on the selection.
+   *
+   *  - 1 selected            → open single integrate dialog
+   *  - ≥2 selected, all sem prestação → consolidar em 1 PC
+   *  - ≥2 selected, mixed/com prestação → percorrer em lote (uma por uma)
+   */
+  const handleIntegrateBatchUnified = () => {
+    if (!checkSapCredentials()) return;
+    const selected = selectableTransactions.filter((t) => selectedIds.has(t.id));
+    if (selected.length === 0) {
+      toast.info("Selecione ao menos uma transação");
+      return;
+    }
+    if (selected.length === 1) {
+      const t = selected[0];
+      openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic");
+      return;
+    }
+    const allGeneric = selected.every((t) => !t.hasAccountability);
+    if (allGeneric) {
+      setConsolidateDialog({ open: true, transactions: selected });
+      return;
+    }
+    // Mixed → percorrer uma a uma
+    toast.info("Seleção contém prestações de contas — integrando uma a uma");
+    startBatch();
+  };
+
   const advanceBatch = () => {
     const next = batchIndex + 1;
     if (next >= batchQueue.length) {
