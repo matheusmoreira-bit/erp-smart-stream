@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, FileSearch, Loader2, AlertTriangle, Calendar, Download, Trophy, Database } from "lucide-react";
+import { ArrowLeft, RefreshCw, FileSearch, Loader2, AlertTriangle, Calendar, Download, Trophy, Database, Layers } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -15,11 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
+import { useCompanies } from "@/hooks/useCompanies";
 import { sapQueryAll } from "@/lib/sap-client";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -34,14 +36,17 @@ interface SapInvoice {
   DocTotal: number;
   DocCurrency: string;
   DocumentStatus: string;
+  Cancelled?: string;
   UserSign: number;
   CreationDate: string | null;
+  _companyDB?: string;
 }
 
 interface SapUser {
   UserCode: string;
   UserName: string;
   InternalKey: number;
+  _companyDB?: string;
 }
 
 interface FiscalCachePayload {
@@ -75,10 +80,16 @@ const daysBetween = (a: Date, b: Date) =>
 
 const toISODate = (d: Date) => d.toISOString().slice(0, 10);
 
+const isCancelled = (i: SapInvoice) => {
+  const c = (i.Cancelled || "").toString().toLowerCase();
+  return c === "tyes" || c === "y" || c === "yes" || c === "true";
+};
+
 export default function FiscalAudit() {
   const navigate = useNavigate();
   const { session } = useSap();
   const { hasAccess, loading: permLoading } = useModuleAccess("fiscal_audit");
+  const { companies } = useCompanies(true);
 
   const today = useMemo(() => new Date(), []);
   const defaultStart = useMemo(() => {
@@ -87,35 +98,41 @@ export default function FiscalAudit() {
     return d;
   }, [today]);
 
-  // Filtros visuais (somente client-side, atualizam o gráfico imediatamente)
   const [startDate, setStartDate] = useState<string>(toISODate(defaultStart));
   const [endDate, setEndDate] = useState<string>(toISODate(today));
-
   const [groupBy, setGroupBy] = useState<"day" | "month" | "quarter">("month");
+
+  // Novos filtros
+  const [consolidated, setConsolidated] = useState(false);
+  const [docType, setDocType] = useState<"all" | "entrada" | "saida">("all");
+  const [cancelStatus, setCancelStatus] = useState<"all" | "active" | "cancelled">("active");
 
   const [loading, setLoading] = useState(false);
   const [allInvoices, setAllInvoices] = useState<SapInvoice[]>([]);
   const [allSalesInvoices, setAllSalesInvoices] = useState<SapInvoice[]>([]);
-  const [users, setUsers] = useState<Map<number, SapUser>>(new Map());
+  const [users, setUsers] = useState<Map<string, SapUser>>(new Map());
   const [error, setError] = useState<string | null>(null);
-  const [cacheInfo, setCacheInfo] = useState<{ fetchedAt: string; fetchStart: string; fetchEnd: string } | null>(null);
+  const [cacheInfo, setCacheInfo] = useState<{ fetchedAt: string; fetchStart: string; fetchEnd: string; sources?: number } | null>(null);
 
-  // Aplica payload no estado local
-  const applyPayload = (p: FiscalCachePayload) => {
-    setAllInvoices(p.invoices || []);
-    setAllSalesInvoices(p.salesInvoices || []);
-    const map = new Map<number, SapUser>();
+  const userKey = (companyDB: string | undefined, sign: number) =>
+    `${companyDB || session?.companyDB || "?"}::${sign}`;
+
+  // Aplica payload (single-company)
+  const applyPayload = (p: FiscalCachePayload, companyDB?: string) => {
+    const tagged = (arr: SapInvoice[]) => (arr || []).map((i) => ({ ...i, _companyDB: companyDB }));
+    setAllInvoices(tagged(p.invoices));
+    setAllSalesInvoices(tagged(p.salesInvoices));
+    const map = new Map<string, SapUser>();
     (p.users || []).forEach((u) => {
-      if (u.InternalKey != null) map.set(Number(u.InternalKey), u);
+      if (u.InternalKey != null) map.set(userKey(companyDB, Number(u.InternalKey)), { ...u, _companyDB: companyDB });
     });
     setUsers(map);
     setCacheInfo({ fetchedAt: p.fetchedAt, fetchStart: p.fetchStart, fetchEnd: p.fetchEnd });
-    // Ajusta filtro para o range do cache se o atual estiver fora
     if (p.fetchStart > startDate) setStartDate(p.fetchStart);
     if (p.fetchEnd < endDate) setEndDate(p.fetchEnd);
   };
 
-  // Carrega do cache (banco)
+  // Carrega do cache (single)
   const loadFromCache = async (companyDB: string): Promise<boolean> => {
     const { data, error } = await supabase
       .from("sap_cache")
@@ -128,21 +145,71 @@ export default function FiscalAudit() {
       return false;
     }
     if (!data?.data) return false;
-    applyPayload(data.data as unknown as FiscalCachePayload);
+    applyPayload(data.data as unknown as FiscalCachePayload, companyDB);
     return true;
   };
 
-  // Busca no SAP e grava cache
+  // Carrega consolidado (todas as empresas)
+  const loadConsolidated = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("sap_cache")
+        .select("company_db, data, updated_at")
+        .eq("cache_key", CACHE_KEY);
+      if (error) throw error;
+
+      const allInv: SapInvoice[] = [];
+      const allSal: SapInvoice[] = [];
+      const usersMap = new Map<string, SapUser>();
+      let minStart = "9999-99-99";
+      let maxEnd = "0000-00-00";
+      let latest = "";
+      let sources = 0;
+
+      (data || []).forEach((row: any) => {
+        const p = row.data as FiscalCachePayload | null;
+        if (!p) return;
+        sources++;
+        const cdb = row.company_db as string;
+        (p.invoices || []).forEach((i) => allInv.push({ ...i, _companyDB: cdb }));
+        (p.salesInvoices || []).forEach((i) => allSal.push({ ...i, _companyDB: cdb }));
+        (p.users || []).forEach((u) => {
+          if (u.InternalKey != null) usersMap.set(userKey(cdb, Number(u.InternalKey)), { ...u, _companyDB: cdb });
+        });
+        if (p.fetchStart && p.fetchStart < minStart) minStart = p.fetchStart;
+        if (p.fetchEnd && p.fetchEnd > maxEnd) maxEnd = p.fetchEnd;
+        if (!latest || (p.fetchedAt && p.fetchedAt > latest)) latest = p.fetchedAt;
+      });
+
+      setAllInvoices(allInv);
+      setAllSalesInvoices(allSal);
+      setUsers(usersMap);
+      if (sources === 0) {
+        setCacheInfo(null);
+        toast.info("Nenhum cache encontrado. Atualize cada empresa do SAP primeiro.");
+      } else {
+        setCacheInfo({ fetchedAt: latest, fetchStart: minStart, fetchEnd: maxEnd, sources });
+      }
+    } catch (e: any) {
+      const msg = e?.message || "Falha ao carregar consolidado";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Atualiza do SAP (single)
   const refreshFromSap = async () => {
     if (!session) return;
     setLoading(true);
     setError(null);
     try {
-      // Para um cache amplo, buscamos sempre o range maior já usado anteriormente OU o range atual
       const fetchStart = cacheInfo?.fetchStart && cacheInfo.fetchStart < startDate ? cacheInfo.fetchStart : startDate;
       const fetchEnd = cacheInfo?.fetchEnd && cacheInfo.fetchEnd > endDate ? cacheInfo.fetchEnd : endDate;
 
-      const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,DocCurrency,DocumentStatus,UserSign,CreationDate";
+      const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,DocCurrency,DocumentStatus,Cancelled,UserSign,CreationDate";
       const filter = `DocDate ge '${fetchStart}' and DocDate le '${fetchEnd}'`;
       const invoiceParams = { $select: select, $filter: filter, $orderby: "DocDate desc" };
 
@@ -175,9 +242,8 @@ export default function FiscalAudit() {
         fetchedAt: new Date().toISOString(),
       };
 
-      applyPayload(payload);
+      applyPayload(payload, session.companyDB);
 
-      // Persistir no banco
       const { error: upErr } = await supabase
         .from("sap_cache")
         .upsert(
@@ -191,10 +257,10 @@ export default function FiscalAudit() {
         );
       if (upErr) console.warn("[FiscalAudit] cache write error:", upErr.message);
 
-      if (purchases.length === 0) {
-        toast.info(`Nenhuma nota de entrada entre ${fetchStart} e ${fetchEnd}.`);
+      if (purchases.length === 0 && sales.length === 0) {
+        toast.info(`Nenhuma nota entre ${fetchStart} e ${fetchEnd}.`);
       } else {
-        toast.success(`${purchases.length} nota(s) carregada(s) do SAP e salvas no cache.`);
+        toast.success(`${purchases.length} entrada(s) e ${sales.length} saída(s) carregadas e salvas no cache.`);
       }
     } catch (e: any) {
       const msg = e?.message || "Falha ao consultar notas no SAP";
@@ -205,31 +271,48 @@ export default function FiscalAudit() {
     }
   };
 
-  // Inicial: cache primeiro; se vazio e tiver sessão, buscar SAP
+  // Inicial
   useEffect(() => {
     (async () => {
+      if (consolidated) {
+        await loadConsolidated();
+        return;
+      }
       if (!session?.companyDB) return;
       const hit = await loadFromCache(session.companyDB);
       if (!hit) await refreshFromSap();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.companyDB]);
+  }, [session?.companyDB, consolidated]);
 
-  // === Filtro client-side por data — instantâneo ===
+  // === Filtros client-side ===
+  const passCancel = (i: SapInvoice) => {
+    if (cancelStatus === "all") return true;
+    const c = isCancelled(i);
+    return cancelStatus === "cancelled" ? c : !c;
+  };
+
   const invoices = useMemo(() => {
-    return allInvoices.filter((i) => i.DocDate >= startDate && i.DocDate <= endDate);
-  }, [allInvoices, startDate, endDate]);
+    return allInvoices.filter((i) => i.DocDate >= startDate && i.DocDate <= endDate && passCancel(i));
+  }, [allInvoices, startDate, endDate, cancelStatus]);
 
   const salesInvoices = useMemo(() => {
-    return allSalesInvoices.filter((i) => i.DocDate >= startDate && i.DocDate <= endDate);
-  }, [allSalesInvoices, startDate, endDate]);
+    return allSalesInvoices.filter((i) => i.DocDate >= startDate && i.DocDate <= endDate && passCancel(i));
+  }, [allSalesInvoices, startDate, endDate, cancelStatus]);
+
+  // Conjunto unificado conforme tipo de NF
+  const docList = useMemo(() => {
+    if (docType === "entrada") return invoices;
+    if (docType === "saida") return salesInvoices;
+    return [...invoices, ...salesInvoices];
+  }, [invoices, salesInvoices, docType]);
 
   // === Análise — notas em aberto no período ===
   const oldOpen = useMemo(() => {
-    return invoices
+    return docList
       .filter((i) => i.DocumentStatus === "bost_Open")
       .sort((a, b) => new Date(a.DocDate).getTime() - new Date(b.DocDate).getTime());
-  }, [invoices]);
+  }, [docList]);
 
   const oldOpenTotalByCurrency = useMemo(() => {
     const m = new Map<string, number>();
@@ -243,7 +326,7 @@ export default function FiscalAudit() {
   // === Quantitativo ===
   const buckets = useMemo(() => {
     const m = new Map<string, { count: number; total: number }>();
-    invoices.forEach((i) => {
+    docList.forEach((i) => {
       const d = new Date(i.DocDate);
       let key = "";
       if (groupBy === "day") key = d.toISOString().slice(0, 10);
@@ -284,7 +367,7 @@ export default function FiscalAudit() {
         valor_grafico: b.count,
       };
     });
-  }, [invoices, groupBy]);
+  }, [docList, groupBy]);
 
   const exportQuantitativoCsv = () => {
     const header = ["Periodo", "Quantidade_Mes", "Acumulado", "Media", "Tendencia", "Valor_Grafico"];
@@ -308,7 +391,7 @@ export default function FiscalAudit() {
 
   // === Por usuário ===
   type UserStat = {
-    userSign: number;
+    userKey: string;
     userCode: string;
     userName: string;
     entrada: number;
@@ -318,38 +401,38 @@ export default function FiscalAudit() {
   };
 
   const perUser = useMemo<UserStat[]>(() => {
-    const m = new Map<number, UserStat>();
-    const ensure = (sign: number): UserStat => {
-      let s = m.get(sign);
+    const m = new Map<string, UserStat>();
+    const ensure = (i: SapInvoice): UserStat => {
+      const k = userKey(i._companyDB, i.UserSign);
+      let s = m.get(k);
       if (!s) {
-        const u = users.get(sign);
+        const u = users.get(k);
         s = {
-          userSign: sign,
-          userCode: u?.UserCode || `#${sign}`,
-          userName: u?.UserName || u?.UserCode || `#${sign}`,
-          entrada: 0,
-          saida: 0,
-          total: 0,
-          valor: 0,
+          userKey: k,
+          userCode: u?.UserCode || `#${i.UserSign}`,
+          userName: u?.UserName || u?.UserCode || `#${i.UserSign}`,
+          entrada: 0, saida: 0, total: 0, valor: 0,
         };
-        m.set(sign, s);
+        m.set(k, s);
       }
       return s;
     };
-    invoices.forEach((i) => {
-      const s = ensure(i.UserSign);
-      s.entrada += 1;
-      s.total += 1;
-      s.valor += Number(i.DocTotal) || 0;
-    });
-    salesInvoices.forEach((i) => {
-      const s = ensure(i.UserSign);
-      s.saida += 1;
-      s.total += 1;
-      s.valor += Number(i.DocTotal) || 0;
-    });
+    const includeEntrada = docType !== "saida";
+    const includeSaida = docType !== "entrada";
+    if (includeEntrada) {
+      invoices.forEach((i) => {
+        const s = ensure(i);
+        s.entrada += 1; s.total += 1; s.valor += Number(i.DocTotal) || 0;
+      });
+    }
+    if (includeSaida) {
+      salesInvoices.forEach((i) => {
+        const s = ensure(i);
+        s.saida += 1; s.total += 1; s.valor += Number(i.DocTotal) || 0;
+      });
+    }
     return Array.from(m.values()).sort((a, b) => b.total - a.total);
-  }, [invoices, salesInvoices, users]);
+  }, [invoices, salesInvoices, users, docType]);
 
   const perUserTotals = useMemo(() => {
     const totalNotes = perUser.reduce((s, u) => s + u.total, 0);
@@ -360,12 +443,7 @@ export default function FiscalAudit() {
   const exportPerUserCsv = () => {
     const header = ["Usuario", "Nome_Usuario", "Total_Notas", "Notas_Entrada", "Notas_Saida", "Valor_Total"];
     const rows = perUser.map((u) => [
-      u.userCode,
-      u.userName,
-      u.total,
-      u.entrada,
-      u.saida,
-      (u.valor || 0).toFixed(2),
+      u.userCode, u.userName, u.total, u.entrada, u.saida, (u.valor || 0).toFixed(2),
     ]);
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
@@ -385,6 +463,12 @@ export default function FiscalAudit() {
     );
   }
 
+  const scopeLabel = consolidated
+    ? `Consolidado (${cacheInfo?.sources ?? 0} empresa${(cacheInfo?.sources ?? 0) === 1 ? "" : "s"})`
+    : (session?.companyDB || "—");
+
+  const docTypeLabel = docType === "entrada" ? "NF de Entrada" : docType === "saida" ? "NF de Saída" : "NF Entrada + Saída";
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-6 py-6">
@@ -399,13 +483,13 @@ export default function FiscalAudit() {
                 Auditoria Fiscal
               </h1>
               <p className="text-sm text-muted-foreground">
-                Notas fiscais de entrada — {session?.companyDB || "—"}
+                {docTypeLabel} — {scopeLabel}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={refreshFromSap} disabled={loading || !session}>
+            <Button variant="outline" size="sm" onClick={refreshFromSap} disabled={loading || !session || consolidated}>
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
               Atualizar do SAP
             </Button>
@@ -415,7 +499,7 @@ export default function FiscalAudit() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* Filters */}
-        <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
           <div>
             <Label htmlFor="start" className="text-xs">Data inicial</Label>
             <Input id="start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -424,17 +508,54 @@ export default function FiscalAudit() {
             <Label htmlFor="end" className="text-xs">Data final</Label>
             <Input id="end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
+          <div>
+            <Label className="text-xs">Tipo de NF</Label>
+            <Select value={docType} onValueChange={(v) => setDocType(v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="entrada">NF de Entrada</SelectItem>
+                <SelectItem value="saida">NF de Saída</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Cancelamento</Label>
+            <Select value={cancelStatus} onValueChange={(v) => setCancelStatus(v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="active">Não canceladas</SelectItem>
+                <SelectItem value="cancelled">Canceladas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 pb-2">
+            <Switch id="consolidated" checked={consolidated} onCheckedChange={setConsolidated} />
+            <Label htmlFor="consolidated" className="text-xs flex items-center gap-1 cursor-pointer">
+              <Layers className="w-3.5 h-3.5" /> Consolidado
+            </Label>
+          </div>
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <Database className="w-3.5 h-3.5" />
             {cacheInfo ? (
-              <span>
-                Cache: {fmtDateTime(cacheInfo.fetchedAt)} · range {cacheInfo.fetchStart} → {cacheInfo.fetchEnd}
+              <span className="leading-tight">
+                {fmtDateTime(cacheInfo.fetchedAt)}
+                <br />
+                {cacheInfo.fetchStart} → {cacheInfo.fetchEnd}
+                {consolidated && cacheInfo.sources ? ` · ${cacheInfo.sources} empresas` : ""}
               </span>
             ) : (
-              <span>Sem cache local — clique em "Atualizar do SAP"</span>
+              <span>Sem cache local</span>
             )}
           </div>
         </div>
+
+        {consolidated && companies.length > 0 && (
+          <div className="text-xs text-muted-foreground">
+            Empresas disponíveis: {companies.map((c) => c.display_name).join(", ")}
+          </div>
+        )}
 
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm flex items-center gap-2">
@@ -480,22 +601,23 @@ export default function FiscalAudit() {
                       <th className="px-4 py-3 text-left">DocNum</th>
                       <th className="px-4 py-3 text-left">Emissão</th>
                       <th className="px-4 py-3 text-left">Vencimento</th>
-                      <th className="px-4 py-3 text-left">Fornecedor</th>
+                      <th className="px-4 py-3 text-left">Parceiro</th>
                       <th className="px-4 py-3 text-right">Valor</th>
                       <th className="px-4 py-3 text-right">Dias em aberto</th>
                       <th className="px-4 py-3 text-left">Usuário</th>
+                      {consolidated && <th className="px-4 py-3 text-left">Empresa</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={7} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
+                      <tr><td colSpan={consolidated ? 8 : 7} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
                     ) : oldOpen.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto no período 🎉</td></tr>
+                      <tr><td colSpan={consolidated ? 8 : 7} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto no período 🎉</td></tr>
                     ) : oldOpen.map((i) => {
                       const days = daysBetween(new Date(i.DocDate), today);
-                      const u = users.get(i.UserSign);
+                      const u = users.get(userKey(i._companyDB, i.UserSign));
                       return (
-                        <tr key={i.DocEntry} className="border-b border-border hover:bg-muted/20">
+                        <tr key={`${i._companyDB}-${i.DocEntry}`} className="border-b border-border hover:bg-muted/20">
                           <td className="px-4 py-2.5 font-mono">{i.DocNum}</td>
                           <td className="px-4 py-2.5">{fmtDate(i.DocDate)}</td>
                           <td className="px-4 py-2.5">{fmtDate(i.DocDueDate)}</td>
@@ -510,6 +632,7 @@ export default function FiscalAudit() {
                             </Badge>
                           </td>
                           <td className="px-4 py-2.5 text-muted-foreground">{u?.UserName || u?.UserCode || `#${i.UserSign}`}</td>
+                          {consolidated && <td className="px-4 py-2.5 text-xs text-muted-foreground">{i._companyDB}</td>}
                         </tr>
                       );
                     })}
@@ -525,12 +648,12 @@ export default function FiscalAudit() {
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="space-y-1">
                   <div className="text-sm text-foreground">
-                    <span className="font-semibold">{session?.companyDB}</span>: gráfico de NF(s) de entrada lançada(s) por{" "}
+                    <span className="font-semibold">{scopeLabel}</span>: gráfico de {docTypeLabel.toLowerCase()} por{" "}
                     {groupBy === "day" ? "dia" : groupBy === "quarter" ? "trimestre" : "mês"} desde{" "}
                     <span className="font-semibold">{fmtDate(startDate)}</span>.
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-3">
-                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {invoices.length} notas no período</span>
+                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {docList.length} notas no período</span>
                     <span>{buckets.length} linha(s) retornada(s)</span>
                   </div>
                 </div>
@@ -606,7 +729,7 @@ export default function FiscalAudit() {
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="space-y-1">
                   <div className="text-sm text-foreground">
-                    <span className="font-semibold">{session?.companyDB}</span>: ranking dos usuários que mais lançaram notas no período. Total:{" "}
+                    <span className="font-semibold">{scopeLabel}</span>: ranking de usuários ({docTypeLabel.toLowerCase()}) no período. Total:{" "}
                     <span className="font-semibold text-primary">{perUserTotals.totalNotes}</span> nota(s).
                   </div>
                   {perUserTotals.leader && (
@@ -655,7 +778,7 @@ export default function FiscalAudit() {
                   </thead>
                   <tbody>
                     {perUser.map((u) => (
-                      <tr key={u.userSign} className="border-b border-border hover:bg-muted/20">
+                      <tr key={u.userKey} className="border-b border-border hover:bg-muted/20">
                         <td className="px-4 py-2.5 font-mono text-xs">{u.userCode}</td>
                         <td className="px-4 py-2.5 font-medium">{u.userName}</td>
                         <td className="px-4 py-2.5 text-right font-semibold">{u.total}</td>
