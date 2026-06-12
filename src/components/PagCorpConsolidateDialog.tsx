@@ -122,16 +122,17 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
             </label>
             <SapSearchCombobox
               endpoint="BusinessPartners"
-              filterTemplate="CardType eq 'cSupplier' and Frozen eq 'tNO' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}'))"
-              selectFields="CardCode,CardName,FederalTaxID"
+              filterTemplate="CardType eq 'cSupplier' and Frozen eq 'tNO' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}') or contains(tolower(AliasName),'{qLower}') or contains(FederalTaxID,'{q}'))"
+              selectFields="CardCode,CardName,AliasName,FederalTaxID"
               mapRow={(row: any) => ({
                 code: row.CardCode,
                 name: row.CardName,
                 extra: row.FederalTaxID || undefined,
+                details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
               })}
               value={supplier}
               onChange={setSupplier}
-              placeholder="Buscar fornecedor por nome ou código…"
+              placeholder="Buscar por código, razão social, nome fantasia ou CNPJ…"
             />
           </div>
 
