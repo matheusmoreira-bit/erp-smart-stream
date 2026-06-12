@@ -464,6 +464,17 @@ export default function IntegrationHistory() {
                               <Ban className="w-4 h-4" />
                             </Button>
                           )}
+                          {log.status === "error" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-primary hover:text-primary"
+                              onClick={() => openRetry(log)}
+                              title="Retentar integração"
+                            >
+                              <RotateCw className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
