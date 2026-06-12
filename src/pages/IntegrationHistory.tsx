@@ -646,6 +646,15 @@ export default function IntegrationHistory() {
           )}
         </DialogContent>
       </Dialog>
+
+      <PagCorpIntegrateDialog
+        open={retryDialog.open}
+        onClose={() => setRetryDialog({ open: false, log: null, transaction: null })}
+        transaction={retryDialog.transaction}
+        integrationType={(retryDialog.log?.integration_type as "generic" | "accountability") || "generic"}
+        companyDb={session?.companyDB}
+        onConfirm={handleRetryConfirm}
+      />
     </div>
   );
 }
