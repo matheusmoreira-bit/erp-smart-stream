@@ -73,8 +73,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Documentos pendentes de aprovação com detalhes de valor, fornecedor, aprovador e vencimento.",
     icon: ClipboardCheck,
     path: "/approvals",
-    color: "text-amber-400",
-    bgGlow: "from-amber-500/20 to-amber-500/5",
+    color: "text-emerald-400",
+    bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "approvals",
   },
   approval_history: {
