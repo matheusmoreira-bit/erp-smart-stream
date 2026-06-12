@@ -145,8 +145,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Acompanhamento unificado de todas as integrações com o SAP (despesas manuais e PagCorp), com status detalhado por estágio.",
     icon: Radio,
     path: "/integrations/monitor",
-    color: "text-fuchsia-400",
-    bgGlow: "from-fuchsia-500/20 to-fuchsia-500/5",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
     moduleKey: "integration_history",
   },
   intercompany: {
