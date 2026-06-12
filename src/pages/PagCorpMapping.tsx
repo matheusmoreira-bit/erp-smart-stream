@@ -7,7 +7,7 @@ import {
   Trash2,
   Loader2,
   MapPin,
-  Package,
+  CreditCard,
   CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
