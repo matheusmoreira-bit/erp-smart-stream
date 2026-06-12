@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
+import { requestSupplierRegistration } from "@/lib/supplier-request-email";
 import { UserPlus } from "lucide-react";
 
 function formatCurrency(value: number, currency: string = "BRL") {
