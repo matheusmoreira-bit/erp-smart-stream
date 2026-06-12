@@ -317,97 +317,11 @@ export default function PagCorpMapping() {
 
       <main className="flex-1 px-6 py-6">
         <div className="max-w-7xl mx-auto">
-          <Tabs defaultValue="costcenter" className="space-y-4">
+          <Tabs defaultValue="cards" className="space-y-4">
             <TabsList>
-              <TabsTrigger value="costcenter" className="gap-2"><MapPin className="w-4 h-4" /> Centro de Custo / Projeto</TabsTrigger>
               <TabsTrigger value="cards" className="gap-2"><CreditCard className="w-4 h-4" /> Cartões</TabsTrigger>
             </TabsList>
 
-            {/* ── TAB: Cost Center / Project ── */}
-            <TabsContent value="costcenter" className="space-y-4">
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={addMappingRow} className="gap-2"><Plus className="w-4 h-4" /> Adicionar</Button>
-                <Button onClick={saveMappings} disabled={isSavingMappings} className="gap-2">
-                  {isSavingMappings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
-                </Button>
-              </div>
-              {isLoadingMappings ? (
-                <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
-              ) : mappings.length === 0 ? (
-                <div className="text-center py-20 text-muted-foreground">
-                  <MapPin className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p className="text-lg font-medium">Nenhum mapeamento configurado</p>
-                  <Button onClick={addMappingRow} variant="outline" className="mt-4 gap-2"><Plus className="w-4 h-4" /> Adicionar</Button>
-                </div>
-              ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-visible">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground">Conta PagCorp</TableHead>
-                        <TableHead className="text-muted-foreground">Centro de Custo</TableHead>
-                        <TableHead className="text-muted-foreground">Projeto</TableHead>
-                        <TableHead className="text-muted-foreground w-12"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {mappings.map((m, i) => (
-                        <TableRow key={m.id || `new-${i}`} className="border-border">
-                          <TableCell>
-                            {m.id ? (
-                              <div className="text-sm">
-                                <span className="font-medium text-foreground">{m.account_name || m.account_code}</span>
-                                <span className="ml-2 text-xs text-muted-foreground">{m.account_code}</span>
-                              </div>
-                            ) : (
-                              <CachedSearchCombobox
-                                options={availableAccountCodes}
-                                isLoading={false}
-                                value={findOption(accountCodeOptions, m.account_code)}
-                                onChange={(opt) => {
-                                  setMappings((p) => p.map((row, idx) => idx === i
-                                    ? { ...row, account_code: opt?.code || "", account_name: opt?.name || "" } : row));
-                                }}
-                                placeholder="Buscar conta PagCorp..."
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {m.id ? (
-                              <div className="text-sm font-medium text-foreground">
-                                {m.cost_center || <span className="text-muted-foreground italic">—</span>}
-                              </div>
-                            ) : (
-                              <CachedSearchCombobox options={costCenterCache.options} isLoading={costCenterCache.isLoading}
-                                value={findOption(costCenterCache.options, m.cost_center)}
-                                onChange={(opt) => updateMappingRow(i, "cost_center", opt?.code || "")}
-                                placeholder="Selecione..." />
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {m.id ? (
-                              <div className="text-sm font-medium text-foreground">
-                                {m.project || <span className="text-muted-foreground italic">—</span>}
-                              </div>
-                            ) : (
-                              <CachedSearchCombobox options={projectCache.options} isLoading={projectCache.isLoading}
-                                value={findOption(projectCache.options, m.project)}
-                                onChange={(opt) => updateMappingRow(i, "project", opt?.code || "")}
-                                placeholder="Selecione..." />
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => removeMappingRow(i)} className="text-destructive hover:text-destructive">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </motion.div>
-              )}
-            </TabsContent>
 
 
             <TabsContent value="cards" className="space-y-4">
