@@ -71,6 +71,11 @@ interface Company {
   default_currency: string;
   timezone: string;
   logo_url: string | null;
+  legal_name: string | null;
+  trade_name: string | null;
+  tax_id: string | null;
+  foreign_name: string | null;
+  is_foreign: boolean;
 }
 
 const ERP_TYPE_LABELS: Record<string, { label: string; icon: typeof Server }> = {
@@ -331,7 +336,7 @@ export default function Admin() {
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "" as string, targets: { ...DEFAULT_TARGETS } });
+  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "" as string, legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [wizardCreds, setWizardCreds] = useState<Record<string, string>>({});
@@ -425,7 +430,7 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "", targets: { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "", legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, targets: { ...DEFAULT_TARGETS } });
     setWizardStep(1);
     setWizardCreds({});
     setShowWizardPasswords({});
@@ -434,7 +439,7 @@ export default function Admin() {
 
   const openEditCompany = async (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", default_currency: c.default_currency || "BRL", timezone: c.timezone || "America/Sao_Paulo", logo_url: c.logo_url || "", targets: c.targets || { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", default_currency: c.default_currency || "BRL", timezone: c.timezone || "America/Sao_Paulo", logo_url: c.logo_url || "", legal_name: c.legal_name || "", trade_name: c.trade_name || "", tax_id: c.tax_id || "", foreign_name: c.foreign_name || "", is_foreign: !!c.is_foreign, targets: c.targets || { ...DEFAULT_TARGETS } });
     setWizardStep(1);
     setShowWizardPasswords({});
     setWizardCreds({});
@@ -481,6 +486,11 @@ export default function Admin() {
           timezone: companyForm.timezone,
           logo_url: companyForm.logo_url || null,
           targets: companyForm.targets,
+          legal_name: companyForm.legal_name || null,
+          trade_name: companyForm.trade_name || null,
+          tax_id: companyForm.tax_id || null,
+          foreign_name: companyForm.foreign_name || null,
+          is_foreign: companyForm.is_foreign,
         })
         .eq("id", editingCompany.id);
       if (error) { toast.error("Erro ao atualizar"); hasError = true; }
@@ -495,6 +505,11 @@ export default function Admin() {
         timezone: companyForm.timezone,
         logo_url: companyForm.logo_url || null,
         targets: companyForm.targets,
+        legal_name: companyForm.legal_name || null,
+        trade_name: companyForm.trade_name || null,
+        tax_id: companyForm.tax_id || null,
+        foreign_name: companyForm.foreign_name || null,
+        is_foreign: companyForm.is_foreign,
       });
       if (error) { toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar"); hasError = true; }
     }
@@ -684,7 +699,12 @@ export default function Admin() {
                             {ERP_TYPE_LABELS[c.erp_type]?.label || c.erp_type}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono">{c.company_db}</p>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {c.company_db}
+                          {c.is_foreign && c.foreign_name ? ` · ${c.foreign_name}` : ""}
+                          {!c.is_foreign && c.legal_name ? ` · ${c.legal_name}` : ""}
+                          {!c.is_foreign && c.tax_id ? ` · ${c.tax_id}` : ""}
+                        </p>
                       </div>
                       <Badge variant={c.is_active ? "default" : "secondary"}>
                         {c.is_active ? "Ativa" : "Inativa"}
@@ -879,13 +899,61 @@ export default function Admin() {
                 />
               </div>
 
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={companyForm.is_active}
-                  onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
-                />
-                <span className="text-sm text-foreground">Empresa ativa</span>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={companyForm.is_active}
+                    onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_active: v }))}
+                  />
+                  <span className="text-sm text-foreground">Empresa ativa</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={companyForm.is_foreign}
+                    onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_foreign: v }))}
+                  />
+                  <span className="text-sm text-foreground">Empresa estrangeira</span>
+                </div>
               </div>
+
+              {/* Identificação fiscal */}
+              {companyForm.is_foreign ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Nome no exterior</label>
+                  <Input
+                    value={companyForm.foreign_name}
+                    onChange={(e) => setCompanyForm((f) => ({ ...f, foreign_name: e.target.value }))}
+                    placeholder="Foreign legal name"
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Razão Social</label>
+                    <Input
+                      value={companyForm.legal_name}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, legal_name: e.target.value }))}
+                      placeholder="Razão social"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Nome Fantasia</label>
+                    <Input
+                      value={companyForm.trade_name}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, trade_name: e.target.value }))}
+                      placeholder="Nome fantasia"
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <label className="text-sm font-medium text-foreground">CNPJ</label>
+                    <Input
+                      value={companyForm.tax_id}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, tax_id: e.target.value }))}
+                      placeholder="00.000.000/0000-00"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Currency & Timezone */}
               <div className="grid grid-cols-2 gap-4">
