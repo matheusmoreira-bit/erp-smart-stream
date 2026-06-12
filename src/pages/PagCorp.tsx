@@ -111,7 +111,7 @@ export default function PagCorp() {
   const [startDate, setStartDate] = useState(firstOfMonth.toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
-  const [accountabilityFilter, setAccountabilityFilter] = useState<"all" | "yes" | "no">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
   const [integrateDialog, setIntegrateDialog] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
