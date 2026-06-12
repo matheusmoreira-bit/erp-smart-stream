@@ -91,8 +91,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Configure regras de aprovação em N níveis com critérios de valor, centro de custo e tipo de documento.",
     icon: Shield,
     path: "/approval-rules",
-    color: "text-rose-400",
-    bgGlow: "from-rose-500/20 to-rose-500/5",
+    color: "text-violet-400",
+    bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "approval_rules",
   },
   pagcorp: {
