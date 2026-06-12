@@ -172,8 +172,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Gerencie conexões com sistemas externos (PagCorp, SAP) de forma segura.",
     icon: Key,
     path: "/credentials",
-    color: "text-slate-300",
-    bgGlow: "from-slate-500/20 to-slate-500/5",
+    color: "text-violet-400",
+    bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "credentials",
   },
   audit_log: {
