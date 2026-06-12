@@ -154,8 +154,8 @@ const modules: Record<string, ModuleCard> = {
     description: "Plano de contas e centros de custo consolidados entre empresas, com criação simultânea em todas.",
     icon: Building2,
     path: "/intercompany",
-    color: "text-cyan-400",
-    bgGlow: "from-cyan-500/20 to-cyan-500/5",
+    color: "text-indigo-400",
+    bgGlow: "from-indigo-500/20 to-indigo-500/5",
     moduleKey: "intercompany",
   },
   financial_review: {
