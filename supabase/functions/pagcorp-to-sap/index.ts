@@ -279,15 +279,32 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // 0. Idempotency: filter out already-integrated transactions
-    const ids = rawList.map((t) => Number(t.id));
+    // 0a. Drop transactions with amount <= 0 (defensive: estornos / créditos
+    // não devem virar linha de PC). Se sobrar nenhuma, retorna sucesso vazio.
+    const beforeFilter = rawList.length;
+    const positiveList = rawList.filter((t) => Number(t.amount) > 0);
+    if (positiveList.length < beforeFilter) {
+      console.warn(`pagcorp-to-sap: descartadas ${beforeFilter - positiveList.length} transações com valor <= 0`);
+    }
+    if (positiveList.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Nenhuma transação com valor positivo para integrar (todas com valor <= 0 foram descartadas).",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // 0b. Idempotency: filter out already-integrated transactions
+    const ids = positiveList.map((t) => Number(t.id));
     const { data: existingLogs } = await supabase
       .from("pagcorp_integration_log")
       .select("id, pagcorp_expense_id, status, sap_doc_entry, sap_doc_num")
       .in("pagcorp_expense_id", ids)
       .eq("status", "success");
     const alreadyIntegratedIds = new Set((existingLogs || []).map((r: any) => r.pagcorp_expense_id));
-    const transactions = rawList.filter((t) => !alreadyIntegratedIds.has(Number(t.id)));
+    const transactions = positiveList.filter((t) => !alreadyIntegratedIds.has(Number(t.id)));
 
     if (transactions.length === 0) {
       const first = (existingLogs || [])[0] as any;
