@@ -399,7 +399,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const { session, logout } = useSap();
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration } = useExpenses(mode);
+  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -408,6 +408,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isActioning, setIsActioning] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const isSales = mode === "sales";
@@ -447,6 +448,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (isAdmin) return true;
     const owner = (expense.created_by_email || expense.requester_email || expense.requester_name || "").toLowerCase();
     return owner === userIdentifier || owner.startsWith(userIdentifier + "@");
+  };
+
+  // Aprovador atual = usuário cujo nome/email "bate" com expense.current_approver.
+  // Admin/super-usuário também pode aprovar inline.
+  const canApprove = (expense: Expense) => {
+    if (expense.status !== "pendente_aprovacao") return false;
+    if (isAdmin) return true;
+    const approver = (expense.current_approver || "").toLowerCase().trim();
+    const me = userIdentifier;
+    if (!approver || !me) return false;
+    if (approver === me) return true;
+    if (approver.includes(me) || me.includes(approver.split("@")[0])) return true;
+    const meLogin = me.split("@")[0];
+    if (meLogin && approver.includes(meLogin)) return true;
+    // Match por tokens do nome (ex.: "matheus.moreira" ↔ "Matheus Moreira")
+    const tokenize = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/[.@]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean);
+    const approverTokens = new Set(tokenize(approver));
+    const meTokens = tokenize(me);
+    if (meTokens.length === 0) return false;
+    return meTokens.every((t) => approverTokens.has(t));
   };
 
   const effectiveShowAll = isAdmin && showAll;
