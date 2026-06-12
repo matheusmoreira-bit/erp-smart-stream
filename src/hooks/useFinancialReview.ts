@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { authFetch } from "@/lib/auth-fetch";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 export type AdvanceDocType = "ADVANCE_AP" | "ADVANCE_AR" | "PAYMENT_OA_OUT" | "PAYMENT_OA_IN";
 
@@ -40,7 +40,7 @@ export interface InvoiceWithAdvances extends OpenInvoice {
 }
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
-  const r = await authFetch("financial-review", {
+  const r = await sapFunctionFetch("financial-review", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

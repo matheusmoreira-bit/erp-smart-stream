@@ -2,7 +2,7 @@
 // in SAP B1 (AR + AP) and exposes actions to link them to invoices, perform
 // internal reconciliation, or cancel the payment.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 
 const corsHeaders = {
@@ -452,7 +452,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    await requireUser(req);
+    await requireUserOrSapSession(req);
   } catch (err) {
     const r = authErrorResponse(err, corsHeaders);
     if (r) return r;
