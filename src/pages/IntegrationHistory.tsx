@@ -12,7 +12,12 @@ import {
   FileText,
   Ban,
   Download,
+  RotateCw,
 } from "lucide-react";
+import { useSap } from "@/contexts/SapContext";
+import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
+import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -95,6 +100,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function IntegrationHistory() {
   const navigate = useNavigate();
+  const { session } = useSap();
+  const { integrateDirect } = usePagCorp();
   const [logs, setLogs] = useState<IntegrationLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -102,6 +109,11 @@ export default function IntegrationHistory() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<IntegrationLog | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [retryDialog, setRetryDialog] = useState<{
+    open: boolean;
+    log: IntegrationLog | null;
+    transaction: PagCorpTransaction | null;
+  }>({ open: false, log: null, transaction: null });
 
   const today = new Date();
   const thirtyDaysAgo = new Date(today);
@@ -151,6 +163,64 @@ export default function IntegrationHistory() {
       fetchLogs();
     } catch (e: any) {
       toast.error(e.message || "Erro ao cancelar");
+    }
+  };
+
+  const openRetry = (log: IntegrationLog) => {
+    if (!session?.companyDB) {
+      toast.error("Selecione uma empresa para retentar a integração");
+      return;
+    }
+    const d = log.pagcorp_data || {};
+    const tx: PagCorpTransaction = {
+      id: log.pagcorp_expense_id,
+      date: d.date || "",
+      description: d.description || "—",
+      amount: Number(d.amount) || 0,
+      currency: d.currency || "BRL",
+      accountAlias: d.accountAlias,
+      accountCode: d.accountCode,
+      hasAccountability: !!d.hasAccountability,
+      accountabilityApproved: !!d.accountabilityApproved,
+      receipts: d.receipts || [],
+      attachments: [],
+    };
+    setRetryDialog({ open: true, log, transaction: tx });
+  };
+
+  const handleRetryConfirm = async (supplier: SapSearchOption, override: { costCenter?: string | null; project?: string | null; item?: string | null }) => {
+    const { log, transaction } = retryDialog;
+    if (!log || !transaction || !session?.companyDB) return;
+    try {
+      const lineOverrides = (override.costCenter || override.project || override.item)
+        ? { [String(transaction.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null, item: override.item ?? null } }
+        : undefined;
+      const isNondeductible = log.integration_type === "generic";
+      const result = await integrateDirect(
+        transaction,
+        log.integration_type as "generic" | "accountability",
+        session.companyDB,
+        supplier.code,
+        supplier.name,
+        session.userName || undefined,
+        lineOverrides,
+        isNondeductible,
+      );
+      // Mark old failed log as cancelled to keep history clean
+      await supabase
+        .from("pagcorp_integration_log")
+        .update({ status: "cancelled", error_message: `Reintegrado em nova tentativa` } as any)
+        .eq("id", log.id);
+      toast.success("Integração reenviada com sucesso", {
+        description: result.purchaseOrder?.DocNum ? `PC #${result.purchaseOrder.DocNum}` : undefined,
+      });
+      setRetryDialog({ open: false, log: null, transaction: null });
+      fetchLogs();
+    } catch (e) {
+      toast.error("Falha ao reintegrar", {
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+      });
+      throw e;
     }
   };
 
@@ -394,6 +464,17 @@ export default function IntegrationHistory() {
                               <Ban className="w-4 h-4" />
                             </Button>
                           )}
+                          {log.status === "error" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-primary hover:text-primary"
+                              onClick={() => openRetry(log)}
+                              title="Retentar integração"
+                            >
+                              <RotateCw className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -565,6 +646,15 @@ export default function IntegrationHistory() {
           )}
         </DialogContent>
       </Dialog>
+
+      <PagCorpIntegrateDialog
+        open={retryDialog.open}
+        onClose={() => setRetryDialog({ open: false, log: null, transaction: null })}
+        transaction={retryDialog.transaction}
+        integrationType={(retryDialog.log?.integration_type as "generic" | "accountability") || "generic"}
+        companyDb={session?.companyDB}
+        onConfirm={handleRetryConfirm}
+      />
     </div>
   );
 }
