@@ -343,7 +343,7 @@ export function PagCorpIntegrateDialog({
             </Button>
             <Button onClick={handleSubmit} disabled={!supplier || submitting}>
               {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Integrar agora
+              Integrar ao ERP
             </Button>
           </DialogFooter>
         </DialogContent>
