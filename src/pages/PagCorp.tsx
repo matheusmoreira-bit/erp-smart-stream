@@ -238,6 +238,8 @@ export default function PagCorp() {
             code,
             g.name,
             session.userName || undefined,
+            undefined,
+            true,
           );
           ok++;
           toast.success(`PC consolidado #${result.purchaseOrder?.DocNum} (${g.txs.length} itens)`);
