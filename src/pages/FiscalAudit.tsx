@@ -76,7 +76,7 @@ export default function FiscalAudit() {
 
   const [startDate, setStartDate] = useState<string>(toISODate(defaultStart));
   const [endDate, setEndDate] = useState<string>(toISODate(today));
-  const [threshold, setThreshold] = useState<number>(90);
+  
   const [groupBy, setGroupBy] = useState<"day" | "month" | "quarter">("month");
 
   const [loading, setLoading] = useState(false);
@@ -145,18 +145,12 @@ export default function FiscalAudit() {
   }, [session?.companyDB]);
 
 
-  // === Analysis tab ===
-  const cutoff = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - threshold);
-    return d;
-  }, [today, threshold]);
-
+  // === Analysis tab — todas as notas em aberto no período ===
   const oldOpen = useMemo(() => {
     return invoices
-      .filter((i) => i.DocumentStatus === "bost_Open" && new Date(i.DocDate) <= cutoff)
+      .filter((i) => i.DocumentStatus === "bost_Open")
       .sort((a, b) => new Date(a.DocDate).getTime() - new Date(b.DocDate).getTime());
-  }, [invoices, cutoff]);
+  }, [invoices]);
 
   const oldOpenTotalByCurrency = useMemo(() => {
     const m = new Map<string, number>();
@@ -344,7 +338,7 @@ export default function FiscalAudit() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* Filters */}
-        <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
             <Label htmlFor="start" className="text-xs">Data inicial</Label>
             <Input id="start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -352,10 +346,6 @@ export default function FiscalAudit() {
           <div>
             <Label htmlFor="end" className="text-xs">Data final</Label>
             <Input id="end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="thr" className="text-xs">Limite de dias (sem aprovação)</Label>
-            <Input id="thr" type="number" min={1} max={365} value={threshold} onChange={(e) => setThreshold(Number(e.target.value) || 90)} />
           </div>
           <Button onClick={load} disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
@@ -380,7 +370,7 @@ export default function FiscalAudit() {
           <TabsContent value="analysis" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="glass-card p-4">
-                <div className="text-xs text-muted-foreground">Notas em aberto há mais de {threshold} dias</div>
+                <div className="text-xs text-muted-foreground">Notas em aberto no período</div>
                 <div className="text-3xl font-bold text-warning mt-1">{oldOpen.length}</div>
               </div>
               <div className="glass-card p-4 md:col-span-2">
@@ -417,7 +407,7 @@ export default function FiscalAudit() {
                     {loading ? (
                       <tr><td colSpan={7} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
                     ) : oldOpen.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto além de {threshold} dias 🎉</td></tr>
+                      <tr><td colSpan={7} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto no período 🎉</td></tr>
                     ) : oldOpen.map((i) => {
                       const days = daysBetween(new Date(i.DocDate), today);
                       const u = users.get(i.UserSign);
