@@ -129,6 +129,16 @@ export default function IntegrationHistory() {
         .select("*")
         .order("created_at", { ascending: false });
 
+      // Segregação por base: só mostra integrações da empresa atualmente
+      // selecionada. Sem empresa, não exibe nada (evita vazar entre bases).
+      if (session?.companyDB) {
+        query = query.eq("company_db", session.companyDB);
+      } else {
+        setLogs([]);
+        setIsLoading(false);
+        return;
+      }
+
       if (startDate) {
         query = query.gte("created_at", `${startDate}T00:00:00`);
       }

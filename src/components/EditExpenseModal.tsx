@@ -108,11 +108,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent
-        className="max-w-2xl max-h-[85vh] overflow-y-auto"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar {isSales ? "Pedido de Venda" : "Pedido de Compra"}</DialogTitle>
         </DialogHeader>
