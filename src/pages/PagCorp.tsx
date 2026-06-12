@@ -222,14 +222,14 @@ export default function PagCorp() {
     }
     // Group by supplier_code mapped on the card
     const groups = new Map<string, { name?: string; txs: PagCorpTransaction[] }>();
-    nondeductiblePending.forEach((t) => {
+    targets.forEach((t) => {
       const code = t.nondeductibleSupplierCode!;
       if (!groups.has(code)) groups.set(code, { name: t.nondeductibleSupplierName, txs: [] });
       groups.get(code)!.txs.push(t);
     });
 
     setIntegratingNondeductible(true);
-    const tId = toast.loading(`Integrando ${nondeductiblePending.length} transações em ${groups.size} PC(s)…`);
+    const tId = toast.loading(`Integrando ${targets.length} transações em ${groups.size} PC(s)…`);
     let ok = 0;
     let fail = 0;
     try {
