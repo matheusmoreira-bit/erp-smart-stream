@@ -30,6 +30,11 @@ export interface Company {
   created_at: string;
   targets: CompanyTargets;
   erp_type: string;
+  legal_name?: string | null;
+  trade_name?: string | null;
+  tax_id?: string | null;
+  foreign_name?: string | null;
+  is_foreign?: boolean;
 }
 
 export function useCompanies(onlyActive = false) {
