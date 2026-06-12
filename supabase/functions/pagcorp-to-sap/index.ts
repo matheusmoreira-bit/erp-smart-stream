@@ -404,10 +404,13 @@ Deno.serve(async (req) => {
       190,
     );
 
-    const documentLines = lineMappings.map(({ tx, acctMapping, itemCode }) => {
+    const documentLines = lineMappings.map(({ tx, acctMapping, cardMapping, itemCode }) => {
       const override = lineOverrides[String(tx.id)] || {};
-      const finalCostCenter = override.costCenter ?? acctMapping?.cost_center ?? null;
-      const finalProject = override.project ?? acctMapping?.project ?? null;
+      // Priority: per-line override > card mapping > account mapping
+      const finalCostCenter =
+        override.costCenter ?? cardMapping?.cost_center ?? acctMapping?.cost_center ?? null;
+      const finalProject =
+        override.project ?? cardMapping?.project ?? acctMapping?.project ?? null;
       const finalItem = override.item || itemCode!;
       const lineCurrency = String(tx.currency || "").toUpperCase();
       const line: Record<string, unknown> = {
