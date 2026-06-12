@@ -338,7 +338,7 @@ export default function FiscalAudit() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* Filters */}
-        <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
             <Label htmlFor="start" className="text-xs">Data inicial</Label>
             <Input id="start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -346,10 +346,6 @@ export default function FiscalAudit() {
           <div>
             <Label htmlFor="end" className="text-xs">Data final</Label>
             <Input id="end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="thr" className="text-xs">Limite de dias (sem aprovação)</Label>
-            <Input id="thr" type="number" min={1} max={365} value={threshold} onChange={(e) => setThreshold(Number(e.target.value) || 90)} />
           </div>
           <Button onClick={load} disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
