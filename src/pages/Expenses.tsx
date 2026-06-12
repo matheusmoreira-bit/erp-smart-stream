@@ -207,9 +207,89 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            {(showSubmit || showCancel || showRetrySap || showEdit) && (
+            {hasIntegration && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                      Integração com ERP
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={onViewIntegration}
+                  >
+                    Ver detalhes
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {expense.sap_doc_num != null && (
+                    <div>
+                      <p className="text-muted-foreground">Documento ERP</p>
+                      <p className="text-foreground font-mono font-medium">
+                        #{expense.sap_doc_num}
+                        {expense.sap_doc_entry ? ` (entry ${expense.sap_doc_entry})` : ""}
+                      </p>
+                    </div>
+                  )}
+                  {expense.sap_purchase_order_status && (
+                    <div>
+                      <p className="text-muted-foreground">Status PC</p>
+                      <p className="text-foreground">{expense.sap_purchase_order_status}</p>
+                    </div>
+                  )}
+                  {expense.sap_attachment_status && (
+                    <div>
+                      <p className="text-muted-foreground">Anexo</p>
+                      <p className="text-foreground">{expense.sap_attachment_status}</p>
+                    </div>
+                  )}
+                  {expense.sap_integration_last_attempt_at && (
+                    <div>
+                      <p className="text-muted-foreground">Última tentativa</p>
+                      <p className="text-foreground">{formatDate(expense.sap_integration_last_attempt_at)}</p>
+                    </div>
+                  )}
+                </div>
+                {expense.sap_integration_error && (
+                  <div className="flex items-start gap-2 rounded bg-destructive/10 border border-destructive/30 p-2">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-destructive shrink-0" />
+                    <p className="text-xs text-destructive flex-1 break-words">
+                      {expense.sap_integration_error}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval) && (
               <div className="border-t border-border pt-4 flex justify-end gap-3 flex-wrap">
                 <Button variant="outline" onClick={onClose}>Fechar</Button>
+                {showApproval && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => onReject(expense)}
+                      disabled={isActioning}
+                      className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                    >
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                      Rejeitar
+                    </Button>
+                    <Button
+                      onClick={() => onApprove(expense)}
+                      disabled={isActioning}
+                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      Aprovar
+                    </Button>
+                  </>
+                )}
                 {showEdit && (
                   <Button
                     variant="outline"
