@@ -22,6 +22,7 @@ import {
   Bell,
   FileSearch,
   FileInput,
+  Radar,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -212,6 +213,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-orange-500/20 to-orange-500/5",
     moduleKey: "nf_entrada",
   },
+  audit_console: {
+    title: "Console de Auditoria",
+    description: "Painel executivo de auditoria sobre SAP: divergências, alertas de fraude, insights IA e análise documental.",
+    icon: Radar,
+    path: "/analytics/audit",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    moduleKey: "audit_console",
+  },
 };
 
 const moduleGroups: { title: string; keys: string[] }[] = (
@@ -226,7 +236,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Análise & Monitoramento",
-      keys: ["analytics", "integration_history"],
+      keys: ["analytics", "audit_console", "integration_history"],
     },
     {
       title: "Financeiro",

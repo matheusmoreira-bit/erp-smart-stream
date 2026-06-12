@@ -34,6 +34,7 @@ import LicenseImport from "./pages/LicenseImport.tsx";
 import Synapse from "./pages/Synapse.tsx";
 import AuditLog from "./pages/AuditLog.tsx";
 import Notifications from "./pages/Notifications.tsx";
+import AuditConsole from "./pages/AuditConsole.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
@@ -57,6 +58,7 @@ const App = () => (
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/analytics/audit/*" element={<AuditConsole />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/approvals/history" element={<ApprovalHistory />} />
               <Route path="/expenses" element={<Expenses />} />
