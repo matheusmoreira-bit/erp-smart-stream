@@ -106,6 +106,11 @@ export default function SapUsersAdmin() {
             <Users className="w-5 h-5 text-muted-foreground" />
             <h1 className="text-xl font-bold text-foreground">Usuários SAP</h1>
           </div>
+          <div className="ml-auto">
+            <Button size="sm" variant="outline" onClick={() => navigate("/backoffice/sap-users/replicate")}>
+              <Copy className="w-4 h-4 mr-1" /> Replicar entre bases
+            </Button>
+          </div>
         </div>
       </header>
 
