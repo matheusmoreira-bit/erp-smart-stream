@@ -321,6 +321,32 @@ function NewFornecedorDialog({
   };
 
 
+  const afterSave = async (data: any) => {
+    const fornecedor = data?.fornecedor;
+    const existed = !!data?.existed;
+    if (existed) {
+      toast.message("Fornecedor já existia localmente", { description: "Tentando enviar ao SAP da empresa ativa…" });
+    } else {
+      toast.success("Fornecedor cadastrado");
+    }
+    if (!session?.companyDB) {
+      toast.warning("Sem sessão SAP ativa — não foi enviado ao SAP", {
+        description: "Faça login no ERP para sincronizar.",
+      });
+      onSaved();
+      return;
+    }
+    const result = await syncFornecedorToSap(fornecedor, session);
+    if (result.ok && result.skipped) {
+      toast.info("Já existia no SAP", { description: result.message });
+    } else if (result.ok) {
+      toast.success("Enviado ao SAP", { description: result.message });
+    } else {
+      toast.error("Falha ao enviar ao SAP", { description: result.message });
+    }
+    onSaved();
+  };
+
   const salvarPj = async () => {
     if (!hydrated) {
       toast.error("Busque o CNPJ primeiro");
@@ -339,8 +365,7 @@ function NewFornecedorDialog({
         toast.error((data as any).error);
         return;
       }
-      toast.success("Fornecedor cadastrado");
-      onSaved();
+      await afterSave(data);
     } finally {
       setBusy(false);
     }
@@ -369,12 +394,12 @@ function NewFornecedorDialog({
         toast.error((data as any).error);
         return;
       }
-      toast.success("Fornecedor cadastrado");
-      onSaved();
+      await afterSave(data);
     } finally {
       setBusy(false);
     }
   };
+
 
   const field = (key: string, label: string, opts: { type?: string; col?: number } = {}) => (
     <div className={`grid gap-1 ${opts.col === 2 ? "col-span-2" : ""}`}>
