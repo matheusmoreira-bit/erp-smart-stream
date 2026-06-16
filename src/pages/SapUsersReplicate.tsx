@@ -226,28 +226,91 @@ export default function SapUsersReplicate() {
             </Select>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Senha padrão para novos usuários</Label>
-              <Input
-                type="password"
-                value={defaultPassword}
-                onChange={(e) => setDefaultPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                className="mt-1 bg-card"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Será aplicada a todos os usuários criados. Eles podem alterar depois.</p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium">Filtrar por códigos (opcional)</Label>
-              <Textarea
-                value={userCodes}
-                onChange={(e) => setUserCodes(e.target.value)}
-                placeholder="USER1, USER2, USER3 (vazio = todos)"
-                className="mt-1 bg-card h-[88px]"
-              />
-            </div>
+          <div>
+            <Label className="text-sm font-medium">Senha padrão para novos usuários</Label>
+            <Input
+              type="password"
+              value={defaultPassword}
+              onChange={(e) => setDefaultPassword(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+              className="mt-1 bg-card max-w-md"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Será aplicada a todos os usuários criados. Eles podem alterar depois.</p>
           </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-sm font-medium">
+                Usuários a replicar
+                {sourceUsers.length > 0 && (
+                  <span className="text-xs text-muted-foreground ml-2">
+                    ({selectedCodes.length} selecionados de {sourceUsers.length})
+                  </span>
+                )}
+              </Label>
+              {sourceUsers.length > 0 && (
+                <div className="flex gap-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={selectAllFiltered}>
+                    Selecionar todos
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
+                    Limpar
+                  </Button>
+                </div>
+              )}
+            </div>
+            {sourceDbs.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-3 border rounded-md bg-card">
+                Selecione ao menos uma base de origem para listar os usuários.
+              </p>
+            ) : loadingUsers ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-md bg-card">
+                <Loader2 className="w-4 h-4 animate-spin" /> Carregando usuários das bases selecionadas...
+              </div>
+            ) : (
+              <>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Buscar por código, nome ou e-mail..."
+                    className="pl-9 bg-card"
+                  />
+                </div>
+                <div className="max-h-72 overflow-auto border rounded-md bg-card divide-y">
+                  {filteredUsers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground p-3">Nenhum usuário encontrado.</p>
+                  ) : (
+                    filteredUsers.map((u) => (
+                      <label
+                        key={u.code}
+                        className="flex items-start gap-2 p-2 hover:bg-muted/40 cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={selectedCodes.includes(u.code)}
+                          onCheckedChange={() => toggleUser(u.code)}
+                          className="mt-1"
+                        />
+                        <div className="text-sm flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs">{u.code}</span>
+                            <span className="font-medium truncate">{u.name}</span>
+                            {u.superuser && <Badge variant="outline" className="text-[10px]">Superuser</Badge>}
+                          </div>
+                          {u.email && <div className="text-xs text-muted-foreground truncate">{u.email}</div>}
+                          <div className="text-[10px] text-muted-foreground font-mono">
+                            {u.sources.join(", ")}
+                          </div>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
 
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm">
