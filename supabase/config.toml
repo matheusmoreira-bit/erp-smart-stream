@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.external-approvals-api]
 verify_jwt = false
+
+[functions.fornecedor-save]
+verify_jwt = false
+
+[functions.cnpj-lookup]
+verify_jwt = false
