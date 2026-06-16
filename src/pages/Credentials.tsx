@@ -97,6 +97,38 @@ function CredentialModal({
     }
   };
 
+  const handleTest = async () => {
+    if (!testEndpoint) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const qs = companyDb ? `?company_db=${encodeURIComponent(companyDb)}` : "";
+      const res = await sapFunctionFetch(`${testEndpoint}${qs}`, { method: "GET" });
+      const data = await res.json().catch(() => ({}));
+      if (data?.ok) {
+        setTestResult({
+          ok: true,
+          message: `Conexão OK (HTTP ${data.status}) em ${data.elapsedMs}ms`,
+          detail: data.url,
+        });
+        toast.success("Conexão com Master Tax bem-sucedida");
+      } else {
+        setTestResult({
+          ok: false,
+          message: data?.hint || data?.error || `Falha (HTTP ${data?.status ?? res.status})`,
+          detail: data?.bodyPreview || data?.url,
+        });
+        toast.error("Falha ao testar conexão");
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTestResult({ ok: false, message: msg });
+      toast.error("Erro ao testar conexão");
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const Icon = system.icon;
 
   return (
