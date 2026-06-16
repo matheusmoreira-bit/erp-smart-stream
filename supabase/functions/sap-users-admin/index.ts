@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
           const creds = await getAdminCreds(admin, db);
           if (!creds) throw new Error("Sem credenciais administrativas");
           const url = await getSapBaseUrl(admin, db);
-          const s = await sapLogin(url, db, creds.username, creds.password);
+          const s = await sapLogin(url, creds.sapCompanyDb, creds.username, creds.password);
           try {
             const select = "UserCode,UserName,eMail,Department,UserPermission,Superuser,Locked";
             let next: string | null = `Users?$select=${select}&$top=200`;
