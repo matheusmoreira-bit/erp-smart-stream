@@ -52,6 +52,7 @@ export default function SapUsersReplicate() {
   const [overwrite, setOverwrite] = useState(false);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TargetResult[] | null>(null);
+  const [resultsOpen, setResultsOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
