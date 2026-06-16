@@ -34,7 +34,10 @@ export default function SapUsersReplicate() {
   const [sourceDbs, setSourceDbs] = useState<string[]>([]);
   const [targetDb, setTargetDb] = useState<string>("");
   const [defaultPassword, setDefaultPassword] = useState("");
-  const [userCodes, setUserCodes] = useState("");
+  const [sourceUsers, setSourceUsers] = useState<SourceUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [userSearch, setUserSearch] = useState("");
   const [includeSuperusers, setIncludeSuperusers] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
   const [running, setRunning] = useState(false);
