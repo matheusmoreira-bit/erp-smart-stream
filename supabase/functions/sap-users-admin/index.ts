@@ -40,15 +40,20 @@ async function getAdminCreds(admin: ReturnType<typeof createClient>, companyDB: 
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDB)
-    .in("credential_key", ["username", "password"]);
+    .in("credential_key", ["username", "password", "company_db"]);
   const map = new Map<string, string>();
   (data || []).forEach((r: { credential_key: string; credential_value: string | null }) => {
     if (r.credential_value) map.set(r.credential_key, r.credential_value);
   });
   const username = map.get("username");
   const password = map.get("password");
+  // The SAP CompanyDB used at /Login may differ from the app's internal company_db
+  // identifier. If a `company_db` credential is configured, prefer it; otherwise fall
+  // back to the row identifier. Ignore values that look like a URL (legacy bad data).
+  const credCompanyDb = map.get("company_db");
+  const sapCompanyDb = credCompanyDb && !/^https?:\/\//i.test(credCompanyDb) ? credCompanyDb : companyDB;
   if (!username || !password) return null;
-  return { username, password };
+  return { username, password, sapCompanyDb };
 }
 
 interface SapSession {
@@ -172,7 +177,7 @@ Deno.serve(async (req) => {
           const creds = await getAdminCreds(admin, db);
           if (!creds) throw new Error("Sem credenciais administrativas");
           const url = await getSapBaseUrl(admin, db);
-          const s = await sapLogin(url, db, creds.username, creds.password);
+          const s = await sapLogin(url, creds.sapCompanyDb, creds.username, creds.password);
           try {
             const select = "UserCode,UserName,eMail,Department,UserPermission,Superuser,Locked";
             let next: string | null = `Users?$select=${select}&$top=200`;
@@ -210,7 +215,7 @@ Deno.serve(async (req) => {
       const targetUrl = await getSapBaseUrl(admin, targetDb);
       let tSession: SapSession;
       try {
-        tSession = await sapLogin(targetUrl, targetDb, targetCreds.username, targetCreds.password);
+        tSession = await sapLogin(targetUrl, targetCreds.sapCompanyDb, targetCreds.username, targetCreds.password);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return new Response(JSON.stringify({
@@ -293,7 +298,7 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl = await getSapBaseUrl(admin, companyDb);
-    const session = await sapLogin(baseUrl, companyDb, creds.username, creds.password);
+    const session = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password);
 
     try {
       if (action === "list_users") {
