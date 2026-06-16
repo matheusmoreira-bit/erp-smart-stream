@@ -221,6 +221,26 @@ function CredentialModal({
           })}
         </div>
 
+        {testResult && (
+          <div
+            className={`rounded-md border p-3 text-xs ${
+              testResult.ok
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            }`}
+          >
+            <div className="font-medium flex items-center gap-2">
+              {testResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+              {testResult.message}
+            </div>
+            {testResult.detail && (
+              <div className="mt-1 font-mono text-[10px] opacity-80 break-all line-clamp-3">
+                {testResult.detail}
+              </div>
+            )}
+          </div>
+        )}
+
         <DialogFooter className="gap-2 sm:gap-0">
           {hasExisting && (
             <Button
@@ -233,6 +253,17 @@ function CredentialModal({
               Remover
             </Button>
           )}
+          {canTest && (
+            <Button
+              variant="outline"
+              onClick={handleTest}
+              disabled={testing || isLoading}
+              className="gap-2"
+            >
+              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              Testar conexão
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -241,6 +272,7 @@ function CredentialModal({
             Salvar
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
