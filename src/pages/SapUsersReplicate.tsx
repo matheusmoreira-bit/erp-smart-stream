@@ -100,6 +100,7 @@ export default function SapUsersReplicate() {
                 name: String(u.UserName || code),
                 email: u.eMail ? String(u.eMail) : undefined,
                 superuser: u.Superuser === "tYES" || u.Superuser === true,
+                locked: u.Locked === "tYES" || u.Locked === true,
                 sources: [db],
               });
             }
