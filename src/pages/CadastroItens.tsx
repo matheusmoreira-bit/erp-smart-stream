@@ -26,6 +26,8 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
+
 
 type ItemBase = {
   id: string;
@@ -223,6 +225,15 @@ function NewItemDialog({
   const [previewCode, setPreviewCode] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const { options: groupOptions, isLoading: groupsLoading } = useSapCachedList({
+    cacheKey: "item_groups",
+    endpoint: "ItemGroups",
+    params: { $select: "Number,GroupName", $orderby: "GroupName" },
+    mapRow: (r: any) => ({ code: String(r.Number), name: r.GroupName }),
+    enabled: open,
+  });
+
+
   useEffect(() => {
     if (!open) {
       setStep(1);
@@ -332,9 +343,21 @@ function NewItemDialog({
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label>Grupo</Label>
-                <Input value={grupo} onChange={(e) => setGrupo(e.target.value)} placeholder="Opcional" />
+                <Label>Grupo (SAP)</Label>
+                <Select value={grupo} onValueChange={setGrupo} disabled={groupsLoading}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={groupsLoading ? "Carregando..." : (groupOptions.length ? "Selecionar grupo" : "Sem grupos em cache")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groupOptions.map((g) => (
+                      <SelectItem key={g.code} value={g.code}>
+                        {g.name} — {g.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+
               <div className="grid gap-2">
                 <Label>Unidade</Label>
                 <Input value={unidade} onChange={(e) => setUnidade(e.target.value)} placeholder="UN, PC, HR..." />
