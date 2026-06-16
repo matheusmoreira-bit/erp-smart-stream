@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, Copy, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, CheckCircle2, XCircle, AlertTriangle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
+
+interface SourceUser {
+  code: string;
+  name: string;
+  email?: string;
+  superuser?: boolean;
+  sources: string[];
+}
 
 interface ReplicateResult {
   total_source_users: number;
