@@ -58,10 +58,12 @@ const digits = (s: string) => (s || "").replace(/\D+/g, "");
 export default function CadastroFornecedores() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const { session } = useSap();
   const [rows, setRows] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [openNew, setOpenNew] = useState(false);
+
 
   const load = async () => {
     setLoading(true);
