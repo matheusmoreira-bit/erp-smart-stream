@@ -288,8 +288,14 @@ function NewFornecedorDialog({
     }
     setBusy(true);
     try {
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session) {
+        toast.error("Sessão expirada. Faça login novamente para cadastrar.");
+        return;
+      }
       // Checa duplicidade
       const { data: dup } = await supabase.from("fornecedores").select("id").eq("cpf", d).maybeSingle();
+
       if (dup) {
         toast.error("Já existe fornecedor com este CPF");
         return;
