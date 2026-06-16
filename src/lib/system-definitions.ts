@@ -189,6 +189,7 @@ export const SYSTEMS: SystemConfig[] = [
     icon: FileInput,
     fields: [
       { key: "base_url", label: "URL Base da API", placeholder: "https://api.mastertax.com.br/v1/" },
+      { key: "company_id", label: "Company ID (Master Tax)", placeholder: "ID da empresa no Master Tax" },
       { key: "token", label: "Token de Acesso", type: "password", placeholder: "Bearer token" },
       { key: "pdf_base_url", label: "URL Base do PDF (opcional)", placeholder: "https://portal.mastertax.com.br/danfe/" },
       { key: "username", label: "Usuário (se aplicável)", placeholder: "usuario_api" },
