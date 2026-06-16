@@ -21,6 +21,8 @@ import Credentials from "./pages/Credentials.tsx";
 import UsersPage from "./pages/Users.tsx";
 import Suppliers from "./pages/Suppliers.tsx";
 import Items from "./pages/Items.tsx";
+import CadastroItens from "./pages/CadastroItens.tsx";
+import CadastroFornecedores from "./pages/CadastroFornecedores.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import FiscalAudit from "./pages/FiscalAudit.tsx";
