@@ -253,8 +253,14 @@ function NewFornecedorDialog({
     }
     setBusy(true);
     try {
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session) {
+        toast.error("Sessão expirada. Faça login novamente para cadastrar.");
+        return;
+      }
       const payload = { ...form, tipo_pessoa: "pj", cnpj: digits(form.cnpj || cnpj) };
       const { error } = await supabase.from("fornecedores").insert(payload);
+
       if (error) {
         if ((error as any).code === "23505") {
           toast.error("Já existe fornecedor com este CNPJ");
@@ -282,8 +288,14 @@ function NewFornecedorDialog({
     }
     setBusy(true);
     try {
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session) {
+        toast.error("Sessão expirada. Faça login novamente para cadastrar.");
+        return;
+      }
       // Checa duplicidade
       const { data: dup } = await supabase.from("fornecedores").select("id").eq("cpf", d).maybeSingle();
+
       if (dup) {
         toast.error("Já existe fornecedor com este CPF");
         return;
