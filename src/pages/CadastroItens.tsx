@@ -343,9 +343,21 @@ function NewItemDialog({
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label>Grupo</Label>
-                <Input value={grupo} onChange={(e) => setGrupo(e.target.value)} placeholder="Opcional" />
+                <Label>Grupo (SAP)</Label>
+                <Select value={grupo} onValueChange={setGrupo} disabled={groupsLoading}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={groupsLoading ? "Carregando..." : (groupOptions.length ? "Selecionar grupo" : "Sem grupos em cache")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groupOptions.map((g) => (
+                      <SelectItem key={g.code} value={g.code}>
+                        {g.name} — {g.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+
               <div className="grid gap-2">
                 <Label>Unidade</Label>
                 <Input value={unidade} onChange={(e) => setUnidade(e.target.value)} placeholder="UN, PC, HR..." />
