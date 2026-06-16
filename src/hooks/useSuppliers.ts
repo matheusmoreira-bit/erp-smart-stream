@@ -254,20 +254,23 @@ export async function createSupplier(
     }
   }
 
-  const { data, error } = await (supabase as any)
-    .from(TABLE)
-    .insert({
-      ...input,
-      card_code: cardCode,
-      sap_sync_status: sapStatus,
-      sap_sync_error: sapError,
-      sap_last_synced_at: syncedAt,
-    })
-    .select("*")
-    .single();
+  const { data: resp, error } = await supabase.functions.invoke("supplier-sync", {
+    body: {
+      action: "insert",
+      row: {
+        ...input,
+        card_code: cardCode,
+        sap_sync_status: sapStatus,
+        sap_sync_error: sapError,
+        sap_last_synced_at: syncedAt,
+      },
+    },
+  });
   if (error) throw error;
-  return data as Supplier;
+  if ((resp as any)?.error) throw new Error((resp as any).error);
+  return (resp as any).supplier as Supplier;
 }
+
 
 export async function updateSupplier(
   id: string,
@@ -446,17 +449,12 @@ export async function findSupplierByTaxId(
 ): Promise<Supplier | null> {
   const trimmed = taxId.trim();
   if (!trimmed) return null;
-  const cleaned = trimmed.replace(/\D/g, "");
-  // Match either the digits-only form (BR style) or the original form
-  // (foreign IDs like 'GB123456789' or 'EIN 12-3456789').
-  const orParts = [`federal_tax_id.eq.${trimmed}`];
-  if (cleaned && cleaned !== trimmed) orParts.push(`federal_tax_id.eq.${cleaned}`);
-  const { data } = await (supabase as any)
-    .from(TABLE)
-    .select("*")
-    .eq("company_db", companyDb)
-    .or(orParts.join(","))
-    .limit(1)
-    .maybeSingle();
+  const { data: resp, error } = await supabase.functions.invoke("supplier-sync", {
+    body: { action: "findByTaxId", taxId: trimmed, companyDb },
+  });
+  if (error) return null;
+  return ((resp as any)?.supplier ?? null) as Supplier | null;
+}
+
   return (data as Supplier) || null;
 }
