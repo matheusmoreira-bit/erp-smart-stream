@@ -28,12 +28,18 @@ interface ReplicateResult {
   source_errors: { db: string; error: string }[];
 }
 
+interface TargetResult {
+  target_db: string;
+  result?: ReplicateResult;
+  error?: string;
+}
+
 export default function SapUsersReplicate() {
   const navigate = useNavigate();
   const [companies, setCompanies] = useState<SapCompanyOption[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [sourceDbs, setSourceDbs] = useState<string[]>([]);
-  const [targetDb, setTargetDb] = useState<string>("");
+  const [targetDbs, setTargetDbs] = useState<string[]>([]);
   const [defaultPassword, setDefaultPassword] = useState("");
   const [sourceUsers, setSourceUsers] = useState<SourceUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -43,7 +49,7 @@ export default function SapUsersReplicate() {
   const [includeSuperusers, setIncludeSuperusers] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<ReplicateResult | null>(null);
+  const [results, setResults] = useState<TargetResult[] | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -64,7 +70,11 @@ export default function SapUsersReplicate() {
 
   const toggleSource = (db: string) => {
     setSourceDbs((prev) => prev.includes(db) ? prev.filter((d) => d !== db) : [...prev, db]);
-    if (targetDb === db) setTargetDb("");
+    setTargetDbs((prev) => prev.filter((d) => d !== db));
+  };
+
+  const toggleTarget = (db: string) => {
+    setTargetDbs((prev) => prev.includes(db) ? prev.filter((d) => d !== db) : [...prev, db]);
   };
 
   // Load users whenever source DBs change
@@ -140,33 +150,41 @@ export default function SapUsersReplicate() {
 
   const handleRun = async () => {
     if (sourceDbs.length === 0) return toast.error("Selecione ao menos uma base de origem");
-    if (!targetDb) return toast.error("Selecione a base de destino");
+    if (targetDbs.length === 0) return toast.error("Selecione ao menos uma base de destino");
     if (!defaultPassword || defaultPassword.length < 8) return toast.error("Senha padrão precisa ter no mínimo 8 caracteres");
-    if (sourceDbs.includes(targetDb)) return toast.error("A base de destino não pode ser uma das origens");
+    if (targetDbs.some((d) => sourceDbs.includes(d))) return toast.error("As bases de destino não podem estar nas origens");
     if (selectedCodes.length === 0) return toast.error("Selecione ao menos um usuário");
 
     setRunning(true);
-    setResult(null);
+    setResults(null);
+    const aggregated: TargetResult[] = [];
     try {
-      const { data, error } = await supabase.functions.invoke("sap-users-admin", {
-        body: {
-          action: "replicate_users",
-          source_company_dbs: sourceDbs,
-          target_company_db: targetDb,
-          default_password: defaultPassword,
-          user_codes: selectedCodes,
-          include_superusers: includeSuperusers,
-          overwrite_existing: overwrite,
-        },
-      });
-      if (error || (data as { error?: string })?.error) {
-        throw new Error((data as { error?: string })?.error || error?.message || "Erro");
+      for (const target of targetDbs) {
+        try {
+          const { data, error } = await supabase.functions.invoke("sap-users-admin", {
+            body: {
+              action: "replicate_users",
+              source_company_dbs: sourceDbs,
+              target_company_db: target,
+              default_password: defaultPassword,
+              user_codes: selectedCodes,
+              include_superusers: includeSuperusers,
+              overwrite_existing: overwrite,
+            },
+          });
+          if (error || (data as { error?: string })?.error) {
+            aggregated.push({ target_db: target, error: (data as { error?: string })?.error || error?.message || "Erro" });
+          } else {
+            aggregated.push({ target_db: target, result: data as ReplicateResult });
+          }
+        } catch (e) {
+          aggregated.push({ target_db: target, error: e instanceof Error ? e.message : "Erro" });
+        }
       }
-      const res = data as ReplicateResult;
-      setResult(res);
-      toast.success(`Replicação concluída: ${res.created.length} criados, ${res.skipped.length} ignorados, ${res.failed.length} falhas`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao replicar");
+      setResults(aggregated);
+      const okTargets = aggregated.filter((r) => r.result).length;
+      const totalCreated = aggregated.reduce((s, r) => s + (r.result?.created.length || 0), 0);
+      toast.success(`Replicação concluída em ${okTargets}/${targetDbs.length} bases — ${totalCreated} criados no total`);
     } finally {
       setRunning(false);
     }
@@ -219,19 +237,35 @@ export default function SapUsersReplicate() {
           </div>
 
           <div>
-            <Label className="text-sm font-medium">Base de destino</Label>
-            <Select value={targetDb} onValueChange={setTargetDb}>
-              <SelectTrigger className="bg-card mt-1">
-                <SelectValue placeholder="Selecione a base destino" />
-              </SelectTrigger>
-              <SelectContent>
+            <Label className="text-sm font-medium">Bases de destino (uma ou mais)</Label>
+            <p className="text-xs text-muted-foreground mb-2">A replicação será executada para cada base selecionada.</p>
+            {targetOptions.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-3 border rounded-md bg-card">
+                Nenhuma base disponível (selecione origens diferentes primeiro).
+              </p>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-2 max-h-64 overflow-auto p-2 border rounded-md bg-card">
                 {targetOptions.map((c) => (
-                  <SelectItem key={c.company_db} value={c.company_db}>
-                    {c.display_name} <span className="text-xs text-muted-foreground ml-2">({c.company_db})</span>
-                  </SelectItem>
+                  <label key={c.company_db} className="flex items-start gap-2 p-2 rounded hover:bg-muted/40 cursor-pointer">
+                    <Checkbox
+                      checked={targetDbs.includes(c.company_db)}
+                      onCheckedChange={() => toggleTarget(c.company_db)}
+                    />
+                    <div className="text-sm">
+                      <div className="font-medium">{c.display_name}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{c.company_db}</div>
+                    </div>
+                  </label>
                 ))}
-              </SelectContent>
-            </Select>
+              </div>
+            )}
+            {targetDbs.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {targetDbs.map((d) => (
+                  <Badge key={d} className="text-[10px]">{d}</Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -351,56 +385,71 @@ export default function SapUsersReplicate() {
           </div>
         </div>
 
-        {result && (
-          <div className="glass-card p-5 space-y-4">
-            <h2 className="text-lg font-semibold">Resultado</h2>
-            <div className="grid sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-md border bg-card">
-                <div className="text-xs text-muted-foreground">Origem (únicos)</div>
-                <div className="text-2xl font-bold">{result.total_source_users}</div>
-              </div>
-              <div className="p-3 rounded-md border bg-card">
-                <div className="text-xs text-muted-foreground">Criados</div>
-                <div className="text-2xl font-bold text-emerald-500">{result.created.length}</div>
-              </div>
-              <div className="p-3 rounded-md border bg-card">
-                <div className="text-xs text-muted-foreground">Ignorados</div>
-                <div className="text-2xl font-bold text-amber-500">{result.skipped.length}</div>
-              </div>
-              <div className="p-3 rounded-md border bg-card">
-                <div className="text-xs text-muted-foreground">Falhas</div>
-                <div className="text-2xl font-bold text-destructive">{result.failed.length}</div>
-              </div>
-            </div>
-
-            {result.created.length > 0 && (
-              <Section icon={<CheckCircle2 className="w-4 h-4 text-emerald-500" />} title="Criados">
-                <div className="flex flex-wrap gap-1">
-                  {result.created.map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
+        {results && (
+          <div className="space-y-4">
+            {results.map((tr) => (
+              <div key={tr.target_db} className="glass-card p-5 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="text-lg font-semibold">
+                    Destino: <span className="font-mono text-sm">{tr.target_db}</span>
+                  </h2>
+                  {tr.error && <Badge variant="destructive">Falhou</Badge>}
                 </div>
-              </Section>
-            )}
-            {result.skipped.length > 0 && (
-              <Section icon={<AlertTriangle className="w-4 h-4 text-amber-500" />} title="Ignorados">
-                <ul className="text-xs space-y-1">
-                  {result.skipped.map((s, i) => <li key={i}><span className="font-mono">{s.code}</span> — {s.reason}</li>)}
-                </ul>
-              </Section>
-            )}
-            {result.failed.length > 0 && (
-              <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Falhas">
-                <ul className="text-xs space-y-1">
-                  {result.failed.map((f, i) => <li key={i}><span className="font-mono">{f.code}</span> — {f.error}</li>)}
-                </ul>
-              </Section>
-            )}
-            {result.source_errors.length > 0 && (
-              <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Erros lendo bases de origem">
-                <ul className="text-xs space-y-1">
-                  {result.source_errors.map((s, i) => <li key={i}><span className="font-mono">{s.db}</span> — {s.error}</li>)}
-                </ul>
-              </Section>
-            )}
+                {tr.error ? (
+                  <p className="text-sm text-destructive">{tr.error}</p>
+                ) : tr.result ? (
+                  <>
+                    <div className="grid sm:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-md border bg-card">
+                        <div className="text-xs text-muted-foreground">Origem (únicos)</div>
+                        <div className="text-2xl font-bold">{tr.result.total_source_users}</div>
+                      </div>
+                      <div className="p-3 rounded-md border bg-card">
+                        <div className="text-xs text-muted-foreground">Criados</div>
+                        <div className="text-2xl font-bold text-emerald-500">{tr.result.created.length}</div>
+                      </div>
+                      <div className="p-3 rounded-md border bg-card">
+                        <div className="text-xs text-muted-foreground">Ignorados</div>
+                        <div className="text-2xl font-bold text-amber-500">{tr.result.skipped.length}</div>
+                      </div>
+                      <div className="p-3 rounded-md border bg-card">
+                        <div className="text-xs text-muted-foreground">Falhas</div>
+                        <div className="text-2xl font-bold text-destructive">{tr.result.failed.length}</div>
+                      </div>
+                    </div>
+
+                    {tr.result.created.length > 0 && (
+                      <Section icon={<CheckCircle2 className="w-4 h-4 text-emerald-500" />} title="Criados">
+                        <div className="flex flex-wrap gap-1">
+                          {tr.result.created.map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
+                        </div>
+                      </Section>
+                    )}
+                    {tr.result.skipped.length > 0 && (
+                      <Section icon={<AlertTriangle className="w-4 h-4 text-amber-500" />} title="Ignorados">
+                        <ul className="text-xs space-y-1">
+                          {tr.result.skipped.map((s, i) => <li key={i}><span className="font-mono">{s.code}</span> — {s.reason}</li>)}
+                        </ul>
+                      </Section>
+                    )}
+                    {tr.result.failed.length > 0 && (
+                      <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Falhas">
+                        <ul className="text-xs space-y-1">
+                          {tr.result.failed.map((f, i) => <li key={i}><span className="font-mono">{f.code}</span> — {f.error}</li>)}
+                        </ul>
+                      </Section>
+                    )}
+                    {tr.result.source_errors.length > 0 && (
+                      <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Erros lendo bases de origem">
+                        <ul className="text-xs space-y-1">
+                          {tr.result.source_errors.map((s, i) => <li key={i}><span className="font-mono">{s.db}</span> — {s.error}</li>)}
+                        </ul>
+                      </Section>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            ))}
           </div>
         )}
       </main>
