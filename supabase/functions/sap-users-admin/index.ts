@@ -208,7 +208,18 @@ Deno.serve(async (req) => {
         });
       }
       const targetUrl = await getSapBaseUrl(admin, targetDb);
-      const tSession = await sapLogin(targetUrl, targetDb, targetCreds.username, targetCreds.password);
+      let tSession: SapSession;
+      try {
+        tSession = await sapLogin(targetUrl, targetDb, targetCreds.username, targetCreds.password);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return new Response(JSON.stringify({
+          ok: false,
+          error: `Falha ao autenticar na base destino ${targetDb}: ${msg}`,
+          total_source_users: sourceUsers.size,
+          source_errors: sourceErrors,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
 
       try {
         const existing = new Set<string>();
@@ -241,6 +252,7 @@ Deno.serve(async (req) => {
           else failed.push({ code, error: extractSapError(r.data, `HTTP ${r.status}`) });
         }
       } finally { await sapLogout(tSession); }
+
 
       await admin.rpc("insert_audit_log", {
         p_action: "sap_users_replicate",
