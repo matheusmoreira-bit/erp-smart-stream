@@ -16,6 +16,7 @@ interface SourceUser {
   name: string;
   email?: string;
   superuser?: boolean;
+  locked?: boolean;
   sources: string[];
 }
 
@@ -38,6 +39,7 @@ export default function SapUsersReplicate() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [userSearch, setUserSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"active" | "all">("active");
   const [includeSuperusers, setIncludeSuperusers] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
   const [running, setRunning] = useState(false);
@@ -98,6 +100,7 @@ export default function SapUsersReplicate() {
                 name: String(u.UserName || code),
                 email: u.eMail ? String(u.eMail) : undefined,
                 superuser: u.Superuser === "tYES" || u.Superuser === true,
+                locked: u.Locked === "tYES" || u.Locked === true,
                 sources: [db],
               });
             }
@@ -118,11 +121,16 @@ export default function SapUsersReplicate() {
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
-    if (!q) return sourceUsers;
-    return sourceUsers.filter(
-      (u) => u.code.toLowerCase().includes(q) || u.name.toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q),
-    );
-  }, [sourceUsers, userSearch]);
+    return sourceUsers.filter((u) => {
+      if (statusFilter === "active" && u.locked) return false;
+      if (!q) return true;
+      return (
+        u.code.toLowerCase().includes(q) ||
+        u.name.toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [sourceUsers, userSearch, statusFilter]);
 
   const toggleUser = (code: string) => {
     setSelectedCodes((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
@@ -269,14 +277,25 @@ export default function SapUsersReplicate() {
               </div>
             ) : (
               <>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    placeholder="Buscar por código, nome ou e-mail..."
-                    className="pl-9 bg-card"
-                  />
+                <div className="flex gap-2 mb-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      placeholder="Buscar por código, nome ou e-mail..."
+                      className="pl-9 bg-card"
+                    />
+                  </div>
+                  <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "active" | "all")}>
+                    <SelectTrigger className="w-[180px] bg-card">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Apenas ativos</SelectItem>
+                      <SelectItem value="all">Todos (incl. bloqueados)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="max-h-72 overflow-auto border rounded-md bg-card divide-y">
                   {filteredUsers.length === 0 ? (
@@ -285,7 +304,7 @@ export default function SapUsersReplicate() {
                     filteredUsers.map((u) => (
                       <label
                         key={u.code}
-                        className="flex items-start gap-2 p-2 hover:bg-muted/40 cursor-pointer"
+                        className={`flex items-start gap-2 p-2 hover:bg-muted/40 cursor-pointer ${u.locked ? "opacity-70" : ""}`}
                       >
                         <Checkbox
                           checked={selectedCodes.includes(u.code)}
@@ -297,6 +316,7 @@ export default function SapUsersReplicate() {
                             <span className="font-mono text-xs">{u.code}</span>
                             <span className="font-medium truncate">{u.name}</span>
                             {u.superuser && <Badge variant="outline" className="text-[10px]">Superuser</Badge>}
+                            {u.locked && <Badge variant="destructive" className="text-[10px]">Bloqueado</Badge>}
                           </div>
                           {u.email && <div className="text-xs text-muted-foreground truncate">{u.email}</div>}
                           <div className="text-[10px] text-muted-foreground font-mono">
