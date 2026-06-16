@@ -188,12 +188,9 @@ export const SYSTEMS: SystemConfig[] = [
     description: "Captura automática de NFs/XMLs de entrada e PDFs (DANFE)",
     icon: FileInput,
     fields: [
-      { key: "base_url", label: "URL Base da API", placeholder: "https://api.mastertax.com.br/v1/" },
-      { key: "company_id", label: "Company ID (Master Tax)", placeholder: "ID da empresa no Master Tax" },
-      { key: "token", label: "Token de Acesso", type: "password", placeholder: "Bearer token" },
-      { key: "pdf_base_url", label: "URL Base do PDF (opcional)", placeholder: "https://portal.mastertax.com.br/danfe/" },
-      { key: "username", label: "Usuário (se aplicável)", placeholder: "usuario_api" },
-      { key: "password", label: "Senha (se aplicável)", type: "password", placeholder: "Senha do usuário" },
+      { key: "base_url", label: "URL Base da API", placeholder: "https://api.mastertax.app" },
+      { key: "cnpj", label: "CNPJ da Empresa (somente dígitos)", placeholder: "00000000000000" },
+      { key: "token", label: "Token de Acesso (Bearer JWT)", type: "password", placeholder: "JWT emitido pela Master Tax" },
     ],
   },
 ];
