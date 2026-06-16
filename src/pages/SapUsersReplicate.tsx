@@ -1,0 +1,264 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Loader2, Copy, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
+
+interface ReplicateResult {
+  total_source_users: number;
+  created: string[];
+  skipped: { code: string; reason: string }[];
+  failed: { code: string; error: string }[];
+  source_errors: { db: string; error: string }[];
+}
+
+export default function SapUsersReplicate() {
+  const navigate = useNavigate();
+  const [companies, setCompanies] = useState<SapCompanyOption[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+  const [sourceDbs, setSourceDbs] = useState<string[]>([]);
+  const [targetDb, setTargetDb] = useState<string>("");
+  const [defaultPassword, setDefaultPassword] = useState("");
+  const [userCodes, setUserCodes] = useState("");
+  const [includeSuperusers, setIncludeSuperusers] = useState(false);
+  const [overwrite, setOverwrite] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<ReplicateResult | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoadingCompanies(true);
+      const { data, error } = await supabase.functions.invoke("sap-users-admin", {
+        body: { action: "list_companies" },
+      });
+      if (error) toast.error("Erro ao carregar empresas");
+      else setCompanies((data as { companies: SapCompanyOption[] })?.companies || []);
+      setLoadingCompanies(false);
+    })();
+  }, []);
+
+  const targetOptions = useMemo(
+    () => companies.filter((c) => !sourceDbs.includes(c.company_db)),
+    [companies, sourceDbs],
+  );
+
+  const toggleSource = (db: string) => {
+    setSourceDbs((prev) => prev.includes(db) ? prev.filter((d) => d !== db) : [...prev, db]);
+    if (targetDb === db) setTargetDb("");
+  };
+
+  const handleRun = async () => {
+    if (sourceDbs.length === 0) return toast.error("Selecione ao menos uma base de origem");
+    if (!targetDb) return toast.error("Selecione a base de destino");
+    if (!defaultPassword || defaultPassword.length < 8) return toast.error("Senha padrão precisa ter no mínimo 8 caracteres");
+    if (sourceDbs.includes(targetDb)) return toast.error("A base de destino não pode ser uma das origens");
+
+    const codes = userCodes
+      .split(/[\n,;\s]+/)
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    setRunning(true);
+    setResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("sap-users-admin", {
+        body: {
+          action: "replicate_users",
+          source_company_dbs: sourceDbs,
+          target_company_db: targetDb,
+          default_password: defaultPassword,
+          user_codes: codes.length > 0 ? codes : undefined,
+          include_superusers: includeSuperusers,
+          overwrite_existing: overwrite,
+        },
+      });
+      if (error || (data as { error?: string })?.error) {
+        throw new Error((data as { error?: string })?.error || error?.message || "Erro");
+      }
+      const res = data as ReplicateResult;
+      setResult(res);
+      toast.success(`Replicação concluída: ${res.created.length} criados, ${res.skipped.length} ignorados, ${res.failed.length} falhas`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao replicar");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-30 bg-card/80 backdrop-blur border-b border-border">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/backoffice/sap-users")}>
+            <ArrowLeft className="w-4 h-4 mr-1" /> Usuários SAP
+          </Button>
+          <div className="flex items-center gap-2">
+            <Copy className="w-5 h-5 text-muted-foreground" />
+            <h1 className="text-xl font-bold text-foreground">Replicar usuários entre bases</h1>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+        <div className="glass-card p-5 space-y-5">
+          <div>
+            <Label className="text-sm font-medium">Bases de origem (uma ou mais — consolidadas)</Label>
+            <p className="text-xs text-muted-foreground mb-2">Os usuários únicos por código serão lidos destas bases.</p>
+            {loadingCompanies ? (
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-2 max-h-64 overflow-auto p-2 border rounded-md bg-card">
+                {companies.map((c) => (
+                  <label key={c.company_db} className="flex items-start gap-2 p-2 rounded hover:bg-muted/40 cursor-pointer">
+                    <Checkbox
+                      checked={sourceDbs.includes(c.company_db)}
+                      onCheckedChange={() => toggleSource(c.company_db)}
+                    />
+                    <div className="text-sm">
+                      <div className="font-medium">{c.display_name}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{c.company_db}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+            {sourceDbs.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {sourceDbs.map((d) => (
+                  <Badge key={d} variant="secondary" className="text-[10px]">{d}</Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-sm font-medium">Base de destino</Label>
+            <Select value={targetDb} onValueChange={setTargetDb}>
+              <SelectTrigger className="bg-card mt-1">
+                <SelectValue placeholder="Selecione a base destino" />
+              </SelectTrigger>
+              <SelectContent>
+                {targetOptions.map((c) => (
+                  <SelectItem key={c.company_db} value={c.company_db}>
+                    {c.display_name} <span className="text-xs text-muted-foreground ml-2">({c.company_db})</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Senha padrão para novos usuários</Label>
+              <Input
+                type="password"
+                value={defaultPassword}
+                onChange={(e) => setDefaultPassword(e.target.value)}
+                placeholder="Mínimo 8 caracteres"
+                className="mt-1 bg-card"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Será aplicada a todos os usuários criados. Eles podem alterar depois.</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Filtrar por códigos (opcional)</Label>
+              <Textarea
+                value={userCodes}
+                onChange={(e) => setUserCodes(e.target.value)}
+                placeholder="USER1, USER2, USER3 (vazio = todos)"
+                className="mt-1 bg-card h-[88px]"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={includeSuperusers} onCheckedChange={(v) => setIncludeSuperusers(!!v)} />
+              Incluir Superusers
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={overwrite} onCheckedChange={(v) => setOverwrite(!!v)} />
+              Sobrescrever (por padrão, usuários já existentes no destino são ignorados)
+            </label>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handleRun} disabled={running}>
+              {running ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Copy className="w-4 h-4 mr-1" />}
+              Replicar usuários
+            </Button>
+          </div>
+        </div>
+
+        {result && (
+          <div className="glass-card p-5 space-y-4">
+            <h2 className="text-lg font-semibold">Resultado</h2>
+            <div className="grid sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-md border bg-card">
+                <div className="text-xs text-muted-foreground">Origem (únicos)</div>
+                <div className="text-2xl font-bold">{result.total_source_users}</div>
+              </div>
+              <div className="p-3 rounded-md border bg-card">
+                <div className="text-xs text-muted-foreground">Criados</div>
+                <div className="text-2xl font-bold text-emerald-500">{result.created.length}</div>
+              </div>
+              <div className="p-3 rounded-md border bg-card">
+                <div className="text-xs text-muted-foreground">Ignorados</div>
+                <div className="text-2xl font-bold text-amber-500">{result.skipped.length}</div>
+              </div>
+              <div className="p-3 rounded-md border bg-card">
+                <div className="text-xs text-muted-foreground">Falhas</div>
+                <div className="text-2xl font-bold text-destructive">{result.failed.length}</div>
+              </div>
+            </div>
+
+            {result.created.length > 0 && (
+              <Section icon={<CheckCircle2 className="w-4 h-4 text-emerald-500" />} title="Criados">
+                <div className="flex flex-wrap gap-1">
+                  {result.created.map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
+                </div>
+              </Section>
+            )}
+            {result.skipped.length > 0 && (
+              <Section icon={<AlertTriangle className="w-4 h-4 text-amber-500" />} title="Ignorados">
+                <ul className="text-xs space-y-1">
+                  {result.skipped.map((s, i) => <li key={i}><span className="font-mono">{s.code}</span> — {s.reason}</li>)}
+                </ul>
+              </Section>
+            )}
+            {result.failed.length > 0 && (
+              <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Falhas">
+                <ul className="text-xs space-y-1">
+                  {result.failed.map((f, i) => <li key={i}><span className="font-mono">{f.code}</span> — {f.error}</li>)}
+                </ul>
+              </Section>
+            )}
+            {result.source_errors.length > 0 && (
+              <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Erros lendo bases de origem">
+                <ul className="text-xs space-y-1">
+                  {result.source_errors.map((s, i) => <li key={i}><span className="font-mono">{s.db}</span> — {s.error}</li>)}
+                </ul>
+              </Section>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="border rounded-md p-3 bg-card">
+      <div className="flex items-center gap-2 mb-2 text-sm font-medium">{icon}{title}</div>
+      {children}
+    </div>
+  );
+}
