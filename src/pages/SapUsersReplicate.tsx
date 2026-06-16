@@ -39,6 +39,7 @@ export default function SapUsersReplicate() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [userSearch, setUserSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"active" | "all">("active");
   const [includeSuperusers, setIncludeSuperusers] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
   const [running, setRunning] = useState(false);
