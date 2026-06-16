@@ -39,6 +39,7 @@ import NotFound from "./pages/NotFound.tsx";
 import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
 import SapUsersAdmin from "./pages/SapUsersAdmin.tsx";
+import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
