@@ -40,15 +40,20 @@ async function getAdminCreds(admin: ReturnType<typeof createClient>, companyDB: 
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDB)
-    .in("credential_key", ["username", "password"]);
+    .in("credential_key", ["username", "password", "company_db"]);
   const map = new Map<string, string>();
   (data || []).forEach((r: { credential_key: string; credential_value: string | null }) => {
     if (r.credential_value) map.set(r.credential_key, r.credential_value);
   });
   const username = map.get("username");
   const password = map.get("password");
+  // The SAP CompanyDB used at /Login may differ from the app's internal company_db
+  // identifier. If a `company_db` credential is configured, prefer it; otherwise fall
+  // back to the row identifier. Ignore values that look like a URL (legacy bad data).
+  const credCompanyDb = map.get("company_db");
+  const sapCompanyDb = credCompanyDb && !/^https?:\/\//i.test(credCompanyDb) ? credCompanyDb : companyDB;
   if (!username || !password) return null;
-  return { username, password };
+  return { username, password, sapCompanyDb };
 }
 
 interface SapSession {
