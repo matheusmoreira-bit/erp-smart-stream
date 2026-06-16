@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Key, Save, Trash2, Loader2,
-  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2,
+  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -22,6 +22,11 @@ import { toast } from "sonner";
 import { SYSTEMS, CATEGORY_LABELS, type SystemConfig } from "@/lib/system-definitions";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+
+const TEST_ENDPOINTS: Record<string, string> = {
+  mastertax: "mastertax-test",
+};
 
 function CredentialModal({
   system,
@@ -41,9 +46,14 @@ function CredentialModal({
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const hasExisting = existingKeys.length > 0;
 
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; detail?: string } | null>(null);
+  const testEndpoint = TEST_ENDPOINTS[system.name];
+  const canTest = !!testEndpoint && hasExisting;
+
   // Load existing non-secret values (custom_fields, toggle) when dialog opens
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setTestResult(null); return; }
     const loadableKeys = system.fields
       .filter((f) => (f.type === "custom_fields" || f.type === "toggle") && existingKeys.includes(f.key))
       .map((f) => f.key);
@@ -84,6 +94,38 @@ function CredentialModal({
     if (ok) {
       toast.success(`Credenciais do ${system.label} removidas`);
       onOpenChange(false);
+    }
+  };
+
+  const handleTest = async () => {
+    if (!testEndpoint) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const qs = companyDb ? `?company_db=${encodeURIComponent(companyDb)}` : "";
+      const res = await sapFunctionFetch(`${testEndpoint}${qs}`, { method: "GET" });
+      const data = await res.json().catch(() => ({}));
+      if (data?.ok) {
+        setTestResult({
+          ok: true,
+          message: `Conexão OK (HTTP ${data.status}) em ${data.elapsedMs}ms`,
+          detail: data.url,
+        });
+        toast.success("Conexão com Master Tax bem-sucedida");
+      } else {
+        setTestResult({
+          ok: false,
+          message: data?.hint || data?.error || `Falha (HTTP ${data?.status ?? res.status})`,
+          detail: data?.bodyPreview || data?.url,
+        });
+        toast.error("Falha ao testar conexão");
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTestResult({ ok: false, message: msg });
+      toast.error("Erro ao testar conexão");
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -179,6 +221,26 @@ function CredentialModal({
           })}
         </div>
 
+        {testResult && (
+          <div
+            className={`rounded-md border p-3 text-xs ${
+              testResult.ok
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            }`}
+          >
+            <div className="font-medium flex items-center gap-2">
+              {testResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+              {testResult.message}
+            </div>
+            {testResult.detail && (
+              <div className="mt-1 font-mono text-[10px] opacity-80 break-all line-clamp-3">
+                {testResult.detail}
+              </div>
+            )}
+          </div>
+        )}
+
         <DialogFooter className="gap-2 sm:gap-0">
           {hasExisting && (
             <Button
@@ -191,6 +253,17 @@ function CredentialModal({
               Remover
             </Button>
           )}
+          {canTest && (
+            <Button
+              variant="outline"
+              onClick={handleTest}
+              disabled={testing || isLoading}
+              className="gap-2"
+            >
+              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              Testar conexão
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -199,6 +272,7 @@ function CredentialModal({
             Salvar
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
