@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, RefreshCw, Lock, Unlock, KeyRound, Pencil, Search, Users } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, Lock, Unlock, KeyRound, Pencil, Search, Users, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
