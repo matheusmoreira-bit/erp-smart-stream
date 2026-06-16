@@ -456,5 +456,4 @@ export async function findSupplierByTaxId(
   return ((resp as any)?.supplier ?? null) as Supplier | null;
 }
 
-  return (data as Supplier) || null;
-}
+
