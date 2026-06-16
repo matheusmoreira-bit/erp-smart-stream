@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
       const targetUrl = await getSapBaseUrl(admin, targetDb);
       let tSession: SapSession;
       try {
-        tSession = await sapLogin(targetUrl, targetDb, targetCreds.username, targetCreds.password);
+        tSession = await sapLogin(targetUrl, targetCreds.sapCompanyDb, targetCreds.username, targetCreds.password);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return new Response(JSON.stringify({
