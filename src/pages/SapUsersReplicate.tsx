@@ -185,6 +185,7 @@ export default function SapUsersReplicate() {
         }
       }
       setResults(aggregated);
+      setResultsOpen(true);
       const okTargets = aggregated.filter((r) => r.result).length;
       const totalCreated = aggregated.reduce((s, r) => s + (r.result?.created.length || 0), 0);
       toast.success(`Replicação concluída em ${okTargets}/${targetDbs.length} bases — ${totalCreated} criados no total`);
