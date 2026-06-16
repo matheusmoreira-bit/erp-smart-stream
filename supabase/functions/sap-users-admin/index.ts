@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
 
     try {
       if (action === "list_users") {
-        const select = "InternalKey,UserCode,UserName,eMail,Locked,Superuser,Department,LastLoginDate,LastLoginTime,UserPermission";
+        const select = "InternalKey,UserCode,UserName,eMail,Locked,Superuser,Department,UserPermission";
         const all: Record<string, unknown>[] = [];
         let next: string | null = `Users?$select=${select}&$top=200`;
         while (next) {
