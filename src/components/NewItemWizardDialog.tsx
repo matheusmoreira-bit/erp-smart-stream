@@ -53,6 +53,9 @@ export function NewItemWizardDialog({
   const [base, setBase] = useState<ItemBase | null>(null);
   const [descricao, setDescricao] = useState("");
   const [previewCode, setPreviewCode] = useState("");
+  const [isSales, setIsSales] = useState(true);
+  const [isInventory, setIsInventory] = useState(true);
+  const [isPurchase, setIsPurchase] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const { options: groupOptions, isLoading: groupsLoading } = useSapCachedList({
@@ -74,6 +77,9 @@ export function NewItemWizardDialog({
       setBase(null);
       setDescricao("");
       setPreviewCode("");
+      setIsSales(true);
+      setIsInventory(true);
+      setIsPurchase(true);
     }
   }, [open]);
 
@@ -151,6 +157,9 @@ export function NewItemWizardDialog({
             item_name: v.descricao,
             items_group_code: base.grupo ? Number(base.grupo) : null,
             is_active: true,
+            is_sales_item: isSales,
+            is_inventory_item: isInventory,
+            is_purchase_item: isPurchase,
           },
           session,
         );
