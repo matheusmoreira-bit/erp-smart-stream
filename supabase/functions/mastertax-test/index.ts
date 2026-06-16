@@ -86,9 +86,8 @@ Deno.serve(async (req) => {
     const bodyText = await resp.text().catch(() => "");
     const preview = bodyText.slice(0, 500);
 
-    const ok = resp.status >= 200 && resp.status < 400 || resp.status === 401 === false;
-    // Treat 2xx/3xx as success; 401/403 = credenciais inválidas; outros = erro
     const success = resp.ok;
+
 
     return json({
       ok: success,
