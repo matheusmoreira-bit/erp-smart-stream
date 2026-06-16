@@ -37,6 +37,9 @@ const itemSchema = z.object({
   item_name: z.string().trim().min(1, "Nome obrigatório").max(200),
   items_group_code: z.number().int().nullable(),
   is_active: z.boolean(),
+  is_sales_item: z.boolean(),
+  is_inventory_item: z.boolean(),
+  is_purchase_item: z.boolean(),
 });
 
 interface Props {
@@ -46,16 +49,41 @@ interface Props {
   onSaved: () => void;
 }
 
+const defaultForm = (): ItemInput => ({
+  item_code: "",
+  item_name: "",
+  items_group_code: null,
+  is_active: true,
+  is_sales_item: true,
+  is_inventory_item: true,
+  is_purchase_item: true,
+});
+
+function BoolSelect({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <Select value={value ? "sim" : "nao"} onValueChange={(v) => onChange(v === "sim")}>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="sim">Sim</SelectItem>
+        <SelectItem value="nao">Não</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
   const { session } = useSap();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<ItemInput>({
-    item_code: "",
-    item_name: "",
-    items_group_code: null,
-    is_active: true,
-  });
+  const [form, setForm] = useState<ItemInput>(defaultForm());
 
   const { options: groupOptions, isLoading: groupsLoading } = useSapCachedList({
     cacheKey: "item_groups",
@@ -68,15 +96,17 @@ export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
   useEffect(() => {
     if (!open) return;
     if (!editing) {
-      setForm({ item_code: "", item_name: "", items_group_code: null, is_active: true });
+      setForm(defaultForm());
       return;
     }
-    // Hydrate from SAP for latest data
     setForm({
       item_code: editing.item_code,
       item_name: editing.item_name,
       items_group_code: editing.items_group_code,
       is_active: editing.is_active,
+      is_sales_item: editing.is_sales_item,
+      is_inventory_item: editing.is_inventory_item,
+      is_purchase_item: editing.is_purchase_item,
     });
     if (session && editing.item_code) {
       setLoading(true);
@@ -88,6 +118,9 @@ export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
               item_name: it.item_name,
               items_group_code: it.items_group_code,
               is_active: it.is_active,
+              is_sales_item: it.is_sales_item,
+              is_inventory_item: it.is_inventory_item,
+              is_purchase_item: it.is_purchase_item,
             });
           }
         })
@@ -178,6 +211,29 @@ export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-2">
+                <Label>Item de Venda</Label>
+                <BoolSelect
+                  value={form.is_sales_item}
+                  onChange={(v) => setForm((f) => ({ ...f, is_sales_item: v }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Item de Estoque</Label>
+                <BoolSelect
+                  value={form.is_inventory_item}
+                  onChange={(v) => setForm((f) => ({ ...f, is_inventory_item: v }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Item de Compra</Label>
+                <BoolSelect
+                  value={form.is_purchase_item}
+                  onChange={(v) => setForm((f) => ({ ...f, is_purchase_item: v }))}
+                />
+              </div>
             </div>
             <div className="flex items-center justify-between rounded-md border border-border p-3">
               <div>

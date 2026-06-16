@@ -143,6 +143,9 @@ export default function Items() {
       valid: true,
       frozen: false,
       is_active: true,
+      is_sales_item: true,
+      is_inventory_item: true,
+      is_purchase_item: true,
       sap_sync_status: pendingErrors[p.id] ? "error" : "pending",
       sap_sync_error: pendingErrors[p.id] || null,
     }));
@@ -192,6 +195,9 @@ export default function Items() {
           item_name: i.item_name,
           items_group_code: i.items_group_code,
           is_active: true,
+          is_sales_item: i.is_sales_item,
+          is_inventory_item: i.is_inventory_item,
+          is_purchase_item: i.is_purchase_item,
         },
         session,
       );
@@ -244,6 +250,9 @@ export default function Items() {
             item_name: i.item_name,
             items_group_code: i.items_group_code,
             is_active: true,
+            is_sales_item: i.is_sales_item,
+            is_inventory_item: i.is_inventory_item,
+            is_purchase_item: i.is_purchase_item,
           },
           session,
         );
