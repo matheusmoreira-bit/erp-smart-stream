@@ -32,6 +32,14 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSap } from "@/contexts/SapContext";
+import {
+  createSupplier,
+  findSupplierByTaxId,
+  type SupplierInput,
+} from "@/hooks/useSuppliers";
+import type { SapSession } from "@/lib/sap-client";
+
 
 type Fornecedor = {
   id: string;
