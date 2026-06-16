@@ -225,6 +225,15 @@ function NewItemDialog({
   const [previewCode, setPreviewCode] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const { options: groupOptions, isLoading: groupsLoading } = useSapCachedList({
+    cacheKey: "item_groups",
+    endpoint: "ItemGroups",
+    params: { $select: "Number,GroupName", $orderby: "GroupName" },
+    mapRow: (r: any) => ({ code: String(r.Number), name: r.GroupName }),
+    enabled: open,
+  });
+
+
   useEffect(() => {
     if (!open) {
       setStep(1);
