@@ -41,7 +41,7 @@ function CredentialModal({
   onOpenChange: (open: boolean) => void;
   companyDb?: string;
 }) {
-  const { saveCredentials, deleteCredentials, fetchCredentialValues, isLoading } = useCredentials();
+  const { saveCredentials, deleteCredentials, fetchCredentialValues, isLoading, error: credError } = useCredentials();
   const [values, setValues] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const hasExisting = existingKeys.length > 0;
