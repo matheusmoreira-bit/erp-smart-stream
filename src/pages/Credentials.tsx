@@ -46,9 +46,14 @@ function CredentialModal({
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const hasExisting = existingKeys.length > 0;
 
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; detail?: string } | null>(null);
+  const testEndpoint = TEST_ENDPOINTS[system.name];
+  const canTest = !!testEndpoint && hasExisting;
+
   // Load existing non-secret values (custom_fields, toggle) when dialog opens
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setTestResult(null); return; }
     const loadableKeys = system.fields
       .filter((f) => (f.type === "custom_fields" || f.type === "toggle") && existingKeys.includes(f.key))
       .map((f) => f.key);
