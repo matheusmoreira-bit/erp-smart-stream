@@ -73,20 +73,11 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !userData?.user) return json({ error: "unauthorized" }, 401);
-
     const body = await req.json().catch(() => ({}));
     const cnpj = digits(String(body?.cnpj ?? ""));
     if (cnpj.length !== 14) return json({ error: "CNPJ inválido (deve ter 14 dígitos)" }, 400);
+
+
 
     // Duplicate check
     const admin = createClient(
