@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Key, Save, Trash2, Loader2,
-  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2,
+  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -22,6 +22,11 @@ import { toast } from "sonner";
 import { SYSTEMS, CATEGORY_LABELS, type SystemConfig } from "@/lib/system-definitions";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+
+const TEST_ENDPOINTS: Record<string, string> = {
+  mastertax: "mastertax-test",
+};
 
 function CredentialModal({
   system,
