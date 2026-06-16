@@ -143,6 +143,128 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Batch user replication between SAP databases
+    if (action === "replicate_users") {
+      const sourceDbs = Array.isArray(body.source_company_dbs) ? (body.source_company_dbs as string[]) : [];
+      const targetDb = body.target_company_db as string | undefined;
+      const defaultPassword = (body.default_password as string | undefined)?.trim();
+      const userCodesFilter = Array.isArray(body.user_codes) ? new Set((body.user_codes as string[]).map((c) => c.toUpperCase())) : null;
+      const includeSuperusers = body.include_superusers === true;
+      const overwriteExisting = body.overwrite_existing === true;
+
+      if (sourceDbs.length === 0 || !targetDb) {
+        return new Response(JSON.stringify({ error: "source_company_dbs e target_company_db são obrigatórios" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!defaultPassword || defaultPassword.length < 8) {
+        return new Response(JSON.stringify({ error: "default_password de no mínimo 8 caracteres é obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // 1. Aggregate users from source databases (dedupe by UserCode)
+      const sourceUsers = new Map<string, Record<string, unknown>>();
+      const sourceErrors: { db: string; error: string }[] = [];
+
+      for (const db of sourceDbs) {
+        try {
+          const creds = await getAdminCreds(admin, db);
+          if (!creds) throw new Error("Sem credenciais administrativas");
+          const url = await getSapBaseUrl(admin, db);
+          const s = await sapLogin(url, db, creds.username, creds.password);
+          try {
+            const select = "UserCode,UserName,eMail,Department,UserPermission,Superuser,Locked";
+            let next: string | null = `Users?$select=${select}&$top=200`;
+            while (next) {
+              const r = await sapRequest(s, next, "GET");
+              if (!r.ok) throw new Error(extractSapError(r.data, `HTTP ${r.status}`));
+              const p = r.data as { value?: Record<string, unknown>[]; "@odata.nextLink"?: string } | null;
+              for (const u of (p?.value || [])) {
+                const code = String(u.UserCode || "").trim();
+                if (!code) continue;
+                if (userCodesFilter && !userCodesFilter.has(code.toUpperCase())) continue;
+                if (!includeSuperusers && u.Superuser === "tYES") continue;
+                if (!sourceUsers.has(code)) sourceUsers.set(code, u);
+              }
+              next = p?.["@odata.nextLink"] ?? null;
+              if (sourceUsers.size > 5000) break;
+            }
+          } finally { await sapLogout(s); }
+        } catch (e) {
+          sourceErrors.push({ db, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+
+      // 2. Connect to target, fetch existing user codes, then create missing
+      const created: string[] = [];
+      const skipped: { code: string; reason: string }[] = [];
+      const failed: { code: string; error: string }[] = [];
+
+      const targetCreds = await getAdminCreds(admin, targetDb);
+      if (!targetCreds) {
+        return new Response(JSON.stringify({ error: `Sem credenciais administrativas para a base destino ${targetDb}` }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const targetUrl = await getSapBaseUrl(admin, targetDb);
+      const tSession = await sapLogin(targetUrl, targetDb, targetCreds.username, targetCreds.password);
+
+      try {
+        const existing = new Set<string>();
+        let next: string | null = `Users?$select=UserCode&$top=200`;
+        while (next) {
+          const r = await sapRequest(tSession, next, "GET");
+          if (!r.ok) throw new Error(extractSapError(r.data, `Falha ao listar usuários do destino (${r.status})`));
+          const p = r.data as { value?: { UserCode?: string }[]; "@odata.nextLink"?: string } | null;
+          (p?.value || []).forEach((u) => { if (u.UserCode) existing.add(u.UserCode.toUpperCase()); });
+          next = p?.["@odata.nextLink"] ?? null;
+        }
+
+        for (const [code, u] of sourceUsers.entries()) {
+          if (existing.has(code.toUpperCase()) && !overwriteExisting) {
+            skipped.push({ code, reason: "já existe no destino" });
+            continue;
+          }
+          const payload: Record<string, unknown> = {
+            UserCode: code,
+            UserName: u.UserName || code,
+            UserPassword: defaultPassword,
+          };
+          if (u.eMail) payload.eMail = u.eMail;
+          if (u.Department != null) payload.Department = u.Department;
+          if (u.UserPermission) payload.UserPermission = u.UserPermission;
+          if (includeSuperusers && u.Superuser === "tYES") payload.Superuser = "tYES";
+
+          const r = await sapRequest(tSession, "Users", "POST", payload);
+          if (r.ok) created.push(code);
+          else failed.push({ code, error: extractSapError(r.data, `HTTP ${r.status}`) });
+        }
+      } finally { await sapLogout(tSession); }
+
+      await admin.rpc("insert_audit_log", {
+        p_action: "sap_users_replicate",
+        p_entity_type: "sap_user_batch",
+        p_entity_id: targetDb,
+        p_actor_email: caller.email,
+        p_company_db: targetDb,
+        p_details: {
+          source_dbs: sourceDbs,
+          target_db: targetDb,
+          created_count: created.length,
+          skipped_count: skipped.length,
+          failed_count: failed.length,
+          source_errors: sourceErrors,
+        },
+      });
+
+      return new Response(JSON.stringify({
+        ok: true,
+        total_source_users: sourceUsers.size,
+        created, skipped, failed, source_errors: sourceErrors,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (!companyDb) {
       return new Response(JSON.stringify({ error: "company_db requerido" }), {
         status: 400,
