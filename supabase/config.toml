@@ -24,3 +24,7 @@ verify_jwt = false
 [functions.supplier-sync]
 verify_jwt = false
 
+[functions.item-save]
+verify_jwt = false
+
+

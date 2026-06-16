@@ -88,29 +88,26 @@ export function NewItemWizardDialog({
         toast.error("Código de Serviço deve estar no formato com pontos, ex: 1.05");
         return;
       }
-      const q = supabase.from("item_base").select("*").eq("tipo", tipo);
-      const { data: existing, error: e1 } =
-        tipo === "produto"
-          ? await q.eq("ncm", ncm).maybeSingle()
-          : await q.eq("codigo_servico", codigoServico).maybeSingle();
-      if (e1) throw e1;
-      let row = existing as ItemBase | null;
-      if (!row) {
-        const payload: any = { tipo, grupo: grupo || null, unidade: unidade || null };
-        if (tipo === "produto") payload.ncm = ncm;
-        else payload.codigo_servico = codigoServico;
-        const { data: created, error: e2 } = await supabase
-          .from("item_base")
-          .insert(payload)
-          .select("*")
-          .single();
-        if (e2) throw e2;
-        row = created as ItemBase;
-      }
+      const { data, error } = await supabase.functions.invoke("item-save", {
+        body: {
+          action: "findOrCreateBase",
+          tipo,
+          ncm: tipo === "produto" ? ncm : null,
+          codigo_servico: tipo === "servico" ? codigoServico : null,
+          grupo: grupo || null,
+          unidade: unidade || null,
+        },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Falha ao preparar item-base");
+      const row = data.base as ItemBase;
       setBase(row);
-      const { data: prev, error: e3 } = await supabase.rpc("preview_next_codigo", { p_item_base_id: row.id });
+      const { data: prev, error: e3 } = await supabase.functions.invoke("item-save", {
+        body: { action: "previewCode", item_base_id: row.id },
+      });
       if (e3) throw e3;
-      setPreviewCode(prev as string);
+      if (!prev?.ok) throw new Error(prev?.error || "Falha ao prever código");
+      setPreviewCode(prev.code as string);
       setStep(2);
     } catch (e: any) {
       toast.error(e?.message || "Falha ao preparar item-base");
@@ -127,12 +124,16 @@ export function NewItemWizardDialog({
     }
     setBusy(true);
     try {
-      const { data: varianteData, error } = await supabase.rpc("create_item_variante", {
-        p_item_base_id: base.id,
-        p_descricao: descricao.trim(),
+      const { data, error } = await supabase.functions.invoke("item-save", {
+        body: {
+          action: "createVariante",
+          item_base_id: base.id,
+          descricao: descricao.trim(),
+        },
       });
       if (error) throw error;
-      const v: any = Array.isArray(varianteData) ? varianteData[0] : varianteData;
+      if (!data?.ok) throw new Error(data?.error || "Falha ao salvar variante");
+      const v: any = data.variante;
       if (!v?.codigo_completo) throw new Error("Variante criada, mas sem código retornado");
       toast.success("Variante criada", { description: `Código: ${v.codigo_completo}` });
 
@@ -166,6 +167,7 @@ export function NewItemWizardDialog({
       setBusy(false);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
