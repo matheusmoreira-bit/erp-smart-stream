@@ -20,3 +20,7 @@ verify_jwt = false
 
 [functions.cnpj-lookup]
 verify_jwt = false
+
+[functions.supplier-sync]
+verify_jwt = false
+
