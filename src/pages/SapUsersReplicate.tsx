@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, Copy, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, CheckCircle2, XCircle, AlertTriangle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
+
+interface SourceUser {
+  code: string;
+  name: string;
+  email?: string;
+  superuser?: boolean;
+  sources: string[];
+}
 
 interface ReplicateResult {
   total_source_users: number;
@@ -27,7 +34,10 @@ export default function SapUsersReplicate() {
   const [sourceDbs, setSourceDbs] = useState<string[]>([]);
   const [targetDb, setTargetDb] = useState<string>("");
   const [defaultPassword, setDefaultPassword] = useState("");
-  const [userCodes, setUserCodes] = useState("");
+  const [sourceUsers, setSourceUsers] = useState<SourceUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [userSearch, setUserSearch] = useState("");
   const [includeSuperusers, setIncludeSuperusers] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
   const [running, setRunning] = useState(false);
@@ -55,16 +65,77 @@ export default function SapUsersReplicate() {
     if (targetDb === db) setTargetDb("");
   };
 
+  // Load users whenever source DBs change
+  useEffect(() => {
+    if (sourceDbs.length === 0) {
+      setSourceUsers([]);
+      setSelectedCodes([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingUsers(true);
+      const map = new Map<string, SourceUser>();
+      for (const db of sourceDbs) {
+        try {
+          const { data, error } = await supabase.functions.invoke("sap-users-admin", {
+            body: { action: "list_users", company_db: db },
+          });
+          if (error || (data as { error?: string })?.error) {
+            toast.error(`Erro lendo ${db}: ${(data as { error?: string })?.error || error?.message}`);
+            continue;
+          }
+          const users = ((data as { users?: Record<string, unknown>[] })?.users) || [];
+          for (const u of users) {
+            const code = String(u.UserCode || "").trim();
+            if (!code) continue;
+            const existing = map.get(code);
+            if (existing) {
+              if (!existing.sources.includes(db)) existing.sources.push(db);
+            } else {
+              map.set(code, {
+                code,
+                name: String(u.UserName || code),
+                email: u.eMail ? String(u.eMail) : undefined,
+                superuser: u.Superuser === "tYES" || u.Superuser === true,
+                sources: [db],
+              });
+            }
+          }
+        } catch (e) {
+          toast.error(`Erro lendo ${db}`);
+        }
+      }
+      if (cancelled) return;
+      const list = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+      setSourceUsers(list);
+      // Keep only selections still present
+      setSelectedCodes((prev) => prev.filter((c) => map.has(c)));
+      setLoadingUsers(false);
+    })();
+    return () => { cancelled = true; };
+  }, [sourceDbs]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return sourceUsers;
+    return sourceUsers.filter(
+      (u) => u.code.toLowerCase().includes(q) || u.name.toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q),
+    );
+  }, [sourceUsers, userSearch]);
+
+  const toggleUser = (code: string) => {
+    setSelectedCodes((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
+  };
+  const selectAllFiltered = () => setSelectedCodes(Array.from(new Set([...selectedCodes, ...filteredUsers.map((u) => u.code)])));
+  const clearSelection = () => setSelectedCodes([]);
+
   const handleRun = async () => {
     if (sourceDbs.length === 0) return toast.error("Selecione ao menos uma base de origem");
     if (!targetDb) return toast.error("Selecione a base de destino");
     if (!defaultPassword || defaultPassword.length < 8) return toast.error("Senha padrão precisa ter no mínimo 8 caracteres");
     if (sourceDbs.includes(targetDb)) return toast.error("A base de destino não pode ser uma das origens");
-
-    const codes = userCodes
-      .split(/[\n,;\s]+/)
-      .map((c) => c.trim())
-      .filter(Boolean);
+    if (selectedCodes.length === 0) return toast.error("Selecione ao menos um usuário");
 
     setRunning(true);
     setResult(null);
@@ -75,7 +146,7 @@ export default function SapUsersReplicate() {
           source_company_dbs: sourceDbs,
           target_company_db: targetDb,
           default_password: defaultPassword,
-          user_codes: codes.length > 0 ? codes : undefined,
+          user_codes: selectedCodes,
           include_superusers: includeSuperusers,
           overwrite_existing: overwrite,
         },
@@ -155,28 +226,91 @@ export default function SapUsersReplicate() {
             </Select>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Senha padrão para novos usuários</Label>
-              <Input
-                type="password"
-                value={defaultPassword}
-                onChange={(e) => setDefaultPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                className="mt-1 bg-card"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Será aplicada a todos os usuários criados. Eles podem alterar depois.</p>
-            </div>
-            <div>
-              <Label className="text-sm font-medium">Filtrar por códigos (opcional)</Label>
-              <Textarea
-                value={userCodes}
-                onChange={(e) => setUserCodes(e.target.value)}
-                placeholder="USER1, USER2, USER3 (vazio = todos)"
-                className="mt-1 bg-card h-[88px]"
-              />
-            </div>
+          <div>
+            <Label className="text-sm font-medium">Senha padrão para novos usuários</Label>
+            <Input
+              type="password"
+              value={defaultPassword}
+              onChange={(e) => setDefaultPassword(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+              className="mt-1 bg-card max-w-md"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Será aplicada a todos os usuários criados. Eles podem alterar depois.</p>
           </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-sm font-medium">
+                Usuários a replicar
+                {sourceUsers.length > 0 && (
+                  <span className="text-xs text-muted-foreground ml-2">
+                    ({selectedCodes.length} selecionados de {sourceUsers.length})
+                  </span>
+                )}
+              </Label>
+              {sourceUsers.length > 0 && (
+                <div className="flex gap-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={selectAllFiltered}>
+                    Selecionar todos
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
+                    Limpar
+                  </Button>
+                </div>
+              )}
+            </div>
+            {sourceDbs.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-3 border rounded-md bg-card">
+                Selecione ao menos uma base de origem para listar os usuários.
+              </p>
+            ) : loadingUsers ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-md bg-card">
+                <Loader2 className="w-4 h-4 animate-spin" /> Carregando usuários das bases selecionadas...
+              </div>
+            ) : (
+              <>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Buscar por código, nome ou e-mail..."
+                    className="pl-9 bg-card"
+                  />
+                </div>
+                <div className="max-h-72 overflow-auto border rounded-md bg-card divide-y">
+                  {filteredUsers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground p-3">Nenhum usuário encontrado.</p>
+                  ) : (
+                    filteredUsers.map((u) => (
+                      <label
+                        key={u.code}
+                        className="flex items-start gap-2 p-2 hover:bg-muted/40 cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={selectedCodes.includes(u.code)}
+                          onCheckedChange={() => toggleUser(u.code)}
+                          className="mt-1"
+                        />
+                        <div className="text-sm flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs">{u.code}</span>
+                            <span className="font-medium truncate">{u.name}</span>
+                            {u.superuser && <Badge variant="outline" className="text-[10px]">Superuser</Badge>}
+                          </div>
+                          {u.email && <div className="text-xs text-muted-foreground truncate">{u.email}</div>}
+                          <div className="text-[10px] text-muted-foreground font-mono">
+                            {u.sources.join(", ")}
+                          </div>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
 
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm">
