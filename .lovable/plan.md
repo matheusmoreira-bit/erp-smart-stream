@@ -1,51 +1,125 @@
-## Plano de ajustes — PagCorp e Integração
+# Expansão: Módulos de Itens e Fornecedores
 
-### 1. KPI "Valor Total" separado por moeda
-- Em `src/pages/PagCorp.tsx`, o cartão de Valor Total mostrará duas linhas: **R$ (BRL)** e **US$ (USD)** calculadas a partir das transações filtradas.
-- Ajustar `MetricCard` (ou usar variante local) para suportar duas linhas de valor.
+Adicionar dois módulos na área de Cadastros, totalmente no backend Lovable Cloud (Supabase), reaproveitando padrão visual atual (shadcn + Tailwind + páginas em `src/pages` + hooks em `src/hooks`).
 
-### 2. Fallback do mapeamento de cartão (CC / Projeto / Item)
-- Em `supabase/functions/pagcorp-to-sap/index.ts`, ao montar cada linha, se `lineOverrides` não trouxer `costCenter`, `project` ou `item`, buscar o mapeamento do cartão (`pagcorp_card_mappings`) por `cardLastDigits`/`cardName` da transação e aplicar os defaults.
-- No `PagCorpIntegrateDialog` e `PagCorpConsolidateDialog` (a serem unificados), pré-carregar os defaults do mapeamento por cartão e mostrá-los como valores iniciais (badge "automático").
+---
 
-### 3. Status "Finalizado" → "Aprovado"
-- Em `PagCorpCandidateRow.tsx` e qualquer outro ponto (`PagCorp.tsx`, `pagcorp-presentation.ts`) que exibe "Finalizado" para despesa com prestação aprovada, trocar o rótulo para **Aprovado**. Sem mudança de regra de negócio.
+## 1. Módulo Itens (Item-base + Variantes)
 
-### 4. Unificar "Integrar em Lote" + "Consolidar em 1 PC"
-- Em `src/pages/PagCorp.tsx`: remover o botão "Consolidar em 1 PC". Manter apenas **Integrar em Lote**, que abre o `PagCorpConsolidateDialog` quando há ≥2 transações selecionadas (consolida em 1 PC), ou o `PagCorpIntegrateDialog` quando há 1.
-- Remover handlers/estado duplicados.
+### Tabelas novas
+- `item_base`
+  - `tipo` (`item_tipo` enum: `produto` | `servico`)
+  - `ncm` (texto, só dígitos; obrigatório se `produto`)
+  - `codigo_servico` (texto, ex.: `1.05`; obrigatório se `servico`)
+  - `grupo`, `unidade` (texto)
+  - Restrições: `CHECK` garantindo NCM 8 dígitos quando produto / codigo_servico quando serviço; índices únicos parciais `(tipo, ncm)` e `(tipo, codigo_servico)`.
+- `item_variante`
+  - `item_base_id` FK
+  - `sequencial` int
+  - `descricao` texto
+  - `codigo_completo` texto único
+  - Único `(item_base_id, sequencial)`
 
-### 5. Moeda automática (BRL/USD) na integração
-- Em `PagCorpIntegrateDialog` e `CreateExpenseModal` (quando vem do PagCorp): inferir moeda da transação — se `currency === "BRL"` → BRL; caso contrário → USD. Preencher o campo e desabilitar/ocultar a seleção manual (com tooltip de origem).
-- A mesma regra já existe parcialmente em `usePagCorp.ts`; reaproveitar.
+### Geração atômica do código (servidor)
+- Função `create_item_variante(p_item_base_id uuid, p_descricao text)` (`SECURITY DEFINER`, `plpgsql`):
+  - `LOCK TABLE item_variante IN SHARE ROW EXCLUSIVE` (ou `SELECT ... FOR UPDATE` no `item_base`).
+  - `next_seq = COALESCE(MAX(sequencial),0) + 1` para aquele `item_base_id`.
+  - Monta `codigo_completo`:
+    - Produto: `'P' || ncm || '.' || lpad(next_seq::text, 3, '0')`
+    - Serviço: `'S' || codigo_servico || '.' || lpad(next_seq::text, 4, '0')`
+  - Insere e retorna a linha. Em caso de `unique_violation`, retry (loop com limite).
+- Função `preview_next_codigo(p_item_base_id uuid)` para mostrar o código previsto na UI antes de salvar.
 
-### 6. Remover linhas com valor ≤ 0 na integração
-- Em `pagcorp-to-sap/index.ts`, antes de montar `DocumentLines`, filtrar `transactions` cujo `amount <= 0`.
-- Front: avisar (toast) quando linhas forem descartadas. Bloquear envio se todas forem inválidas.
+### RLS / GRANT
+- RLS habilitado nas duas tabelas.
+- Leitura: `authenticated`. Escrita: `authenticated` (todos os usuários logados podem cadastrar). `GRANT` para `authenticated` e `service_role`.
+- Auditoria via `insert_audit_log` em criar/editar.
 
-### 7. Cache de sessão para arquivos processados por IA
-- Novo helper `src/lib/ai-file-cache.ts` com `Map` em memória chaveado por SHA-256 do arquivo (`crypto.subtle.digest`).
-- Em `CreateExpenseModal.tsx` (e onde mais a IA é chamada — `supplier-ai-extract` / `process-expense-doc`), consultar o cache antes da chamada e gravar o resultado após sucesso. Limpar no logout.
+### UI — `src/pages/Items.tsx` (substitui SAP-only) ou novo `src/pages/cadastros/Itens.tsx`
+- Listagem: tabela com `codigo_completo`, descrição, tipo, grupo, unidade. Busca server-side por código e descrição (ILIKE em `item_variante.descricao` + `codigo_completo`).
+- Modal "Novo item" em 2 passos:
+  1. Tipo + chave fiscal (NCM/Código de Serviço) → `lookup` no `item_base`. Se existe → reaproveita (mostra grupo/unidade somente leitura). Se não → form de criação do item-base.
+  2. Descrição da variante + preview do `codigo_completo` (via `preview_next_codigo`). Salvar chama `create_item_variante`.
+- Botão "Nova variante" em cada linha agrupada por `item_base` (atalho para Passo 2).
+- Validações zod:
+  - NCM: `/^\d{8}$/`
+  - Código de Serviço: `/^\d+(\.\d+)+$/`
+  - Descrição: 1–255 chars.
 
-### 8. Reorganização visual do modal de integração
-- Reestruturar `PagCorpIntegrateDialog` e `PagCorpConsolidateDialog` em três seções claramente separadas com títulos:
-  - **Cabeçalho da Integração** — Fornecedor, Empresa, Data, Moeda (auto), Condição de pagamento, Observações.
-  - **Linhas da Integração** — tabela com CC, Projeto, Item, Valor, Descrição, Anexos.
-  - **Padrões aplicados (fallback)** — exibe CC/Projeto/Item padrão herdados do cartão, com badge "Automático" (cinza) vs "Editado" (azul).
-- Destaque visual para campos obrigatórios (asterisco vermelho) e para valores preenchidos automaticamente (badge discreto).
+---
 
-### Arquivos afetados
-- `src/pages/PagCorp.tsx` (KPI, unificação ações, status)
-- `src/components/PagCorpCandidateRow.tsx` (status, badges)
-- `src/components/PagCorpIntegrateDialog.tsx` (moeda auto, seções, fallback visual)
-- `src/components/PagCorpConsolidateDialog.tsx` (seções, fallback visual, moeda)
-- `src/components/CreateExpenseModal.tsx` (moeda auto, cache IA)
-- `src/lib/ai-file-cache.ts` (novo)
-- `src/lib/pagcorp-presentation.ts` (rótulo Aprovado, se aplicável)
-- `supabase/functions/pagcorp-to-sap/index.ts` (fallback do mapeamento, filtro ≤0)
+## 2. Módulo Fornecedores
 
-### Fora de escopo
-- Mudanças no schema de banco; o fallback usa a tabela `pagcorp_card_mappings` já existente.
-- Persistência do cache de IA além da sessão (somente memória).
+### Tabela `fornecedores`
+- `tipo_pessoa` (`pj` | `pf`)
+- `cnpj` texto (somente dígitos, único quando não nulo) / `cpf` texto (único quando não nulo)
+- `razao_social`, `nome_fantasia`, `tipo_estabelecimento` (matriz/filial), `situacao_cadastral`, `data_inicio_atividade`
+- `natureza_juridica_id`, `natureza_juridica_descricao`
+- `porte`, `capital_social numeric`
+- `cnae_principal_codigo`, `cnae_principal_descricao`
+- `cnaes_secundarios jsonb`
+- `logradouro`, `numero`, `complemento`, `bairro`, `cep`, `municipio`, `municipio_ibge`, `uf`, `pais`
+- `telefone1`, `telefone2`, `email`
+- `inscricao_estadual`
+- `simples_nacional bool`
+- `socios jsonb`
+- `created_by uuid` (default `auth.uid()`)
+- Índices únicos parciais: `(cnpj) WHERE cnpj IS NOT NULL`, `(cpf) WHERE cpf IS NOT NULL`.
 
-Pode aprovar para eu executar?
+### RLS / GRANT
+- `authenticated` lê/escreve; `service_role` ALL. Auditoria em insert/update.
+- Sem campos bancários nem de pagamento.
+
+### Edge Function `cnpj-lookup`
+- Recebe `{ cnpj }`, normaliza, valida 14 dígitos.
+- Antes de chamar API, consulta `fornecedores` para detectar duplicado e retorna `{ exists: true, id }`.
+- Caso contrário, `fetch('https://publica.cnpj.ws/cnpj/' + digits)`. Trata 429 (rate limit) e 404. Retorna JSON cru + payload normalizado já mapeado.
+- CORS via `npm:@supabase/supabase-js@2/cors`. Verifica JWT do chamador.
+
+### UI — `src/pages/cadastros/Fornecedores.tsx`
+- Listagem: razão social/nome, CNPJ/CPF, município/UF, situação.
+- Modal "Novo fornecedor":
+  - Escolha PJ/PF.
+  - PJ: input CNPJ + botão "Buscar dados" → chama edge function. Se duplicado, mostra toast com link "Abrir cadastro". Caso ok, popula form editável (todos os campos do mapeamento). Salvar grava em `fornecedores`.
+  - PF: form manual (CPF, nome, endereço, contato). Checa duplicidade por CPF antes de salvar.
+- Validações zod: CNPJ 14 dígitos, CPF 11 dígitos, email opcional válido, CEP 8 dígitos.
+
+---
+
+## 3. Navegação / Menu
+- Adicionar entradas "Itens" e "Fornecedores" no `MainMenu` sob seção Cadastros.
+- Rotas em `src/App.tsx`:
+  - `/cadastros/itens`
+  - `/cadastros/fornecedores`
+- Proteger com o wrapper de auth existente (não admin-only).
+
+---
+
+## 4. Arquivos a criar/editar
+**Migração SQL** (uma só): cria enums, tabelas, índices, funções `create_item_variante`, `preview_next_codigo`, RLS e GRANTs.
+
+**Edge function nova**: `supabase/functions/cnpj-lookup/index.ts`.
+
+**Frontend**:
+- `src/pages/cadastros/Itens.tsx`
+- `src/pages/cadastros/Fornecedores.tsx`
+- `src/components/items/ItemBaseStep.tsx`
+- `src/components/items/ItemVarianteStep.tsx`
+- `src/components/fornecedores/FornecedorPjForm.tsx`
+- `src/components/fornecedores/FornecedorPfForm.tsx`
+- `src/hooks/useItensCadastro.ts`
+- `src/hooks/useFornecedores.ts`
+- Editar `src/App.tsx` (rotas) e `src/components/MainMenu.tsx` (links).
+
+---
+
+## 5. Critérios de aceite cobertos
+- Código gerado exatamente `P{NCM}.{3}` / `S{cod}.{4}` via função SQL.
+- Sequencial atômico (transação + retry em unique violation).
+- Busca por código e qualquer descrição.
+- CNPJ via edge function com mapeamento completo.
+- Unicidade CNPJ/CPF no banco + checagem antes de salvar.
+- PF com form manual.
+- Nenhum campo bancário/pagamento.
+
+Confirma para eu executar?

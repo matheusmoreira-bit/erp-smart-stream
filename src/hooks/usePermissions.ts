@@ -45,6 +45,8 @@ export const ALL_MODULES = [
   { key: "fiscal_audit", label: "Auditoria Fiscal" },
   { key: "nf_entrada", label: "NF de Entrada (Master Tax)" },
   { key: "audit_console", label: "Console de Auditoria" },
+  { key: "cadastros_itens", label: "Itens (Cadastro)" },
+  { key: "cadastros_fornecedores", label: "Fornecedores (Cadastro)" },
 ] as const;
 
 // Legacy compat aliases
