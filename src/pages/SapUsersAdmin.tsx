@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, RefreshCw, Lock, Unlock, KeyRound, Pencil, Search, Users } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, Lock, Unlock, KeyRound, Pencil, Search, Users, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,6 +106,11 @@ export default function SapUsersAdmin() {
             <Users className="w-5 h-5 text-muted-foreground" />
             <h1 className="text-xl font-bold text-foreground">Usuários SAP</h1>
           </div>
+          <div className="ml-auto">
+            <Button size="sm" variant="outline" onClick={() => navigate("/backoffice/sap-users/replicate")}>
+              <Copy className="w-4 h-4 mr-1" /> Replicar entre bases
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -154,13 +159,12 @@ export default function SapUsersAdmin() {
                   <TableHead>E-mail</TableHead>
                   <TableHead>Grupo</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Último login</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">Nenhum usuário</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">Nenhum usuário</TableCell></TableRow>
                 ) : filtered.map((u) => {
                   const isLocked = u.Locked === "tYES";
                   const isSuper = u.Superuser === "tYES";
@@ -178,9 +182,6 @@ export default function SapUsersAdmin() {
                             : <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-500">Ativo</Badge>}
                           {isSuper && <Badge className="text-[10px] bg-amber-500/20 text-amber-500 border-amber-500/40">Super</Badge>}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {u.LastLoginDate ? `${u.LastLoginDate}${u.LastLoginTime ? ` ${u.LastLoginTime}` : ""}` : "-"}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
