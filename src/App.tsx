@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,8 +21,6 @@ import Credentials from "./pages/Credentials.tsx";
 import UsersPage from "./pages/Users.tsx";
 import Suppliers from "./pages/Suppliers.tsx";
 import Items from "./pages/Items.tsx";
-import CadastroItens from "./pages/CadastroItens.tsx";
-import CadastroFornecedores from "./pages/CadastroFornecedores.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import FiscalAudit from "./pages/FiscalAudit.tsx";
@@ -80,8 +78,8 @@ const App = () => (
               <Route path="/suppliers" element={<Suppliers />} />
               <Route path="/suppliers/import-pagcorp" element={<SuppliersImportPagCorp />} />
               <Route path="/items" element={<Items />} />
-              <Route path="/cadastros/itens" element={<CadastroItens />} />
-              <Route path="/cadastros/fornecedores" element={<CadastroFornecedores />} />
+              <Route path="/cadastros/itens" element={<Navigate to="/items" replace />} />
+              <Route path="/cadastros/fornecedores" element={<Navigate to="/suppliers" replace />} />
               <Route path="/intercompany" element={<Intercompany />} />
               <Route path="/financial-review" element={<FinancialReview />} />
               <Route path="/fiscal-audit" element={<FiscalAudit />} />
