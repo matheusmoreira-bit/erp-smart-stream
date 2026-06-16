@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
@@ -50,6 +52,7 @@ export default function SapUsersReplicate() {
   const [overwrite, setOverwrite] = useState(false);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TargetResult[] | null>(null);
+  const [resultsOpen, setResultsOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -182,6 +185,7 @@ export default function SapUsersReplicate() {
         }
       }
       setResults(aggregated);
+      setResultsOpen(true);
       const okTargets = aggregated.filter((r) => r.result).length;
       const totalCreated = aggregated.reduce((s, r) => s + (r.result?.created.length || 0), 0);
       toast.success(`Replicação concluída em ${okTargets}/${targetDbs.length} bases — ${totalCreated} criados no total`);
@@ -385,75 +389,145 @@ export default function SapUsersReplicate() {
           </div>
         </div>
 
-        {results && (
-          <div className="space-y-4">
-            {results.map((tr) => (
-              <div key={tr.target_db} className="glass-card p-5 space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h2 className="text-lg font-semibold">
-                    Destino: <span className="font-mono text-sm">{tr.target_db}</span>
-                  </h2>
-                  {tr.error && <Badge variant="destructive">Falhou</Badge>}
-                </div>
-                {tr.error ? (
-                  <p className="text-sm text-destructive">{tr.error}</p>
-                ) : tr.result ? (
-                  <>
-                    <div className="grid sm:grid-cols-4 gap-3">
-                      <div className="p-3 rounded-md border bg-card">
-                        <div className="text-xs text-muted-foreground">Origem (únicos)</div>
-                        <div className="text-2xl font-bold">{tr.result.total_source_users}</div>
-                      </div>
-                      <div className="p-3 rounded-md border bg-card">
-                        <div className="text-xs text-muted-foreground">Criados</div>
-                        <div className="text-2xl font-bold text-emerald-500">{tr.result.created.length}</div>
-                      </div>
-                      <div className="p-3 rounded-md border bg-card">
-                        <div className="text-xs text-muted-foreground">Ignorados</div>
-                        <div className="text-2xl font-bold text-amber-500">{tr.result.skipped.length}</div>
-                      </div>
-                      <div className="p-3 rounded-md border bg-card">
-                        <div className="text-xs text-muted-foreground">Falhas</div>
-                        <div className="text-2xl font-bold text-destructive">{tr.result.failed.length}</div>
-                      </div>
-                    </div>
+        <Dialog open={resultsOpen} onOpenChange={setResultsOpen}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Resultado da replicação</DialogTitle>
+              <DialogDescription>
+                Confira abaixo o resultado por base de destino.
+              </DialogDescription>
+            </DialogHeader>
 
-                    {tr.result.created.length > 0 && (
-                      <Section icon={<CheckCircle2 className="w-4 h-4 text-emerald-500" />} title="Criados">
-                        <div className="flex flex-wrap gap-1">
-                          {tr.result.created.map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
+            {results && (() => {
+              const hasCredError = results.some((r) => r.error && isCredentialError(r.error));
+              return (
+                <div className="space-y-4">
+                  {hasCredError && (
+                    <div className="border border-destructive/40 bg-destructive/10 rounded-md p-3 flex items-start gap-3">
+                      <KeyRound className="w-5 h-5 text-destructive mt-0.5" />
+                      <div className="flex-1 text-sm">
+                        <div className="font-medium text-destructive">Erro de acesso detectado</div>
+                        <div className="text-xs text-muted-foreground">
+                          Uma ou mais bases destino estão sem credenciais administrativas válidas configuradas.
                         </div>
-                      </Section>
-                    )}
-                    {tr.result.skipped.length > 0 && (
-                      <Section icon={<AlertTriangle className="w-4 h-4 text-amber-500" />} title="Ignorados">
-                        <ul className="text-xs space-y-1">
-                          {tr.result.skipped.map((s, i) => <li key={i}><span className="font-mono">{s.code}</span> — {s.reason}</li>)}
-                        </ul>
-                      </Section>
-                    )}
-                    {tr.result.failed.length > 0 && (
-                      <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Falhas">
-                        <ul className="text-xs space-y-1">
-                          {tr.result.failed.map((f, i) => <li key={i}><span className="font-mono">{f.code}</span> — {f.error}</li>)}
-                        </ul>
-                      </Section>
-                    )}
-                    {tr.result.source_errors.length > 0 && (
-                      <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Erros lendo bases de origem">
-                        <ul className="text-xs space-y-1">
-                          {tr.result.source_errors.map((s, i) => <li key={i}><span className="font-mono">{s.db}</span> — {s.error}</li>)}
-                        </ul>
-                      </Section>
-                    )}
-                  </>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
+                      </div>
+                      <Button size="sm" variant="destructive" onClick={() => navigate("/credentials")}>
+                        Ajustar credenciais
+                      </Button>
+                    </div>
+                  )}
+
+                  {results.map((tr) => {
+                    const credErr = tr.error && isCredentialError(tr.error);
+                    return (
+                      <div key={tr.target_db} className="border rounded-md p-4 space-y-3 bg-card">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <h2 className="text-sm font-semibold">
+                            Destino: <span className="font-mono">{tr.target_db}</span>
+                          </h2>
+                          {tr.error ? (
+                            <Badge variant="destructive">{credErr ? "Sem credenciais" : "Falhou"}</Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-emerald-500 text-emerald-600">OK</Badge>
+                          )}
+                        </div>
+                        {tr.error ? (
+                          <div className="space-y-2">
+                            <p className="text-sm text-destructive">{tr.error}</p>
+                            {credErr && (
+                              <Button size="sm" variant="outline" onClick={() => navigate("/credentials")}>
+                                <KeyRound className="w-3.5 h-3.5 mr-1" />
+                                Configurar credenciais desta base
+                              </Button>
+                            )}
+                          </div>
+                        ) : tr.result ? (
+                          <>
+                            <div className="grid sm:grid-cols-4 gap-2">
+                              <div className="p-2 rounded-md border bg-background">
+                                <div className="text-[10px] text-muted-foreground">Origem (únicos)</div>
+                                <div className="text-xl font-bold">{tr.result.total_source_users}</div>
+                              </div>
+                              <div className="p-2 rounded-md border bg-background">
+                                <div className="text-[10px] text-muted-foreground">Criados</div>
+                                <div className="text-xl font-bold text-emerald-500">{tr.result.created.length}</div>
+                              </div>
+                              <div className="p-2 rounded-md border bg-background">
+                                <div className="text-[10px] text-muted-foreground">Ignorados</div>
+                                <div className="text-xl font-bold text-amber-500">{tr.result.skipped.length}</div>
+                              </div>
+                              <div className="p-2 rounded-md border bg-background">
+                                <div className="text-[10px] text-muted-foreground">Falhas</div>
+                                <div className="text-xl font-bold text-destructive">{tr.result.failed.length}</div>
+                              </div>
+                            </div>
+
+                            {tr.result.created.length > 0 && (
+                              <Section icon={<CheckCircle2 className="w-4 h-4 text-emerald-500" />} title="Criados">
+                                <div className="flex flex-wrap gap-1">
+                                  {tr.result.created.map((c) => <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>)}
+                                </div>
+                              </Section>
+                            )}
+                            {tr.result.skipped.length > 0 && (
+                              <Section icon={<AlertTriangle className="w-4 h-4 text-amber-500" />} title="Ignorados">
+                                <ul className="text-xs space-y-1">
+                                  {tr.result.skipped.map((s, i) => <li key={i}><span className="font-mono">{s.code}</span> — {s.reason}</li>)}
+                                </ul>
+                              </Section>
+                            )}
+                            {tr.result.failed.length > 0 && (
+                              <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Falhas">
+                                <ul className="text-xs space-y-1">
+                                  {tr.result.failed.map((f, i) => <li key={i}><span className="font-mono">{f.code}</span> — {f.error}</li>)}
+                                </ul>
+                              </Section>
+                            )}
+                            {tr.result.source_errors.length > 0 && (
+                              <Section icon={<XCircle className="w-4 h-4 text-destructive" />} title="Erros lendo bases de origem">
+                                <ul className="text-xs space-y-1">
+                                  {tr.result.source_errors.map((s, i) => (
+                                    <li key={i} className="flex items-center justify-between gap-2">
+                                      <span><span className="font-mono">{s.db}</span> — {s.error}</span>
+                                      {isCredentialError(s.error) && (
+                                        <Button size="sm" variant="ghost" onClick={() => navigate("/credentials")}>
+                                          <KeyRound className="w-3.5 h-3.5 mr-1" /> Ajustar
+                                        </Button>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </Section>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setResultsOpen(false)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
+  );
+}
+
+function isCredentialError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return (
+    m.includes("sem credenciais") ||
+    m.includes("credenciais administrativas") ||
+    m.includes("falha login sap") ||
+    m.includes("falha ao autenticar") ||
+    m.includes("unauthorized") ||
+    m.includes("401") ||
+    m.includes("invalid") && m.includes("user")
   );
 }
 
