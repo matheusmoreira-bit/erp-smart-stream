@@ -41,7 +41,7 @@ function CredentialModal({
   onOpenChange: (open: boolean) => void;
   companyDb?: string;
 }) {
-  const { saveCredentials, deleteCredentials, fetchCredentialValues, isLoading } = useCredentials();
+  const { saveCredentials, deleteCredentials, fetchCredentialValues, isLoading, error: credError } = useCredentials();
   const [values, setValues] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const hasExisting = existingKeys.length > 0;
@@ -85,6 +85,10 @@ function CredentialModal({
       toast.success(`Credenciais do ${system.label} salvas com sucesso`);
       setValues({});
       onOpenChange(false);
+    } else {
+      const msg = credError || "Falha ao salvar credenciais. Verifique se você está logado como administrador.";
+      console.error("[Credentials] save failed:", msg);
+      toast.error(msg);
     }
   };
 
