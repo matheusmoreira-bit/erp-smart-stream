@@ -65,16 +65,77 @@ export default function SapUsersReplicate() {
     if (targetDb === db) setTargetDb("");
   };
 
+  // Load users whenever source DBs change
+  useEffect(() => {
+    if (sourceDbs.length === 0) {
+      setSourceUsers([]);
+      setSelectedCodes([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingUsers(true);
+      const map = new Map<string, SourceUser>();
+      for (const db of sourceDbs) {
+        try {
+          const { data, error } = await supabase.functions.invoke("sap-users-admin", {
+            body: { action: "list_users", company_db: db },
+          });
+          if (error || (data as { error?: string })?.error) {
+            toast.error(`Erro lendo ${db}: ${(data as { error?: string })?.error || error?.message}`);
+            continue;
+          }
+          const users = ((data as { users?: Record<string, unknown>[] })?.users) || [];
+          for (const u of users) {
+            const code = String(u.UserCode || "").trim();
+            if (!code) continue;
+            const existing = map.get(code);
+            if (existing) {
+              if (!existing.sources.includes(db)) existing.sources.push(db);
+            } else {
+              map.set(code, {
+                code,
+                name: String(u.UserName || code),
+                email: u.eMail ? String(u.eMail) : undefined,
+                superuser: u.Superuser === "tYES" || u.Superuser === true,
+                sources: [db],
+              });
+            }
+          }
+        } catch (e) {
+          toast.error(`Erro lendo ${db}`);
+        }
+      }
+      if (cancelled) return;
+      const list = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+      setSourceUsers(list);
+      // Keep only selections still present
+      setSelectedCodes((prev) => prev.filter((c) => map.has(c)));
+      setLoadingUsers(false);
+    })();
+    return () => { cancelled = true; };
+  }, [sourceDbs]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return sourceUsers;
+    return sourceUsers.filter(
+      (u) => u.code.toLowerCase().includes(q) || u.name.toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q),
+    );
+  }, [sourceUsers, userSearch]);
+
+  const toggleUser = (code: string) => {
+    setSelectedCodes((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
+  };
+  const selectAllFiltered = () => setSelectedCodes(Array.from(new Set([...selectedCodes, ...filteredUsers.map((u) => u.code)])));
+  const clearSelection = () => setSelectedCodes([]);
+
   const handleRun = async () => {
     if (sourceDbs.length === 0) return toast.error("Selecione ao menos uma base de origem");
     if (!targetDb) return toast.error("Selecione a base de destino");
     if (!defaultPassword || defaultPassword.length < 8) return toast.error("Senha padrão precisa ter no mínimo 8 caracteres");
     if (sourceDbs.includes(targetDb)) return toast.error("A base de destino não pode ser uma das origens");
-
-    const codes = userCodes
-      .split(/[\n,;\s]+/)
-      .map((c) => c.trim())
-      .filter(Boolean);
+    if (selectedCodes.length === 0) return toast.error("Selecione ao menos um usuário");
 
     setRunning(true);
     setResult(null);
@@ -85,7 +146,7 @@ export default function SapUsersReplicate() {
           source_company_dbs: sourceDbs,
           target_company_db: targetDb,
           default_password: defaultPassword,
-          user_codes: codes.length > 0 ? codes : undefined,
+          user_codes: selectedCodes,
           include_superusers: includeSuperusers,
           overwrite_existing: overwrite,
         },
