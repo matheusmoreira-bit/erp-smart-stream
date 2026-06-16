@@ -1167,6 +1167,120 @@ export type Database = {
         }
         Relationships: []
       }
+      fornecedores: {
+        Row: {
+          api_payload: Json | null
+          bairro: string | null
+          capital_social: number | null
+          cep: string | null
+          cnae_principal_codigo: string | null
+          cnae_principal_descricao: string | null
+          cnaes_secundarios: Json | null
+          cnpj: string | null
+          complemento: string | null
+          cpf: string | null
+          created_at: string
+          created_by: string | null
+          data_inicio_atividade: string | null
+          email: string | null
+          id: string
+          inscricao_estadual: string | null
+          logradouro: string | null
+          municipio: string | null
+          municipio_ibge: string | null
+          natureza_juridica_descricao: string | null
+          natureza_juridica_id: string | null
+          nome_fantasia: string | null
+          numero: string | null
+          pais: string | null
+          porte: string | null
+          razao_social: string | null
+          simples_nacional: boolean | null
+          situacao_cadastral: string | null
+          socios: Json | null
+          telefone1: string | null
+          telefone2: string | null
+          tipo_estabelecimento: string | null
+          tipo_pessoa: Database["public"]["Enums"]["fornecedor_tipo_pessoa"]
+          uf: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_payload?: Json | null
+          bairro?: string | null
+          capital_social?: number | null
+          cep?: string | null
+          cnae_principal_codigo?: string | null
+          cnae_principal_descricao?: string | null
+          cnaes_secundarios?: Json | null
+          cnpj?: string | null
+          complemento?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_inicio_atividade?: string | null
+          email?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          logradouro?: string | null
+          municipio?: string | null
+          municipio_ibge?: string | null
+          natureza_juridica_descricao?: string | null
+          natureza_juridica_id?: string | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          pais?: string | null
+          porte?: string | null
+          razao_social?: string | null
+          simples_nacional?: boolean | null
+          situacao_cadastral?: string | null
+          socios?: Json | null
+          telefone1?: string | null
+          telefone2?: string | null
+          tipo_estabelecimento?: string | null
+          tipo_pessoa: Database["public"]["Enums"]["fornecedor_tipo_pessoa"]
+          uf?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_payload?: Json | null
+          bairro?: string | null
+          capital_social?: number | null
+          cep?: string | null
+          cnae_principal_codigo?: string | null
+          cnae_principal_descricao?: string | null
+          cnaes_secundarios?: Json | null
+          cnpj?: string | null
+          complemento?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_inicio_atividade?: string | null
+          email?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          logradouro?: string | null
+          municipio?: string | null
+          municipio_ibge?: string | null
+          natureza_juridica_descricao?: string | null
+          natureza_juridica_id?: string | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          pais?: string | null
+          porte?: string | null
+          razao_social?: string | null
+          simples_nacional?: boolean | null
+          situacao_cadastral?: string | null
+          socios?: Json | null
+          telefone1?: string | null
+          telefone2?: string | null
+          tipo_estabelecimento?: string | null
+          tipo_pessoa?: Database["public"]["Enums"]["fornecedor_tipo_pessoa"]
+          uf?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       idp_user_mapping: {
         Row: {
           created_at: string
@@ -1211,6 +1325,83 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      item_base: {
+        Row: {
+          codigo_servico: string | null
+          created_at: string
+          created_by: string | null
+          grupo: string | null
+          id: string
+          ncm: string | null
+          tipo: Database["public"]["Enums"]["item_tipo"]
+          unidade: string | null
+          updated_at: string
+        }
+        Insert: {
+          codigo_servico?: string | null
+          created_at?: string
+          created_by?: string | null
+          grupo?: string | null
+          id?: string
+          ncm?: string | null
+          tipo: Database["public"]["Enums"]["item_tipo"]
+          unidade?: string | null
+          updated_at?: string
+        }
+        Update: {
+          codigo_servico?: string | null
+          created_at?: string
+          created_by?: string | null
+          grupo?: string | null
+          id?: string
+          ncm?: string | null
+          tipo?: Database["public"]["Enums"]["item_tipo"]
+          unidade?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      item_variante: {
+        Row: {
+          codigo_completo: string
+          created_at: string
+          created_by: string | null
+          descricao: string
+          id: string
+          item_base_id: string
+          sequencial: number
+          updated_at: string
+        }
+        Insert: {
+          codigo_completo: string
+          created_at?: string
+          created_by?: string | null
+          descricao: string
+          id?: string
+          item_base_id: string
+          sequencial: number
+          updated_at?: string
+        }
+        Update: {
+          codigo_completo?: string
+          created_at?: string
+          created_by?: string | null
+          descricao?: string
+          id?: string
+          item_base_id?: string
+          sequencial?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "item_variante_item_base_id_fkey"
+            columns: ["item_base_id"]
+            isOneToOne: false
+            referencedRelation: "item_base"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       license_idle_alerts: {
         Row: {
@@ -2336,6 +2527,25 @@ export type Database = {
         Args: { _company_db: string }
         Returns: boolean
       }
+      create_item_variante: {
+        Args: { p_descricao: string; p_item_base_id: string }
+        Returns: {
+          codigo_completo: string
+          created_at: string
+          created_by: string | null
+          descricao: string
+          id: string
+          item_base_id: string
+          sequencial: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "item_variante"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -2372,6 +2582,7 @@ export type Database = {
         }
         Returns: number
       }
+      preview_next_codigo: { Args: { p_item_base_id: string }; Returns: string }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
@@ -2380,6 +2591,8 @@ export type Database = {
           read_ct: number
         }[]
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "user"
@@ -2411,6 +2624,8 @@ export type Database = {
         | "pagamento"
         | "finalizado"
         | "cancelado"
+      fornecedor_tipo_pessoa: "pj" | "pf"
+      item_tipo: "produto" | "servico"
       nf_entrada_status:
         | "pending_expense"
         | "awaiting_erpflow_approval"
@@ -2579,6 +2794,8 @@ export const Constants = {
         "finalizado",
         "cancelado",
       ],
+      fornecedor_tipo_pessoa: ["pj", "pf"],
+      item_tipo: ["produto", "servico"],
       nf_entrada_status: [
         "pending_expense",
         "awaiting_erpflow_approval",
