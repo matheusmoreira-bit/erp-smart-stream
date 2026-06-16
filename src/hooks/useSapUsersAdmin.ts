@@ -10,8 +10,6 @@ export interface SapAdminUser {
   Superuser?: "tYES" | "tNO";
   Department?: number | null;
   UserPermission?: string | null;
-  LastLoginDate?: string | null;
-  LastLoginTime?: string | null;
 }
 
 export interface SapCompanyOption {
