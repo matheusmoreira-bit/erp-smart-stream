@@ -16,6 +16,7 @@ interface SourceUser {
   name: string;
   email?: string;
   superuser?: boolean;
+  locked?: boolean;
   sources: string[];
 }
 
