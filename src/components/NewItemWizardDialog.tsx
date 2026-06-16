@@ -127,11 +127,13 @@ export function NewItemWizardDialog({
     }
     setBusy(true);
     try {
-      const { data: variante, error } = await supabase
-        .rpc("create_item_variante", { p_item_base_id: base.id, p_descricao: descricao.trim() })
-        .single();
+      const { data: varianteData, error } = await supabase.rpc("create_item_variante", {
+        p_item_base_id: base.id,
+        p_descricao: descricao.trim(),
+      });
       if (error) throw error;
-      const v = variante as any;
+      const v: any = Array.isArray(varianteData) ? varianteData[0] : varianteData;
+      if (!v?.codigo_completo) throw new Error("Variante criada, mas sem código retornado");
       toast.success("Variante criada", { description: `Código: ${v.codigo_completo}` });
 
       if (!session) {
