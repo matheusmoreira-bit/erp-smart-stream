@@ -40,10 +40,10 @@ Deno.serve(async (req) => {
 
       const { data: dup } = await admin
         .from("fornecedores")
-        .select("id")
+        .select("*")
         .eq("cnpj", cnpj)
         .maybeSingle();
-      if (dup) return json({ error: "Já existe fornecedor com este CNPJ" }, 409);
+      if (dup) return json({ ok: true, id: dup.id, existed: true, fornecedor: dup });
     } else {
       const cpf = digits(String(payload?.cpf ?? ""));
       if (cpf.length !== 11) return json({ error: "CPF inválido" }, 400);
@@ -54,16 +54,16 @@ Deno.serve(async (req) => {
 
       const { data: dup } = await admin
         .from("fornecedores")
-        .select("id")
+        .select("*")
         .eq("cpf", cpf)
         .maybeSingle();
-      if (dup) return json({ error: "Já existe fornecedor com este CPF" }, 409);
+      if (dup) return json({ ok: true, id: dup.id, existed: true, fornecedor: dup });
     }
 
     const { data, error } = await admin
       .from("fornecedores")
       .insert(payload)
-      .select("id")
+      .select("*")
       .single();
 
     if (error) {
@@ -73,7 +73,8 @@ Deno.serve(async (req) => {
       return json({ error: error.message }, 400);
     }
 
-    return json({ ok: true, id: data.id });
+    return json({ ok: true, id: data.id, existed: false, fornecedor: data });
+
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }
