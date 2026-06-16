@@ -195,6 +195,9 @@ export default function Items() {
           item_name: i.item_name,
           items_group_code: i.items_group_code,
           is_active: true,
+          is_sales_item: i.is_sales_item,
+          is_inventory_item: i.is_inventory_item,
+          is_purchase_item: i.is_purchase_item,
         },
         session,
       );
@@ -247,6 +250,9 @@ export default function Items() {
             item_name: i.item_name,
             items_group_code: i.items_group_code,
             is_active: true,
+            is_sales_item: i.is_sales_item,
+            is_inventory_item: i.is_inventory_item,
+            is_purchase_item: i.is_purchase_item,
           },
           session,
         );
