@@ -261,13 +261,16 @@ async function syncFornecedorToSap(
 
 function NewFornecedorDialog({
   open,
+  session,
   onClose,
   onSaved,
 }: {
   open: boolean;
+  session: SapSession | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
+
   const [tipo, setTipo] = useState<"pj" | "pf">("pj");
   const [cnpj, setCnpj] = useState("");
   const [form, setForm] = useState<any>({});
