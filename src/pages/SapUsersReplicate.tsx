@@ -121,11 +121,16 @@ export default function SapUsersReplicate() {
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
-    if (!q) return sourceUsers;
-    return sourceUsers.filter(
-      (u) => u.code.toLowerCase().includes(q) || u.name.toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q),
-    );
-  }, [sourceUsers, userSearch]);
+    return sourceUsers.filter((u) => {
+      if (statusFilter === "active" && u.locked) return false;
+      if (!q) return true;
+      return (
+        u.code.toLowerCase().includes(q) ||
+        u.name.toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [sourceUsers, userSearch, statusFilter]);
 
   const toggleUser = (code: string) => {
     setSelectedCodes((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
