@@ -297,8 +297,12 @@ function NewFornecedorDialog({
       const { data, error } = await supabase.functions.invoke("cnpj-lookup", { body: { cnpj: d } });
       if (error) throw error;
       if (data?.exists) {
-        toast.error("Fornecedor já cadastrado", {
-          description: `${data.fornecedor?.razao_social ?? data.fornecedor?.nome_fantasia ?? data.fornecedor?.cnpj}`,
+        // Já existe em fornecedores — carrega os dados existentes para permitir
+        // promover ao SAP da empresa ativa (caso ainda não esteja lá).
+        setForm(data.fornecedor ?? {});
+        setHydrated(true);
+        toast.warning("Fornecedor já cadastrado localmente", {
+          description: "Você pode revisar e enviar ao SAP da empresa ativa.",
         });
         return;
       }
@@ -315,6 +319,7 @@ function NewFornecedorDialog({
       setBusy(false);
     }
   };
+
 
   const salvarPj = async () => {
     if (!hydrated) {
