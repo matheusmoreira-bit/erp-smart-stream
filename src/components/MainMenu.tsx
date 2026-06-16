@@ -222,24 +222,6 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-sky-500/20 to-sky-500/5",
     moduleKey: "audit_console",
   },
-  cadastros_itens: {
-    title: "Itens (Cadastro)",
-    description: "Cadastro de itens com item-base e variantes de descrição (NCM / Código de Serviço).",
-    icon: Box,
-    path: "/cadastros/itens",
-    color: "text-emerald-400",
-    bgGlow: "from-emerald-500/20 to-emerald-500/5",
-    moduleKey: "cadastros_itens",
-  },
-  cadastros_fornecedores: {
-    title: "Fornecedores (Cadastro)",
-    description: "Cadastro de fornecedores PJ (via CNPJ na Receita) e PF, sem dados bancários.",
-    icon: Building2,
-    path: "/cadastros/fornecedores",
-    color: "text-emerald-400",
-    bgGlow: "from-emerald-500/20 to-emerald-500/5",
-    moduleKey: "cadastros_fornecedores",
-  },
 };
 
 const moduleGroups: { title: string; keys: string[] }[] = (
@@ -250,7 +232,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Cadastros",
-      keys: ["suppliers", "cadastros_fornecedores", "items", "cadastros_itens", "intercompany"],
+      keys: ["suppliers", "items", "intercompany"],
     },
     {
       title: "Análise & Monitoramento",

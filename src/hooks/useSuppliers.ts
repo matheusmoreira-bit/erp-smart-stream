@@ -456,4 +456,64 @@ export async function findSupplierByTaxId(
   return ((resp as any)?.supplier ?? null) as Supplier | null;
 }
 
+/**
+ * Retries pushing an existing local supplier to SAP. Used by /suppliers
+ * "Reenviar ao SAP" action when sap_sync_status is 'error' or 'skipped'.
+ * Mutates the suppliers row with the new card_code + status on success.
+ */
+export async function retrySupplierToSap(
+  supplier: Supplier,
+  session: SapSession,
+): Promise<Supplier> {
+  let cardCode = supplier.card_code;
+  if (!cardCode) cardCode = await getNextCardCode(session);
+  const input: SupplierInput = {
+    company_db: supplier.company_db || session.companyDB,
+    card_code: cardCode,
+    card_name: supplier.card_name,
+    card_type: supplier.card_type || "S",
+    federal_tax_id: supplier.federal_tax_id,
+    u_fgr_taxid0: supplier.u_fgr_taxid0 || supplier.federal_tax_id,
+    email: supplier.email,
+    phone1: supplier.phone1,
+    phone2: supplier.phone2,
+    currency: supplier.currency || "BRL",
+    bill_to_street: supplier.bill_to_street,
+    bill_to_zip: supplier.bill_to_zip,
+    bill_to_city: supplier.bill_to_city,
+    bill_to_state: supplier.bill_to_state,
+    bill_to_country: supplier.bill_to_country || "BR",
+    bill_to_block: supplier.bill_to_block,
+    bill_to_building: supplier.bill_to_building,
+    is_active: supplier.is_active,
+    source: supplier.source || "local",
+  };
+
+  let sapStatus: string;
+  let sapError: string | null = null;
+  let syncedAt: string | null = null;
+  try {
+    await sapAction(session, "BusinessPartners", "POST", buildSapPayload(input));
+    sapStatus = "synced";
+    syncedAt = new Date().toISOString();
+  } catch (e) {
+    sapStatus = "error";
+    sapError = e instanceof Error ? e.message : "Erro ao criar no SAP";
+  }
+
+  const { data, error } = await (supabase as any)
+    .from(TABLE)
+    .update({
+      card_code: cardCode,
+      sap_sync_status: sapStatus,
+      sap_sync_error: sapError,
+      sap_last_synced_at: syncedAt,
+    })
+    .eq("id", supplier.id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Supplier;
+}
+
 
