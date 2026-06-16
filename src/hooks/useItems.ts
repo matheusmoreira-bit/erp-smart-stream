@@ -10,6 +10,9 @@ export interface SapItem {
   is_active: boolean; // Valid='tYES' AND Frozen='tNO'
   valid: boolean;
   frozen: boolean;
+  is_sales_item: boolean;
+  is_inventory_item: boolean;
+  is_purchase_item: boolean;
   sap_sync_status: "synced" | "error" | "pending";
   sap_sync_error: string | null;
 }
@@ -19,7 +22,12 @@ export interface ItemInput {
   item_name: string;
   items_group_code: number | null;
   is_active: boolean;
+  is_sales_item: boolean;
+  is_inventory_item: boolean;
+  is_purchase_item: boolean;
 }
+
+const yn = (v: any) => v === "tYES";
 
 export function useItems(companyDb?: string) {
   const cacheKey = companyDb ? `items_all:${companyDb}` : "items_all:none";
@@ -27,7 +35,7 @@ export function useItems(companyDb?: string) {
     cacheKey,
     endpoint: "Items",
     params: {
-      $select: "ItemCode,ItemName,ItemsGroupCode,Valid,Frozen",
+      $select: "ItemCode,ItemName,ItemsGroupCode,Valid,Frozen,SalesItem,InventoryItem,PurchaseItem",
       $orderby: "ItemName",
     },
     mapRow: (row: any) =>
@@ -40,14 +48,13 @@ export function useItems(companyDb?: string) {
     enabled: !!companyDb,
   });
 
-  // Per-row error overlay from last action so UI can show error badges
   const [overlay, setOverlay] = useState<Record<string, { status: SapItem["sap_sync_status"]; error: string | null }>>({});
 
   const items = useMemo<SapItem[]>(() => {
     return options.map((opt: any) => {
       const raw = opt._raw || {};
-      const valid = raw.Valid === "tYES";
-      const frozen = raw.Frozen === "tYES";
+      const valid = yn(raw.Valid);
+      const frozen = yn(raw.Frozen);
       const o = overlay[opt.code];
       return {
         id: `sap:${opt.code}`,
@@ -57,6 +64,9 @@ export function useItems(companyDb?: string) {
         valid,
         frozen,
         is_active: valid && !frozen,
+        is_sales_item: yn(raw.SalesItem),
+        is_inventory_item: yn(raw.InventoryItem),
+        is_purchase_item: yn(raw.PurchaseItem),
         sap_sync_status: o?.status || "synced",
         sap_sync_error: o?.error || null,
       };
@@ -79,13 +89,13 @@ export async function fetchItemFromSap(itemCode: string, session: SapSession): P
     const { data } = await sapQuery(
       session,
       `Items('${itemCode}')`,
-      { $select: "ItemCode,ItemName,ItemsGroupCode,Valid,Frozen" },
+      { $select: "ItemCode,ItemName,ItemsGroupCode,Valid,Frozen,SalesItem,InventoryItem,PurchaseItem" },
       false,
     );
     const raw = data as any;
     if (!raw) return null;
-    const valid = raw.Valid === "tYES";
-    const frozen = raw.Frozen === "tYES";
+    const valid = yn(raw.Valid);
+    const frozen = yn(raw.Frozen);
     return {
       id: `sap:${raw.ItemCode}`,
       item_code: raw.ItemCode,
@@ -94,6 +104,9 @@ export async function fetchItemFromSap(itemCode: string, session: SapSession): P
       valid,
       frozen,
       is_active: valid && !frozen,
+      is_sales_item: yn(raw.SalesItem),
+      is_inventory_item: yn(raw.InventoryItem),
+      is_purchase_item: yn(raw.PurchaseItem),
       sap_sync_status: "synced",
       sap_sync_error: null,
     };
@@ -108,6 +121,9 @@ export async function createItem(input: ItemInput, session: SapSession): Promise
     ItemName: input.item_name,
     Valid: input.is_active ? "tYES" : "tNO",
     Frozen: input.is_active ? "tNO" : "tYES",
+    SalesItem: input.is_sales_item ? "tYES" : "tNO",
+    InventoryItem: input.is_inventory_item ? "tYES" : "tNO",
+    PurchaseItem: input.is_purchase_item ? "tYES" : "tNO",
   };
   if (input.items_group_code != null) payload.ItemsGroupCode = input.items_group_code;
   await sapAction(session, "Items", "POST", payload);
@@ -121,6 +137,9 @@ export async function updateItem(itemCode: string, input: Partial<ItemInput>, se
     payload.Valid = input.is_active ? "tYES" : "tNO";
     payload.Frozen = input.is_active ? "tNO" : "tYES";
   }
+  if (input.is_sales_item !== undefined) payload.SalesItem = input.is_sales_item ? "tYES" : "tNO";
+  if (input.is_inventory_item !== undefined) payload.InventoryItem = input.is_inventory_item ? "tYES" : "tNO";
+  if (input.is_purchase_item !== undefined) payload.PurchaseItem = input.is_purchase_item ? "tYES" : "tNO";
   await sapAction(session, `Items('${itemCode}')`, "PATCH", payload);
 }
 
