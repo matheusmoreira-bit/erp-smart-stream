@@ -33,7 +33,7 @@ export default function SapUsersReplicate() {
   const [companies, setCompanies] = useState<SapCompanyOption[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [sourceDbs, setSourceDbs] = useState<string[]>([]);
-  const [targetDb, setTargetDb] = useState<string>("");
+  const [targetDbs, setTargetDbs] = useState<string[]>([]);
   const [defaultPassword, setDefaultPassword] = useState("");
   const [sourceUsers, setSourceUsers] = useState<SourceUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
