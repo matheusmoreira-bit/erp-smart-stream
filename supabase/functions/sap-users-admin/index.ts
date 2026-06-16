@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl = await getSapBaseUrl(admin, companyDb);
-    const session = await sapLogin(baseUrl, companyDb, creds.username, creds.password);
+    const session = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password);
 
     try {
       if (action === "list_users") {
