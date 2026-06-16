@@ -32,6 +32,14 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSap } from "@/contexts/SapContext";
+import {
+  createSupplier,
+  findSupplierByTaxId,
+  type SupplierInput,
+} from "@/hooks/useSuppliers";
+import type { SapSession } from "@/lib/sap-client";
+
 
 type Fornecedor = {
   id: string;
@@ -50,10 +58,12 @@ const digits = (s: string) => (s || "").replace(/\D+/g, "");
 export default function CadastroFornecedores() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const { session } = useSap();
   const [rows, setRows] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [openNew, setOpenNew] = useState(false);
+
 
   const load = async () => {
     setLoading(true);
@@ -182,6 +192,7 @@ export default function CadastroFornecedores() {
 
       <NewFornecedorDialog
         open={openNew}
+        session={session as SapSession | null}
         onClose={() => setOpenNew(false)}
         onSaved={() => {
           setOpenNew(false);
@@ -192,15 +203,74 @@ export default function CadastroFornecedores() {
   );
 }
 
+/**
+ * Promotes a fornecedor (local) to suppliers + SAP for the active company.
+ * - If the same federal tax id already exists in suppliers for this companyDB, skips.
+ * - Otherwise creates a BusinessPartner in SAP and a row in suppliers via createSupplier.
+ */
+async function syncFornecedorToSap(
+  fornecedor: any,
+  session: SapSession,
+): Promise<{ ok: boolean; skipped?: boolean; message?: string }> {
+  const taxId = digits(String(fornecedor?.cnpj || fornecedor?.cpf || ""));
+  if (!taxId) return { ok: false, message: "Sem CNPJ/CPF para enviar ao SAP" };
+
+  // Skip if already mirrored for this company
+  const existing = await findSupplierByTaxId(taxId, session.companyDB);
+  if (existing) {
+    return { ok: true, skipped: true, message: `Já existe em ${session.companyDB} (CardCode ${existing.card_code || "?"})` };
+  }
+
+  const name = String(fornecedor?.razao_social || fornecedor?.nome_fantasia || "").trim();
+  if (!name) return { ok: false, message: "Sem razão social/nome" };
+
+  const street = [fornecedor?.logradouro, fornecedor?.numero].filter(Boolean).join(", ") || null;
+  const input: SupplierInput = {
+    company_db: session.companyDB,
+    card_code: null,
+    card_name: name.slice(0, 100),
+    card_type: "S",
+    federal_tax_id: taxId,
+    u_fgr_taxid0: taxId,
+    email: fornecedor?.email || null,
+    phone1: fornecedor?.telefone1 || null,
+    phone2: fornecedor?.telefone2 || null,
+    currency: "BRL",
+    bill_to_street: street,
+    bill_to_zip: (fornecedor?.cep || "").replace(/\D/g, "") || null,
+    bill_to_city: fornecedor?.municipio || null,
+    bill_to_state: fornecedor?.uf || null,
+    bill_to_country: fornecedor?.pais && String(fornecedor.pais).toUpperCase() !== "BRASIL" ? fornecedor.pais : "BR",
+    bill_to_block: fornecedor?.bairro || null,
+    bill_to_building: fornecedor?.complemento || null,
+    is_active: true,
+    source: "local",
+  };
+
+  try {
+    const created = await createSupplier(input, session);
+    if (created.sap_sync_status === "error") {
+      return { ok: false, message: created.sap_sync_error || "Erro ao criar no SAP" };
+    }
+    return { ok: true, message: `Criado no SAP (CardCode ${created.card_code || "?"})` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Erro ao sincronizar SAP" };
+  }
+}
+
+
 function NewFornecedorDialog({
   open,
+  session,
   onClose,
   onSaved,
 }: {
   open: boolean;
+  session: SapSession | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
+
   const [tipo, setTipo] = useState<"pj" | "pf">("pj");
   const [cnpj, setCnpj] = useState("");
   const [form, setForm] = useState<any>({});
@@ -227,8 +297,12 @@ function NewFornecedorDialog({
       const { data, error } = await supabase.functions.invoke("cnpj-lookup", { body: { cnpj: d } });
       if (error) throw error;
       if (data?.exists) {
-        toast.error("Fornecedor já cadastrado", {
-          description: `${data.fornecedor?.razao_social ?? data.fornecedor?.nome_fantasia ?? data.fornecedor?.cnpj}`,
+        // Já existe em fornecedores — carrega os dados existentes para permitir
+        // promover ao SAP da empresa ativa (caso ainda não esteja lá).
+        setForm(data.fornecedor ?? {});
+        setHydrated(true);
+        toast.warning("Fornecedor já cadastrado localmente", {
+          description: "Você pode revisar e enviar ao SAP da empresa ativa.",
         });
         return;
       }
@@ -244,6 +318,33 @@ function NewFornecedorDialog({
     } finally {
       setBusy(false);
     }
+  };
+
+
+  const afterSave = async (data: any) => {
+    const fornecedor = data?.fornecedor;
+    const existed = !!data?.existed;
+    if (existed) {
+      toast.message("Fornecedor já existia localmente", { description: "Tentando enviar ao SAP da empresa ativa…" });
+    } else {
+      toast.success("Fornecedor cadastrado");
+    }
+    if (!session?.companyDB) {
+      toast.warning("Sem sessão SAP ativa — não foi enviado ao SAP", {
+        description: "Faça login no ERP para sincronizar.",
+      });
+      onSaved();
+      return;
+    }
+    const result = await syncFornecedorToSap(fornecedor, session);
+    if (result.ok && result.skipped) {
+      toast.info("Já existia no SAP", { description: result.message });
+    } else if (result.ok) {
+      toast.success("Enviado ao SAP", { description: result.message });
+    } else {
+      toast.error("Falha ao enviar ao SAP", { description: result.message });
+    }
+    onSaved();
   };
 
   const salvarPj = async () => {
@@ -264,8 +365,7 @@ function NewFornecedorDialog({
         toast.error((data as any).error);
         return;
       }
-      toast.success("Fornecedor cadastrado");
-      onSaved();
+      await afterSave(data);
     } finally {
       setBusy(false);
     }
@@ -294,12 +394,12 @@ function NewFornecedorDialog({
         toast.error((data as any).error);
         return;
       }
-      toast.success("Fornecedor cadastrado");
-      onSaved();
+      await afterSave(data);
     } finally {
       setBusy(false);
     }
   };
+
 
   const field = (key: string, label: string, opts: { type?: string; col?: number } = {}) => (
     <div className={`grid gap-1 ${opts.col === 2 ? "col-span-2" : ""}`}>
