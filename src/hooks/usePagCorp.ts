@@ -32,8 +32,23 @@ export function usePagCorp() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchTransactions = useCallback(async (startDate?: string, endDate?: string, companyDb?: string) => {
-    setIsLoading(true);
     setError(null);
+    const cacheKey = `pagcorp:txns:${startDate || ""}:${endDate || ""}`;
+
+    // 1. Stale-while-revalidate: paint cached data instantly when available.
+    let hadCache = false;
+    if (companyDb) {
+      try {
+        const { readCache } = await import("@/lib/external-cache");
+        const cached = await readCache<PagCorpTransaction[]>(cacheKey, companyDb);
+        if (cached?.data?.length) {
+          setTransactions(cached.data);
+          hadCache = true;
+        }
+      } catch {/* ignore cache errors */}
+    }
+    if (!hadCache) setIsLoading(true);
+
     try {
       const params: Record<string, string> = {};
       if (startDate) params.startDate = startDate;
@@ -49,6 +64,7 @@ export function usePagCorp() {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error || `Erro ${res.status}`);
       }
+
 
       const result = await res.json();
       const seenIds = new Set<string | number>();
@@ -146,9 +162,19 @@ export function usePagCorp() {
       }
 
       setTransactions(items);
+
+      // Persist to DB cache so the next visit / period switch is instant
+      if (companyDb) {
+        try {
+          const { writeCache } = await import("@/lib/external-cache");
+          await writeCache(cacheKey, companyDb, items);
+        } catch (e) {
+          console.warn("PagCorp cache write failed:", e);
+        }
+      }
     } catch (e) {
       console.error("PagCorp fetch error:", e);
-      setError(e instanceof Error ? e.message : "Erro ao buscar transações");
+      if (!hadCache) setError(e instanceof Error ? e.message : "Erro ao buscar transações");
     } finally {
       setIsLoading(false);
     }
