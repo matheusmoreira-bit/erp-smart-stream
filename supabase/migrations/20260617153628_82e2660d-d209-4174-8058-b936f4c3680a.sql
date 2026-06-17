@@ -1,0 +1,12 @@
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pagcorp_account_mapping TO authenticated;
+GRANT ALL ON public.pagcorp_account_mapping TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pagcorp_card_mapping TO authenticated;
+GRANT ALL ON public.pagcorp_card_mapping TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pagcorp_item_mapping TO authenticated;
+GRANT ALL ON public.pagcorp_item_mapping TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pagcorp_nondeductible_cards TO authenticated;
+GRANT ALL ON public.pagcorp_nondeductible_cards TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pagcorp_supplier_links TO authenticated;
+GRANT ALL ON public.pagcorp_supplier_links TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pagcorp_integration_log TO authenticated;
+GRANT ALL ON public.pagcorp_integration_log TO service_role;
