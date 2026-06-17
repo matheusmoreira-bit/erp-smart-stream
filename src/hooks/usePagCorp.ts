@@ -162,9 +162,19 @@ export function usePagCorp() {
       }
 
       setTransactions(items);
+
+      // Persist to DB cache so the next visit / period switch is instant
+      if (companyDb) {
+        try {
+          const { writeCache } = await import("@/lib/external-cache");
+          await writeCache(cacheKey, companyDb, items);
+        } catch (e) {
+          console.warn("PagCorp cache write failed:", e);
+        }
+      }
     } catch (e) {
       console.error("PagCorp fetch error:", e);
-      setError(e instanceof Error ? e.message : "Erro ao buscar transações");
+      if (!hadCache) setError(e instanceof Error ? e.message : "Erro ao buscar transações");
     } finally {
       setIsLoading(false);
     }
