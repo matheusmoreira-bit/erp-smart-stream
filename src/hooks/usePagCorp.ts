@@ -20,6 +20,9 @@ export interface PagCorpTransaction {
   receipts?: any[];
   integrated?: boolean;
   integrationLogId?: string;
+  sapDocNum?: number | null;
+  sapDocEntry?: number | null;
+  isReversed?: boolean;
   isNondeductible?: boolean;
   nondeductibleSupplierCode?: string;
   nondeductibleSupplierName?: string;
@@ -109,6 +112,7 @@ export function usePagCorp() {
           attachments: item.attachments || [],
           receipts,
           integrated: false,
+          isReversed: Number(item.amount || item.value || item.expenseValue || 0) === 0,
         };
       });
 
@@ -118,21 +122,27 @@ export function usePagCorp() {
       if (expenseIds.length > 0 && companyDb) {
         const { data: logs } = await supabase
           .from("pagcorp_integration_log")
-          .select("pagcorp_expense_id, id, status")
+          .select("pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry")
           .in("pagcorp_expense_id", expenseIds)
           .eq("status", "success")
           .eq("company_db", companyDb);
 
-        const integratedMap = new Map<number, string>();
+        const integratedMap = new Map<number, { id: string; docNum: number | null; docEntry: number | null }>();
         (logs || []).forEach((log: any) => {
-          integratedMap.set(log.pagcorp_expense_id, log.id);
+          integratedMap.set(log.pagcorp_expense_id, {
+            id: log.id,
+            docNum: log.sap_doc_num ?? null,
+            docEntry: log.sap_doc_entry ?? null,
+          });
         });
 
         items.forEach((t) => {
-          const logId = integratedMap.get(Number(t.id));
-          if (logId) {
+          const hit = integratedMap.get(Number(t.id));
+          if (hit) {
             t.integrated = true;
-            t.integrationLogId = logId;
+            t.integrationLogId = hit.id;
+            t.sapDocNum = hit.docNum;
+            t.sapDocEntry = hit.docEntry;
           }
         });
       }

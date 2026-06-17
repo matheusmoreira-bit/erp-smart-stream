@@ -202,7 +202,12 @@ export default function PagCorp() {
       );
     }
 
-    return list;
+    // Sort by purchase date, most recent first
+    return [...list].sort((a, b) => {
+      const ta = a.date ? new Date(a.date).getTime() : 0;
+      const tb = b.date ? new Date(b.date).getTime() : 0;
+      return tb - ta;
+    });
   }, [transactions, search, statusFilter, showNondeductible]);
 
   const nondeductiblePending = useMemo(
@@ -290,7 +295,7 @@ export default function PagCorp() {
   };
 
   const selectableTransactions = useMemo(
-    () => filteredTransactions.filter((t) => !t.integrated),
+    () => filteredTransactions.filter((t) => !t.integrated && !t.isReversed),
     [filteredTransactions],
   );
 
@@ -948,7 +953,7 @@ export default function PagCorp() {
                     return (
                       <TableRow key={t.id} className="border-border" data-state={isSelected ? "selected" : undefined}>
                         <TableCell className="w-10">
-                          {!t.integrated && (
+                          {!t.integrated && !t.isReversed && (
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => toggleSelect(t.id)}
@@ -984,7 +989,11 @@ export default function PagCorp() {
                             const receiptCount =
                               (Array.isArray(t.receipts) ? t.receipts.length : 0) +
                               (Array.isArray(t.attachments) ? t.attachments.length : 0);
-                            const statusBadge = t.hasAccountability ? (
+                            const statusBadge = t.isReversed ? (
+                              <Badge variant="secondary" className="bg-muted text-muted-foreground border-border gap-1">
+                                <XCircle className="w-3 h-3" /> Estornado
+                              </Badge>
+                            ) : t.hasAccountability ? (
                               t.accountabilityApproved ? (
                                 <Badge variant="secondary" className="bg-success/15 text-success border-success/30 gap-1">
                                   <CheckCircle2 className="w-3 h-3" /> Aprovado
@@ -1019,9 +1028,20 @@ export default function PagCorp() {
                         </TableCell>
                         <TableCell className="text-center">
                           {t.integrated ? (
-                            <Badge variant="secondary" className="bg-success/20 text-success border-success/30 font-semibold text-xs">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Integrado
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge variant="secondary" className="bg-success/20 text-success border-success/30 font-semibold text-xs">
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Integrado
+                              </Badge>
+                              {t.sapDocNum != null && (
+                                <span className="text-[11px] font-mono text-muted-foreground" title="Número do Pedido de Compra no SAP">
+                                  PC #{t.sapDocNum}
+                                </span>
+                              )}
+                            </div>
+                          ) : t.isReversed ? (
+                            <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
+                              <XCircle className="w-3 h-3" /> Sem integração
                             </Badge>
                           ) : integrating === t.id ? (
                             <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
