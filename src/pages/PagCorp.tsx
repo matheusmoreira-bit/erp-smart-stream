@@ -202,7 +202,12 @@ export default function PagCorp() {
       );
     }
 
-    return list;
+    // Sort by purchase date, most recent first
+    return [...list].sort((a, b) => {
+      const ta = a.date ? new Date(a.date).getTime() : 0;
+      const tb = b.date ? new Date(b.date).getTime() : 0;
+      return tb - ta;
+    });
   }, [transactions, search, statusFilter, showNondeductible]);
 
   const nondeductiblePending = useMemo(
