@@ -112,6 +112,7 @@ export function usePagCorp() {
           attachments: item.attachments || [],
           receipts,
           integrated: false,
+          isReversed: Number(item.amount || item.value || item.expenseValue || 0) === 0,
         };
       });
 
