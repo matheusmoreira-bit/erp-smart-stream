@@ -51,10 +51,15 @@ export function useSapCachedList({
         const { data: cached } = await cacheQuery.maybeSingle();
 
         if (cached) {
-          const cachedData = cached.data as any[];
+          let cachedData = cached.data as any[];
           const isExpired = new Date(cached.expires_at) <= new Date();
 
           if (cachedData && cachedData.length > 0) {
+            if (endpoint === "CostCenters" || endpoint === "ProfitCenters") {
+              cachedData = cachedData.filter(
+                (r: any) => !String(r?.CenterCode || "").startsWith("Centr_"),
+              );
+            }
             setOptions(cachedData.map(mapRowRef.current));
 
             // If cache is still valid or no SAP session to refresh, stop here
@@ -73,7 +78,11 @@ export function useSapCachedList({
       }
 
       const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
-      const rows = data?.value || [];
+      let rows: any[] = data?.value || [];
+      // Filtra centros de custo auto-gerados pelo SAP (prefixo "Centr_")
+      if (endpoint === "CostCenters" || endpoint === "ProfitCenters") {
+        rows = rows.filter((r: any) => !String(r?.CenterCode || "").startsWith("Centr_"));
+      }
 
       // 3. Only cache non-empty results
       if (rows.length > 0) {
