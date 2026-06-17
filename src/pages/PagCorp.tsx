@@ -989,7 +989,11 @@ export default function PagCorp() {
                             const receiptCount =
                               (Array.isArray(t.receipts) ? t.receipts.length : 0) +
                               (Array.isArray(t.attachments) ? t.attachments.length : 0);
-                            const statusBadge = t.hasAccountability ? (
+                            const statusBadge = t.isReversed ? (
+                              <Badge variant="secondary" className="bg-muted text-muted-foreground border-border gap-1">
+                                <XCircle className="w-3 h-3" /> Estornado
+                              </Badge>
+                            ) : t.hasAccountability ? (
                               t.accountabilityApproved ? (
                                 <Badge variant="secondary" className="bg-success/15 text-success border-success/30 gap-1">
                                   <CheckCircle2 className="w-3 h-3" /> Aprovado
