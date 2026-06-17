@@ -5,22 +5,17 @@ import {
   BarChart3,
   ShoppingCart,
   ClipboardCheck,
-  History,
   Activity,
   ArrowRight,
   Shield,
   CreditCard,
-  Key,
   Users,
-  Zap,
-  Radio,
-  ScrollText,
+  Plug,
   Lock,
   Building2,
   Box,
   Wallet,
   Bell,
-  FileSearch,
   FileInput,
   Radar,
   type LucideIcon,
@@ -38,7 +33,10 @@ interface ModuleCard {
   path: string;
   color: string;
   bgGlow: string;
+  /** Primary module key. Empty string for hubs gated by subModuleKeys. */
   moduleKey: string;
+  /** If set, the card is visible when the user has access to ANY of these modules. */
+  subModuleKeys?: string[];
 }
 
 const modules: Record<string, ModuleCard> = {
@@ -71,21 +69,13 @@ const modules: Record<string, ModuleCard> = {
   },
   approvals: {
     title: "Aprovações",
-    description: "Documentos pendentes de aprovação com detalhes de valor, fornecedor, aprovador e vencimento.",
+    description: "Pendentes e histórico em um só lugar — valor, fornecedor, aprovador e vencimento.",
     icon: ClipboardCheck,
     path: "/approvals",
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
-    moduleKey: "approvals",
-  },
-  approval_history: {
-    title: "Histórico de Aprovações",
-    description: "Aprovações já decididas em todas as empresas, sincronizadas com o SAP Approval Hub.",
-    icon: History,
-    path: "/approvals/history",
-    color: "text-emerald-400",
-    bgGlow: "from-emerald-500/20 to-emerald-500/5",
-    moduleKey: "approval_history",
+    moduleKey: "",
+    subModuleKeys: ["approvals", "approval_history"],
   },
   approval_rules: {
     title: "Regras de Aprovação",
@@ -97,7 +87,7 @@ const modules: Record<string, ModuleCard> = {
     moduleKey: "approval_rules",
   },
   pagcorp: {
-    title: "PagCorp",
+    title: "Cartões Corporativos",
     description: "Transações de cartões corporativos com filtro de prestação de conta e lançamento no SAP.",
     icon: CreditCard,
     path: "/pagcorp",
@@ -107,7 +97,7 @@ const modules: Record<string, ModuleCard> = {
   },
   users: {
     title: "Usuários",
-    description: "Gerencie usuários SAP: bloqueio, desbloqueio e redefinição de senhas.",
+    description: "Lista, atividade, produtividade, licenças e sincronização IdP — tudo em um só hub.",
     icon: Users,
     path: "/users",
     color: "text-violet-400",
@@ -132,26 +122,18 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-indigo-500/20 to-indigo-500/5",
     moduleKey: "items",
   },
-  synapse: {
-    title: "Synapse",
-    description: "Central de automações e integrações entre sistemas (JumpCloud, SAP, IdP).",
-    icon: Zap,
-    path: "/synapse",
+  integracoes: {
+    title: "Integrações",
+    description: "Automações, monitor de sincronização e credenciais de sistemas externos em um só hub.",
+    icon: Plug,
+    path: "/integracoes",
     color: "text-violet-400",
     bgGlow: "from-violet-500/20 to-violet-500/5",
-    moduleKey: "synapse",
-  },
-  integration_history: {
-    title: "Monitor de Integrações",
-    description: "Acompanhamento unificado de todas as integrações com o SAP (despesas manuais e PagCorp), com status detalhado por estágio.",
-    icon: Radio,
-    path: "/integrations/monitor",
-    color: "text-sky-400",
-    bgGlow: "from-sky-500/20 to-sky-500/5",
-    moduleKey: "integration_history",
+    moduleKey: "",
+    subModuleKeys: ["synapse", "integration_history", "credentials"],
   },
   intercompany: {
-    title: "Intercompany",
+    title: "Plano de Contas & CC",
     description: "Plano de contas e centros de custo consolidados entre empresas, com criação simultânea em todas.",
     icon: Building2,
     path: "/intercompany",
@@ -160,31 +142,13 @@ const modules: Record<string, ModuleCard> = {
     moduleKey: "intercompany",
   },
   financial_review: {
-    title: "Avaliação Financeira",
+    title: "Adiantamentos",
     description: "Adiantamentos em aberto (clientes/fornecedores) sem vínculo a notas, com passo a passo de reconciliação.",
     icon: Wallet,
     path: "/financial-review",
     color: "text-cyan-400",
     bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "financial_review",
-  },
-  credentials: {
-    title: "Credenciais",
-    description: "Gerencie conexões com sistemas externos (PagCorp, SAP) de forma segura.",
-    icon: Key,
-    path: "/credentials",
-    color: "text-violet-400",
-    bgGlow: "from-violet-500/20 to-violet-500/5",
-    moduleKey: "credentials",
-  },
-  audit_log: {
-    title: "Logs de Auditoria",
-    description: "Registro completo de todas as ações realizadas no sistema para análise e auditoria.",
-    icon: ScrollText,
-    path: "/audit-log",
-    color: "text-violet-400",
-    bgGlow: "from-violet-500/20 to-violet-500/5",
-    moduleKey: "audit_log",
   },
   notifications: {
     title: "Notificações",
@@ -195,17 +159,8 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "notifications",
   },
-  fiscal_audit: {
-    title: "Auditoria Fiscal",
-    description: "Análise de notas fiscais de entrada antigas em aberto e relatório de lançamentos por usuário.",
-    icon: FileSearch,
-    path: "/fiscal-audit",
-    color: "text-orange-400",
-    bgGlow: "from-orange-500/20 to-orange-500/5",
-    moduleKey: "fiscal_audit",
-  },
   nf_entrada: {
-    title: "NF de Entrada (Master Tax)",
+    title: "NF de Entrada",
     description: "Importa NFs da Master Tax, gera despesa no ERP Flow e cria esboços de PO e NF de Entrada no SAP B1.",
     icon: FileInput,
     path: "/nf-entrada",
@@ -213,42 +168,39 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-orange-500/20 to-orange-500/5",
     moduleKey: "nf_entrada",
   },
-  audit_console: {
-    title: "Console de Auditoria",
-    description: "Painel executivo de auditoria sobre SAP: divergências, alertas de fraude, insights IA e análise documental.",
+  auditoria: {
+    title: "Auditoria",
+    description: "Auditoria SAP, auditoria fiscal e logs do sistema unificados em um único hub.",
     icon: Radar,
-    path: "/analytics/audit",
+    path: "/auditoria",
     color: "text-sky-400",
     bgGlow: "from-sky-500/20 to-sky-500/5",
-    moduleKey: "audit_console",
+    moduleKey: "",
+    subModuleKeys: ["audit_console", "fiscal_audit", "audit_log"],
   },
 };
 
 const moduleGroups: { title: string; keys: string[] }[] = (
   [
     {
-      title: "Fluxo Operacional",
-      keys: ["expenses", "sales", "approvals", "approval_history"],
+      title: "Operação",
+      keys: ["expenses", "sales", "approvals", "pagcorp"],
     },
     {
       title: "Cadastros",
       keys: ["suppliers", "items", "intercompany"],
     },
     {
-      title: "Análise & Monitoramento",
-      keys: ["analytics", "audit_console", "integration_history"],
+      title: "Financeiro & Fiscal",
+      keys: ["financial_review", "nf_entrada"],
     },
     {
-      title: "Financeiro",
-      keys: ["pagcorp", "financial_review"],
-    },
-    {
-      title: "Fiscal",
-      keys: ["fiscal_audit", "nf_entrada"],
+      title: "Análise",
+      keys: ["analytics", "auditoria"],
     },
     {
       title: "Administração",
-      keys: ["approval_rules", "users", "synapse", "credentials", "audit_log", "notifications"],
+      keys: ["users", "approval_rules", "integracoes", "notifications"],
     },
   ] as { title: string; keys: string[] }[]
 ).map((g) => ({
@@ -258,6 +210,13 @@ const moduleGroups: { title: string; keys: string[] }[] = (
   ),
 }));
 
+function moduleHasAccess(mod: ModuleCard, userModules: string[]): boolean {
+  if (mod.subModuleKeys && mod.subModuleKeys.length > 0) {
+    return mod.subModuleKeys.some((k) => userModules.includes(k));
+  }
+  if (!mod.moduleKey) return true;
+  return userModules.includes(mod.moduleKey);
+}
 
 function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: number; hasAccess: boolean }) {
   const navigate = useNavigate();
@@ -351,7 +310,7 @@ export function MainMenu() {
                 .map((k) => modules[k])
                 .filter((m): m is ModuleCard => Boolean(m));
               const visible = groupModules.filter(
-                (m) => permLoading || userModules.includes(m.moduleKey),
+                (m) => permLoading || moduleHasAccess(m, userModules),
               );
               if (visible.length === 0) return null;
               return (
@@ -365,7 +324,7 @@ export function MainMenu() {
                         key={`${group.title}-${mod.title}`}
                         mod={mod}
                         index={i}
-                        hasAccess={permLoading || userModules.includes(mod.moduleKey)}
+                        hasAccess={permLoading || moduleHasAccess(mod, userModules)}
                       />
                     ))}
                   </div>
