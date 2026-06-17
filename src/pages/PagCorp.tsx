@@ -1028,9 +1028,20 @@ export default function PagCorp() {
                         </TableCell>
                         <TableCell className="text-center">
                           {t.integrated ? (
-                            <Badge variant="secondary" className="bg-success/20 text-success border-success/30 font-semibold text-xs">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Integrado
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge variant="secondary" className="bg-success/20 text-success border-success/30 font-semibold text-xs">
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Integrado
+                              </Badge>
+                              {t.sapDocNum != null && (
+                                <span className="text-[11px] font-mono text-muted-foreground" title="Número do Pedido de Compra no SAP">
+                                  PC #{t.sapDocNum}
+                                </span>
+                              )}
+                            </div>
+                          ) : t.isReversed ? (
+                            <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
+                              <XCircle className="w-3 h-3" /> Sem integração
                             </Badge>
                           ) : integrating === t.id ? (
                             <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
