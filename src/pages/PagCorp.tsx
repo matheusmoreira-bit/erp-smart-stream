@@ -953,7 +953,7 @@ export default function PagCorp() {
                     return (
                       <TableRow key={t.id} className="border-border" data-state={isSelected ? "selected" : undefined}>
                         <TableCell className="w-10">
-                          {!t.integrated && (
+                          {!t.integrated && !t.isReversed && (
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => toggleSelect(t.id)}
