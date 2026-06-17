@@ -85,7 +85,7 @@ export default function PagCorpMapping() {
   const { transactions: recentTransactions, fetchTransactions } = usePagCorp();
   useEffect(() => {
     const today = new Date();
-    const ago = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
+    const ago = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 180);
     fetchTransactions(
       ago.toISOString().slice(0, 10),
       today.toISOString().slice(0, 10),
