@@ -414,8 +414,42 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
 
   const fetchData = useCallback(async () => {
     if (!session) return;
-    setIsLoading(true);
     setError(null);
+    const companyDb = session.companyDB;
+    const paymentsKey = `sap-dashboard:payments:${session.erpType}`;
+    const approvalsKey = `sap-dashboard:approvals:${session.erpType}`;
+
+    // 1. Paint cached data instantly
+    let hadCache = false;
+    if (companyDb) {
+      try {
+        const { readCache } = await import("@/lib/external-cache");
+        const [pCache, aCache] = await Promise.all([
+          readCache<ViewRow[]>(paymentsKey, companyDb),
+          readCache<ApprovalViewRow[]>(approvalsKey, companyDb),
+        ]);
+        if (pCache?.data?.length) {
+          setRawRows(pCache.data);
+          hadCache = true;
+        }
+        if (aCache?.data) {
+          const approvalRows = aCache.data;
+          const days: number[] = [];
+          for (const a of approvalRows) {
+            if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
+              const d = daysBetween(a.Data_Documento || null, a.Data_Lancamento || null);
+              if (d !== null) days.push(Math.max(d, 1));
+            } else {
+              const d = Number(a.Dias_Desde_Criacao || 0);
+              if (d > 0) days.push(d);
+            }
+          }
+          setApprovalDaysRaw(days);
+          setApprovalRowsRaw(approvalRows);
+        }
+      } catch {/* ignore */}
+    }
+    if (!hadCache) setIsLoading(true);
 
     try {
       if (session.erpType === "sap") {
@@ -424,7 +458,8 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
           sapQueryView<ApprovalViewRow>(session, "VW_TODAS_APROVACOES").catch(() => ({ data: [] as ApprovalViewRow[] })),
         ]);
 
-        setRawRows(paymentResult.data || []);
+        const payRows = paymentResult.data || [];
+        setRawRows(payRows);
 
         const approvalRows = approvalResult.data || [];
         const days: number[] = [];
@@ -441,22 +476,40 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
         }
         setApprovalDaysRaw(days);
         setApprovalRowsRaw(approvalRows);
+
+        if (companyDb) {
+          try {
+            const { writeCache } = await import("@/lib/external-cache");
+            await Promise.all([
+              payRows.length ? writeCache(paymentsKey, companyDb, payRows) : Promise.resolve(),
+              writeCache(approvalsKey, companyDb, approvalRows),
+            ]);
+          } catch (e) {
+            console.warn("SAP dashboard cache write failed:", e);
+          }
+        }
       } else if (session.erpType === "omie") {
-        // OMIE: fetch contas a pagar and map to ViewRow structure
         const contas = await omieListarContasPagar(session.companyDB, 10);
         const mapped = mapOmieToViewRows(contas);
         setRawRows(mapped);
         setApprovalDaysRaw([]);
         setApprovalRowsRaw([]);
+        if (companyDb && mapped.length) {
+          try {
+            const { writeCache } = await import("@/lib/external-cache");
+            await writeCache(paymentsKey, companyDb, mapped);
+          } catch (e) {
+            console.warn("SAP dashboard cache write failed:", e);
+          }
+        }
       } else {
-        // Other ERP types — no data yet
         setRawRows([]);
         setApprovalDaysRaw([]);
         setApprovalRowsRaw([]);
       }
     } catch (e) {
       console.error("Error fetching view data:", e);
-      setError(e instanceof Error ? e.message : "Erro ao buscar dados da view");
+      if (!hadCache) setError(e instanceof Error ? e.message : "Erro ao buscar dados da view");
     } finally {
       setIsLoading(false);
     }
