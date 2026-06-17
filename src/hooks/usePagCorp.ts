@@ -20,6 +20,9 @@ export interface PagCorpTransaction {
   receipts?: any[];
   integrated?: boolean;
   integrationLogId?: string;
+  sapDocNum?: number | null;
+  sapDocEntry?: number | null;
+  isReversed?: boolean;
   isNondeductible?: boolean;
   nondeductibleSupplierCode?: string;
   nondeductibleSupplierName?: string;
