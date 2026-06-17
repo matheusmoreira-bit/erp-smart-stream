@@ -102,25 +102,49 @@ export function usePaymentAnalysis(): PaymentAnalysisData {
 
   const fetchData = useCallback(async () => {
     if (!session) return;
-    setIsLoading(true);
     setError(null);
+    const cacheKey = `payment-analysis:${session.erpType}`;
+    const companyDb = session.companyDB;
+
+    // 1. Paint cached data instantly (stale-while-revalidate)
+    let hadCache = false;
+    if (companyDb) {
+      try {
+        const { readCache } = await import("@/lib/external-cache");
+        const cached = await readCache<PaymentAnalysisRow[]>(cacheKey, companyDb);
+        if (cached?.data?.length) {
+          setRows(cached.data);
+          hadCache = true;
+        }
+      } catch {/* ignore */}
+    }
+    if (!hadCache) setIsLoading(true);
 
     try {
+      let fresh: PaymentAnalysisRow[] = [];
       if (session.erpType === "sap") {
         const result = await sapQueryView<PaymentAnalysisRow>(
           session,
           "VW_ANALISE_PAGAMENTOS_DETALHADO",
         );
-        setRows(result.data || []);
+        fresh = result.data || [];
       } else if (session.erpType === "omie") {
         const contas = await omieListarContasPagar(session.companyDB, 10);
-        setRows(mapOmieToPaymentRows(contas));
-      } else {
-        setRows([]);
+        fresh = mapOmieToPaymentRows(contas);
+      }
+      setRows(fresh);
+
+      if (companyDb && fresh.length) {
+        try {
+          const { writeCache } = await import("@/lib/external-cache");
+          await writeCache(cacheKey, companyDb, fresh);
+        } catch (e) {
+          console.warn("PaymentAnalysis cache write failed:", e);
+        }
       }
     } catch (e) {
       console.error("Error fetching payment analysis:", e);
-      setError(e instanceof Error ? e.message : "Erro ao buscar análise de pagamentos");
+      if (!hadCache) setError(e instanceof Error ? e.message : "Erro ao buscar análise de pagamentos");
     } finally {
       setIsLoading(false);
     }
