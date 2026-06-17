@@ -1,125 +1,126 @@
-# Expansão: Módulos de Itens e Fornecedores
+# Refatoração de UX/UI — Fusões, Renomes e Reagrupamento
 
-Adicionar dois módulos na área de Cadastros, totalmente no backend Lovable Cloud (Supabase), reaproveitando padrão visual atual (shadcn + Tailwind + páginas em `src/pages` + hooks em `src/hooks`).
-
----
-
-## 1. Módulo Itens (Item-base + Variantes)
-
-### Tabelas novas
-- `item_base`
-  - `tipo` (`item_tipo` enum: `produto` | `servico`)
-  - `ncm` (texto, só dígitos; obrigatório se `produto`)
-  - `codigo_servico` (texto, ex.: `1.05`; obrigatório se `servico`)
-  - `grupo`, `unidade` (texto)
-  - Restrições: `CHECK` garantindo NCM 8 dígitos quando produto / codigo_servico quando serviço; índices únicos parciais `(tipo, ncm)` e `(tipo, codigo_servico)`.
-- `item_variante`
-  - `item_base_id` FK
-  - `sequencial` int
-  - `descricao` texto
-  - `codigo_completo` texto único
-  - Único `(item_base_id, sequencial)`
-
-### Geração atômica do código (servidor)
-- Função `create_item_variante(p_item_base_id uuid, p_descricao text)` (`SECURITY DEFINER`, `plpgsql`):
-  - `LOCK TABLE item_variante IN SHARE ROW EXCLUSIVE` (ou `SELECT ... FOR UPDATE` no `item_base`).
-  - `next_seq = COALESCE(MAX(sequencial),0) + 1` para aquele `item_base_id`.
-  - Monta `codigo_completo`:
-    - Produto: `'P' || ncm || '.' || lpad(next_seq::text, 3, '0')`
-    - Serviço: `'S' || codigo_servico || '.' || lpad(next_seq::text, 4, '0')`
-  - Insere e retorna a linha. Em caso de `unique_violation`, retry (loop com limite).
-- Função `preview_next_codigo(p_item_base_id uuid)` para mostrar o código previsto na UI antes de salvar.
-
-### RLS / GRANT
-- RLS habilitado nas duas tabelas.
-- Leitura: `authenticated`. Escrita: `authenticated` (todos os usuários logados podem cadastrar). `GRANT` para `authenticated` e `service_role`.
-- Auditoria via `insert_audit_log` em criar/editar.
-
-### UI — `src/pages/Items.tsx` (substitui SAP-only) ou novo `src/pages/cadastros/Itens.tsx`
-- Listagem: tabela com `codigo_completo`, descrição, tipo, grupo, unidade. Busca server-side por código e descrição (ILIKE em `item_variante.descricao` + `codigo_completo`).
-- Modal "Novo item" em 2 passos:
-  1. Tipo + chave fiscal (NCM/Código de Serviço) → `lookup` no `item_base`. Se existe → reaproveita (mostra grupo/unidade somente leitura). Se não → form de criação do item-base.
-  2. Descrição da variante + preview do `codigo_completo` (via `preview_next_codigo`). Salvar chama `create_item_variante`.
-- Botão "Nova variante" em cada linha agrupada por `item_base` (atalho para Passo 2).
-- Validações zod:
-  - NCM: `/^\d{8}$/`
-  - Código de Serviço: `/^\d+(\.\d+)+$/`
-  - Descrição: 1–255 chars.
+Objetivo: reduzir de **19 cards / 6 grupos** para **~13 cards / 5 grupos**, usar linguagem de negócio e padronizar tudo no modelo "página única com abas".
 
 ---
 
-## 2. Módulo Fornecedores
+## 1. Fusões (4 hubs com abas)
 
-### Tabela `fornecedores`
-- `tipo_pessoa` (`pj` | `pf`)
-- `cnpj` texto (somente dígitos, único quando não nulo) / `cpf` texto (único quando não nulo)
-- `razao_social`, `nome_fantasia`, `tipo_estabelecimento` (matriz/filial), `situacao_cadastral`, `data_inicio_atividade`
-- `natureza_juridica_id`, `natureza_juridica_descricao`
-- `porte`, `capital_social numeric`
-- `cnae_principal_codigo`, `cnae_principal_descricao`
-- `cnaes_secundarios jsonb`
-- `logradouro`, `numero`, `complemento`, `bairro`, `cep`, `municipio`, `municipio_ibge`, `uf`, `pais`
-- `telefone1`, `telefone2`, `email`
-- `inscricao_estadual`
-- `simples_nacional bool`
-- `socios jsonb`
-- `created_by uuid` (default `auth.uid()`)
-- Índices únicos parciais: `(cnpj) WHERE cnpj IS NOT NULL`, `(cpf) WHERE cpf IS NOT NULL`.
+### 1.1 Aprovações (`/approvals`)
+Funde `/approvals` + `/approvals/history` em uma só página com abas.
+- Abas: **Pendentes** | **Histórico**
+- Remove card "Histórico de Aprovações" do MainMenu
+- Mantém rota `/approvals/history` como redirect para `/approvals?tab=history`
+- Module keys `approvals` e `approval_history` continuam separados (controle de permissão por aba: se só tem `approval_history`, abre direto na aba histórico)
 
-### RLS / GRANT
-- `authenticated` lê/escreve; `service_role` ALL. Auditoria em insert/update.
-- Sem campos bancários nem de pagamento.
+### 1.2 Auditoria (`/auditoria`) — nova rota
+Funde Console de Auditoria + Auditoria Fiscal + Logs de Auditoria.
+- Abas: **SAP** (atual `/analytics/audit/*`) | **Fiscal** | **Logs do Sistema**
+- Redirects: `/analytics/audit` → `/auditoria?tab=sap`, `/fiscal-audit` → `/auditoria?tab=fiscal`, `/audit-log` → `/auditoria?tab=logs`
+- Cada aba só renderiza se o usuário tiver a module key correspondente (`audit_console`, `fiscal_audit`, `audit_log`)
 
-### Edge Function `cnpj-lookup`
-- Recebe `{ cnpj }`, normaliza, valida 14 dígitos.
-- Antes de chamar API, consulta `fornecedores` para detectar duplicado e retorna `{ exists: true, id }`.
-- Caso contrário, `fetch('https://publica.cnpj.ws/cnpj/' + digits)`. Trata 429 (rate limit) e 404. Retorna JSON cru + payload normalizado já mapeado.
-- CORS via `npm:@supabase/supabase-js@2/cors`. Verifica JWT do chamador.
+### 1.3 Integrações (`/integracoes`) — nova rota
+Funde Synapse + Monitor de Integrações + Credenciais.
+- Abas: **Automações** | **Monitor** | **Credenciais**
+- Redirects de `/synapse`, `/integrations/monitor`, `/credentials`
+- Visibilidade de aba por module key (`synapse`, `integration_history`, `credentials`)
 
-### UI — `src/pages/cadastros/Fornecedores.tsx`
-- Listagem: razão social/nome, CNPJ/CPF, município/UF, situação.
-- Modal "Novo fornecedor":
-  - Escolha PJ/PF.
-  - PJ: input CNPJ + botão "Buscar dados" → chama edge function. Se duplicado, mostra toast com link "Abrir cadastro". Caso ok, popula form editável (todos os campos do mapeamento). Salvar grava em `fornecedores`.
-  - PF: form manual (CPF, nome, endereço, contato). Checa duplicidade por CPF antes de salvar.
-- Validações zod: CNPJ 14 dígitos, CPF 11 dígitos, email opcional válido, CEP 8 dígitos.
+### 1.4 Usuários (`/users`)
+Consolida `/users` + `/users/activity` + `/users/productivity` + `/users/idp-sync` + `/users/license-analysis` + `/users/license-import` em abas.
+- Abas: **Lista** | **Atividade** | **Produtividade** | **Licenças** (subaba Análise/Importação) | **Sincronização IdP**
+- Mantém rotas antigas como redirects com `?tab=…`
+- Visibilidade por module key
 
 ---
 
-## 3. Navegação / Menu
-- Adicionar entradas "Itens" e "Fornecedores" no `MainMenu` sob seção Cadastros.
-- Rotas em `src/App.tsx`:
-  - `/cadastros/itens`
-  - `/cadastros/fornecedores`
-- Proteger com o wrapper de auth existente (não admin-only).
+## 2. Renomeações
+
+| Onde | De | Para |
+|---|---|---|
+| Card + página | PagCorp | **Cartões Corporativos** |
+| Card + página | Synapse | **Automações** (dentro do hub Integrações) |
+| Card + página | Intercompany | **Plano de Contas & CC** |
+| Card + página | NF de Entrada (Master Tax) | **NF de Entrada** |
+| Card + página | Avaliação Financeira | **Adiantamentos** |
+| Card + página | Console de Auditoria | **Auditoria SAP** (aba) |
+| Card + página | Logs de Auditoria | **Logs do Sistema** (aba) |
+| Card + página | Monitor de Integrações | **Monitor** (aba) |
+
+**Importante:** rotas físicas permanecem (`/pagcorp`, `/intercompany`, etc.) para não quebrar links salvos. Só muda o **label** exibido. Module keys permanecem inalteradas para não invalidar permissões existentes.
 
 ---
 
-## 4. Arquivos a criar/editar
-**Migração SQL** (uma só): cria enums, tabelas, índices, funções `create_item_variante`, `preview_next_codigo`, RLS e GRANTs.
+## 3. Reagrupamento do MainMenu
 
-**Edge function nova**: `supabase/functions/cnpj-lookup/index.ts`.
+```text
+Operação
+  • Compras
+  • Vendas
+  • Aprovações                 (fusão)
+  • Cartões Corporativos       (renomeado)
 
-**Frontend**:
-- `src/pages/cadastros/Itens.tsx`
-- `src/pages/cadastros/Fornecedores.tsx`
-- `src/components/items/ItemBaseStep.tsx`
-- `src/components/items/ItemVarianteStep.tsx`
-- `src/components/fornecedores/FornecedorPjForm.tsx`
-- `src/components/fornecedores/FornecedorPfForm.tsx`
-- `src/hooks/useItensCadastro.ts`
-- `src/hooks/useFornecedores.ts`
-- Editar `src/App.tsx` (rotas) e `src/components/MainMenu.tsx` (links).
+Cadastros
+  • Fornecedores
+  • Itens
+  • Plano de Contas & CC       (renomeado)
+
+Financeiro & Fiscal
+  • Adiantamentos              (renomeado)
+  • NF de Entrada              (renomeado)
+  • Auditoria Fiscal → entra como aba de Auditoria (removido daqui)
+
+Análise
+  • Analytics
+  • Auditoria                  (hub novo)
+
+Administração
+  • Usuários                   (hub consolidado)
+  • Regras de Aprovação
+  • Integrações                (hub novo)
+  • Notificações
+```
+
+Resultado: 5 grupos, 13 cards visíveis no menu.
 
 ---
 
-## 5. Critérios de aceite cobertos
-- Código gerado exatamente `P{NCM}.{3}` / `S{cod}.{4}` via função SQL.
-- Sequencial atômico (transação + retry em unique violation).
-- Busca por código e qualquer descrição.
-- CNPJ via edge function com mapeamento completo.
-- Unicidade CNPJ/CPF no banco + checagem antes de salvar.
-- PF com form manual.
-- Nenhum campo bancário/pagamento.
+## 4. Detalhes técnicos
 
-Confirma para eu executar?
+**Arquivos editados**
+- `src/App.tsx` — novas rotas `/auditoria`, `/integracoes`; redirects das antigas
+- `src/components/MainMenu.tsx` — novo mapa `modules`, novos grupos, labels renomeados, remoção dos cards fundidos
+- `src/pages/Approvals.tsx` — adicionar abas Pendentes/Histórico (incorporando `ApprovalHistory.tsx` como subcomponente)
+- `src/pages/Users.tsx` — converter em hub com abas, incorporando as 5 páginas existentes
+- Nenhuma página antiga é deletada nesta etapa — viram subcomponentes/abas. Limpeza fica para uma segunda passada quando confirmarmos que nada quebrou.
+
+**Arquivos novos**
+- `src/pages/AuditHub.tsx` — abas SAP/Fiscal/Logs renderizando os componentes existentes
+- `src/pages/IntegrationsHub.tsx` — abas Automações/Monitor/Credenciais
+
+**Permissões (`src/hooks/usePermissions.ts`)**
+- `ALL_MODULES`: atualizar apenas os `label`s renomeados (mantém `key` original)
+- Comportamento de `useModuleAccess` permanece igual
+- Hub abre na primeira aba a que o usuário tem acesso; se não tiver nenhuma, mostra estado "sem acesso"
+
+**Compatibilidade**
+- Todas as rotas antigas viram `<Navigate replace>` para o novo destino com `?tab=…`
+- Atalhos `MainMenu` e quaisquer `navigate("/old-path")` no código continuam funcionando via redirect
+- Memórias do projeto (visibility rule, OMIE open modules, users-screen-actions) continuam válidas — só mudam de local visual
+
+---
+
+## 5. Não incluído neste plano
+- Alteração de module keys ou tabela de permissões (evita migration)
+- Mudança visual além do necessário para abas (sem redesign)
+- Tradução/i18n
+- Remoção definitiva dos arquivos `ApprovalHistory.tsx`, `Synapse.tsx`, `Credentials.tsx`, `IntegrationsMonitor.tsx`, `FiscalAudit.tsx`, `AuditLog.tsx`, `AuditConsole.tsx`, `UserActivity.tsx`, `UserProductivity.tsx`, `IdpSync.tsx`, `LicenseAnalysis.tsx`, `LicenseImport.tsx` — segunda passada após validação
+
+---
+
+## 6. Ordem de execução sugerida
+1. Renomes (label-only) — mudança visual imediata, risco zero
+2. Reagrupamento do MainMenu
+3. Fusão Aprovações (mais simples, 2 abas)
+4. Hub Usuários
+5. Hub Auditoria
+6. Hub Integrações
