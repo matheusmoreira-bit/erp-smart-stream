@@ -73,7 +73,11 @@ export function useSapCachedList({
       }
 
       const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
-      const rows = data?.value || [];
+      let rows: any[] = data?.value || [];
+      // Filtra centros de custo auto-gerados pelo SAP (prefixo "Centr_")
+      if (endpoint === "CostCenters" || endpoint === "ProfitCenters") {
+        rows = rows.filter((r: any) => !String(r?.CenterCode || "").startsWith("Centr_"));
+      }
 
       // 3. Only cache non-empty results
       if (rows.length > 0) {
