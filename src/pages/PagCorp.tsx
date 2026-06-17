@@ -295,7 +295,7 @@ export default function PagCorp() {
   };
 
   const selectableTransactions = useMemo(
-    () => filteredTransactions.filter((t) => !t.integrated),
+    () => filteredTransactions.filter((t) => !t.integrated && !t.isReversed),
     [filteredTransactions],
   );
 
