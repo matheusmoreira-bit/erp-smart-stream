@@ -443,6 +443,12 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         updates.total_amount = totalAmount;
       }
 
+      // Quando o usuário edita após erro de integração, limpe o erro para
+      // permitir nova tentativa limpa.
+      if (editableForFix) {
+        updates.sap_integration_error = null;
+      }
+
       if (Object.keys(updates).length > 0) {
         const { error: upErr } = await supabase
           .from("expenses")
