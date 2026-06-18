@@ -213,6 +213,7 @@ export default function NfEntrada() {
                 <TableHead>Despesa</TableHead>
                 <TableHead>PO SAP</TableHead>
                 <TableHead>NF SAP</TableHead>
+                <TableHead>Vínculo SAP</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
