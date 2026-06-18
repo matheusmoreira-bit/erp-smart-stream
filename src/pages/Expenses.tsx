@@ -853,6 +853,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 expense={exp}
                 originBadge={origin}
                 onOpen={() => setSelectedExpense(exp)}
+                onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
               />
             ))}
           </div>
