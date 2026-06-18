@@ -417,7 +417,10 @@ Deno.serve(async (req) => {
     result.companies = allCreds.length;
 
     for (const creds of allCreds) {
-      const stats = { company_db: creds.company_db, fetched: 0, upserted: 0, skipped: 0, errors: 0, error: undefined as string | undefined };
+      const stats = { company_db: creds.company_db, fetched: 0, upserted: 0, skipped: 0, matched: 0, errors: 0, error: undefined as string | undefined };
+      const insertedIdsForCompany: string[] = [];
+
+
 
       for (const empresaId of creds.empresa_ids) {
         const stateKey = `mastertax_last_pull:${empresaId}`;
