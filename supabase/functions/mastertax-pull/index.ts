@@ -101,11 +101,22 @@ function parseNotaFromRow(row: any): MasterTaxInvoice | null {
   };
 }
 
-async function fetchInvoicesForCompany(
+const MAX_WINDOW_DAYS = 120;
+
+function clampStart(sinceIso: string): string {
+  const today = new Date();
+  const minStart = new Date(today.getTime() - MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const since = new Date(sinceIso);
+  const start = since > minStart ? since : minStart;
+  return start.toISOString().slice(0, 10);
+}
+
+async function fetchInvoicesForEmpresa(
   creds: CompanyCreds,
+  empresaId: string,
   sinceIso: string,
 ): Promise<{ invoices: MasterTaxInvoice[]; error?: string }> {
-  const dataInicio = sinceIso.slice(0, 10);
+  const dataInicio = clampStart(sinceIso);
   const dataFim = new Date().toISOString().slice(0, 10);
   const invoices: MasterTaxInvoice[] = [];
   const authHeader = creds.token.toLowerCase().startsWith("bearer ")
@@ -114,69 +125,67 @@ async function fetchInvoicesForCompany(
   const limite = 50;
   const errors: string[] = [];
 
-  for (const empresaId of creds.empresa_ids) {
-    let pagina = 1;
-    while (true) {
-      const competencia = dataFim.slice(0, 7);
-      const params = new URLSearchParams({
-        empresa_id: empresaId,
-        competencia,
-        emissaoDe: dataInicio,
-        emissaoAte: dataFim,
-        dataArmazenamentoInicio: dataInicio,
-        dataArmazenamentoFim: dataFim,
-        pagina: String(pagina),
-        quantidade: String(limite),
-        ordenar: "dataEmissao",
-        sentido: "desc",
-        tipo: "Prestador",
-        retencoes: "todas",
+  let pagina = 1;
+  while (true) {
+    const competencia = dataFim.slice(0, 7);
+    const params = new URLSearchParams({
+      empresa_id: empresaId,
+      competencia,
+      emissaoDe: dataInicio,
+      emissaoAte: dataFim,
+      dataArmazenamentoInicio: dataInicio,
+      dataArmazenamentoFim: dataFim,
+      pagina: String(pagina),
+      quantidade: String(limite),
+      ordenar: "dataEmissao",
+      sentido: "desc",
+      tipo: "Prestador",
+      retencoes: "todas",
+    });
+    const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
+
+    let resp: Response;
+    try {
+      resp = await fetch(target, {
+        method: "GET",
+        headers: { Authorization: authHeader, Accept: "application/json" },
+        signal: AbortSignal.timeout(30000),
       });
-      const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
-
-      let resp: Response;
-      try {
-        resp = await fetch(target, {
-          method: "GET",
-          headers: { Authorization: authHeader, Accept: "application/json" },
-          signal: AbortSignal.timeout(30000),
-        });
-      } catch (e) {
-        errors.push(`[${empresaId}] rede: ${(e as Error).message}`);
-        break;
-      }
-      const raw = await resp.text().catch(() => "");
-      if (!resp.ok) {
-        errors.push(`[${empresaId}] HTTP ${resp.status}: ${raw.slice(0, 160)}`);
-        break;
-      }
-      let data: any = null;
-      try { data = JSON.parse(raw); } catch { data = null; }
-
-      const retorno = data?.retorno ?? data;
-      const rows: any[] = Array.isArray(retorno?.data)
-        ? retorno.data
-        : Array.isArray(retorno?.notas)
-          ? retorno.notas
-          : Array.isArray(data?.data)
-            ? data.data
-            : Array.isArray(data)
-              ? data
-              : [];
-      for (const r of rows) {
-        const inv = parseNotaFromRow(r);
-        if (inv) {
-          (inv.raw as any) = { ...(inv.raw || {}), _empresa_id: empresaId };
-          invoices.push(inv);
-        }
-      }
-      const lastPage = Number(
-        retorno?.last_page ?? retorno?.meta?.last_page ?? data?.meta?.last_page ??
-        data?.last_page ?? data?.pagination?.last_page ?? 1,
-      );
-      if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
-      pagina++;
+    } catch (e) {
+      errors.push(`[${empresaId}] rede: ${(e as Error).message}`);
+      break;
     }
+    const raw = await resp.text().catch(() => "");
+    if (!resp.ok) {
+      errors.push(`[${empresaId}] HTTP ${resp.status}: ${raw.slice(0, 160)}`);
+      break;
+    }
+    let data: any = null;
+    try { data = JSON.parse(raw); } catch { data = null; }
+
+    const retorno = data?.retorno ?? data;
+    const rows: any[] = Array.isArray(retorno?.data)
+      ? retorno.data
+      : Array.isArray(retorno?.notas)
+        ? retorno.notas
+        : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data)
+            ? data
+            : [];
+    for (const r of rows) {
+      const inv = parseNotaFromRow(r);
+      if (inv) {
+        (inv.raw as any) = { ...(inv.raw || {}), _empresa_id: empresaId };
+        invoices.push(inv);
+      }
+    }
+    const lastPage = Number(
+      retorno?.last_page ?? retorno?.meta?.last_page ?? data?.meta?.last_page ??
+      data?.last_page ?? data?.pagination?.last_page ?? 1,
+    );
+    if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
+    pagina++;
   }
 
   return { invoices, error: errors.length ? errors.join(" | ") : undefined };
@@ -250,94 +259,116 @@ Deno.serve(async (req) => {
     for (const creds of allCreds) {
       const stats = { company_db: creds.company_db, fetched: 0, upserted: 0, skipped: 0, errors: 0, error: undefined as string | undefined };
 
-      const { data: stateRow } = await supabase
-        .from("nf_entrada_settings")
-        .select("value")
-        .eq("company_db", creds.company_db)
-        .eq("key", "last_pull_iso")
-        .maybeSingle();
-      const sinceIso = (stateRow?.value as { iso?: string })?.iso ||
-        new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      for (const empresaId of creds.empresa_ids) {
+        const stateKey = `mastertax_last_pull:${empresaId}`;
+        const { data: stateRow } = await supabase
+          .from("nf_entrada_settings")
+          .select("value")
+          .eq("company_db", creds.company_db)
+          .eq("key", stateKey)
+          .maybeSingle();
+        // Incremental: continue from last successful pull; clamp to last 120 days.
+        const sinceIso = (stateRow?.value as { iso?: string })?.iso ||
+          new Date(Date.now() - MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-      const { invoices, error: pullErr } = await fetchInvoicesForCompany(creds, sinceIso);
-      stats.fetched = invoices.length;
-      result.fetched += invoices.length;
-      if (pullErr) {
-        stats.error = pullErr;
-        stats.errors++;
-        result.errors++;
-        result.perCompany.push(stats);
-        console.error(`[mastertax-pull][${creds.company_db}]`, pullErr);
-        continue;
-      }
-
-      for (const inv of invoices) {
-        try {
-          const { data: existing } = await supabase
-            .from("nf_entrada_imports")
-            .select("id")
-            .eq("chave_acesso", inv.chave_acesso)
-            .maybeSingle();
-          if (existing) {
-            stats.skipped++;
-            result.skipped++;
-            continue;
-          }
-
-          let xmlPath: string | null = null;
-          if (inv.xml_base64) {
-            xmlPath = `xml/${inv.chave_acesso}.xml`;
-            await supabase.storage.from("nf-entrada-files").upload(
-              xmlPath,
-              decodeBase64(inv.xml_base64),
-              { contentType: "application/xml", upsert: true },
-            );
-          }
-
-          const { data: inserted, error: insErr } = await supabase
-            .from("nf_entrada_imports")
-            .insert({
-              chave_acesso: inv.chave_acesso,
-              numero_nf: inv.numero_nf,
-              serie: inv.serie,
-              cnpj_fornecedor: inv.cnpj_fornecedor,
-              nome_fornecedor: inv.nome_fornecedor,
-              data_emissao: inv.data_emissao,
-              valor_total: inv.valor_total,
-              condicao_pagamento: inv.condicao_pagamento,
-              itens: inv.itens,
-              impostos: inv.impostos,
-              raw_mastertax: inv.raw ?? null,
-              xml_storage_path: xmlPath,
-              pdf_storage_path: null,
-              status: "awaiting_erpflow_approval",
-            })
-            .select()
-            .single();
-          if (insErr) throw insErr;
-
-          await supabase.from("nf_entrada_logs").insert({
-            import_id: inserted.id,
-            step: "mastertax_pull",
-            status_to: "awaiting_erpflow_approval",
-            message: "NF importada da Master Tax",
-            payload: { chave_acesso: inv.chave_acesso, company_db: creds.company_db, empresa_id: (inv.raw as any)?._empresa_id ?? null },
-            actor: "mastertax-pull",
-          });
-
-          stats.upserted++;
-          result.upserted++;
-        } catch (e) {
-          console.error(`[mastertax-pull][${creds.company_db}] erro item:`, (e as Error).message);
+        const { invoices, error: pullErr } = await fetchInvoicesForEmpresa(creds, empresaId, sinceIso);
+        stats.fetched += invoices.length;
+        result.fetched += invoices.length;
+        if (pullErr) {
+          stats.error = (stats.error ? stats.error + " | " : "") + pullErr;
           stats.errors++;
           result.errors++;
+          console.error(`[mastertax-pull][${creds.company_db}][${empresaId}]`, pullErr);
+          continue;
         }
+
+        for (const inv of invoices) {
+          try {
+            const { data: existing } = await supabase
+              .from("nf_entrada_imports")
+              .select("id")
+              .eq("chave_acesso", inv.chave_acesso)
+              .maybeSingle();
+            if (existing) {
+              stats.skipped++;
+              result.skipped++;
+              continue;
+            }
+
+            let xmlPath: string | null = null;
+            if (inv.xml_base64) {
+              xmlPath = `xml/${inv.chave_acesso}.xml`;
+              await supabase.storage.from("nf-entrada-files").upload(
+                xmlPath,
+                decodeBase64(inv.xml_base64),
+                { contentType: "application/xml", upsert: true },
+              );
+            }
+
+            const { data: inserted, error: insErr } = await supabase
+              .from("nf_entrada_imports")
+              .insert({
+                chave_acesso: inv.chave_acesso,
+                numero_nf: inv.numero_nf,
+                serie: inv.serie,
+                cnpj_fornecedor: inv.cnpj_fornecedor,
+                nome_fornecedor: inv.nome_fornecedor,
+                data_emissao: inv.data_emissao,
+                valor_total: inv.valor_total,
+                condicao_pagamento: inv.condicao_pagamento,
+                itens: inv.itens,
+                impostos: inv.impostos,
+                raw_mastertax: inv.raw ?? null,
+                xml_storage_path: xmlPath,
+                pdf_storage_path: null,
+                status: "awaiting_erpflow_approval",
+              })
+              .select()
+              .single();
+            if (insErr) throw insErr;
+
+            await supabase.from("nf_entrada_logs").insert({
+              import_id: inserted.id,
+              step: "mastertax_pull",
+              status_to: "awaiting_erpflow_approval",
+              message: "NF importada da Master Tax",
+              payload: { chave_acesso: inv.chave_acesso, company_db: creds.company_db, empresa_id: empresaId },
+              actor: "mastertax-pull",
+            });
+
+            stats.upserted++;
+            result.upserted++;
+          } catch (e) {
+            console.error(`[mastertax-pull][${creds.company_db}][${empresaId}] erro item:`, (e as Error).message);
+            stats.errors++;
+            result.errors++;
+          }
+        }
+
+        // Save per-empresa incremental cursor only when fetch succeeded.
+        await supabase.from("nf_entrada_settings").upsert(
+          { company_db: creds.company_db, key: stateKey, value: { iso: new Date().toISOString() } },
+          { onConflict: "company_db,key" },
+        );
       }
 
+      // Keep aggregate cursor for backward compatibility.
       await supabase.from("nf_entrada_settings").upsert(
         { company_db: creds.company_db, key: "last_pull_iso", value: { iso: new Date().toISOString() } },
         { onConflict: "company_db,key" },
       );
+
+      // Retention: drop mastertax imports with data_emissao older than 120 days
+      // (only those still untouched — pending/awaiting/cancelled — to preserve audit trail of processed ones).
+      const cutoff = new Date(Date.now() - MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+        .toISOString().slice(0, 10);
+      const { error: purgeErr } = await supabase
+        .from("nf_entrada_imports")
+        .delete()
+        .lt("data_emissao", cutoff)
+        .not("raw_mastertax", "is", null)
+        .in("status", ["awaiting_erpflow_approval", "erpflow_rejected", "cancelled", "pending_expense"]);
+      if (purgeErr) console.error(`[mastertax-pull][${creds.company_db}] purge:`, purgeErr.message);
 
       result.perCompany.push(stats);
     }
