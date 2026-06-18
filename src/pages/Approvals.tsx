@@ -134,13 +134,26 @@ function ApprovalCard({
           </span>
           <h3 className="text-foreground font-semibold mt-2 font-mono">#{doc.docNum}</h3>
         </div>
-        <div className="text-right">
-          <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(doc.docTotal, doc.currency)}</p>
-          {overdue && (
-            <span className="text-[10px] font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full uppercase">
-              Vencido
-            </span>
+        <div className="text-right flex items-start gap-1">
+          {onRelationsMap && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Mapa de relações"
+              onClick={(ev) => { ev.stopPropagation(); onRelationsMap(); }}
+            >
+              <Network className="w-4 h-4" />
+            </Button>
           )}
+          <div>
+            <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(doc.docTotal, doc.currency)}</p>
+            {overdue && (
+              <span className="text-[10px] font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full uppercase">
+                Vencido
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
