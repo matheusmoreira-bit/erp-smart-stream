@@ -142,13 +142,22 @@ const modules: Record<string, ModuleCard> = {
     moduleKey: "intercompany",
   },
   financial_review: {
-    title: "Adiantamentos",
+    title: "Reconciliação de Adiantamentos",
     description: "Adiantamentos em aberto (clientes/fornecedores) sem vínculo a notas, com passo a passo de reconciliação.",
     icon: Wallet,
     path: "/financial-review",
     color: "text-cyan-400",
     bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "financial_review",
+  },
+  advance_payments: {
+    title: "Adiantamentos",
+    description: "Crie pedidos de adiantamento a fornecedor com aprovação e integração automática no SAP.",
+    icon: Wallet,
+    path: "/advance-payments",
+    color: "text-amber-400",
+    bgGlow: "from-amber-500/20 to-amber-500/5",
+    moduleKey: "expenses",
   },
   notifications: {
     title: "Notificações",
@@ -192,7 +201,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Financeiro & Fiscal",
-      keys: ["financial_review", "nf_entrada"],
+      keys: ["advance_payments", "financial_review", "nf_entrada"],
     },
     {
       title: "Análise",

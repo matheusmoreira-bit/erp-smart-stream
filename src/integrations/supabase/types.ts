@@ -14,6 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
+      advance_payment_attachments: {
+        Row: {
+          advance_id: string
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          advance_id: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          advance_id?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advance_payment_attachments_advance_id_fkey"
+            columns: ["advance_id"]
+            isOneToOne: false
+            referencedRelation: "advance_payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advance_payments: {
+        Row: {
+          amount: number
+          company_db: string
+          created_at: string
+          currency: string
+          current_approval_level: number
+          due_date: string | null
+          id: string
+          rejection_reason: string | null
+          remarks: string | null
+          requester_email: string | null
+          requester_id: string
+          requester_name: string | null
+          sap_doc_entry: number | null
+          sap_doc_num: number | null
+          sap_integrated_at: string | null
+          sap_integration_error: string | null
+          sap_integration_status: string | null
+          status: string
+          supplier_card_code: string
+          supplier_cnpj: string | null
+          supplier_name: string
+          total_approval_levels: number
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          company_db: string
+          created_at?: string
+          currency?: string
+          current_approval_level?: number
+          due_date?: string | null
+          id?: string
+          rejection_reason?: string | null
+          remarks?: string | null
+          requester_email?: string | null
+          requester_id: string
+          requester_name?: string | null
+          sap_doc_entry?: number | null
+          sap_doc_num?: number | null
+          sap_integrated_at?: string | null
+          sap_integration_error?: string | null
+          sap_integration_status?: string | null
+          status?: string
+          supplier_card_code: string
+          supplier_cnpj?: string | null
+          supplier_name: string
+          total_approval_levels?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          company_db?: string
+          created_at?: string
+          currency?: string
+          current_approval_level?: number
+          due_date?: string | null
+          id?: string
+          rejection_reason?: string | null
+          remarks?: string | null
+          requester_email?: string | null
+          requester_id?: string
+          requester_name?: string | null
+          sap_doc_entry?: number | null
+          sap_doc_num?: number | null
+          sap_integrated_at?: string | null
+          sap_integration_error?: string | null
+          sap_integration_status?: string | null
+          status?: string
+          supplier_card_code?: string
+          supplier_cnpj?: string | null
+          supplier_name?: string
+          total_approval_levels?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_chat_messages: {
         Row: {
           content: string | null
