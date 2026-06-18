@@ -1141,32 +1141,6 @@ export default function PagCorp() {
                               Integrar ao ERP
                             </Button>
                           )}
-                            <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
-                              <XCircle className="w-3 h-3" /> Sem integração
-                            </Badge>
-                          ) : integrating === t.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
-                          ) : t.hasAccountability ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 text-xs"
-                              onClick={() => openIntegrateDialog(t, "accountability")}
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              Integrar ao ERP
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 text-xs"
-                              onClick={() => openIntegrateDialog(t, "generic")}
-                            >
-                              <Upload className="w-3 h-3" />
-                              Integrar ao ERP
-                            </Button>
-                          )}
                         </TableCell>
                       </TableRow>
                     );
