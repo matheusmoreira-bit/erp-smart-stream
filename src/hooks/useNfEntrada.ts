@@ -121,3 +121,13 @@ export async function getSignedFileUrl(path: string): Promise<string> {
   if (error) throw error;
   return data.signedUrl;
 }
+
+export async function fetchNfFile(importId: string, kind: "xml" | "pdf"): Promise<string> {
+  const { data, error } = await supabase.functions.invoke("nf-entrada-fetch-file", {
+    body: { import_id: importId, kind },
+  });
+  if (error) throw error;
+  const url = (data as { url?: string; error?: string })?.url;
+  if (!url) throw new Error((data as { error?: string })?.error || "Sem URL");
+  return url;
+}
