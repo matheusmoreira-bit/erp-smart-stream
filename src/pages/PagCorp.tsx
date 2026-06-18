@@ -19,6 +19,7 @@ import {
   Paperclip,
   FileText,
   ShieldOff,
+  CheckCircle,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -51,6 +52,7 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
+import { SapValidationDialog } from "@/components/SapValidationDialog";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { useExpenses } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
@@ -112,6 +114,8 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
+  const [cardFilter, setCardFilter] = useState<string>("all");
+  const [validateDialog, setValidateDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
   const [integrateDialog, setIntegrateDialog] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
@@ -202,13 +206,34 @@ export default function PagCorp() {
       );
     }
 
+    if (cardFilter !== "all") {
+      list = list.filter((t) => {
+        const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+          (t.cardName && String(t.cardName).trim()) || "—";
+        return key === cardFilter;
+      });
+    }
+
     // Sort by purchase date, most recent first
     return [...list].sort((a, b) => {
       const ta = a.date ? new Date(a.date).getTime() : 0;
       const tb = b.date ? new Date(b.date).getTime() : 0;
       return tb - ta;
     });
-  }, [transactions, search, statusFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, cardFilter, showNondeductible]);
+
+  // Lista única de cartões para o filtro
+  const cardOptions = useMemo(() => {
+    const set = new Map<string, string>();
+    transactions.forEach((t) => {
+      const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+        (t.cardName && String(t.cardName).trim()) || "";
+      if (!key) return;
+      const label = `${t.accountAlias || t.accountName || t.cardName || "Cartão"}${t.cardLastDigits ? ` •••${t.cardLastDigits}` : ""}`;
+      if (!set.has(key)) set.set(key, label);
+    });
+    return Array.from(set.entries()).map(([value, label]) => ({ value, label }));
+  }, [transactions]);
 
   const nondeductiblePending = useMemo(
     () => transactions.filter((t) => t.isNondeductible && !t.integrated),
