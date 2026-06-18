@@ -9,6 +9,26 @@ export interface MultiCompanyPasswordResult {
   message?: string;
 }
 
+/**
+ * Detecta erros do SAP B1 quando a nova senha é igual à anterior.
+ * Em lote, tratamos esse caso como "skipped" e seguimos com as demais empresas.
+ */
+export function isSamePasswordError(message: string): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes("same as") ||
+    m.includes("same password") ||
+    m.includes("previous password") ||
+    m.includes("igual") ||
+    m.includes("já utilizada") ||
+    m.includes("ja utilizada") ||
+    m.includes("password history") ||
+    m.includes("cannot be reused") ||
+    m.includes("must differ")
+  );
+}
+
 interface CompanyRow {
   company_db: string;
   display_name: string;
