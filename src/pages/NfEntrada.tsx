@@ -75,13 +75,15 @@ export default function NfEntrada() {
       .finally(() => setLogsLoading(false));
   }, [detail, toast]);
 
-  async function openFile(path: string | null) {
-    if (!path) return;
+  async function openFile(id: string, kind: "xml" | "pdf") {
+    setBusyId(id);
     try {
-      const url = await getSignedFileUrl(path);
+      const url = await fetchNfFile(id, kind);
       window.open(url, "_blank");
     } catch (e) {
-      toast({ title: "Erro ao abrir arquivo", description: (e as Error).message, variant: "destructive" });
+      toast({ title: `Erro ao abrir ${kind.toUpperCase()}`, description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
     }
   }
 
