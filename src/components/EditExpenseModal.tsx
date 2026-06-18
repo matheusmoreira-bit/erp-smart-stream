@@ -216,6 +216,12 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           </div>
         </div>
       </DialogContent>
+      <RelationsMap
+        open={showRelationsMap}
+        onClose={() => setShowRelationsMap(false)}
+        expense={expense as any}
+        title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
+      />
     </Dialog>
   );
 }
