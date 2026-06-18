@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import type { Expense, ExpenseItem } from "@/hooks/useExpenses";
+import { RelationsMap } from "@/components/RelationsMap";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
