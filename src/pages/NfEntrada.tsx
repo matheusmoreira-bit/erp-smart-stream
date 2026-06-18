@@ -241,6 +241,27 @@ export default function NfEntrada() {
                     <TableCell className="font-mono text-xs">{it.expense_id?.slice(0, 8) || "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{it.sap_po_draft_id || "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{it.sap_invoice_draft_id || "—"}</TableCell>
+                    <TableCell className="text-xs">
+                      {it.sap_matched_card_code || it.sap_match_reason ? (
+                        <div className="flex flex-col gap-0.5">
+                          {it.sap_matched_card_code && (
+                            <span className="font-mono">
+                              {it.sap_matched_card_code}
+                              {it.sap_matched_po_doc_entry && (
+                                <span className="text-muted-foreground">
+                                  {" "}· {it.sap_matched_po_is_draft ? "esboço" : "PC"} {it.sap_matched_po_doc_entry}
+                                </span>
+                              )}
+                            </span>
+                          )}
+                          {it.sap_match_reason && (
+                            <span className="text-muted-foreground truncate max-w-[200px]" title={it.sap_match_reason}>
+                              {it.sap_match_reason}
+                            </span>
+                          )}
+                        </div>
+                      ) : "—"}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center gap-1 justify-end">
                         <Button variant="ghost" size="icon" title="Ver XML"
@@ -253,6 +274,11 @@ export default function NfEntrada() {
                         </Button>
                         <Button variant="ghost" size="icon" title="Histórico" onClick={() => setDetail(it)}>
                           <History className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" title="Refazer vínculo SAP (sem duplicar)"
+                          disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
+                          onClick={() => handleRematch(it.id)}>
+                          <Link2 className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" title="Reprocessar"
                           disabled={busyId === it.id} onClick={() => handleReprocess(it.id)}>
