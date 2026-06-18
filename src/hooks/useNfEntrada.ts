@@ -77,6 +77,15 @@ export function useNfEntrada() {
     await fetchAll();
   }, [fetchAll]);
 
+  const rematchSap = useCallback(async (id: string) => {
+    const { data, error: err } = await supabase.functions.invoke("nf-entrada-rematch", {
+      body: { import_id: id },
+    });
+    if (err) throw err;
+    await fetchAll();
+    return data as { matched: boolean; cardCode?: string; docEntry?: string; isDraft?: boolean; reason?: string; skipped?: string };
+  }, [fetchAll]);
+
   const cancel = useCallback(async (id: string) => {
     const { error: err } = await supabase
       .from("nf_entrada_imports")
@@ -92,7 +101,7 @@ export function useNfEntrada() {
     await fetchAll();
   }, [fetchAll]);
 
-  return { items, loading, error, refresh: fetchAll, reprocess, cancel, pullNow };
+  return { items, loading, error, refresh: fetchAll, reprocess, rematchSap, cancel, pullNow };
 }
 
 export async function fetchNfEntradaLogs(importId: string): Promise<NfEntradaLog[]> {

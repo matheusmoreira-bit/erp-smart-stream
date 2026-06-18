@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw } from "lucide-react";
+import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,7 @@ function formatDate(s: string | null) {
 export default function NfEntrada() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { items, loading, error, refresh, reprocess, cancel, pullNow } = useNfEntrada();
+  const { items, loading, error, refresh, reprocess, rematchSap, cancel, pullNow } = useNfEntrada();
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -92,6 +92,31 @@ export default function NfEntrada() {
       toast({ title: "Reprocessamento disparado" });
     } catch (e) {
       toast({ title: "Falha no reprocessamento", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleRematch(id: string) {
+    setBusyId(id);
+    try {
+      const res = await rematchSap(id);
+      if (res?.skipped) {
+        toast({ title: "Rematch ignorado", description: res.skipped });
+      } else if (res?.matched) {
+        toast({
+          title: "Vínculo SAP refeito",
+          description: `CardCode ${res.cardCode} · DocEntry ${res.docEntry}${res.isDraft ? " (esboço)" : ""}`,
+        });
+      } else {
+        toast({
+          title: "Nenhum PC encontrado",
+          description: res?.reason || "Sem PC/esboço aberto para o fornecedor e valor.",
+          variant: "destructive",
+        });
+      }
+    } catch (e) {
+      toast({ title: "Falha no rematch", description: (e as Error).message, variant: "destructive" });
     } finally {
       setBusyId(null);
     }
@@ -188,15 +213,16 @@ export default function NfEntrada() {
                 <TableHead>Despesa</TableHead>
                 <TableHead>PO SAP</TableHead>
                 <TableHead>NF SAP</TableHead>
+                <TableHead>Vínculo SAP</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
               )}
               {!loading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">
                   Nenhuma NF importada ainda. Configure os secrets <code>MASTERTAX_BASE_URL</code> e <code>MASTERTAX_TOKEN</code> e clique em "Buscar Master Tax agora".
                 </TableCell></TableRow>
               )}
@@ -215,6 +241,27 @@ export default function NfEntrada() {
                     <TableCell className="font-mono text-xs">{it.expense_id?.slice(0, 8) || "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{it.sap_po_draft_id || "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{it.sap_invoice_draft_id || "—"}</TableCell>
+                    <TableCell className="text-xs">
+                      {it.sap_matched_card_code || it.sap_match_reason ? (
+                        <div className="flex flex-col gap-0.5">
+                          {it.sap_matched_card_code && (
+                            <span className="font-mono">
+                              {it.sap_matched_card_code}
+                              {it.sap_matched_po_doc_entry && (
+                                <span className="text-muted-foreground">
+                                  {" "}· {it.sap_matched_po_is_draft ? "esboço" : "PC"} {it.sap_matched_po_doc_entry}
+                                </span>
+                              )}
+                            </span>
+                          )}
+                          {it.sap_match_reason && (
+                            <span className="text-muted-foreground truncate max-w-[200px]" title={it.sap_match_reason}>
+                              {it.sap_match_reason}
+                            </span>
+                          )}
+                        </div>
+                      ) : "—"}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center gap-1 justify-end">
                         <Button variant="ghost" size="icon" title="Ver XML"
@@ -227,6 +274,11 @@ export default function NfEntrada() {
                         </Button>
                         <Button variant="ghost" size="icon" title="Histórico" onClick={() => setDetail(it)}>
                           <History className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" title="Refazer vínculo SAP (sem duplicar)"
+                          disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
+                          onClick={() => handleRematch(it.id)}>
+                          <Link2 className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" title="Reprocessar"
                           disabled={busyId === it.id} onClick={() => handleReprocess(it.id)}>
@@ -256,6 +308,43 @@ export default function NfEntrada() {
             <div className="space-y-3">
               <div className="text-xs text-muted-foreground">
                 Chave de acesso: <span className="font-mono">{detail.chave_acesso}</span>
+              </div>
+              <div className="rounded-md border border-border p-3 text-xs space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">Vínculo SAP</span>
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={busyId === detail.id || !!detail.sap_invoice_draft_id}
+                    onClick={() => handleRematch(detail.id)}
+                  >
+                    <Link2 className="w-3.5 h-3.5" /> Refazer vínculo SAP
+                  </Button>
+                </div>
+                <div>
+                  Fornecedor (NF): <span className="font-mono">{detail.cnpj_fornecedor || "—"}</span>
+                  {detail.nome_fornecedor ? ` · ${detail.nome_fornecedor}` : ""}
+                </div>
+                <div>
+                  CardCode SAP:{" "}
+                  <span className="font-mono">{detail.sap_matched_card_code || "—"}</span>
+                </div>
+                <div>
+                  PC vinculado:{" "}
+                  <span className="font-mono">
+                    {detail.sap_matched_po_doc_entry
+                      ? `${detail.sap_matched_po_is_draft ? "esboço" : "PC"} ${detail.sap_matched_po_doc_entry}`
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  Motivo do match:{" "}
+                  <span className="text-muted-foreground">{detail.sap_match_reason || "—"}</span>
+                </div>
+                {detail.sap_invoice_draft_id && (
+                  <div className="text-muted-foreground">
+                    Esboço de NF de entrada já criado ({detail.sap_invoice_draft_id}) — rematch desabilitado para evitar duplicata.
+                  </div>
+                )}
               </div>
               {detail.last_error && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 text-destructive text-xs px-3 py-2">
