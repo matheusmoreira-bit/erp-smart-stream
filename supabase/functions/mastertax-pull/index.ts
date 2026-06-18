@@ -101,11 +101,22 @@ function parseNotaFromRow(row: any): MasterTaxInvoice | null {
   };
 }
 
-async function fetchInvoicesForCompany(
+const MAX_WINDOW_DAYS = 120;
+
+function clampStart(sinceIso: string): string {
+  const today = new Date();
+  const minStart = new Date(today.getTime() - MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const since = new Date(sinceIso);
+  const start = since > minStart ? since : minStart;
+  return start.toISOString().slice(0, 10);
+}
+
+async function fetchInvoicesForEmpresa(
   creds: CompanyCreds,
+  empresaId: string,
   sinceIso: string,
 ): Promise<{ invoices: MasterTaxInvoice[]; error?: string }> {
-  const dataInicio = sinceIso.slice(0, 10);
+  const dataInicio = clampStart(sinceIso);
   const dataFim = new Date().toISOString().slice(0, 10);
   const invoices: MasterTaxInvoice[] = [];
   const authHeader = creds.token.toLowerCase().startsWith("bearer ")
