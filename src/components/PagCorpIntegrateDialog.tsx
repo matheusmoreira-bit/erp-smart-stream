@@ -144,10 +144,10 @@ export function PagCorpIntegrateDialog({
     [cardDefaults.itemCode, itOptions],
   );
 
-  // Moeda inferida: BRL se transação for em BRL, senão USD
-  const inferredCurrency = useMemo(() => {
-    const c = String(transaction?.currency || "").toUpperCase();
-    return c === "BRL" ? "BRL" : "USD";
+  // Moeda real da transação (sem forçar BRL/USD)
+  const txCurrency = useMemo(() => {
+    const c = String(transaction?.currency || "BRL").toUpperCase();
+    return /^[A-Z]{3}$/.test(c) ? c : "BRL";
   }, [transaction?.currency]);
 
   const runAi = useCallback(async (tx: PagCorpTransaction) => {
@@ -355,7 +355,7 @@ export function PagCorpIntegrateDialog({
                   </p>
                   <Badge variant="outline" className="text-[10px] mt-0.5 gap-1">
                     <Wand2 className="w-3 h-3" />
-                    Moeda: {inferredCurrency}
+                    Moeda: {txCurrency}
                   </Badge>
                 </div>
               </div>

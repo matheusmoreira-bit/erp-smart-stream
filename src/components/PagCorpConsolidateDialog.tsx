@@ -198,6 +198,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
                 <tr className="text-left text-xs text-muted-foreground">
                   <th className="px-2 py-1.5 font-medium">Transação</th>
                   <th className="px-2 py-1.5 font-medium">Valor</th>
+                  <th className="px-2 py-1.5 font-medium text-center w-16">Anexos</th>
                   <th className="px-2 py-1.5 font-medium w-44">Centro de Custo</th>
                   <th className="px-2 py-1.5 font-medium w-44">Projeto</th>
                 </tr>
@@ -205,6 +206,9 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
               <tbody>
                 {transactions.map((t) => {
                   const id = String(t.id);
+                  const receiptCount =
+                    (Array.isArray(t.receipts) ? t.receipts.length : 0) +
+                    (Array.isArray(t.attachments) ? t.attachments.length : 0);
                   return (
                     <tr key={id} className="border-t border-border align-top">
                       <td className="px-2 py-2">
@@ -214,12 +218,22 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
                             <p className="truncate font-medium">{t.description}</p>
                             <p className="text-xs text-muted-foreground truncate">
                               {t.accountAlias || t.accountName || "—"}
+                              {t.hasAccountability && <span className="ml-1 text-success">• com prestação</span>}
                             </p>
                           </div>
                         </div>
                       </td>
                       <td className="px-2 py-2 text-xs tabular-nums whitespace-nowrap">
                         {formatCurrency(Number(t.amount) || 0, t.currency)}
+                      </td>
+                      <td className="px-2 py-2 text-center text-xs tabular-nums">
+                        {receiptCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-primary" title="Comprovantes serão anexados ao PC consolidado">
+                            📎 {receiptCount}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-2 py-2">
                         <CachedSearchCombobox
