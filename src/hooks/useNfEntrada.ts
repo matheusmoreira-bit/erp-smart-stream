@@ -101,7 +101,7 @@ export function useNfEntrada() {
     await fetchAll();
   }, [fetchAll]);
 
-  return { items, loading, error, refresh: fetchAll, reprocess, cancel, pullNow };
+  return { items, loading, error, refresh: fetchAll, reprocess, rematchSap, cancel, pullNow };
 }
 
 export async function fetchNfEntradaLogs(importId: string): Promise<NfEntradaLog[]> {
