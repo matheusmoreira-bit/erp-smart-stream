@@ -70,18 +70,20 @@ function parseNotaFromRow(row: any): MasterTaxInvoice | null {
   const numero = String(row?.numero ?? row?.nNF ?? row?.numero_nf ?? row?.numero_nfse ?? "");
   const serie = String(row?.serie ?? row?.serie_nf ?? "");
   const cnpjFor = String(
-    row?.cnpj_prestador ?? row?.prestador?.cnpj ?? row?.cnpj_emit ??
-    row?.cnpjEmit ?? row?.cnpj_emitente ?? row?.cnpj_fornecedor ?? "",
+    row?.emitenteDocumento ?? row?.prestadorDocumento ?? row?.cnpj_prestador ??
+    row?.prestador?.cnpj ?? row?.cnpj_emit ?? row?.cnpjEmit ?? row?.cnpj_emitente ??
+    row?.cnpj_fornecedor ?? "",
   );
   const nomeFor = String(
-    row?.razao_social_prestador ?? row?.prestador?.razao_social ?? row?.prestador?.nome ??
-    row?.nome_emit ?? row?.nomeEmit ?? row?.razao_emit ?? row?.nome_fornecedor ?? "",
+    row?.emitenteNome ?? row?.prestadorNome ?? row?.razao_social_prestador ??
+    row?.prestador?.razao_social ?? row?.prestador?.nome ?? row?.nome_emit ??
+    row?.nomeEmit ?? row?.razao_emit ?? row?.nome_fornecedor ?? "",
   );
   const dataEmissao = String(
-    row?.data_emissao ?? row?.dhEmi ?? row?.dataEmissao ?? row?.emissao ?? "",
+    row?.dataEmissao ?? row?.data_emissao ?? row?.dhEmi ?? row?.emissao ?? "",
   ).slice(0, 10) || new Date().toISOString().slice(0, 10);
   const valorTotal = Number(
-    row?.valor_total ?? row?.valor_servicos ?? row?.vNF ?? row?.valor ?? 0,
+    row?.valor ?? row?.valor_total ?? row?.valor_servicos ?? row?.vNF ?? 0,
   ) || 0;
 
   return {
@@ -143,13 +145,16 @@ async function fetchInvoicesForCompany(
       let data: any = null;
       try { data = JSON.parse(raw); } catch { data = null; }
 
-      const rows: any[] = Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data?.notas)
-          ? data.notas
-          : Array.isArray(data)
-            ? data
-            : [];
+      const retorno = data?.retorno ?? data;
+      const rows: any[] = Array.isArray(retorno?.data)
+        ? retorno.data
+        : Array.isArray(retorno?.notas)
+          ? retorno.notas
+          : Array.isArray(data?.data)
+            ? data.data
+            : Array.isArray(data)
+              ? data
+              : [];
       for (const r of rows) {
         const inv = parseNotaFromRow(r);
         if (inv) {
@@ -158,7 +163,8 @@ async function fetchInvoicesForCompany(
         }
       }
       const lastPage = Number(
-        data?.meta?.last_page ?? data?.last_page ?? data?.pagination?.last_page ?? 1,
+        retorno?.last_page ?? retorno?.meta?.last_page ?? data?.meta?.last_page ??
+        data?.last_page ?? data?.pagination?.last_page ?? 1,
       );
       if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
       pagina++;

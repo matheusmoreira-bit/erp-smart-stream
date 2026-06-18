@@ -1,0 +1,1 @@
+UPDATE public.nf_entrada_settings SET value='{"iso":"2026-06-01T00:00:00.000Z"}'::jsonb WHERE company_db='SBO_TESTE_20260318_ANAGAMING' AND key='last_pull_iso';
