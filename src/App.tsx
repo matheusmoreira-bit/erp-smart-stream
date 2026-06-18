@@ -20,6 +20,7 @@ import Suppliers from "./pages/Suppliers.tsx";
 import Items from "./pages/Items.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
+import AdvancePayments from "./pages/AdvancePayments.tsx";
 import NfEntrada from "./pages/NfEntrada.tsx";
 import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
 import AuditHub from "./pages/AuditHub.tsx";
@@ -101,6 +102,7 @@ const App = () => (
               <Route path="/cadastros/fornecedores" element={<Navigate to="/suppliers" replace />} />
               <Route path="/intercompany" element={<Intercompany />} />
               <Route path="/financial-review" element={<FinancialReview />} />
+              <Route path="/advance-payments" element={<AdvancePayments />} />
               <Route path="/nf-entrada" element={<NfEntrada />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="*" element={<NotFound />} />
