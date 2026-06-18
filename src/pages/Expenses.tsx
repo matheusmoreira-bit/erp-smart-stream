@@ -368,7 +368,15 @@ function ExpenseDetailModal({
 }
 
 /* ─── Expense Card ─── */
-function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void }) {
+function ExpenseCard({
+  expense,
+  onOpen,
+  originBadge,
+}: {
+  expense: Expense;
+  onOpen: () => void;
+  originBadge?: "erp_flow" | "erp";
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -377,8 +385,18 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
       onClick={onOpen}
     >
       <div className="flex items-start justify-between">
-        <div>
+        <div className="flex flex-wrap items-center gap-1.5">
           <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
+          {originBadge === "erp_flow" && (
+            <Badge variant="outline" className="text-[10px] gap-1 border-primary/40 text-primary">
+              ERP Flow
+            </Badge>
+          )}
+          {originBadge === "erp" && (
+            <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/40 text-amber-500">
+              ERP
+            </Badge>
+          )}
         </div>
         <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
       </div>
