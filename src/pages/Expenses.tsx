@@ -49,11 +49,13 @@ import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 import { RelationsMap } from "@/components/RelationsMap";
+import { sapQuery } from "@/lib/sap-client";
 import {
   useExpenses,
   STATUS_LABELS,
   STATUS_COLORS,
   type Expense,
+  type ExpenseStatus,
 } from "@/hooks/useExpenses";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { EditExpenseModal } from "@/components/EditExpenseModal";
@@ -367,7 +369,15 @@ function ExpenseDetailModal({
 }
 
 /* ─── Expense Card ─── */
-function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void }) {
+function ExpenseCard({
+  expense,
+  onOpen,
+  originBadge,
+}: {
+  expense: Expense;
+  onOpen: () => void;
+  originBadge?: "erp_flow" | "erp";
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -376,8 +386,18 @@ function ExpenseCard({ expense, onOpen }: { expense: Expense; onOpen: () => void
       onClick={onOpen}
     >
       <div className="flex items-start justify-between">
-        <div>
+        <div className="flex flex-wrap items-center gap-1.5">
           <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
+          {originBadge === "erp_flow" && (
+            <Badge variant="outline" className="text-[10px] gap-1 border-primary/40 text-primary">
+              ERP Flow
+            </Badge>
+          )}
+          {originBadge === "erp" && (
+            <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/40 text-amber-500">
+              ERP
+            </Badge>
+          )}
         </div>
         <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
       </div>
@@ -431,6 +451,61 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [showAll, setShowAll] = useState<boolean>(isAdmin);
   useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
 
+  // Origem dos pedidos: padrão "Apenas ERP Flow"; "Ambos" também busca direto do ERP (SAP).
+  const [sourceMode, setSourceMode] = useState<"flow" | "both">("flow");
+  const [sapOrders, setSapOrders] = useState<Expense[]>([]);
+  const [isLoadingSap, setIsLoadingSap] = useState(false);
+  const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
+
+  useEffect(() => {
+    if (!showSourceToggle || sourceMode !== "both" || !session) return;
+    let cancelled = false;
+    (async () => {
+      setIsLoadingSap(true);
+      try {
+        const res = await sapQuery(
+          session as any,
+          "PurchaseOrders",
+          {
+            $select: "DocEntry,DocNum,CardCode,CardName,DocTotal,DocCurrency,DocDate,CreationDate,DocumentStatus,Comments",
+            $orderby: "DocDate desc",
+            $top: "100",
+          },
+          false,
+        );
+        if (cancelled) return;
+        const rows = Array.isArray((res as any).data)
+          ? (res as any).data
+          : ((res as any).data?.value || []);
+        const mapped: Expense[] = (rows as any[]).map((r) => ({
+          id: `sap-${r.DocEntry}`,
+          supplier_code: r.CardCode || undefined,
+          supplier_name: r.CardName || r.CardCode || "—",
+          total_amount: Number(r.DocTotal || 0),
+          currency: r.DocCurrency || "BRL",
+          status: "pc_lancado" as ExpenseStatus,
+          requester_name: "(ERP)",
+          sap_doc_entry: r.DocEntry,
+          sap_doc_num: r.DocNum,
+          company_db: session.companyDB,
+          remarks: r.Comments || undefined,
+          created_at: r.DocDate || r.CreationDate || new Date().toISOString(),
+          updated_at: r.DocDate || r.CreationDate || new Date().toISOString(),
+          origin: "manual",
+        }));
+        setSapOrders(mapped);
+      } catch (e) {
+        if (!cancelled) {
+          toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
+          setSapOrders([]);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingSap(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sourceMode, showSourceToggle, session]);
+
   useEffect(() => {
     if (!session) navigate("/");
   }, [session, navigate]);
@@ -482,8 +557,20 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   };
 
   const effectiveShowAll = isAdmin && showAll;
-  const filtered = expenses.filter((e) => {
-    if (!effectiveShowAll && !isMine(e)) return false;
+
+  // Identifica DocEntries do SAP já vinculados a alguma despesa do ERP Flow,
+  // para não exibi-los duplicados quando o modo é "Ambos".
+  const flowSapDocEntries = new Set(
+    expenses
+      .map((e) => e.sap_doc_entry)
+      .filter((v): v is number => typeof v === "number"),
+  );
+  const sapOnly = showSourceToggle && sourceMode === "both"
+    ? sapOrders.filter((o) => o.sap_doc_entry == null || !flowSapDocEntries.has(o.sap_doc_entry))
+    : [];
+
+  const applyFilters = (e: Expense, scoped: boolean) => {
+    if (scoped && !effectiveShowAll && !isMine(e)) return false;
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
@@ -492,10 +579,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       e.requester_name.toLowerCase().includes(q) ||
       (e.remarks || "").toLowerCase().includes(q)
     );
-  });
+  };
 
+  const flowFiltered = expenses.filter((e) => applyFilters(e, true));
+  const sapFiltered = sapOnly.filter((e) => applyFilters(e, false));
+  const filtered: Array<{ exp: Expense; origin: "erp_flow" | "erp" }> = [
+    ...flowFiltered.map((exp) => ({ exp, origin: "erp_flow" as const })),
+    ...sapFiltered.map((exp) => ({ exp, origin: "erp" as const })),
+  ];
 
-  const totalValue = filtered.reduce((sum, e) => sum + e.total_amount, 0);
+  const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
 
   const handleSubmitForApproval = async (id: string) => {
     setIsSubmitting(true);
@@ -681,6 +774,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </button>
             ))}
           </div>
+          {showSourceToggle && (
+            <div className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs">
+              <button
+                onClick={() => setSourceMode("flow")}
+                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
+                  sourceMode === "flow"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Apenas ERP Flow
+              </button>
+              <button
+                onClick={() => setSourceMode("both")}
+                className={`px-3 py-1.5 rounded-md font-medium transition-colors flex items-center gap-1.5 ${
+                  sourceMode === "both"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Ambos (ERP Flow + ERP)
+                {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" />}
+              </button>
+            </div>
+          )}
           {isAdmin && (
             <div className="flex items-center gap-2 glass-card px-3 py-2 ml-auto">
               <ShieldAlert className="w-4 h-4 text-amber-400" />
@@ -713,11 +831,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((expense) => (
+            {filtered.map(({ exp, origin }) => (
               <ExpenseCard
-                key={expense.id}
-                expense={expense}
-                onOpen={() => setSelectedExpense(expense)}
+                key={exp.id}
+                expense={exp}
+                originBadge={origin}
+                onOpen={() => setSelectedExpense(exp)}
               />
             ))}
           </div>
