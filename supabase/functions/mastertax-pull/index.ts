@@ -33,7 +33,7 @@ interface CompanyCreds {
   company_db: string;
   base_url: string;
   token: string;
-  empresa_id: string;
+  empresa_ids: string[];
   cnpj: string;
 }
 
@@ -44,6 +44,13 @@ function normalizeBaseUrl(raw: string): string {
 
 function sanitizeCnpj(raw: string): string {
   return (raw || "").replace(/\D+/g, "");
+}
+
+function parseEmpresaIds(raw: string): string[] {
+  return (raw || "")
+    .split(/[\s,;]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 function decodeBase64(b64: string): Uint8Array {
