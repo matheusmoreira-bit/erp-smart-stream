@@ -484,11 +484,14 @@ Deno.serve(async (req) => {
                 raw_mastertax: inv.raw ?? null,
                 xml_storage_path: xmlPath,
                 pdf_storage_path: null,
+                sap_company_db: creds.company_db,
                 status: "awaiting_erpflow_approval",
               })
               .select()
               .single();
             if (insErr) throw insErr;
+
+            insertedIdsForCompany.push(inserted.id);
 
             await supabase.from("nf_entrada_logs").insert({
               import_id: inserted.id,
@@ -501,6 +504,7 @@ Deno.serve(async (req) => {
 
             stats.upserted++;
             result.upserted++;
+
           } catch (e) {
             console.error(`[mastertax-pull][${creds.company_db}][${empresaId}] erro item:`, (e as Error).message);
             stats.errors++;
