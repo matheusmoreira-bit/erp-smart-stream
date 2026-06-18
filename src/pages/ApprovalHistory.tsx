@@ -176,6 +176,13 @@ export default function ApprovalHistory() {
           </div>
         )}
       </main>
+
+      <RelationsMap
+        open={!!relationsMapExpense}
+        onClose={() => setRelationsMapExpense(null)}
+        expense={relationsMapExpense as any}
+        title="Mapa de Relações"
+      />
     </div>
   );
 }
