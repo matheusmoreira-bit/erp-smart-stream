@@ -104,10 +104,17 @@ Deno.serve(async (req) => {
     for (const empresaId of empresaIds) {
       const params = new URLSearchParams({
         empresa_id: empresaId,
+        competencia: fmt(today).slice(0, 7),
         emissaoDe: fmt(start),
         emissaoAte: fmt(today),
+        dataArmazenamentoInicio: fmt(start),
+        dataArmazenamentoFim: fmt(today),
         pagina: "1",
         quantidade: "1",
+        ordenar: "dataEmissao",
+        sentido: "desc",
+        tipo: "Prestador",
+        retencoes: "todas",
       });
       const target = `${baseUrl}/api/notas-servico?${params.toString()}`;
       lastUrl = target;
