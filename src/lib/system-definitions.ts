@@ -189,8 +189,9 @@ export const SYSTEMS: SystemConfig[] = [
     icon: FileInput,
     fields: [
       { key: "base_url", label: "URL Base da API", placeholder: "https://api.mastertax.app" },
-      { key: "cnpj", label: "CNPJ da Empresa (somente dígitos)", placeholder: "00000000000000" },
-      { key: "token", label: "Token de Acesso (Bearer JWT)", type: "password", placeholder: "JWT emitido pela Master Tax" },
+      { key: "empresa_id", label: "Empresa ID (UUID Master Tax)", placeholder: "019e4a71-22c9-71bc-94ab-7375b215e2d8" },
+      { key: "cnpj", label: "CNPJ da Empresa (opcional, somente dígitos)", placeholder: "00000000000000" },
+      { key: "token", label: "Token de Acesso (Bearer)", type: "password", placeholder: "Token emitido pela Master Tax" },
     ],
   },
 ];

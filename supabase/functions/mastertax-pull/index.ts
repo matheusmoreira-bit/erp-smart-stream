@@ -1,13 +1,13 @@
 // Edge function: mastertax-pull
-// Busca NFs novas na Master Tax (https://apidocs.mastertax.app/), baixa XML,
-// faz upsert idempotente em public.nf_entrada_imports.
+// Busca NFs novas (notas-servico) na Master Tax (https://api.mastertax.app),
+// baixa XML quando disponível, e faz upsert idempotente em public.nf_entrada_imports.
 //
-// Por empresa, lê as credenciais em system_credentials (base_url, token, cnpj)
-// e chama:
-//   POST {base_url}/api/gestor/retornaNotasPaginado  -> lista de notas
-//   POST {base_url}/api/gestor/retornaNota           -> XML completo (base64)
+// Por empresa, lê credenciais em system_credentials:
+//   base_url, empresa_id (UUID Master Tax), token (Bearer), cnpj (opcional)
 //
-// Autenticação: Authorization: Bearer {token}
+// Endpoint principal:
+//   GET {base_url}/api/notas-servico?empresa_id=...&emissaoDe=YYYY-MM-DD&emissaoAte=YYYY-MM-DD&pagina=N&quantidade=N
+//   Header: Authorization: Bearer {token}
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -33,6 +33,7 @@ interface CompanyCreds {
   company_db: string;
   base_url: string;
   token: string;
+  empresa_id: string;
   cnpj: string;
 }
 
@@ -53,43 +54,28 @@ function decodeBase64(b64: string): Uint8Array {
   return bytes;
 }
 
-async function mtFetch(
-  baseUrl: string,
-  token: string,
-  path: string,
-  body: Record<string, unknown>,
-): Promise<{ ok: boolean; status: number; data: any; raw: string }> {
-  const auth = token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`;
-  const r = await fetch(`${baseUrl}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: auth,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30000),
-  });
-  const raw = await r.text().catch(() => "");
-  let data: any = null;
-  try { data = JSON.parse(raw); } catch { /* not json */ }
-  return { ok: r.ok && data?.sucesso !== false, status: r.status, data, raw };
-}
-
 function parseNotaFromRow(row: any): MasterTaxInvoice | null {
-  // O retorno do retornaNotasPaginado traz cada nota com pelo menos:
-  //   chave, numero, serie, dhEmi/data_emissao, valor_total, cnpj_emit, nome_emit, ...
-  // Como o schema oficial não detalha o item de array em "data", aceitamos vários nomes.
   const chave: string | undefined =
-    row?.chave || row?.chaveAcesso || row?.chave_acesso || row?.chNFe;
+    row?.chave || row?.chave_acesso || row?.chaveAcesso || row?.chNFe ||
+    row?.codigo_verificacao || row?.id;
   if (!chave || typeof chave !== "string") return null;
 
-  const numero = String(row?.numero ?? row?.nNF ?? row?.numero_nf ?? "");
+  const numero = String(row?.numero ?? row?.nNF ?? row?.numero_nf ?? row?.numero_nfse ?? "");
   const serie = String(row?.serie ?? row?.serie_nf ?? "");
-  const cnpjFor = String(row?.cnpj_emit ?? row?.cnpjEmit ?? row?.cnpj_emitente ?? row?.cnpj_fornecedor ?? "");
-  const nomeFor = String(row?.nome_emit ?? row?.nomeEmit ?? row?.razao_emit ?? row?.nome_fornecedor ?? "");
-  const dataEmissao = String(row?.dhEmi ?? row?.data_emissao ?? row?.dataEmissao ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10);
-  const valorTotal = Number(row?.valor_total ?? row?.vNF ?? row?.valor ?? 0) || 0;
+  const cnpjFor = String(
+    row?.cnpj_prestador ?? row?.prestador?.cnpj ?? row?.cnpj_emit ??
+    row?.cnpjEmit ?? row?.cnpj_emitente ?? row?.cnpj_fornecedor ?? "",
+  );
+  const nomeFor = String(
+    row?.razao_social_prestador ?? row?.prestador?.razao_social ?? row?.prestador?.nome ??
+    row?.nome_emit ?? row?.nomeEmit ?? row?.razao_emit ?? row?.nome_fornecedor ?? "",
+  );
+  const dataEmissao = String(
+    row?.data_emissao ?? row?.dhEmi ?? row?.dataEmissao ?? row?.emissao ?? "",
+  ).slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const valorTotal = Number(
+    row?.valor_total ?? row?.valor_servicos ?? row?.vNF ?? row?.valor ?? 0,
+  ) || 0;
 
   return {
     chave_acesso: chave,
@@ -101,6 +87,7 @@ function parseNotaFromRow(row: any): MasterTaxInvoice | null {
     valor_total: valorTotal,
     itens: Array.isArray(row?.itens) ? row.itens : [],
     impostos: typeof row?.impostos === "object" && row?.impostos ? row.impostos : {},
+    xml_base64: typeof row?.xml === "string" ? row.xml : (typeof row?.xml_base64 === "string" ? row.xml_base64 : undefined),
     raw: row,
   };
 }
@@ -112,63 +99,63 @@ async function fetchInvoicesForCompany(
   const dataInicio = sinceIso.slice(0, 10);
   const dataFim = new Date().toISOString().slice(0, 10);
   const invoices: MasterTaxInvoice[] = [];
+  const authHeader = creds.token.toLowerCase().startsWith("bearer ")
+    ? creds.token
+    : `Bearer ${creds.token}`;
+  const limite = 50;
   let pagina = 1;
-  const limite = 100;
 
   while (true) {
-    const body: Record<string, unknown> = {
-      pagina,
-      limite,
-      cnpj: creds.cnpj,
-      data_inicio: dataInicio,
-      data_fim: dataFim,
-    };
-    const { ok, status, data, raw } = await mtFetch(
-      creds.base_url,
-      creds.token,
-      "/api/gestor/retornaNotasPaginado",
-      body,
-    );
-    if (!ok) {
-      return {
-        invoices,
-        error: `retornaNotasPaginado HTTP ${status}: ${data?.mensagem || raw.slice(0, 200)}`,
-      };
+    const params = new URLSearchParams({
+      empresa_id: creds.empresa_id,
+      emissaoDe: dataInicio,
+      emissaoAte: dataFim,
+      pagina: String(pagina),
+      quantidade: String(limite),
+    });
+    const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
+
+    let resp: Response;
+    try {
+      resp = await fetch(target, {
+        method: "GET",
+        headers: { Authorization: authHeader, Accept: "application/json" },
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch (e) {
+      return { invoices, error: `Falha de rede: ${(e as Error).message}` };
     }
-    const retorno = data?.retorno || {};
-    const rows: any[] = Array.isArray(retorno.data) ? retorno.data : [];
+    const raw = await resp.text().catch(() => "");
+    if (!resp.ok) {
+      return { invoices, error: `notas-servico HTTP ${resp.status}: ${raw.slice(0, 200)}` };
+    }
+    let data: any = null;
+    try { data = JSON.parse(raw); } catch { data = null; }
+
+    const rows: any[] = Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data?.notas)
+        ? data.notas
+        : Array.isArray(data)
+          ? data
+          : [];
     for (const r of rows) {
       const inv = parseNotaFromRow(r);
       if (inv) invoices.push(inv);
     }
-    const lastPage = Number(retorno.last_page ?? retorno.lastPage ?? 1);
-    if (!rows.length || pagina >= lastPage || pagina >= 50) break; // hard safety cap
+    const lastPage = Number(
+      data?.meta?.last_page ?? data?.last_page ?? data?.pagination?.last_page ?? 1,
+    );
+    if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
     pagina++;
-  }
-
-  // Hidrata XML por nota via retornaNota (comXml=1)
-  for (const inv of invoices) {
-    try {
-      const { ok, data } = await mtFetch(creds.base_url, creds.token, "/api/gestor/retornaNota", {
-        cnpj: creds.cnpj,
-        chave: inv.chave_acesso,
-        comXml: 1,
-        tipoXml: "nfe",
-      });
-      if (ok) {
-        const ret = data?.retorno || {};
-        const xmlB64: string | undefined = ret?.xml || ret?.xml_base64 || ret?.conteudo;
-        if (xmlB64 && typeof xmlB64 === "string") inv.xml_base64 = xmlB64;
-      }
-    } catch (e) {
-      console.warn("[mastertax-pull] retornaNota falhou:", inv.chave_acesso, (e as Error).message);
-    }
   }
 
   return { invoices };
 }
 
-async function loadCompanyCredentials(supabase: ReturnType<typeof createClient>): Promise<CompanyCreds[]> {
+async function loadCompanyCredentials(
+  supabase: ReturnType<typeof createClient>,
+): Promise<CompanyCreds[]> {
   const { data, error } = await supabase
     .from("system_credentials")
     .select("company_db, credential_key, credential_value")
@@ -186,13 +173,14 @@ async function loadCompanyCredentials(supabase: ReturnType<typeof createClient>)
   const out: CompanyCreds[] = [];
   for (const [companyDb, kv] of grouped) {
     const token = (kv.token || "").trim();
-    const cnpj = sanitizeCnpj(kv.cnpj || "");
-    if (!token || !cnpj) continue;
+    const empresaId = (kv.empresa_id || "").trim();
+    if (!token || !empresaId) continue;
     out.push({
       company_db: companyDb,
       base_url: normalizeBaseUrl(kv.base_url || DEFAULT_BASE_URL),
       token,
-      cnpj,
+      empresa_id: empresaId,
+      cnpj: sanitizeCnpj(kv.cnpj || ""),
     });
   }
   return out;
@@ -304,7 +292,7 @@ Deno.serve(async (req) => {
             step: "mastertax_pull",
             status_to: "awaiting_erpflow_approval",
             message: "NF importada da Master Tax",
-            payload: { chave_acesso: inv.chave_acesso, company_db: creds.company_db, cnpj: creds.cnpj },
+            payload: { chave_acesso: inv.chave_acesso, company_db: creds.company_db, empresa_id: creds.empresa_id },
             actor: "mastertax-pull",
           });
 
