@@ -1223,6 +1223,15 @@ export default function PagCorp() {
         companyLabel={companyLabel || session?.companyDB || ""}
         onGenerate={handleGeneratePresentation}
       />
+
+      <SapValidationDialog
+        open={validateDialog.open}
+        onClose={() => setValidateDialog({ open: false, tx: null })}
+        docEntry={(validateDialog.tx?.sapDocEntry as number | null) ?? null}
+        docNum={(validateDialog.tx?.sapDocNum as number | null) ?? null}
+        expectedAmount={validateDialog.tx ? Number(validateDialog.tx.amount) : undefined}
+        expectedCurrency={validateDialog.tx?.currency}
+      />
     </div>
   );
 }
