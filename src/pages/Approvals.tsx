@@ -1024,6 +1024,7 @@ export default function ApprovalsPage() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
+  const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
   const [isActioning, setIsActioning] = useState(false);
   const isSuperUser = session?.isSuperUser ?? false;
   const isAdmin = isLovableAdmin || isSuperUser;
