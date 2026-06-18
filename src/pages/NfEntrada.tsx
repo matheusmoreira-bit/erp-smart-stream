@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  useNfEntrada, fetchNfEntradaLogs, getSignedFileUrl,
+  useNfEntrada, fetchNfEntradaLogs, fetchNfFile,
   type NfEntradaImport, type NfEntradaLog, type NfEntradaStatus,
 } from "@/hooks/useNfEntrada";
 
@@ -75,13 +75,15 @@ export default function NfEntrada() {
       .finally(() => setLogsLoading(false));
   }, [detail, toast]);
 
-  async function openFile(path: string | null) {
-    if (!path) return;
+  async function openFile(id: string, kind: "xml" | "pdf") {
+    setBusyId(id);
     try {
-      const url = await getSignedFileUrl(path);
+      const url = await fetchNfFile(id, kind);
       window.open(url, "_blank");
     } catch (e) {
-      toast({ title: "Erro ao abrir arquivo", description: (e as Error).message, variant: "destructive" });
+      toast({ title: `Erro ao abrir ${kind.toUpperCase()}`, description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -265,11 +267,11 @@ export default function NfEntrada() {
                     <TableCell className="text-right">
                       <div className="flex items-center gap-1 justify-end">
                         <Button variant="ghost" size="icon" title="Ver XML"
-                          disabled={!it.xml_storage_path} onClick={() => openFile(it.xml_storage_path)}>
+                          disabled={busyId === it.id} onClick={() => openFile(it.id, "xml")}>
                           <FileCode2 className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" title="Ver PDF"
-                          disabled={!it.pdf_storage_path} onClick={() => openFile(it.pdf_storage_path)}>
+                          disabled={busyId === it.id} onClick={() => openFile(it.id, "pdf")}>
                           <FileText className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" title="Histórico" onClick={() => setDetail(it)}>
