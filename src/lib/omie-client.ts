@@ -57,7 +57,7 @@ export async function omieCall<T = unknown>(
 
   const request = (async () => {
     try {
-      const resp = await authFetch(FUNCTION_URL, {
+      const resp = await publicFunctionFetch(FUNCTION_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
