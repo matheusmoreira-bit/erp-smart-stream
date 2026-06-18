@@ -41,7 +41,7 @@ function formatDate(s: string | null) {
 export default function NfEntrada() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { items, loading, error, refresh, reprocess, cancel, pullNow } = useNfEntrada();
+  const { items, loading, error, refresh, reprocess, rematchSap, cancel, pullNow } = useNfEntrada();
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
