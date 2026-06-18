@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2 } from "lucide-react";
+import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2, ShieldOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -357,7 +357,27 @@ export function PagCorpIntegrateDialog({
                     {transaction.accountAlias || transaction.accountName || "—"}
                     {transaction.cardLastDigits && ` • •••${transaction.cardLastDigits}`}
                   </p>
+            </div>
+
+            {/* ====== Toggle: marcar como indedutível ====== */}
+            <label className="flex items-start gap-2 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30 transition-colors">
+              <input
+                type="checkbox"
+                checked={markNondeductible}
+                onChange={(e) => setMarkNondeductible(e.target.checked)}
+                className="mt-0.5 accent-primary"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <ShieldOff className="w-3.5 h-3.5 text-warning" />
+                  Marcar esta compra como indedutível
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Use quando esta compra específica não possui nota fiscal, mesmo em cartão dedutível.
+                  A marcação prevalece sobre a configuração do cartão.
+                </p>
+              </div>
+            </label>
                 <div className="text-right">
                   <p className="text-sm font-semibold tabular-nums">
                     {formatCurrency(transaction.amount, transaction.currency)}
