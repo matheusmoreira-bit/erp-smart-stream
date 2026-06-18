@@ -48,6 +48,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
+import { RelationsMap } from "@/components/RelationsMap";
 import {
   useExpenses,
   STATUS_LABELS,
