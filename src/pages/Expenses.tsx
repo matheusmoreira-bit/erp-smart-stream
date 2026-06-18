@@ -450,6 +450,61 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [showAll, setShowAll] = useState<boolean>(isAdmin);
   useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
 
+  // Origem dos pedidos: padrão "Apenas ERP Flow"; "Ambos" também busca direto do ERP (SAP).
+  const [sourceMode, setSourceMode] = useState<"flow" | "both">("flow");
+  const [sapOrders, setSapOrders] = useState<Expense[]>([]);
+  const [isLoadingSap, setIsLoadingSap] = useState(false);
+  const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
+
+  useEffect(() => {
+    if (!showSourceToggle || sourceMode !== "both" || !session) return;
+    let cancelled = false;
+    (async () => {
+      setIsLoadingSap(true);
+      try {
+        const res = await sapQuery(
+          session as any,
+          "PurchaseOrders",
+          {
+            $select: "DocEntry,DocNum,CardCode,CardName,DocTotal,DocCurrency,DocDate,CreationDate,DocumentStatus,Comments",
+            $orderby: "DocDate desc",
+            $top: "100",
+          },
+          false,
+        );
+        if (cancelled) return;
+        const rows = Array.isArray((res as any).data)
+          ? (res as any).data
+          : ((res as any).data?.value || []);
+        const mapped: Expense[] = (rows as any[]).map((r) => ({
+          id: `sap-${r.DocEntry}`,
+          supplier_code: r.CardCode || undefined,
+          supplier_name: r.CardName || r.CardCode || "—",
+          total_amount: Number(r.DocTotal || 0),
+          currency: r.DocCurrency || "BRL",
+          status: "pc_lancado" as ExpenseStatus,
+          requester_name: "(ERP)",
+          sap_doc_entry: r.DocEntry,
+          sap_doc_num: r.DocNum,
+          company_db: session.companyDB,
+          remarks: r.Comments || undefined,
+          created_at: r.DocDate || r.CreationDate || new Date().toISOString(),
+          updated_at: r.DocDate || r.CreationDate || new Date().toISOString(),
+          origin: "manual",
+        }));
+        setSapOrders(mapped);
+      } catch (e) {
+        if (!cancelled) {
+          toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
+          setSapOrders([]);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingSap(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sourceMode, showSourceToggle, session]);
+
   useEffect(() => {
     if (!session) navigate("/");
   }, [session, navigate]);
