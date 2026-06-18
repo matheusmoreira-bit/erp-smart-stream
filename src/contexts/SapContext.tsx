@@ -89,18 +89,11 @@ export function SapProvider({ children }: { children: ReactNode }) {
           expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
         });
       } else if (erpType === "omie") {
-        // OMIE login — validate credentials via edge function
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const { data: { session: authSession } } = await supabase.auth.getSession();
-        const authToken = authSession?.access_token || anonKey;
-        const res = await fetch(`${supabaseUrl}/functions/v1/omie-proxy`, {
+        // OMIE login — validate credentials via edge function (requires Lovable Cloud auth)
+        const { authFetch } = await import("@/lib/auth-fetch");
+        const res = await authFetch("omie-proxy", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`,
-            apikey: anonKey,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "login", company_db: companyDB }),
         });
         const data = await res.json();
