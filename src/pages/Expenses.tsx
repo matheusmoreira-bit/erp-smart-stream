@@ -806,11 +806,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((expense) => (
+            {filtered.map(({ exp, origin }) => (
               <ExpenseCard
-                key={expense.id}
-                expense={expense}
-                onOpen={() => setSelectedExpense(expense)}
+                key={exp.id}
+                expense={exp}
+                originBadge={origin}
+                onOpen={() => setSelectedExpense(exp)}
               />
             ))}
           </div>
