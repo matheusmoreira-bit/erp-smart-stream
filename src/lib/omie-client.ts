@@ -1,4 +1,4 @@
-import { authFetch } from "@/lib/auth-fetch";
+import { publicFunctionFetch } from "@/lib/auth-fetch";
 
 const FUNCTION_URL = "omie-proxy";
 const OMIE_CACHE_TTL_MS = 60_000;
@@ -57,7 +57,7 @@ export async function omieCall<T = unknown>(
 
   const request = (async () => {
     try {
-      const resp = await authFetch(FUNCTION_URL, {
+      const resp = await publicFunctionFetch(FUNCTION_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

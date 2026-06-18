@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+import { authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,7 +16,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireUser(req);
+    // OMIE proxy is decoupled from Backoffice (Lovable Cloud) auth.
+    // OMIE itself is the ERP authentication: the function only ever uses
+    // credentials stored per company_db in system_credentials.
+
+
 
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;

@@ -90,8 +90,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
         });
       } else if (erpType === "omie") {
         // OMIE login — validate credentials via edge function (requires Lovable Cloud auth)
-        const { authFetch } = await import("@/lib/auth-fetch");
-        const res = await authFetch("omie-proxy", {
+        const { publicFunctionFetch } = await import("@/lib/auth-fetch");
+        const res = await publicFunctionFetch("omie-proxy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "login", company_db: companyDB }),
