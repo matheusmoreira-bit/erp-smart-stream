@@ -307,7 +307,7 @@ Deno.serve(async (req) => {
             step: "mastertax_pull",
             status_to: "awaiting_erpflow_approval",
             message: "NF importada da Master Tax",
-            payload: { chave_acesso: inv.chave_acesso, company_db: creds.company_db, empresa_id: creds.empresa_id },
+            payload: { chave_acesso: inv.chave_acesso, company_db: creds.company_db, empresa_id: (inv.raw as any)?._empresa_id ?? null },
             actor: "mastertax-pull",
           });
 
