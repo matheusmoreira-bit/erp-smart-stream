@@ -390,7 +390,11 @@ function buildByCostCenter(
 }
 
 function buildMonthlyEvolution(pptx: PptxGenJS, input: PresentationInput) {
-  if (input.period === "monthly") return; // not relevant for 1 month
+  if (input.period === "monthly") return; // not relevant for single month
+  if (input.period === "custom") {
+    const ms = new Date(input.endDate).getTime() - new Date(input.startDate).getTime();
+    if (ms < 1000 * 60 * 60 * 24 * 45) return; // <45 dias: pular evolução mensal
+  }
 
   const monthKey = (d: string) => {
     const dt = new Date(d);

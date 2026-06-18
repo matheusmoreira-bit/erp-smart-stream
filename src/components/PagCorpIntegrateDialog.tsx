@@ -80,7 +80,11 @@ interface Props {
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
-  onConfirm: (supplier: SapSearchOption, override: PagCorpLineOverride) => Promise<void>;
+  onConfirm: (
+    supplier: SapSearchOption,
+    override: PagCorpLineOverride,
+    options: { markNondeductible: boolean },
+  ) => Promise<void>;
 }
 
 
