@@ -1,4 +1,4 @@
-import { authFetch } from "@/lib/auth-fetch";
+import { publicFunctionFetch } from "@/lib/auth-fetch";
 
 const FUNCTION_URL = "omie-proxy";
 const OMIE_CACHE_TTL_MS = 60_000;
