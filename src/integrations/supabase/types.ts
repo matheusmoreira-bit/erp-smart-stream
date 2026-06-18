@@ -1484,6 +1484,10 @@ export type Database = {
           rejection_reason: string | null
           sap_company_db: string | null
           sap_invoice_draft_id: string | null
+          sap_match_reason: string | null
+          sap_matched_card_code: string | null
+          sap_matched_po_doc_entry: string | null
+          sap_matched_po_is_draft: boolean
           sap_po_draft_id: string | null
           serie: string | null
           status: Database["public"]["Enums"]["nf_entrada_status"]
@@ -1511,6 +1515,10 @@ export type Database = {
           rejection_reason?: string | null
           sap_company_db?: string | null
           sap_invoice_draft_id?: string | null
+          sap_match_reason?: string | null
+          sap_matched_card_code?: string | null
+          sap_matched_po_doc_entry?: string | null
+          sap_matched_po_is_draft?: boolean
           sap_po_draft_id?: string | null
           serie?: string | null
           status?: Database["public"]["Enums"]["nf_entrada_status"]
@@ -1538,6 +1546,10 @@ export type Database = {
           rejection_reason?: string | null
           sap_company_db?: string | null
           sap_invoice_draft_id?: string | null
+          sap_match_reason?: string | null
+          sap_matched_card_code?: string | null
+          sap_matched_po_doc_entry?: string | null
+          sap_matched_po_is_draft?: boolean
           sap_po_draft_id?: string | null
           serie?: string | null
           status?: Database["public"]["Enums"]["nf_entrada_status"]
