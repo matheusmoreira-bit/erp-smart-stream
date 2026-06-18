@@ -318,6 +318,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // Determine initial status
       let status: ExpenseStatus = input.initialStatus || "rascunho";
       let currentApprover: string | null = null;
+      let matchedRuleId: string | null = null;
 
       // Evaluate approval rules for manual expenses (PagCorp skips rules)
       if (!input.skipRules && origin === "manual") {
@@ -334,6 +335,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         if (match) {
           status = "pendente_aprovacao";
           currentApprover = match.firstApprover?.name || null;
+          matchedRuleId = match.rule.id;
         } else {
           status = "aprovado";
         }
@@ -356,6 +358,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           requester_email: userIdentifier,
           created_by_email: userIdentifier,
           current_approver: currentApprover,
+          approval_rule_id: matchedRuleId,
           origin,
           company_db: session.companyDB,
           branch_id: input.branch_id ?? 1,
@@ -365,6 +368,21 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .single();
 
       if (err) throw err;
+
+      const createdId = (expense as any).id as string;
+      // Log de criação + envio para aprovação (quando aplicável)
+      await logExpenseDecision(createdId, "created", {
+        approverName: session.userName,
+        approverEmail: userIdentifier,
+        remarks: input.remarks || null,
+      });
+      if (status === "pendente_aprovacao") {
+        await logExpenseDecision(createdId, "submitted", {
+          approverName: session.userName,
+          approverEmail: userIdentifier,
+          levelOrder: 1,
+        });
+      }
 
       if (input.items.length > 0) {
         const { error: itemsErr } = await supabase.from("expense_items").insert(
