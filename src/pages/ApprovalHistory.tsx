@@ -163,7 +163,16 @@ export default function ApprovalHistory() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((r) => <HistoryCard key={r.id} row={r} />)}
+            {filtered.map((r) => {
+              const linked = typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined;
+              return (
+                <HistoryCard
+                  key={r.id}
+                  row={r}
+                  onRelationsMap={linked ? () => setRelationsMapExpense(linked) : undefined}
+                />
+              );
+            })}
           </div>
         )}
       </main>
