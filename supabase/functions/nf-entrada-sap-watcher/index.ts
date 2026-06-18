@@ -105,13 +105,62 @@ Deno.serve(async (req) => {
     try {
       for (const row of list) {
         try {
-          // Consultar Draft (PurchaseOrder)
+          // CASO 1: vinculado a um Pedido de Compra EFETIVO já existente no SAP.
+          // Não precisa polling — cria o Draft da NF de Entrada referenciando o PO.
+          if (row.sap_matched_po_doc_entry && row.sap_matched_po_is_draft === false) {
+            const poEntry = Number(row.sap_matched_po_doc_entry);
+            const poR = await fetch(
+              `${baseUrl}/PurchaseOrders(${poEntry})?$select=DocEntry,CardCode,DocumentLines`,
+              { headers: { Cookie: cookie } },
+            );
+            if (!poR.ok) throw new Error(`Consulta PO existente falhou ${poR.status}`);
+            const po = await poR.json();
+            const lines = Array.isArray(po.DocumentLines) && po.DocumentLines.length
+              ? po.DocumentLines.map((l: Record<string, unknown>) => ({
+                  BaseType: 22,
+                  BaseEntry: poEntry,
+                  BaseLine: l.LineNum ?? 0,
+                }))
+              : [{ BaseType: 22, BaseEntry: poEntry, BaseLine: 0 }];
+
+            const invResp = await fetch(`${baseUrl}/Drafts`, {
+              method: "POST",
+              headers: { Cookie: cookie, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                DocObjectCode: "oPurchaseInvoices",
+                CardCode: po.CardCode || row.sap_matched_card_code,
+                Comments: `NF Entrada chave ${row.chave_acesso} (vinculada PC #${poEntry})`,
+                DocumentLines: lines,
+              }),
+            });
+            if (!invResp.ok) throw new Error(`Draft NF Entrada (PO vinculada) falhou ${invResp.status}: ${(await invResp.text()).slice(0, 300)}`);
+            const invJson = await invResp.json();
+
+            await sb.from("nf_entrada_imports").update({
+              sap_invoice_draft_id: String(invJson.DocEntry),
+              status: "completed",
+              last_poll_at: new Date().toISOString(),
+              last_error: null,
+            }).eq("id", row.id);
+            await sb.from("nf_entrada_logs").insert({
+              import_id: row.id,
+              step: "create_invoice_draft",
+              status_to: "completed",
+              message: `Draft NF Entrada criado vinculado ao PC ${poEntry}: Draft ${invJson.DocEntry}`,
+              actor: "nf-entrada-sap-watcher",
+            });
+            results.push({ id: row.id, status: "completed" });
+            continue;
+          }
+
+          // CASO 2 (padrão): polling do Draft do Pedido de Compra
           const dr = await fetch(
-            `${baseUrl}/Drafts(${row.sap_po_draft_id})?$select=DocEntry,DocumentStatus,DocNum,Cancelled`,
+            `${baseUrl}/Drafts(${row.sap_po_draft_id})?$select=DocEntry,DocumentStatus,DocNum,Cancelled,CardCode`,
             { headers: { Cookie: cookie } },
           );
           if (!dr.ok) throw new Error(`Consulta Draft falhou ${dr.status}`);
           const dj = await dr.json();
+
 
           // DocumentStatus: bost_Open / bost_Close ; quando vira documento real, sai de Drafts
           // Estratégia simples: se Draft sumiu/foi convertido (404) consideramos aprovado e procuramos o PO real
