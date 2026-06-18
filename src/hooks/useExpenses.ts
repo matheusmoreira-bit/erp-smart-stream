@@ -216,6 +216,42 @@ async function findMatchingRule(
   return null;
 }
 
+/* ───────────────── Approval log helper ───────────────── */
+
+type ExpenseLogDecision =
+  | "created"
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "integrated"
+  | "integration_failed";
+
+async function logExpenseDecision(
+  expenseId: string,
+  decision: ExpenseLogDecision,
+  opts: {
+    approverName?: string | null;
+    approverEmail?: string | null;
+    levelOrder?: number | null;
+    remarks?: string | null;
+  } = {},
+) {
+  try {
+    await supabase.from("expense_approval_log").insert({
+      expense_id: expenseId,
+      decision,
+      approver_name: opts.approverName ?? null,
+      approver_email: opts.approverEmail ?? null,
+      level_order: opts.levelOrder ?? null,
+      remarks: opts.remarks ?? null,
+    } as any);
+  } catch (e) {
+    // Não bloqueia o fluxo principal se o log falhar (ex.: RLS), só registra.
+    console.warn("Falha ao registrar log de aprovação:", e);
+  }
+}
+
 /* ───────────────── Hook ───────────────── */
 
 export function useExpenses(docType: ExpenseDocType = "purchase") {
