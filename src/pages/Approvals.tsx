@@ -1662,6 +1662,13 @@ export default function ApprovalsPage() {
         formatCostCenter={formatCostCenter}
       />
 
+      <RelationsMap
+        open={!!relationsMapExpense}
+        onClose={() => setRelationsMapExpense(null)}
+        expense={relationsMapExpense as any}
+        title="Mapa de Relações"
+      />
+
       <DelegationDialog
         open={!!delegationDoc}
         onClose={() => setDelegationDoc(null)}
