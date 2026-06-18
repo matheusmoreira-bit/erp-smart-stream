@@ -561,9 +561,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .update({ status: "pendente_aprovacao" as any })
         .eq("id", expenseId);
       if (err) throw err;
+      const actor = session?.userName || "";
+      await logExpenseDecision(expenseId, "submitted", {
+        approverName: actor,
+        approverEmail: actor.includes("@") ? actor : null,
+      });
       await fetchExpenses();
     },
-    [fetchExpenses]
+    [fetchExpenses, session]
   );
 
   const cancelExpense = useCallback(
@@ -573,9 +578,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .update({ status: "cancelado" as any })
         .eq("id", expenseId);
       if (err) throw err;
+      const actor = session?.userName || "";
+      await logExpenseDecision(expenseId, "cancelled", {
+        approverName: actor,
+        approverEmail: actor.includes("@") ? actor : null,
+      });
       await fetchExpenses();
     },
-    [fetchExpenses]
+    [fetchExpenses, session]
   );
 
   const approveExpense = useCallback(
@@ -588,6 +598,13 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .eq("id", expenseId);
       if (err) throw err;
 
+      const actor = session?.userName || "";
+      await logExpenseDecision(expenseId, "approved", {
+        approverName: actor,
+        approverEmail: actor.includes("@") ? actor : null,
+        remarks: remarks || null,
+      });
+
       // Trigger SAP integration immediately (only for SAP companies)
       if (session?.erpType === "sap") {
         try {
@@ -598,11 +615,12 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             sap_company_db: session.companyDB,
             sap_session_expires_at: session.expiresAt,
           });
+          await logExpenseDecision(expenseId, "integrated", { approverName: actor });
         } catch (sapErr) {
+          const msg = sapErr instanceof Error ? sapErr.message : "Erro desconhecido";
+          await logExpenseDecision(expenseId, "integration_failed", { remarks: msg });
           await fetchExpenses();
-          throw new Error(
-            `Despesa aprovada, mas falhou ao integrar no SAP: ${sapErr instanceof Error ? sapErr.message : "Erro desconhecido"}`,
-          );
+          throw new Error(`Despesa aprovada, mas falhou ao integrar no SAP: ${msg}`);
         }
       }
 
@@ -614,15 +632,22 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   const retrySapIntegration = useCallback(
     async (expenseId: string) => {
       if (!session || session.erpType !== "sap") throw new Error("Faça login no SAP pela tela antes de integrar.");
-      const data = await invokeExpenseToSap({
-        expense_id: expenseId,
-        sap_session_id: session.sessionId,
-        sap_route_id: session.routeId,
-        sap_company_db: session.companyDB,
-        sap_session_expires_at: session.expiresAt,
-      });
-      await fetchExpenses();
-      return data;
+      try {
+        const data = await invokeExpenseToSap({
+          expense_id: expenseId,
+          sap_session_id: session.sessionId,
+          sap_route_id: session.routeId,
+          sap_company_db: session.companyDB,
+          sap_session_expires_at: session.expiresAt,
+        });
+        await logExpenseDecision(expenseId, "integrated", { approverName: session.userName });
+        await fetchExpenses();
+        return data;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        await logExpenseDecision(expenseId, "integration_failed", { remarks: msg });
+        throw e;
+      }
     },
     [fetchExpenses, session]
   );
@@ -636,9 +661,15 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .update(updates)
         .eq("id", expenseId);
       if (err) throw err;
+      const actor = session?.userName || "";
+      await logExpenseDecision(expenseId, "rejected", {
+        approverName: actor,
+        approverEmail: actor.includes("@") ? actor : null,
+        remarks: remarks || null,
+      });
       await fetchExpenses();
     },
-    [fetchExpenses]
+    [fetchExpenses, session]
   );
 
   useEffect(() => {
