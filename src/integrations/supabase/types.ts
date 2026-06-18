@@ -1111,6 +1111,50 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_approval_log: {
+        Row: {
+          approver_email: string | null
+          approver_name: string | null
+          created_at: string
+          decided_at: string
+          decision: string
+          expense_id: string
+          id: string
+          level_order: number | null
+          remarks: string | null
+        }
+        Insert: {
+          approver_email?: string | null
+          approver_name?: string | null
+          created_at?: string
+          decided_at?: string
+          decision: string
+          expense_id: string
+          id?: string
+          level_order?: number | null
+          remarks?: string | null
+        }
+        Update: {
+          approver_email?: string | null
+          approver_name?: string | null
+          created_at?: string
+          decided_at?: string
+          decision?: string
+          expense_id?: string
+          id?: string
+          level_order?: number | null
+          remarks?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_approval_log_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_attachments: {
         Row: {
           created_at: string
