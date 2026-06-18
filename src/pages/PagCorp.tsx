@@ -19,6 +19,7 @@ import {
   Paperclip,
   FileText,
   ShieldOff,
+  CheckCircle,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -51,6 +52,7 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
+import { SapValidationDialog } from "@/components/SapValidationDialog";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { useExpenses } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
@@ -112,6 +114,8 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
+  const [cardFilter, setCardFilter] = useState<string>("all");
+  const [validateDialog, setValidateDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
   const [integrateDialog, setIntegrateDialog] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
@@ -202,13 +206,34 @@ export default function PagCorp() {
       );
     }
 
+    if (cardFilter !== "all") {
+      list = list.filter((t) => {
+        const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+          (t.cardName && String(t.cardName).trim()) || "—";
+        return key === cardFilter;
+      });
+    }
+
     // Sort by purchase date, most recent first
     return [...list].sort((a, b) => {
       const ta = a.date ? new Date(a.date).getTime() : 0;
       const tb = b.date ? new Date(b.date).getTime() : 0;
       return tb - ta;
     });
-  }, [transactions, search, statusFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, cardFilter, showNondeductible]);
+
+  // Lista única de cartões para o filtro
+  const cardOptions = useMemo(() => {
+    const set = new Map<string, string>();
+    transactions.forEach((t) => {
+      const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+        (t.cardName && String(t.cardName).trim()) || "";
+      if (!key) return;
+      const label = `${t.accountAlias || t.accountName || t.cardName || "Cartão"}${t.cardLastDigits ? ` •••${t.cardLastDigits}` : ""}`;
+      if (!set.has(key)) set.set(key, label);
+    });
+    return Array.from(set.entries()).map(([value, label]) => ({ value, label }));
+  }, [transactions]);
 
   const nondeductiblePending = useMemo(
     () => transactions.filter((t) => t.isNondeductible && !t.integrated),
@@ -352,14 +377,9 @@ export default function PagCorp() {
       openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic");
       return;
     }
-    const allGeneric = selected.every((t) => !t.hasAccountability);
-    if (allGeneric) {
-      setConsolidateDialog({ open: true, transactions: selected });
-      return;
-    }
-    // Mixed → percorrer uma a uma
-    toast.info("Seleção contém prestações de contas — integrando uma a uma");
-    startBatch();
+    // ≥2 selecionadas → SEMPRE consolida em 1 PC (independente de prestação).
+    // Comprovantes de todas serão anexados ao PC consolidado.
+    setConsolidateDialog({ open: true, transactions: selected });
   };
 
   const advanceBatch = () => {
@@ -388,6 +408,7 @@ export default function PagCorp() {
   const handleConfirmIntegrate = async (
     supplier: SapSearchOption,
     override: { costCenter?: string | null; project?: string | null; item?: string | null } = {},
+    options: { markNondeductible: boolean } = { markNondeductible: false },
   ) => {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
@@ -399,8 +420,27 @@ export default function PagCorp() {
         override.costCenter || override.project || override.item
           ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null, item: override.item ?? null } }
           : undefined;
-      // Sem prestação ⇒ tratada como indedutível por padrão
-      const asNondeductible = integrateDialog.type === "generic";
+      // Sem prestação ⇒ indedutível por padrão; toggle do usuário tem prioridade
+      const asNondeductible =
+        options.markNondeductible || integrateDialog.type === "generic" || !!t.isNondeductible;
+
+      // Persiste marcação a nível de compra (override do cartão) — B4
+      if (options.markNondeductible) {
+        try {
+          await supabase
+            .from("pagcorp_nondeductible_expenses" as any)
+            .upsert({
+              pagcorp_expense_id: Number(t.id),
+              company_db: session.companyDB,
+              supplier_code: supplier.code,
+              supplier_name: supplier.name,
+              created_by: session.userName || null,
+            }, { onConflict: "pagcorp_expense_id,company_db" });
+        } catch (e) {
+          console.warn("Falha ao persistir indedutível por compra:", e);
+        }
+      }
+
       const result = await integrateDirect(
         t,
         integrateDialog.type,
@@ -513,16 +553,26 @@ export default function PagCorp() {
     }
   };
 
-  const handleGeneratePresentation = async (period: PresentationPeriod) => {
+  const handleGeneratePresentation = async (
+    period: PresentationPeriod,
+    customRange?: { start: string; end: string },
+  ) => {
     if (!session?.companyDB) {
       toast.error("Empresa não selecionada");
       return;
     }
-    const monthsBack = period === "monthly" ? 1 : period === "quarterly" ? 3 : 6;
-    const today = new Date();
-    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const start = new Date(end);
-    start.setMonth(start.getMonth() - monthsBack);
+    let start: Date;
+    let end: Date;
+    if (period === "custom" && customRange) {
+      start = new Date(customRange.start + "T00:00:00");
+      end = new Date(customRange.end + "T00:00:00");
+    } else {
+      const monthsBack = period === "monthly" ? 1 : period === "quarterly" ? 3 : 6;
+      const today = new Date();
+      end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      start = new Date(end);
+      start.setMonth(start.getMonth() - monthsBack);
+    }
 
     const toIso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -778,6 +828,20 @@ export default function PagCorp() {
                 <SelectItem value="pending">Pendente</SelectItem>
                 <SelectItem value="review">Em análise</SelectItem>
                 <SelectItem value="done">Aprovado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Cartão</label>
+            <Select value={cardFilter} onValueChange={setCardFilter}>
+              <SelectTrigger className="w-56 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os cartões</SelectItem>
+                {cardOptions.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -1038,6 +1102,17 @@ export default function PagCorp() {
                                   PC #{t.sapDocNum}
                                 </span>
                               )}
+                              {t.sapDocEntry != null && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] gap-1 text-primary"
+                                  onClick={() => setValidateDialog({ open: true, tx: t })}
+                                >
+                                  <CheckCircle className="w-3 h-3" />
+                                  Validar SAP
+                                </Button>
+                              )}
                             </div>
                           ) : t.isReversed ? (
                             <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
@@ -1147,6 +1222,15 @@ export default function PagCorp() {
         onClose={() => setPresentationDialogOpen(false)}
         companyLabel={companyLabel || session?.companyDB || ""}
         onGenerate={handleGeneratePresentation}
+      />
+
+      <SapValidationDialog
+        open={validateDialog.open}
+        onClose={() => setValidateDialog({ open: false, tx: null })}
+        docEntry={(validateDialog.tx?.sapDocEntry as number | null) ?? null}
+        docNum={(validateDialog.tx?.sapDocNum as number | null) ?? null}
+        expectedAmount={validateDialog.tx ? Number(validateDialog.tx.amount) : undefined}
+        expectedCurrency={validateDialog.tx?.currency}
       />
     </div>
   );

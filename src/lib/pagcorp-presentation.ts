@@ -1,18 +1,20 @@
 import PptxGenJS from "pptxgenjs";
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 
-export type PresentationPeriod = "monthly" | "quarterly" | "semestral";
+export type PresentationPeriod = "monthly" | "quarterly" | "semestral" | "custom";
 
 const PERIOD_LABEL: Record<PresentationPeriod, string> = {
   monthly: "Mensal",
   quarterly: "Trimestral",
   semestral: "Semestral",
+  custom: "Personalizado",
 };
 
 const PERIOD_MONTHS: Record<PresentationPeriod, number> = {
   monthly: 1,
   quarterly: 3,
   semestral: 6,
+  custom: 0,
 };
 
 // Brand-ish palette aligned to the reference deck
@@ -388,7 +390,11 @@ function buildByCostCenter(
 }
 
 function buildMonthlyEvolution(pptx: PptxGenJS, input: PresentationInput) {
-  if (input.period === "monthly") return; // not relevant for 1 month
+  if (input.period === "monthly") return; // not relevant for single month
+  if (input.period === "custom") {
+    const ms = new Date(input.endDate).getTime() - new Date(input.startDate).getTime();
+    if (ms < 1000 * 60 * 60 * 24 * 45) return; // <45 dias: pular evolução mensal
+  }
 
   const monthKey = (d: string) => {
     const dt = new Date(d);
@@ -528,15 +534,32 @@ export async function generatePagCorpPresentation(input: PresentationInput): Pro
 
   addMaster(pptx);
 
-  buildCover(pptx, input);
-  buildExecutiveSummary(pptx, input);
-  buildByCostCenter(pptx, input, "BRL", "03");
-  buildByCostCenter(pptx, input, "USD", "04");
-  buildMonthlyEvolution(pptx, input);
-  buildByCard(pptx, input);
-  buildNextSteps(pptx, input);
+  // Each builder isolated so a single failure doesn't kill the whole .pptx
+  const stages: { name: string; fn: () => void }[] = [
+    { name: "cover", fn: () => buildCover(pptx, input) },
+    { name: "summary", fn: () => buildExecutiveSummary(pptx, input) },
+    { name: "cc-brl", fn: () => buildByCostCenter(pptx, input, "BRL", "03") },
+    { name: "cc-usd", fn: () => buildByCostCenter(pptx, input, "USD", "04") },
+    { name: "monthly", fn: () => buildMonthlyEvolution(pptx, input) },
+    { name: "by-card", fn: () => buildByCard(pptx, input) },
+    { name: "next", fn: () => buildNextSteps(pptx, input) },
+  ];
+  const failed: string[] = [];
+  for (const s of stages) {
+    try { s.fn(); } catch (e) {
+      console.error(`[pptx] stage ${s.name} failed:`, e);
+      failed.push(`${s.name}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  if (failed.length === stages.length) {
+    throw new Error(`Falha ao montar slides: ${failed.join(" | ")}`);
+  }
 
   const safeName = input.companyLabel.replace(/[^a-z0-9\-_]+/gi, "_");
   const fileName = `PagCorp_${safeName}_${PERIOD_LABEL[input.period]}_${input.endDate}.pptx`;
-  await pptx.writeFile({ fileName });
+  try {
+    await pptx.writeFile({ fileName });
+  } catch (e) {
+    throw new Error(`Falha ao salvar .pptx: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }

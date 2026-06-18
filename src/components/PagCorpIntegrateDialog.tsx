@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2 } from "lucide-react";
+import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2, ShieldOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -80,7 +80,11 @@ interface Props {
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
-  onConfirm: (supplier: SapSearchOption, override: PagCorpLineOverride) => Promise<void>;
+  onConfirm: (
+    supplier: SapSearchOption,
+    override: PagCorpLineOverride,
+    options: { markNondeductible: boolean },
+  ) => Promise<void>;
 }
 
 
@@ -97,6 +101,7 @@ export function PagCorpIntegrateDialog({
   const [project, setProject] = useState<SapSearchOption | null>(null);
   const [item, setItem] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [markNondeductible, setMarkNondeductible] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
@@ -144,10 +149,10 @@ export function PagCorpIntegrateDialog({
     [cardDefaults.itemCode, itOptions],
   );
 
-  // Moeda inferida: BRL se transação for em BRL, senão USD
-  const inferredCurrency = useMemo(() => {
-    const c = String(transaction?.currency || "").toUpperCase();
-    return c === "BRL" ? "BRL" : "USD";
+  // Moeda real da transação (sem forçar BRL/USD)
+  const txCurrency = useMemo(() => {
+    const c = String(transaction?.currency || "BRL").toUpperCase();
+    return /^[A-Z]{3}$/.test(c) ? c : "BRL";
   }, [transaction?.currency]);
 
   const runAi = useCallback(async (tx: PagCorpTransaction) => {
@@ -291,11 +296,15 @@ export function PagCorpIntegrateDialog({
     if (!supplier) return;
     setSubmitting(true);
     try {
-      await onConfirm(supplier, {
-        costCenter: costCenter?.code || null,
-        project: project?.code || null,
-        item: item?.code || null,
-      });
+      await onConfirm(
+        supplier,
+        {
+          costCenter: costCenter?.code || null,
+          project: project?.code || null,
+          item: item?.code || null,
+        },
+        { markNondeductible },
+      );
       if (storageKey) {
         try { sessionStorage.removeItem(storageKey); } catch {/* ignore */}
       }
@@ -348,14 +357,34 @@ export function PagCorpIntegrateDialog({
                     {transaction.accountAlias || transaction.accountName || "—"}
                     {transaction.cardLastDigits && ` • •••${transaction.cardLastDigits}`}
                   </p>
+            </div>
+
+            {/* ====== Toggle: marcar como indedutível ====== */}
+            <label className="flex items-start gap-2 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30 transition-colors">
+              <input
+                type="checkbox"
+                checked={markNondeductible}
+                onChange={(e) => setMarkNondeductible(e.target.checked)}
+                className="mt-0.5 accent-primary"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <ShieldOff className="w-3.5 h-3.5 text-warning" />
+                  Marcar esta compra como indedutível
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Use quando esta compra específica não possui nota fiscal, mesmo em cartão dedutível.
+                  A marcação prevalece sobre a configuração do cartão.
+                </p>
+              </div>
+            </label>
                 <div className="text-right">
                   <p className="text-sm font-semibold tabular-nums">
                     {formatCurrency(transaction.amount, transaction.currency)}
                   </p>
                   <Badge variant="outline" className="text-[10px] mt-0.5 gap-1">
                     <Wand2 className="w-3 h-3" />
-                    Moeda: {inferredCurrency}
+                    Moeda: {txCurrency}
                   </Badge>
                 </div>
               </div>

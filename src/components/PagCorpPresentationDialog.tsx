@@ -9,6 +9,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -22,24 +23,38 @@ interface Props {
   open: boolean;
   onClose: () => void;
   companyLabel: string;
-  onGenerate: (period: PresentationPeriod) => Promise<void>;
+  onGenerate: (period: PresentationPeriod, customRange?: { start: string; end: string }) => Promise<void>;
 }
 
 const OPTIONS: { value: PresentationPeriod; label: string; hint: string }[] = [
   { value: "monthly", label: "Mensal", hint: "Último mês completo (≈30 dias)" },
   { value: "quarterly", label: "Trimestral", hint: "Últimos 3 meses" },
   { value: "semestral", label: "Semestral", hint: "Últimos 6 meses" },
+  { value: "custom", label: "Personalizado", hint: "Escolha o intervalo exato" },
 ];
 
 export function PagCorpPresentationDialog({ open, onClose, companyLabel, onGenerate }: Props) {
   const [period, setPeriod] = useState<PresentationPeriod>("quarterly");
+  const today = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    .toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(firstOfMonth);
+  const [endDate, setEndDate] = useState(today);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
+    setError(null);
+    if (period === "custom") {
+      if (!startDate || !endDate) { setError("Informe data inicial e final"); return; }
+      if (new Date(startDate) > new Date(endDate)) { setError("Data inicial maior que final"); return; }
+    }
     setBusy(true);
     try {
-      await onGenerate(period);
+      await onGenerate(period, period === "custom" ? { start: startDate, end: endDate } : undefined);
       onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao gerar apresentação");
     } finally {
       setBusy(false);
     }
@@ -78,6 +93,25 @@ export function PagCorpPresentationDialog({ open, onClose, companyLabel, onGener
               </SelectContent>
             </Select>
           </div>
+
+          {period === "custom" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Data inicial</label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Data final</label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+              {error}
+            </div>
+          )}
 
           <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded p-2">
             O download começa automaticamente após a geração. Períodos maiores podem demorar
