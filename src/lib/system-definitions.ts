@@ -189,7 +189,12 @@ export const SYSTEMS: SystemConfig[] = [
     icon: FileInput,
     fields: [
       { key: "base_url", label: "URL Base da API", placeholder: "https://api.mastertax.app" },
-      { key: "empresa_id", label: "Empresa ID (UUID Master Tax)", placeholder: "019e4a71-22c9-71bc-94ab-7375b215e2d8" },
+      {
+        key: "empresa_id",
+        label: "Empresa IDs (UUID Master Tax — matriz e filiais)",
+        placeholder: "019e4a71-22c9-..., 019e4a71-33d0-..., 019e4a71-44e1-...",
+        description: "Aceita múltiplos UUIDs separados por vírgula, ponto-e-vírgula ou quebra de linha (matriz + filiais).",
+      },
       { key: "cnpj", label: "CNPJ da Empresa (opcional, somente dígitos)", placeholder: "00000000000000" },
       { key: "token", label: "Token de Acesso (Bearer)", type: "password", placeholder: "Token emitido pela Master Tax" },
     ],

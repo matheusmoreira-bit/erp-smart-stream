@@ -68,11 +68,15 @@ Deno.serve(async (req) => {
 
     const baseUrl = normalizeBaseUrl(creds.base_url || DEFAULT_BASE_URL);
     const token = (creds.token || "").trim();
-    const empresaId = (creds.empresa_id || "").trim();
+    const empresaIdsRaw = (creds.empresa_id || "").trim();
+    const empresaIds = empresaIdsRaw
+      .split(/[\s,;]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     const cnpj = sanitizeCnpj(creds.cnpj || "");
 
     if (!token) return json({ ok: false, error: "Token Bearer não configurado." }, 400);
-    if (!empresaId) return json({ ok: false, error: "Empresa ID (UUID Master Tax) não configurado." }, 400);
+    if (empresaIds.length === 0) return json({ ok: false, error: "Nenhum Empresa ID configurado." }, 400);
 
     const authHeader = token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`;
 
@@ -80,68 +84,98 @@ Deno.serve(async (req) => {
     const start = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
-    const params = new URLSearchParams({
-      empresa_id: empresaId,
-      emissaoDe: fmt(start),
-      emissaoAte: fmt(today),
-      pagina: "1",
-      quantidade: "1",
-    });
-    const target = `${baseUrl}/api/notas-servico?${params.toString()}`;
+    const results: Array<{
+      empresaId: string;
+      ok: boolean;
+      status: number;
+      elapsedMs: number;
+      total: number | null;
+      error?: string;
+    }> = [];
 
-    const started = Date.now();
-    let resp: Response;
-    try {
-      resp = await fetch(target, {
-        method: "GET",
-        headers: {
-          Authorization: authHeader,
-          Accept: "application/json",
-        },
-        signal: AbortSignal.timeout(20000),
+    let lastUrl = "";
+    let lastPreview = "";
+    let lastStatus = 0;
+    let lastStatusText = "";
+    let totalOk = 0;
+    let totalNotasSum = 0;
+    let totalElapsed = 0;
+
+    for (const empresaId of empresaIds) {
+      const params = new URLSearchParams({
+        empresa_id: empresaId,
+        emissaoDe: fmt(start),
+        emissaoAte: fmt(today),
+        pagina: "1",
+        quantidade: "1",
       });
-    } catch (e) {
-      return json(
-        {
+      const target = `${baseUrl}/api/notas-servico?${params.toString()}`;
+      lastUrl = target;
+
+      const started = Date.now();
+      let resp: Response;
+      try {
+        resp = await fetch(target, {
+          method: "GET",
+          headers: { Authorization: authHeader, Accept: "application/json" },
+          signal: AbortSignal.timeout(20000),
+        });
+      } catch (e) {
+        results.push({
+          empresaId,
           ok: false,
-          error: `Falha de rede ao acessar ${target}: ${e instanceof Error ? e.message : String(e)}`,
-        },
-        502,
-      );
+          status: 0,
+          elapsedMs: Date.now() - started,
+          total: null,
+          error: `Falha de rede: ${e instanceof Error ? e.message : String(e)}`,
+        });
+        continue;
+      }
+      const elapsedMs = Date.now() - started;
+      totalElapsed += elapsedMs;
+      const bodyText = await resp.text().catch(() => "");
+      lastPreview = bodyText.slice(0, 400);
+      lastStatus = resp.status;
+      lastStatusText = resp.statusText;
+
+      let parsed: any = null;
+      try { parsed = JSON.parse(bodyText); } catch { parsed = null; }
+      let totalNotas: number | null = null;
+      if (parsed && typeof parsed === "object") {
+        const meta = parsed.meta || parsed.pagination || parsed;
+        if (typeof meta?.total === "number") totalNotas = meta.total;
+      }
+      if (resp.ok) {
+        totalOk++;
+        if (typeof totalNotas === "number") totalNotasSum += totalNotas;
+      }
+      results.push({
+        empresaId,
+        ok: resp.ok,
+        status: resp.status,
+        elapsedMs,
+        total: totalNotas,
+        error: resp.ok ? undefined : `HTTP ${resp.status} ${bodyText.slice(0, 160)}`,
+      });
     }
-    const elapsedMs = Date.now() - started;
-    const bodyText = await resp.text().catch(() => "");
-    const preview = bodyText.slice(0, 800);
 
-    let parsed: any = null;
-    try { parsed = JSON.parse(bodyText); } catch { parsed = null; }
-
-    const success = resp.ok;
-    let totalNotas: number | null = null;
-    let paginaAtual: number | null = null;
-    if (parsed && typeof parsed === "object") {
-      const meta = parsed.meta || parsed.pagination || parsed;
-      if (typeof meta?.total === "number") totalNotas = meta.total;
-      if (typeof meta?.current_page === "number") paginaAtual = meta.current_page;
-      else if (typeof meta?.pagina === "number") paginaAtual = meta.pagina;
-    }
-
+    const allOk = totalOk === empresaIds.length;
     return json({
-      ok: success,
-      status: resp.status,
-      statusText: resp.statusText,
-      elapsedMs,
-      url: target,
-      empresaId,
+      ok: allOk,
+      status: lastStatus,
+      statusText: lastStatusText,
+      elapsedMs: totalElapsed,
+      url: lastUrl,
+      empresaIds,
       cnpj: cnpj || null,
-      totalNotas,
-      paginaAtual,
-      bodyPreview: preview,
-      hint: success
-        ? `Conexão OK — Master Tax respondeu para empresa_id ${empresaId}.`
-        : resp.status === 401 || resp.status === 403
-          ? "Credenciais rejeitadas (token inválido/expirado ou sem permissão para esta empresa)."
-          : `HTTP ${resp.status} — verifique URL/token/empresa_id.`,
+      totalEmpresas: empresaIds.length,
+      okEmpresas: totalOk,
+      totalNotas: totalNotasSum,
+      perEmpresa: results,
+      bodyPreview: lastPreview,
+      hint: allOk
+        ? `Conexão OK — Master Tax respondeu para ${empresaIds.length} empresa(s) (${totalNotasSum} nota(s) nos últimos 7 dias).`
+        : `${totalOk}/${empresaIds.length} empresa(s) responderam OK. Verifique os IDs com falha.`,
     });
   } catch (err) {
     const authResp = authErrorResponse(err, corsHeaders);

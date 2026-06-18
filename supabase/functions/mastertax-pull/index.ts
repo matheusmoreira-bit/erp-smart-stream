@@ -33,7 +33,7 @@ interface CompanyCreds {
   company_db: string;
   base_url: string;
   token: string;
-  empresa_id: string;
+  empresa_ids: string[];
   cnpj: string;
 }
 
@@ -44,6 +44,13 @@ function normalizeBaseUrl(raw: string): string {
 
 function sanitizeCnpj(raw: string): string {
   return (raw || "").replace(/\D+/g, "");
+}
+
+function parseEmpresaIds(raw: string): string[] {
+  return (raw || "")
+    .split(/[\s,;]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 function decodeBase64(b64: string): Uint8Array {
@@ -103,54 +110,62 @@ async function fetchInvoicesForCompany(
     ? creds.token
     : `Bearer ${creds.token}`;
   const limite = 50;
-  let pagina = 1;
+  const errors: string[] = [];
 
-  while (true) {
-    const params = new URLSearchParams({
-      empresa_id: creds.empresa_id,
-      emissaoDe: dataInicio,
-      emissaoAte: dataFim,
-      pagina: String(pagina),
-      quantidade: String(limite),
-    });
-    const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
-
-    let resp: Response;
-    try {
-      resp = await fetch(target, {
-        method: "GET",
-        headers: { Authorization: authHeader, Accept: "application/json" },
-        signal: AbortSignal.timeout(30000),
+  for (const empresaId of creds.empresa_ids) {
+    let pagina = 1;
+    while (true) {
+      const params = new URLSearchParams({
+        empresa_id: empresaId,
+        emissaoDe: dataInicio,
+        emissaoAte: dataFim,
+        pagina: String(pagina),
+        quantidade: String(limite),
       });
-    } catch (e) {
-      return { invoices, error: `Falha de rede: ${(e as Error).message}` };
-    }
-    const raw = await resp.text().catch(() => "");
-    if (!resp.ok) {
-      return { invoices, error: `notas-servico HTTP ${resp.status}: ${raw.slice(0, 200)}` };
-    }
-    let data: any = null;
-    try { data = JSON.parse(raw); } catch { data = null; }
+      const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
 
-    const rows: any[] = Array.isArray(data?.data)
-      ? data.data
-      : Array.isArray(data?.notas)
-        ? data.notas
-        : Array.isArray(data)
-          ? data
-          : [];
-    for (const r of rows) {
-      const inv = parseNotaFromRow(r);
-      if (inv) invoices.push(inv);
+      let resp: Response;
+      try {
+        resp = await fetch(target, {
+          method: "GET",
+          headers: { Authorization: authHeader, Accept: "application/json" },
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch (e) {
+        errors.push(`[${empresaId}] rede: ${(e as Error).message}`);
+        break;
+      }
+      const raw = await resp.text().catch(() => "");
+      if (!resp.ok) {
+        errors.push(`[${empresaId}] HTTP ${resp.status}: ${raw.slice(0, 160)}`);
+        break;
+      }
+      let data: any = null;
+      try { data = JSON.parse(raw); } catch { data = null; }
+
+      const rows: any[] = Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.notas)
+          ? data.notas
+          : Array.isArray(data)
+            ? data
+            : [];
+      for (const r of rows) {
+        const inv = parseNotaFromRow(r);
+        if (inv) {
+          (inv.raw as any) = { ...(inv.raw || {}), _empresa_id: empresaId };
+          invoices.push(inv);
+        }
+      }
+      const lastPage = Number(
+        data?.meta?.last_page ?? data?.last_page ?? data?.pagination?.last_page ?? 1,
+      );
+      if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
+      pagina++;
     }
-    const lastPage = Number(
-      data?.meta?.last_page ?? data?.last_page ?? data?.pagination?.last_page ?? 1,
-    );
-    if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
-    pagina++;
   }
 
-  return { invoices };
+  return { invoices, error: errors.length ? errors.join(" | ") : undefined };
 }
 
 async function loadCompanyCredentials(
@@ -173,13 +188,13 @@ async function loadCompanyCredentials(
   const out: CompanyCreds[] = [];
   for (const [companyDb, kv] of grouped) {
     const token = (kv.token || "").trim();
-    const empresaId = (kv.empresa_id || "").trim();
-    if (!token || !empresaId) continue;
+    const empresaIds = parseEmpresaIds(kv.empresa_id || "");
+    if (!token || empresaIds.length === 0) continue;
     out.push({
       company_db: companyDb,
       base_url: normalizeBaseUrl(kv.base_url || DEFAULT_BASE_URL),
       token,
-      empresa_id: empresaId,
+      empresa_ids: empresaIds,
       cnpj: sanitizeCnpj(kv.cnpj || ""),
     });
   }
@@ -292,7 +307,7 @@ Deno.serve(async (req) => {
             step: "mastertax_pull",
             status_to: "awaiting_erpflow_approval",
             message: "NF importada da Master Tax",
-            payload: { chave_acesso: inv.chave_acesso, company_db: creds.company_db, empresa_id: creds.empresa_id },
+            payload: { chave_acesso: inv.chave_acesso, company_db: creds.company_db, empresa_id: (inv.raw as any)?._empresa_id ?? null },
             actor: "mastertax-pull",
           });
 
