@@ -352,14 +352,9 @@ export default function PagCorp() {
       openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic");
       return;
     }
-    const allGeneric = selected.every((t) => !t.hasAccountability);
-    if (allGeneric) {
-      setConsolidateDialog({ open: true, transactions: selected });
-      return;
-    }
-    // Mixed → percorrer uma a uma
-    toast.info("Seleção contém prestações de contas — integrando uma a uma");
-    startBatch();
+    // ≥2 selecionadas → SEMPRE consolida em 1 PC (independente de prestação).
+    // Comprovantes de todas serão anexados ao PC consolidado.
+    setConsolidateDialog({ open: true, transactions: selected });
   };
 
   const advanceBatch = () => {
@@ -388,6 +383,7 @@ export default function PagCorp() {
   const handleConfirmIntegrate = async (
     supplier: SapSearchOption,
     override: { costCenter?: string | null; project?: string | null; item?: string | null } = {},
+    options: { markNondeductible: boolean } = { markNondeductible: false },
   ) => {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
@@ -399,8 +395,27 @@ export default function PagCorp() {
         override.costCenter || override.project || override.item
           ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null, item: override.item ?? null } }
           : undefined;
-      // Sem prestação ⇒ tratada como indedutível por padrão
-      const asNondeductible = integrateDialog.type === "generic";
+      // Sem prestação ⇒ indedutível por padrão; toggle do usuário tem prioridade
+      const asNondeductible =
+        options.markNondeductible || integrateDialog.type === "generic" || !!t.isNondeductible;
+
+      // Persiste marcação a nível de compra (override do cartão) — B4
+      if (options.markNondeductible) {
+        try {
+          await supabase
+            .from("pagcorp_nondeductible_expenses" as any)
+            .upsert({
+              pagcorp_expense_id: Number(t.id),
+              company_db: session.companyDB,
+              supplier_code: supplier.code,
+              supplier_name: supplier.name,
+              created_by: session.userName || null,
+            }, { onConflict: "pagcorp_expense_id,company_db" });
+        } catch (e) {
+          console.warn("Falha ao persistir indedutível por compra:", e);
+        }
+      }
+
       const result = await integrateDirect(
         t,
         integrateDialog.type,
