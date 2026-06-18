@@ -267,11 +267,11 @@ export default function NfEntrada() {
                     <TableCell className="text-right">
                       <div className="flex items-center gap-1 justify-end">
                         <Button variant="ghost" size="icon" title="Ver XML"
-                          disabled={!it.xml_storage_path} onClick={() => openFile(it.xml_storage_path)}>
+                          disabled={busyId === it.id} onClick={() => openFile(it.id, "xml")}>
                           <FileCode2 className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" title="Ver PDF"
-                          disabled={!it.pdf_storage_path} onClick={() => openFile(it.pdf_storage_path)}>
+                          disabled={busyId === it.id} onClick={() => openFile(it.id, "pdf")}>
                           <FileText className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" title="Histórico" onClick={() => setDetail(it)}>
