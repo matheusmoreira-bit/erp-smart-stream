@@ -219,10 +219,10 @@ export default function NfEntrada() {
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
               )}
               {!loading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">
                   Nenhuma NF importada ainda. Configure os secrets <code>MASTERTAX_BASE_URL</code> e <code>MASTERTAX_TOKEN</code> e clique em "Buscar Master Tax agora".
                 </TableCell></TableRow>
               )}
