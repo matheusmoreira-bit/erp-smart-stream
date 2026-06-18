@@ -19,20 +19,30 @@ async function loadCredsForCompany(
   supabase: ReturnType<typeof createClient>,
   companyDb: string | null,
 ): Promise<MasterTaxCreds | null> {
-  if (!companyDb) return null;
   const { data } = await supabase
     .from("system_credentials")
-    .select("credential_key, credential_value")
-    .eq("system_name", "mastertax")
-    .eq("company_db", companyDb);
-  const kv: Record<string, string> = {};
-  for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
-    kv[r.credential_key] = r.credential_value ?? "";
+    .select("company_db, credential_key, credential_value")
+    .eq("system_name", "mastertax");
+  const rows = (data || []) as Array<{ company_db: string | null; credential_key: string; credential_value: string }>;
+  // Group by company_db
+  const grouped = new Map<string, Record<string, string>>();
+  for (const r of rows) {
+    const key = r.company_db || "_global";
+    const bucket = grouped.get(key) || {};
+    bucket[r.credential_key] = r.credential_value ?? "";
+    grouped.set(key, bucket);
   }
-  const token = (kv.token || "").trim();
-  if (!token) return null;
-  const baseRaw = (kv.base_url || DEFAULT_BASE_URL).trim().replace(/\/+$/, "");
-  return { base_url: baseRaw || DEFAULT_BASE_URL, token };
+  // Try exact match, then global, then any
+  const tryKeys = [companyDb || "", "_global", ...Array.from(grouped.keys())];
+  for (const k of tryKeys) {
+    const kv = grouped.get(k);
+    if (!kv) continue;
+    const token = (kv.token || "").trim();
+    if (!token) continue;
+    const baseRaw = (kv.base_url || DEFAULT_BASE_URL).trim().replace(/\/+$/, "");
+    return { base_url: baseRaw || DEFAULT_BASE_URL, token };
+  }
+  return null;
 }
 
 function authHeader(token: string): string {
