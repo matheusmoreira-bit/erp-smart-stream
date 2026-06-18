@@ -20,13 +20,20 @@ interface NfRow {
 async function loadCredentials(sb: ReturnType<typeof createClient>, companyDb: string) {
   const { data, error } = await sb
     .from("system_credentials")
-    .select("config")
-    .eq("system", "sap")
-    .eq("company_db", companyDb)
-    .maybeSingle();
-  if (error || !data) throw new Error(`Credenciais SAP ausentes para ${companyDb}`);
-  return data.config as Record<string, string>;
+    .select("credential_key, credential_value")
+    .eq("system_name", "sap")
+    .eq("company_db", companyDb);
+  if (error) throw new Error(`Credenciais SAP erro: ${error.message}`);
+  const kv: Record<string, string> = {};
+  for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
+    kv[r.credential_key] = r.credential_value ?? "";
+  }
+  if (!kv.service_layer_url || !kv.username || !kv.password) {
+    throw new Error(`Credenciais SAP ausentes para ${companyDb}`);
+  }
+  return kv;
 }
+
 
 function buildBaseUrl(raw: string): string {
   let url = raw.replace(/\/+$/, "");

@@ -224,6 +224,166 @@ async function loadCompanyCredentials(
   return out;
 }
 
+// ============================================================
+// SAP existing-PO matching (avoid duplicate ERP Flow approval)
+// ============================================================
+
+function buildSapBaseUrl(raw: string): string {
+  let url = (raw || "").replace(/\/+$/, "");
+  if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
+  else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
+  return url;
+}
+
+async function sapLogin(baseUrl: string, companyDB: string, u: string, p: string): Promise<string> {
+  const r = await fetch(`${baseUrl}/Login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ UserName: u, Password: p, CompanyDB: companyDB }),
+  });
+  if (!r.ok) throw new Error(`Login SAP falhou ${r.status}`);
+  await r.json();
+  const sc = r.headers.get("set-cookie") || "";
+  const sess = sc.match(/B1SESSION=([^;]+)/)?.[1];
+  const route = sc.match(/ROUTEID=([^;]+)/)?.[1];
+  if (!sess) throw new Error("B1SESSION ausente");
+  return `B1SESSION=${sess}${route ? `; ROUTEID=${route}` : ""}`;
+}
+
+async function loadSapCreds(
+  supabase: ReturnType<typeof createClient>,
+  companyDb: string,
+): Promise<{ baseUrl: string; companyDB: string; username: string; password: string } | null> {
+  const { data } = await supabase
+    .from("system_credentials")
+    .select("credential_key, credential_value")
+    .eq("system_name", "sap")
+    .eq("company_db", companyDb);
+  const kv: Record<string, string> = {};
+  for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
+    kv[r.credential_key] = r.credential_value ?? "";
+  }
+  if (!kv.service_layer_url || !kv.username || !kv.password) return null;
+  return {
+    baseUrl: buildSapBaseUrl(kv.service_layer_url),
+    companyDB: kv.company_db || companyDb,
+    username: kv.username,
+    password: kv.password,
+  };
+}
+
+const escapeOData = (s: string) => (s || "").replace(/'/g, "''");
+
+async function findSapSupplierCardCode(
+  baseUrl: string,
+  cookie: string,
+  cnpj: string,
+  nome: string,
+): Promise<string | null> {
+  const digits = (cnpj || "").replace(/\D/g, "");
+  if (digits) {
+    const r = await fetch(
+      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and FederalTaxID eq '${digits}'&$select=CardCode&$top=1`,
+      { headers: { Cookie: cookie } },
+    );
+    if (r.ok) {
+      const cc = (await r.json())?.value?.[0]?.CardCode;
+      if (cc) return String(cc);
+    }
+  }
+  const n = (nome || "").trim();
+  if (n.length >= 4) {
+    const r = await fetch(
+      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and contains(CardName,'${escapeOData(n)}')&$select=CardCode&$top=1`,
+      { headers: { Cookie: cookie } },
+    );
+    if (r.ok) {
+      const cc = (await r.json())?.value?.[0]?.CardCode;
+      if (cc) return String(cc);
+    }
+  }
+  return null;
+}
+
+async function findExistingPo(
+  baseUrl: string, cookie: string, cardCode: string, valor: number,
+): Promise<{ docEntry: string; isDraft: boolean } | null> {
+  const v = Number(valor).toFixed(2);
+  const poUrl = `${baseUrl}/PurchaseOrders?$filter=CardCode eq '${escapeOData(cardCode)}' and DocumentStatus eq 'bost_Open' and DocTotal eq ${v}&$select=DocEntry&$top=1`;
+  const poR = await fetch(poUrl, { headers: { Cookie: cookie } });
+  if (poR.ok) {
+    const de = (await poR.json())?.value?.[0]?.DocEntry;
+    if (de != null) return { docEntry: String(de), isDraft: false };
+  }
+  const drUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseOrders' and CardCode eq '${escapeOData(cardCode)}' and DocTotal eq ${v}&$select=DocEntry&$top=1`;
+  const drR = await fetch(drUrl, { headers: { Cookie: cookie } });
+  if (drR.ok) {
+    const de = (await drR.json())?.value?.[0]?.DocEntry;
+    if (de != null) return { docEntry: String(de), isDraft: true };
+  }
+  return null;
+}
+
+async function tryMatchExistingPo(
+  supabase: ReturnType<typeof createClient>,
+  companyDb: string,
+  insertedIds: string[],
+): Promise<{ matched: number; checked: number; error?: string }> {
+  if (!insertedIds.length) return { matched: 0, checked: 0 };
+  const sap = await loadSapCreds(supabase, companyDb);
+  if (!sap) return { matched: 0, checked: 0, error: "SAP creds ausentes" };
+
+  let cookie: string;
+  try {
+    cookie = await sapLogin(sap.baseUrl, sap.companyDB, sap.username, sap.password);
+  } catch (e) {
+    return { matched: 0, checked: 0, error: (e as Error).message };
+  }
+
+  let matched = 0;
+  let checked = 0;
+  try {
+    const { data: rows } = await supabase
+      .from("nf_entrada_imports")
+      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total")
+      .in("id", insertedIds);
+    for (const row of (rows || []) as Array<{ id: string; cnpj_fornecedor: string | null; nome_fornecedor: string | null; valor_total: number | null }>) {
+      checked++;
+      try {
+        const cardCode = await findSapSupplierCardCode(
+          sap.baseUrl, cookie, row.cnpj_fornecedor || "", row.nome_fornecedor || "",
+        );
+        if (!cardCode) continue;
+        const match = await findExistingPo(sap.baseUrl, cookie, cardCode, Number(row.valor_total || 0));
+        if (!match) continue;
+        await supabase.from("nf_entrada_imports").update({
+          status: "awaiting_sap",
+          sap_company_db: companyDb,
+          sap_matched_card_code: cardCode,
+          sap_matched_po_doc_entry: match.docEntry,
+          sap_matched_po_is_draft: match.isDraft,
+          sap_po_draft_id: match.docEntry,
+          sap_match_reason: `cnpj+valor (${match.isDraft ? "draft" : "PO"})`,
+        }).eq("id", row.id);
+        await supabase.from("nf_entrada_logs").insert({
+          import_id: row.id,
+          step: "match_existing_po",
+          status_to: "awaiting_sap",
+          message: `PC ${match.isDraft ? "esboço" : "efetiva"} já existente no SAP (DocEntry ${match.docEntry}, CardCode ${cardCode}) — aprovação ERP Flow ignorada`,
+          actor: "mastertax-pull",
+        });
+        matched++;
+      } catch (e) {
+        console.error(`[mastertax-pull][${companyDb}] match err id=${row.id}:`, (e as Error).message);
+      }
+    }
+  } finally {
+    await fetch(`${sap.baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
+  }
+  return { matched, checked };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -257,7 +417,10 @@ Deno.serve(async (req) => {
     result.companies = allCreds.length;
 
     for (const creds of allCreds) {
-      const stats = { company_db: creds.company_db, fetched: 0, upserted: 0, skipped: 0, errors: 0, error: undefined as string | undefined };
+      const stats = { company_db: creds.company_db, fetched: 0, upserted: 0, skipped: 0, matched: 0, errors: 0, error: undefined as string | undefined };
+      const insertedIdsForCompany: string[] = [];
+
+
 
       for (const empresaId of creds.empresa_ids) {
         const stateKey = `mastertax_last_pull:${empresaId}`;
@@ -321,11 +484,14 @@ Deno.serve(async (req) => {
                 raw_mastertax: inv.raw ?? null,
                 xml_storage_path: xmlPath,
                 pdf_storage_path: null,
+                sap_company_db: creds.company_db,
                 status: "awaiting_erpflow_approval",
               })
               .select()
               .single();
             if (insErr) throw insErr;
+
+            insertedIdsForCompany.push(inserted.id);
 
             await supabase.from("nf_entrada_logs").insert({
               import_id: inserted.id,
@@ -338,6 +504,7 @@ Deno.serve(async (req) => {
 
             stats.upserted++;
             result.upserted++;
+
           } catch (e) {
             console.error(`[mastertax-pull][${creds.company_db}][${empresaId}] erro item:`, (e as Error).message);
             stats.errors++;
@@ -357,6 +524,17 @@ Deno.serve(async (req) => {
         { company_db: creds.company_db, key: "last_pull_iso", value: { iso: new Date().toISOString() } },
         { onConflict: "company_db,key" },
       );
+
+      // Try to match new imports against existing SAP POs / PO drafts
+      // to skip ERP Flow approval when the document already exists in the ERP.
+      try {
+        const m = await tryMatchExistingPo(supabase, creds.company_db, insertedIdsForCompany);
+        stats.matched = m.matched;
+        if (m.error) console.warn(`[mastertax-pull][${creds.company_db}] match: ${m.error}`);
+      } catch (e) {
+        console.error(`[mastertax-pull][${creds.company_db}] match falhou:`, (e as Error).message);
+      }
+
 
       // Retention: drop mastertax imports with data_emissao older than 120 days
       // (only those still untouched — pending/awaiting/cancelled — to preserve audit trail of processed ones).
