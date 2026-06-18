@@ -112,7 +112,17 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar {isSales ? "Pedido de Venda" : "Pedido de Compra"}</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+            <span>Editar {isSales ? "Pedido de Venda" : "Pedido de Compra"}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-7"
+              onClick={() => setShowRelationsMap(true)}
+            >
+              <Network className="w-3.5 h-3.5" /> Mapa de relações
+            </Button>
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
