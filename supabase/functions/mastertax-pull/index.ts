@@ -110,54 +110,62 @@ async function fetchInvoicesForCompany(
     ? creds.token
     : `Bearer ${creds.token}`;
   const limite = 50;
-  let pagina = 1;
+  const errors: string[] = [];
 
-  while (true) {
-    const params = new URLSearchParams({
-      empresa_id: creds.empresa_id,
-      emissaoDe: dataInicio,
-      emissaoAte: dataFim,
-      pagina: String(pagina),
-      quantidade: String(limite),
-    });
-    const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
-
-    let resp: Response;
-    try {
-      resp = await fetch(target, {
-        method: "GET",
-        headers: { Authorization: authHeader, Accept: "application/json" },
-        signal: AbortSignal.timeout(30000),
+  for (const empresaId of creds.empresa_ids) {
+    let pagina = 1;
+    while (true) {
+      const params = new URLSearchParams({
+        empresa_id: empresaId,
+        emissaoDe: dataInicio,
+        emissaoAte: dataFim,
+        pagina: String(pagina),
+        quantidade: String(limite),
       });
-    } catch (e) {
-      return { invoices, error: `Falha de rede: ${(e as Error).message}` };
-    }
-    const raw = await resp.text().catch(() => "");
-    if (!resp.ok) {
-      return { invoices, error: `notas-servico HTTP ${resp.status}: ${raw.slice(0, 200)}` };
-    }
-    let data: any = null;
-    try { data = JSON.parse(raw); } catch { data = null; }
+      const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
 
-    const rows: any[] = Array.isArray(data?.data)
-      ? data.data
-      : Array.isArray(data?.notas)
-        ? data.notas
-        : Array.isArray(data)
-          ? data
-          : [];
-    for (const r of rows) {
-      const inv = parseNotaFromRow(r);
-      if (inv) invoices.push(inv);
+      let resp: Response;
+      try {
+        resp = await fetch(target, {
+          method: "GET",
+          headers: { Authorization: authHeader, Accept: "application/json" },
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch (e) {
+        errors.push(`[${empresaId}] rede: ${(e as Error).message}`);
+        break;
+      }
+      const raw = await resp.text().catch(() => "");
+      if (!resp.ok) {
+        errors.push(`[${empresaId}] HTTP ${resp.status}: ${raw.slice(0, 160)}`);
+        break;
+      }
+      let data: any = null;
+      try { data = JSON.parse(raw); } catch { data = null; }
+
+      const rows: any[] = Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.notas)
+          ? data.notas
+          : Array.isArray(data)
+            ? data
+            : [];
+      for (const r of rows) {
+        const inv = parseNotaFromRow(r);
+        if (inv) {
+          (inv.raw as any) = { ...(inv.raw || {}), _empresa_id: empresaId };
+          invoices.push(inv);
+        }
+      }
+      const lastPage = Number(
+        data?.meta?.last_page ?? data?.last_page ?? data?.pagination?.last_page ?? 1,
+      );
+      if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
+      pagina++;
     }
-    const lastPage = Number(
-      data?.meta?.last_page ?? data?.last_page ?? data?.pagination?.last_page ?? 1,
-    );
-    if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
-    pagina++;
   }
 
-  return { invoices };
+  return { invoices, error: errors.length ? errors.join(" | ") : undefined };
 }
 
 async function loadCompanyCredentials(
