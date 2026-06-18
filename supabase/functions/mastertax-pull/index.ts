@@ -188,13 +188,13 @@ async function loadCompanyCredentials(
   const out: CompanyCreds[] = [];
   for (const [companyDb, kv] of grouped) {
     const token = (kv.token || "").trim();
-    const empresaId = (kv.empresa_id || "").trim();
-    if (!token || !empresaId) continue;
+    const empresaIds = parseEmpresaIds(kv.empresa_id || "");
+    if (!token || empresaIds.length === 0) continue;
     out.push({
       company_db: companyDb,
       base_url: normalizeBaseUrl(kv.base_url || DEFAULT_BASE_URL),
       token,
-      empresa_id: empresaId,
+      empresa_ids: empresaIds,
       cnpj: sanitizeCnpj(kv.cnpj || ""),
     });
   }
