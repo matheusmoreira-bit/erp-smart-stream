@@ -125,69 +125,67 @@ async function fetchInvoicesForEmpresa(
   const limite = 50;
   const errors: string[] = [];
 
-  for (const empresaId of creds.empresa_ids) {
-    let pagina = 1;
-    while (true) {
-      const competencia = dataFim.slice(0, 7);
-      const params = new URLSearchParams({
-        empresa_id: empresaId,
-        competencia,
-        emissaoDe: dataInicio,
-        emissaoAte: dataFim,
-        dataArmazenamentoInicio: dataInicio,
-        dataArmazenamentoFim: dataFim,
-        pagina: String(pagina),
-        quantidade: String(limite),
-        ordenar: "dataEmissao",
-        sentido: "desc",
-        tipo: "Prestador",
-        retencoes: "todas",
+  let pagina = 1;
+  while (true) {
+    const competencia = dataFim.slice(0, 7);
+    const params = new URLSearchParams({
+      empresa_id: empresaId,
+      competencia,
+      emissaoDe: dataInicio,
+      emissaoAte: dataFim,
+      dataArmazenamentoInicio: dataInicio,
+      dataArmazenamentoFim: dataFim,
+      pagina: String(pagina),
+      quantidade: String(limite),
+      ordenar: "dataEmissao",
+      sentido: "desc",
+      tipo: "Prestador",
+      retencoes: "todas",
+    });
+    const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
+
+    let resp: Response;
+    try {
+      resp = await fetch(target, {
+        method: "GET",
+        headers: { Authorization: authHeader, Accept: "application/json" },
+        signal: AbortSignal.timeout(30000),
       });
-      const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
-
-      let resp: Response;
-      try {
-        resp = await fetch(target, {
-          method: "GET",
-          headers: { Authorization: authHeader, Accept: "application/json" },
-          signal: AbortSignal.timeout(30000),
-        });
-      } catch (e) {
-        errors.push(`[${empresaId}] rede: ${(e as Error).message}`);
-        break;
-      }
-      const raw = await resp.text().catch(() => "");
-      if (!resp.ok) {
-        errors.push(`[${empresaId}] HTTP ${resp.status}: ${raw.slice(0, 160)}`);
-        break;
-      }
-      let data: any = null;
-      try { data = JSON.parse(raw); } catch { data = null; }
-
-      const retorno = data?.retorno ?? data;
-      const rows: any[] = Array.isArray(retorno?.data)
-        ? retorno.data
-        : Array.isArray(retorno?.notas)
-          ? retorno.notas
-          : Array.isArray(data?.data)
-            ? data.data
-            : Array.isArray(data)
-              ? data
-              : [];
-      for (const r of rows) {
-        const inv = parseNotaFromRow(r);
-        if (inv) {
-          (inv.raw as any) = { ...(inv.raw || {}), _empresa_id: empresaId };
-          invoices.push(inv);
-        }
-      }
-      const lastPage = Number(
-        retorno?.last_page ?? retorno?.meta?.last_page ?? data?.meta?.last_page ??
-        data?.last_page ?? data?.pagination?.last_page ?? 1,
-      );
-      if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
-      pagina++;
+    } catch (e) {
+      errors.push(`[${empresaId}] rede: ${(e as Error).message}`);
+      break;
     }
+    const raw = await resp.text().catch(() => "");
+    if (!resp.ok) {
+      errors.push(`[${empresaId}] HTTP ${resp.status}: ${raw.slice(0, 160)}`);
+      break;
+    }
+    let data: any = null;
+    try { data = JSON.parse(raw); } catch { data = null; }
+
+    const retorno = data?.retorno ?? data;
+    const rows: any[] = Array.isArray(retorno?.data)
+      ? retorno.data
+      : Array.isArray(retorno?.notas)
+        ? retorno.notas
+        : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data)
+            ? data
+            : [];
+    for (const r of rows) {
+      const inv = parseNotaFromRow(r);
+      if (inv) {
+        (inv.raw as any) = { ...(inv.raw || {}), _empresa_id: empresaId };
+        invoices.push(inv);
+      }
+    }
+    const lastPage = Number(
+      retorno?.last_page ?? retorno?.meta?.last_page ?? data?.meta?.last_page ??
+      data?.last_page ?? data?.pagination?.last_page ?? 1,
+    );
+    if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
+    pagina++;
   }
 
   return { invoices, error: errors.length ? errors.join(" | ") : undefined };
