@@ -821,6 +821,20 @@ export default function PagCorp() {
               </SelectContent>
             </Select>
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Cartão</label>
+            <Select value={cardFilter} onValueChange={setCardFilter}>
+              <SelectTrigger className="w-56 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os cartões</SelectItem>
+                {cardOptions.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
             <label className="text-xs text-muted-foreground">Buscar</label>
             <div className="relative">
