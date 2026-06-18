@@ -309,6 +309,43 @@ export default function NfEntrada() {
               <div className="text-xs text-muted-foreground">
                 Chave de acesso: <span className="font-mono">{detail.chave_acesso}</span>
               </div>
+              <div className="rounded-md border border-border p-3 text-xs space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">Vínculo SAP</span>
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={busyId === detail.id || !!detail.sap_invoice_draft_id}
+                    onClick={() => handleRematch(detail.id)}
+                  >
+                    <Link2 className="w-3.5 h-3.5" /> Refazer vínculo SAP
+                  </Button>
+                </div>
+                <div>
+                  Fornecedor (NF): <span className="font-mono">{detail.cnpj_fornecedor || "—"}</span>
+                  {detail.nome_fornecedor ? ` · ${detail.nome_fornecedor}` : ""}
+                </div>
+                <div>
+                  CardCode SAP:{" "}
+                  <span className="font-mono">{detail.sap_matched_card_code || "—"}</span>
+                </div>
+                <div>
+                  PC vinculado:{" "}
+                  <span className="font-mono">
+                    {detail.sap_matched_po_doc_entry
+                      ? `${detail.sap_matched_po_is_draft ? "esboço" : "PC"} ${detail.sap_matched_po_doc_entry}`
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  Motivo do match:{" "}
+                  <span className="text-muted-foreground">{detail.sap_match_reason || "—"}</span>
+                </div>
+                {detail.sap_invoice_draft_id && (
+                  <div className="text-muted-foreground">
+                    Esboço de NF de entrada já criado ({detail.sap_invoice_draft_id}) — rematch desabilitado para evitar duplicata.
+                  </div>
+                )}
+              </div>
               {detail.last_error && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 text-destructive text-xs px-3 py-2">
                   Último erro: {detail.last_error}
