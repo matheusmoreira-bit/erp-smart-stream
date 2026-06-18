@@ -117,7 +117,12 @@ function ExpenseDetailModal({
 
   const showSubmit = expense.status === "rascunho";
   const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
-  const showEdit = canEdit && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
+  const hasSapError = !!expense.sap_integration_error && !expense.sap_doc_entry;
+  const showEdit = canEdit && (
+    expense.status === "rascunho" ||
+    expense.status === "pendente_aprovacao" ||
+    (expense.status === "aprovado" && hasSapError)
+  );
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
   const showApproval = canApprove && expense.status === "pendente_aprovacao";
   const hasIntegration = !!(expense.sap_doc_entry || expense.sap_doc_num || expense.sap_integration_error);

@@ -144,7 +144,18 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                     </Button>
                   </div>
                   <div className="grid grid-cols-12 gap-2">
-                    <div className="col-span-6">
+                    <div className="col-span-3">
+                      <label className="text-[10px] text-muted-foreground">
+                        Código SAP <span className="opacity-60">(opcional)</span>
+                      </label>
+                      <Input
+                        value={item.item_code || ""}
+                        onChange={(e) => updateItem(i, "item_code", e.target.value)}
+                        placeholder="Ex.: 10001"
+                        className="text-sm h-8 font-mono"
+                      />
+                    </div>
+                    <div className="col-span-3">
                       <label className="text-[10px] text-muted-foreground">Descrição *</label>
                       <Input value={item.description} onChange={(e) => updateItem(i, "description", e.target.value)} className="text-sm h-8" />
                     </div>
@@ -161,6 +172,9 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                       <Input value={formatCurrency(item.line_total, expense.currency)} readOnly className="text-sm h-8 bg-muted/30 font-mono" />
                     </div>
                   </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Deixe o Código SAP em branco para enviar como linha de serviço (sem item).
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[10px] text-muted-foreground">Centro de Custo</label>

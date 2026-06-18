@@ -426,8 +426,11 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .single();
       if (getErr) throw getErr;
       const status = (current as any).status as ExpenseStatus;
-      if (status !== "rascunho" && status !== "pendente_aprovacao") {
-        throw new Error("Somente pedidos em rascunho ou pendentes de aprovação podem ser alterados.");
+      const hasSapError = !!(current as any).sap_integration_error;
+      const alreadyInSap = !!((current as any).sap_doc_entry || (current as any).sap_doc_num);
+      const editableForFix = status === "aprovado" && hasSapError && !alreadyInSap;
+      if (status !== "rascunho" && status !== "pendente_aprovacao" && !editableForFix) {
+        throw new Error("Somente pedidos em rascunho, pendentes de aprovação ou aprovados com erro de integração podem ser alterados.");
       }
 
       const updates: any = {};
@@ -438,6 +441,12 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       if (input.items && input.items.length > 0) {
         const totalAmount = input.items.reduce((s, i) => s + i.line_total, 0);
         updates.total_amount = totalAmount;
+      }
+
+      // Quando o usuário edita após erro de integração, limpe o erro para
+      // permitir nova tentativa limpa.
+      if (editableForFix) {
+        updates.sap_integration_error = null;
       }
 
       if (Object.keys(updates).length > 0) {
