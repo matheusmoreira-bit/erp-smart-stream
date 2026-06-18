@@ -145,13 +145,16 @@ async function fetchInvoicesForCompany(
       let data: any = null;
       try { data = JSON.parse(raw); } catch { data = null; }
 
-      const rows: any[] = Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data?.notas)
-          ? data.notas
-          : Array.isArray(data)
-            ? data
-            : [];
+      const retorno = data?.retorno ?? data;
+      const rows: any[] = Array.isArray(retorno?.data)
+        ? retorno.data
+        : Array.isArray(retorno?.notas)
+          ? retorno.notas
+          : Array.isArray(data?.data)
+            ? data.data
+            : Array.isArray(data)
+              ? data
+              : [];
       for (const r of rows) {
         const inv = parseNotaFromRow(r);
         if (inv) {
@@ -160,7 +163,8 @@ async function fetchInvoicesForCompany(
         }
       }
       const lastPage = Number(
-        data?.meta?.last_page ?? data?.last_page ?? data?.pagination?.last_page ?? 1,
+        retorno?.last_page ?? retorno?.meta?.last_page ?? data?.meta?.last_page ??
+        data?.last_page ?? data?.pagination?.last_page ?? 1,
       );
       if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 50) break;
       pagina++;
