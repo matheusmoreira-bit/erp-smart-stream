@@ -360,14 +360,21 @@ function ApprovalDetailModal({
   const [selectedCCs, setSelectedCCs] = useState<Set<string>>(new Set());
 
   // Sempre que troca de documento, pré-seleciona CCs mapeados (ou nenhum se não houver mapping)
+  // e limpa o campo de Observação para não vazar texto do card anterior.
   useEffect(() => {
     if (!doc) return;
     const preselected = rateio.info.byCC
       .map((cc) => cc.code)
       .filter((code) => approverCCs.has(code));
     setSelectedCCs(new Set(preselected));
+    setRemarks("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc?.approvalRequestId]);
+
+  // Também limpa ao fechar o modal, garantindo estado limpo na próxima abertura.
+  useEffect(() => {
+    if (!open) setRemarks("");
+  }, [open]);
 
   const handleDownloadAttachment = async (name: string) => {
     if (!doc || !doc.attachmentEntry || !session || session.erpType !== "sap") {
