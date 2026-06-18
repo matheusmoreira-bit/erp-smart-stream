@@ -37,6 +37,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<Omit<ExpenseItem, "id">[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [showRelationsMap, setShowRelationsMap] = useState(false);
 
   useEffect(() => {
     if (open && expense) {
