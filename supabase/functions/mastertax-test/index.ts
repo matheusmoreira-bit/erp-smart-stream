@@ -1,6 +1,6 @@
 // Edge function: mastertax-test
-// Valida credenciais Master Tax chamando POST /api/gestor/retornaNotasPaginado
-// (endpoint autenticado com Bearer JWT segundo a doc oficial https://apidocs.mastertax.app/).
+// Valida credenciais Master Tax chamando GET /api/notas-servico
+// (endpoint autenticado com Bearer token, filtrado por empresa_id).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { corsHeaders as baseCors } from "npm:@supabase/supabase-js@2/cors";
@@ -68,35 +68,36 @@ Deno.serve(async (req) => {
 
     const baseUrl = normalizeBaseUrl(creds.base_url || DEFAULT_BASE_URL);
     const token = (creds.token || "").trim();
+    const empresaId = (creds.empresa_id || "").trim();
     const cnpj = sanitizeCnpj(creds.cnpj || "");
 
     if (!token) return json({ ok: false, error: "Token Bearer não configurado." }, 400);
+    if (!empresaId) return json({ ok: false, error: "Empresa ID (UUID Master Tax) não configurado." }, 400);
 
     const authHeader = token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`;
-    const target = `${baseUrl}/api/gestor/retornaNotasPaginado`;
 
     const today = new Date();
     const start = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
-    const body: Record<string, unknown> = { pagina: 1, limite: 1 };
-    if (cnpj) {
-      body.cnpj = cnpj;
-      body.data_inicio = fmt(start);
-      body.data_fim = fmt(today);
-    }
+    const params = new URLSearchParams({
+      empresa_id: empresaId,
+      emissaoDe: fmt(start),
+      emissaoAte: fmt(today),
+      pagina: "1",
+      quantidade: "1",
+    });
+    const target = `${baseUrl}/api/notas-servico?${params.toString()}`;
 
     const started = Date.now();
     let resp: Response;
     try {
       resp = await fetch(target, {
-        method: "POST",
+        method: "GET",
         headers: {
           Authorization: authHeader,
-          "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify(body),
         signal: AbortSignal.timeout(20000),
       });
     } catch (e) {
@@ -112,20 +113,17 @@ Deno.serve(async (req) => {
     const bodyText = await resp.text().catch(() => "");
     const preview = bodyText.slice(0, 800);
 
-    let parsed: { sucesso?: boolean; mensagem?: string; retorno?: unknown } | null = null;
-    try {
-      parsed = JSON.parse(bodyText);
-    } catch {
-      parsed = null;
-    }
+    let parsed: any = null;
+    try { parsed = JSON.parse(bodyText); } catch { parsed = null; }
 
-    const success = resp.ok && parsed?.sucesso !== false;
+    const success = resp.ok;
     let totalNotas: number | null = null;
     let paginaAtual: number | null = null;
-    if (parsed && typeof parsed.retorno === "object" && parsed.retorno !== null) {
-      const r = parsed.retorno as Record<string, unknown>;
-      if (typeof r.total === "number") totalNotas = r.total as number;
-      if (typeof r.current_page === "number") paginaAtual = r.current_page as number;
+    if (parsed && typeof parsed === "object") {
+      const meta = parsed.meta || parsed.pagination || parsed;
+      if (typeof meta?.total === "number") totalNotas = meta.total;
+      if (typeof meta?.current_page === "number") paginaAtual = meta.current_page;
+      else if (typeof meta?.pagina === "number") paginaAtual = meta.pagina;
     }
 
     return json({
@@ -134,20 +132,16 @@ Deno.serve(async (req) => {
       statusText: resp.statusText,
       elapsedMs,
       url: target,
+      empresaId,
       cnpj: cnpj || null,
-      mensagem: parsed?.mensagem ?? null,
       totalNotas,
       paginaAtual,
       bodyPreview: preview,
       hint: success
-        ? cnpj
-          ? `Conexão OK — Master Tax respondeu para o CNPJ ${cnpj}.`
-          : "Conexão OK — token aceito (sem filtro de CNPJ; configure o CNPJ para validar a empresa)."
+        ? `Conexão OK — Master Tax respondeu para empresa_id ${empresaId}.`
         : resp.status === 401 || resp.status === 403
-          ? "Credenciais rejeitadas pelo servidor (token inválido/expirado ou sem permissão)."
-          : parsed?.mensagem
-            ? `Erro retornado: ${parsed.mensagem}`
-            : `HTTP ${resp.status} — verifique URL/token.`,
+          ? "Credenciais rejeitadas (token inválido/expirado ou sem permissão para esta empresa)."
+          : `HTTP ${resp.status} — verifique URL/token/empresa_id.`,
     });
   } catch (err) {
     const authResp = authErrorResponse(err, corsHeaders);
