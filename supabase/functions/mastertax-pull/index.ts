@@ -117,12 +117,20 @@ async function fetchInvoicesForCompany(
   for (const empresaId of creds.empresa_ids) {
     let pagina = 1;
     while (true) {
+      const competencia = dataFim.slice(0, 7);
       const params = new URLSearchParams({
         empresa_id: empresaId,
+        competencia,
         emissaoDe: dataInicio,
         emissaoAte: dataFim,
+        dataArmazenamentoInicio: dataInicio,
+        dataArmazenamentoFim: dataFim,
         pagina: String(pagina),
         quantidade: String(limite),
+        ordenar: "dataEmissao",
+        sentido: "desc",
+        tipo: "Prestador",
+        retencoes: "todas",
       });
       const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
 
