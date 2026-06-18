@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  useNfEntrada, fetchNfEntradaLogs, getSignedFileUrl,
+  useNfEntrada, fetchNfEntradaLogs, fetchNfFile,
   type NfEntradaImport, type NfEntradaLog, type NfEntradaStatus,
 } from "@/hooks/useNfEntrada";
 
