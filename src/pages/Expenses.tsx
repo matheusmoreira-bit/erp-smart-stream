@@ -557,8 +557,20 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   };
 
   const effectiveShowAll = isAdmin && showAll;
-  const filtered = expenses.filter((e) => {
-    if (!effectiveShowAll && !isMine(e)) return false;
+
+  // Identifica DocEntries do SAP já vinculados a alguma despesa do ERP Flow,
+  // para não exibi-los duplicados quando o modo é "Ambos".
+  const flowSapDocEntries = new Set(
+    expenses
+      .map((e) => e.sap_doc_entry)
+      .filter((v): v is number => typeof v === "number"),
+  );
+  const sapOnly = showSourceToggle && sourceMode === "both"
+    ? sapOrders.filter((o) => o.sap_doc_entry == null || !flowSapDocEntries.has(o.sap_doc_entry))
+    : [];
+
+  const applyFilters = (e: Expense, scoped: boolean) => {
+    if (scoped && !effectiveShowAll && !isMine(e)) return false;
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
@@ -567,10 +579,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       e.requester_name.toLowerCase().includes(q) ||
       (e.remarks || "").toLowerCase().includes(q)
     );
-  });
+  };
 
+  const flowFiltered = expenses.filter((e) => applyFilters(e, true));
+  const sapFiltered = sapOnly.filter((e) => applyFilters(e, false));
+  const filtered: Array<{ exp: Expense; origin: "erp_flow" | "erp" }> = [
+    ...flowFiltered.map((exp) => ({ exp, origin: "erp_flow" as const })),
+    ...sapFiltered.map((exp) => ({ exp, origin: "erp" as const })),
+  ];
 
-  const totalValue = filtered.reduce((sum, e) => sum + e.total_amount, 0);
+  const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
 
   const handleSubmitForApproval = async (id: string) => {
     setIsSubmitting(true);
