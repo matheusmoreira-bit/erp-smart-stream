@@ -774,6 +774,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </button>
             ))}
           </div>
+          {showSourceToggle && (
+            <div className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs">
+              <button
+                onClick={() => setSourceMode("flow")}
+                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
+                  sourceMode === "flow"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Apenas ERP Flow
+              </button>
+              <button
+                onClick={() => setSourceMode("both")}
+                className={`px-3 py-1.5 rounded-md font-medium transition-colors flex items-center gap-1.5 ${
+                  sourceMode === "both"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Ambos (ERP Flow + ERP)
+                {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" />}
+              </button>
+            </div>
+          )}
           {isAdmin && (
             <div className="flex items-center gap-2 glass-card px-3 py-2 ml-auto">
               <ShieldAlert className="w-4 h-4 text-amber-400" />
