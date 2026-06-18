@@ -106,16 +106,28 @@ function readSapHeaders(): Record<string, string> {
   }
 }
 
+function getCurrentErpType(): string | null {
+  try {
+    const raw = sessionStorage.getItem("erp_session_v1");
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return typeof s?.erpType === "string" ? s.erpType : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function sapFunctionFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
   const sapHeaders = readSapHeaders();
   const hasSapSession = !!sapHeaders["x-sap-session"];
-  // PagCorp / SAP-bound functions don't work with Lovable Cloud auth alone.
-  // If the user isn't logged into SAP, fail fast with a clear message instead
-  // of sending the anon key and getting a generic 401 "Não autenticado".
-  if (!hasSapSession) {
+  const erpType = getCurrentErpType();
+  // Only gate on SAP session when the active ERP is SAP. For other ERPs
+  // (OMIE, TOTVS, S/4HANA…) the SAP session is irrelevant — let the call
+  // proceed so each module can use its own ERP data/endpoints.
+  if (erpType === "sap" && !hasSapSession) {
     const userToken = await getValidAccessToken();
     if (!userToken) {
       return new Response(
@@ -131,4 +143,5 @@ export async function sapFunctionFetch(
     headers: mergeHeaders(sapHeaders, options.headers),
   });
 }
+
 
