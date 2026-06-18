@@ -1242,6 +1242,7 @@ export type Database = {
       }
       expenses: {
         Row: {
+          approval_rule_id: string | null
           branch_id: number
           company_db: string | null
           cost_center: string | null
@@ -1271,6 +1272,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approval_rule_id?: string | null
           branch_id?: number
           company_db?: string | null
           cost_center?: string | null
@@ -1300,6 +1302,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approval_rule_id?: string | null
           branch_id?: number
           company_db?: string | null
           cost_center?: string | null
@@ -1328,7 +1331,15 @@ export type Database = {
           total_amount?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expenses_approval_rule_id_fkey"
+            columns: ["approval_rule_id"]
+            isOneToOne: false
+            referencedRelation: "approval_rules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fornecedores: {
         Row: {
