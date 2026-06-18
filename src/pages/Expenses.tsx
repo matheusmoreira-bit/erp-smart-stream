@@ -48,6 +48,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
+import { RelationsMap } from "@/components/RelationsMap";
 import {
   useExpenses,
   STATUS_LABELS,
@@ -535,12 +536,18 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     }
   };
 
+  const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
+
   const handleCreate = async (input: any) => {
     const result = await createExpense(input) as any;
     if (result?.status === "pendente_aprovacao") {
       toast.info("Despesa enviada para aprovação automaticamente.");
     } else if (result?.status === "aprovado") {
       toast.success("Despesa aprovada (nenhuma regra aplicável).");
+    }
+    // Abre o Mapa de Relações com a despesa recém-criada
+    if (result?.expense) {
+      setRelationsMapExpense(result.expense as Expense);
     }
     return result;
   };
@@ -755,6 +762,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onCreate={handleCreate}
         sapSession={session}
         mode={mode}
+      />
+
+      <RelationsMap
+        open={!!relationsMapExpense}
+        onClose={() => setRelationsMapExpense(null)}
+        expense={relationsMapExpense as any}
+        title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
       />
     </div>
   );

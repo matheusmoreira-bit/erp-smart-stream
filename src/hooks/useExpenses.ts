@@ -216,6 +216,42 @@ async function findMatchingRule(
   return null;
 }
 
+/* ───────────────── Approval log helper ───────────────── */
+
+type ExpenseLogDecision =
+  | "created"
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "integrated"
+  | "integration_failed";
+
+async function logExpenseDecision(
+  expenseId: string,
+  decision: ExpenseLogDecision,
+  opts: {
+    approverName?: string | null;
+    approverEmail?: string | null;
+    levelOrder?: number | null;
+    remarks?: string | null;
+  } = {},
+) {
+  try {
+    await supabase.from("expense_approval_log").insert({
+      expense_id: expenseId,
+      decision,
+      approver_name: opts.approverName ?? null,
+      approver_email: opts.approverEmail ?? null,
+      level_order: opts.levelOrder ?? null,
+      remarks: opts.remarks ?? null,
+    } as any);
+  } catch (e) {
+    // Não bloqueia o fluxo principal se o log falhar (ex.: RLS), só registra.
+    console.warn("Falha ao registrar log de aprovação:", e);
+  }
+}
+
 /* ───────────────── Hook ───────────────── */
 
 export function useExpenses(docType: ExpenseDocType = "purchase") {
@@ -282,6 +318,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // Determine initial status
       let status: ExpenseStatus = input.initialStatus || "rascunho";
       let currentApprover: string | null = null;
+      let matchedRuleId: string | null = null;
 
       // Evaluate approval rules for manual expenses (PagCorp skips rules)
       if (!input.skipRules && origin === "manual") {
@@ -298,6 +335,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         if (match) {
           status = "pendente_aprovacao";
           currentApprover = match.firstApprover?.name || null;
+          matchedRuleId = match.rule.id;
         } else {
           status = "aprovado";
         }
@@ -320,6 +358,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           requester_email: userIdentifier,
           created_by_email: userIdentifier,
           current_approver: currentApprover,
+          approval_rule_id: matchedRuleId,
           origin,
           company_db: session.companyDB,
           branch_id: input.branch_id ?? 1,
@@ -329,6 +368,21 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .single();
 
       if (err) throw err;
+
+      const createdId = (expense as any).id as string;
+      // Log de criação + envio para aprovação (quando aplicável)
+      await logExpenseDecision(createdId, "created", {
+        approverName: session.userName,
+        approverEmail: userIdentifier,
+        remarks: input.remarks || null,
+      });
+      if (status === "pendente_aprovacao") {
+        await logExpenseDecision(createdId, "submitted", {
+          approverName: session.userName,
+          approverEmail: userIdentifier,
+          levelOrder: 1,
+        });
+      }
 
       if (input.items.length > 0) {
         const { error: itemsErr } = await supabase.from("expense_items").insert(
@@ -507,9 +561,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .update({ status: "pendente_aprovacao" as any })
         .eq("id", expenseId);
       if (err) throw err;
+      const actor = session?.userName || "";
+      await logExpenseDecision(expenseId, "submitted", {
+        approverName: actor,
+        approverEmail: actor.includes("@") ? actor : null,
+      });
       await fetchExpenses();
     },
-    [fetchExpenses]
+    [fetchExpenses, session]
   );
 
   const cancelExpense = useCallback(
@@ -519,9 +578,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .update({ status: "cancelado" as any })
         .eq("id", expenseId);
       if (err) throw err;
+      const actor = session?.userName || "";
+      await logExpenseDecision(expenseId, "cancelled", {
+        approverName: actor,
+        approverEmail: actor.includes("@") ? actor : null,
+      });
       await fetchExpenses();
     },
-    [fetchExpenses]
+    [fetchExpenses, session]
   );
 
   const approveExpense = useCallback(
@@ -534,6 +598,13 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .eq("id", expenseId);
       if (err) throw err;
 
+      const actor = session?.userName || "";
+      await logExpenseDecision(expenseId, "approved", {
+        approverName: actor,
+        approverEmail: actor.includes("@") ? actor : null,
+        remarks: remarks || null,
+      });
+
       // Trigger SAP integration immediately (only for SAP companies)
       if (session?.erpType === "sap") {
         try {
@@ -544,11 +615,12 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             sap_company_db: session.companyDB,
             sap_session_expires_at: session.expiresAt,
           });
+          await logExpenseDecision(expenseId, "integrated", { approverName: actor });
         } catch (sapErr) {
+          const msg = sapErr instanceof Error ? sapErr.message : "Erro desconhecido";
+          await logExpenseDecision(expenseId, "integration_failed", { remarks: msg });
           await fetchExpenses();
-          throw new Error(
-            `Despesa aprovada, mas falhou ao integrar no SAP: ${sapErr instanceof Error ? sapErr.message : "Erro desconhecido"}`,
-          );
+          throw new Error(`Despesa aprovada, mas falhou ao integrar no SAP: ${msg}`);
         }
       }
 
@@ -560,15 +632,22 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   const retrySapIntegration = useCallback(
     async (expenseId: string) => {
       if (!session || session.erpType !== "sap") throw new Error("Faça login no SAP pela tela antes de integrar.");
-      const data = await invokeExpenseToSap({
-        expense_id: expenseId,
-        sap_session_id: session.sessionId,
-        sap_route_id: session.routeId,
-        sap_company_db: session.companyDB,
-        sap_session_expires_at: session.expiresAt,
-      });
-      await fetchExpenses();
-      return data;
+      try {
+        const data = await invokeExpenseToSap({
+          expense_id: expenseId,
+          sap_session_id: session.sessionId,
+          sap_route_id: session.routeId,
+          sap_company_db: session.companyDB,
+          sap_session_expires_at: session.expiresAt,
+        });
+        await logExpenseDecision(expenseId, "integrated", { approverName: session.userName });
+        await fetchExpenses();
+        return data;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Erro desconhecido";
+        await logExpenseDecision(expenseId, "integration_failed", { remarks: msg });
+        throw e;
+      }
     },
     [fetchExpenses, session]
   );
@@ -582,9 +661,15 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .update(updates)
         .eq("id", expenseId);
       if (err) throw err;
+      const actor = session?.userName || "";
+      await logExpenseDecision(expenseId, "rejected", {
+        approverName: actor,
+        approverEmail: actor.includes("@") ? actor : null,
+        remarks: remarks || null,
+      });
       await fetchExpenses();
     },
-    [fetchExpenses]
+    [fetchExpenses, session]
   );
 
   useEffect(() => {
