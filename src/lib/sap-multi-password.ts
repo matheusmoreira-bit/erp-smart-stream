@@ -109,8 +109,17 @@ export async function changePasswordInCompanies(
       if (rows.length === 0 || rows[0].InternalKey == null) {
         results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Usuário não existe nesta empresa" });
       } else {
-        await sapAction(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword });
-        results.push({ companyDB: companyDb, displayName, status: "success" });
+        try {
+          await sapAction(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword });
+          results.push({ companyDB: companyDb, displayName, status: "success" });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Erro ao alterar senha";
+          if (isSamePasswordError(msg)) {
+            results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" });
+          } else {
+            results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
+          }
+        }
       }
     } catch (e) {
       results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro ao alterar senha" });
