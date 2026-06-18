@@ -24,6 +24,7 @@ export interface PagCorpTransaction {
   sapDocEntry?: number | null;
   isReversed?: boolean;
   isNondeductible?: boolean;
+  nondeductibleAtExpense?: boolean;
   nondeductibleSupplierCode?: string;
   nondeductibleSupplierName?: string;
   [key: string]: unknown;
@@ -92,12 +93,32 @@ export function usePagCorp() {
           description: item.description || item.expenseDescription || "—",
           amount: item.amount || item.value || item.expenseValue || 0,
           currency: (() => {
-            const explicit = item.currencyCode || item.currency;
-            if (explicit && explicit !== "##") return explicit;
-            const classification = String(item.eventClassification || "").toLowerCase();
-            if (classification.includes("dolar") || classification.includes("dólar") || classification.includes("dollar") || classification.includes("usd")) {
-              return "USD";
+            // Prioriza a moeda original da compra; só assume BRL como último recurso.
+            const candidates = [
+              item.originalCurrencyCode,
+              item.originalCurrency,
+              item.paymentCurrency,
+              item.paymentCurrencyCode,
+              item.eventCurrency,
+              item.eventCurrencyCode,
+              item.cardCurrency,
+              item.cardCurrencyCode,
+              item.currencyCode,
+              item.currency,
+              item.currencySymbol,
+            ];
+            for (const c of candidates) {
+              if (!c) continue;
+              const s = String(c).toUpperCase().trim();
+              if (!s || s === "##" || s === "N/A") continue;
+              if (s === "R$" || s === "BRL") return "BRL";
+              if (s === "US$" || s === "$" || s === "USD") return "USD";
+              if (/^[A-Z]{3}$/.test(s)) return s;
             }
+            // Heurística textual final
+            const text = [item.eventClassification, item.classification, item.description]
+              .map((x) => String(x || "").toLowerCase()).join(" ");
+            if (/(dolar|dólar|dollar|\busd\b|us\$|exterior)/.test(text)) return "USD";
             return "BRL";
           })(),
           accountCode: item.accountCode || item.account || "",
@@ -147,8 +168,9 @@ export function usePagCorp() {
         });
       }
 
-      // Annotate nondeductible cards (mapped by company)
+      // Annotate nondeductible cards + per-expense overrides
       if (companyDb) {
+        // 1) Card-level
         const { data: nondeductible } = await supabase
           .from("pagcorp_nondeductible_cards" as any)
           .select("card_identifier, supplier_code, supplier_name")
@@ -168,6 +190,34 @@ export function usePagCorp() {
               t.nondeductibleSupplierName = hit.name;
             }
           });
+        }
+
+        // 2) Per-expense overrides (B4) — prevalece sobre o do cartão
+        const expIds = items.map((t) => Number(t.id)).filter((n) => !isNaN(n));
+        if (expIds.length > 0) {
+          const { data: ndExp } = await supabase
+            .from("pagcorp_nondeductible_expenses" as any)
+            .select("pagcorp_expense_id, supplier_code, supplier_name")
+            .eq("company_db", companyDb)
+            .in("pagcorp_expense_id", expIds);
+          if (ndExp && ndExp.length) {
+            const map = new Map<number, { code?: string; name?: string }>();
+            (ndExp as any[]).forEach((r) =>
+              map.set(Number(r.pagcorp_expense_id), {
+                code: r.supplier_code || undefined,
+                name: r.supplier_name || undefined,
+              }),
+            );
+            items.forEach((t) => {
+              const hit = map.get(Number(t.id));
+              if (hit) {
+                t.isNondeductible = true;
+                t.nondeductibleAtExpense = true;
+                if (hit.code) t.nondeductibleSupplierCode = hit.code;
+                if (hit.name) t.nondeductibleSupplierName = hit.name;
+              }
+            });
+          }
         }
       }
 
