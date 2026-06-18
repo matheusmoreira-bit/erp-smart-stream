@@ -34,6 +34,16 @@ export default function ApprovalHistory() {
   const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { getLabel } = useCompanies(true);
   const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
+  const { expenses: purchaseExpenses } = useExpenses("purchase");
+  const { expenses: salesExpenses } = useExpenses("sales");
+  const expensesByDocEntry = useMemo(() => {
+    const m = new Map<number, Expense>();
+    for (const e of [...purchaseExpenses, ...salesExpenses]) {
+      if (typeof e.sap_doc_entry === "number") m.set(e.sap_doc_entry, e);
+    }
+    return m;
+  }, [purchaseExpenses, salesExpenses]);
+  const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
 
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
