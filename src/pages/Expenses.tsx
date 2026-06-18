@@ -21,6 +21,7 @@ import {
   XCircle,
   Link2,
   AlertTriangle,
+  Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -373,10 +374,12 @@ function ExpenseCard({
   expense,
   onOpen,
   originBadge,
+  onRelationsMap,
 }: {
   expense: Expense;
   onOpen: () => void;
   originBadge?: "erp_flow" | "erp";
+  onRelationsMap?: () => void;
 }) {
   return (
     <motion.div
@@ -399,7 +402,20 @@ function ExpenseCard({
             </Badge>
           )}
         </div>
-        <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
+        <div className="flex items-center gap-1">
+          {onRelationsMap && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Mapa de relações"
+              onClick={(ev) => { ev.stopPropagation(); onRelationsMap(); }}
+            >
+              <Network className="w-4 h-4" />
+            </Button>
+          )}
+          <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
+        </div>
       </div>
 
       <div className="space-y-2 text-sm">
@@ -837,6 +853,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 expense={exp}
                 originBadge={origin}
                 onOpen={() => setSelectedExpense(exp)}
+                onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
               />
             ))}
           </div>

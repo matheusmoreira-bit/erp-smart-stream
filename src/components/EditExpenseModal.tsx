@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import type { Expense, ExpenseItem } from "@/hooks/useExpenses";
+import { RelationsMap } from "@/components/RelationsMap";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -36,6 +37,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<Omit<ExpenseItem, "id">[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [showRelationsMap, setShowRelationsMap] = useState(false);
 
   useEffect(() => {
     if (open && expense) {
@@ -110,7 +112,17 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar {isSales ? "Pedido de Venda" : "Pedido de Compra"}</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+            <span>Editar {isSales ? "Pedido de Venda" : "Pedido de Compra"}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-7"
+              onClick={() => setShowRelationsMap(true)}
+            >
+              <Network className="w-3.5 h-3.5" /> Mapa de relações
+            </Button>
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
@@ -204,6 +216,12 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           </div>
         </div>
       </DialogContent>
+      <RelationsMap
+        open={showRelationsMap}
+        onClose={() => setShowRelationsMap(false)}
+        expense={expense as any}
+        title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
+      />
     </Dialog>
   );
 }

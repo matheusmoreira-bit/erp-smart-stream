@@ -1,15 +1,17 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText } from "lucide-react";
+import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network } from "lucide-react";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useApprovalHistory, type ApprovalHistoryRow } from "@/hooks/useApprovalHistory";
+import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useCompanies } from "@/hooks/useCompanies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RelationsMap } from "@/components/RelationsMap";
 
 
 function formatCurrency(value?: number | null, currency = "BRL") {
@@ -32,6 +34,16 @@ export default function ApprovalHistory() {
   const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { getLabel } = useCompanies(true);
   const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
+  const { expenses: purchaseExpenses } = useExpenses("purchase");
+  const { expenses: salesExpenses } = useExpenses("sales");
+  const expensesByDocEntry = useMemo(() => {
+    const m = new Map<number, Expense>();
+    for (const e of [...purchaseExpenses, ...salesExpenses]) {
+      if (typeof e.sap_doc_entry === "number") m.set(e.sap_doc_entry, e);
+    }
+    return m;
+  }, [purchaseExpenses, salesExpenses]);
+  const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
 
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
@@ -151,15 +163,31 @@ export default function ApprovalHistory() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((r) => <HistoryCard key={r.id} row={r} />)}
+            {filtered.map((r) => {
+              const linked = typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined;
+              return (
+                <HistoryCard
+                  key={r.id}
+                  row={r}
+                  onRelationsMap={linked ? () => setRelationsMapExpense(linked) : undefined}
+                />
+              );
+            })}
           </div>
         )}
       </main>
+
+      <RelationsMap
+        open={!!relationsMapExpense}
+        onClose={() => setRelationsMapExpense(null)}
+        expense={relationsMapExpense as any}
+        title="Mapa de Relações"
+      />
     </div>
   );
 }
 
-function HistoryCard({ row }: { row: ApprovalHistoryRow }) {
+function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelationsMap?: () => void }) {
   const isApproved = row.decision === "Y";
   const isRejected = row.decision === "N";
   return (
@@ -175,18 +203,31 @@ function HistoryCard({ row }: { row: ApprovalHistoryRow }) {
           </span>
           <h3 className="font-mono font-semibold mt-1">#{row.doc_num || row.doc_entry || "—"}</h3>
         </div>
-        <div className="text-right">
-          <p className="font-mono font-bold">{formatCurrency(row.doc_total, row.currency || "BRL")}</p>
-          {isApproved && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5 mt-1">
-              <CheckCircle2 className="w-3 h-3" /> Aprovado
-            </span>
+        <div className="text-right flex items-start gap-1">
+          {onRelationsMap && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Mapa de relações"
+              onClick={onRelationsMap}
+            >
+              <Network className="w-4 h-4" />
+            </Button>
           )}
-          {isRejected && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-destructive bg-destructive/10 border border-destructive/30 rounded-full px-2 py-0.5 mt-1">
-              <XCircle className="w-3 h-3" /> Rejeitado
-            </span>
-          )}
+          <div>
+            <p className="font-mono font-bold">{formatCurrency(row.doc_total, row.currency || "BRL")}</p>
+            {isApproved && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5 mt-1">
+                <CheckCircle2 className="w-3 h-3" /> Aprovado
+              </span>
+            )}
+            {isRejected && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-destructive bg-destructive/10 border border-destructive/30 rounded-full px-2 py-0.5 mt-1">
+                <XCircle className="w-3 h-3" /> Rejeitado
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

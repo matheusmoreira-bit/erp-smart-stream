@@ -27,7 +27,7 @@ import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useAp
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useNavigate } from "react-router-dom";
-import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check } from "lucide-react";
+import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
 import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache } from "@/lib/sap-client";
@@ -41,6 +41,7 @@ import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RelationsMap } from "@/components/RelationsMap";
 
 import {
   Dialog,
@@ -89,11 +90,13 @@ function ApprovalCard({
   onOpen,
   approverCCs,
   formatCostCenter,
+  onRelationsMap,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
   approverCCs: Set<string>;
   formatCostCenter: (code?: string | null) => string;
+  onRelationsMap?: () => void;
 }) {
   const overdue = isOverdue(doc.dueDate);
   const { show: showRateio, info } = shouldShowRateio(doc);
@@ -131,13 +134,26 @@ function ApprovalCard({
           </span>
           <h3 className="text-foreground font-semibold mt-2 font-mono">#{doc.docNum}</h3>
         </div>
-        <div className="text-right">
-          <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(doc.docTotal, doc.currency)}</p>
-          {overdue && (
-            <span className="text-[10px] font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full uppercase">
-              Vencido
-            </span>
+        <div className="text-right flex items-start gap-1">
+          {onRelationsMap && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Mapa de relações"
+              onClick={(ev) => { ev.stopPropagation(); onRelationsMap(); }}
+            >
+              <Network className="w-4 h-4" />
+            </Button>
           )}
+          <div>
+            <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(doc.docTotal, doc.currency)}</p>
+            {overdue && (
+              <span className="text-[10px] font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full uppercase">
+                Vencido
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1008,6 +1024,7 @@ export default function ApprovalsPage() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
+  const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
   const [isActioning, setIsActioning] = useState(false);
   const isSuperUser = session?.isSuperUser ?? false;
   const isAdmin = isLovableAdmin || isSuperUser;
@@ -1558,7 +1575,19 @@ export default function ApprovalsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((doc, i) => (
               <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <ApprovalCard doc={doc} onOpen={() => setSelectedDoc(doc)} approverCCs={getCostCentersForEmail(doc.approverEmail)} formatCostCenter={formatCostCenter} />
+                <ApprovalCard
+                  doc={doc}
+                  onOpen={() => setSelectedDoc(doc)}
+                  approverCCs={getCostCentersForEmail(doc.approverEmail)}
+                  formatCostCenter={formatCostCenter}
+                  onRelationsMap={(() => {
+                    const internalId = (doc as any).__internalId as string | undefined;
+                    if (!internalId) return undefined;
+                    const exp = expenses.find((e) => e.id === internalId);
+                    return exp ? () => setRelationsMapExpense(exp) : undefined;
+                  })()}
+                />
+
               </motion.div>
             ))}
           </div>
@@ -1631,6 +1660,13 @@ export default function ApprovalsPage() {
         currentUserName={session.userName}
         approverCCs={getCostCentersForEmail(selectedDoc?.approverEmail || "")}
         formatCostCenter={formatCostCenter}
+      />
+
+      <RelationsMap
+        open={!!relationsMapExpense}
+        onClose={() => setRelationsMapExpense(null)}
+        expense={relationsMapExpense as any}
+        title="Mapa de Relações"
       />
 
       <DelegationDialog
