@@ -55,6 +55,7 @@ import {
   STATUS_LABELS,
   STATUS_COLORS,
   type Expense,
+  type ExpenseStatus,
 } from "@/hooks/useExpenses";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { EditExpenseModal } from "@/components/EditExpenseModal";
