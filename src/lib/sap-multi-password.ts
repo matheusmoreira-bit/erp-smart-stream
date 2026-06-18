@@ -9,6 +9,26 @@ export interface MultiCompanyPasswordResult {
   message?: string;
 }
 
+/**
+ * Detecta erros do SAP B1 quando a nova senha é igual à anterior.
+ * Em lote, tratamos esse caso como "skipped" e seguimos com as demais empresas.
+ */
+export function isSamePasswordError(message: string): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes("same as") ||
+    m.includes("same password") ||
+    m.includes("previous password") ||
+    m.includes("igual") ||
+    m.includes("já utilizada") ||
+    m.includes("ja utilizada") ||
+    m.includes("password history") ||
+    m.includes("cannot be reused") ||
+    m.includes("must differ")
+  );
+}
+
 interface CompanyRow {
   company_db: string;
   display_name: string;
@@ -89,8 +109,17 @@ export async function changePasswordInCompanies(
       if (rows.length === 0 || rows[0].InternalKey == null) {
         results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Usuário não existe nesta empresa" });
       } else {
-        await sapAction(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword });
-        results.push({ companyDB: companyDb, displayName, status: "success" });
+        try {
+          await sapAction(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword });
+          results.push({ companyDB: companyDb, displayName, status: "success" });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Erro ao alterar senha";
+          if (isSamePasswordError(msg)) {
+            results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" });
+          } else {
+            results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
+          }
+        }
       }
     } catch (e) {
       results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro ao alterar senha" });

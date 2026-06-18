@@ -4,10 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { KeyRound, Loader2 } from "lucide-react";
+import { KeyRound, Loader2, CheckCircle2, AlertCircle, MinusCircle } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
-import { sapLogin, sapAction, sapQuery } from "@/lib/sap-client";
-import { listSapTargetCompanies, changePasswordInCompanies, type MultiCompanyPasswordResult } from "@/lib/sap-multi-password";
+import { sapAction, sapQuery } from "@/lib/sap-client";
+import {
+  listSapTargetCompanies,
+  changePasswordInCompanies,
+  isSamePasswordError,
+  type MultiCompanyPasswordResult,
+} from "@/lib/sap-multi-password";
 import { toast } from "sonner";
 
 interface CompanyOption {
@@ -18,12 +23,12 @@ interface CompanyOption {
 export function ChangePasswordDialog() {
   const { session } = useSap();
   const [open, setOpen] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
 
   useEffect(() => {
     if (!open || !session) return;
@@ -33,10 +38,10 @@ export function ChangePasswordDialog() {
   }, [open, session]);
 
   const reset = () => {
-    setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setSelected(new Set());
+    setSummary(null);
   };
 
   const toggle = (db: string) => {
@@ -63,11 +68,11 @@ export function ChangePasswordDialog() {
     }
 
     setLoading(true);
+    setSummary(null);
+    const allResults: MultiCompanyPasswordResult[] = [];
+    const currentDisplay = session.companyDB;
     try {
-      // Step 1: Validate current password via Login
-      await sapLogin(session.userName, currentPassword, session.companyDB);
-
-      // Step 2: Look up InternalKey for the current user (Users entity key is integer)
+      // Look up InternalKey for the current user (Users entity key is integer)
       const lookup = await sapQuery(
         session,
         `Users?$filter=UserCode eq '${session.userName.replace(/'/g, "''")}'&$select=InternalKey`,
@@ -80,45 +85,55 @@ export function ChangePasswordDialog() {
       const internalKey = rows[0]?.InternalKey;
       if (internalKey == null) throw new Error("Usuário não encontrado no SAP.");
 
-      // Step 3: Change password in current company
-      await sapAction(
-        session,
-        `Users(${internalKey})`,
-        "PATCH",
-        { UserPassword: newPassword }
-      );
+      // Change password in current company (uses the active session — não pede senha atual)
+      try {
+        await sapAction(session, `Users(${internalKey})`, "PATCH", { UserPassword: newPassword });
+        allResults.push({ companyDB: session.companyDB, displayName: currentDisplay, status: "success" });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (isSamePasswordError(msg)) {
+          allResults.push({
+            companyDB: session.companyDB,
+            displayName: currentDisplay,
+            status: "skipped",
+            message: "Senha igual à anterior",
+          });
+        } else {
+          allResults.push({
+            companyDB: session.companyDB,
+            displayName: currentDisplay,
+            status: "error",
+            message: msg,
+          });
+        }
+      }
 
-      // Step 3: Replicate to additional companies, if any
-      let extraResults: MultiCompanyPasswordResult[] = [];
+      // Replicate to additional companies, if any (cada empresa é independente)
       if (selected.size > 0) {
-        extraResults = await changePasswordInCompanies(session.userName, newPassword, Array.from(selected));
+        const extra = await changePasswordInCompanies(session.userName, newPassword, Array.from(selected));
+        allResults.push(...extra);
       }
 
-      const failures = extraResults.filter((r) => r.status === "error");
-      const skipped = extraResults.filter((r) => r.status === "skipped");
-      const successes = extraResults.filter((r) => r.status === "success");
+      setSummary(allResults);
 
-      if (extraResults.length === 0) {
-        toast.success("Senha alterada com sucesso!");
-      } else if (failures.length === 0) {
+      const successes = allResults.filter((r) => r.status === "success").length;
+      const skipped = allResults.filter((r) => r.status === "skipped").length;
+      const failures = allResults.filter((r) => r.status === "error").length;
+
+      if (failures === 0 && successes > 0) {
         toast.success(
-          `Senha alterada em ${1 + successes.length} empresa(s)${skipped.length ? ` (${skipped.length} ignorada(s))` : ""}.`,
+          `Senha alterada em ${successes} empresa(s)${skipped ? ` (${skipped} ignorada(s))` : ""}.`,
         );
+      } else if (failures === 0 && successes === 0) {
+        toast.info(`Nenhuma alteração aplicada (${skipped} ignorada(s)).`);
+      } else if (successes > 0) {
+        toast.warning(`Concluído com falhas: ${successes} sucesso(s), ${skipped} ignorada(s), ${failures} erro(s).`);
       } else {
-        toast.warning(
-          `Alterada em ${1 + successes.length} empresa(s). Falhas: ${failures.map((f) => f.displayName).join(", ")}`,
-        );
+        toast.error(`Falhou em todas as empresas (${failures}).`);
       }
-
-      setOpen(false);
-      reset();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao alterar senha";
-      if (msg.includes("login") || msg.includes("Login") || msg.includes("Invalid")) {
-        toast.error("Senha atual incorreta.");
-      } else {
-        toast.error(msg);
-      }
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -137,67 +152,84 @@ export function ChangePasswordDialog() {
         <DialogHeader>
           <DialogTitle>Alterar Senha</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div className="space-y-2">
-            <Label htmlFor="current-pw">Senha Atual</Label>
-            <Input
-              id="current-pw"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="new-pw">Nova Senha</Label>
-            <Input
-              id="new-pw"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirm-pw">Confirmar Nova Senha</Label>
-            <Input
-              id="confirm-pw"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-            />
-          </div>
 
-          {otherCompanies.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-border">
-              <Label className="text-sm">Aplicar também em outras empresas</Label>
-              <p className="text-xs text-muted-foreground">
-                A nova senha será aplicada ao usuário <span className="font-medium text-foreground">{session.userName}</span> em cada empresa selecionada (caso exista).
-              </p>
-              <div className="max-h-40 overflow-y-auto space-y-2 rounded-md border border-border p-2">
-                {otherCompanies.map((c) => (
-                  <label key={c.company_db} className="flex items-center gap-2 cursor-pointer text-sm">
-                    <Checkbox
-                      checked={selected.has(c.company_db)}
-                      onCheckedChange={() => toggle(c.company_db)}
-                    />
-                    <span className="text-foreground">{c.display_name}</span>
-                    <span className="text-xs text-muted-foreground">({c.company_db})</span>
-                  </label>
-                ))}
-              </div>
+        {summary ? (
+          <div className="space-y-3 mt-2">
+            <p className="text-sm text-muted-foreground">Resumo da operação:</p>
+            <div className="max-h-64 overflow-y-auto space-y-1.5 rounded-md border border-border p-2">
+              {summary.map((r) => (
+                <div key={r.companyDB} className="flex items-start gap-2 text-sm">
+                  {r.status === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />}
+                  {r.status === "skipped" && <MinusCircle className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />}
+                  {r.status === "error" && <AlertCircle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-foreground font-medium">{r.displayName}</div>
+                    {r.message && (
+                      <div className={`text-xs ${r.status === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+                        {r.message}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={reset}>Nova alteração</Button>
+              <Button className="flex-1" onClick={() => { setOpen(false); reset(); }}>Fechar</Button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-pw">Nova Senha</Label>
+              <Input
+                id="new-pw"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-pw">Confirmar Nova Senha</Label>
+              <Input
+                id="confirm-pw"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            Alterar Senha
-          </Button>
-        </form>
+            {otherCompanies.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-border">
+                <Label className="text-sm">Aplicar também em outras empresas</Label>
+                <p className="text-xs text-muted-foreground">
+                  A nova senha será aplicada ao usuário <span className="font-medium text-foreground">{session.userName}</span> em cada empresa selecionada (caso exista). Empresas onde a senha já for igual à atual serão ignoradas automaticamente.
+                </p>
+                <div className="max-h-40 overflow-y-auto space-y-2 rounded-md border border-border p-2">
+                  {otherCompanies.map((c) => (
+                    <label key={c.company_db} className="flex items-center gap-2 cursor-pointer text-sm">
+                      <Checkbox
+                        checked={selected.has(c.company_db)}
+                        onCheckedChange={() => toggle(c.company_db)}
+                      />
+                      <span className="text-foreground">{c.display_name}</span>
+                      <span className="text-xs text-muted-foreground">({c.company_db})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Alterar Senha
+            </Button>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
