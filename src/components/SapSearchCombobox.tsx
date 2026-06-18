@@ -176,36 +176,62 @@ export function SapSearchCombobox({
 
       {isOpen && options.length > 0 && (
         <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
-          {options.map((opt) => {
-            const hasColumns = !!(opt.details?.fantasyName || opt.details?.taxId);
-            return (
-              <button
-                key={opt.code}
-                onClick={() => handleSelect(opt)}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-              >
-                {hasColumns ? (
-                  <div className="grid grid-cols-[80px_1fr_1fr_120px] gap-2 items-center">
-                    <span className="text-xs font-mono text-muted-foreground truncate">{opt.code}</span>
-                    <span className="font-medium text-foreground truncate" title={opt.name}>{opt.name}</span>
-                    <span className="text-xs text-muted-foreground truncate" title={opt.details?.fantasyName || ""}>
-                      {opt.details?.fantasyName || "—"}
-                    </span>
-                    <span className="text-xs text-muted-foreground tabular-nums truncate text-right" title={opt.details?.taxId || ""}>
-                      {opt.details?.taxId || "—"}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col">
-                    <span className="font-medium text-foreground truncate">{opt.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
-                    </span>
-                  </div>
-                )}
-              </button>
-            );
-          })}
+          {(() => {
+            // Detecta nomes duplicados nos resultados para alertar o usuário a escolher pelo CNPJ
+            const nameCount = new Map<string, number>();
+            options.forEach((o) => {
+              const k = (o.name || "").trim().toLowerCase();
+              nameCount.set(k, (nameCount.get(k) || 0) + 1);
+            });
+            return options.map((opt) => {
+              const hasColumns = !!(opt.details?.fantasyName || opt.details?.taxId);
+              const isDup = (nameCount.get((opt.name || "").trim().toLowerCase()) || 0) > 1;
+              return (
+                <button
+                  key={opt.code}
+                  onClick={() => handleSelect(opt)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  {hasColumns ? (
+                    <div className="grid grid-cols-[80px_1fr_1fr_120px] gap-2 items-center">
+                      <span className="text-xs font-mono text-muted-foreground truncate">{opt.code}</span>
+                      <span className="font-medium text-foreground truncate flex items-center gap-1" title={opt.name}>
+                        {opt.name}
+                        {isDup && (
+                          <span
+                            className="text-[10px] px-1 py-0.5 rounded bg-warning/20 text-warning border border-warning/30"
+                            title="Existem múltiplos cadastros com este nome — confira o CNPJ"
+                          >
+                            DUP
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-xs text-muted-foreground truncate" title={opt.details?.fantasyName || ""}>
+                        {opt.details?.fantasyName || "—"}
+                      </span>
+                      <span className="text-xs text-muted-foreground tabular-nums truncate text-right" title={opt.details?.taxId || ""}>
+                        {opt.details?.taxId || "—"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground truncate flex items-center gap-1">
+                        {opt.name}
+                        {isDup && (
+                          <span className="text-[10px] px-1 py-0.5 rounded bg-warning/20 text-warning border border-warning/30">
+                            DUP
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
+                      </span>
+                    </div>
+                  )}
+                </button>
+              );
+            });
+          })()}
         </div>
       )}
 
