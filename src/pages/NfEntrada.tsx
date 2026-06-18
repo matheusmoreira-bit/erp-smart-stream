@@ -97,6 +97,31 @@ export default function NfEntrada() {
     }
   }
 
+  async function handleRematch(id: string) {
+    setBusyId(id);
+    try {
+      const res = await rematchSap(id);
+      if (res?.skipped) {
+        toast({ title: "Rematch ignorado", description: res.skipped });
+      } else if (res?.matched) {
+        toast({
+          title: "Vínculo SAP refeito",
+          description: `CardCode ${res.cardCode} · DocEntry ${res.docEntry}${res.isDraft ? " (esboço)" : ""}`,
+        });
+      } else {
+        toast({
+          title: "Nenhum PC encontrado",
+          description: res?.reason || "Sem PC/esboço aberto para o fornecedor e valor.",
+          variant: "destructive",
+        });
+      }
+    } catch (e) {
+      toast({ title: "Falha no rematch", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleCancel(id: string) {
     if (!confirm("Cancelar este fluxo? Esta ação registra cancelamento mas não desfaz documentos já criados no SAP.")) return;
     setBusyId(id);
