@@ -101,6 +101,7 @@ export function PagCorpIntegrateDialog({
   const [project, setProject] = useState<SapSearchOption | null>(null);
   const [item, setItem] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [markNondeductible, setMarkNondeductible] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
