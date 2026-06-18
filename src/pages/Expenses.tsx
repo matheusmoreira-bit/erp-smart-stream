@@ -762,6 +762,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         sapSession={session}
         mode={mode}
       />
+
+      <RelationsMap
+        open={!!relationsMapExpense}
+        onClose={() => setRelationsMapExpense(null)}
+        expense={relationsMapExpense as any}
+        title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
+      />
     </div>
   );
 }
