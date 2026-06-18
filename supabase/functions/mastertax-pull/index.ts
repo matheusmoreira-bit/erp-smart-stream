@@ -525,6 +525,17 @@ Deno.serve(async (req) => {
         { onConflict: "company_db,key" },
       );
 
+      // Try to match new imports against existing SAP POs / PO drafts
+      // to skip ERP Flow approval when the document already exists in the ERP.
+      try {
+        const m = await tryMatchExistingPo(supabase, creds.company_db, insertedIdsForCompany);
+        stats.matched = m.matched;
+        if (m.error) console.warn(`[mastertax-pull][${creds.company_db}] match: ${m.error}`);
+      } catch (e) {
+        console.error(`[mastertax-pull][${creds.company_db}] match falhou:`, (e as Error).message);
+      }
+
+
       // Retention: drop mastertax imports with data_emissao older than 120 days
       // (only those still untouched — pending/awaiting/cancelled — to preserve audit trail of processed ones).
       const cutoff = new Date(Date.now() - MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000)
