@@ -16,7 +16,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireUser(req);
+    // OMIE proxy is decoupled from Backoffice (Lovable Cloud) auth.
+    // OMIE itself is the ERP authentication: the function only ever uses
+    // credentials stored per company_db in system_credentials.
+
+
 
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
