@@ -553,16 +553,26 @@ export default function PagCorp() {
     }
   };
 
-  const handleGeneratePresentation = async (period: PresentationPeriod) => {
+  const handleGeneratePresentation = async (
+    period: PresentationPeriod,
+    customRange?: { start: string; end: string },
+  ) => {
     if (!session?.companyDB) {
       toast.error("Empresa não selecionada");
       return;
     }
-    const monthsBack = period === "monthly" ? 1 : period === "quarterly" ? 3 : 6;
-    const today = new Date();
-    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const start = new Date(end);
-    start.setMonth(start.getMonth() - monthsBack);
+    let start: Date;
+    let end: Date;
+    if (period === "custom" && customRange) {
+      start = new Date(customRange.start + "T00:00:00");
+      end = new Date(customRange.end + "T00:00:00");
+    } else {
+      const monthsBack = period === "monthly" ? 1 : period === "quarterly" ? 3 : 6;
+      const today = new Date();
+      end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      start = new Date(end);
+      start.setMonth(start.getMonth() - monthsBack);
+    }
 
     const toIso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -1092,8 +1102,45 @@ export default function PagCorp() {
                                   PC #{t.sapDocNum}
                                 </span>
                               )}
+                              {t.sapDocEntry != null && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] gap-1 text-primary"
+                                  onClick={() => setValidateDialog({ open: true, tx: t })}
+                                >
+                                  <CheckCircle className="w-3 h-3" />
+                                  Validar SAP
+                                </Button>
+                              )}
                             </div>
                           ) : t.isReversed ? (
+                            <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
+                              <XCircle className="w-3 h-3" /> Sem integração
+                            </Badge>
+                          ) : integrating === t.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
+                          ) : t.hasAccountability ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs"
+                              onClick={() => openIntegrateDialog(t, "accountability")}
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              Integrar ao ERP
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs"
+                              onClick={() => openIntegrateDialog(t, "generic")}
+                            >
+                              <Upload className="w-3 h-3" />
+                              Integrar ao ERP
+                            </Button>
+                          )}
                             <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
                               <XCircle className="w-3 h-3" /> Sem integração
                             </Badge>
