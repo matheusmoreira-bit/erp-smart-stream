@@ -41,13 +41,20 @@ async function sapLogin(baseUrl: string, companyDB: string, u: string, p: string
 async function loadCreds(sb: ReturnType<typeof createClient>, companyDb: string) {
   const { data, error } = await sb
     .from("system_credentials")
-    .select("config")
-    .eq("system", "sap")
-    .eq("company_db", companyDb)
-    .maybeSingle();
-  if (error || !data) throw new Error(`Credenciais SAP ausentes para ${companyDb}`);
-  return data.config as Record<string, string>;
+    .select("credential_key, credential_value")
+    .eq("system_name", "sap")
+    .eq("company_db", companyDb);
+  if (error) throw new Error(`Credenciais SAP erro: ${error.message}`);
+  const kv: Record<string, string> = {};
+  for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
+    kv[r.credential_key] = r.credential_value ?? "";
+  }
+  if (!kv.service_layer_url || !kv.username || !kv.password) {
+    throw new Error(`Credenciais SAP ausentes para ${companyDb}`);
+  }
+  return kv;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
