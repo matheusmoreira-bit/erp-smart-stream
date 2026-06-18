@@ -296,11 +296,15 @@ export function PagCorpIntegrateDialog({
     if (!supplier) return;
     setSubmitting(true);
     try {
-      await onConfirm(supplier, {
-        costCenter: costCenter?.code || null,
-        project: project?.code || null,
-        item: item?.code || null,
-      });
+      await onConfirm(
+        supplier,
+        {
+          costCenter: costCenter?.code || null,
+          project: project?.code || null,
+          item: item?.code || null,
+        },
+        { markNondeductible },
+      );
       if (storageKey) {
         try { sessionStorage.removeItem(storageKey); } catch {/* ignore */}
       }
