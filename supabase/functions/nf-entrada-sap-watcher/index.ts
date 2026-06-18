@@ -12,9 +12,13 @@ interface NfRow {
   sap_company_db: string | null;
   sap_po_draft_id: string | null;
   sap_invoice_draft_id: string | null;
+  sap_matched_po_doc_entry: string | null;
+  sap_matched_po_is_draft: boolean | null;
+  sap_matched_card_code: string | null;
   itens: Array<Record<string, unknown>>;
   impostos: Record<string, unknown>;
 }
+
 
 function buildBaseUrl(raw: string): string {
   let url = raw.replace(/\/+$/, "");
