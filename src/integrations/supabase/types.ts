@@ -1912,6 +1912,42 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_nondeductible_expenses: {
+        Row: {
+          company_db: string
+          created_at: string
+          created_by: string | null
+          id: string
+          pagcorp_expense_id: number
+          reason: string | null
+          supplier_code: string | null
+          supplier_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pagcorp_expense_id: number
+          reason?: string | null
+          supplier_code?: string | null
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pagcorp_expense_id?: number
+          reason?: string | null
+          supplier_code?: string | null
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pagcorp_supplier_links: {
         Row: {
           card_code: string | null
