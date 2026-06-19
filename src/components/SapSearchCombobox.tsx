@@ -48,8 +48,10 @@ export function SapSearchCombobox({
   placeholder = "Buscar...",
   label,
   minChars = 2,
+  topResults = 15,
   suggestedQuery,
 }: SapSearchComboboxProps) {
+
   const { session } = useSap();
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<SapSearchOption[]>([]);
