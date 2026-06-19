@@ -77,6 +77,30 @@ export interface CreateRuleInput {
   levels: Omit<ApprovalRuleLevel, "id">[];
 }
 
+/**
+ * Colapsa níveis consecutivos do mesmo aprovador em um único nível.
+ * Match por e-mail (case-insensitive) quando presente; senão, pelo nome.
+ * Reordena `level_order` para 1..N após o colapso.
+ */
+export function collapseConsecutiveApprovers(
+  levels: Omit<ApprovalRuleLevel, "id">[],
+): Omit<ApprovalRuleLevel, "id">[] {
+  const sorted = [...levels].sort((a, b) => a.level_order - b.level_order);
+  const key = (l: Omit<ApprovalRuleLevel, "id">) =>
+    (l.approver_email || "").trim().toLowerCase() ||
+    `name:${(l.approver_name || "").trim().toLowerCase()}`;
+  const collapsed: Omit<ApprovalRuleLevel, "id">[] = [];
+  let lastKey = "";
+  for (const lvl of sorted) {
+    const k = key(lvl);
+    if (k && k === lastKey) continue;
+    collapsed.push(lvl);
+    lastKey = k;
+  }
+  return collapsed.map((lvl, i) => ({ ...lvl, level_order: i + 1 }));
+}
+
+
 export function useApprovalRules() {
   const { session } = useSap();
   const activeCompanyDb = session?.companyDB || null;
@@ -153,8 +177,9 @@ export function useApprovalRules() {
       if (err) throw err;
 
       if (input.levels.length > 0) {
+        const normalizedLevels = collapseConsecutiveApprovers(input.levels);
         const { error: lvlErr } = await supabase.from("approval_rule_levels").insert(
-          input.levels.map((lvl) => ({
+          normalizedLevels.map((lvl) => ({
             rule_id: (rule as any).id,
             level_order: lvl.level_order,
             approver_name: lvl.approver_name,
@@ -200,8 +225,9 @@ export function useApprovalRules() {
       if (delErr) throw delErr;
 
       if (input.levels.length > 0) {
+        const normalizedLevels = collapseConsecutiveApprovers(input.levels);
         const { error: insErr } = await supabase.from("approval_rule_levels").insert(
-          input.levels.map((lvl) => ({
+          normalizedLevels.map((lvl) => ({
             rule_id: id,
             level_order: lvl.level_order,
             approver_name: lvl.approver_name,
