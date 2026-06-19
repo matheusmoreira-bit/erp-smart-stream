@@ -31,6 +31,8 @@ export const FIELD_OPTIONS = [
   { value: "supplier_name", label: "Fornecedor" },
   { value: "doc_type", label: "Tipo de Documento" },
   { value: "currency", label: "Moeda" },
+  { value: "item_codes", label: "Códigos dos Itens" },
+  { value: "item_groups", label: "Grupos dos Itens" },
 ];
 
 export interface RuleCriterion {

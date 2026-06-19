@@ -1,7 +1,99 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
+
+/* ───────────────── Item group enrichment ───────────────── */
+
+interface EnrichedItem {
+  item_code: string | null;
+  items_group_code: number | null;
+  items_group_name: string | null;
+}
+
+async function enrichItemsWithGroup(
+  items: Array<{ item_code?: string | null }>,
+  session: SapSession,
+): Promise<Record<string, EnrichedItem>> {
+  const codes = Array.from(
+    new Set(
+      items.map((i) => (i.item_code || "").trim()).filter((c) => c.length > 0),
+    ),
+  );
+  const result: Record<string, EnrichedItem> = {};
+  if (codes.length === 0) return result;
+
+  // Fetch item -> group code
+  const codeToGroup: Record<string, number | null> = {};
+  await Promise.all(
+    codes.map(async (code) => {
+      try {
+        const { data } = await sapQuery(
+          session,
+          `Items('${code.replace(/'/g, "''")}')`,
+          { $select: "ItemCode,ItemsGroupCode" },
+          true,
+        );
+        const g = (data as any)?.ItemsGroupCode;
+        codeToGroup[code] = typeof g === "number" ? g : null;
+      } catch {
+        codeToGroup[code] = null;
+      }
+    }),
+  );
+
+  // Fetch unique groups -> name
+  const groupCodes = Array.from(
+    new Set(Object.values(codeToGroup).filter((g): g is number => g != null)),
+  );
+  const groupToName: Record<number, string | null> = {};
+  await Promise.all(
+    groupCodes.map(async (gc) => {
+      try {
+        const { data } = await sapQuery(
+          session,
+          `ItemGroups(${gc})`,
+          { $select: "Number,GroupName" },
+          true,
+        );
+        groupToName[gc] = (data as any)?.GroupName ?? null;
+      } catch {
+        groupToName[gc] = null;
+      }
+    }),
+  );
+
+  for (const code of codes) {
+    const gc = codeToGroup[code];
+    result[code] = {
+      item_code: code,
+      items_group_code: gc,
+      items_group_name: gc != null ? groupToName[gc] ?? null : null,
+    };
+  }
+  return result;
+}
+
+function buildItemCtx(
+  items: Array<{ item_code?: string | null }>,
+  enriched: Record<string, EnrichedItem>,
+): { item_codes: string; item_groups: string } {
+  // Wrap with spaces so `like '% fol%'` and `like '% folha %'` work.
+  const codes = items
+    .map((i) => (i.item_code || "").trim().toLowerCase())
+    .filter(Boolean);
+  const groups = items
+    .map((i) => {
+      const c = (i.item_code || "").trim();
+      return (enriched[c]?.items_group_name || "").trim().toLowerCase();
+    })
+    .filter(Boolean);
+  return {
+    item_codes: codes.length ? ` ${codes.join(" ")} ` : "",
+    item_groups: groups.length ? ` ${groups.join(" ")} ` : "",
+  };
+}
 
 export type ExpenseStatus =
   | "rascunho"
@@ -320,6 +412,10 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       let currentApprover: string | null = null;
       let matchedRuleId: string | null = null;
 
+      // Enrich items with SAP item group (used both for rule context and for persistence)
+      const enriched = await enrichItemsWithGroup(input.items, session);
+      const itemCtx = buildItemCtx(input.items, enriched);
+
       // Evaluate approval rules for manual expenses (PagCorp skips rules)
       if (!input.skipRules && origin === "manual") {
         const ctx = {
@@ -330,6 +426,8 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           supplier_name: input.supplier_name,
           currency: input.currency || "BRL",
           doc_type: docType,
+          item_codes: itemCtx.item_codes,
+          item_groups: itemCtx.item_groups,
         };
         const match = await findMatchingRule(ctx, session.companyDB || null, docType);
         if (match) {
@@ -386,16 +484,22 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
       if (input.items.length > 0) {
         const { error: itemsErr } = await supabase.from("expense_items").insert(
-          input.items.map((item) => ({
-            expense_id: (expense as any).id,
-            item_code: item.item_code || null,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            line_total: item.line_total,
-            cost_center: item.cost_center || input.cost_center || null,
-            project: item.project || input.project || null,
-          }))
+          input.items.map((item) => {
+            const code = (item.item_code || "").trim();
+            const e = code ? enriched[code] : undefined;
+            return {
+              expense_id: (expense as any).id,
+              item_code: item.item_code || null,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              line_total: item.line_total,
+              cost_center: item.cost_center || input.cost_center || null,
+              project: item.project || input.project || null,
+              items_group_code: e?.items_group_code ?? null,
+              items_group_name: e?.items_group_name ?? null,
+            };
+          })
         );
         if (itemsErr) throw itemsErr;
       }
@@ -518,17 +622,25 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           .eq("expense_id", expenseId);
         if (delErr) throw delErr;
 
+        const enrichedUpd = await enrichItemsWithGroup(input.items, session);
+
         const { error: insErr } = await supabase.from("expense_items").insert(
-          input.items.map((item) => ({
-            expense_id: expenseId,
-            item_code: item.item_code || null,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            line_total: item.line_total,
-            cost_center: item.cost_center || null,
-            project: item.project || null,
-          }))
+          input.items.map((item) => {
+            const code = (item.item_code || "").trim();
+            const e = code ? enrichedUpd[code] : undefined;
+            return {
+              expense_id: expenseId,
+              item_code: item.item_code || null,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              line_total: item.line_total,
+              cost_center: item.cost_center || null,
+              project: item.project || null,
+              items_group_code: e?.items_group_code ?? null,
+              items_group_name: e?.items_group_name ?? null,
+            };
+          })
         );
         if (insErr) throw insErr;
       }

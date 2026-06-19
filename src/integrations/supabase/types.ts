@@ -1201,6 +1201,8 @@ export type Database = {
           expense_id: string
           id: string
           item_code: string | null
+          items_group_code: number | null
+          items_group_name: string | null
           line_total: number
           project: string | null
           quantity: number
@@ -1213,6 +1215,8 @@ export type Database = {
           expense_id: string
           id?: string
           item_code?: string | null
+          items_group_code?: number | null
+          items_group_name?: string | null
           line_total?: number
           project?: string | null
           quantity?: number
@@ -1225,6 +1229,8 @@ export type Database = {
           expense_id?: string
           id?: string
           item_code?: string | null
+          items_group_code?: number | null
+          items_group_name?: string | null
           line_total?: number
           project?: string | null
           quantity?: number
