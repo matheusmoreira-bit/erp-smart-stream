@@ -13,10 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-import { PageTitle } from "@/components/PageTitle";
   useNfEntrada, fetchNfEntradaLogs, fetchNfFile,
   type NfEntradaImport, type NfEntradaLog, type NfEntradaStatus,
 } from "@/hooks/useNfEntrada";
+import { PageTitle } from "@/components/PageTitle";
 
 const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending_expense: { label: "Pendente despesa", variant: "outline" },

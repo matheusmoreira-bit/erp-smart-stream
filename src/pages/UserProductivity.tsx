@@ -38,7 +38,6 @@ import {
   Legend,
 } from "recharts";
 import {
-import { PageTitle } from "@/components/PageTitle";
   useUserProductivity,
   aggregateByDepartment,
   aggregateByUser,
@@ -47,6 +46,7 @@ import { PageTitle } from "@/components/PageTitle";
   formatBRL,
   useProductivityFilters,
 } from "@/hooks/useUserProductivity";
+import { PageTitle } from "@/components/PageTitle";
 
 const CHART_COLORS = [
   "hsl(var(--primary))",

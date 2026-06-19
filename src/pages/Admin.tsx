@@ -51,13 +51,13 @@ import IntegrationsTab from "@/components/IntegrationsTab";
 import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import {
-import { PageTitle } from "@/components/PageTitle";
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageTitle } from "@/components/PageTitle";
 /* ── Types ── */
 
 interface Company {
