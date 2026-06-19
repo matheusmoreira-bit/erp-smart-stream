@@ -177,8 +177,9 @@ export function useApprovalRules() {
       if (err) throw err;
 
       if (input.levels.length > 0) {
+        const normalizedLevels = collapseConsecutiveApprovers(input.levels);
         const { error: lvlErr } = await supabase.from("approval_rule_levels").insert(
-          input.levels.map((lvl) => ({
+          normalizedLevels.map((lvl) => ({
             rule_id: (rule as any).id,
             level_order: lvl.level_order,
             approver_name: lvl.approver_name,
