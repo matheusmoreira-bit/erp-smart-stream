@@ -230,68 +230,68 @@ async function listAdvances(creds: SapCreds, cookies: string): Promise<AdvanceIt
     return { docTotal, applied, open };
   }
 
-  // 1) Adiantamentos / pagamentos a fornecedores em aberto (OVPM)
-  try {
-    const op = await sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
+  // Filtro server-side: somente pagamentos "on account" (adiantamentos puros).
+  // Isso reduz drasticamente o volume — pagamentos vinculados a NF não vêm.
+  // Cancelled eq 'tNO' garante que cancelados não entrem.
+  const advFilter = "Cancelled eq 'tNO' and DocType eq 'rAccount'";
+
+  // 1) AP (VendorPayments) e 2) AR (IncomingPayments) em paralelo
+  const [op, ip] = await Promise.all([
+    sapGetAll(creds.baseUrl, cookies, "VendorPayments", {
       $select: paymentSelect,
-      $filter: "Cancelled eq 'tNO'",
+      $filter: advFilter,
       $orderby: "DocEntry desc",
-    }, 5000);
-    for (const d of op) {
-      const { docTotal, applied, open } = calcOpen(d);
-      if (open <= 0.0001) continue;
-      items.push({
-        doc_type: "ADVANCE_AP",
-        doc_entry: d.DocEntry,
-        doc_num: d.DocNum,
-        card_code: d.CardCode,
-        card_name: d.CardName,
-        bp_type: "supplier",
-        doc_date: d.DocDate,
-        doc_total: docTotal,
-        paid_to_date: applied,
-        open_amount: open,
-        doc_currency: d.DocCurrency,
-        remarks: d.JournalRemarks,
-        reference: d.Reference1,
-      });
-    }
-  } catch (e) {
-    console.warn("VendorPayments err", e);
+    }, 5000).catch((e) => { console.warn("VendorPayments err", e); return [] as any[]; }),
+    sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
+      $select: paymentSelect,
+      $filter: advFilter,
+      $orderby: "DocEntry desc",
+    }, 5000).catch((e) => { console.warn("IncomingPayments err", e); return [] as any[]; }),
+  ]);
+
+  for (const d of op) {
+    const { docTotal, applied, open } = calcOpen(d);
+    if (open <= 0.0001) continue;
+    items.push({
+      doc_type: "ADVANCE_AP",
+      doc_entry: d.DocEntry,
+      doc_num: d.DocNum,
+      card_code: d.CardCode,
+      card_name: d.CardName,
+      bp_type: "supplier",
+      doc_date: d.DocDate,
+      doc_total: docTotal,
+      paid_to_date: applied,
+      open_amount: open,
+      doc_currency: d.DocCurrency,
+      remarks: d.JournalRemarks,
+      reference: d.Reference1,
+    });
   }
 
-  // 2) Adiantamentos / pagamentos de clientes em aberto (ORCT)
-  try {
-    const ip = await sapGetAll(creds.baseUrl, cookies, "IncomingPayments", {
-      $select: paymentSelect,
-      $filter: "Cancelled eq 'tNO'",
-      $orderby: "DocEntry desc",
-    }, 5000);
-    for (const d of ip) {
-      const { docTotal, applied, open } = calcOpen(d);
-      if (open <= 0.0001) continue;
-      items.push({
-        doc_type: "ADVANCE_AR",
-        doc_entry: d.DocEntry,
-        doc_num: d.DocNum,
-        card_code: d.CardCode,
-        card_name: d.CardName,
-        bp_type: "customer",
-        doc_date: d.DocDate,
-        doc_total: docTotal,
-        paid_to_date: applied,
-        open_amount: open,
-        doc_currency: d.DocCurrency,
-        remarks: d.JournalRemarks,
-        reference: d.Reference1,
-      });
-    }
-  } catch (e) {
-    console.warn("IncomingPayments err", e);
+  for (const d of ip) {
+    const { docTotal, applied, open } = calcOpen(d);
+    if (open <= 0.0001) continue;
+    items.push({
+      doc_type: "ADVANCE_AR",
+      doc_entry: d.DocEntry,
+      doc_num: d.DocNum,
+      card_code: d.CardCode,
+      card_name: d.CardName,
+      bp_type: "customer",
+      doc_date: d.DocDate,
+      doc_total: docTotal,
+      paid_to_date: applied,
+      open_amount: open,
+      doc_currency: d.DocCurrency,
+      remarks: d.JournalRemarks,
+      reference: d.Reference1,
+    });
   }
 
   return items;
 }
+
 
 async function listOpenInvoicesForBp(
   creds: SapCreds,
