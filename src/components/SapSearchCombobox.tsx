@@ -31,9 +31,12 @@ interface SapSearchComboboxProps {
   label?: string;
   /** Minimum characters before searching (default 2) */
   minChars?: number;
+  /** Max results returned by SAP (default 15) */
+  topResults?: number;
   /** Pre-fill text from AI without marking as validated. User must pick from SAP results. */
   suggestedQuery?: string;
 }
+
 
 export function SapSearchCombobox({
   endpoint,
