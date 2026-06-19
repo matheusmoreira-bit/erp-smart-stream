@@ -18,6 +18,7 @@ import { useUserActivity, getActionLabel, getSourceLabel, isFailedLogin, formatD
 import type { Usr5Record } from "@/hooks/useUserActivity";
 import MonthlyLoginChart from "@/components/MonthlyLoginChart";
 import UserActivityRankings from "@/components/UserActivityRankings";
+import { PageTitle } from "@/components/PageTitle";
 
 const PIE_COLORS = [
   "hsl(var(--primary))",
@@ -129,6 +130,7 @@ export default function UserActivityPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Atividade de Usuários" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">

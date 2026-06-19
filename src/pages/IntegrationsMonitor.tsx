@@ -46,6 +46,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 
 /* ───────────────── Types ───────────────── */
 
@@ -323,6 +324,7 @@ export default function IntegrationsMonitor() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Monitor de Integrações" />
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">

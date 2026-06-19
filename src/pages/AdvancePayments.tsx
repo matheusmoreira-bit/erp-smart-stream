@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Plus, RefreshCw, Search, Loader2, CheckCircle2, XCircle, RotateCw, Trash2 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 
 function fmtCurrency(v: number, ccy: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(ccy) ? ccy : "BRL";
@@ -93,6 +94,7 @@ export default function AdvancePayments() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Adiantamentos a Fornecedor" />
       <header className="border-b border-border px-6 py-4 sticky top-0 z-20 bg-background/95 backdrop-blur">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">

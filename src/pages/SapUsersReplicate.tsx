@@ -12,6 +12,7 @@ import { KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
+import { PageTitle } from "@/components/PageTitle";
 
 interface SourceUser {
   code: string;
@@ -196,6 +197,7 @@ export default function SapUsersReplicate() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Replicar Usuários SAP" />
       <header className="sticky top-0 z-30 bg-card/80 backdrop-blur border-b border-border">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate("/backoffice/sap-users")}>

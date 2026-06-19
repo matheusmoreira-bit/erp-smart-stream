@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RelationsMap } from "@/components/RelationsMap";
+import { PageTitle } from "@/components/PageTitle";
 
 
 function formatCurrency(value?: number | null, currency = "BRL") {
@@ -95,6 +96,7 @@ export default function ApprovalHistory() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Histórico de Aprovações" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">

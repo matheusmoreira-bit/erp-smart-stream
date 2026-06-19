@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { FileSignature, ArrowRight } from "lucide-react";
+import { PageTitle } from "@/components/PageTitle";
 
 const TYPE_LABEL: Record<AdvanceItem["doc_type"], string> = {
   ADVANCE_AP: "Adiant. Fornecedor (NF)",
@@ -262,6 +263,7 @@ export default function FinancialReview() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Reconciliação de Adiantamentos" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">

@@ -37,6 +37,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { useCompanies } from "@/hooks/useCompanies";
+import { PageTitle } from "@/components/PageTitle";
 
 export default function SynapsePage() {
   const navigate = useNavigate();
@@ -142,6 +143,7 @@ export default function SynapsePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Automações" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">

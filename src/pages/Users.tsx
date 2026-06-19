@@ -16,6 +16,7 @@ import { listSapTargetCompanies, changePasswordInCompanies } from "@/lib/sap-mul
 import { useUserPhones } from "@/hooks/useUserPhones";
 import EditPhoneDialog from "@/components/EditPhoneDialog";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 
 type ConfirmAction = {
   type: "lock" | "unlock" | "password";
@@ -177,6 +178,7 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Usuários" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">

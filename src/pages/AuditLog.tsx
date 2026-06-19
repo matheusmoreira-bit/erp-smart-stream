@@ -5,6 +5,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { useSap } from "@/contexts/SapContext";
 import AuditLogTable from "@/components/AuditLogTable";
+import { PageTitle } from "@/components/PageTitle";
 
 export default function AuditLogPage() {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export default function AuditLogPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Logs do Sistema" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">

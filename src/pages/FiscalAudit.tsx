@@ -25,6 +25,7 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { sapQueryAll } from "@/lib/sap-client";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 
 interface SapInvoice {
   DocEntry: number;
@@ -460,6 +461,7 @@ export default function FiscalAudit() {
   if (!permLoading && !hasAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      <PageTitle title="Auditoria Fiscal" />
         Sem permissão para acessar Auditoria Fiscal.
       </div>
     );

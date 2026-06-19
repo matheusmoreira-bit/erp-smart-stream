@@ -59,6 +59,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { generatePagCorpPresentation, type PresentationPeriod } from "@/lib/pagcorp-presentation";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { PageTitle } from "@/components/PageTitle";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -763,6 +764,7 @@ export default function PagCorp() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PageTitle title="Cartões Corporativos" />
       {/* Header */}
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

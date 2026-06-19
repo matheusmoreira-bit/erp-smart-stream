@@ -21,6 +21,7 @@ import {
 } from "@/hooks/useNondeductibleCards";
 import { PagCorpNondeductibleDialog } from "@/components/PagCorpNondeductibleDialog";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 
 export default function PagCorpNondeductible() {
   const navigate = useNavigate();
@@ -76,6 +77,7 @@ export default function PagCorpNondeductible() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PageTitle title="Cartões Indedutíveis" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">

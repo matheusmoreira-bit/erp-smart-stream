@@ -30,6 +30,7 @@ import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { usePagCorp } from "@/hooks/usePagCorp";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
+import { PageTitle } from "@/components/PageTitle";
 
 /* ── Account → Cost Center / Project mapping ── */
 interface AccountMapping {
@@ -297,6 +298,7 @@ export default function PagCorpMapping() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PageTitle title="Mapeamento de Cartões" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/cartoes/transacoes")} className="text-muted-foreground hover:text-foreground">

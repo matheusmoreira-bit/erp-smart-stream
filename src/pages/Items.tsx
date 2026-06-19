@@ -37,6 +37,7 @@ import { useItems, toggleItemActive, createItem, type SapItem } from "@/hooks/us
 import { ItemFormModal } from "@/components/ItemFormModal";
 import { NewItemWizardDialog } from "@/components/NewItemWizardDialog";
 import { parseSapError } from "@/lib/sap-error";
+import { PageTitle } from "@/components/PageTitle";
 
 type PendingVariante = {
   id: string;
@@ -283,6 +284,7 @@ export default function Items() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PageTitle title="Itens" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">

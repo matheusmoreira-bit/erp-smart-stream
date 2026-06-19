@@ -23,6 +23,7 @@ import { SYSTEMS, CATEGORY_LABELS, type SystemConfig } from "@/lib/system-defini
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { PageTitle } from "@/components/PageTitle";
 
 const TEST_ENDPOINTS: Record<string, string> = {
   mastertax: "mastertax-test",
@@ -175,6 +176,7 @@ function CredentialModal({
                   key={field.key}
                   className="md:col-span-2 flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4"
                 >
+      <PageTitle title="Credenciais" />
                   <div className="space-y-1">
                     <Label className="text-sm font-medium text-foreground flex items-center gap-2">
                       {field.label}

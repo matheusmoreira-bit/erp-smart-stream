@@ -61,6 +61,7 @@ import { useSapUsers } from "@/hooks/useSapUsers";
 import type { SapUser } from "@/lib/cache-repository";
 
 import { useCompanies } from "@/hooks/useCompanies";
+import { PageTitle } from "@/components/PageTitle";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -107,6 +108,7 @@ function UserSelect({
 
   return (
     <div>
+      <PageTitle title="Regras de Aprovação" />
       {label && <label className="text-[10px] text-muted-foreground mb-1 block">{label}</label>}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>

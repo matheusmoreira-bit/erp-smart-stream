@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
+import { PageTitle } from "@/components/PageTitle";
   useIntercompany,
   type PerCompanyResult,
   type SapAccountRow,
@@ -635,6 +636,7 @@ function ConsolidatedTable({
   if (companies.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-12 text-sm">
+      <PageTitle title="Plano de Contas & CC" />
         Nenhuma empresa carregada. Clique em Atualizar.
       </div>
     );
