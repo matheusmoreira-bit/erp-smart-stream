@@ -723,7 +723,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const handleViewIntegration = () => {
     setSelectedExpense(null);
-    navigate("/integrations-monitor");
+    navigate("/integracoes/monitor");
   };
 
   const statusOptions = [
