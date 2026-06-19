@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, sapAction, sapQuery } from "@/lib/sap-client";
-import { authFetch } from "@/lib/auth-fetch";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 export interface MultiCompanyPasswordResult {
   companyDB: string;
@@ -49,7 +49,7 @@ export async function listSapTargetCompanies(excludeCompanyDb?: string): Promise
 
 async function getCompanyAdminCreds(companyDb: string): Promise<{ username: string; password: string } | null> {
   try {
-    const res = await authFetch(`credentials?system=sap&company_db=${encodeURIComponent(companyDb)}&keys=username,password`);
+    const res = await sapFunctionFetch(`credentials?system=sap&company_db=${encodeURIComponent(companyDb)}&keys=username,password`);
     if (!res.ok) return null;
     const data = await res.json();
     const creds = data.credentials || [];
