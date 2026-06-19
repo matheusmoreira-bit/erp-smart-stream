@@ -162,6 +162,9 @@ export function useApprovalRules() {
       if (!activeCompanyDb) {
         throw new Error("Selecione uma empresa antes de criar uma regra");
       }
+      if (!createdBy) {
+        throw new Error("Usuário não identificado — faça login novamente antes de criar uma regra");
+      }
       const { data: rule, error: err } = await supabase
         .from("approval_rules")
         .insert({
