@@ -472,7 +472,47 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [sourceMode, setSourceMode] = useState<"flow" | "both">("flow");
   const [sapOrders, setSapOrders] = useState<Expense[]>([]);
   const [isLoadingSap, setIsLoadingSap] = useState(false);
+  const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
+  const [sapHasMore, setSapHasMore] = useState(false);
   const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
+  const SAP_PAGE_SIZE = 100;
+
+  const fetchSapPage = useCallback(
+    async (skip: number): Promise<Expense[]> => {
+      if (!session) return [];
+      const res = await sapQuery(
+        session as any,
+        "PurchaseOrders",
+        {
+          $select: "DocEntry,DocNum,CardCode,CardName,DocTotal,DocCurrency,DocDate,CreationDate,DocumentStatus,Comments",
+          $orderby: "DocDate desc",
+          $top: String(SAP_PAGE_SIZE),
+          $skip: String(skip),
+        },
+        false,
+      );
+      const rows = Array.isArray((res as any).data)
+        ? (res as any).data
+        : ((res as any).data?.value || []);
+      return (rows as any[]).map((r) => ({
+        id: `sap-${r.DocEntry}`,
+        supplier_code: r.CardCode || undefined,
+        supplier_name: r.CardName || r.CardCode || "—",
+        total_amount: Number(r.DocTotal || 0),
+        currency: r.DocCurrency || "BRL",
+        status: "pc_lancado" as ExpenseStatus,
+        requester_name: "(ERP)",
+        sap_doc_entry: r.DocEntry,
+        sap_doc_num: r.DocNum,
+        company_db: session.companyDB,
+        remarks: r.Comments || undefined,
+        created_at: r.DocDate || r.CreationDate || new Date().toISOString(),
+        updated_at: r.DocDate || r.CreationDate || new Date().toISOString(),
+        origin: "manual",
+      }));
+    },
+    [session],
+  );
 
   useEffect(() => {
     if (!showSourceToggle || sourceMode !== "both" || !session) return;
@@ -480,48 +520,41 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     (async () => {
       setIsLoadingSap(true);
       try {
-        const res = await sapQuery(
-          session as any,
-          "PurchaseOrders",
-          {
-            $select: "DocEntry,DocNum,CardCode,CardName,DocTotal,DocCurrency,DocDate,CreationDate,DocumentStatus,Comments",
-            $orderby: "DocDate desc",
-            $top: "100",
-          },
-          false,
-        );
+        const mapped = await fetchSapPage(0);
         if (cancelled) return;
-        const rows = Array.isArray((res as any).data)
-          ? (res as any).data
-          : ((res as any).data?.value || []);
-        const mapped: Expense[] = (rows as any[]).map((r) => ({
-          id: `sap-${r.DocEntry}`,
-          supplier_code: r.CardCode || undefined,
-          supplier_name: r.CardName || r.CardCode || "—",
-          total_amount: Number(r.DocTotal || 0),
-          currency: r.DocCurrency || "BRL",
-          status: "pc_lancado" as ExpenseStatus,
-          requester_name: "(ERP)",
-          sap_doc_entry: r.DocEntry,
-          sap_doc_num: r.DocNum,
-          company_db: session.companyDB,
-          remarks: r.Comments || undefined,
-          created_at: r.DocDate || r.CreationDate || new Date().toISOString(),
-          updated_at: r.DocDate || r.CreationDate || new Date().toISOString(),
-          origin: "manual",
-        }));
         setSapOrders(mapped);
+        setSapHasMore(mapped.length === SAP_PAGE_SIZE);
       } catch (e) {
         if (!cancelled) {
           toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
           setSapOrders([]);
+          setSapHasMore(false);
         }
       } finally {
         if (!cancelled) setIsLoadingSap(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [sourceMode, showSourceToggle, session]);
+  }, [sourceMode, showSourceToggle, session, fetchSapPage]);
+
+  const loadMoreSap = useCallback(async () => {
+    if (isLoadingMoreSap || !sapHasMore) return;
+    setIsLoadingMoreSap(true);
+    try {
+      const next = await fetchSapPage(sapOrders.length);
+      setSapOrders((prev) => {
+        const seen = new Set(prev.map((p) => p.sap_doc_entry));
+        const dedup = next.filter((n) => !seen.has(n.sap_doc_entry));
+        return [...prev, ...dedup];
+      });
+      setSapHasMore(next.length === SAP_PAGE_SIZE);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao carregar mais pedidos do ERP");
+    } finally {
+      setIsLoadingMoreSap(false);
+    }
+  }, [fetchSapPage, isLoadingMoreSap, sapHasMore, sapOrders.length]);
+
 
   useEffect(() => {
     if (!session) navigate("/");
