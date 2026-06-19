@@ -100,8 +100,9 @@ export function SapSearchCombobox({
         const { data } = await sapQuery(session, endpoint, {
           $filter: filter,
           $select: selectFields,
-          $top: 15,
+          $top: topResults,
         });
+
         const rows = (data as any)?.value || [];
         setOptions(rows.map(mapRow));
       } catch (e) {
