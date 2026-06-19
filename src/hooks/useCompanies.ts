@@ -35,7 +35,9 @@ export interface Company {
   tax_id?: string | null;
   foreign_name?: string | null;
   is_foreign?: boolean;
+  default_currency?: string | null;
 }
+
 
 export function useCompanies(onlyActive = false) {
   const [companies, setCompanies] = useState<Company[]>([]);
