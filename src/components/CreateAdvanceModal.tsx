@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchC
 import { useCompanies } from "@/hooks/useCompanies";
 import { useSap } from "@/contexts/SapContext";
 import { useAdvancePayments, type CreateAdvanceInput } from "@/hooks/useAdvancePayments";
-import { Loader2, Paperclip, X } from "lucide-react";
+import { Loader2, Paperclip, X, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
@@ -18,24 +18,47 @@ interface Props {
 
 const CURRENCIES = ["BRL", "USD", "EUR", "ARS", "GBP"];
 
+interface SupplierOpt extends SapSearchOption {
+  details?: { fantasyName?: string; taxId?: string; currency?: string };
+}
+
 export function CreateAdvanceModal({ open, onClose }: Props) {
   const { session } = useSap();
   const { companies } = useCompanies(true);
   const { create } = useAdvancePayments();
 
-  const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
-  const [companyDb, setCompanyDb] = useState<string>(session?.companyDB || "");
+  const companyDb = session?.companyDB || "";
+  const company = useMemo(
+    () => companies.find((c) => c.company_db === companyDb),
+    [companies, companyDb],
+  );
+  const defaultCurrency = company?.default_currency || "BRL";
+
+  const [supplier, setSupplier] = useState<SupplierOpt | null>(null);
   const [amount, setAmount] = useState<string>("");
-  const [currency, setCurrency] = useState<string>("BRL");
+  const [currency, setCurrency] = useState<string>(defaultCurrency);
   const [dueDate, setDueDate] = useState<string>("");
   const [remarks, setRemarks] = useState<string>("");
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Quando o fornecedor é selecionado, força a moeda conforme cadastro do BP.
+  // SAP B1: Currency = "##" significa "todas" — aí mantém o default da empresa.
+  const supplierCurrency = supplier?.details?.currency || "";
+  const currencyLocked = !!supplierCurrency && supplierCurrency !== "##";
+
+  useEffect(() => {
+    if (currencyLocked) {
+      setCurrency(supplierCurrency);
+    } else if (!supplier) {
+      setCurrency(defaultCurrency);
+    }
+  }, [supplier, supplierCurrency, currencyLocked, defaultCurrency]);
+
   const reset = () => {
     setSupplier(null);
     setAmount("");
-    setCurrency("BRL");
+    setCurrency(defaultCurrency);
     setDueDate("");
     setRemarks("");
     setFiles([]);
@@ -43,7 +66,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
 
   const handleSubmit = async (submit: boolean) => {
     if (!supplier) return toast.error("Selecione um fornecedor");
-    if (!companyDb) return toast.error("Selecione a empresa");
+    if (!companyDb) return toast.error("Sessão sem empresa selecionada");
     const amt = Number(amount.replace(",", "."));
     if (!Number.isFinite(amt) || amt <= 0) return toast.error("Informe um valor válido");
 
@@ -80,42 +103,39 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
-          <div className="space-y-2">
-            <Label>Empresa</Label>
-            <select
-              value={companyDb}
-              onChange={(e) => setCompanyDb(e.target.value)}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="">Selecione…</option>
-              {companies.map((c) => (
-                <option key={c.company_db} value={c.company_db}>
-                  {c.display_name}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/40 border border-border text-sm">
+            <Building2 className="w-4 h-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Empresa:</span>
+            <span className="font-medium text-foreground">
+              {company?.display_name || companyDb || "—"}
+            </span>
           </div>
 
           <div className="space-y-2">
             <Label>Fornecedor</Label>
             <SapSearchCombobox
               endpoint="BusinessPartners"
-              filterTemplate="CardType eq 'cSupplier' and (contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}'))"
-              selectFields="CardCode,CardName,FederalTaxID"
+              filterTemplate="CardType eq 'cSupplier' and Frozen ne 'tYES' and (contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}'))"
+              selectFields="CardCode,CardName,FederalTaxID,Currency"
+              topResults={50}
               mapRow={(r) => ({
                 code: r.CardCode,
                 name: r.CardName,
                 extra: r.FederalTaxID || "",
-                details: { taxId: r.FederalTaxID || "" },
+                details: {
+                  taxId: r.FederalTaxID || "",
+                  currency: r.Currency || "",
+                },
               })}
               value={supplier}
-              onChange={setSupplier}
+              onChange={(v) => setSupplier(v as SupplierOpt | null)}
               placeholder="Buscar fornecedor por nome, código ou CNPJ"
             />
             {supplier && (
               <p className="text-xs text-muted-foreground">
                 {supplier.code} · {supplier.name}
                 {supplier.details?.taxId && ` · CNPJ ${supplier.details.taxId}`}
+                {supplierCurrency && ` · Moeda ${supplierCurrency === "##" ? "Todas" : supplierCurrency}`}
               </p>
             )}
           </div>
@@ -132,13 +152,19 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Moeda</Label>
+              <Label>
+                Moeda
+                {currencyLocked && (
+                  <span className="ml-1 text-[10px] text-muted-foreground">(do fornecedor)</span>
+                )}
+              </Label>
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                disabled={currencyLocked}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {CURRENCIES.map((c) => (
+                {(currencyLocked ? [supplierCurrency] : CURRENCIES).map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
