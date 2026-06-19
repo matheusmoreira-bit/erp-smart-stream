@@ -31,9 +31,12 @@ interface SapSearchComboboxProps {
   label?: string;
   /** Minimum characters before searching (default 2) */
   minChars?: number;
+  /** Max results returned by SAP (default 15) */
+  topResults?: number;
   /** Pre-fill text from AI without marking as validated. User must pick from SAP results. */
   suggestedQuery?: string;
 }
+
 
 export function SapSearchCombobox({
   endpoint,
@@ -45,8 +48,10 @@ export function SapSearchCombobox({
   placeholder = "Buscar...",
   label,
   minChars = 2,
+  topResults = 15,
   suggestedQuery,
 }: SapSearchComboboxProps) {
+
   const { session } = useSap();
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<SapSearchOption[]>([]);
@@ -95,8 +100,9 @@ export function SapSearchCombobox({
         const { data } = await sapQuery(session, endpoint, {
           $filter: filter,
           $select: selectFields,
-          $top: 15,
+          $top: topResults,
         });
+
         const rows = (data as any)?.value || [];
         setOptions(rows.map(mapRow));
       } catch (e) {
@@ -106,8 +112,9 @@ export function SapSearchCombobox({
         setIsLoading(false);
       }
     },
-    [session, endpoint, filterTemplate, selectFields, mapRow, minChars]
+    [session, endpoint, filterTemplate, selectFields, mapRow, minChars, topResults]
   );
+
 
   const handleInputChange = (val: string) => {
     setQuery(val);
