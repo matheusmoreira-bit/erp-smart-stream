@@ -412,6 +412,10 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       let currentApprover: string | null = null;
       let matchedRuleId: string | null = null;
 
+      // Enrich items with SAP item group (used both for rule context and for persistence)
+      const enriched = await enrichItemsWithGroup(input.items, session);
+      const itemCtx = buildItemCtx(input.items, enriched);
+
       // Evaluate approval rules for manual expenses (PagCorp skips rules)
       if (!input.skipRules && origin === "manual") {
         const ctx = {
@@ -422,6 +426,8 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           supplier_name: input.supplier_name,
           currency: input.currency || "BRL",
           doc_type: docType,
+          item_codes: itemCtx.item_codes,
+          item_groups: itemCtx.item_groups,
         };
         const match = await findMatchingRule(ctx, session.companyDB || null, docType);
         if (match) {
@@ -478,16 +484,22 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
       if (input.items.length > 0) {
         const { error: itemsErr } = await supabase.from("expense_items").insert(
-          input.items.map((item) => ({
-            expense_id: (expense as any).id,
-            item_code: item.item_code || null,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            line_total: item.line_total,
-            cost_center: item.cost_center || input.cost_center || null,
-            project: item.project || input.project || null,
-          }))
+          input.items.map((item) => {
+            const code = (item.item_code || "").trim();
+            const e = code ? enriched[code] : undefined;
+            return {
+              expense_id: (expense as any).id,
+              item_code: item.item_code || null,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              line_total: item.line_total,
+              cost_center: item.cost_center || input.cost_center || null,
+              project: item.project || input.project || null,
+              items_group_code: e?.items_group_code ?? null,
+              items_group_name: e?.items_group_name ?? null,
+            };
+          })
         );
         if (itemsErr) throw itemsErr;
       }
