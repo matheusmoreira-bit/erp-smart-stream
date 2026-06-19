@@ -112,8 +112,9 @@ export function SapSearchCombobox({
         setIsLoading(false);
       }
     },
-    [session, endpoint, filterTemplate, selectFields, mapRow, minChars]
+    [session, endpoint, filterTemplate, selectFields, mapRow, minChars, topResults]
   );
+
 
   const handleInputChange = (val: string) => {
     setQuery(val);
