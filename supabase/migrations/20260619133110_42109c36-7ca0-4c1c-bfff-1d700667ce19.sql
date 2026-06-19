@@ -1,0 +1,1 @@
+DELETE FROM public.approval_rules WHERE company_db = 'cactus_providers';
