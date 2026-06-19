@@ -775,6 +775,57 @@ export default function ApprovalRulesPage() {
           </div>
         </div>
 
+        {/* Search & Filters */}
+        <div className="glass-card p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, critério, aprovador ou e-mail..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 pl-9 text-sm"
+            />
+          </div>
+          <Select value={docTypeFilter} onValueChange={(v) => setDocTypeFilter(v as any)}>
+            <SelectTrigger className="h-9 w-full sm:w-[180px] text-sm">
+              <SelectValue placeholder="Tipo de documento" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              <SelectItem value="both">Ambos</SelectItem>
+              <SelectItem value="purchase">Compra</SelectItem>
+              <SelectItem value="sales">Venda</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+            <SelectTrigger className="h-9 w-full sm:w-[160px] text-sm">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os status</SelectItem>
+              <SelectItem value="active">Ativas</SelectItem>
+              <SelectItem value="inactive">Inativas</SelectItem>
+            </SelectContent>
+          </Select>
+          {(search || docTypeFilter !== "all" || statusFilter !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setDocTypeFilter("all");
+                setStatusFilter("all");
+              }}
+              className="text-xs"
+            >
+              Limpar
+            </Button>
+          )}
+          <div className="text-xs text-muted-foreground sm:ml-auto whitespace-nowrap">
+            {filteredRules.length} de {rules.length}
+          </div>
+        </div>
+
         {/* Content */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -794,9 +845,15 @@ export default function ApprovalRulesPage() {
               <Plus className="w-4 h-4" /> Criar primeira regra
             </Button>
           </div>
+        ) : filteredRules.length === 0 ? (
+          <div className="text-center py-20">
+            <Search className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+            <p className="text-muted-foreground mb-2">Nenhuma regra encontrada</p>
+            <p className="text-xs text-muted-foreground">Ajuste os filtros ou o termo de busca</p>
+          </div>
         ) : (
           <div className="space-y-3">
-            {rules.map((rule) => (
+            {filteredRules.map((rule) => (
               <RuleCard
                 key={rule.id}
                 rule={rule}
