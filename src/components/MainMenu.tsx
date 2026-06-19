@@ -1,6 +1,7 @@
 import { useCompanies } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { PageTitle } from "@/components/PageTitle";
 import {
   BarChart3,
   ShoppingCart,
@@ -274,6 +275,7 @@ export function MainMenu() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PageTitle title="Painel" />
       {/* Header */}
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
