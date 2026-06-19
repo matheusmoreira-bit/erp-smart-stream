@@ -622,17 +622,25 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           .eq("expense_id", expenseId);
         if (delErr) throw delErr;
 
+        const enrichedUpd = await enrichItemsWithGroup(input.items, session);
+
         const { error: insErr } = await supabase.from("expense_items").insert(
-          input.items.map((item) => ({
-            expense_id: expenseId,
-            item_code: item.item_code || null,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            line_total: item.line_total,
-            cost_center: item.cost_center || null,
-            project: item.project || null,
-          }))
+          input.items.map((item) => {
+            const code = (item.item_code || "").trim();
+            const e = code ? enrichedUpd[code] : undefined;
+            return {
+              expense_id: expenseId,
+              item_code: item.item_code || null,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              line_total: item.line_total,
+              cost_center: item.cost_center || null,
+              project: item.project || null,
+              items_group_code: e?.items_group_code ?? null,
+              items_group_name: e?.items_group_name ?? null,
+            };
+          })
         );
         if (insErr) throw insErr;
       }
