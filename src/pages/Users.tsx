@@ -191,19 +191,19 @@ export default function UsersPage() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <CreateUserDialog onCreateUser={createUser} isLoading={isLoading} />
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/activity")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/atividade")}>
               <BarChart3 className="w-4 h-4 mr-2" />
               Atividade
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/productivity")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/produtividade")}>
               <TrendingUp className="w-4 h-4 mr-2" />
               Produtividade
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/idp-sync")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/sincronizacao-idp")}>
               <Users className="w-4 h-4 mr-2" />
-              IdP Sync
+              Sincronização IdP
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/license-analysis")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/licencas")}>
               <DollarSign className="w-4 h-4 mr-2" />
               Licenças
             </Button>
