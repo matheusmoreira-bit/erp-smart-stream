@@ -631,10 +631,14 @@ export default function ApprovalRulesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingRule, setEditingRule] = useState<ApprovalRule | null>(null);
 
+  useEffect(() => {
+    if (!session) navigate("/");
+  }, [session, navigate]);
+
   if (!session) {
-    navigate("/");
     return null;
   }
+
 
   const companyLabel = getLabel(session?.companyDB || "");
 
