@@ -556,6 +556,26 @@ export function CreateExpenseModal({
       toast.error("Todos os itens devem ter descrição");
       return;
     }
+    for (let idx = 0; idx < items.length; idx++) {
+      const it = items[idx];
+      const n = idx + 1;
+      if (!it.item_code || !String(it.item_code).trim()) {
+        toast.error(`Item ${n}: código do item é obrigatório`);
+        return;
+      }
+      if (!Number(it.quantity) || Number(it.quantity) <= 0) {
+        toast.error(`Item ${n}: quantidade deve ser maior que zero`);
+        return;
+      }
+      if (!Number(it.unit_price) || Number(it.unit_price) <= 0) {
+        toast.error(`Item ${n}: valor unitário deve ser maior que zero`);
+        return;
+      }
+      if (!it.cost_center || !String(it.cost_center).trim()) {
+        toast.error(`Item ${n}: centro de custo é obrigatório`);
+        return;
+      }
+    }
     setIsCreating(true);
     try {
       await onCreate({
