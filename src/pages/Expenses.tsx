@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
 import {
@@ -703,6 +704,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet><title>{`${isSales ? "Vendas" : "Compras"} — ERP Flow`}</title></Helmet>
       {/* Header */}
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -711,7 +713,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
+              <h1 className="text-xl font-bold text-foreground">{isSales ? "Vendas" : "Compras"}</h1>
               <p className="text-xs text-muted-foreground">{pageTitle}</p>
             </div>
           </div>

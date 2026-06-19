@@ -16,6 +16,7 @@ import {
   useNfEntrada, fetchNfEntradaLogs, fetchNfFile,
   type NfEntradaImport, type NfEntradaLog, type NfEntradaStatus,
 } from "@/hooks/useNfEntrada";
+import { PageTitle } from "@/components/PageTitle";
 
 const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending_expense: { label: "Pendente despesa", variant: "outline" },
@@ -148,6 +149,7 @@ export default function NfEntrada() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="NF de Entrada" />
       <header className="sticky top-0 z-40 bg-card border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">

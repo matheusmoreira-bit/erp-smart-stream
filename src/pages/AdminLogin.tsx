@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { lovable } from "@/integrations/lovable/index";
+import { PageTitle } from "@/components/PageTitle";
 
 export default function BackofficeLogin() {
   const navigate = useNavigate();
@@ -65,6 +66,7 @@ export default function BackofficeLogin() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
+      <PageTitle title="Backoffice — Login" />
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>

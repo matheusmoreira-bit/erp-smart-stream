@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NotificationAuditTab } from "@/components/NotificationAuditTab";
 import { NotificationSendHistoryTab } from "@/components/NotificationSendHistoryTab";
+import { PageTitle } from "@/components/PageTitle";
 
 const categoryIcon: Record<string, string> = {
   approval: "📋",
@@ -29,6 +30,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Notificações" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
           <button onClick={() => navigate("/")} className="p-2 rounded-lg hover:bg-muted transition-colors">

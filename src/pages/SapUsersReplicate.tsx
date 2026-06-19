@@ -12,6 +12,7 @@ import { KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
+import { PageTitle } from "@/components/PageTitle";
 
 interface SourceUser {
   code: string;
@@ -196,6 +197,7 @@ export default function SapUsersReplicate() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Replicar Usuários SAP" />
       <header className="sticky top-0 z-30 bg-card/80 backdrop-blur border-b border-border">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate("/backoffice/sap-users")}>
@@ -411,7 +413,7 @@ export default function SapUsersReplicate() {
                           Uma ou mais bases destino estão sem credenciais administrativas válidas configuradas.
                         </div>
                       </div>
-                      <Button size="sm" variant="destructive" onClick={() => navigate("/credentials")}>
+                      <Button size="sm" variant="destructive" onClick={() => navigate("/integracoes/credenciais")}>
                         Ajustar credenciais
                       </Button>
                     </div>
@@ -435,7 +437,7 @@ export default function SapUsersReplicate() {
                           <div className="space-y-2">
                             <p className="text-sm text-destructive">{tr.error}</p>
                             {credErr && (
-                              <Button size="sm" variant="outline" onClick={() => navigate("/credentials")}>
+                              <Button size="sm" variant="outline" onClick={() => navigate("/integracoes/credenciais")}>
                                 <KeyRound className="w-3.5 h-3.5 mr-1" />
                                 Configurar credenciais desta base
                               </Button>
@@ -490,7 +492,7 @@ export default function SapUsersReplicate() {
                                     <li key={i} className="flex items-center justify-between gap-2">
                                       <span><span className="font-mono">{s.db}</span> — {s.error}</span>
                                       {isCredentialError(s.error) && (
-                                        <Button size="sm" variant="ghost" onClick={() => navigate("/credentials")}>
+                                        <Button size="sm" variant="ghost" onClick={() => navigate("/integracoes/credenciais")}>
                                           <KeyRound className="w-3.5 h-3.5 mr-1" /> Ajustar
                                         </Button>
                                       )}

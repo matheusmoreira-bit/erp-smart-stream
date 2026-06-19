@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { PageTitle } from "@/components/PageTitle";
 
 const COMPANY_MAP: Record<string, string> = {
   "instituto": "SBO_INSTITUTO_ANA",
@@ -155,10 +156,11 @@ export default function LicenseImportPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Importar Licenças" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/users/license-analysis")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/usuarios/licencas")}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="min-w-0">

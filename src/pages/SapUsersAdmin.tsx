@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useSapUsersAdmin, type SapAdminUser } from "@/hooks/useSapUsersAdmin";
+import { PageTitle } from "@/components/PageTitle";
 
 export default function SapUsersAdmin() {
   const navigate = useNavigate();
@@ -97,6 +98,7 @@ export default function SapUsersAdmin() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Usuários SAP" />
       <header className="sticky top-0 z-30 bg-card/80 backdrop-blur border-b border-border">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate("/backoffice")}>

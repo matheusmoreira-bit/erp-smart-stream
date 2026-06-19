@@ -16,6 +16,7 @@ import { listSapTargetCompanies, changePasswordInCompanies } from "@/lib/sap-mul
 import { useUserPhones } from "@/hooks/useUserPhones";
 import EditPhoneDialog from "@/components/EditPhoneDialog";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 
 type ConfirmAction = {
   type: "lock" | "unlock" | "password";
@@ -177,6 +178,7 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Usuários" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -191,19 +193,19 @@ export default function UsersPage() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <CreateUserDialog onCreateUser={createUser} isLoading={isLoading} />
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/activity")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/atividade")}>
               <BarChart3 className="w-4 h-4 mr-2" />
               Atividade
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/productivity")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/produtividade")}>
               <TrendingUp className="w-4 h-4 mr-2" />
               Produtividade
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/idp-sync")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/sincronizacao-idp")}>
               <Users className="w-4 h-4 mr-2" />
-              IdP Sync
+              Sincronização IdP
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/license-analysis")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/licencas")}>
               <DollarSign className="w-4 h-4 mr-2" />
               Licenças
             </Button>

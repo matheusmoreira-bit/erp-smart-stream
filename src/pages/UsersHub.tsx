@@ -25,12 +25,12 @@ export default function UsersHub({ tab }: Props) {
   const { userModules } = useModuleAccess();
 
   const allTabs = [
-    { key: "list" as const, label: "Lista", module: "users", path: "/users" },
-    { key: "activity" as const, label: "Atividade", module: "users", path: "/users/activity" },
-    { key: "productivity" as const, label: "Produtividade", module: "users_productivity", path: "/users/productivity" },
-    { key: "licenses" as const, label: "Licenças", module: "users", path: "/users/license-analysis" },
-    { key: "licenses-import" as const, label: "Importar Licenças", module: "users", path: "/users/license-import" },
-    { key: "idp" as const, label: "Sincronização IdP", module: "users", path: "/users/idp-sync" },
+    { key: "list" as const, label: "Usuários", module: "users", path: "/usuarios/lista" },
+    { key: "activity" as const, label: "Atividade", module: "users", path: "/usuarios/atividade" },
+    { key: "productivity" as const, label: "Produtividade", module: "users_productivity", path: "/usuarios/produtividade" },
+    { key: "licenses" as const, label: "Licenças", module: "users", path: "/usuarios/licencas" },
+    { key: "licenses-import" as const, label: "Importar Licenças", module: "users", path: "/usuarios/importar-licencas" },
+    { key: "idp" as const, label: "Sincronização IdP", module: "users", path: "/usuarios/sincronizacao-idp" },
   ];
 
   const tabs = allTabs.filter(

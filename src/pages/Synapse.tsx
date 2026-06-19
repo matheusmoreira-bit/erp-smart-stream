@@ -37,6 +37,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { useCompanies } from "@/hooks/useCompanies";
+import { PageTitle } from "@/components/PageTitle";
 
 export default function SynapsePage() {
   const navigate = useNavigate();
@@ -142,6 +143,7 @@ export default function SynapsePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Automações" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -153,7 +155,7 @@ export default function SynapsePage() {
                 <Zap className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Synapse</h1>
+                <h1 className="text-2xl font-bold text-foreground">Automações</h1>
                 <p className="text-sm text-muted-foreground">
                   Central de automações e integrações
                   {companyLabel && <span className="ml-1">— {companyLabel}</span>}
@@ -221,7 +223,7 @@ export default function SynapsePage() {
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        onClick={() => navigate("/pagcorp/history")}
+                        onClick={() => navigate("/cartoes/historico")}
                       >
                         <History className="w-4 h-4" />
                         Histórico

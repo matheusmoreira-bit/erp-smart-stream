@@ -48,63 +48,66 @@ const App = () => (
             <StickyHeaderMeasure />
             <Routes>
               <Route path="/" element={<Index />} />
+
+              {/* Backoffice */}
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
               <Route path="/backoffice/sap-users" element={<AdminRoute><SapUsersAdmin /></AdminRoute>} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
+
+              {/* Analytics */}
               <Route path="/analytics" element={<AnalyticsPage />} />
 
-              {/* Auditoria — hub */}
+              {/* Operação */}
+              <Route path="/compras" element={<Expenses />} />
+              <Route path="/vendas" element={<Sales />} />
+
+              {/* Aprovações */}
+              <Route path="/aprovacoes" element={<ApprovalsHub />} />
+              <Route path="/aprovacoes/regras" element={<ApprovalRules />} />
+
+              {/* Cartões Corporativos */}
+              <Route path="/cartoes" element={<Navigate to="/cartoes/transacoes" replace />} />
+              <Route path="/cartoes/transacoes" element={<PagCorp />} />
+              <Route path="/cartoes/mapeamento" element={<PagCorpMapping />} />
+              <Route path="/cartoes/indedutiveis" element={<PagCorpNondeductible />} />
+              <Route path="/cartoes/historico" element={<IntegrationHistory />} />
+
+              {/* Auditoria */}
               <Route path="/auditoria" element={<Navigate to="/auditoria/sap" replace />} />
               <Route path="/auditoria/sap/*" element={<AuditHub tab="sap" />} />
               <Route path="/auditoria/fiscal" element={<AuditHub tab="fiscal" />} />
               <Route path="/auditoria/logs" element={<AuditHub tab="logs" />} />
-              {/* Legacy redirects → Auditoria */}
-              <Route path="/analytics/audit" element={<Navigate to="/auditoria/sap" replace />} />
-              <Route path="/analytics/audit/*" element={<Navigate to="/auditoria/sap" replace />} />
-              <Route path="/fiscal-audit" element={<Navigate to="/auditoria/fiscal" replace />} />
-              <Route path="/audit-log" element={<Navigate to="/auditoria/logs" replace />} />
 
-              {/* Aprovações — hub */}
-              <Route path="/approvals" element={<ApprovalsHub />} />
-              <Route path="/approvals/history" element={<Navigate to="/approvals?tab=history" replace />} />
-
-              <Route path="/expenses" element={<Expenses />} />
-              <Route path="/sales" element={<Sales />} />
-              <Route path="/approval-rules" element={<ApprovalRules />} />
-              <Route path="/pagcorp" element={<PagCorp />} />
-              <Route path="/pagcorp/mapping" element={<PagCorpMapping />} />
-              <Route path="/pagcorp/nondeductible" element={<PagCorpNondeductible />} />
-              <Route path="/pagcorp/history" element={<IntegrationHistory />} />
-
-              {/* Integrações — hub */}
+              {/* Integrações */}
               <Route path="/integracoes" element={<Navigate to="/integracoes/automacoes" replace />} />
               <Route path="/integracoes/automacoes" element={<IntegrationsHub tab="automations" />} />
               <Route path="/integracoes/monitor" element={<IntegrationsHub tab="monitor" />} />
               <Route path="/integracoes/credenciais" element={<IntegrationsHub tab="credentials" />} />
-              {/* Legacy redirects → Integrações */}
-              <Route path="/synapse" element={<Navigate to="/integracoes/automacoes" replace />} />
-              <Route path="/integrations/monitor" element={<Navigate to="/integracoes/monitor" replace />} />
-              <Route path="/credentials" element={<Navigate to="/integracoes/credenciais" replace />} />
 
-              {/* Usuários — hub (rotas legadas preservadas, agora servidas pelo hub) */}
-              <Route path="/users" element={<UsersHub tab="list" />} />
-              <Route path="/users/activity" element={<UsersHub tab="activity" />} />
-              <Route path="/users/productivity" element={<UsersHub tab="productivity" />} />
-              <Route path="/users/idp-sync" element={<UsersHub tab="idp" />} />
-              <Route path="/users/license-analysis" element={<UsersHub tab="licenses" />} />
-              <Route path="/users/license-import" element={<UsersHub tab="licenses-import" />} />
+              {/* Usuários */}
+              <Route path="/usuarios" element={<Navigate to="/usuarios/lista" replace />} />
+              <Route path="/usuarios/lista" element={<UsersHub tab="list" />} />
+              <Route path="/usuarios/atividade" element={<UsersHub tab="activity" />} />
+              <Route path="/usuarios/produtividade" element={<UsersHub tab="productivity" />} />
+              <Route path="/usuarios/sincronizacao-idp" element={<UsersHub tab="idp" />} />
+              <Route path="/usuarios/licencas" element={<UsersHub tab="licenses" />} />
+              <Route path="/usuarios/importar-licencas" element={<UsersHub tab="licenses-import" />} />
 
-              <Route path="/suppliers" element={<Suppliers />} />
-              <Route path="/suppliers/import-pagcorp" element={<SuppliersImportPagCorp />} />
-              <Route path="/items" element={<Items />} />
-              <Route path="/cadastros/itens" element={<Navigate to="/items" replace />} />
-              <Route path="/cadastros/fornecedores" element={<Navigate to="/suppliers" replace />} />
-              <Route path="/intercompany" element={<Intercompany />} />
-              <Route path="/financial-review" element={<FinancialReview />} />
-              <Route path="/advance-payments" element={<AdvancePayments />} />
-              <Route path="/nf-entrada" element={<NfEntrada />} />
-              <Route path="/notifications" element={<Notifications />} />
+              {/* Cadastros */}
+              <Route path="/cadastros/fornecedores" element={<Suppliers />} />
+              <Route path="/cadastros/fornecedores/importar-cartoes" element={<SuppliersImportPagCorp />} />
+              <Route path="/cadastros/itens" element={<Items />} />
+              <Route path="/cadastros/intercompany" element={<Intercompany />} />
+
+              {/* Financeiro */}
+              <Route path="/financeiro/adiantamentos" element={<AdvancePayments />} />
+              <Route path="/financeiro/reconciliacao" element={<FinancialReview />} />
+              <Route path="/financeiro/nf-entrada" element={<NfEntrada />} />
+
+              {/* Notificações */}
+              <Route path="/notificacoes" element={<Notifications />} />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -44,6 +44,7 @@ import {
   type PagCorpCandidate,
 } from "@/hooks/useImportPagCorpSuppliers";
 import { PagCorpCandidateRow } from "@/components/PagCorpCandidateRow";
+import { PageTitle } from "@/components/PageTitle";
 
 const PERIOD_OPTIONS = [
   { value: "7", label: "Últimos 7 dias" },
@@ -183,13 +184,14 @@ export default function SuppliersImportPagCorp() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PageTitle title="Importar Fornecedores de Cartões" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate("/suppliers")}
+              onClick={() => navigate("/cadastros/fornecedores")}
               className="text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -199,7 +201,7 @@ export default function SuppliersImportPagCorp() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">
-                Importar Fornecedores do PagCorp
+                Importar Fornecedores de Cartões Corporativos
               </h1>
               <p className="text-xs text-muted-foreground">
                 Prestações de contas do período selecionado

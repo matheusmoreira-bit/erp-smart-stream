@@ -1,6 +1,7 @@
 import { useCompanies } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { PageTitle } from "@/components/PageTitle";
 import {
   BarChart3,
   ShoppingCart,
@@ -53,7 +54,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Compras",
     description: "Crie e acompanhe solicitações de compras com fluxo de aprovação e integração SAP.",
     icon: ShoppingCart,
-    path: "/expenses",
+    path: "/compras",
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "expenses",
@@ -62,7 +63,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Vendas",
     description: "Crie e acompanhe pedidos de venda com fluxo de aprovação e integração SAP.",
     icon: Wallet,
-    path: "/sales",
+    path: "/vendas",
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "sales",
@@ -71,7 +72,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Aprovações",
     description: "Pendentes e histórico em um só lugar — valor, fornecedor, aprovador e vencimento.",
     icon: ClipboardCheck,
-    path: "/approvals",
+    path: "/aprovacoes",
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "",
@@ -81,7 +82,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Regras de Aprovação",
     description: "Configure regras de aprovação em N níveis com critérios de valor, centro de custo e tipo de documento.",
     icon: Shield,
-    path: "/approval-rules",
+    path: "/aprovacoes/regras",
     color: "text-violet-400",
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "approval_rules",
@@ -90,7 +91,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Cartões Corporativos",
     description: "Transações de cartões corporativos com filtro de prestação de conta e lançamento no SAP.",
     icon: CreditCard,
-    path: "/pagcorp",
+    path: "/cartoes/transacoes",
     color: "text-cyan-400",
     bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "pagcorp",
@@ -99,7 +100,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Usuários",
     description: "Lista, atividade, produtividade, licenças e sincronização IdP — tudo em um só hub.",
     icon: Users,
-    path: "/users",
+    path: "/usuarios/lista",
     color: "text-violet-400",
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "users",
@@ -108,7 +109,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Fornecedores",
     description: "Cadastro de fornecedores com sincronização SAP e extração via IA a partir de notas fiscais.",
     icon: Building2,
-    path: "/suppliers",
+    path: "/cadastros/fornecedores",
     color: "text-indigo-400",
     bgGlow: "from-indigo-500/20 to-indigo-500/5",
     moduleKey: "suppliers",
@@ -117,7 +118,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Itens",
     description: "Cadastro de itens (OITM) com sincronização direta no SAP — criar, editar e ativar/inativar.",
     icon: Box,
-    path: "/items",
+    path: "/cadastros/itens",
     color: "text-indigo-400",
     bgGlow: "from-indigo-500/20 to-indigo-500/5",
     moduleKey: "items",
@@ -136,7 +137,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Plano de Contas & CC",
     description: "Plano de contas e centros de custo consolidados entre empresas, com criação simultânea em todas.",
     icon: Building2,
-    path: "/intercompany",
+    path: "/cadastros/intercompany",
     color: "text-indigo-400",
     bgGlow: "from-indigo-500/20 to-indigo-500/5",
     moduleKey: "intercompany",
@@ -145,7 +146,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Reconciliação de Adiantamentos",
     description: "Adiantamentos em aberto (clientes/fornecedores) sem vínculo a notas, com passo a passo de reconciliação.",
     icon: Wallet,
-    path: "/financial-review",
+    path: "/financeiro/reconciliacao",
     color: "text-cyan-400",
     bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "financial_review",
@@ -154,7 +155,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Adiantamentos",
     description: "Crie pedidos de adiantamento a fornecedor com aprovação e integração automática no SAP.",
     icon: Wallet,
-    path: "/advance-payments",
+    path: "/financeiro/adiantamentos",
     color: "text-amber-400",
     bgGlow: "from-amber-500/20 to-amber-500/5",
     moduleKey: "expenses",
@@ -163,7 +164,7 @@ const modules: Record<string, ModuleCard> = {
     title: "Notificações",
     description: "Central de notificações, preferências, auditoria e histórico de envios (WhatsApp, e-mail).",
     icon: Bell,
-    path: "/notifications",
+    path: "/notificacoes",
     color: "text-violet-400",
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "notifications",
@@ -172,7 +173,7 @@ const modules: Record<string, ModuleCard> = {
     title: "NF de Entrada",
     description: "Importa NFs da Master Tax, gera despesa no ERP Flow e cria esboços de PO e NF de Entrada no SAP B1.",
     icon: FileInput,
-    path: "/nf-entrada",
+    path: "/financeiro/nf-entrada",
     color: "text-orange-400",
     bgGlow: "from-orange-500/20 to-orange-500/5",
     moduleKey: "nf_entrada",
@@ -274,6 +275,7 @@ export function MainMenu() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PageTitle title="Painel" />
       {/* Header */}
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
@@ -282,7 +284,7 @@ export function MainMenu() {
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">ERP <span className="text-gradient">Analytics</span></h1>
+              <h1 className="text-xl font-bold text-foreground">ERP <span className="text-gradient">Flow</span></h1>
               <p className="text-xs text-muted-foreground">Painel de gestão</p>
             </div>
           </div>

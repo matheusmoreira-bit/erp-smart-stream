@@ -61,6 +61,7 @@ import { useSapUsers } from "@/hooks/useSapUsers";
 import type { SapUser } from "@/lib/cache-repository";
 
 import { useCompanies } from "@/hooks/useCompanies";
+import { PageTitle } from "@/components/PageTitle";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -107,6 +108,7 @@ function UserSelect({
 
   return (
     <div>
+      <PageTitle title="Regras de Aprovação" />
       {label && <label className="text-[10px] text-muted-foreground mb-1 block">{label}</label>}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -685,8 +687,8 @@ export default function ApprovalRulesPage() {
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
-              <p className="text-xs text-muted-foreground">Regras de Aprovação</p>
+              <h1 className="text-xl font-bold text-foreground">Regras de Aprovação</h1>
+              <p className="text-xs text-muted-foreground">Configure aprovadores por nível, valor e tipo de documento</p>
             </div>
           </div>
           <div className="flex items-center gap-4">

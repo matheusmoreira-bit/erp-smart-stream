@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { FileSignature, ArrowRight } from "lucide-react";
+import { PageTitle } from "@/components/PageTitle";
 
 const TYPE_LABEL: Record<AdvanceItem["doc_type"], string> = {
   ADVANCE_AP: "Adiant. Fornecedor (NF)",
@@ -220,7 +221,7 @@ export default function FinancialReview() {
   const exportPdf = () => {
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
     doc.setFontSize(14);
-    doc.text("Avaliação Financeira — Adiantamentos em aberto", 40, 36);
+    doc.text("Reconciliação de Adiantamentos — Em aberto", 40, 36);
     doc.setFontSize(9);
     doc.setTextColor(120);
     doc.text(
@@ -262,6 +263,7 @@ export default function FinancialReview() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Reconciliação de Adiantamentos" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -272,7 +274,7 @@ export default function FinancialReview() {
               <Wallet className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">Avaliação Financeira</h1>
+              <h1 className="text-xl font-bold">Reconciliação de Adiantamentos</h1>
               <p className="text-xs text-muted-foreground">
                 Adiantamentos em aberto sem vínculo a notas
               </p>

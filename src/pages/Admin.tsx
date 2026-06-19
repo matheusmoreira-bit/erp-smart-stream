@@ -57,6 +57,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageTitle } from "@/components/PageTitle";
 /* ── Types ── */
 
 interface Company {
@@ -245,6 +246,7 @@ function SystemCredentialModal({
                   key={field.key}
                   className="md:col-span-2 flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4"
                 >
+      <PageTitle title="Backoffice" />
                   <div className="space-y-1">
                     <Label className="text-sm font-medium text-foreground flex items-center gap-2">
                       {field.label}

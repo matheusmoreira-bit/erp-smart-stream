@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useLicenseAnalysis, type LicenseRow } from "@/hooks/useLicenseAnalysis";
 import { useSap } from "@/contexts/SapContext";
+import { PageTitle } from "@/components/PageTitle";
 
 const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const fmtH = (m: number) => m <= 0 ? "—" : `${(m/60).toFixed(1)}h`;
@@ -99,10 +100,11 @@ export default function LicenseAnalysisPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Análise de Licenças" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/users")}><ArrowLeft className="w-5 h-5" /></Button>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/usuarios/lista")}><ArrowLeft className="w-5 h-5" /></Button>
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-foreground">Análise de Licenças</h1>
               <p className="text-sm text-muted-foreground">Custo-benefício por licença · {session?.companyDB || "—"}</p>
@@ -110,7 +112,7 @@ export default function LicenseAnalysisPage() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={() => navigate("/users/license-import")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/importar-licencas")}>
               <Upload className="w-4 h-4 mr-2" />Importar CSV
             </Button>
             <Dialog open={pricingOpen} onOpenChange={(o) => { setPricingOpen(o); if (o) { setProPrice(String(pricing.PRO ?? 0)); setCrmPrice(String(pricing.CRM ?? 0)); } }}>

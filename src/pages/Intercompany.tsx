@@ -56,6 +56,7 @@ import {
   type SapItemRow,
   type SapUserRow,
 } from "@/hooks/useIntercompany";
+import { PageTitle } from "@/components/PageTitle";
 
 interface UnifiedAccountRow {
   code: string;
@@ -635,6 +636,7 @@ function ConsolidatedTable({
   if (companies.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-12 text-sm">
+      <PageTitle title="Plano de Contas & CC" />
         Nenhuma empresa carregada. Clique em Atualizar.
       </div>
     );
@@ -981,7 +983,7 @@ export default function Intercompany() {
               <Building2 className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Intercompany</h1>
+              <h1 className="text-xl font-bold text-foreground">Plano de Contas & Centros de Custo</h1>
               <p className="text-xs text-muted-foreground">
                 Plano de contas, centros de custo, parceiros de negócios e itens consolidados entre empresas
               </p>

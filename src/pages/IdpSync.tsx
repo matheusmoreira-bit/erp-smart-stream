@@ -19,6 +19,7 @@ import { useIdpSync, type JumpCloudUser } from "@/hooks/useIdpSync";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 
 function jcToOption(jc: JumpCloudUser): SapSearchOption {
   const name = jc.displayname || `${jc.firstname || ""} ${jc.lastname || ""}`.trim() || jc.username;
@@ -193,14 +194,15 @@ export default function IdpSyncPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTitle title="Sincronização IdP" />
       <header className="border-b border-border px-6 py-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/users")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/usuarios/lista")}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-foreground">IdP Sync</h1>
+              <h1 className="text-2xl font-bold text-foreground">Sincronização IdP</h1>
               <p className="text-sm text-muted-foreground">
                 Vinculação de usuários SAP (ativos) ↔ JumpCloud
               </p>

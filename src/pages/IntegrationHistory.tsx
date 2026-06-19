@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 interface IntegrationLog {
   id: string;
   pagcorp_expense_id: number;
@@ -303,17 +304,18 @@ export default function IntegrationHistory() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PageTitle title="Histórico de Integrações de Cartões" />
       <header className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/pagcorp")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/cartoes/transacoes")}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="p-2 rounded-lg bg-primary/10">
               <History className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Histórico de Integrações</h1>
+              <h1 className="text-xl font-bold text-foreground">Histórico de Integrações de Cartões</h1>
               <p className="text-xs text-muted-foreground">Log de auditoria PagCorp → SAP</p>
             </div>
           </div>

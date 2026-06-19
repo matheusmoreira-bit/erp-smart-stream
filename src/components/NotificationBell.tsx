@@ -44,7 +44,7 @@ export function NotificationBell() {
                 Marcar todas como lidas
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => navigate("/notifications")}>
+            <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => navigate("/notificacoes")}>
               Ver todas
             </Button>
           </div>

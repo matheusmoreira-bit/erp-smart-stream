@@ -17,7 +17,7 @@ export default function IntegrationsHub({ tab }: Props) {
 
   const allTabs = [
     { key: "automations" as const, label: "Automações", module: "synapse", path: "/integracoes/automacoes" },
-    { key: "monitor" as const, label: "Monitor", module: "integration_history", path: "/integracoes/monitor" },
+    { key: "monitor" as const, label: "Monitor de Integrações", module: "integration_history", path: "/integracoes/monitor" },
     { key: "credentials" as const, label: "Credenciais", module: "credentials", path: "/integracoes/credenciais" },
   ];
 
