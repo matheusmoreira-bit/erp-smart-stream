@@ -49,7 +49,7 @@ export async function listSapTargetCompanies(excludeCompanyDb?: string): Promise
 
 async function getCompanyAdminCreds(companyDb: string): Promise<{ username: string; password: string } | null> {
   try {
-    const res = await authFetch(`credentials?system=sap&company_db=${encodeURIComponent(companyDb)}`);
+    const res = await authFetch(`credentials?system=sap&company_db=${encodeURIComponent(companyDb)}&keys=username,password`);
     if (!res.ok) return null;
     const data = await res.json();
     const creds = data.credentials || [];
