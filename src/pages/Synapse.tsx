@@ -153,7 +153,7 @@ export default function SynapsePage() {
                 <Zap className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Synapse</h1>
+                <h1 className="text-2xl font-bold text-foreground">Automações</h1>
                 <p className="text-sm text-muted-foreground">
                   Central de automações e integrações
                   {companyLabel && <span className="ml-1">— {companyLabel}</span>}
@@ -221,7 +221,7 @@ export default function SynapsePage() {
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        onClick={() => navigate("/pagcorp/history")}
+                        onClick={() => navigate("/cartoes/historico")}
                       >
                         <History className="w-4 h-4" />
                         Histórico

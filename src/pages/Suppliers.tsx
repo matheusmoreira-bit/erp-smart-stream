@@ -365,7 +365,7 @@ export default function Suppliers() {
             {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
           </Button>
-          <Button variant="outline" onClick={() => navigate("/suppliers/import-pagcorp")} className="gap-2">
+          <Button variant="outline" onClick={() => navigate("/cadastros/fornecedores/importar-cartoes")} className="gap-2">
             <Sparkles className="w-4 h-4" />
             Importar do PagCorp
           </Button>

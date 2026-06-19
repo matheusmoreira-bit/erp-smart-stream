@@ -1281,8 +1281,8 @@ export default function ApprovalsPage() {
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
-              <p className="text-xs text-muted-foreground">Acompanhamento de Aprovações</p>
+              <h1 className="text-xl font-bold text-foreground">Aprovações Pendentes</h1>
+              <p className="text-xs text-muted-foreground">Acompanhamento de aprovações</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -1316,7 +1316,7 @@ export default function ApprovalsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate("/approvals/history")}
+              onClick={() => navigate("/aprovacoes?tab=history")}
               className="gap-2"
               title="Ver histórico de aprovações"
             >
@@ -1349,7 +1349,7 @@ export default function ApprovalsPage() {
             <TabsTrigger value="my-requests" className="gap-2">
               <FileText className="w-4 h-4" /> Meus Pedidos
             </TabsTrigger>
-            <TabsTrigger value="history" className="gap-2" onClick={() => navigate("/approvals/history")}>
+            <TabsTrigger value="history" className="gap-2" onClick={() => navigate("/aprovacoes?tab=history")}>
               <History className="w-4 h-4" /> Histórico
             </TabsTrigger>
           </TabsList>

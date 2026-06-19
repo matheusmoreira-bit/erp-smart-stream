@@ -981,7 +981,7 @@ export default function Intercompany() {
               <Building2 className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Intercompany</h1>
+              <h1 className="text-xl font-bold text-foreground">Plano de Contas & Centros de Custo</h1>
               <p className="text-xs text-muted-foreground">
                 Plano de contas, centros de custo, parceiros de negócios e itens consolidados entre empresas
               </p>

@@ -220,7 +220,7 @@ export default function FinancialReview() {
   const exportPdf = () => {
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
     doc.setFontSize(14);
-    doc.text("Avaliação Financeira — Adiantamentos em aberto", 40, 36);
+    doc.text("Reconciliação de Adiantamentos — Em aberto", 40, 36);
     doc.setFontSize(9);
     doc.setTextColor(120);
     doc.text(
@@ -272,7 +272,7 @@ export default function FinancialReview() {
               <Wallet className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">Avaliação Financeira</h1>
+              <h1 className="text-xl font-bold">Reconciliação de Adiantamentos</h1>
               <p className="text-xs text-muted-foreground">
                 Adiantamentos em aberto sem vínculo a notas
               </p>

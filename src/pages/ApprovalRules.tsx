@@ -685,8 +685,8 @@ export default function ApprovalRulesPage() {
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
-              <p className="text-xs text-muted-foreground">Regras de Aprovação</p>
+              <h1 className="text-xl font-bold text-foreground">Regras de Aprovação</h1>
+              <p className="text-xs text-muted-foreground">Configure aprovadores por nível, valor e tipo de documento</p>
             </div>
           </div>
           <div className="flex items-center gap-4">

@@ -411,7 +411,7 @@ export default function SapUsersReplicate() {
                           Uma ou mais bases destino estão sem credenciais administrativas válidas configuradas.
                         </div>
                       </div>
-                      <Button size="sm" variant="destructive" onClick={() => navigate("/credentials")}>
+                      <Button size="sm" variant="destructive" onClick={() => navigate("/integracoes/credenciais")}>
                         Ajustar credenciais
                       </Button>
                     </div>
@@ -435,7 +435,7 @@ export default function SapUsersReplicate() {
                           <div className="space-y-2">
                             <p className="text-sm text-destructive">{tr.error}</p>
                             {credErr && (
-                              <Button size="sm" variant="outline" onClick={() => navigate("/credentials")}>
+                              <Button size="sm" variant="outline" onClick={() => navigate("/integracoes/credenciais")}>
                                 <KeyRound className="w-3.5 h-3.5 mr-1" />
                                 Configurar credenciais desta base
                               </Button>
@@ -490,7 +490,7 @@ export default function SapUsersReplicate() {
                                     <li key={i} className="flex items-center justify-between gap-2">
                                       <span><span className="font-mono">{s.db}</span> — {s.error}</span>
                                       {isCredentialError(s.error) && (
-                                        <Button size="sm" variant="ghost" onClick={() => navigate("/credentials")}>
+                                        <Button size="sm" variant="ghost" onClick={() => navigate("/integracoes/credenciais")}>
                                           <KeyRound className="w-3.5 h-3.5 mr-1" /> Ajustar
                                         </Button>
                                       )}

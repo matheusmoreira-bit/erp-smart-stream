@@ -711,7 +711,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
+              <h1 className="text-xl font-bold text-foreground">{isSales ? "Vendas" : "Compras"}</h1>
               <p className="text-xs text-muted-foreground">{pageTitle}</p>
             </div>
           </div>

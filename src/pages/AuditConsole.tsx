@@ -85,7 +85,7 @@ export default function AuditConsole() {
                 <Activity className="h-4 w-4 text-primary" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-foreground">Console de Auditoria</h1>
+                <h1 className="text-lg font-bold text-foreground">Auditoria SAP</h1>
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
                   {getLabel(session.companyDB || "")}
                 </p>

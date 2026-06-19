@@ -101,7 +101,7 @@ export default function PagCorp() {
     if (!hasSapCredentials) {
       toast.error("Credencial SAP B1 não cadastrada", {
         description: "Configure as credenciais do SAP Business One na tela de Credenciais antes de integrar.",
-        action: { label: "Configurar", onClick: () => navigate("/credentials") },
+        action: { label: "Configurar", onClick: () => navigate("/integracoes/credenciais") },
       });
       return false;
     }
@@ -465,7 +465,7 @@ export default function PagCorp() {
     } catch (e) {
       toast.error("Falha na integração", {
         description: e instanceof Error ? e.message : "Erro desconhecido",
-        action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
+        action: { label: "Ver histórico", onClick: () => navigate("/cartoes/historico") },
       });
       if (batchActive) advanceBatch();
     } finally {
@@ -508,7 +508,7 @@ export default function PagCorp() {
     } catch (e) {
       toast.error("Falha na integração consolidada", {
         description: e instanceof Error ? e.message : "Erro desconhecido",
-        action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
+        action: { label: "Ver histórico", onClick: () => navigate("/cartoes/historico") },
       });
       throw e;
     }
@@ -751,7 +751,7 @@ export default function PagCorp() {
     } catch (e) {
       toast.error("Falha ao integrar prestação", {
         description: e instanceof Error ? e.message : "Erro desconhecido",
-        action: { label: "Ver histórico", onClick: () => navigate("/pagcorp/history") },
+        action: { label: "Ver histórico", onClick: () => navigate("/cartoes/historico") },
       });
       throw e;
     } finally {
@@ -775,19 +775,19 @@ export default function PagCorp() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">
-                PagCorp <span className="text-gradient">Transações</span>
+                Cartões Corporativos <span className="text-gradient">— Transações</span>
               </h1>
               <p className="text-xs text-muted-foreground">Cartões corporativos</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/history")} className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/cartoes/historico")} className="gap-2">
               <History className="w-4 h-4" /> Histórico
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/mapping")} className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/cartoes/mapeamento")} className="gap-2">
               <MapPin className="w-4 h-4" /> Mapeamento
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/pagcorp/nondeductible")} className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/cartoes/indedutiveis")} className="gap-2">
               <ShieldOff className="w-4 h-4" /> Indedutíveis
             </Button>
             <div className="text-right">

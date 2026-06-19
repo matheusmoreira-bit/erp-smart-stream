@@ -189,7 +189,7 @@ export default function SuppliersImportPagCorp() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate("/suppliers")}
+              onClick={() => navigate("/cadastros/fornecedores")}
               className="text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -199,7 +199,7 @@ export default function SuppliersImportPagCorp() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">
-                Importar Fornecedores do PagCorp
+                Importar Fornecedores de Cartões Corporativos
               </h1>
               <p className="text-xs text-muted-foreground">
                 Prestações de contas do período selecionado
