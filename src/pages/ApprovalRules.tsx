@@ -630,6 +630,38 @@ export default function ApprovalRulesPage() {
   const { getLabel } = useCompanies(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRule, setEditingRule] = useState<ApprovalRule | null>(null);
+  const [search, setSearch] = useState("");
+  const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+
+  const filteredRules = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rules.filter((r) => {
+      if (docTypeFilter !== "all" && (r.doc_type || "both") !== docTypeFilter) return false;
+      if (statusFilter === "active" && !r.is_active) return false;
+      if (statusFilter === "inactive" && r.is_active) return false;
+      if (!q) return true;
+      if (r.name?.toLowerCase().includes(q)) return true;
+      if (
+        r.criteria?.some(
+          (c) =>
+            fieldLabel(c.field).toLowerCase().includes(q) ||
+            (c.value || "").toLowerCase().includes(q) ||
+            (c.value2 || "").toLowerCase().includes(q),
+        )
+      )
+        return true;
+      if (
+        r.levels?.some(
+          (l) =>
+            (l.approver_name || "").toLowerCase().includes(q) ||
+            (l.approver_email || "").toLowerCase().includes(q),
+        )
+      )
+        return true;
+      return false;
+    });
+  }, [rules, search, docTypeFilter, statusFilter]);
 
   useEffect(() => {
     if (!session) navigate("/");
