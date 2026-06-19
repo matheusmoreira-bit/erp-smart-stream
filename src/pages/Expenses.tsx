@@ -881,17 +881,30 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(({ exp, origin }) => (
-              <ExpenseCard
-                key={exp.id}
-                expense={exp}
-                originBadge={origin}
-                onOpen={() => setSelectedExpense(exp)}
-                onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map(({ exp, origin }) => (
+                <ExpenseCard
+                  key={exp.id}
+                  expense={exp}
+                  originBadge={origin}
+                  onOpen={() => setSelectedExpense(exp)}
+                  onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
+                />
+              ))}
+            </div>
+            {showSourceToggle && sourceMode === "both" && sapHasMore && (
+              <div className="flex justify-center mt-6">
+                <Button variant="outline" onClick={loadMoreSap} disabled={isLoadingMoreSap} className="gap-2">
+                  {isLoadingMoreSap ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</>
+                  ) : (
+                    <>Mostrar mais</>
+                  )}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </main>
 
