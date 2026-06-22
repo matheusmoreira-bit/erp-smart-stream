@@ -270,12 +270,9 @@ async function findMatchingRule(
     .eq("is_active", true)
     .order("priority", { ascending: false });
 
-  // Match rules of the active company OR legacy rules without a company (treated as global).
-  if (companyDb) {
-    q = q.or(`company_db.eq.${companyDb},company_db.is.null`);
-  } else {
-    q = q.is("company_db", null);
-  }
+  // Strict segregation: only match rules of the active company. Sem empresa => sem regra.
+  if (!companyDb) return null;
+  q = q.eq("company_db", companyDb);
 
   const { data: rules } = await q;
   if (!rules || rules.length === 0) return null;
