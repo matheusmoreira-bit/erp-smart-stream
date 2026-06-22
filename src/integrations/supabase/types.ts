@@ -343,7 +343,7 @@ export type Database = {
       }
       approval_rules: {
         Row: {
-          company_db: string | null
+          company_db: string
           cost_center: string | null
           created_at: string
           created_by: string
@@ -360,7 +360,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          company_db?: string | null
+          company_db: string
           cost_center?: string | null
           created_at?: string
           created_by: string
@@ -377,7 +377,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          company_db?: string | null
+          company_db?: string
           cost_center?: string | null
           created_at?: string
           created_by?: string
@@ -1250,7 +1250,7 @@ export type Database = {
         Row: {
           approval_rule_id: string | null
           branch_id: number
-          company_db: string | null
+          company_db: string
           cost_center: string | null
           created_at: string
           created_by_email: string | null
@@ -1280,7 +1280,7 @@ export type Database = {
         Insert: {
           approval_rule_id?: string | null
           branch_id?: number
-          company_db?: string | null
+          company_db: string
           cost_center?: string | null
           created_at?: string
           created_by_email?: string | null
@@ -1310,7 +1310,7 @@ export type Database = {
         Update: {
           approval_rule_id?: string | null
           branch_id?: number
-          company_db?: string | null
+          company_db?: string
           cost_center?: string | null
           created_at?: string
           created_by_email?: string | null
@@ -2333,7 +2333,7 @@ export type Database = {
           card_code: string | null
           card_name: string
           card_type: string
-          company_db: string | null
+          company_db: string
           created_at: string
           currency: string
           email: string | null
@@ -2360,7 +2360,7 @@ export type Database = {
           card_code?: string | null
           card_name: string
           card_type?: string
-          company_db?: string | null
+          company_db: string
           created_at?: string
           currency?: string
           email?: string | null
@@ -2387,7 +2387,7 @@ export type Database = {
           card_code?: string | null
           card_name?: string
           card_type?: string
-          company_db?: string | null
+          company_db?: string
           created_at?: string
           currency?: string
           email?: string | null
