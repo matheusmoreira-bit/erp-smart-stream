@@ -415,24 +415,45 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
       // Evaluate approval rules for manual expenses (PagCorp skips rules)
       if (!input.skipRules && origin === "manual") {
-        const ctx = {
-          total_amount: totalAmount,
-          cost_center: input.cost_center || "",
-          project: input.project || "",
-          requester_name: session.userName,
-          supplier_name: input.supplier_name,
-          currency: input.currency || "BRL",
-          doc_type: docType,
-          item_codes: itemCtx.item_codes,
-          item_groups: itemCtx.item_groups,
-        };
-        const match = await findMatchingRule(ctx, session.companyDB || null, docType);
+        // CC do cabeçalho pode estar vazio — usar o(s) CC(s) dos itens como fallback
+        // para evitar bypass quando o rateio fica somente nas linhas.
+        const itemCostCenters = Array.from(
+          new Set(
+            (input.items || [])
+              .map((it) => (it.cost_center || "").trim())
+              .filter((cc) => cc.length > 0),
+          ),
+        );
+        const headerCc = (input.cost_center || "").trim();
+        const candidateCcs = headerCc ? [headerCc] : itemCostCenters;
+
+        let match: Awaited<ReturnType<typeof findMatchingRule>> = null;
+        for (const cc of (candidateCcs.length > 0 ? candidateCcs : [""])) {
+          const ctx = {
+            total_amount: totalAmount,
+            cost_center: cc,
+            project: input.project || "",
+            requester_name: session.userName,
+            supplier_name: input.supplier_name,
+            currency: input.currency || "BRL",
+            doc_type: docType,
+            item_codes: itemCtx.item_codes,
+            item_groups: itemCtx.item_groups,
+          };
+          match = await findMatchingRule(ctx, session.companyDB || null, docType);
+          if (match) break;
+        }
+
         if (match) {
           status = "pendente_aprovacao";
           currentApprover = match.firstApprover?.name || null;
           matchedRuleId = match.rule.id;
         } else {
-          status = "aprovado";
+          // Sem regra correspondente: NUNCA auto-aprovar. Vai para aprovação
+          // manual (admin/financeiro) — evita bypass como o ocorrido em SBO_CACTUS.
+          status = "pendente_aprovacao";
+          currentApprover = null;
+          matchedRuleId = null;
         }
       }
 
