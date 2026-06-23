@@ -474,6 +474,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isLoadingSap, setIsLoadingSap] = useState(false);
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
   const [sapHasMore, setSapHasMore] = useState(false);
+  const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
   const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
   const SAP_PAGE_SIZE = 100;
 
