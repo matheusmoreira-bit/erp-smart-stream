@@ -679,7 +679,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     }
   };
 
-  const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
+  
 
   const handleCreate = async (input: any) => {
     const result = await createExpense(input) as any;
