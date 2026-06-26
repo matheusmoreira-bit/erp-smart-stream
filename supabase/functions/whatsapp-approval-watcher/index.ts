@@ -396,6 +396,7 @@ Deno.serve(async (req) => {
       error_message: hasError ? results.filter((r) => r.error).map((r) => `${r.company_db}: ${r.error}`).join(" | ") : null,
       details: { results },
     });
+    await releaseWatcherLock(sb, "whatsapp-approval-watcher", hasError ? "error" : "ok", `alerts=${totalAlerts}`);
     return new Response(
       JSON.stringify({ ok: true, total_alerts: totalAlerts, results }, null, 2),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -411,6 +412,7 @@ Deno.serve(async (req) => {
         details: {},
       });
     } catch { /* ignore */ }
+    await releaseWatcherLock(sb, "whatsapp-approval-watcher", "error", (e as Error).message);
     return new Response(
       JSON.stringify({ ok: false, error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
