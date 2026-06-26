@@ -16,6 +16,11 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const _startedAt = Date.now();
+  let _action = "unknown";
+  let _company_db: string | null = null;
+  let _http = 200;
+  let _err: string | null = null;
   try {
     // OMIE proxy is decoupled from Backoffice (Lovable Cloud) auth.
     // OMIE itself is the ERP authentication: the function only ever uses
