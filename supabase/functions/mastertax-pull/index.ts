@@ -11,6 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { logIntegrationCall } from "../_shared/integration-log.ts";
 
 const DEFAULT_BASE_URL = "https://api.mastertax.app";
 
