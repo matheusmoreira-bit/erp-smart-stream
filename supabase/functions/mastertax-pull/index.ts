@@ -561,9 +561,26 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("[mastertax-pull] falha geral:", (e as Error).message);
+    _http = 500;
+    _err = (e as Error).message;
     return new Response(JSON.stringify({ ok: false, error: (e as Error).message, ...result }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } finally {
+    void logIntegrationCall({
+      system_name: "mastertax",
+      action: "pull",
+      status: _http >= 400 ? "error" : "ok",
+      http_status: _http,
+      error_message: _err,
+      duration_ms: Date.now() - _startedAt,
+      response_meta: {
+        companies: result.companies,
+        fetched: result.fetched,
+        upserted: result.upserted,
+        errors: result.errors,
+      },
     });
   }
 });
