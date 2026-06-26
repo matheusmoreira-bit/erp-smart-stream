@@ -590,5 +590,10 @@ Deno.serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+  } finally {
+    // Libera o lock anti-duplicação (no-op se nunca foi adquirido).
+    if (supabase && expenseId) {
+      await releaseIntegrationLock(supabase, "expenses", expenseId);
+    }
   }
 });
