@@ -194,7 +194,7 @@ function SystemCredentialModal({
   };
 
   const handleDeleteAll = async () => {
-    if (!confirm(`Remover todas as credenciais do ${system.label}?`)) return;
+    setConfirmDeleteAllOpen(false);
     setSaving(true);
     await supabase
       .from("system_credentials")
@@ -206,6 +206,7 @@ function SystemCredentialModal({
     onSaved();
     onOpenChange(false);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
