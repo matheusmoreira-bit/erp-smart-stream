@@ -267,12 +267,21 @@ Deno.serve(async (req) => {
   );
 
   try {
-    // Empresas ativas SAP
+    const gotLock = await tryWatcherLock(sb, "whatsapp-login-watcher", 15);
+    if (!gotLock) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: "another_run_in_progress" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Empresas ativas SAP (exclui bases de teste)
     const { data: companies, error: cErr } = await sb
       .from("companies")
       .select("company_db, display_name, erp_type, is_active")
       .eq("is_active", true)
-      .eq("erp_type", "sap");
+      .eq("erp_type", "sap")
+      .not("company_db", "ilike", "SBO_TESTE_%");
 
     if (cErr) throw cErr;
 
