@@ -38,6 +38,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -119,6 +120,7 @@ function SystemCredentialModal({
   const [values, setValues] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false);
   const Icon = system.icon;
 
   // Load existing non-secret values (custom_fields, toggle, default_branch_id) when dialog opens
@@ -193,7 +195,7 @@ function SystemCredentialModal({
   };
 
   const handleDeleteAll = async () => {
-    if (!confirm(`Remover todas as credenciais do ${system.label}?`)) return;
+    setConfirmDeleteAllOpen(false);
     setSaving(true);
     await supabase
       .from("system_credentials")
@@ -205,6 +207,7 @@ function SystemCredentialModal({
     onSaved();
     onOpenChange(false);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -305,7 +308,7 @@ function SystemCredentialModal({
           {existingKeys.length > 0 && (
             <Button
               variant="outline"
-              onClick={handleDeleteAll}
+              onClick={() => setConfirmDeleteAllOpen(true)}
               disabled={saving}
               className="gap-2 text-destructive hover:text-destructive mr-auto"
             >
@@ -320,6 +323,15 @@ function SystemCredentialModal({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ConfirmDialog
+        open={confirmDeleteAllOpen}
+        onOpenChange={setConfirmDeleteAllOpen}
+        title={`Remover credenciais do ${system.label}?`}
+        description="Esta ação remove permanentemente todas as credenciais deste sistema para a empresa."
+        confirmLabel="Remover"
+        destructive
+        onConfirm={handleDeleteAll}
+      />
     </Dialog>
   );
 }
@@ -340,6 +352,7 @@ export default function Admin() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "" as string, legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [wizardCreds, setWizardCreds] = useState<Record<string, string>>({});
   const [showWizardPasswords, setShowWizardPasswords] = useState<Record<string, boolean>>({});
@@ -552,15 +565,21 @@ export default function Admin() {
     }
   };
 
-  const deleteCompany = async (c: Company) => {
-    if (!confirm(`Excluir empresa "${c.display_name}"?`)) return;
-    const { error } = await supabase.from("companies").delete().eq("id", c.id);
+  const deleteCompany = (c: Company) => {
+    setCompanyToDelete(c);
+  };
+
+  const confirmDeleteCompany = async () => {
+    if (!companyToDelete) return;
+    const { error } = await supabase.from("companies").delete().eq("id", companyToDelete.id);
     if (error) toast.error("Erro ao excluir");
     else {
       toast.success("Empresa excluída");
       fetchCompanies();
     }
+    setCompanyToDelete(null);
   };
+
 
   const toggleActive = async (c: Company) => {
     const { error } = await supabase
@@ -1210,6 +1229,16 @@ export default function Admin() {
           onSaved={() => fetchCredentials(selectedCompanyDb)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!companyToDelete}
+        onOpenChange={(o) => !o && setCompanyToDelete(null)}
+        title={`Excluir empresa "${companyToDelete?.display_name ?? ""}"?`}
+        description="Esta ação remove a empresa e suas credenciais associadas. Não pode ser desfeita."
+        confirmLabel="Excluir"
+        destructive
+        onConfirm={confirmDeleteCompany}
+      />
     </div>
   );
 }

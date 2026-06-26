@@ -17,9 +17,9 @@ import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/
  */
 
 const WEBHOOK_URL =
+  Deno.env.get("APPROVAL_HISTORY_WEBHOOK_URL") ||
   "https://anagaming.app.n8n.cloud/webhook/496a9d2a-2ff0-4e7c-9d2e-755900bb040a";
 
-const DEFAULT_COMPANY_DB = "SBO_ANAGAMING";
 
 const DOC_TYPE_TO_OBJECT: Record<string, string> = {
   "Pedido de Compra": "22",
@@ -228,7 +228,11 @@ Deno.serve(async (req) => {
 
     let body: { companyDb?: string } = {};
     try { body = await req.json(); } catch { /* no body */ }
-    const companyDb = body.companyDb || DEFAULT_COMPANY_DB;
+    const companyDb = (body.companyDb || "").trim();
+    if (!companyDb) {
+      await releaseWatcherLock(supabase, "approval-history-sync", "error", "companyDb missing");
+      return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
+    }
 
     const res = await fetch(WEBHOOK_URL, {
       method: "GET",
