@@ -307,7 +307,7 @@ function SystemCredentialModal({
           {existingKeys.length > 0 && (
             <Button
               variant="outline"
-              onClick={handleDeleteAll}
+              onClick={() => setConfirmDeleteAllOpen(true)}
               disabled={saving}
               className="gap-2 text-destructive hover:text-destructive mr-auto"
             >
@@ -322,6 +322,15 @@ function SystemCredentialModal({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ConfirmDialog
+        open={confirmDeleteAllOpen}
+        onOpenChange={setConfirmDeleteAllOpen}
+        title={`Remover credenciais do ${system.label}?`}
+        description="Esta ação remove permanentemente todas as credenciais deste sistema para a empresa."
+        confirmLabel="Remover"
+        destructive
+        onConfirm={handleDeleteAll}
+      />
     </Dialog>
   );
 }
