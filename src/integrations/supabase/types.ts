@@ -1554,6 +1554,48 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_log: {
+        Row: {
+          action: string
+          company_db: string | null
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          request_meta: Json | null
+          response_meta: Json | null
+          status: string
+          system_name: string
+        }
+        Insert: {
+          action: string
+          company_db?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          request_meta?: Json | null
+          response_meta?: Json | null
+          status?: string
+          system_name: string
+        }
+        Update: {
+          action?: string
+          company_db?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          request_meta?: Json | null
+          response_meta?: Json | null
+          status?: string
+          system_name?: string
+        }
+        Relationships: []
+      }
       item_base: {
         Row: {
           codigo_servico: string | null
@@ -2833,6 +2875,19 @@ export type Database = {
         Args: { _company_db: string }
         Returns: boolean
       }
+      check_applicable_approval_rules: {
+        Args: {
+          _category?: string
+          _company_db: string
+          _cost_center?: string
+          _total_amount: number
+        }
+        Returns: {
+          has_rule: boolean
+          rule_count: number
+          sample_rule_id: string
+        }[]
+      }
       check_external_api_access: {
         Args: { _company_db: string; _user_code: string }
         Returns: {
@@ -2896,6 +2951,7 @@ export type Database = {
         Returns: number
       }
       preview_next_codigo: { Args: { p_item_base_id: string }; Returns: string }
+      prune_old_integration_data: { Args: never; Returns: undefined }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
