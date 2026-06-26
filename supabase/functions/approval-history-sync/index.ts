@@ -17,9 +17,9 @@ import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/
  */
 
 const WEBHOOK_URL =
+  Deno.env.get("APPROVAL_HISTORY_WEBHOOK_URL") ||
   "https://anagaming.app.n8n.cloud/webhook/496a9d2a-2ff0-4e7c-9d2e-755900bb040a";
 
-const DEFAULT_COMPANY_DB = "SBO_ANAGAMING";
 
 const DOC_TYPE_TO_OBJECT: Record<string, string> = {
   "Pedido de Compra": "22",
