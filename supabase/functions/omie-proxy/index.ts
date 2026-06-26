@@ -30,6 +30,8 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
+    _action = typeof action === "string" ? action : "unknown";
+    _company_db = typeof company_db === "string" ? company_db : null;
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
