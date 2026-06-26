@@ -1229,6 +1229,16 @@ export default function Admin() {
           onSaved={() => fetchCredentials(selectedCompanyDb)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!companyToDelete}
+        onOpenChange={(o) => !o && setCompanyToDelete(null)}
+        title={`Excluir empresa "${companyToDelete?.display_name ?? ""}"?`}
+        description="Esta ação remove a empresa e suas credenciais associadas. Não pode ser desfeita."
+        confirmLabel="Excluir"
+        destructive
+        onConfirm={confirmDeleteCompany}
+      />
     </div>
   );
 }
