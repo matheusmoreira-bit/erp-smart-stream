@@ -261,9 +261,15 @@ Deno.serve(async (req) => {
     } finally {
       await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
     }
+    }
+
+    // Próxima página: avança o offset pelo total recebido
+    pageOffset += rows.length;
+    if (rows.length < PAGE_SIZE) break; // última página
   }
 
-  return new Response(JSON.stringify({ ok: true, results }), {
+  await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "ok", `processed=${results.length}`);
+  return new Response(JSON.stringify({ ok: true, results, processed: results.length }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
