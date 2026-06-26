@@ -2692,6 +2692,36 @@ export type Database = {
         }
         Relationships: []
       }
+      watcher_runs: {
+        Row: {
+          last_finished_at: string | null
+          last_message: string | null
+          last_started_at: string | null
+          last_status: string | null
+          locked_at: string | null
+          updated_at: string
+          watcher_name: string
+        }
+        Insert: {
+          last_finished_at?: string | null
+          last_message?: string | null
+          last_started_at?: string | null
+          last_status?: string | null
+          locked_at?: string | null
+          updated_at?: string
+          watcher_name: string
+        }
+        Update: {
+          last_finished_at?: string | null
+          last_message?: string | null
+          last_started_at?: string | null
+          last_status?: string | null
+          locked_at?: string | null
+          updated_at?: string
+          watcher_name?: string
+        }
+        Relationships: []
+      }
       whatsapp_approval_alerts: {
         Row: {
           approval_request_id: number
@@ -2825,8 +2855,16 @@ export type Database = {
           read_ct: number
         }[]
       }
+      release_watcher_lock: {
+        Args: { _message?: string; _name: string; _status?: string }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      try_watcher_lock: {
+        Args: { _name: string; _ttl_minutes?: number }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "user"
