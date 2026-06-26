@@ -220,11 +220,18 @@ Deno.serve(async (req) => {
 
   const work = async () => {
     try {
+    // Lock anti-execução-paralela
+    const gotLock = await tryWatcherLock(sb, "license-idle-watcher", 30);
+    if (!gotLock) {
+      return { ok: true, skipped: "another_run_in_progress" };
+    }
+
     const { data: companies } = await sb
       .from("companies")
       .select("company_db, display_name")
       .eq("is_active", true)
-      .eq("erp_type", "sap");
+      .eq("erp_type", "sap")
+      .not("company_db", "ilike", "SBO_TESTE_%");
 
     const dbs = (companies || []).map((c) => c.company_db);
     const { data: credRows } = await sb
