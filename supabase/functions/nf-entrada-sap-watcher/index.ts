@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 
 interface NfRow {
   id: string;
@@ -68,25 +69,46 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const { data: rows, error } = await sb
-    .from("nf_entrada_imports")
-    .select("*")
-    .eq("status", "awaiting_sap")
-    .limit(50);
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+  const gotLock = await tryWatcherLock(sb, "nf-entrada-sap-watcher", 10);
+  if (!gotLock) {
+    return new Response(
+      JSON.stringify({ ok: true, skipped: "another_run_in_progress" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
+  // Paginação: processa em páginas de 50 até esvaziar ou atingir limite de tempo (90s).
+  const PAGE_SIZE = 50;
+  const TIME_BUDGET_MS = 90_000;
+  const startedAt = Date.now();
   const results: Array<{ id: string; status: string; error?: string }> = [];
+  let pageOffset = 0;
 
-  // Agrupar por company_db para reaproveitar login
-  const byCompany = new Map<string, NfRow[]>();
-  for (const r of (rows || []) as NfRow[]) {
-    if (!r.sap_company_db || !r.sap_po_draft_id) continue;
-    const arr = byCompany.get(r.sap_company_db) || [];
-    arr.push(r);
-    byCompany.set(r.sap_company_db, arr);
-  }
+  while (Date.now() - startedAt < TIME_BUDGET_MS) {
+    const { data: rows, error } = await sb
+      .from("nf_entrada_imports")
+      .select("*")
+      .eq("status", "awaiting_sap")
+      .order("created_at", { ascending: true })
+      .range(pageOffset, pageOffset + PAGE_SIZE - 1);
+    if (error) {
+      await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "error", error.message);
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+    }
+    if (!rows || rows.length === 0) break;
+
+    // Agrupar por company_db para reaproveitar login (pulando bases de teste)
+    const byCompany = new Map<string, NfRow[]>();
+    for (const r of rows as NfRow[]) {
+      if (!r.sap_company_db || !r.sap_po_draft_id) continue;
+      if (isTestCompanyDb(r.sap_company_db)) {
+        results.push({ id: r.id, status: "skipped", error: "test_base" });
+        continue;
+      }
+      const arr = byCompany.get(r.sap_company_db) || [];
+      arr.push(r);
+      byCompany.set(r.sap_company_db, arr);
+    }
 
   for (const [companyDb, list] of byCompany) {
     let cookie = "";
@@ -239,9 +261,15 @@ Deno.serve(async (req) => {
     } finally {
       await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
     }
+    }
+
+    // Próxima página: avança o offset pelo total recebido
+    pageOffset += rows.length;
+    if (rows.length < PAGE_SIZE) break; // última página
   }
 
-  return new Response(JSON.stringify({ ok: true, results }), {
+  await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "ok", `processed=${results.length}`);
+  return new Response(JSON.stringify({ ok: true, results, processed: results.length }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });

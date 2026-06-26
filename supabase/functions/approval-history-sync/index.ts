@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 
 /**
  * approval-history-sync
@@ -209,6 +210,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  let lockAcquired = false;
   try {
     try {
       await requireAdminOrSapSession(req);
@@ -217,6 +219,13 @@ Deno.serve(async (req) => {
       if (r) return r;
       throw err;
     }
+
+    // Lock anti-execução-paralela
+    lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 20);
+    if (!lockAcquired) {
+      return jsonResponse({ success: true, skipped: "another_run_in_progress" });
+    }
+
     let body: { companyDb?: string } = {};
     try { body = await req.json(); } catch { /* no body */ }
     const companyDb = body.companyDb || DEFAULT_COMPANY_DB;
@@ -236,7 +245,6 @@ Deno.serve(async (req) => {
       throw new Error(`Resposta inesperada do webhook: ${text.slice(0, 300)}`);
     }
 
-    // Esperamos um array com um objeto { data: [...] }, mas aceitamos variações
     const groups: Array<{ data?: WebhookRow[] }> = Array.isArray(parsed)
       ? (parsed as Array<{ data?: WebhookRow[] }>)
       : [parsed as { data?: WebhookRow[] }];
@@ -248,6 +256,7 @@ Deno.serve(async (req) => {
 
     if (rows.length === 0) {
       await updateSyncState(supabase, "success", "Nenhum registro recebido", 0);
+      await releaseWatcherLock(supabase, "approval-history-sync", "ok", "no rows");
       return jsonResponse({ success: true, received: 0, upserted: 0 });
     }
 
@@ -261,22 +270,62 @@ Deno.serve(async (req) => {
       companyLookup.set(normalizeName(c.company_db), c.company_db);
     }
 
-    // Deduplica por (company_db, external_id)
+    // Deduplica por (company_db, external_id), filtrando teste e linhas sem empresa
     const mapped = new Map<string, ReturnType<typeof mapRow>>();
+    let skippedTest = 0;
+    let skippedUnknownCompany = 0;
     for (const r of rows) {
-      const resolved = resolveCompanyDb(r.Empresa, companyLookup, companyDb);
+      // Detecta linhas sem campo Empresa reconhecível: vão para quarentena (não usa fallback silencioso)
+      const rawEmpresa = (r.Empresa || "").trim();
+      const resolved = resolveCompanyDb(rawEmpresa, companyLookup, "");
+      if (!resolved) {
+        skippedUnknownCompany++;
+        console.warn(`[approval-history-sync] linha sem Empresa reconhecível (Code=${r.Code}): "${rawEmpresa}" — ignorada`);
+        continue;
+      }
+      if (isTestCompanyDb(resolved)) {
+        skippedTest++;
+        continue;
+      }
       const row = mapRow(r, resolved);
       if (row.external_id.startsWith("::")) continue;
       mapped.set(`${row.company_db}::${row.external_id}`, row);
     }
     const payload = Array.from(mapped.values());
 
+    // Máquina de estado: NÃO sobrescrever decisão final (Y/N) com pendente (P).
+    // Pré-carrega decisões atuais e filtra do payload os updates que regrediram.
+    const externalIds = payload.map((p) => p.external_id);
+    const existingByKey = new Map<string, string>();
+    if (externalIds.length > 0) {
+      const CHUNK = 500;
+      for (let i = 0; i < externalIds.length; i += CHUNK) {
+        const ids = externalIds.slice(i, i + CHUNK);
+        const { data: existing } = await supabase
+          .from("approval_history")
+          .select("company_db,external_id,decision")
+          .in("external_id", ids);
+        for (const e of (existing || []) as Array<{ company_db: string; external_id: string; decision: string | null }>) {
+          existingByKey.set(`${e.company_db}::${e.external_id}`, e.decision || "");
+        }
+      }
+    }
+    let skippedRegression = 0;
+    const safePayload = payload.filter((p) => {
+      const prev = existingByKey.get(`${p.company_db}::${p.external_id}`);
+      if ((prev === "Y" || prev === "N") && p.decision === "P") {
+        skippedRegression++;
+        console.warn(`[approval-history-sync] decisão final (${prev}) preservada em ${p.company_db}::${p.external_id} — pendente ignorado`);
+        return false;
+      }
+      return true;
+    });
 
-    // Upsert em lotes para evitar payloads gigantes
+    // Upsert em lotes
     const BATCH = 200;
     let upserted = 0;
-    for (let i = 0; i < payload.length; i += BATCH) {
-      const slice = payload.slice(i, i + BATCH);
+    for (let i = 0; i < safePayload.length; i += BATCH) {
+      const slice = safePayload.slice(i, i + BATCH);
       const { error } = await supabase
         .from("approval_history")
         .upsert(slice, { onConflict: "company_db,external_id" });
@@ -284,22 +333,21 @@ Deno.serve(async (req) => {
       upserted += slice.length;
     }
 
-    await updateSyncState(
-      supabase,
-      "success",
-      `Sincronizados ${upserted} registros do webhook n8n`,
-      upserted,
-    );
+    const summary = `Sincronizados ${upserted} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression})`;
+    await updateSyncState(supabase, "success", summary, upserted);
+    await releaseWatcherLock(supabase, "approval-history-sync", "ok", summary);
 
     return jsonResponse({
       success: true,
       received: rows.length,
       upserted,
+      skipped: { test: skippedTest, unknown_company: skippedUnknownCompany, regression: skippedRegression },
       companyDb,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await updateSyncState(supabase, "error", message, 0).catch(() => {});
+    if (lockAcquired) await releaseWatcherLock(supabase, "approval-history-sync", "error", message);
     return jsonResponse({ success: false, error: message }, 500);
   }
 });

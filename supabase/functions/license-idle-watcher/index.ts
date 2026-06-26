@@ -2,6 +2,7 @@
 // e envia alerta via WhatsApp + e-mail. Re-alerta uma vez por semana ISO.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -219,11 +220,18 @@ Deno.serve(async (req) => {
 
   const work = async () => {
     try {
+    // Lock anti-execução-paralela
+    const gotLock = await tryWatcherLock(sb, "license-idle-watcher", 30);
+    if (!gotLock) {
+      return { ok: true, skipped: "another_run_in_progress" };
+    }
+
     const { data: companies } = await sb
       .from("companies")
       .select("company_db, display_name")
       .eq("is_active", true)
-      .eq("erp_type", "sap");
+      .eq("erp_type", "sap")
+      .not("company_db", "ilike", "SBO_TESTE_%");
 
     const dbs = (companies || []).map((c) => c.company_db);
     const { data: credRows } = await sb
@@ -396,6 +404,7 @@ Deno.serve(async (req) => {
       error_message: null,
       details: { idle_total: allIdle.length, week: weekKey, forced: forceWeek },
     });
+    await releaseWatcherLock(sb, "license-idle-watcher", "ok", `idle=${allIdle.length} sent=${sentCount}`);
     return { ok: true, idle_total: allIdle.length, alerts_sent: sentCount, week: weekKey };
     } catch (e) {
       console.error("license-idle-watcher error:", e);
@@ -408,6 +417,7 @@ Deno.serve(async (req) => {
           details: {},
         });
       } catch { /* ignore */ }
+      await releaseWatcherLock(sb, "license-idle-watcher", "error", (e as Error).message);
       return { error: (e as Error).message };
     }
   };

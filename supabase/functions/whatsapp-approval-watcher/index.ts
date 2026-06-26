@@ -3,6 +3,7 @@
 // se a aprovação continuar pendente.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -337,6 +338,14 @@ Deno.serve(async (req) => {
   );
 
   try {
+    const gotLock = await tryWatcherLock(sb, "whatsapp-approval-watcher", 20);
+    if (!gotLock) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: "another_run_in_progress" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { data: companies, error: cErr } = await sb
       .from("companies")
       .select("company_db, display_name, erp_type, is_active")
@@ -387,6 +396,7 @@ Deno.serve(async (req) => {
       error_message: hasError ? results.filter((r) => r.error).map((r) => `${r.company_db}: ${r.error}`).join(" | ") : null,
       details: { results },
     });
+    await releaseWatcherLock(sb, "whatsapp-approval-watcher", hasError ? "error" : "ok", `alerts=${totalAlerts}`);
     return new Response(
       JSON.stringify({ ok: true, total_alerts: totalAlerts, results }, null, 2),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -402,6 +412,7 @@ Deno.serve(async (req) => {
         details: {},
       });
     } catch { /* ignore */ }
+    await releaseWatcherLock(sb, "whatsapp-approval-watcher", "error", (e as Error).message);
     return new Response(
       JSON.stringify({ ok: false, error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

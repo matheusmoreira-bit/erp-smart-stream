@@ -1,6 +1,7 @@
 // Synapse — Notificações de andamento de Pedidos de Compra
 // Marcos: approved, grpo (NF entrada), ap_invoice (contas a pagar), ap_paid (baixado)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -370,6 +371,17 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Lock anti-execução-paralela (apenas se for execução automática, sem company filtrada)
+  if (!requestedCompany) {
+    const gotLock = await tryWatcherLock(supabase, "synapse-po-notify", 15);
+    if (!gotLock) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: "another_run_in_progress" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+  }
+
   // Empresas ativas
   let q = supabase
     .from("synapse_integrations")
@@ -380,6 +392,7 @@ Deno.serve(async (req) => {
 
   const { data: integrations, error: intErr } = await q;
   if (intErr) {
+    if (!requestedCompany) await releaseWatcherLock(supabase, "synapse-po-notify", "error", intErr.message);
     return new Response(JSON.stringify({ error: intErr.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -392,6 +405,11 @@ Deno.serve(async (req) => {
   for (const integ of integrations || []) {
     const companyDb = integ.company_db as string;
     if (!companyDb) continue;
+    // Pula bases de teste em execução automática (sem requestedCompany)
+    if (!requestedCompany && isTestCompanyDb(companyDb)) {
+      overall.push({ company_db: companyDb, skipped: "test_base" });
+      continue;
+    }
     const startedAt = new Date().toISOString();
     try {
       const summary = await processCompany(supabase, companyDb, daysBack);
@@ -436,6 +454,7 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (!requestedCompany) await releaseWatcherLock(supabase, "synapse-po-notify", "ok", `sent=${totalSent}`);
   return new Response(
     JSON.stringify({ ok: true, message: `${totalSent} notificação(ões) enviada(s)`, results: overall }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
