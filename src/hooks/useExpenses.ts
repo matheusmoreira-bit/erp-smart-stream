@@ -686,6 +686,35 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
   const submitForApproval = useCallback(
     async (expenseId: string) => {
+      // Pre-validate: ensure at least one approval rule applies
+      try {
+        const { data: exp } = await supabase
+          .from("expenses")
+          .select("total_amount, cost_center, company_db")
+          .eq("id", expenseId)
+          .maybeSingle();
+        if (exp) {
+          const { data: ruleCheck } = await supabase.rpc(
+            "check_applicable_approval_rules",
+            {
+              _company_db: (exp as any).company_db || session?.companyDB || "",
+              _total_amount: Number((exp as any).total_amount || 0),
+              _cost_center: (exp as any).cost_center || null,
+            }
+          );
+          const row = Array.isArray(ruleCheck) ? ruleCheck[0] : ruleCheck;
+          if (row && row.has_rule === false) {
+            throw new Error(
+              "Nenhuma regra de aprovação aplicável encontrada para esta despesa. Verifique valor, centro de custo e regras ativas antes de submeter."
+            );
+          }
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("Nenhuma regra")) throw e;
+        // RPC failure should not block submission silently
+        console.warn("check_applicable_approval_rules failed:", e);
+      }
+
       const { error: err } = await supabase
         .from("expenses")
         .update({ status: "pendente_aprovacao" as any })
