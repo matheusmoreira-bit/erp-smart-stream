@@ -312,6 +312,21 @@ Deno.serve(async (req) => {
     if (!companyDB) return json(400, { error: "company_db é obrigatório" });
     if (!userCode) return json(400, { error: "user_code é obrigatório" });
 
+    // Allowlist + circuit breaker check
+    const admin = sb();
+    const { data: accessRows, error: accessErr } = await admin.rpc("check_external_api_access", {
+      _company_db: companyDB,
+      _user_code: userCode,
+    });
+    if (accessErr) {
+      console.error("check_external_api_access error:", accessErr);
+      return json(500, { error: "Falha ao validar allowlist" });
+    }
+    const access = Array.isArray(accessRows) ? accessRows[0] : accessRows;
+    if (!access?.allowed) {
+      return json(403, { error: access?.reason || "Acesso negado" });
+    }
+
     const cfg = await getCompanyConfig(companyDB);
     const session = await sapLogin(cfg);
 
@@ -320,6 +335,7 @@ Deno.serve(async (req) => {
 
       if (op === "list") {
         const docs = await listPendingForUser(session, userKey, userCode);
+        await admin.rpc("register_external_api_success", { _company_db: companyDB, _user_code: userCode });
         return json(200, { company_db: companyDB, user_code: userCode, count: docs.length, documents: docs });
       }
 
@@ -330,7 +346,18 @@ Deno.serve(async (req) => {
         return json(400, { error: "approval_request_id é obrigatório (número)" });
       }
 
-      await decideApproval(session, approvalRequestId, userKey, step, op as "approve" | "reject", remarks);
+      try {
+        await decideApproval(session, approvalRequestId, userKey, step, op as "approve" | "reject", remarks);
+      } catch (decideErr) {
+        await admin.rpc("register_external_api_failure", {
+          _company_db: companyDB,
+          _user_code: userCode,
+          _reason: decideErr instanceof Error ? decideErr.message : String(decideErr),
+        });
+        throw decideErr;
+      }
+
+      await admin.rpc("register_external_api_success", { _company_db: companyDB, _user_code: userCode });
       return json(200, {
         success: true,
         company_db: companyDB,
