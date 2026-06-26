@@ -119,6 +119,7 @@ function SystemCredentialModal({
   const [values, setValues] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false);
   const Icon = system.icon;
 
   // Load existing non-secret values (custom_fields, toggle, default_branch_id) when dialog opens
