@@ -324,7 +324,8 @@ Deno.serve(async (req) => {
       .from("companies")
       .select("company_db, display_name, erp_type, is_active")
       .eq("is_active", true)
-      .eq("erp_type", "sap");
+      .eq("erp_type", "sap")
+      .not("company_db", "ilike", "SBO_TESTE_%");
     if (cErr) throw cErr;
 
     const dbs = (companies || []).map((c) => c.company_db);
