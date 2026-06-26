@@ -160,12 +160,28 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     const authResp = authErrorResponse(e, corsHeaders);
-    if (authResp) return authResp;
+    if (authResp) {
+      _http = authResp.status;
+      _err = e instanceof Error ? e.message : "auth error";
+      return authResp;
+    }
 
     console.error("omie-proxy error:", e);
+    _http = 500;
+    _err = e instanceof Error ? e.message : "Erro interno";
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Erro interno" }),
+      JSON.stringify({ error: _err }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  } finally {
+    void logIntegrationCall({
+      system_name: "omie",
+      action: _action,
+      company_db: _company_db,
+      status: _http >= 400 ? "error" : "ok",
+      http_status: _http,
+      error_message: _err,
+      duration_ms: Date.now() - _startedAt,
+    });
   }
 });
