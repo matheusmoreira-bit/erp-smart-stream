@@ -454,6 +454,7 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (!requestedCompany) await releaseWatcherLock(supabase, "synapse-po-notify", "ok", `sent=${totalSent}`);
   return new Response(
     JSON.stringify({ ok: true, message: `${totalSent} notificação(ões) enviada(s)`, results: overall }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
