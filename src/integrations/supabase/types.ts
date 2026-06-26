@@ -2875,19 +2875,32 @@ export type Database = {
         Args: { _company_db: string }
         Returns: boolean
       }
-      check_applicable_approval_rules: {
-        Args: {
-          _category?: string
-          _company_db: string
-          _cost_center?: string
-          _total_amount: number
-        }
-        Returns: {
-          has_rule: boolean
-          rule_count: number
-          sample_rule_id: string
-        }[]
-      }
+      check_applicable_approval_rules:
+        | {
+            Args: {
+              _company_db: string
+              _cost_center?: string
+              _total_amount: number
+            }
+            Returns: {
+              has_rule: boolean
+              rule_count: number
+              sample_rule_id: string
+            }[]
+          }
+        | {
+            Args: {
+              _category?: string
+              _company_db: string
+              _cost_center?: string
+              _total_amount: number
+            }
+            Returns: {
+              has_rule: boolean
+              rule_count: number
+              sample_rule_id: string
+            }[]
+          }
       check_external_api_access: {
         Args: { _company_db: string; _user_code: string }
         Returns: {
