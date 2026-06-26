@@ -2,6 +2,7 @@
 // e envia alerta via WhatsApp + e-mail. Re-alerta uma vez por semana ISO.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
