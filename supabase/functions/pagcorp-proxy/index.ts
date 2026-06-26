@@ -209,14 +209,19 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const _startedAt = Date.now();
+  let _action = "default";
+  let _company_db: string | null = null;
+  let _http = 200;
+  let _err: string | null = null;
   try {
     await requireUserOrSapSession(req);
-
-
 
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
     const companyDb = url.searchParams.get("companyDb") || undefined;
+    _action = action || "default";
+    _company_db = companyDb ?? null;
 
     // ── Receipt file proxy: ?action=receipt&receiptId=X&companyDb=Y ──
     if (action === "receipt") {
