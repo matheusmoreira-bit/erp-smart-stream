@@ -2,6 +2,7 @@
 // POST /functions/v1/advance-to-sap  body: { advance_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireUserOrSapSession } from "../_shared/auth.ts";
+import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,6 +92,19 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ success: true, alreadyIntegrated: true, docEntry: adv.sap_doc_entry, docNum: adv.sap_doc_num }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Lock anti-duplicação: impede dois cliques simultâneos de criar 2 DPIs no SAP.
+    const acquired = await tryAcquireIntegrationLock(supabase, "advance_payments", advanceId);
+    if (!acquired) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Este adiantamento já está sendo integrado ao SAP por outro processo. Aguarde alguns minutos e tente novamente.",
+          alreadyProcessing: true,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -190,5 +204,9 @@ Deno.serve(async (req) => {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  } finally {
+    if (supabase && advanceId) {
+      await releaseIntegrationLock(supabase, "advance_payments", advanceId);
+    }
   }
 });

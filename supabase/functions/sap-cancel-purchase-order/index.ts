@@ -59,6 +59,22 @@ Deno.serve(async (req) => {
 
     const results: any[] = [];
     for (const de of docEntries) {
+      // Guard anti duplo-clique: tenta marcar o lock no expense correspondente.
+      // Se 0 rows atualizadas → já foi cancelado ou outro processo está cancelando.
+      const cutoffIso = new Date(Date.now() - 2 * 60_000).toISOString();
+      const { data: lockedRows } = await sb
+        .from("expenses")
+        .update({ sap_integration_locked_at: new Date().toISOString() })
+        .eq("company_db", companyDb)
+        .eq("sap_doc_entry", Number(de))
+        .or(`sap_integration_locked_at.is.null,sap_integration_locked_at.lt.${cutoffIso}`)
+        .select("id, requester_email");
+
+      if (!lockedRows || lockedRows.length === 0) {
+        results.push({ docEntry: de, status: 0, ok: false, body: "skipped: já cancelado ou em curso" });
+        continue;
+      }
+
       const url = `${sap.baseUrl}/PurchaseOrders(${Number(de)})/Cancel`;
       const r = await fetch(url, {
         method: "POST",
@@ -68,33 +84,29 @@ Deno.serve(async (req) => {
       const ok = r.status === 204 || r.ok;
       results.push({ docEntry: de, status: r.status, ok, body: body.slice(0, 300) });
 
-      // On success: reset expense to pendente_aprovacao
+      const exp = lockedRows[0] as any;
       if (ok) {
-        const { data: exp } = await sb
+        await sb
           .from("expenses")
-          .select("id, requester_email")
-          .eq("company_db", companyDb)
-          .eq("sap_doc_entry", de)
-          .maybeSingle();
-        if (exp) {
-          await sb
-            .from("expenses")
-            .update({
-              status: "pendente_aprovacao",
-              sap_doc_entry: null,
-              sap_doc_num: null,
-              sap_purchase_order_status: null,
-              sap_integration_error: `Cancelado no SAP em ${new Date().toISOString()} — ${reason || "bypass de aprovação"}`,
-            } as any)
-            .eq("id", (exp as any).id);
-          await sb.rpc("insert_audit_log", {
-            p_action: "sap_purchase_order_cancelled",
-            p_entity_type: "expense",
-            p_entity_id: (exp as any).id,
-            p_company_db: companyDb,
-            p_details: { docEntry: de, reason: reason || null } as any,
-          });
-        }
+          .update({
+            status: "pendente_aprovacao",
+            sap_doc_entry: null,
+            sap_doc_num: null,
+            sap_purchase_order_status: null,
+            sap_integration_error: `Cancelado no SAP em ${new Date().toISOString()} — ${reason || "bypass de aprovação"}`,
+            sap_integration_locked_at: null,
+          } as any)
+          .eq("id", exp.id);
+        await sb.rpc("insert_audit_log", {
+          p_action: "sap_purchase_order_cancelled",
+          p_entity_type: "expense",
+          p_entity_id: exp.id,
+          p_company_db: companyDb,
+          p_details: { docEntry: de, reason: reason || null } as any,
+        });
+      } else {
+        // Libera o lock para permitir nova tentativa imediata
+        await sb.from("expenses").update({ sap_integration_locked_at: null }).eq("id", exp.id);
       }
     }
 

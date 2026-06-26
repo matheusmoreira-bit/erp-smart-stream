@@ -3,6 +3,7 @@
 // Body: { expense_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireUserOrSapSession } from "../_shared/auth.ts";
+import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 
 
 const corsHeaders = {
@@ -267,6 +268,22 @@ Deno.serve(async (req) => {
       .eq("expense_id", expenseId);
     if (itemsErr) throw new Error(`Erro ao carregar itens: ${itemsErr.message}`);
     if (!items || items.length === 0) throw new Error("Despesa sem itens — não é possível lançar no SAP");
+
+    // Lock anti-duplicação: impede dois cliques simultâneos de criar 2 POs no SAP.
+    // Pulado se já há sap_doc_entry (caso de re-link de anexos tratado abaixo).
+    if (!expense.sap_doc_entry) {
+      const acquired = await tryAcquireIntegrationLock(supabase, "expenses", expenseId);
+      if (!acquired) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Esta despesa já está sendo integrada ao SAP por outro processo. Aguarde alguns minutos e tente novamente.",
+            alreadyProcessing: true,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     const isSales = (expense as any).doc_type === "sales";
     const sapEndpoint = isSales ? "Orders" : "PurchaseOrders";
@@ -573,5 +590,10 @@ Deno.serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+  } finally {
+    // Libera o lock anti-duplicação (no-op se nunca foi adquirido).
+    if (supabase && expenseId) {
+      await releaseIntegrationLock(supabase, "expenses", expenseId);
+    }
   }
 });
