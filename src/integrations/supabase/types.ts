@@ -73,6 +73,7 @@ export type Database = {
           sap_doc_num: number | null
           sap_integrated_at: string | null
           sap_integration_error: string | null
+          sap_integration_locked_at: string | null
           sap_integration_status: string | null
           status: string
           supplier_card_code: string
@@ -98,6 +99,7 @@ export type Database = {
           sap_doc_num?: number | null
           sap_integrated_at?: string | null
           sap_integration_error?: string | null
+          sap_integration_locked_at?: string | null
           sap_integration_status?: string | null
           status?: string
           supplier_card_code: string
@@ -123,6 +125,7 @@ export type Database = {
           sap_doc_num?: number | null
           sap_integrated_at?: string | null
           sap_integration_error?: string | null
+          sap_integration_locked_at?: string | null
           sap_integration_status?: string | null
           status?: string
           supplier_card_code?: string
@@ -1270,6 +1273,7 @@ export type Database = {
           sap_doc_num: number | null
           sap_integration_error: string | null
           sap_integration_last_attempt_at: string | null
+          sap_integration_locked_at: string | null
           sap_purchase_order_status: string | null
           status: Database["public"]["Enums"]["expense_status"]
           supplier_code: string | null
@@ -1300,6 +1304,7 @@ export type Database = {
           sap_doc_num?: number | null
           sap_integration_error?: string | null
           sap_integration_last_attempt_at?: string | null
+          sap_integration_locked_at?: string | null
           sap_purchase_order_status?: string | null
           status?: Database["public"]["Enums"]["expense_status"]
           supplier_code?: string | null
@@ -1330,6 +1335,7 @@ export type Database = {
           sap_doc_num?: number | null
           sap_integration_error?: string | null
           sap_integration_last_attempt_at?: string | null
+          sap_integration_locked_at?: string | null
           sap_purchase_order_status?: string | null
           status?: Database["public"]["Enums"]["expense_status"]
           supplier_code?: string | null
