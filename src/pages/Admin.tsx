@@ -352,6 +352,7 @@ export default function Admin() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "" as string, legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [wizardCreds, setWizardCreds] = useState<Record<string, string>>({});
   const [showWizardPasswords, setShowWizardPasswords] = useState<Record<string, boolean>>({});
