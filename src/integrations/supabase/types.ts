@@ -1353,6 +1353,48 @@ export type Database = {
           },
         ]
       }
+      external_api_allowlist: {
+        Row: {
+          company_db: string
+          created_at: string
+          enabled: boolean
+          failed_attempts: number
+          id: string
+          last_failure_at: string | null
+          last_failure_reason: string | null
+          locked_until: string | null
+          notes: string | null
+          updated_at: string
+          user_code: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          enabled?: boolean
+          failed_attempts?: number
+          id?: string
+          last_failure_at?: string | null
+          last_failure_reason?: string | null
+          locked_until?: string | null
+          notes?: string | null
+          updated_at?: string
+          user_code: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          enabled?: boolean
+          failed_attempts?: number
+          id?: string
+          last_failure_at?: string | null
+          last_failure_reason?: string | null
+          locked_until?: string | null
+          notes?: string | null
+          updated_at?: string
+          user_code?: string
+        }
+        Relationships: []
+      }
       fornecedores: {
         Row: {
           api_payload: Json | null
@@ -2791,6 +2833,13 @@ export type Database = {
         Args: { _company_db: string }
         Returns: boolean
       }
+      check_external_api_access: {
+        Args: { _company_db: string; _user_code: string }
+        Returns: {
+          allowed: boolean
+          reason: string
+        }[]
+      }
       create_item_variante: {
         Args: { p_descricao: string; p_item_base_id: string }
         Returns: {
@@ -2854,6 +2903,14 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      register_external_api_failure: {
+        Args: { _company_db: string; _reason: string; _user_code: string }
+        Returns: undefined
+      }
+      register_external_api_success: {
+        Args: { _company_db: string; _user_code: string }
+        Returns: undefined
       }
       release_watcher_lock: {
         Args: { _message?: string; _name: string; _status?: string }
