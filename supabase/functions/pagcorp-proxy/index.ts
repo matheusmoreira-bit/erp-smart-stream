@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { logIntegrationCall } from "../_shared/integration-log.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,14 +209,19 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const _startedAt = Date.now();
+  let _action = "default";
+  let _company_db: string | null = null;
+  let _http = 200;
+  let _err: string | null = null;
   try {
     await requireUserOrSapSession(req);
-
-
 
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
     const companyDb = url.searchParams.get("companyDb") || undefined;
+    _action = action || "default";
+    _company_db = companyDb ?? null;
 
     // ── Receipt file proxy: ?action=receipt&receiptId=X&companyDb=Y ──
     if (action === "receipt") {
@@ -314,13 +320,29 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     const authResp = authErrorResponse(error, corsHeaders);
-    if (authResp) return authResp;
+    if (authResp) {
+      _http = authResp.status;
+      _err = error instanceof Error ? error.message : "auth error";
+      return authResp;
+    }
 
     console.error("PagCorp proxy error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
+    _http = 500;
+    _err = message;
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } finally {
+    void logIntegrationCall({
+      system_name: "pagcorp",
+      action: _action,
+      company_db: _company_db,
+      status: _http >= 400 ? "error" : "ok",
+      http_status: _http,
+      error_message: _err,
+      duration_ms: Date.now() - _startedAt,
     });
   }
 });

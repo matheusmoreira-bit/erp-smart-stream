@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { authErrorResponse } from "../_shared/auth.ts";
+import { logIntegrationCall } from "../_shared/integration-log.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,6 +16,11 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const _startedAt = Date.now();
+  let _action = "unknown";
+  let _company_db: string | null = null;
+  let _http = 200;
+  let _err: string | null = null;
   try {
     // OMIE proxy is decoupled from Backoffice (Lovable Cloud) auth.
     // OMIE itself is the ERP authentication: the function only ever uses
@@ -24,6 +30,8 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
+    _action = typeof action === "string" ? action : "unknown";
+    _company_db = typeof company_db === "string" ? company_db : null;
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -152,12 +160,28 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     const authResp = authErrorResponse(e, corsHeaders);
-    if (authResp) return authResp;
+    if (authResp) {
+      _http = authResp.status;
+      _err = e instanceof Error ? e.message : "auth error";
+      return authResp;
+    }
 
     console.error("omie-proxy error:", e);
+    _http = 500;
+    _err = e instanceof Error ? e.message : "Erro interno";
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Erro interno" }),
+      JSON.stringify({ error: _err }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  } finally {
+    void logIntegrationCall({
+      system_name: "omie",
+      action: _action,
+      company_db: _company_db,
+      status: _http >= 400 ? "error" : "ok",
+      http_status: _http,
+      error_message: _err,
+      duration_ms: Date.now() - _startedAt,
+    });
   }
 });

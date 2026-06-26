@@ -11,6 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { logIntegrationCall } from "../_shared/integration-log.ts";
 
 const DEFAULT_BASE_URL = "https://api.mastertax.app";
 
@@ -387,6 +388,10 @@ async function tryMatchExistingPo(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  const _startedAt = Date.now();
+  let _http = 200;
+  let _err: string | null = null;
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -556,9 +561,26 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("[mastertax-pull] falha geral:", (e as Error).message);
+    _http = 500;
+    _err = (e as Error).message;
     return new Response(JSON.stringify({ ok: false, error: (e as Error).message, ...result }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } finally {
+    void logIntegrationCall({
+      system_name: "mastertax",
+      action: "pull",
+      status: _http >= 400 ? "error" : "ok",
+      http_status: _http,
+      error_message: _err,
+      duration_ms: Date.now() - _startedAt,
+      response_meta: {
+        companies: result.companies,
+        fetched: result.fetched,
+        upserted: result.upserted,
+        errors: result.errors,
+      },
     });
   }
 });
