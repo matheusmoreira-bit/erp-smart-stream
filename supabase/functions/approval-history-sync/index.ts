@@ -228,7 +228,11 @@ Deno.serve(async (req) => {
 
     let body: { companyDb?: string } = {};
     try { body = await req.json(); } catch { /* no body */ }
-    const companyDb = body.companyDb || DEFAULT_COMPANY_DB;
+    const companyDb = (body.companyDb || "").trim();
+    if (!companyDb) {
+      await releaseWatcherLock(supabase, "approval-history-sync", "error", "companyDb missing");
+      return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
+    }
 
     const res = await fetch(WEBHOOK_URL, {
       method: "GET",
