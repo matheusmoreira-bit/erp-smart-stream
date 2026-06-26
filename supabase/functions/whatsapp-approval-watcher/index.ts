@@ -338,6 +338,14 @@ Deno.serve(async (req) => {
   );
 
   try {
+    const gotLock = await tryWatcherLock(sb, "whatsapp-approval-watcher", 20);
+    if (!gotLock) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: "another_run_in_progress" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { data: companies, error: cErr } = await sb
       .from("companies")
       .select("company_db, display_name, erp_type, is_active")
