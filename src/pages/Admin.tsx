@@ -565,15 +565,21 @@ export default function Admin() {
     }
   };
 
-  const deleteCompany = async (c: Company) => {
-    if (!confirm(`Excluir empresa "${c.display_name}"?`)) return;
-    const { error } = await supabase.from("companies").delete().eq("id", c.id);
+  const deleteCompany = (c: Company) => {
+    setCompanyToDelete(c);
+  };
+
+  const confirmDeleteCompany = async () => {
+    if (!companyToDelete) return;
+    const { error } = await supabase.from("companies").delete().eq("id", companyToDelete.id);
     if (error) toast.error("Erro ao excluir");
     else {
       toast.success("Empresa excluída");
       fetchCompanies();
     }
+    setCompanyToDelete(null);
   };
+
 
   const toggleActive = async (c: Company) => {
     const { error } = await supabase
