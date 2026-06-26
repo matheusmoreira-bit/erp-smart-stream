@@ -388,6 +388,10 @@ async function tryMatchExistingPo(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  const _startedAt = Date.now();
+  let _http = 200;
+  let _err: string | null = null;
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
