@@ -239,7 +239,7 @@ async function processCompany(
         continue;
       }
 
-      // Dedup: já enviado nas últimas 24h?
+      // Dedup 1: já enviado nas últimas 24h para esse approval_request_id?
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: recent } = await sb
         .from("whatsapp_approval_alerts")
@@ -250,6 +250,23 @@ async function processCompany(
         .limit(1)
         .maybeSingle();
       if (recent) continue;
+
+      // Dedup 2: mesmo (company_db, approver_code, docNum) nas últimas 24h?
+      // Evita múltiplas mensagens para o mesmo aprovador quando a view retorna
+      // várias linhas (uma por estágio/aprovador) para o mesmo documento.
+      const docNumDedup = String(ap["Nº do documento"] ?? "").trim();
+      if (approverCode && docNumDedup) {
+        const { data: recentDoc } = await sb
+          .from("whatsapp_approval_alerts")
+          .select("id")
+          .eq("company_db", company.company_db)
+          .eq("approver_code", approverCode)
+          .eq("payload->>docNum", docNumDedup)
+          .gte("sent_at", since)
+          .limit(1)
+          .maybeSingle();
+        if (recentDoc) continue;
+      }
 
       const moedaOriginal = (ap["Código da moeda original"] || "BRL").trim().toUpperCase();
       const valorOriginal = Number(ap["Valor do documento na moeda original"] || 0);
