@@ -404,6 +404,7 @@ Deno.serve(async (req) => {
       error_message: null,
       details: { idle_total: allIdle.length, week: weekKey, forced: forceWeek },
     });
+    await releaseWatcherLock(sb, "license-idle-watcher", "ok", `idle=${allIdle.length} sent=${sentCount}`);
     return { ok: true, idle_total: allIdle.length, alerts_sent: sentCount, week: weekKey };
     } catch (e) {
       console.error("license-idle-watcher error:", e);
@@ -416,6 +417,7 @@ Deno.serve(async (req) => {
           details: {},
         });
       } catch { /* ignore */ }
+      await releaseWatcherLock(sb, "license-idle-watcher", "error", (e as Error).message);
       return { error: (e as Error).message };
     }
   };
