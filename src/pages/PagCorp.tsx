@@ -613,6 +613,7 @@ export default function PagCorp() {
           accountCode: item.accountCode || item.account || "",
           accountName: item.accountName || "",
           accountAlias: item.accountAlias || "",
+          cardId: item.cardId || item.card_id || "",
           cardName: item.cardName || item.card_name || "",
           cardLastDigits: item.cardLastDigits || item.lastDigits || "",
           hasAccountability: (item.receipts || []).length > 0,
@@ -1205,8 +1206,10 @@ export default function PagCorp() {
                 amount: accountabilityModal.tx.amount,
                 currency: accountabilityModal.tx.currency,
                 accountAlias: accountabilityModal.tx.accountAlias,
+                accountName: accountabilityModal.tx.accountName,
                 receipts: accountabilityModal.tx.receipts,
                 triggerAI: true,
+                cardId: accountabilityModal.tx.cardId,
                 cardLastDigits: accountabilityModal.tx.cardLastDigits,
                 cardName: accountabilityModal.tx.cardName,
               }

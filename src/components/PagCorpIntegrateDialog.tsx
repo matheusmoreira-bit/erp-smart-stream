@@ -132,21 +132,21 @@ export function PagCorpIntegrateDialog({
   });
 
   // Mapeamento por cartão (fallback) — usado para mostrar valores aplicados automaticamente
-  const { resolve: resolveCardMapping } = usePagCorpCardMapping(companyDb);
+  const { resolve: resolveCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(companyDb);
   const cardDefaults = useMemo(
-    () => (transaction ? resolveCardMapping(transaction) : { costCenter: null, project: null, itemCode: null, source: null }),
-    [resolveCardMapping, transaction],
+    () => (transaction && cardMappingLoaded ? resolveCardMapping(transaction) : { costCenter: null, project: null, itemCode: null, source: null }),
+    [resolveCardMapping, transaction, cardMappingLoaded],
   );
   const cardDefaultCC = useMemo(
-    () => (cardDefaults.costCenter ? ccOptions.find((o) => o.code === cardDefaults.costCenter) || null : null),
+    () => (cardDefaults.costCenter ? ccOptions.find((o) => o.code === cardDefaults.costCenter) || { code: cardDefaults.costCenter, name: cardDefaults.costCenter } : null),
     [cardDefaults.costCenter, ccOptions],
   );
   const cardDefaultPR = useMemo(
-    () => (cardDefaults.project ? prOptions.find((o) => o.code === cardDefaults.project) || null : null),
+    () => (cardDefaults.project ? prOptions.find((o) => o.code === cardDefaults.project) || { code: cardDefaults.project, name: cardDefaults.project } : null),
     [cardDefaults.project, prOptions],
   );
   const cardDefaultIT = useMemo(
-    () => (cardDefaults.itemCode ? itOptions.find((o) => o.code === cardDefaults.itemCode) || null : null),
+    () => (cardDefaults.itemCode ? itOptions.find((o) => o.code === cardDefaults.itemCode) || { code: cardDefaults.itemCode, name: cardDefaults.itemCode } : null),
     [cardDefaults.itemCode, itOptions],
   );
 
@@ -273,6 +273,13 @@ export function PagCorpIntegrateDialog({
     setAiTried(true);
     void runAi(transaction);
   }, [open, transaction?.id, runAi, transaction, storageKey]);
+
+  useEffect(() => {
+    if (!open || !transaction || !cardMappingLoaded) return;
+    if (cardDefaultCC) setCostCenter((prev) => prev || cardDefaultCC);
+    if (cardDefaultPR) setProject((prev) => prev || cardDefaultPR);
+    if (cardDefaultIT) setItem((prev) => prev || cardDefaultIT);
+  }, [open, transaction, cardMappingLoaded, cardDefaultCC, cardDefaultPR, cardDefaultIT]);
 
   // Persist selections so an accidental close doesn't lose work
   useEffect(() => {

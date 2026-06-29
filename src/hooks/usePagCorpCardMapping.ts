@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 export interface PagCorpCardMappingRow {
   card_identifier: string | null;
@@ -37,21 +36,45 @@ export interface PagCorpCardMappingDescribed {
 export function usePagCorpCardMapping(companyDb: string | undefined) {
   const [rows, setRows] = useState<PagCorpCardMappingRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadedCompanyDb, setLoadedCompanyDb] = useState<string | null>(null);
 
   useEffect(() => {
     if (!companyDb) {
       setRows([]);
+      setLoadedCompanyDb(null);
       return;
     }
     let cancelled = false;
     (async () => {
       setIsLoading(true);
+      setLoadedCompanyDb(null);
       try {
-        const { data } = await (supabase as any)
-          .from("pagcorp_card_mapping")
-          .select("card_identifier,is_fallback,cost_center,project,item_code")
-          .eq("company_db", companyDb);
-        if (!cancelled) setRows((data as PagCorpCardMappingRow[]) || []);
+        const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+        const res = await sapFunctionFetch("pagcorp-card-mapping", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list-mappings", company_db: companyDb }),
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || result.success === false) {
+          throw new Error(result.error || `Erro ${res.status}`);
+        }
+        if (!cancelled) {
+          setRows(((result.mappings as PagCorpCardMappingRow[]) || []).map((r) => ({
+            card_identifier: r.card_identifier,
+            is_fallback: !!r.is_fallback,
+            cost_center: r.cost_center || null,
+            project: r.project || null,
+            item_code: r.item_code || null,
+          })));
+          setLoadedCompanyDb(companyDb);
+        }
+      } catch (e) {
+        console.warn("PagCorp card mapping load failed:", e);
+        if (!cancelled) {
+          setRows([]);
+          setLoadedCompanyDb(companyDb);
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -61,19 +84,45 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
     };
   }, [companyDb]);
 
-  const resolveKey = (tx: { cardLastDigits?: unknown; cardName?: unknown }): string | null => {
-    const last = tx.cardLastDigits ? String(tx.cardLastDigits).trim() : "";
-    if (last) return last;
-    const name = tx.cardName ? String(tx.cardName).trim() : "";
-    return name || null;
+  const normalizeKey = (value: unknown): string => String(value ?? "").trim().toLowerCase();
+  const digitKey = (value: unknown): string => String(value ?? "").replace(/\D/g, "");
+
+  const resolveKeys = (tx: {
+    cardLastDigits?: unknown;
+    cardId?: unknown;
+    cardName?: unknown;
+    accountAlias?: unknown;
+    accountName?: unknown;
+  }): string[] => {
+    const candidates = [tx.cardLastDigits, tx.cardId, tx.cardName, tx.accountAlias, tx.accountName]
+      .map((v) => (v == null ? "" : String(v).trim()))
+      .filter(Boolean);
+    return Array.from(new Set(candidates));
+  };
+
+  const resolveKey = (tx: {
+    cardLastDigits?: unknown;
+    cardId?: unknown;
+    cardName?: unknown;
+    accountAlias?: unknown;
+    accountName?: unknown;
+  }): string | null => {
+    return resolveKeys(tx)[0] || null;
   };
 
   const resolve = useCallback(
-    (tx: { cardLastDigits?: unknown; cardName?: unknown }): PagCorpCardMappingResolved => {
-      const key = resolveKey(tx);
-      const specific = key
-        ? rows.find((r) => !r.is_fallback && r.card_identifier === key)
-        : undefined;
+    (tx: { cardLastDigits?: unknown; cardId?: unknown; cardName?: unknown; accountAlias?: unknown; accountName?: unknown }): PagCorpCardMappingResolved => {
+      const keys = resolveKeys(tx);
+      const normalizedKeys = keys.map(normalizeKey);
+      const digitKeys = keys.map(digitKey).filter((v) => v.length >= 4);
+      const specific = rows.find(
+        (r) => {
+          if (r.is_fallback || !r.card_identifier) return false;
+          const rowKey = normalizeKey(r.card_identifier);
+          const rowDigits = digitKey(r.card_identifier);
+          return normalizedKeys.includes(rowKey) || (rowDigits.length >= 4 && digitKeys.includes(rowDigits));
+        },
+      );
       if (specific) {
         return {
           costCenter: specific.cost_center,
@@ -97,7 +146,7 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
   );
 
   const describe = useCallback(
-    (tx: { cardLastDigits?: unknown; cardName?: unknown }): PagCorpCardMappingDescribed => {
+    (tx: { cardLastDigits?: unknown; cardId?: unknown; cardName?: unknown; accountAlias?: unknown; accountName?: unknown }): PagCorpCardMappingDescribed => {
       const resolved = resolve(tx);
       const missing: string[] = [];
       if (!resolved.costCenter) missing.push("Centro de Custo");
@@ -112,5 +161,7 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
     [resolve],
   );
 
-  return { rows, isLoading, resolve, describe };
+  const isLoaded = !!companyDb && loadedCompanyDb === companyDb && !isLoading;
+
+  return { rows, isLoading, isLoaded, resolve, describe };
 }
