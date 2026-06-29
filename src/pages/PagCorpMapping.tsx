@@ -419,36 +419,36 @@ export default function PagCorpMapping() {
                                 </div>
                               ) : (
                                 <>
-                                  <input
-                                    type="text"
-                                    list={`card-suggestions-${i}`}
-                                    value={m.card_identifier}
-                                    onChange={(e) => {
-                                      const v = e.target.value;
-                                      const match = cardSuggestions.find((c) => c.identifier === v);
+                                  <CachedSearchCombobox
+                                    options={cardSuggestions.map((c) => ({ code: c.identifier, name: c.label, extra: "" }))}
+                                    isLoading={false}
+                                    value={
+                                      m.card_identifier
+                                        ? { code: m.card_identifier, name: m.card_label || m.card_identifier, extra: "" }
+                                        : null
+                                    }
+                                    onChange={(opt) => {
+                                      const match = cardSuggestions.find((c) => c.identifier === opt?.code);
                                       updateCardRow(i, {
-                                        card_identifier: v,
-                                        card_label: match?.label || m.card_label,
+                                        card_identifier: opt?.code || "",
+                                        card_label: match?.label || opt?.name || "",
                                       });
                                     }}
-                                    placeholder="Ex.: 1234 (últimos 4) ou nome do cartão"
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                    placeholder={
+                                      cardSuggestions.length === 0
+                                        ? "Nenhum cartão catalogado — busque transações primeiro"
+                                        : "Selecione o cartão…"
+                                    }
                                   />
-                                  <datalist id={`card-suggestions-${i}`}>
-                                    {cardSuggestions.map((c) => (
-                                      <option key={c.identifier} value={c.identifier}>
-                                        {c.label}
-                                      </option>
-                                    ))}
-                                  </datalist>
                                   {cardSuggestions.length === 0 && (
                                     <p className="mt-1 text-[11px] text-muted-foreground">
-                                      Nenhum cartão detectado nos últimos 180 dias — digite manualmente.
+                                      Abra "Transações PagCorp", faça uma busca, e os cartões aparecerão aqui automaticamente.
                                     </p>
                                   )}
                                 </>
                               )}
                             </TableCell>
+
                             <TableCell>
                               {m.id ? (
                                 <div className="text-sm font-medium text-foreground">
