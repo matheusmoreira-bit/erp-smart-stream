@@ -10,6 +10,7 @@ export interface PagCorpTransaction {
   accountCode?: string;
   accountName?: string;
   accountAlias?: string;
+  cardId?: string | number;
   cardName?: string;
   cardLastDigits?: string;
   status?: string;
@@ -122,9 +123,10 @@ export function usePagCorp() {
             return "BRL";
           })(),
           accountCode: item.accountCode || item.account || "",
-          accountName: item.accountName || "",
-          accountAlias: item.accountAlias || "",
-          cardName: item.cardName || item.card_name || "",
+          accountName: item.accountName || item.parentAccountAlias || item.accountAlias || "",
+          accountAlias: item.accountAlias || item.parentAccountAlias || "",
+          cardId: item.cardId || item.card_id || "",
+          cardName: item.cardName || item.card_name || item.accountAlias || item.parentAccountAlias || "",
           cardLastDigits: item.cardLastDigits || item.lastDigits || "",
           status: item.status || item.statusDescription || "",
           hasAccountability,
@@ -239,10 +241,11 @@ export function usePagCorp() {
           const nowIso = new Date().toISOString();
           for (const t of items) {
             const last = t.cardLastDigits ? String(t.cardLastDigits).trim() : "";
+            const cardId = t.cardId ? String(t.cardId).trim() : "";
             const name = t.cardName ? String(t.cardName).trim() : "";
-            const identifier = last || name;
+            const identifier = last || cardId || name;
             if (!identifier || cardMap.has(identifier)) continue;
-            const label = [name, last ? `•••• ${last}` : null].filter(Boolean).join(" ") || identifier;
+            const label = [name || t.accountAlias || t.accountName, last ? `•••• ${last}` : cardId ? `ID ${cardId}` : null].filter(Boolean).join(" ") || identifier;
             cardMap.set(identifier, {
               company_db: companyDb,
               card_identifier: identifier,

@@ -4,6 +4,7 @@
 // requisição exigindo um JWT válido OU os headers de sessão SAP.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,14 +24,6 @@ interface SaveRow {
   is_fallback?: boolean;
 }
 
-function isAuthenticated(req: Request): boolean {
-  const auth = req.headers.get("authorization") || "";
-  if (auth.toLowerCase().startsWith("bearer ")) return true;
-  // Aceita sessão SAP propagada pelos headers x-sap-*
-  if (req.headers.get("x-sap-session") && req.headers.get("x-sap-user")) return true;
-  return false;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -41,10 +34,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (!isAuthenticated(req)) {
+  try {
+    await requireUserOrSapSession(req);
+  } catch (err) {
+    const authResp = authErrorResponse(err, corsHeaders);
+    if (authResp) return authResp;
     return new Response(JSON.stringify({ error: "Não autenticado" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
@@ -58,9 +54,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const action: "save" | "delete" | "catalog" = body?.action;
-  if (action !== "save" && action !== "delete" && action !== "catalog") {
-    return new Response(JSON.stringify({ error: "Ação inválida (esperado 'save', 'delete' ou 'catalog')" }), {
+  const action: "save" | "delete" | "catalog" | "list" = body?.action;
+  if (action !== "save" && action !== "delete" && action !== "catalog" && action !== "list") {
+    return new Response(JSON.stringify({ error: "Ação inválida (esperado 'save', 'delete', 'catalog' ou 'list')" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -73,6 +69,24 @@ Deno.serve(async (req) => {
   );
 
   try {
+    if (action === "list") {
+      const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
+      if (!companyDb) {
+        return new Response(JSON.stringify({ error: "company_db obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data, error } = await sb
+        .from("pagcorp_cards")
+        .select("card_identifier,card_label,card_name,card_last_digits,account_alias,last_seen_at")
+        .eq("company_db", companyDb)
+        .order("last_seen_at", { ascending: false });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true, cards: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "delete") {
       const id = body?.id;
       if (typeof id !== "string" || !id) {

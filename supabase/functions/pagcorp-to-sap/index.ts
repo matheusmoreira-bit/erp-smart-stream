@@ -197,9 +197,11 @@ interface CardMapping {
 }
 
 /** Same resolution as the client uses to identify cards. */
-function resolveCardKey(tx: { cardLastDigits?: unknown; cardName?: unknown }): string | null {
+function resolveCardKey(tx: { cardLastDigits?: unknown; cardId?: unknown; cardName?: unknown }): string | null {
   const last = tx.cardLastDigits ? String(tx.cardLastDigits).trim() : "";
   if (last) return last;
+  const cardId = tx.cardId ? String(tx.cardId).trim() : "";
+  if (cardId) return cardId;
   const name = tx.cardName ? String(tx.cardName).trim() : "";
   return name || null;
 }
@@ -333,6 +335,7 @@ Deno.serve(async (req) => {
             accountAlias: transaction.accountAlias,
             accountCode: transaction.accountCode,
             accountName: transaction.accountName,
+            cardId: transaction.cardId,
             cardName: transaction.cardName,
             cardLastDigits: transaction.cardLastDigits,
             hasAccountability: transaction.hasAccountability,

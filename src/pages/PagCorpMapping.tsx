@@ -110,13 +110,20 @@ export default function PagCorpMapping() {
     if (!companyDB) { setDbCards([]); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await (supabase as any)
-        .from("pagcorp_cards")
-        .select("card_identifier,card_label,card_name,card_last_digits")
-        .eq("company_db", companyDB)
-        .order("last_seen_at", { ascending: false });
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("pagcorp-card-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list", company_db: companyDB }),
+      });
+      const result = await res.json().catch(() => ({}));
       if (cancelled) return;
-      setDbCards(((data as any[]) || []).map((r) => {
+      if (!res.ok || result.success === false) {
+        console.warn("PagCorp card catalog load failed:", result.error || res.status);
+        setDbCards([]);
+        return;
+      }
+      setDbCards(((result.cards as any[]) || []).map((r) => {
         const label = r.card_label || [r.card_name, r.card_last_digits ? `•••• ${r.card_last_digits}` : null]
           .filter(Boolean).join(" ") || r.card_identifier;
         return { identifier: r.card_identifier, label };
@@ -131,9 +138,10 @@ export default function PagCorpMapping() {
     dbCards.forEach((c) => map.set(c.identifier, c));
     recentTransactions.forEach((t) => {
       const id = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+        (t.cardId && String(t.cardId).trim()) ||
         (t.cardName && String(t.cardName).trim()) || "";
       if (!id || map.has(id)) return;
-      const label = [t.cardName, t.cardLastDigits ? `•••• ${t.cardLastDigits}` : null]
+      const label = [t.cardName || t.accountAlias || t.accountName, t.cardLastDigits ? `•••• ${t.cardLastDigits}` : t.cardId ? `ID ${t.cardId}` : null]
         .filter(Boolean).join(" ");
       map.set(id, { identifier: id, label: label || id });
     });
