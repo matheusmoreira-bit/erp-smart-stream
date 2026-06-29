@@ -1207,6 +1207,8 @@ export default function PagCorp() {
                 accountAlias: accountabilityModal.tx.accountAlias,
                 receipts: accountabilityModal.tx.receipts,
                 triggerAI: true,
+                cardLastDigits: accountabilityModal.tx.cardLastDigits,
+                cardName: accountabilityModal.tx.cardName,
               }
             : undefined
         }
