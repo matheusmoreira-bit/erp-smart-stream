@@ -163,8 +163,6 @@ export function CreateExpenseModal({
     }
     if (cardDefaultsApplied) return;
     if (origin !== "pagcorp" || !prefill) return;
-    // Aguarda opções do SAP carregarem
-    if (costCentersLoading || projectsLoading || itemsLoading) return;
 
     const mapping = resolveCardMapping({
       cardLastDigits: prefill.cardLastDigits,
@@ -172,22 +170,24 @@ export function CreateExpenseModal({
     });
     if (!mapping.source) return;
 
+    // Resolve options from SAP cache; if not found (cache vazio ou ainda
+    // carregando), sintetiza uma opção mínima para que o valor apareça
+    // selecionado mesmo assim — o usuário pode trocar depois.
     const ccOpt = mapping.costCenter
-      ? costCenterOptions.find((o) => o.code === mapping.costCenter) || null
+      ? costCenterOptions.find((o) => o.code === mapping.costCenter)
+        || { code: mapping.costCenter, name: mapping.costCenter, extra: "" }
       : null;
     const prOpt = mapping.project
-      ? projectOptions.find((o) => o.code === mapping.project) || null
+      ? projectOptions.find((o) => o.code === mapping.project)
+        || { code: mapping.project, name: mapping.project, extra: "" }
       : null;
     const itOpt = mapping.itemCode
-      ? itemOptions.find((o) => o.code === mapping.itemCode) || null
+      ? itemOptions.find((o) => o.code === mapping.itemCode)
+        || { code: mapping.itemCode, name: mapping.itemCode, extra: "" }
       : null;
 
-    if (ccOpt) {
-      setHeaderCostCenter(ccOpt);
-    }
-    if (prOpt) {
-      setHeaderProject(prOpt);
-    }
+    if (ccOpt) setHeaderCostCenter(ccOpt);
+    if (prOpt) setHeaderProject(prOpt);
     setItems((prev) => prev.map((it) => ({
       ...it,
       ...(ccOpt ? { sapCostCenter: ccOpt, cost_center: ccOpt.code } : {}),
@@ -198,7 +198,6 @@ export function CreateExpenseModal({
   }, [
     open, origin, prefill, cardDefaultsApplied, resolveCardMapping,
     costCenterOptions, projectOptions, itemOptions,
-    costCentersLoading, projectsLoading, itemsLoading,
   ]);
 
 
