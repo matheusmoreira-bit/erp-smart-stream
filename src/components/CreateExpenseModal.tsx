@@ -1076,7 +1076,11 @@ export function CreateExpenseModal({
                           return updated;
                         });
                       }}
-                      placeholder="Buscar projeto..."
+                      placeholder={
+                        origin === "pagcorp" && mappingInfo?.missingFields.includes("Projeto")
+                          ? "Sem mapeamento — selecione manualmente"
+                          : "Buscar projeto..."
+                      }
                       suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
                       portalContainer={dialogContainer}
                     />
