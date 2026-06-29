@@ -84,6 +84,9 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
     };
   }, [companyDb]);
 
+  const normalizeKey = (value: unknown): string => String(value ?? "").trim().toLowerCase();
+  const digitKey = (value: unknown): string => String(value ?? "").replace(/\D/g, "");
+
   const resolveKeys = (tx: {
     cardLastDigits?: unknown;
     cardId?: unknown;
@@ -110,8 +113,15 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
   const resolve = useCallback(
     (tx: { cardLastDigits?: unknown; cardId?: unknown; cardName?: unknown; accountAlias?: unknown; accountName?: unknown }): PagCorpCardMappingResolved => {
       const keys = resolveKeys(tx);
+      const normalizedKeys = keys.map(normalizeKey);
+      const digitKeys = keys.map(digitKey).filter((v) => v.length >= 4);
       const specific = rows.find(
-        (r) => !r.is_fallback && !!r.card_identifier && keys.includes(String(r.card_identifier).trim()),
+        (r) => {
+          if (r.is_fallback || !r.card_identifier) return false;
+          const rowKey = normalizeKey(r.card_identifier);
+          const rowDigits = digitKey(r.card_identifier);
+          return normalizedKeys.includes(rowKey) || (rowDigits.length >= 4 && digitKeys.includes(rowDigits));
+        },
       );
       if (specific) {
         return {
