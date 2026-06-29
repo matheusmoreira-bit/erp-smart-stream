@@ -58,13 +58,14 @@ Deno.serve(async (req) => {
     });
   }
 
-  const action: "save" | "delete" = body?.action;
-  if (action !== "save" && action !== "delete") {
-    return new Response(JSON.stringify({ error: "Ação inválida (esperado 'save' ou 'delete')" }), {
+  const action: "save" | "delete" | "catalog" = body?.action;
+  if (action !== "save" && action !== "delete" && action !== "catalog") {
+    return new Response(JSON.stringify({ error: "Ação inválida (esperado 'save', 'delete' ou 'catalog')" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
