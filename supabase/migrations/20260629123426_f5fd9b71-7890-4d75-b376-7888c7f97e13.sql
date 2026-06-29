@@ -1,0 +1,1 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS current_level_order integer NOT NULL DEFAULT 1;
