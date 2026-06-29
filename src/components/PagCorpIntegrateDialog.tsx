@@ -20,6 +20,7 @@ import { findSupplierByTaxId, type Supplier } from "@/hooks/useSuppliers";
 import { requestSupplierRegistration } from "@/lib/supplier-request-email";
 import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
 import { hashUrls, withAiCache } from "@/lib/ai-file-cache";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { toast } from "sonner";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -289,6 +290,49 @@ export function PagCorpIntegrateDialog({
     () => (transaction ? collectAttachments(transaction.receipts, transaction.attachments as any[]) : []),
     [transaction],
   );
+  const [openingAttachment, setOpeningAttachment] = useState<string | null>(null);
+
+  const openAttachment = useCallback(async (att: { name: string; url: string }) => {
+    if (!companyDb) {
+      toast.error("Empresa não identificada para baixar o anexo.");
+      return;
+    }
+    // Open the tab synchronously to avoid popup blockers; fill it once we have the blob.
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(
+        `<title>${att.name}</title><p style="font-family:sans-serif;padding:24px;color:#555">Carregando anexo…</p>`,
+      );
+    }
+    setOpeningAttachment(att.url);
+    try {
+      const params = new URLSearchParams({ action: "receipt", url: att.url, companyDb });
+      const res = await sapFunctionFetch(`pagcorp-proxy?${params.toString()}`);
+      const ct = res.headers.get("content-type") || "";
+      if (!res.ok || ct.includes("application/json")) {
+        const j = await res.json().catch(() => null);
+        const msg = j?.message || j?.error || `Falha ao abrir anexo (${res.status})`;
+        toast.error(msg);
+        if (win) win.close();
+        return;
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      if (win) {
+        win.location.href = blobUrl;
+      } else {
+        window.location.href = blobUrl;
+      }
+      // Revoke later to allow the tab to load.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao abrir anexo");
+      if (win) win.close();
+    } finally {
+      setOpeningAttachment(null);
+    }
+  }, [companyDb]);
+
 
   if (!transaction) return null;
 
@@ -431,20 +475,27 @@ export function PagCorpIntegrateDialog({
                   </span>
                 </div>
                 <ul className="space-y-1 max-h-40 overflow-y-auto">
-                  {attachmentList.map((a, idx) => (
-                    <li key={`${a.url}-${idx}`}>
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-primary hover:underline truncate"
-                        title={a.name}
-                      >
-                        <ExternalLink className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{a.name}</span>
-                      </a>
-                    </li>
-                  ))}
+                  {attachmentList.map((a, idx) => {
+                    const loading = openingAttachment === a.url;
+                    return (
+                      <li key={`${a.url}-${idx}`}>
+                        <button
+                          type="button"
+                          onClick={() => openAttachment(a)}
+                          disabled={loading}
+                          className="flex items-center gap-2 text-xs text-primary hover:underline truncate w-full text-left disabled:opacity-60"
+                          title={`Abrir ${a.name} em nova aba`}
+                        >
+                          {loading ? (
+                            <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-3 h-3 shrink-0" />
+                          )}
+                          <span className="truncate">{a.name}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
