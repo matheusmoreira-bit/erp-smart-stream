@@ -268,6 +268,40 @@ export default function PagCorpMapping() {
     }
   }
 
+  // Pré-cria uma linha nova quando vindo de "Abrir mapeamento" (?card=)
+  // — só dispara após o load terminar e se ainda não existir mapeamento.
+  useEffect(() => {
+    const cardParam = searchParams.get("card");
+    if (!cardParam || !companyDB || isLoadingCards) return;
+    const already = cardMappings.some(
+      (m) => !m.is_fallback && m.card_identifier === cardParam,
+    );
+    const pendingNew = cardMappings.some(
+      (m) => m.isNew && !m.is_fallback && m.card_identifier === cardParam,
+    );
+    if (!already && !pendingNew) {
+      const match = cardSuggestions.find((c) => c.identifier === cardParam);
+      setCardMappings((p) => [
+        {
+          company_db: companyDB,
+          card_identifier: cardParam,
+          card_label: match?.label || cardParam,
+          cost_center: "",
+          project: "",
+          item_code: "",
+          is_fallback: false,
+          isNew: true,
+        },
+        ...p,
+      ]);
+      toast.info(`Novo mapeamento iniciado para o cartão ${match?.label || cardParam}`);
+    }
+    // Limpa o query param para não recriar em re-renders / navegação
+    const next = new URLSearchParams(searchParams);
+    next.delete("card");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, companyDB, isLoadingCards, cardMappings, cardSuggestions, setSearchParams]);
+
   function addCardRow() {
     setCardMappings((p) => [...p, {
       company_db: companyDB, card_identifier: "", card_label: "",
