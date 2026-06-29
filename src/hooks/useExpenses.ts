@@ -749,6 +749,62 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
   const approveExpense = useCallback(
     async (expenseId: string, remarks?: string) => {
+      const actor = session?.userName || "";
+      const actorEmail = actor.includes("@") ? actor : null;
+
+      // Carrega o estado atual + regra + níveis para decidir se ainda há níveis acima.
+      const { data: exp, error: expErr } = await (supabase
+        .from("expenses") as any)
+        .select("id, approval_rule_id, current_level_order, status")
+        .eq("id", expenseId)
+        .single();
+      if (expErr || !exp) throw expErr || new Error("Despesa não encontrada");
+      if (exp.status !== "pendente_aprovacao") {
+        throw new Error(
+          `Despesa não está pendente de aprovação (status atual: ${exp.status}).`,
+        );
+      }
+
+      const currentLevel = Number(exp.current_level_order || 1);
+      let levels: RuleLevelRow[] = [];
+      if (exp.approval_rule_id) {
+        const { data: lvls } = await supabase
+          .from("approval_rule_levels")
+          .select("*")
+          .eq("rule_id", exp.approval_rule_id)
+          .order("level_order", { ascending: true });
+        levels = (lvls || []) as RuleLevelRow[];
+      }
+
+      const totalLevels = levels.length || 1;
+      const isFinalLevel = currentLevel >= totalLevels;
+
+      // Registra a decisão deste nível
+      await logExpenseDecision(expenseId, "approved", {
+        approverName: actor,
+        approverEmail: actorEmail,
+        levelOrder: currentLevel,
+        remarks: remarks || null,
+      });
+
+      if (!isFinalLevel) {
+        // Avança para o próximo nível — NÃO integra ao SAP ainda.
+        const nextLevel = levels.find((l) => l.level_order === currentLevel + 1);
+        const updates: any = {
+          current_level_order: currentLevel + 1,
+          current_approver: nextLevel?.approver_name || null,
+        };
+        if (remarks) updates.remarks = remarks;
+        const { error: updErr } = await supabase
+          .from("expenses")
+          .update(updates)
+          .eq("id", expenseId);
+        if (updErr) throw updErr;
+        await fetchExpenses();
+        return;
+      }
+
+      // Último nível: aprova de fato e integra ao SAP
       const updates: any = { status: "aprovado" };
       if (remarks) updates.remarks = remarks;
       const { error: err } = await supabase
@@ -757,14 +813,6 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .eq("id", expenseId);
       if (err) throw err;
 
-      const actor = session?.userName || "";
-      await logExpenseDecision(expenseId, "approved", {
-        approverName: actor,
-        approverEmail: actor.includes("@") ? actor : null,
-        remarks: remarks || null,
-      });
-
-      // Trigger SAP integration immediately (only for SAP companies)
       if (session?.erpType === "sap") {
         try {
           await invokeExpenseToSap({

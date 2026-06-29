@@ -262,6 +262,25 @@ Deno.serve(async (req) => {
       .single();
     if (expErr || !expense) throw new Error(`Despesa não encontrada: ${expErr?.message ?? ""}`);
 
+    // Guard: somente despesas totalmente aprovadas podem ser integradas ao SAP.
+    // Status válidos: "aprovado" (primeira integração) ou estados pós-PC (re-link de anexos).
+    const allowedStatuses = new Set([
+      "aprovado",
+      "pc_lancado",
+      "nf_entrada",
+      "pagamento",
+      "finalizado",
+    ]);
+    if (!allowedStatuses.has(String((expense as any).status || ""))) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Despesa não está aprovada (status atual: ${(expense as any).status}). A integração ao SAP só é permitida após a conclusão de todos os níveis de aprovação.`,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { data: items, error: itemsErr } = await supabase
       .from("expense_items")
       .select("*")

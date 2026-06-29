@@ -1259,6 +1259,7 @@ export type Database = {
           created_by_email: string | null
           currency: string
           current_approver: string | null
+          current_level_order: number
           doc_type: string
           id: string
           origin: string
@@ -1290,6 +1291,7 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           current_approver?: string | null
+          current_level_order?: number
           doc_type?: string
           id?: string
           origin?: string
@@ -1321,6 +1323,7 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           current_approver?: string | null
+          current_level_order?: number
           doc_type?: string
           id?: string
           origin?: string
