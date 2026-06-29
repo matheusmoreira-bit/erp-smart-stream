@@ -475,20 +475,27 @@ export function PagCorpIntegrateDialog({
                   </span>
                 </div>
                 <ul className="space-y-1 max-h-40 overflow-y-auto">
-                  {attachmentList.map((a, idx) => (
-                    <li key={`${a.url}-${idx}`}>
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-primary hover:underline truncate"
-                        title={a.name}
-                      >
-                        <ExternalLink className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{a.name}</span>
-                      </a>
-                    </li>
-                  ))}
+                  {attachmentList.map((a, idx) => {
+                    const loading = openingAttachment === a.url;
+                    return (
+                      <li key={`${a.url}-${idx}`}>
+                        <button
+                          type="button"
+                          onClick={() => openAttachment(a)}
+                          disabled={loading}
+                          className="flex items-center gap-2 text-xs text-primary hover:underline truncate w-full text-left disabled:opacity-60"
+                          title={`Abrir ${a.name} em nova aba`}
+                        >
+                          {loading ? (
+                            <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-3 h-3 shrink-0" />
+                          )}
+                          <span className="truncate">{a.name}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
