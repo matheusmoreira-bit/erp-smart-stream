@@ -290,6 +290,49 @@ export function PagCorpIntegrateDialog({
     () => (transaction ? collectAttachments(transaction.receipts, transaction.attachments as any[]) : []),
     [transaction],
   );
+  const [openingAttachment, setOpeningAttachment] = useState<string | null>(null);
+
+  const openAttachment = useCallback(async (att: { name: string; url: string }) => {
+    if (!companyDb) {
+      toast.error("Empresa não identificada para baixar o anexo.");
+      return;
+    }
+    // Open the tab synchronously to avoid popup blockers; fill it once we have the blob.
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(
+        `<title>${att.name}</title><p style="font-family:sans-serif;padding:24px;color:#555">Carregando anexo…</p>`,
+      );
+    }
+    setOpeningAttachment(att.url);
+    try {
+      const params = new URLSearchParams({ action: "receipt", url: att.url, companyDb });
+      const res = await sapFunctionFetch(`pagcorp-proxy?${params.toString()}`);
+      const ct = res.headers.get("content-type") || "";
+      if (!res.ok || ct.includes("application/json")) {
+        const j = await res.json().catch(() => null);
+        const msg = j?.message || j?.error || `Falha ao abrir anexo (${res.status})`;
+        toast.error(msg);
+        if (win) win.close();
+        return;
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      if (win) {
+        win.location.href = blobUrl;
+      } else {
+        window.location.href = blobUrl;
+      }
+      // Revoke later to allow the tab to load.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao abrir anexo");
+      if (win) win.close();
+    } finally {
+      setOpeningAttachment(null);
+    }
+  }, [companyDb]);
+
 
   if (!transaction) return null;
 
