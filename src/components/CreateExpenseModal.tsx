@@ -42,8 +42,10 @@ export interface PagCorpPrefill {
   amount?: number;
   currency?: string;
   accountAlias?: string;
+  accountName?: string;
   receipts?: any[];
   triggerAI?: boolean;
+  cardId?: string | number;
   cardLastDigits?: string;
   cardName?: string;
 }
@@ -153,7 +155,7 @@ export function CreateExpenseModal({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
-  const { describe: describeCardMapping } = usePagCorpCardMapping(
+  const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
     origin === "pagcorp" ? sapSession?.companyDB : undefined,
   );
   const [cardDefaultsApplied, setCardDefaultsApplied] = useState(false);
@@ -175,10 +177,16 @@ export function CreateExpenseModal({
     // Aguarda o effect de prefill rodar primeiro (que reseta `items`),
     // senão nossas defaults são sobrescritas imediatamente.
     if (!initialized) return;
+    // Aguarda carregar os mapeamentos do backend. Antes disso `rows=[]` faria
+    // o modal concluir incorretamente que não existe mapeamento.
+    if (!cardMappingLoaded) return;
 
     const info = describeCardMapping({
       cardLastDigits: prefill.cardLastDigits,
+      cardId: prefill.cardId,
       cardName: prefill.cardName,
+      accountAlias: prefill.accountAlias,
+      accountName: prefill.accountName,
     });
 
     setMappingInfo({
@@ -223,7 +231,7 @@ export function CreateExpenseModal({
     setCardDefaultsApplied(true);
   }, [
     open, origin, prefill, initialized, cardDefaultsApplied, describeCardMapping,
-    costCenterOptions, projectOptions, itemOptions,
+    cardMappingLoaded, costCenterOptions, projectOptions, itemOptions,
   ]);
 
 
@@ -474,6 +482,7 @@ export function CreateExpenseModal({
             };
           })
         );
+        if (origin === "pagcorp") setCardDefaultsApplied(false);
       } else if (doc.total_amount && Number(doc.total_amount) > 0) {
         // Fallback: no items detected, create single line with total amount
         const fallbackDesc =
@@ -492,6 +501,7 @@ export function CreateExpenseModal({
             searchHint: "",
           },
         ]);
+        if (origin === "pagcorp") setCardDefaultsApplied(false);
       }
       if (doc.confidence) setAiConfidence(doc.confidence);
 
