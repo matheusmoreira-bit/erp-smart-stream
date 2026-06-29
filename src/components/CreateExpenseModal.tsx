@@ -689,6 +689,14 @@ export function CreateExpenseModal({
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
+          {origin === "pagcorp" && mappingInfo && (
+            <PagCorpCardMappingBanner
+              status={mappingInfo.status}
+              source={mappingInfo.source}
+              missingFields={mappingInfo.missingFields}
+              cardKey={mappingInfo.cardKey}
+            />
+          )}
           {/* AI Toggle */}
           <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
             <div className="flex items-center gap-2">
