@@ -29,6 +29,7 @@ import { type ExpenseItem, type CreateExpenseInput } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { requestSupplierRegistration } from "@/lib/supplier-request-email";
 import { UserPlus } from "lucide-react";
+import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -42,6 +43,8 @@ export interface PagCorpPrefill {
   accountAlias?: string;
   receipts?: any[];
   triggerAI?: boolean;
+  cardLastDigits?: string;
+  cardName?: string;
 }
 
 export type ExpenseMode = "purchase" | "sales";
@@ -147,6 +150,57 @@ export function CreateExpenseModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
+  const { resolve: resolveCardMapping } = usePagCorpCardMapping(
+    origin === "pagcorp" ? sapSession?.companyDB : undefined,
+  );
+  const [cardDefaultsApplied, setCardDefaultsApplied] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      setCardDefaultsApplied(false);
+      return;
+    }
+    if (cardDefaultsApplied) return;
+    if (origin !== "pagcorp" || !prefill) return;
+    // Aguarda opções do SAP carregarem
+    if (costCentersLoading || projectsLoading || itemsLoading) return;
+
+    const mapping = resolveCardMapping({
+      cardLastDigits: prefill.cardLastDigits,
+      cardName: prefill.cardName,
+    });
+    if (!mapping.source) return;
+
+    const ccOpt = mapping.costCenter
+      ? costCenterOptions.find((o) => o.code === mapping.costCenter) || null
+      : null;
+    const prOpt = mapping.project
+      ? projectOptions.find((o) => o.code === mapping.project) || null
+      : null;
+    const itOpt = mapping.itemCode
+      ? itemOptions.find((o) => o.code === mapping.itemCode) || null
+      : null;
+
+    if (ccOpt) {
+      setHeaderCostCenter(ccOpt);
+    }
+    if (prOpt) {
+      setHeaderProject(prOpt);
+    }
+    setItems((prev) => prev.map((it) => ({
+      ...it,
+      ...(ccOpt ? { sapCostCenter: ccOpt, cost_center: ccOpt.code } : {}),
+      ...(prOpt ? { sapProject: prOpt, project: prOpt.code } : {}),
+      ...(itOpt && !it.sapItem ? { sapItem: itOpt, description: it.description || itOpt.name } : {}),
+    })));
+    setCardDefaultsApplied(true);
+  }, [
+    open, origin, prefill, cardDefaultsApplied, resolveCardMapping,
+    costCenterOptions, projectOptions, itemOptions,
+    costCentersLoading, projectsLoading, itemsLoading,
+  ]);
+
 
   // Apply prefill when modal opens
   useEffect(() => {
@@ -658,9 +712,27 @@ export function CreateExpenseModal({
             {files.length > 0 && (
               <div className="mt-2 space-y-1">
                 {files.map((file, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20">
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 cursor-pointer hover:bg-primary/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const url = URL.createObjectURL(file);
+                      const win = window.open(url, "_blank");
+                      if (!win) {
+                        // popup blocked — fallback to download
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.target = "_blank";
+                        a.rel = "noopener";
+                        a.click();
+                      }
+                      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                    }}
+                    title="Clique para visualizar o anexo"
+                  >
                     <FileSpreadsheet className="w-4 h-4 text-primary shrink-0" />
-                    <span className="text-xs text-foreground truncate flex-1">{file.name}</span>
+                    <span className="text-xs text-foreground truncate flex-1 underline decoration-dotted">{file.name}</span>
                     <span className="text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
                     <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-muted-foreground hover:text-foreground">
                       <X className="w-3.5 h-3.5" />
