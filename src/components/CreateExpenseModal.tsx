@@ -151,6 +151,57 @@ export function CreateExpenseModal({
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
+  const { resolve: resolveCardMapping } = usePagCorpCardMapping(
+    origin === "pagcorp" ? sapSession?.companyDB : undefined,
+  );
+  const [cardDefaultsApplied, setCardDefaultsApplied] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      setCardDefaultsApplied(false);
+      return;
+    }
+    if (cardDefaultsApplied) return;
+    if (origin !== "pagcorp" || !prefill) return;
+    // Aguarda opções do SAP carregarem
+    if (costCentersLoading || projectsLoading || itemsLoading) return;
+
+    const mapping = resolveCardMapping({
+      cardLastDigits: prefill.cardLastDigits,
+      cardName: prefill.cardName,
+    });
+    if (!mapping.source) return;
+
+    const ccOpt = mapping.costCenter
+      ? costCenterOptions.find((o) => o.code === mapping.costCenter) || null
+      : null;
+    const prOpt = mapping.project
+      ? projectOptions.find((o) => o.code === mapping.project) || null
+      : null;
+    const itOpt = mapping.itemCode
+      ? itemOptions.find((o) => o.code === mapping.itemCode) || null
+      : null;
+
+    if (ccOpt) {
+      setHeaderCostCenter(ccOpt);
+    }
+    if (prOpt) {
+      setHeaderProject(prOpt);
+    }
+    setItems((prev) => prev.map((it) => ({
+      ...it,
+      ...(ccOpt ? { sapCostCenter: ccOpt, cost_center: ccOpt.code } : {}),
+      ...(prOpt ? { sapProject: prOpt, project: prOpt.code } : {}),
+      ...(itOpt && !it.sapItem ? { sapItem: itOpt, description: it.description || itOpt.name } : {}),
+    })));
+    setCardDefaultsApplied(true);
+  }, [
+    open, origin, prefill, cardDefaultsApplied, resolveCardMapping,
+    costCenterOptions, projectOptions, itemOptions,
+    costCentersLoading, projectsLoading, itemsLoading,
+  ]);
+
+
   // Apply prefill when modal opens
   useEffect(() => {
     if (open && prefill && !initialized) {
