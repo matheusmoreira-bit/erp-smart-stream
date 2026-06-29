@@ -64,9 +64,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const action: "save" | "delete" | "catalog" | "list" = body?.action;
-  if (action !== "save" && action !== "delete" && action !== "catalog" && action !== "list") {
-    return new Response(JSON.stringify({ error: "Ação inválida (esperado 'save', 'delete', 'catalog' ou 'list')" }), {
+  const action: "save" | "delete" | "catalog" | "list" | "list-mappings" = body?.action;
+  if (action !== "save" && action !== "delete" && action !== "catalog" && action !== "list" && action !== "list-mappings") {
+    return new Response(JSON.stringify({ error: "Ação inválida" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
