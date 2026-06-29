@@ -58,6 +58,7 @@ interface CardMappingRow {
 
 export default function PagCorpMapping() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { session } = useSap();
   const companyDB = session?.companyDB || "";
 
