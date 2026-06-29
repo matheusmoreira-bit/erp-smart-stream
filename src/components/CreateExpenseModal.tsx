@@ -163,6 +163,9 @@ export function CreateExpenseModal({
     }
     if (cardDefaultsApplied) return;
     if (origin !== "pagcorp" || !prefill) return;
+    // Aguarda o effect de prefill rodar primeiro (que reseta `items`),
+    // senão nossas defaults são sobrescritas imediatamente.
+    if (!initialized) return;
 
     const mapping = resolveCardMapping({
       cardLastDigits: prefill.cardLastDigits,
@@ -196,7 +199,7 @@ export function CreateExpenseModal({
     })));
     setCardDefaultsApplied(true);
   }, [
-    open, origin, prefill, cardDefaultsApplied, resolveCardMapping,
+    open, origin, prefill, initialized, cardDefaultsApplied, resolveCardMapping,
     costCenterOptions, projectOptions, itemOptions,
   ]);
 
