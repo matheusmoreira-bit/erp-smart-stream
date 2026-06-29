@@ -712,9 +712,27 @@ export function CreateExpenseModal({
             {files.length > 0 && (
               <div className="mt-2 space-y-1">
                 {files.map((file, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20">
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 cursor-pointer hover:bg-primary/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const url = URL.createObjectURL(file);
+                      const win = window.open(url, "_blank");
+                      if (!win) {
+                        // popup blocked — fallback to download
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.target = "_blank";
+                        a.rel = "noopener";
+                        a.click();
+                      }
+                      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                    }}
+                    title="Clique para visualizar o anexo"
+                  >
                     <FileSpreadsheet className="w-4 h-4 text-primary shrink-0" />
-                    <span className="text-xs text-foreground truncate flex-1">{file.name}</span>
+                    <span className="text-xs text-foreground truncate flex-1 underline decoration-dotted">{file.name}</span>
                     <span className="text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
                     <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-muted-foreground hover:text-foreground">
                       <X className="w-3.5 h-3.5" />
