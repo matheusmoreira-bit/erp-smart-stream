@@ -223,6 +223,46 @@ export function usePagCorp() {
 
       setTransactions(items);
 
+      // Catálogo de cartões: upsert distintos vistos nesta busca para alimentar
+      // o mapeamento de cartões mesmo sem refazer a chamada ao PagCorp.
+      if (companyDb && items.length > 0) {
+        try {
+          const cardMap = new Map<string, {
+            company_db: string;
+            card_identifier: string;
+            card_name: string | null;
+            card_last_digits: string | null;
+            card_label: string | null;
+            account_alias: string | null;
+            last_seen_at: string;
+          }>();
+          const nowIso = new Date().toISOString();
+          for (const t of items) {
+            const last = t.cardLastDigits ? String(t.cardLastDigits).trim() : "";
+            const name = t.cardName ? String(t.cardName).trim() : "";
+            const identifier = last || name;
+            if (!identifier || cardMap.has(identifier)) continue;
+            const label = [name, last ? `•••• ${last}` : null].filter(Boolean).join(" ") || identifier;
+            cardMap.set(identifier, {
+              company_db: companyDb,
+              card_identifier: identifier,
+              card_name: name || null,
+              card_last_digits: last || null,
+              card_label: label,
+              account_alias: t.accountAlias ? String(t.accountAlias) : null,
+              last_seen_at: nowIso,
+            });
+          }
+          if (cardMap.size > 0) {
+            await (supabase as any)
+              .from("pagcorp_cards")
+              .upsert(Array.from(cardMap.values()), { onConflict: "company_db,card_identifier" });
+          }
+        } catch (e) {
+          console.warn("PagCorp card catalog upsert failed:", e);
+        }
+      }
+
       // Persist to DB cache so the next visit / period switch is instant
       if (companyDb) {
         try {
@@ -232,6 +272,7 @@ export function usePagCorp() {
           console.warn("PagCorp cache write failed:", e);
         }
       }
+
     } catch (e) {
       console.error("PagCorp fetch error:", e);
       if (!hadCache) setError(e instanceof Error ? e.message : "Erro ao buscar transações");
