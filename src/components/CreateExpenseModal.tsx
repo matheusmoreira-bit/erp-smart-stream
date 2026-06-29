@@ -29,6 +29,7 @@ import { type ExpenseItem, type CreateExpenseInput } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { requestSupplierRegistration } from "@/lib/supplier-request-email";
 import { UserPlus } from "lucide-react";
+import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
