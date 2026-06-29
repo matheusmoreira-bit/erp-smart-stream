@@ -226,7 +226,7 @@ export function CreateExpenseModal({
       ...it,
       ...(ccOpt ? { sapCostCenter: ccOpt, cost_center: ccOpt.code } : {}),
       ...(prOpt ? { sapProject: prOpt, project: prOpt.code } : {}),
-      ...(itOpt && !it.sapItem ? { sapItem: itOpt, description: it.description || itOpt.name } : {}),
+      ...(itOpt && !it.sapItem ? { sapItem: itOpt, item_code: itOpt.code, description: it.description || itOpt.name } : {}),
     })));
     setCardDefaultsApplied(true);
   }, [
