@@ -157,9 +157,29 @@ Deno.serve(async (req) => {
           .from("pagcorp_card_mapping").update(payload).eq("id", r.id).select().single();
         if (error) throw error;
         results.push(data);
+      } else if (payload.is_fallback) {
+        // fallback: 1 por company_db
+        const { data, error } = await sb
+          .from("pagcorp_card_mapping")
+          .upsert(payload, { onConflict: "company_db,is_fallback" })
+          .select().single();
+        if (error) {
+          // fallback caso o índice único não exista: tenta update do existente
+          const { data: existing } = await sb
+            .from("pagcorp_card_mapping").select("id")
+            .eq("company_db", payload.company_db).eq("is_fallback", true).maybeSingle();
+          if (existing?.id) {
+            const { data: upd, error: updErr } = await sb
+              .from("pagcorp_card_mapping").update(payload).eq("id", existing.id).select().single();
+            if (updErr) throw updErr;
+            results.push(upd);
+          } else { throw error; }
+        } else { results.push(data); }
       } else {
         const { data, error } = await sb
-          .from("pagcorp_card_mapping").insert(payload).select().single();
+          .from("pagcorp_card_mapping")
+          .upsert(payload, { onConflict: "company_db,card_identifier" })
+          .select().single();
         if (error) throw error;
         results.push(data);
       }
