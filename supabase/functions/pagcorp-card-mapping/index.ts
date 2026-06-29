@@ -24,6 +24,16 @@ interface SaveRow {
   is_fallback?: boolean;
 }
 
+function serializeError(e: unknown) {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -158,30 +168,64 @@ Deno.serve(async (req) => {
         if (error) throw error;
         results.push(data);
       } else if (payload.is_fallback) {
-        // fallback: 1 por company_db
-        const { data, error } = await sb
+        // O banco usa índice único parcial (company_db WHERE is_fallback = true),
+        // que não é compatível com PostgREST upsert/onConflict. Fazemos merge manual.
+        const { data: existing, error: existingErr } = await sb
           .from("pagcorp_card_mapping")
-          .upsert(payload, { onConflict: "company_db,is_fallback" })
-          .select().single();
-        if (error) {
-          // fallback caso o índice único não exista: tenta update do existente
-          const { data: existing } = await sb
-            .from("pagcorp_card_mapping").select("id")
-            .eq("company_db", payload.company_db).eq("is_fallback", true).maybeSingle();
-          if (existing?.id) {
-            const { data: upd, error: updErr } = await sb
-              .from("pagcorp_card_mapping").update(payload).eq("id", existing.id).select().single();
-            if (updErr) throw updErr;
-            results.push(upd);
-          } else { throw error; }
-        } else { results.push(data); }
+          .select("id")
+          .eq("company_db", payload.company_db)
+          .eq("is_fallback", true)
+          .maybeSingle();
+        if (existingErr) throw existingErr;
+
+        if (existing?.id) {
+          const { data, error } = await sb
+            .from("pagcorp_card_mapping")
+            .update(payload)
+            .eq("id", existing.id)
+            .select()
+            .single();
+          if (error) throw error;
+          results.push(data);
+        } else {
+          const { data, error } = await sb
+            .from("pagcorp_card_mapping")
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw error;
+          results.push(data);
+        }
       } else {
-        const { data, error } = await sb
+        // O índice único de cartão também é parcial (WHERE is_fallback = false),
+        // então evitamos upsert/onConflict e fazemos merge manual.
+        const { data: existing, error: existingErr } = await sb
           .from("pagcorp_card_mapping")
-          .upsert(payload, { onConflict: "company_db,card_identifier" })
-          .select().single();
-        if (error) throw error;
-        results.push(data);
+          .select("id")
+          .eq("company_db", payload.company_db)
+          .eq("card_identifier", payload.card_identifier)
+          .eq("is_fallback", false)
+          .maybeSingle();
+        if (existingErr) throw existingErr;
+
+        if (existing?.id) {
+          const { data, error } = await sb
+            .from("pagcorp_card_mapping")
+            .update(payload)
+            .eq("id", existing.id)
+            .select()
+            .single();
+          if (error) throw error;
+          results.push(data);
+        } else {
+          const { data, error } = await sb
+            .from("pagcorp_card_mapping")
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw error;
+          results.push(data);
+        }
       }
     }
 
@@ -190,7 +234,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("pagcorp-card-mapping error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+    return new Response(JSON.stringify({ error: serializeError(e) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
