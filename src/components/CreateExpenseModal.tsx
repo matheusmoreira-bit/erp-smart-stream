@@ -43,6 +43,8 @@ export interface PagCorpPrefill {
   accountAlias?: string;
   receipts?: any[];
   triggerAI?: boolean;
+  cardLastDigits?: string;
+  cardName?: string;
 }
 
 export type ExpenseMode = "purchase" | "sales";
