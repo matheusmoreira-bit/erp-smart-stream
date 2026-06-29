@@ -97,6 +97,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "list-mappings") {
+      const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
+      if (!companyDb) {
+        return new Response(JSON.stringify({ error: "company_db obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data, error } = await sb
+        .from("pagcorp_card_mapping")
+        .select("*")
+        .eq("company_db", companyDb)
+        .order("is_fallback", { ascending: false });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true, mappings: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "delete") {
       const id = body?.id;
       if (typeof id !== "string" || !id) {
