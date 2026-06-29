@@ -87,6 +87,34 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "catalog") {
+      const cards: any[] = Array.isArray(body?.cards) ? body.cards : [];
+      const cleaned = cards
+        .filter((c) => c?.company_db && c?.card_identifier)
+        .map((c) => ({
+          company_db: String(c.company_db),
+          card_identifier: String(c.card_identifier),
+          card_name: c.card_name ?? null,
+          card_last_digits: c.card_last_digits ?? null,
+          card_label: c.card_label ?? null,
+          account_alias: c.account_alias ?? null,
+          last_seen_at: c.last_seen_at ?? new Date().toISOString(),
+        }));
+      if (cleaned.length === 0) {
+        return new Response(JSON.stringify({ success: true, upserted: 0 }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { error } = await sb
+        .from("pagcorp_cards")
+        .upsert(cleaned, { onConflict: "company_db,card_identifier" });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true, upserted: cleaned.length }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     // save (insert ou update)
     const rows: SaveRow[] = Array.isArray(body?.rows) ? body.rows : [];
     if (rows.length === 0) {
