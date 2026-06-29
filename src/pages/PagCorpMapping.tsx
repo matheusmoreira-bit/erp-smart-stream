@@ -239,24 +239,32 @@ export default function PagCorpMapping() {
 
   async function loadCardMappings() {
     setIsLoadingCards(true);
-    const { data, error } = await (supabase as any)
-      .from("pagcorp_card_mapping")
-      .select("*")
-      .eq("company_db", companyDB)
-      .order("is_fallback", { ascending: false });
-    if (error) { toast.error("Erro ao carregar mapeamento de cartões"); console.error(error); }
-    else {
-      setCardMappings((data || []).map((r: any) => ({
-        id: r.id, company_db: r.company_db,
-        card_identifier: r.card_identifier || "",
-        card_label: r.card_label || "",
-        cost_center: r.cost_center || "",
-        project: r.project || "",
-        item_code: r.item_code || "",
-        is_fallback: !!r.is_fallback,
-      })));
+    try {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("pagcorp-card-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list-mappings", company_db: companyDB }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || result.success === false) {
+        toast.error(result.error || "Erro ao carregar mapeamento de cartões");
+      } else {
+        setCardMappings((result.mappings || []).map((r: any) => ({
+          id: r.id, company_db: r.company_db,
+          card_identifier: r.card_identifier || "",
+          card_label: r.card_label || "",
+          cost_center: r.cost_center || "",
+          project: r.project || "",
+          item_code: r.item_code || "",
+          is_fallback: !!r.is_fallback,
+        })));
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao carregar mapeamento de cartões");
+    } finally {
+      setIsLoadingCards(false);
     }
-    setIsLoadingCards(false);
   }
 
   function addCardRow() {
