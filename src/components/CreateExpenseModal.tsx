@@ -1056,7 +1056,11 @@ export function CreateExpenseModal({
                           return updated;
                         });
                       }}
-                      placeholder="Buscar centro de custo..."
+                      placeholder={
+                        origin === "pagcorp" && mappingInfo?.missingFields.includes("Centro de Custo")
+                          ? "Sem mapeamento — selecione manualmente"
+                          : "Buscar centro de custo..."
+                      }
                       suggestedQuery={item.cost_center && !item.sapCostCenter ? item.cost_center : undefined}
                       portalContainer={dialogContainer}
                     />
