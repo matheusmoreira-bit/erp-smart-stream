@@ -1,113 +1,54 @@
-# Padronização de Nomenclatura, Títulos e URLs
+# Fallback e mensagem de UI para mapeamento de cartão ausente
 
-Reescrita completa de marca, rótulos do menu, `<h1>`, `<title>` por rota e URLs para o esquema unificado em PT-BR. **Sem redirects legados** — URLs antigas deixam de existir.
+## Objetivo
+Quando o usuário abrir "Integrar Prestação de Conta" para uma transação PagCorp e não houver mapeamento (específico do cartão nem fallback da empresa) para Centro de Custo, Projeto ou Item, deixar claro na interface o que aconteceu e oferecer atalho para criar o mapeamento.
 
-> ⚠️ Quem tiver bookmarks ou clicar em links antigos de e-mails de aprovação cairá em 404. Confirme antes que isso é aceitável.
+## Comportamento
 
----
+1. Ao abrir o modal de integração com `origin === "pagcorp"`:
+   - Resolver o mapeamento via `usePagCorpCardMapping.resolve({ cardLastDigits, cardName })`.
+   - Calcular o estado do mapeamento:
+     - `none` — nenhum mapeamento (nem cartão, nem fallback).
+     - `partial` — algum campo (CC, Projeto ou Item) está sem valor no mapeamento aplicado.
+     - `full` — todos os três campos vieram preenchidos.
 
-## 1. Marca (fixes rápidos)
+2. Banner no topo do modal (logo abaixo do título), só para `origin === "pagcorp"`:
+   - `full` + `source = "card"`: banner verde discreto — "Mapeamento do cartão aplicado (CC, Projeto e Item)".
+   - `full` + `source = "fallback"`: banner âmbar discreto — "Aplicado o fallback da empresa. Crie um mapeamento específico para este cartão se desejar."
+   - `partial`: banner âmbar listando os campos faltantes — "Mapeamento incompleto: faltando [Centro de Custo, Item]. Preencha manualmente ou edite o mapeamento."
+   - `none`: banner âmbar — "Nenhum mapeamento encontrado para este cartão e não há fallback configurado. Preencha CC, Projeto e Item manualmente."
+   - Todos os banners (exceto `full+card`) trazem um link "Abrir mapeamento" que abre `/cartoes/mapeamento` em nova aba já filtrado pelo cartão atual (via query `?card=<identifier>`).
 
-| Arquivo | De | Para |
-|---|---|---|
-| `index.html` | `<title>ERP FLow</title>`, `lang="en"`, meta description em inglês | `<title>ERP Flow — Gestão Corporativa</title>`, `lang="pt-BR"`, descrição em PT-BR |
-| `index.html` | `og:title`, `twitter:title` = "ERP FLow" | "ERP Flow" |
-| `package.json` | `"vite_react_shadcn_ts"` | `"erp-flow"` |
-| `MainMenu.tsx` | `<h1>ERP Analytics</h1>` | `<h1>ERP Flow</h1>` |
+3. Comportamento de fallback nos campos:
+   - Campos sem valor do mapeamento permanecem vazios e exibem `placeholder` explícito: "Sem mapeamento — selecione manualmente".
+   - A validação atual (CC obrigatório por item) continua barrando o envio, então o usuário é forçado a escolher antes de integrar.
+   - Adicionar `aria-invalid` quando o campo estiver vazio e o usuário tentar salvar, para destacar visualmente.
 
-## 2. Esquema novo de URLs
+4. Tela de Mapeamento (`PagCorpMapping.tsx`):
+   - Ler `?card=<identifier>` na URL e, se presente, abrir o formulário de novo mapeamento já com o `card_identifier` preenchido e dar scroll/foco nele.
 
-```text
-/                            Painel
-/compras                     (era /expenses)
-/vendas                      (era /sales)
+## Detalhes técnicos
 
-/aprovacoes                  Hub → redirect para /aprovacoes/pendentes
-/aprovacoes/pendentes        (era /approvals)
-/aprovacoes/historico        (era /approvals?tab=history)
-/aprovacoes/regras           (era /approval-rules)
+Arquivos afetados:
 
-/cartoes                     Hub Cartões Corporativos
-/cartoes/transacoes          (era /pagcorp)
-/cartoes/mapeamento          (era /pagcorp/mapping)
-/cartoes/indedutiveis        (era /pagcorp/nondeductible)
-/cartoes/historico           (era /pagcorp/history)
+- `src/components/CreateExpenseModal.tsx`
+  - Após `resolveCardMapping(...)`, guardar um `mappingStatus` em estado (`none | partial | full`), `missingFields: string[]` e `source`.
+  - Renderizar um componente `<CardMappingBanner />` (novo, inline ou em `src/components/PagCorpCardMappingBanner.tsx`) condicional a `origin === "pagcorp"`.
+  - Manter o effect atual que aplica defaults; só não definir os campos faltantes (já é o caso). Garantir que o placeholder dos `CachedSearchCombobox` reflita o estado quando vazio (prop `placeholder`).
+  - Link "Abrir mapeamento" usa `window.open(`/cartoes/mapeamento?card=${encodeURIComponent(prefill.cardLastDigits || prefill.cardName || "")}`, "_blank")`.
 
-/auditoria, /auditoria/sap, /auditoria/fiscal, /auditoria/logs    (mantém ✅)
-/integracoes/automacoes, /integracoes/monitor, /integracoes/credenciais  (mantém ✅)
+- `src/components/PagCorpCardMappingBanner.tsx` (novo)
+  - Props: `status`, `source`, `missingFields`, `cardKey`.
+  - Usa `Alert` do shadcn com variantes semânticas (`bg-amber-50 text-amber-900 border-amber-200` ou tokens equivalentes do projeto).
 
-/usuarios                    Hub (era /users)
-/usuarios/lista              (era /users)
-/usuarios/atividade          (era /users/activity)
-/usuarios/produtividade      (era /users/productivity)
-/usuarios/licencas           (era /users/license-analysis)
-/usuarios/importar-licencas  (era /users/license-import)
-/usuarios/sincronizacao-idp  (era /users/idp-sync)
+- `src/pages/PagCorpMapping.tsx`
+  - `useSearchParams()` para ler `card`. Se presente e ainda não houver mapeamento para ele, pré-preencher o formulário de criação e dar `scrollIntoView`.
 
-/cadastros/fornecedores      (era /suppliers)
-/cadastros/fornecedores/importar-cartoes  (era /suppliers/import-pagcorp)
-/cadastros/itens             (era /items)
-/cadastros/intercompany      (era /intercompany)
+- `src/hooks/usePagCorpCardMapping.ts`
+  - Sem mudança de schema. Opcional: expor um helper `describe(tx)` que retorna `{ resolved, status, missingFields, source }` para evitar duplicar a lógica no modal.
 
-/financeiro/adiantamentos    (era /advance-payments)
-/financeiro/reconciliacao    (era /financial-review)
-/financeiro/nf-entrada       (era /nf-entrada)
+Sem mudanças de banco de dados, RLS ou edge functions.
 
-/analytics, /notificacoes    (notifications → notificacoes)
-/backoffice/*                (mantém)
-```
-
-Todos os redirects legados em `App.tsx` removidos (`/synapse`, `/audit-log`, `/fiscal-audit`, `/credentials`, `/cadastros/*` em formato antigo, `/analytics/audit`).
-
-## 3. Rótulos do menu e h1 (padronização)
-
-| Módulo | Menu label | H1 | Title (`<title>`) |
-|---|---|---|---|
-| Painel | — | "ERP Flow" | "ERP Flow" |
-| Compras | "Compras" | "Compras" | "Compras — ERP Flow" |
-| Vendas | "Vendas" | "Vendas" | "Vendas — ERP Flow" |
-| Aprovações (pendentes) | "Aprovações" | "Aprovações Pendentes" | "Aprovações — ERP Flow" |
-| Aprovações (histórico) | — (tab) | "Histórico de Aprovações" | "Histórico de Aprovações — ERP Flow" |
-| Regras | "Regras de Aprovação" | "Regras de Aprovação" | idem |
-| Cartões / Transações | "Cartões Corporativos" | "Cartões Corporativos — Transações" | idem |
-| Cartões / Mapeamento | (tab) | "Mapeamento de Cartões → SAP" | idem |
-| Cartões / Indedutíveis | (tab) | "Cartões Indedutíveis" | idem |
-| Cartões / Histórico | (tab) | "Histórico de Integrações de Cartões" | idem |
-| Auditoria SAP | "Auditoria" | "Auditoria SAP" | idem |
-| Logs | (tab "Logs do Sistema") | "Logs do Sistema" | idem |
-| Automações | (tab "Automações") | "Automações" (não mais "Synapse") | idem |
-| Monitor | (tab "Monitor de Integrações") | "Monitor de Integrações" | idem |
-| Usuários | "Usuários" | "Gestão de Usuários" | idem |
-| IdP Sync | (tab "Sincronização IdP") | "Sincronização IdP" | idem |
-| Adiantamentos | "Adiantamentos" | "Adiantamentos a Fornecedor" | idem |
-| Reconciliação | "Reconciliação de Adiantamentos" | "Reconciliação de Adiantamentos" | idem |
-| NF Entrada | "NF de Entrada" | "Integração NF de Entrada" | idem |
-| Intercompany | "Plano de Contas & CC" | "Plano de Contas & Centros de Custo" | idem |
-
-H1 errados `"SAP B1 Analytics"` corrigidos em `Expenses`, `Sales`, `ApprovalRules`, `Approvals`.
-
-## 4. `<title>` por rota
-
-- Instalar `react-helmet-async`.
-- Adicionar `<HelmetProvider>` em `src/main.tsx`.
-- Adicionar `<Helmet><title>...</title></Helmet>` em cada página listada acima.
-
-## 5. PagCorp → Cartões Corporativos (cuidados)
-
-- A marca "PagCorp" some das URLs, rótulos e h1.
-- **Permanece nos dados internos** (nomes de tabelas/colunas no banco, nomes de edge functions, campos de mapeamento `pagcorp_*`). Renomear schema seria invasivo e fora do escopo desta rodada.
-- Componentes/arquivos com `PagCorp` no nome (`PagCorpMapping.tsx`, `useCreatePagCorp...`) ficam como estão; só UI textual muda.
-
-## Arquivos a editar (estimativa)
-
-- `index.html`, `package.json`, `src/main.tsx`, `src/App.tsx`, `src/components/MainMenu.tsx`, `src/components/HubTabs.tsx`
-- Páginas com mudança de h1/title: `Expenses`, `Sales`, `Approvals`, `ApprovalHistory`, `ApprovalRules`, `PagCorp`, `PagCorpMapping`, `PagCorpNondeductible`, `IntegrationHistory`, `AuditConsole`, `FiscalAudit`, `AuditLog`, `Synapse`, `IntegrationsMonitor`, `Credentials`, `Users`, `UserActivity`, `UserProductivity`, `IdpSync`, `LicenseAnalysis`, `LicenseImport`, `Suppliers`, `Items`, `Intercompany`, `AdvancePayments`, `FinancialReview`, `NfEntrada`, `Notifications`, `MainMenu` (h1 home)
-- Qualquer `navigate("/old-url")` ou `<Link to="/old-url">` espalhado pelo app é atualizado para a URL nova (busca por `rg`).
-
-## Riscos
-
-- Links antigos em e-mails de aprovação (notificações antigas) quebram.
-- Bookmarks dos usuários quebram.
-- Qualquer integração externa que chame URLs do app precisa ser atualizada manualmente.
-
-Confirma que posso prosseguir sem manter nenhum redirect?
+## Fora de escopo
+- Criar mapeamento direto do banner (continuamos abrindo a tela dedicada).
+- Auto-criar mapeamento "rascunho" quando o usuário salvar a integração manualmente.

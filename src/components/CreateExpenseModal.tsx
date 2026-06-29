@@ -29,7 +29,8 @@ import { type ExpenseItem, type CreateExpenseInput } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { requestSupplierRegistration } from "@/lib/supplier-request-email";
 import { UserPlus } from "lucide-react";
-import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
+import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
+import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -152,13 +153,21 @@ export function CreateExpenseModal({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
-  const { resolve: resolveCardMapping } = usePagCorpCardMapping(
+  const { describe: describeCardMapping } = usePagCorpCardMapping(
     origin === "pagcorp" ? sapSession?.companyDB : undefined,
   );
   const [cardDefaultsApplied, setCardDefaultsApplied] = useState(false);
+  const [mappingInfo, setMappingInfo] = useState<{
+    status: CardMappingStatus;
+    source: "card" | "fallback" | null;
+    missingFields: string[];
+    cardKey: string | null;
+  } | null>(null);
+
   useEffect(() => {
     if (!open) {
       setCardDefaultsApplied(false);
+      setMappingInfo(null);
       return;
     }
     if (cardDefaultsApplied) return;
@@ -167,26 +176,40 @@ export function CreateExpenseModal({
     // senão nossas defaults são sobrescritas imediatamente.
     if (!initialized) return;
 
-    const mapping = resolveCardMapping({
+    const info = describeCardMapping({
       cardLastDigits: prefill.cardLastDigits,
       cardName: prefill.cardName,
     });
-    if (!mapping.source) return;
+
+    setMappingInfo({
+      status: info.status,
+      source: info.resolved.source,
+      missingFields: info.missingFields,
+      cardKey: info.cardKey,
+    });
+
+    if (info.status === "none") {
+      // Nada para aplicar — apenas marca como tratado para não rodar de novo
+      setCardDefaultsApplied(true);
+      return;
+    }
+
+    const { costCenter, project, itemCode } = info.resolved;
 
     // Resolve options from SAP cache; if not found (cache vazio ou ainda
     // carregando), sintetiza uma opção mínima para que o valor apareça
     // selecionado mesmo assim — o usuário pode trocar depois.
-    const ccOpt = mapping.costCenter
-      ? costCenterOptions.find((o) => o.code === mapping.costCenter)
-        || { code: mapping.costCenter, name: mapping.costCenter, extra: "" }
+    const ccOpt = costCenter
+      ? costCenterOptions.find((o) => o.code === costCenter)
+        || { code: costCenter, name: costCenter, extra: "" }
       : null;
-    const prOpt = mapping.project
-      ? projectOptions.find((o) => o.code === mapping.project)
-        || { code: mapping.project, name: mapping.project, extra: "" }
+    const prOpt = project
+      ? projectOptions.find((o) => o.code === project)
+        || { code: project, name: project, extra: "" }
       : null;
-    const itOpt = mapping.itemCode
-      ? itemOptions.find((o) => o.code === mapping.itemCode)
-        || { code: mapping.itemCode, name: mapping.itemCode, extra: "" }
+    const itOpt = itemCode
+      ? itemOptions.find((o) => o.code === itemCode)
+        || { code: itemCode, name: itemCode, extra: "" }
       : null;
 
     if (ccOpt) setHeaderCostCenter(ccOpt);
@@ -199,9 +222,10 @@ export function CreateExpenseModal({
     })));
     setCardDefaultsApplied(true);
   }, [
-    open, origin, prefill, initialized, cardDefaultsApplied, resolveCardMapping,
+    open, origin, prefill, initialized, cardDefaultsApplied, describeCardMapping,
     costCenterOptions, projectOptions, itemOptions,
   ]);
+
 
 
   // Apply prefill when modal opens
@@ -665,6 +689,14 @@ export function CreateExpenseModal({
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
+          {origin === "pagcorp" && mappingInfo && (
+            <PagCorpCardMappingBanner
+              status={mappingInfo.status}
+              source={mappingInfo.source}
+              missingFields={mappingInfo.missingFields}
+              cardKey={mappingInfo.cardKey}
+            />
+          )}
           {/* AI Toggle */}
           <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
             <div className="flex items-center gap-2">
@@ -985,7 +1017,11 @@ export function CreateExpenseModal({
                         return updated;
                       });
                     }}
-                    placeholder="Buscar item SAP por nome ou código..."
+                    placeholder={
+                      origin === "pagcorp" && mappingInfo?.missingFields.includes("Item")
+                        ? "Sem mapeamento — selecione manualmente"
+                        : "Buscar item SAP por nome ou código..."
+                    }
                     suggestedQuery={!item.sapItem ? (item.searchHint || item.description || undefined) : undefined}
                     portalContainer={dialogContainer}
                   />
@@ -1020,7 +1056,11 @@ export function CreateExpenseModal({
                           return updated;
                         });
                       }}
-                      placeholder="Buscar centro de custo..."
+                      placeholder={
+                        origin === "pagcorp" && mappingInfo?.missingFields.includes("Centro de Custo")
+                          ? "Sem mapeamento — selecione manualmente"
+                          : "Buscar centro de custo..."
+                      }
                       suggestedQuery={item.cost_center && !item.sapCostCenter ? item.cost_center : undefined}
                       portalContainer={dialogContainer}
                     />
@@ -1036,7 +1076,11 @@ export function CreateExpenseModal({
                           return updated;
                         });
                       }}
-                      placeholder="Buscar projeto..."
+                      placeholder={
+                        origin === "pagcorp" && mappingInfo?.missingFields.includes("Projeto")
+                          ? "Sem mapeamento — selecione manualmente"
+                          : "Buscar projeto..."
+                      }
                       suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
                       portalContainer={dialogContainer}
                     />

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
@@ -58,6 +58,7 @@ interface CardMappingRow {
 
 export default function PagCorpMapping() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { session } = useSap();
   const companyDB = session?.companyDB || "";
 
@@ -266,6 +267,40 @@ export default function PagCorpMapping() {
       setIsLoadingCards(false);
     }
   }
+
+  // Pré-cria uma linha nova quando vindo de "Abrir mapeamento" (?card=)
+  // — só dispara após o load terminar e se ainda não existir mapeamento.
+  useEffect(() => {
+    const cardParam = searchParams.get("card");
+    if (!cardParam || !companyDB || isLoadingCards) return;
+    const already = cardMappings.some(
+      (m) => !m.is_fallback && m.card_identifier === cardParam,
+    );
+    const pendingNew = cardMappings.some(
+      (m) => m.isNew && !m.is_fallback && m.card_identifier === cardParam,
+    );
+    if (!already && !pendingNew) {
+      const match = cardSuggestions.find((c) => c.identifier === cardParam);
+      setCardMappings((p) => [
+        {
+          company_db: companyDB,
+          card_identifier: cardParam,
+          card_label: match?.label || cardParam,
+          cost_center: "",
+          project: "",
+          item_code: "",
+          is_fallback: false,
+          isNew: true,
+        },
+        ...p,
+      ]);
+      toast.info(`Novo mapeamento iniciado para o cartão ${match?.label || cardParam}`);
+    }
+    // Limpa o query param para não recriar em re-renders / navegação
+    const next = new URLSearchParams(searchParams);
+    next.delete("card");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, companyDB, isLoadingCards, cardMappings, cardSuggestions, setSearchParams]);
 
   function addCardRow() {
     setCardMappings((p) => [...p, {

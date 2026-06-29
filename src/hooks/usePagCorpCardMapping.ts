@@ -17,6 +17,17 @@ export interface PagCorpCardMappingResolved {
   source: "card" | "fallback" | null;
 }
 
+export type CardMappingStatus = "none" | "partial" | "full";
+
+export interface PagCorpCardMappingDescribed {
+  resolved: PagCorpCardMappingResolved;
+  /** none = nenhum mapeamento aplicável; partial = aplicado mas faltam campos; full = todos os 3 campos vieram */
+  status: CardMappingStatus;
+  /** Labels human-readable dos campos faltantes ('Centro de Custo' | 'Projeto' | 'Item') */
+  missingFields: string[];
+  cardKey: string | null;
+}
+
 /**
  * Carrega TODAS as linhas de pagcorp_card_mapping da empresa atual e expõe
  * uma função que resolve o mapeamento aplicável a uma transação (por
@@ -85,5 +96,21 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
     [rows],
   );
 
-  return { rows, isLoading, resolve };
+  const describe = useCallback(
+    (tx: { cardLastDigits?: unknown; cardName?: unknown }): PagCorpCardMappingDescribed => {
+      const resolved = resolve(tx);
+      const missing: string[] = [];
+      if (!resolved.costCenter) missing.push("Centro de Custo");
+      if (!resolved.project) missing.push("Projeto");
+      if (!resolved.itemCode) missing.push("Item");
+      let status: CardMappingStatus;
+      if (!resolved.source) status = "none";
+      else if (missing.length === 0) status = "full";
+      else status = "partial";
+      return { resolved, status, missingFields: missing, cardKey: resolveKey(tx) };
+    },
+    [resolve],
+  );
+
+  return { rows, isLoading, resolve, describe };
 }
