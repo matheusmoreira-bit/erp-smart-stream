@@ -1017,7 +1017,11 @@ export function CreateExpenseModal({
                         return updated;
                       });
                     }}
-                    placeholder="Buscar item SAP por nome ou código..."
+                    placeholder={
+                      origin === "pagcorp" && mappingInfo?.missingFields.includes("Item")
+                        ? "Sem mapeamento — selecione manualmente"
+                        : "Buscar item SAP por nome ou código..."
+                    }
                     suggestedQuery={!item.sapItem ? (item.searchHint || item.description || undefined) : undefined}
                     portalContainer={dialogContainer}
                   />
