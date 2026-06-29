@@ -1,0 +1,163 @@
+// Edge function para CRUD do mapeamento de cartões PagCorp.
+// Usa service_role para contornar a RLS quando o usuário está apenas
+// autenticado pela sessão SAP (sem JWT do Lovable Cloud). Valida a
+// requisição exigindo um JWT válido OU os headers de sessão SAP.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+interface SaveRow {
+  id?: string;
+  company_db: string;
+  card_identifier?: string | null;
+  card_label?: string | null;
+  cost_center?: string | null;
+  project?: string | null;
+  item_code?: string | null;
+  is_fallback?: boolean;
+}
+
+function isAuthenticated(req: Request): boolean {
+  const auth = req.headers.get("authorization") || "";
+  if (auth.toLowerCase().startsWith("bearer ")) return true;
+  // Aceita sessão SAP propagada pelos headers x-sap-*
+  if (req.headers.get("x-sap-session") && req.headers.get("x-sap-user")) return true;
+  return false;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Método não permitido" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (!isAuthenticated(req)) {
+    return new Response(JSON.stringify({ error: "Não autenticado" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "JSON inválido" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const action: "save" | "delete" | "catalog" = body?.action;
+  if (action !== "save" && action !== "delete" && action !== "catalog") {
+    return new Response(JSON.stringify({ error: "Ação inválida (esperado 'save', 'delete' ou 'catalog')" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+
+  const sb = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  try {
+    if (action === "delete") {
+      const id = body?.id;
+      if (typeof id !== "string" || !id) {
+        return new Response(JSON.stringify({ error: "id obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { error } = await sb.from("pagcorp_card_mapping").delete().eq("id", id);
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "catalog") {
+      const cards: any[] = Array.isArray(body?.cards) ? body.cards : [];
+      const cleaned = cards
+        .filter((c) => c?.company_db && c?.card_identifier)
+        .map((c) => ({
+          company_db: String(c.company_db),
+          card_identifier: String(c.card_identifier),
+          card_name: c.card_name ?? null,
+          card_last_digits: c.card_last_digits ?? null,
+          card_label: c.card_label ?? null,
+          account_alias: c.account_alias ?? null,
+          last_seen_at: c.last_seen_at ?? new Date().toISOString(),
+        }));
+      if (cleaned.length === 0) {
+        return new Response(JSON.stringify({ success: true, upserted: 0 }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { error } = await sb
+        .from("pagcorp_cards")
+        .upsert(cleaned, { onConflict: "company_db,card_identifier" });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true, upserted: cleaned.length }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
+    // save (insert ou update)
+    const rows: SaveRow[] = Array.isArray(body?.rows) ? body.rows : [];
+    if (rows.length === 0) {
+      return new Response(JSON.stringify({ error: "rows vazio" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const results: any[] = [];
+    for (const r of rows) {
+      if (!r.company_db) continue;
+      if (!r.is_fallback && !r.card_identifier) continue;
+
+      const payload = {
+        company_db: r.company_db,
+        card_identifier: r.is_fallback ? null : r.card_identifier,
+        card_label: r.card_label ?? null,
+        cost_center: r.cost_center ?? null,
+        project: r.project ?? null,
+        item_code: r.item_code ?? null,
+        is_fallback: !!r.is_fallback,
+      };
+
+      if (r.id) {
+        const { data, error } = await sb
+          .from("pagcorp_card_mapping").update(payload).eq("id", r.id).select().single();
+        if (error) throw error;
+        results.push(data);
+      } else {
+        const { data, error } = await sb
+          .from("pagcorp_card_mapping").insert(payload).select().single();
+        if (error) throw error;
+        results.push(data);
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, rows: results }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("pagcorp-card-mapping error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

@@ -276,18 +276,29 @@ export default function PagCorpMapping() {
   }
 
   async function deleteCardRow(id: string, i: number) {
-    const { error } = await (supabase as any).from("pagcorp_card_mapping").delete().eq("id", id);
-    if (error) toast.error("Erro ao excluir");
-    else { setCardMappings((p) => p.filter((_, idx) => idx !== i)); toast.success("Excluído"); }
+    const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+    const res = await sapFunctionFetch("pagcorp-card-mapping", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", id }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.success === false) {
+      toast.error(result.error || "Erro ao excluir");
+      return;
+    }
+    setCardMappings((p) => p.filter((_, idx) => idx !== i));
+    toast.success("Excluído");
   }
 
   async function saveCardMappings() {
     if (!companyDB) { toast.error("Selecione uma empresa antes de salvar"); return; }
     setIsSavingCards(true);
     try {
-      for (const m of cardMappings) {
-        if (!m.is_fallback && !m.card_identifier) continue;
-        const payload: any = {
+      const rows = cardMappings
+        .filter((m) => m.is_fallback || m.card_identifier)
+        .map((m) => ({
+          id: m.id,
           company_db: companyDB,
           card_identifier: m.is_fallback ? null : m.card_identifier,
           card_label: m.card_label || null,
@@ -295,19 +306,21 @@ export default function PagCorpMapping() {
           project: m.project || null,
           item_code: m.item_code || null,
           is_fallback: m.is_fallback,
-        };
-        if (m.id) {
-          const { error } = await (supabase as any).from("pagcorp_card_mapping").update(payload).eq("id", m.id);
-          if (error) throw error;
-        } else {
-          const { error } = await (supabase as any).from("pagcorp_card_mapping").insert(payload);
-          if (error) throw error;
-        }
-      }
+        }));
+      if (rows.length === 0) { toast.error("Preencha ao menos um cartão"); return; }
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("pagcorp-card-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", rows }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || result.success === false) throw new Error(result.error || `Erro ${res.status}`);
       toast.success("Mapeamento de cartões salvo");
       loadCardMappings();
     } catch (e: any) { toast.error(e.message || "Erro ao salvar"); }
     finally { setIsSavingCards(false); }
+
   }
 
   const hasCardFallback = cardMappings.some((m) => m.is_fallback);

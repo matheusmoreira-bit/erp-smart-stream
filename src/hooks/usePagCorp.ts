@@ -254,9 +254,12 @@ export function usePagCorp() {
             });
           }
           if (cardMap.size > 0) {
-            await (supabase as any)
-              .from("pagcorp_cards")
-              .upsert(Array.from(cardMap.values()), { onConflict: "company_db,card_identifier" });
+            const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+            await sapFunctionFetch("pagcorp-card-mapping", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "catalog", cards: Array.from(cardMap.values()) }),
+            });
           }
         } catch (e) {
           console.warn("PagCorp card catalog upsert failed:", e);
