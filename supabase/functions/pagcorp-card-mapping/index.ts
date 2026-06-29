@@ -64,9 +64,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const action: "save" | "delete" | "catalog" | "list" = body?.action;
-  if (action !== "save" && action !== "delete" && action !== "catalog" && action !== "list") {
-    return new Response(JSON.stringify({ error: "Ação inválida (esperado 'save', 'delete', 'catalog' ou 'list')" }), {
+  const action: "save" | "delete" | "catalog" | "list" | "list-mappings" = body?.action;
+  if (action !== "save" && action !== "delete" && action !== "catalog" && action !== "list" && action !== "list-mappings") {
+    return new Response(JSON.stringify({ error: "Ação inválida" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -93,6 +93,24 @@ Deno.serve(async (req) => {
         .order("last_seen_at", { ascending: false });
       if (error) throw error;
       return new Response(JSON.stringify({ success: true, cards: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "list-mappings") {
+      const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
+      if (!companyDb) {
+        return new Response(JSON.stringify({ error: "company_db obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data, error } = await sb
+        .from("pagcorp_card_mapping")
+        .select("*")
+        .eq("company_db", companyDb)
+        .order("is_fallback", { ascending: false });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true, mappings: data || [] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
