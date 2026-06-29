@@ -2077,6 +2077,48 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_cards: {
+        Row: {
+          account_alias: string | null
+          card_identifier: string
+          card_label: string | null
+          card_last_digits: string | null
+          card_name: string | null
+          company_db: string
+          created_at: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          updated_at: string
+        }
+        Insert: {
+          account_alias?: string | null
+          card_identifier: string
+          card_label?: string | null
+          card_last_digits?: string | null
+          card_name?: string | null
+          company_db: string
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          updated_at?: string
+        }
+        Update: {
+          account_alias?: string | null
+          card_identifier?: string
+          card_label?: string | null
+          card_last_digits?: string | null
+          card_name?: string | null
+          company_db?: string
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pagcorp_integration_log: {
         Row: {
           company_db: string | null

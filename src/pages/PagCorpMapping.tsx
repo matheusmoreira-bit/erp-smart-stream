@@ -104,9 +104,31 @@ export default function PagCorpMapping() {
     return Array.from(map.entries()).map(([code, name]) => ({ code, name, extra: "" }));
   }, [recentTransactions]);
 
-  /* Card identifiers detected in recent transactions */
+  /* Cartões já catalogados em banco (alimentados a cada busca de transações) */
+  const [dbCards, setDbCards] = useState<{ identifier: string; label: string }[]>([]);
+  useEffect(() => {
+    if (!companyDB) { setDbCards([]); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("pagcorp_cards")
+        .select("card_identifier,card_label,card_name,card_last_digits")
+        .eq("company_db", companyDB)
+        .order("last_seen_at", { ascending: false });
+      if (cancelled) return;
+      setDbCards(((data as any[]) || []).map((r) => {
+        const label = r.card_label || [r.card_name, r.card_last_digits ? `•••• ${r.card_last_digits}` : null]
+          .filter(Boolean).join(" ") || r.card_identifier;
+        return { identifier: r.card_identifier, label };
+      }));
+    })();
+    return () => { cancelled = true; };
+  }, [companyDB]);
+
+  /* Card identifiers detected in recent transactions, merged with DB catalog */
   const cardSuggestions = useMemo(() => {
     const map = new Map<string, { identifier: string; label: string }>();
+    dbCards.forEach((c) => map.set(c.identifier, c));
     recentTransactions.forEach((t) => {
       const id = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
         (t.cardName && String(t.cardName).trim()) || "";
@@ -116,7 +138,8 @@ export default function PagCorpMapping() {
       map.set(id, { identifier: id, label: label || id });
     });
     return Array.from(map.values());
-  }, [recentTransactions]);
+  }, [recentTransactions, dbCards]);
+
 
   /* ════════════════════════════════════════════
      TAB 1 – Account → Cost Center / Project
@@ -396,36 +419,36 @@ export default function PagCorpMapping() {
                                 </div>
                               ) : (
                                 <>
-                                  <input
-                                    type="text"
-                                    list={`card-suggestions-${i}`}
-                                    value={m.card_identifier}
-                                    onChange={(e) => {
-                                      const v = e.target.value;
-                                      const match = cardSuggestions.find((c) => c.identifier === v);
+                                  <CachedSearchCombobox
+                                    options={cardSuggestions.map((c) => ({ code: c.identifier, name: c.label, extra: "" }))}
+                                    isLoading={false}
+                                    value={
+                                      m.card_identifier
+                                        ? { code: m.card_identifier, name: m.card_label || m.card_identifier, extra: "" }
+                                        : null
+                                    }
+                                    onChange={(opt) => {
+                                      const match = cardSuggestions.find((c) => c.identifier === opt?.code);
                                       updateCardRow(i, {
-                                        card_identifier: v,
-                                        card_label: match?.label || m.card_label,
+                                        card_identifier: opt?.code || "",
+                                        card_label: match?.label || opt?.name || "",
                                       });
                                     }}
-                                    placeholder="Ex.: 1234 (últimos 4) ou nome do cartão"
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                    placeholder={
+                                      cardSuggestions.length === 0
+                                        ? "Nenhum cartão catalogado — busque transações primeiro"
+                                        : "Selecione o cartão…"
+                                    }
                                   />
-                                  <datalist id={`card-suggestions-${i}`}>
-                                    {cardSuggestions.map((c) => (
-                                      <option key={c.identifier} value={c.identifier}>
-                                        {c.label}
-                                      </option>
-                                    ))}
-                                  </datalist>
                                   {cardSuggestions.length === 0 && (
                                     <p className="mt-1 text-[11px] text-muted-foreground">
-                                      Nenhum cartão detectado nos últimos 180 dias — digite manualmente.
+                                      Abra "Transações PagCorp", faça uma busca, e os cartões aparecerão aqui automaticamente.
                                     </p>
                                   )}
                                 </>
                               )}
                             </TableCell>
+
                             <TableCell>
                               {m.id ? (
                                 <div className="text-sm font-medium text-foreground">
