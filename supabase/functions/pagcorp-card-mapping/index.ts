@@ -4,6 +4,7 @@
 // requisição exigindo um JWT válido OU os headers de sessão SAP.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,14 +24,6 @@ interface SaveRow {
   is_fallback?: boolean;
 }
 
-function isAuthenticated(req: Request): boolean {
-  const auth = req.headers.get("authorization") || "";
-  if (auth.toLowerCase().startsWith("bearer ")) return true;
-  // Aceita sessão SAP propagada pelos headers x-sap-*
-  if (req.headers.get("x-sap-session") && req.headers.get("x-sap-user")) return true;
-  return false;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -41,10 +34,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (!isAuthenticated(req)) {
+  try {
+    await requireUserOrSapSession(req);
+  } catch (err) {
+    const authResp = authErrorResponse(err, corsHeaders);
+    if (authResp) return authResp;
     return new Response(JSON.stringify({ error: "Não autenticado" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
