@@ -1,44 +1,34 @@
-# Aplicar princípios da ponytail neste projeto
+## Objetivo
+Unificar permissões: um usuário tem os mesmos módulos em TODAS as empresas. Acesso definido por grupo, nunca nominal por empresa.
 
-Objetivo: materializar 3 princípios (root-cause first, reuse first, trace-before-fix) como (a) regras sempre em contexto no `mem://index.md` e (b) uma skill operacional com checklist, exemplos e gatilhos de retrieval.
+## Mudanças
 
-## 1. Atualizar `mem://index.md` (Core sempre em contexto)
+### 1. Banco de dados (migration)
+- `user_group_assignments`: tornar `company_db` obsoleto.
+  - Consolidar registros existentes: para cada `(sap_email, group_id)` distinto, manter um único registro com `company_db = NULL` (união dos grupos atuais do usuário em qualquer empresa).
+  - Remover duplicatas, ajustar unique constraint para `(sap_email, group_id)` e tornar `company_db` sempre `NULL` (ou dropar a coluna — manter `NULL` é mais seguro contra rollback).
+- `permission_groups`: remover/ignorar colunas `erp_type` e `company_db` (grupos já são globais por convenção; garantir `NULL` em todas as linhas).
+- Atualizar políticas RLS se referenciarem `company_db`.
 
-Adicionar 3 linhas curtas na seção **Core**:
+### 2. Hook `usePermissions.ts`
+- `useUserAssignments`: ignorar parâmetro `companyDb`, sempre listar global.
+- `assign()`: gravar sempre com `company_db = null`, `onConflict: "sap_email,group_id"`.
+- `useModuleAccess`: remover filtro por `companyDB`; buscar somente assignments globais do usuário.
 
-- Root-cause first: antes de editar uma função, `rg` os callers e corrigir no ponto compartilhado, não no sintoma local.
-- Reuse first: antes de criar helper/componente, procurar similar existente (`useSapCachedList`, `CachedSearchCombobox`, `sapFunctionFetch`, `Alert`, `usePagCorpCardMapping` etc.).
-- Trace-before-fix: em bug de "valor não chega em X", mapear origem→sink (página → hook → edge function → modal) antes de editar.
+### 3. UI `PermissionManager.tsx`
+- Remover o seletor/coluna "Empresa" na aba de atribuições de usuários.
+- Mostrar lista única de usuários × grupos, válida para todas as empresas.
+- Manter gestão de grupos como já é (globais).
 
-Adicionar uma linha em **Memories** apontando para a skill.
-
-## 2. Criar skill `.agents/skills/lovable-debug-discipline/`
-
-Arquivos:
-
-- `SKILL.md` com frontmatter:
-  - `name: lovable-debug-discipline`
-  - `description`: dispara em pedidos de correção de bug, "ainda não funciona", loops de fix, refactors em hooks/edge functions e qualquer tarefa onde o sintoma é em UI mas a causa pode estar no fluxo de dados.
-- Conteúdo do SKILL.md (curto, operacional):
-  1. **Checklist root-cause** — `rg -n "<symbol>"` antes de editar; se 2+ callers, corrigir no compartilhado.
-  2. **Checklist reuse** — listar primitivas do projeto a checar antes de criar nova: hooks `src/hooks/`, componentes UI `src/components/ui/`, helpers `src/lib/`, edge functions `supabase/functions/`.
-  3. **Trace-before-fix** — para bugs de dados, escrever em 3 linhas: origem do valor, transformações intermediárias, sink onde aparece (ou deveria aparecer); só então editar.
-  4. **Anti-padrões** — não trocar placeholder/copy como "fix", não duplicar lógica de matching/normalização, não adicionar `useEffect` que sobrescreve estado sem checar quem mais escreve no mesmo campo.
-  5. **Mini caso de referência**: o loop recente do mapeamento PagCorp (Centro de Custo / Projeto / Item) como exemplo do que evitar.
-
-- Sem `scripts/` nem `references/` nesta primeira versão — manter <100 linhas, focado.
-
-## 3. Ativar a skill
-
-Rodar `skills--apply_draft` com `.agents/skills/lovable-debug-discipline`.
-
-## Fora de escopo
-
-- Não copiar arquivos da ponytail (licenciamento + não são lidos pelo Lovable).
-- Não criar benchmarks/self-tests (infra de avaliação de agente, não do ERP).
-- Nenhuma mudança em código de aplicação, banco, RLS ou edge functions.
+### 4. Memória do projeto
+- Atualizar `mem://features/permissions.md`: assignments são globais; remover menção a "per company_db".
 
 ## Detalhes técnicos
+- `OMIE open modules` continua valendo (early-return em `useModuleAccess`).
+- Admin de backoffice e SAP superuser continuam com todos os módulos.
+- Default (sem grupo) continua = `expenses`.
+- A coluna `company_db` permanece na tabela por compatibilidade, sempre `NULL`. Pode ser removida em migration futura após verificação.
 
-- Arquivos tocados: `mem://index.md` (edit), `.agents/skills/lovable-debug-discipline/SKILL.md` (novo).
-- Após `apply_draft`, a skill passa a viver em `.workspace/skills/lovable-debug-discipline/` e é surfaceada por retrieval quando a descrição bater com a tarefa.
+## Confirmação necessária
+1. Posso **consolidar automaticamente** os assignments atuais (união dos grupos do usuário entre empresas vira o conjunto global) ou prefere **zerar tudo** e reatribuir manualmente?
+2. Posso **dropar a coluna `company_db`** de `user_group_assignments` agora, ou prefere mantê-la como `NULL` por segurança?
