@@ -26,6 +26,7 @@ export default function SapUsersAdmin() {
   const [editForm, setEditForm] = useState({ UserName: "", eMail: "", UserPermission: "", UserPassword: "" });
   const [savingId, setSavingId] = useState<number | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [pwdUser, setPwdUser] = useState<SapAdminUser | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
