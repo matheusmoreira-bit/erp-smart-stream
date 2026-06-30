@@ -339,7 +339,16 @@ Deno.serve(async (req) => {
           });
         }
         const result = await sapRequest(session, `Users(${internalKey})`, "PATCH", safe);
-        if (!result.ok) throw new Error(extractSapError(result.data, `Falha ao atualizar usuário (${result.status})`));
+        if (!result.ok) {
+          const sapMsg = extractSapError(result.data, `Falha ao atualizar usuário (${result.status})`);
+          if (/OUSR\.PASSWORD/i.test(sapMsg) || /different from previous password/i.test(sapMsg)) {
+            return new Response(JSON.stringify({ error: "A nova senha deve ser diferente da senha atual do usuário." }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          throw new Error(sapMsg);
+        }
 
         await admin.rpc("insert_audit_log", {
           p_action: "sap_user_update",
