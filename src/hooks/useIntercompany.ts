@@ -278,5 +278,7 @@ export function useIntercompany() {
     replicateBusinessPartner,
     replicateItem,
     replicateUser,
+    replicateAccount,
+    replicateCostCenter,
   };
 }
