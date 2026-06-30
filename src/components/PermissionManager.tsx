@@ -7,8 +7,6 @@ import {
   Loader2,
   Users,
   Shield,
-  UserPlus,
-  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,12 +35,6 @@ import {
   type PermissionGroup,
 } from "@/hooks/usePermissions";
 
-interface Company {
-  company_db: string;
-  display_name: string;
-  erp_type: string;
-}
-
 interface SapCacheUser {
   UserCode: string;
   UserName: string;
@@ -66,8 +58,6 @@ function GroupDialog({
   const [desc, setDesc] = useState(group?.description || "");
   const [modules, setModules] = useState<string[]>(group?.modules || []);
   const [saving, setSaving] = useState(false);
-
-  const availableModules = ALL_MODULES;
 
   const toggle = (key: string) => {
     setModules((prev) =>
@@ -118,7 +108,7 @@ function GroupDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Módulos</label>
             <div className="grid grid-cols-2 gap-2">
-              {availableModules.map((mod) => (
+              {ALL_MODULES.map((mod) => (
                 <label
                   key={mod.key}
                   className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 cursor-pointer"
@@ -154,80 +144,49 @@ function GroupDialog({
 /* ── Main Component ── */
 
 export default function PermissionManager() {
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [selectedCompany, setSelectedCompany] = useState<string>("");
-  const [companiesLoading, setCompaniesLoading] = useState(true);
   const [userFilter, setUserFilter] = useState("");
-
-  const company = companies.find((c) => c.company_db === selectedCompany);
 
   const { groups, loading: groupsLoading, saveGroup, deleteGroup, ensureDefaultGroup } =
     usePermissionGroups();
-  const { assignments, loading: assignLoading, assign, remove } =
-    useUserAssignments(selectedCompany || undefined);
+  const { assignments, loading: assignLoading, assign, remove } = useUserAssignments();
 
   const [groupDialog, setGroupDialog] = useState(false);
   const [editingGroup, setEditingGroup] = useState<PermissionGroup | null>(null);
 
-  // SAP users from cache
+  // Aggregated SAP users from all companies' caches (deduped)
   const [sapUsers, setSapUsers] = useState<SapCacheUser[]>([]);
-  const [sapUsersLoading, setSapUsersLoading] = useState(false);
+  const [sapUsersLoading, setSapUsersLoading] = useState(true);
 
-  // Load companies
   useEffect(() => {
-    setCompaniesLoading(true);
-    supabase
-      .from("companies")
-      .select("company_db, display_name, erp_type")
-      .eq("is_active", true)
-      .order("display_name")
-      .then(({ data }) => {
-        setCompanies(
-          (data || []).map((c: any) => ({
-            company_db: c.company_db,
-            display_name: c.display_name,
-            erp_type: c.erp_type || "sap",
-          }))
-        );
-        setCompaniesLoading(false);
-      });
+    ensureDefaultGroup();
   }, []);
 
-  // Load SAP users from cache when company changes
   useEffect(() => {
-    if (!selectedCompany) {
-      setSapUsers([]);
-      return;
-    }
-
     setSapUsersLoading(true);
     supabase
       .from("sap_cache")
-      .select("data")
+      .select("data, updated_at, company_db")
       .eq("cache_key", "users")
-      .eq("company_db", selectedCompany)
       .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
       .then(({ data }) => {
-        if (data?.data && Array.isArray(data.data)) {
-          const users = (data.data as any[]).map((u) => ({
-            UserCode: u.UserCode || u.user_code || "",
-            UserName: u.UserName || u.u_name || "",
-            eMail: u.eMail || u.E_Mail || u.EMAIL || "",
-          }));
-          setSapUsers(users.filter((u) => u.UserCode || u.UserName));
-        } else {
-          setSapUsers([]);
+        const byKey = new Map<string, SapCacheUser>();
+        for (const row of data || []) {
+          if (!Array.isArray((row as any).data)) continue;
+          for (const u of (row as any).data as any[]) {
+            const user: SapCacheUser = {
+              UserCode: u.UserCode || u.user_code || "",
+              UserName: u.UserName || u.u_name || "",
+              eMail: u.eMail || u.E_Mail || u.EMAIL || "",
+            };
+            const key = (user.eMail || user.UserCode || "").toLowerCase();
+            if (!key) continue;
+            if (!byKey.has(key)) byKey.set(key, user);
+          }
         }
+        setSapUsers(Array.from(byKey.values()));
         setSapUsersLoading(false);
       });
-
-    // Ensure default group exists
-    if (selectedCompany) {
-      ensureDefaultGroup();
-    }
-  }, [selectedCompany]);
+  }, []);
 
   const openNewGroup = () => {
     setEditingGroup(null);
@@ -255,7 +214,7 @@ export default function PermissionManager() {
   };
 
   const handleAssignUser = async (userEmail: string, groupId: string) => {
-    await assign(userEmail, groupId, selectedCompany);
+    await assign(userEmail, groupId);
     toast.success("Permissão atualizada");
   };
 
@@ -282,210 +241,166 @@ export default function PermissionManager() {
       (a.UserName || a.UserCode).localeCompare(b.UserName || b.UserCode, "pt-BR", { sensitivity: "base" })
     );
 
-  const getErpBadge = (erp: string) => {
-    if (erp === "sap") return "SAP B1";
-    if (erp.startsWith("s4hana")) return "S/4HANA";
-    if (erp.startsWith("totvs")) return "TOTVS";
-    if (erp === "netsuite") return "NetSuite";
-    return erp.toUpperCase();
-  };
-
-  if (companiesLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      {/* Company Selector */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Building2 className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-semibold text-foreground">Permissões por Empresa</h3>
-        </div>
-        <Select value={selectedCompany} onValueChange={setSelectedCompany}>
-          <SelectTrigger className="w-[300px] bg-card">
-            <SelectValue placeholder="Selecione uma empresa" />
-          </SelectTrigger>
-          <SelectContent>
-            {companies.map((c) => (
-              <SelectItem key={c.company_db} value={c.company_db}>
-                <div className="flex items-center gap-2">
-                  <span>{c.display_name}</span>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                    {getErpBadge(c.erp_type)}
-                  </Badge>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center gap-2">
+        <Shield className="w-5 h-5 text-primary" />
+        <h3 className="text-lg font-semibold text-foreground">Permissões Globais</h3>
       </div>
+      <p className="text-xs text-muted-foreground -mt-4">
+        As permissões são unificadas: o grupo atribuído a um usuário vale para todas as empresas.
+      </p>
 
-      {!selectedCompany ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Building2 className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Selecione uma empresa para gerenciar permissões</p>
+      {/* Groups Section */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-semibold text-foreground">Grupos de Permissão</h3>
+          </div>
+          <Button size="sm" onClick={openNewGroup}>
+            <Plus className="w-4 h-4 mr-1" /> Novo Grupo
+          </Button>
         </div>
-      ) : (
-        <>
-          {/* Groups Section */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold text-foreground">Grupos de Permissão</h3>
-              </div>
-              <Button size="sm" onClick={openNewGroup}>
-                <Plus className="w-4 h-4 mr-1" /> Novo Grupo
-              </Button>
-            </div>
 
-            {groupsLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {groups.map((g) => {
-                  return (
-                    <div key={g.id} className="glass-card p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-foreground">{g.name}</p>
-                            {g.name === "Usuário" && (
-                              <Badge variant="secondary" className="text-[10px]">Padrão</Badge>
-                            )}
-                          </div>
-                          {g.description && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{g.description}</p>
-                          )}
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {g.modules.map((m) => {
-                              const mod = ALL_MODULES.find((am) => am.key === m);
-                              return (
-                                <Badge key={m} variant="secondary" className="text-[10px]">
-                                  {mod?.label || m}
-                                </Badge>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="icon" onClick={() => openEditGroup(g)}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        {g.name !== "Usuário" && (
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g)}>
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
+        {groupsLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {groups.map((g) => (
+              <div key={g.id} className="glass-card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-foreground">{g.name}</p>
+                      {g.name === "Usuário" && (
+                        <Badge variant="secondary" className="text-[10px]">Padrão</Badge>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          {/* Users Section */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold text-foreground">Usuários</h3>
-              </div>
-              <Input
-                placeholder="Filtrar usuários..."
-                value={userFilter}
-                onChange={(e) => setUserFilter(e.target.value)}
-                className="w-[260px] h-8 text-sm bg-card"
-              />
-            </div>
-
-            <p className="text-xs text-muted-foreground mb-3">
-              Usuários sem grupo atribuído possuem a permissão padrão <strong>Usuário</strong> (apenas despesas).
-            </p>
-
-            {sapUsersLoading || assignLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : sapUsers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                Nenhum usuário encontrado no cache. Faça login na empresa e atualize a lista de usuários.
-              </div>
-            ) : (
-              <div className="rounded-xl border border-border overflow-hidden bg-card">
-                <div className="grid grid-cols-[1fr_1fr_auto] items-center px-4 py-2.5 border-b border-border bg-muted/30">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Usuário</span>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Grupo</span>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-20 text-right">Ação</span>
+                    {g.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{g.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {g.modules.map((m) => {
+                        const mod = ALL_MODULES.find((am) => am.key === m);
+                        return (
+                          <Badge key={m} variant="secondary" className="text-[10px]">
+                            {mod?.label || m}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => openEditGroup(g)}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  {g.name !== "Usuário" && (
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g)}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  )}
                 </div>
-
-                {filteredSortedUsers.map((user) => {
-                  const email = user.eMail || user.UserCode;
-                  const currentGroup = getUserGroup(email);
-                  const assignment = assignments.find(
-                    (a) => a.sap_email.toLowerCase() === email.toLowerCase()
-                  );
-
-                  return (
-                    <div
-                      key={user.UserCode}
-                      className="grid grid-cols-[1fr_1fr_auto] items-center px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/20"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {user.UserName || user.UserCode}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{email}</p>
-                      </div>
-
-                      <div>
-                        <Select
-                          value={currentGroup?.id || defaultGroup?.id || ""}
-                          onValueChange={(groupId) => handleAssignUser(email, groupId)}
-                        >
-                          <SelectTrigger className="h-8 text-xs bg-card w-[200px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {groups.map((g) => (
-                              <SelectItem key={g.id} value={g.id}>
-                                {g.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="w-20 flex justify-end">
-                        {assignment && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            title="Remover atribuição (voltar ao padrão)"
-                            onClick={() => remove(assignment.id)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
-            )}
-          </section>
-        </>
-      )}
+            ))}
+          </div>
+        )}
+      </section>
 
-      {/* Dialogs */}
+      {/* Users Section */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-semibold text-foreground">Usuários</h3>
+          </div>
+          <Input
+            placeholder="Filtrar usuários..."
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
+            className="w-[260px] h-8 text-sm bg-card"
+          />
+        </div>
+
+        <p className="text-xs text-muted-foreground mb-3">
+          Usuários sem grupo atribuído possuem a permissão padrão <strong>Usuário</strong> (apenas despesas).
+          A atribuição vale para todas as empresas.
+        </p>
+
+        {sapUsersLoading || assignLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : sapUsers.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            Nenhum usuário encontrado no cache. Faça login em alguma empresa para popular a lista.
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border overflow-hidden bg-card">
+            <div className="grid grid-cols-[1fr_1fr_auto] items-center px-4 py-2.5 border-b border-border bg-muted/30">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Usuário</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Grupo</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-20 text-right">Ação</span>
+            </div>
+
+            {filteredSortedUsers.map((user) => {
+              const email = user.eMail || user.UserCode;
+              const currentGroup = getUserGroup(email);
+              const assignment = assignments.find(
+                (a) => a.sap_email.toLowerCase() === email.toLowerCase()
+              );
+
+              return (
+                <div
+                  key={(user.eMail || user.UserCode).toLowerCase()}
+                  className="grid grid-cols-[1fr_1fr_auto] items-center px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/20"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {user.UserName || user.UserCode}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{email}</p>
+                  </div>
+
+                  <div>
+                    <Select
+                      value={currentGroup?.id || defaultGroup?.id || ""}
+                      onValueChange={(groupId) => handleAssignUser(email, groupId)}
+                    >
+                      <SelectTrigger className="h-8 text-xs bg-card w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {groups.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="w-20 flex justify-end">
+                    {assignment && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Remover atribuição (voltar ao padrão)"
+                        onClick={() => remove(assignment.id)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       <GroupDialog
         open={groupDialog}
         onOpenChange={setGroupDialog}
