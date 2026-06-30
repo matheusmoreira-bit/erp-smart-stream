@@ -36,6 +36,10 @@ export function useAuditRun(id: string | undefined) {
   return useQuery({
     queryKey: ["audit-console", "run", id],
     enabled: !!id && !!companyDB,
+    refetchInterval: (q) => {
+      const status = (q.state.data as AuditRun | null | undefined)?.status;
+      return status === "pending" || status === "running" ? 2500 : false;
+    },
     queryFn: async (): Promise<AuditRun | null> => {
       const { data, error } = await supabase
         .from("audit_console_runs")
