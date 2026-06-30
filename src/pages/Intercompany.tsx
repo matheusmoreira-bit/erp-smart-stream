@@ -619,7 +619,7 @@ function ConsolidatedTable({
   search: string;
   onResolveConflict?: (code: string, names: string[]) => void;
   onToggleActive?: (code: string, companyDb: string, nextActive: boolean) => Promise<void> | void;
-  onReplicate?: (code: string, name: string, companyDb: string) => Promise<void> | void;
+  onReplicate?: (code: string, name: string, companyDb: string, sourceCompanyDb: string) => Promise<void> | void;
   readOnly?: boolean;
 }) {
   const [pending, setPending] = useState<string | null>(null);
@@ -721,7 +721,8 @@ function ConsolidatedTable({
                     const replicateKey = `${row.code}::${c.db}::replicate`;
                     const isReplicating = pending === replicateKey;
                     const sourceName = names[0];
-                    const canReplicate = !!onReplicate && !!sourceName;
+                    const sourceCompanyDb = Array.from(row.presence.keys())[0];
+                    const canReplicate = !!onReplicate && !!sourceName && !!sourceCompanyDb;
                     return (
                       <TableCell key={c.db} className="text-center">
                         {canReplicate ? (
@@ -732,7 +733,7 @@ function ConsolidatedTable({
                               if (!onReplicate) return;
                               setPending(replicateKey);
                               try {
-                                await onReplicate(row.code, sourceName, c.db);
+                                await onReplicate(row.code, sourceName, c.db, sourceCompanyDb);
                               } finally {
                                 setPending(null);
                               }
@@ -845,6 +846,8 @@ export default function Intercompany() {
     replicateBusinessPartner,
     replicateItem,
     replicateUser,
+    replicateAccount,
+    replicateCostCenter,
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = useMemo(
@@ -1172,12 +1175,12 @@ export default function Intercompany() {
                       toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
                     }
                   }}
-                  onReplicate={async (code, name, companyDb) => {
+                  onReplicate={async (code, _name, companyDb, sourceCompanyDb) => {
                     try {
-                      const { results } = await createAccount({
+                      const { results } = await replicateAccount({
                         code,
-                        name,
-                        company_dbs: [companyDb],
+                        source_company_db: sourceCompanyDb,
+                        target_company_db: companyDb,
                       });
                       const r = results[0];
                       if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
@@ -1219,12 +1222,12 @@ export default function Intercompany() {
                       toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
                     }
                   }}
-                  onReplicate={async (code, name, companyDb) => {
+                  onReplicate={async (code, _name, companyDb, sourceCompanyDb) => {
                     try {
-                      const { results } = await createCostCenter({
-                        center_code: code,
-                        center_name: name,
-                        company_dbs: [companyDb],
+                      const { results } = await replicateCostCenter({
+                        code,
+                        source_company_db: sourceCompanyDb,
+                        target_company_db: companyDb,
                       });
                       const r = results[0];
                       if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
