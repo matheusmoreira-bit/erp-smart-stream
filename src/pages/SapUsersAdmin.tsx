@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "sonner";
 import { useSapUsersAdmin, type SapAdminUser } from "@/hooks/useSapUsersAdmin";
 import { PageTitle } from "@/components/PageTitle";
+import { BackofficeChangePasswordDialog } from "@/components/BackofficeChangePasswordDialog";
 
 export default function SapUsersAdmin() {
   const navigate = useNavigate();
