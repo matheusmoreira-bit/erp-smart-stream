@@ -110,7 +110,7 @@ export async function changePasswordInCompanies(
         results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Usuário não existe nesta empresa" });
       } else {
         try {
-          await sapAction(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword });
+          await sapAction(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword, Locked: "tNO" });
           results.push({ companyDB: companyDb, displayName, status: "success" });
         } catch (e) {
           const msg = e instanceof Error ? e.message : "Erro ao alterar senha";
