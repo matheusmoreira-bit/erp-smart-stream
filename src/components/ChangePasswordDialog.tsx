@@ -43,7 +43,8 @@ export function ChangePasswordDialog() {
   const reset = () => {
     setNewPassword("");
     setConfirmPassword("");
-    setSelected(new Set());
+    setSelected(new Set(otherCompanies.map((o) => o.company_db)));
+    setApplyAll(true);
     setSummary(null);
   };
 
