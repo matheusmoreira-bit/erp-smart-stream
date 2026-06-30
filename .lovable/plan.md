@@ -1,54 +1,44 @@
-# Fallback e mensagem de UI para mapeamento de cartão ausente
+# Aplicar princípios da ponytail neste projeto
 
-## Objetivo
-Quando o usuário abrir "Integrar Prestação de Conta" para uma transação PagCorp e não houver mapeamento (específico do cartão nem fallback da empresa) para Centro de Custo, Projeto ou Item, deixar claro na interface o que aconteceu e oferecer atalho para criar o mapeamento.
+Objetivo: materializar 3 princípios (root-cause first, reuse first, trace-before-fix) como (a) regras sempre em contexto no `mem://index.md` e (b) uma skill operacional com checklist, exemplos e gatilhos de retrieval.
 
-## Comportamento
+## 1. Atualizar `mem://index.md` (Core sempre em contexto)
 
-1. Ao abrir o modal de integração com `origin === "pagcorp"`:
-   - Resolver o mapeamento via `usePagCorpCardMapping.resolve({ cardLastDigits, cardName })`.
-   - Calcular o estado do mapeamento:
-     - `none` — nenhum mapeamento (nem cartão, nem fallback).
-     - `partial` — algum campo (CC, Projeto ou Item) está sem valor no mapeamento aplicado.
-     - `full` — todos os três campos vieram preenchidos.
+Adicionar 3 linhas curtas na seção **Core**:
 
-2. Banner no topo do modal (logo abaixo do título), só para `origin === "pagcorp"`:
-   - `full` + `source = "card"`: banner verde discreto — "Mapeamento do cartão aplicado (CC, Projeto e Item)".
-   - `full` + `source = "fallback"`: banner âmbar discreto — "Aplicado o fallback da empresa. Crie um mapeamento específico para este cartão se desejar."
-   - `partial`: banner âmbar listando os campos faltantes — "Mapeamento incompleto: faltando [Centro de Custo, Item]. Preencha manualmente ou edite o mapeamento."
-   - `none`: banner âmbar — "Nenhum mapeamento encontrado para este cartão e não há fallback configurado. Preencha CC, Projeto e Item manualmente."
-   - Todos os banners (exceto `full+card`) trazem um link "Abrir mapeamento" que abre `/cartoes/mapeamento` em nova aba já filtrado pelo cartão atual (via query `?card=<identifier>`).
+- Root-cause first: antes de editar uma função, `rg` os callers e corrigir no ponto compartilhado, não no sintoma local.
+- Reuse first: antes de criar helper/componente, procurar similar existente (`useSapCachedList`, `CachedSearchCombobox`, `sapFunctionFetch`, `Alert`, `usePagCorpCardMapping` etc.).
+- Trace-before-fix: em bug de "valor não chega em X", mapear origem→sink (página → hook → edge function → modal) antes de editar.
 
-3. Comportamento de fallback nos campos:
-   - Campos sem valor do mapeamento permanecem vazios e exibem `placeholder` explícito: "Sem mapeamento — selecione manualmente".
-   - A validação atual (CC obrigatório por item) continua barrando o envio, então o usuário é forçado a escolher antes de integrar.
-   - Adicionar `aria-invalid` quando o campo estiver vazio e o usuário tentar salvar, para destacar visualmente.
+Adicionar uma linha em **Memories** apontando para a skill.
 
-4. Tela de Mapeamento (`PagCorpMapping.tsx`):
-   - Ler `?card=<identifier>` na URL e, se presente, abrir o formulário de novo mapeamento já com o `card_identifier` preenchido e dar scroll/foco nele.
+## 2. Criar skill `.agents/skills/lovable-debug-discipline/`
+
+Arquivos:
+
+- `SKILL.md` com frontmatter:
+  - `name: lovable-debug-discipline`
+  - `description`: dispara em pedidos de correção de bug, "ainda não funciona", loops de fix, refactors em hooks/edge functions e qualquer tarefa onde o sintoma é em UI mas a causa pode estar no fluxo de dados.
+- Conteúdo do SKILL.md (curto, operacional):
+  1. **Checklist root-cause** — `rg -n "<symbol>"` antes de editar; se 2+ callers, corrigir no compartilhado.
+  2. **Checklist reuse** — listar primitivas do projeto a checar antes de criar nova: hooks `src/hooks/`, componentes UI `src/components/ui/`, helpers `src/lib/`, edge functions `supabase/functions/`.
+  3. **Trace-before-fix** — para bugs de dados, escrever em 3 linhas: origem do valor, transformações intermediárias, sink onde aparece (ou deveria aparecer); só então editar.
+  4. **Anti-padrões** — não trocar placeholder/copy como "fix", não duplicar lógica de matching/normalização, não adicionar `useEffect` que sobrescreve estado sem checar quem mais escreve no mesmo campo.
+  5. **Mini caso de referência**: o loop recente do mapeamento PagCorp (Centro de Custo / Projeto / Item) como exemplo do que evitar.
+
+- Sem `scripts/` nem `references/` nesta primeira versão — manter <100 linhas, focado.
+
+## 3. Ativar a skill
+
+Rodar `skills--apply_draft` com `.agents/skills/lovable-debug-discipline`.
+
+## Fora de escopo
+
+- Não copiar arquivos da ponytail (licenciamento + não são lidos pelo Lovable).
+- Não criar benchmarks/self-tests (infra de avaliação de agente, não do ERP).
+- Nenhuma mudança em código de aplicação, banco, RLS ou edge functions.
 
 ## Detalhes técnicos
 
-Arquivos afetados:
-
-- `src/components/CreateExpenseModal.tsx`
-  - Após `resolveCardMapping(...)`, guardar um `mappingStatus` em estado (`none | partial | full`), `missingFields: string[]` e `source`.
-  - Renderizar um componente `<CardMappingBanner />` (novo, inline ou em `src/components/PagCorpCardMappingBanner.tsx`) condicional a `origin === "pagcorp"`.
-  - Manter o effect atual que aplica defaults; só não definir os campos faltantes (já é o caso). Garantir que o placeholder dos `CachedSearchCombobox` reflita o estado quando vazio (prop `placeholder`).
-  - Link "Abrir mapeamento" usa `window.open(`/cartoes/mapeamento?card=${encodeURIComponent(prefill.cardLastDigits || prefill.cardName || "")}`, "_blank")`.
-
-- `src/components/PagCorpCardMappingBanner.tsx` (novo)
-  - Props: `status`, `source`, `missingFields`, `cardKey`.
-  - Usa `Alert` do shadcn com variantes semânticas (`bg-amber-50 text-amber-900 border-amber-200` ou tokens equivalentes do projeto).
-
-- `src/pages/PagCorpMapping.tsx`
-  - `useSearchParams()` para ler `card`. Se presente e ainda não houver mapeamento para ele, pré-preencher o formulário de criação e dar `scrollIntoView`.
-
-- `src/hooks/usePagCorpCardMapping.ts`
-  - Sem mudança de schema. Opcional: expor um helper `describe(tx)` que retorna `{ resolved, status, missingFields, source }` para evitar duplicar a lógica no modal.
-
-Sem mudanças de banco de dados, RLS ou edge functions.
-
-## Fora de escopo
-- Criar mapeamento direto do banner (continuamos abrindo a tela dedicada).
-- Auto-criar mapeamento "rascunho" quando o usuário salvar a integração manualmente.
+- Arquivos tocados: `mem://index.md` (edit), `.agents/skills/lovable-debug-discipline/SKILL.md` (novo).
+- Após `apply_draft`, a skill passa a viver em `.workspace/skills/lovable-debug-discipline/` e é surfaceada por retrieval quando a descrição bater com a tarefa.
