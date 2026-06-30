@@ -360,23 +360,27 @@ export default function Suppliers() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
-          <Button
-            variant="outline"
-            onClick={handleBulkSync}
-            disabled={bulkBusy || pendingCount === 0 || !session}
-            className="gap-2"
-          >
-            {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
-          </Button>
-          <Button variant="outline" onClick={() => navigate("/cadastros/fornecedores/importar-cartoes")} className="gap-2">
-            <Sparkles className="w-4 h-4" />
-            Importar do PagCorp
-          </Button>
-          <Button onClick={() => setCreating(true)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Novo Fornecedor
-          </Button>
+          {canWrite && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleBulkSync}
+                disabled={bulkBusy || pendingCount === 0 || !session}
+                className="gap-2"
+              >
+                {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/cadastros/fornecedores/importar-cartoes")} className="gap-2">
+                <Sparkles className="w-4 h-4" />
+                Importar do PagCorp
+              </Button>
+              <Button onClick={() => setCreating(true)} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Novo Fornecedor
+              </Button>
+            </>
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-2 max-w-7xl mx-auto">
           SAP+local: {suppliers.length} · Locais pendentes: {pending.length} · Exibindo: {filtered.length}
