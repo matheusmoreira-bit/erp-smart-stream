@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "sonner";
 import { useSapUsersAdmin, type SapAdminUser } from "@/hooks/useSapUsersAdmin";
 import { PageTitle } from "@/components/PageTitle";
+import { BackofficeChangePasswordDialog } from "@/components/BackofficeChangePasswordDialog";
 
 export default function SapUsersAdmin() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function SapUsersAdmin() {
   const [editForm, setEditForm] = useState({ UserName: "", eMail: "", UserPermission: "", UserPassword: "" });
   const [savingId, setSavingId] = useState<number | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [pwdUser, setPwdUser] = useState<SapAdminUser | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -58,18 +60,8 @@ export default function SapUsersAdmin() {
     }
   };
 
-  const handleResetPassword = async (u: SapAdminUser) => {
-    const pwd = prompt(`Nova senha para ${u.UserCode}:`);
-    if (!pwd) return;
-    setSavingId(u.InternalKey);
-    try {
-      await updateUser(u.InternalKey, { UserPassword: pwd });
-      toast.success("Senha redefinida");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao redefinir senha");
-    } finally {
-      setSavingId(null);
-    }
+  const handleResetPassword = (u: SapAdminUser) => {
+    setPwdUser(u);
   };
 
   const handleSaveEdit = async () => {
@@ -239,6 +231,18 @@ export default function SapUsersAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {pwdUser && (
+        <BackofficeChangePasswordDialog
+          open={!!pwdUser}
+          onOpenChange={(v) => { if (!v) setPwdUser(null); }}
+          userCode={pwdUser.UserCode}
+          userName={pwdUser.UserName || undefined}
+          currentCompanyDb={companyDb}
+          currentCompanyName={companies.find((c) => c.company_db === companyDb)?.display_name}
+          onDone={refresh}
+        />
+      )}
     </div>
   );
 }
