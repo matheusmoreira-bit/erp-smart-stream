@@ -619,7 +619,7 @@ function ConsolidatedTable({
   search: string;
   onResolveConflict?: (code: string, names: string[]) => void;
   onToggleActive?: (code: string, companyDb: string, nextActive: boolean) => Promise<void> | void;
-  onReplicate?: (code: string, name: string, companyDb: string) => Promise<void> | void;
+  onReplicate?: (code: string, name: string, companyDb: string, sourceCompanyDb: string) => Promise<void> | void;
   readOnly?: boolean;
 }) {
   const [pending, setPending] = useState<string | null>(null);
