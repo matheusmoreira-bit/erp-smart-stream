@@ -330,12 +330,12 @@ export function MainMenu() {
                     {group.title}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {groupModules.map((mod, i) => (
+                    {visible.map((mod, i) => (
                       <ModuleCardItem
                         key={`${group.title}-${mod.title}`}
                         mod={mod}
                         index={i}
-                        hasAccess={permLoading || moduleHasAccess(mod, userModules)}
+                        hasAccess={true}
                       />
                     ))}
                   </div>

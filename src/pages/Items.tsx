@@ -38,6 +38,7 @@ import { ItemFormModal } from "@/components/ItemFormModal";
 import { NewItemWizardDialog } from "@/components/NewItemWizardDialog";
 import { parseSapError } from "@/lib/sap-error";
 import { PageTitle } from "@/components/PageTitle";
+import { useModuleAccess } from "@/hooks/usePermissions";
 
 type PendingVariante = {
   id: string;
@@ -92,6 +93,7 @@ function StatusBadge({ s }: { s: SapItem }) {
 export default function Items() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
+  const { hasAccess: canWrite } = useModuleAccess("items_write");
   const { items, isLoading, refresh, setRowOverlay } = useItems(session?.companyDB);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
@@ -345,19 +347,23 @@ export default function Items() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
-          <Button
-            variant="outline"
-            onClick={handleBulkSync}
-            disabled={bulkBusy || pendingCount === 0 || !session}
-            className="gap-2"
-          >
-            {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
-          </Button>
-          <Button onClick={() => setCreating(true)} className="gap-2" disabled={!session}>
-            <Plus className="w-4 h-4" />
-            Novo Item
-          </Button>
+          {canWrite && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleBulkSync}
+                disabled={bulkBusy || pendingCount === 0 || !session}
+                className="gap-2"
+              >
+                {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
+              </Button>
+              <Button onClick={() => setCreating(true)} className="gap-2" disabled={!session}>
+                <Plus className="w-4 h-4" />
+                Novo Item
+              </Button>
+            </>
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-2 max-w-7xl mx-auto">
           SAP: {items.length} · Locais pendentes: {pending.length} · Exibindo: {filtered.length}
@@ -399,7 +405,7 @@ export default function Items() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex gap-1">
-                          {canSync && (
+                          {canSync && canWrite && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -419,7 +425,7 @@ export default function Items() {
                               <TooltipContent>Enviar ao SAP</TooltipContent>
                             </Tooltip>
                           )}
-                          {!isLocal && (
+                          {!isLocal && canWrite && (
                             <>
                               <Tooltip>
                                 <TooltipTrigger asChild>

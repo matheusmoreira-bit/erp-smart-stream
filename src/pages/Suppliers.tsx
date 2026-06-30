@@ -44,6 +44,7 @@ import { SupplierFormModal } from "@/components/SupplierFormModal";
 import { NewFornecedorDialog } from "@/components/NewFornecedorDialog";
 import { syncFornecedorToSap } from "@/lib/promote-fornecedor";
 import { PageTitle } from "@/components/PageTitle";
+import { useModuleAccess } from "@/hooks/usePermissions";
 
 type PendingFornecedor = {
   kind: "fornecedor";
@@ -101,6 +102,7 @@ function StatusBadge({ s }: { s: Supplier }) {
 export default function Suppliers() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
+  const { hasAccess: canWrite } = useModuleAccess("suppliers_write");
   const { suppliers, isLoading, refresh } = useSuppliers(session?.companyDB);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
@@ -358,23 +360,27 @@ export default function Suppliers() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
-          <Button
-            variant="outline"
-            onClick={handleBulkSync}
-            disabled={bulkBusy || pendingCount === 0 || !session}
-            className="gap-2"
-          >
-            {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
-          </Button>
-          <Button variant="outline" onClick={() => navigate("/cadastros/fornecedores/importar-cartoes")} className="gap-2">
-            <Sparkles className="w-4 h-4" />
-            Importar do PagCorp
-          </Button>
-          <Button onClick={() => setCreating(true)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Novo Fornecedor
-          </Button>
+          {canWrite && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleBulkSync}
+                disabled={bulkBusy || pendingCount === 0 || !session}
+                className="gap-2"
+              >
+                {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/cadastros/fornecedores/importar-cartoes")} className="gap-2">
+                <Sparkles className="w-4 h-4" />
+                Importar do PagCorp
+              </Button>
+              <Button onClick={() => setCreating(true)} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Novo Fornecedor
+              </Button>
+            </>
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-2 max-w-7xl mx-auto">
           SAP+local: {suppliers.length} · Locais pendentes: {pending.length} · Exibindo: {filtered.length}
@@ -439,7 +445,7 @@ export default function Suppliers() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex gap-1">
-                          {canSync && (
+                          {canSync && canWrite && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -459,7 +465,7 @@ export default function Suppliers() {
                               <TooltipContent>Enviar ao SAP</TooltipContent>
                             </Tooltip>
                           )}
-                          {!isLocalPending && (
+                          {!isLocalPending && canWrite && (
                             <>
                               <Tooltip>
                                 <TooltipTrigger asChild>
