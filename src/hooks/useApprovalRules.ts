@@ -131,18 +131,25 @@ export function useApprovalRules() {
       const ruleIds = (data || []).map((r: any) => r.id);
       let levelsMap: Record<string, ApprovalRuleLevel[]> = {};
       if (ruleIds.length > 0) {
-        const { data: levels } = await supabase
-          .from("approval_rule_levels")
-          .select("*")
-          .in("rule_id", ruleIds)
-          .order("level_order", { ascending: true });
-        if (levels) {
-          for (const lvl of levels as any[]) {
-            if (!levelsMap[lvl.rule_id]) levelsMap[lvl.rule_id] = [];
-            levelsMap[lvl.rule_id].push(lvl);
+        // Chunk the .in() query to avoid URL length limits when there are many rules
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < ruleIds.length; i += CHUNK_SIZE) {
+          const chunk = ruleIds.slice(i, i + CHUNK_SIZE);
+          const { data: levels, error: lvlErr } = await supabase
+            .from("approval_rule_levels")
+            .select("*")
+            .in("rule_id", chunk)
+            .order("level_order", { ascending: true });
+          if (lvlErr) throw lvlErr;
+          if (levels) {
+            for (const lvl of levels as any[]) {
+              if (!levelsMap[lvl.rule_id]) levelsMap[lvl.rule_id] = [];
+              levelsMap[lvl.rule_id].push(lvl);
+            }
           }
         }
       }
+
 
       setRules(
         (data || []).map((r: any) => ({
