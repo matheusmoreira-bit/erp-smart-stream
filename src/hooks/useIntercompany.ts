@@ -210,6 +210,26 @@ export function useIntercompany() {
     [],
   );
 
+  const replicateAccount = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-account",
+        ...input,
+      });
+    },
+    [],
+  );
+
+  const replicateCostCenter = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-cost-center",
+        ...input,
+      });
+    },
+    [],
+  );
+
   const loadUsers = useCallback(async (company_dbs?: string[]) => {
     setLoadingUsers(true);
     try {
