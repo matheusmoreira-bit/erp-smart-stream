@@ -231,6 +231,18 @@ export default function SapUsersAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {pwdUser && (
+        <BackofficeChangePasswordDialog
+          open={!!pwdUser}
+          onOpenChange={(v) => { if (!v) setPwdUser(null); }}
+          userCode={pwdUser.UserCode}
+          userName={pwdUser.UserName || undefined}
+          currentCompanyDb={companyDb}
+          currentCompanyName={companies.find((c) => c.company_db === companyDb)?.display_name}
+          onDone={refresh}
+        />
+      )}
     </div>
   );
 }
