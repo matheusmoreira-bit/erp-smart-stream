@@ -102,6 +102,7 @@ function StatusBadge({ s }: { s: Supplier }) {
 export default function Suppliers() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
+  const { hasAccess: canWrite } = useModuleAccess("suppliers_write");
   const { suppliers, isLoading, refresh } = useSuppliers(session?.companyDB);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");

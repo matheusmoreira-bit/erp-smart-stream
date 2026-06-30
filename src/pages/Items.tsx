@@ -93,6 +93,7 @@ function StatusBadge({ s }: { s: SapItem }) {
 export default function Items() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
+  const { hasAccess: canWrite } = useModuleAccess("items_write");
   const { items, isLoading, refresh, setRowOverlay } = useItems(session?.companyDB);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
