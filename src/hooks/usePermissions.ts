@@ -244,17 +244,10 @@ export function useModuleAccess(moduleKey?: string) {
         return;
       }
 
-      // Get assignments for this user filtered by current company
-      let query = supabase
+      // Global assignments: one row per (sap_email, group_id), independent of company.
+      const { data: allAssignments } = await supabase
         .from("user_group_assignments")
-        .select("group_id, sap_email, company_db");
-
-      if (companyDB) {
-        // Get assignments for this specific company OR global (null company_db)
-        query = query.or(`company_db.eq.${companyDB},company_db.is.null`);
-      }
-
-      const { data: allAssignments } = await query;
+        .select("group_id, sap_email");
 
       const assignments = (allAssignments || []).filter((a: any) => {
         const sapEmail = a.sap_email.toLowerCase();
