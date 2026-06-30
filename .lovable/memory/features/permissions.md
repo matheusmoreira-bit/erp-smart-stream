@@ -1,16 +1,16 @@
 ---
 name: Permission System
-description: Unified permission groups with module-level access control, per-company user assignments, backoffice admin = all access
+description: Unified GLOBAL permission groups with module-level access control; one group per user, valid across all companies; backoffice admin = all access
 type: feature
 ---
 
 ## Tables
-- permission_groups: name, description (shared across all companies/ERPs)
+- permission_groups: name, description (global)
 - permission_group_modules: group_id + module_key (many-to-many)
-- user_group_assignments: sap_email + group_id + company_db (per-company)
+- user_group_assignments: sap_email + group_id (GLOBAL — company_db always NULL; unique on (sap_email, group_id))
 
 ## Module Keys (unified, same for all ERPs)
-analytics, analytics_payments, expenses, approvals, approval_rules, pagcorp, users, synapse, credentials, audit_log
+analytics, analytics_payments, expenses, approvals, approval_rules, pagcorp, users, synapse, credentials, audit_log, ...
 
 ## Default Access (no group assigned)
 - expenses only
@@ -19,16 +19,15 @@ analytics, analytics_payments, expenses, approvals, approval_rules, pagcorp, use
 - Usuário: expenses only
 
 ## Rules
-- Permission groups are global (not ERP-specific)
-- User assignments are per company_db
+- Permission groups are global (not ERP-specific, not company-specific)
+- User assignments are GLOBAL — one group per sap_email, valid across all companies
 - Backoffice admin (user_roles.role = 'admin') gets ALL modules in ALL companies
 - SAP superuser gets ALL modules
-- Assignments filter by company_db OR null (global)
+- OMIE companies bypass checks (see omie-open-modules)
 
 ## Guards
 - MainMenu: shows lock icon on inaccessible modules, disables navigation
-- Analytics: hides "Análise de Pagamentos" tab unless user has analytics_payments
-- Admin panel: "Permissões" tab for managing groups and user assignments
+- Admin panel "Permissões" tab: single global view (no company selector); SAP users aggregated/deduped from all sap_cache rows
 
 ## Hook: useModuleAccess(moduleKey?)
-Returns { hasAccess, loading, userModules } based on current SAP session email + companyDB
+Returns { hasAccess, loading, userModules } based on current SAP session email — looks up global assignment, no company filter.
