@@ -347,19 +347,23 @@ export default function Items() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
-          <Button
-            variant="outline"
-            onClick={handleBulkSync}
-            disabled={bulkBusy || pendingCount === 0 || !session}
-            className="gap-2"
-          >
-            {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
-          </Button>
-          <Button onClick={() => setCreating(true)} className="gap-2" disabled={!session}>
-            <Plus className="w-4 h-4" />
-            Novo Item
-          </Button>
+          {canWrite && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleBulkSync}
+                disabled={bulkBusy || pendingCount === 0 || !session}
+                className="gap-2"
+              >
+                {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
+              </Button>
+              <Button onClick={() => setCreating(true)} className="gap-2" disabled={!session}>
+                <Plus className="w-4 h-4" />
+                Novo Item
+              </Button>
+            </>
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-2 max-w-7xl mx-auto">
           SAP: {items.length} · Locais pendentes: {pending.length} · Exibindo: {filtered.length}
