@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import type { Database } from "@/integrations/supabase/types";
@@ -8,6 +8,7 @@ export type AuditDivergence = Database["public"]["Tables"]["audit_console_diverg
 export type AuditInsight = Database["public"]["Tables"]["audit_console_insights"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_console_logs"]["Row"];
 export type AuditRule = Database["public"]["Tables"]["audit_console_rules"]["Row"];
+export type AuditDocument = Database["public"]["Tables"]["audit_console_documents"]["Row"];
 
 export function useAuditRuns(limit = 50) {
   const { session } = useSap();
