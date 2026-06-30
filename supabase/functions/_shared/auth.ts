@@ -118,7 +118,14 @@ async function validateSapAdmin(req: Request) {
   const routeId = req.headers.get("x-sap-route")?.trim() || "";
   const sapUser = req.headers.get("x-sap-user")?.trim();
   const companyDB = req.headers.get("x-company-db")?.trim();
-  if (!sapSession || !sapUser || !companyDB) return null;
+  if (!sapSession || !sapUser || !companyDB) {
+    console.warn("[validateSapAdmin] missing SAP headers", {
+      hasSession: !!sapSession,
+      hasUser: !!sapUser,
+      hasCompanyDB: !!companyDB,
+    });
+    return null;
+  }
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -140,11 +147,29 @@ async function validateSapAdmin(req: Request) {
     `${baseUrl}/Users?${params.toString()}`,
     { headers: { Cookie: `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}` } },
   );
-  if (!sapResp.ok) return null;
+  if (!sapResp.ok) {
+    const t = await sapResp.text().catch(() => "");
+    console.warn("[validateSapAdmin] SAP Users probe failed", {
+      status: sapResp.status,
+      companyDB,
+      sapUser,
+      body: t.slice(0, 200),
+    });
+    return null;
+  }
 
   const payload = await sapResp.json().catch(() => null) as { value?: { Superuser?: string }[] } | null;
   const isSapSuperUser = payload?.value?.some((row) => row.Superuser === "tYES") === true;
-  if (!isManager && !isSapSuperUser && isAdminByMapping !== true) return null;
+  if (!isManager && !isSapSuperUser && isAdminByMapping !== true) {
+    console.warn("[validateSapAdmin] user is not admin", {
+      sapUser,
+      companyDB,
+      isManager,
+      isSapSuperUser,
+      isAdminByMapping,
+    });
+    return null;
+  }
 
   return { id: `sap:${companyDB}:${sapUser}`, email: sapUser, companyDB, userName: sapUser, source: "sap_admin" as const };
 }
