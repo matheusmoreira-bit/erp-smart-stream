@@ -152,13 +152,20 @@ async function sapPost(
     headers: { "Content-Type": "application/json", Cookie: cookies },
     body: JSON.stringify(body),
   });
-  const data = await resp.json().catch(() => ({}));
+  const raw = await resp.text().catch(() => "");
+  let data: any = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { /* keep raw */ }
   if (!resp.ok) {
-    const msg = (data as any)?.error?.message?.value || `HTTP ${resp.status}`;
+    const sapMsg = data?.error?.message?.value || data?.error?.message || "";
+    const msg = sapMsg
+      ? `SAP ${endpoint}: ${sapMsg}`
+      : `SAP ${endpoint} HTTP ${resp.status}: ${raw.slice(0, 400)}`;
+    console.warn("[sapPost] error", { endpoint, status: resp.status, body, raw: raw.slice(0, 400) });
     return { ok: false, error: msg };
   }
   return { ok: true, data };
 }
+
 
 async function sapPatch(
   baseUrl: string,
