@@ -16,6 +16,7 @@ export function useAuditRuns(limit = 50) {
   return useQuery({
     queryKey: ["audit-console", "runs", companyDB, limit],
     enabled: !!companyDB,
+    refetchInterval: 5000,
     queryFn: async (): Promise<AuditRun[]> => {
       const { data, error } = await supabase
         .from("audit_console_runs")
