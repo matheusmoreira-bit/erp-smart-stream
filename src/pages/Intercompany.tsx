@@ -1175,12 +1175,12 @@ export default function Intercompany() {
                       toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
                     }
                   }}
-                  onReplicate={async (code, name, companyDb) => {
+                  onReplicate={async (code, _name, companyDb, sourceCompanyDb) => {
                     try {
-                      const { results } = await createAccount({
+                      const { results } = await replicateAccount({
                         code,
-                        name,
-                        company_dbs: [companyDb],
+                        source_company_db: sourceCompanyDb,
+                        target_company_db: companyDb,
                       });
                       const r = results[0];
                       if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
