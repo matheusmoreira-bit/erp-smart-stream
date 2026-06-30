@@ -445,7 +445,7 @@ export default function Suppliers() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex gap-1">
-                          {canSync && (
+                          {canSync && canWrite && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -465,7 +465,7 @@ export default function Suppliers() {
                               <TooltipContent>Enviar ao SAP</TooltipContent>
                             </Tooltip>
                           )}
-                          {!isLocalPending && (
+                          {!isLocalPending && canWrite && (
                             <>
                               <Tooltip>
                                 <TooltipTrigger asChild>
