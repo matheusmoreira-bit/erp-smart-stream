@@ -28,12 +28,15 @@ export function ChangePasswordDialog() {
   const [loading, setLoading] = useState(false);
   const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [applyAll, setApplyAll] = useState(true);
   const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
 
   useEffect(() => {
     if (!open || !session) return;
     listSapTargetCompanies(session.companyDB).then((cs) => {
-      setOtherCompanies(cs.map((c) => ({ company_db: c.company_db, display_name: c.display_name })));
+      const opts = cs.map((c) => ({ company_db: c.company_db, display_name: c.display_name }));
+      setOtherCompanies(opts);
+      setSelected(new Set(opts.map((o) => o.company_db)));
     });
   }, [open, session]);
 
