@@ -209,22 +209,35 @@ export function ChangePasswordDialog() {
 
             {otherCompanies.length > 0 && (
               <div className="space-y-2 pt-2 border-t border-border">
-                <Label className="text-sm">Aplicar também em outras empresas</Label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <Checkbox
+                    checked={applyAll}
+                    onCheckedChange={(v) => {
+                      const checked = v === true;
+                      setApplyAll(checked);
+                      setSelected(checked ? new Set(otherCompanies.map((o) => o.company_db)) : new Set());
+                    }}
+                  />
+                  <span className="text-foreground font-medium">Aplicar em todas as empresas</span>
+                </label>
                 <p className="text-xs text-muted-foreground">
-                  A nova senha será aplicada ao usuário <span className="font-medium text-foreground">{session.userName}</span> em cada empresa selecionada (caso exista). Empresas onde a senha já for igual à atual serão ignoradas automaticamente.
+                  A nova senha será aplicada ao usuário <span className="font-medium text-foreground">{session.userName}</span> em cada empresa (caso exista). Empresas onde a senha já for igual à atual serão ignoradas automaticamente.
                 </p>
-                <div className="max-h-40 overflow-y-auto space-y-2 rounded-md border border-border p-2">
-                  {otherCompanies.map((c) => (
-                    <label key={c.company_db} className="flex items-center gap-2 cursor-pointer text-sm">
-                      <Checkbox
-                        checked={selected.has(c.company_db)}
-                        onCheckedChange={() => toggle(c.company_db)}
-                      />
-                      <span className="text-foreground">{c.display_name}</span>
-                      <span className="text-xs text-muted-foreground">({c.company_db})</span>
-                    </label>
-                  ))}
-                </div>
+
+                {!applyAll && (
+                  <div className="max-h-40 overflow-y-auto space-y-2 rounded-md border border-border p-2">
+                    {otherCompanies.map((c) => (
+                      <label key={c.company_db} className="flex items-center gap-2 cursor-pointer text-sm">
+                        <Checkbox
+                          checked={selected.has(c.company_db)}
+                          onCheckedChange={() => toggle(c.company_db)}
+                        />
+                        <span className="text-foreground">{c.display_name}</span>
+                        <span className="text-xs text-muted-foreground">({c.company_db})</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
