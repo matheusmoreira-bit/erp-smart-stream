@@ -721,7 +721,8 @@ function ConsolidatedTable({
                     const replicateKey = `${row.code}::${c.db}::replicate`;
                     const isReplicating = pending === replicateKey;
                     const sourceName = names[0];
-                    const canReplicate = !!onReplicate && !!sourceName;
+                    const sourceCompanyDb = Array.from(row.presence.keys())[0];
+                    const canReplicate = !!onReplicate && !!sourceName && !!sourceCompanyDb;
                     return (
                       <TableCell key={c.db} className="text-center">
                         {canReplicate ? (
@@ -732,7 +733,7 @@ function ConsolidatedTable({
                               if (!onReplicate) return;
                               setPending(replicateKey);
                               try {
-                                await onReplicate(row.code, sourceName, c.db);
+                                await onReplicate(row.code, sourceName, c.db, sourceCompanyDb);
                               } finally {
                                 setPending(null);
                               }
