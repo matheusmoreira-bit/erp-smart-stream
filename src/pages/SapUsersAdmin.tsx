@@ -60,18 +60,8 @@ export default function SapUsersAdmin() {
     }
   };
 
-  const handleResetPassword = async (u: SapAdminUser) => {
-    const pwd = prompt(`Nova senha para ${u.UserCode}:`);
-    if (!pwd) return;
-    setSavingId(u.InternalKey);
-    try {
-      await updateUser(u.InternalKey, { UserPassword: pwd });
-      toast.success("Senha redefinida");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao redefinir senha");
-    } finally {
-      setSavingId(null);
-    }
+  const handleResetPassword = (u: SapAdminUser) => {
+    setPwdUser(u);
   };
 
   const handleSaveEdit = async () => {
