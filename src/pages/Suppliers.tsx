@@ -44,6 +44,7 @@ import { SupplierFormModal } from "@/components/SupplierFormModal";
 import { NewFornecedorDialog } from "@/components/NewFornecedorDialog";
 import { syncFornecedorToSap } from "@/lib/promote-fornecedor";
 import { PageTitle } from "@/components/PageTitle";
+import { useModuleAccess } from "@/hooks/usePermissions";
 
 type PendingFornecedor = {
   kind: "fornecedor";

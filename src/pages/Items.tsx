@@ -38,6 +38,7 @@ import { ItemFormModal } from "@/components/ItemFormModal";
 import { NewItemWizardDialog } from "@/components/NewItemWizardDialog";
 import { parseSapError } from "@/lib/sap-error";
 import { PageTitle } from "@/components/PageTitle";
+import { useModuleAccess } from "@/hooks/usePermissions";
 
 type PendingVariante = {
   id: string;
