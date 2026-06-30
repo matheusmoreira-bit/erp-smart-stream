@@ -846,6 +846,8 @@ export default function Intercompany() {
     replicateBusinessPartner,
     replicateItem,
     replicateUser,
+    replicateAccount,
+    replicateCostCenter,
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = useMemo(
