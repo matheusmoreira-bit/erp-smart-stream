@@ -138,22 +138,16 @@ export function usePermissionGroups() {
   return { groups, loading, refresh: fetch, saveGroup, deleteGroup, ensureDefaultGroup };
 }
 
-export function useUserAssignments(companyDb?: string) {
+export function useUserAssignments(_companyDb?: string) {
   const [assignments, setAssignments] = useState<UserAssignment[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    let query = supabase
+    const { data } = await supabase
       .from("user_group_assignments")
       .select("*, permission_groups(name)")
       .order("sap_email");
-
-    if (companyDb) {
-      query = query.eq("company_db", companyDb);
-    }
-
-    const { data } = await query;
 
     setAssignments(
       (data || []).map((d: any) => ({
@@ -161,20 +155,28 @@ export function useUserAssignments(companyDb?: string) {
         sap_email: d.sap_email,
         group_id: d.group_id,
         group_name: d.permission_groups?.name,
-        company_db: d.company_db,
+        company_db: null,
         created_at: d.created_at,
       }))
     );
     setLoading(false);
-  }, [companyDb]);
+  }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const assign = async (sap_email: string, group_id: string, targetCompanyDb?: string) => {
-    const cdb = targetCompanyDb || companyDb || null;
+  const assign = async (sap_email: string, group_id: string) => {
+    const email = sap_email.toLowerCase();
+    // Global assignment: one group per user, independent of company.
+    // Remove any other group assignment for this user first.
+    await supabase
+      .from("user_group_assignments")
+      .delete()
+      .eq("sap_email", email)
+      .neq("group_id", group_id);
+
     await supabase.from("user_group_assignments").upsert(
-      { sap_email: sap_email.toLowerCase(), group_id, company_db: cdb },
-      { onConflict: "sap_email,group_id,company_db" }
+      { sap_email: email, group_id, company_db: null },
+      { onConflict: "sap_email,group_id" }
     );
     await fetch();
   };
