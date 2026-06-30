@@ -18,22 +18,11 @@ import { AuditDashboard } from "@/components/audit-console/AuditDashboard";
 import { AuditRunsList } from "@/components/audit-console/AuditRunsList";
 import { AuditRunDetail } from "@/components/audit-console/AuditRunDetail";
 import { AuditDivergencesTable } from "@/components/audit-console/AuditDivergencesTable";
+import { AuditRulesTable } from "@/components/audit-console/AuditRulesTable";
+import { AuditLogsViewer } from "@/components/audit-console/AuditLogsViewer";
+import { AuditInsightsList } from "@/components/audit-console/AuditInsightsList";
+import { AuditDocumentsTab } from "@/components/audit-console/AuditDocumentsTab";
 import { PageTitle } from "@/components/PageTitle";
-
-/**
- * Console de Auditoria (porte do Silent Specter).
- * Fase 2: dashboard real + lista de runs + detalhe + divergências.
- */
-function ComingSoon({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card/40 p-12 text-center">
-      <PageTitle title="Auditoria SAP" />
-      <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
-}
 
 const subNav = [
   { to: "dashboard", label: "Dashboard", icon: LayoutDashboard },
