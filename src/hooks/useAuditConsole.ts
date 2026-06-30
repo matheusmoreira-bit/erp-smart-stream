@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import type { Database } from "@/integrations/supabase/types";
@@ -8,6 +8,7 @@ export type AuditDivergence = Database["public"]["Tables"]["audit_console_diverg
 export type AuditInsight = Database["public"]["Tables"]["audit_console_insights"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_console_logs"]["Row"];
 export type AuditRule = Database["public"]["Tables"]["audit_console_rules"]["Row"];
+export type AuditDocument = Database["public"]["Tables"]["audit_console_documents"]["Row"];
 
 export function useAuditRuns(limit = 50) {
   const { session } = useSap();
@@ -15,6 +16,7 @@ export function useAuditRuns(limit = 50) {
   return useQuery({
     queryKey: ["audit-console", "runs", companyDB, limit],
     enabled: !!companyDB,
+    refetchInterval: 5000,
     queryFn: async (): Promise<AuditRun[]> => {
       const { data, error } = await supabase
         .from("audit_console_runs")
@@ -34,6 +36,10 @@ export function useAuditRun(id: string | undefined) {
   return useQuery({
     queryKey: ["audit-console", "run", id],
     enabled: !!id && !!companyDB,
+    refetchInterval: (q) => {
+      const status = (q.state.data as AuditRun | null | undefined)?.status;
+      return status === "pending" || status === "running" ? 2500 : false;
+    },
     queryFn: async (): Promise<AuditRun | null> => {
       const { data, error } = await supabase
         .from("audit_console_runs")
@@ -215,3 +221,94 @@ export function useAuditDashboard() {
     },
   });
 }
+
+// ===== Mutations and Phase 3/4 helpers =====
+
+export function useStartAuditRun() {
+  const { session } = useSap();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { scope?: string; dateFrom?: string; dateTo?: string }) => {
+      const companyDB = session?.companyDB;
+      if (!companyDB) throw new Error("Empresa não selecionada");
+      const { data, error } = await supabase.functions.invoke("audit-console-run", {
+        body: { companyDB, ...input },
+      });
+      if (error) throw error;
+      return data as { runId: string; status: string };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["audit-console", "runs"] });
+      qc.invalidateQueries({ queryKey: ["audit-console", "dashboard"] });
+    },
+  });
+}
+
+export function useUpdateAuditRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (rule: Partial<AuditRule> & { id: string }) => {
+      const { id, ...patch } = rule;
+      const { error } = await supabase.from("audit_console_rules").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["audit-console", "rules"] }),
+  });
+}
+
+export function useAuditDocuments(runId?: string) {
+  const { session } = useSap();
+  const companyDB = session?.companyDB ?? "";
+  return useQuery({
+    queryKey: ["audit-console", "documents", companyDB, runId],
+    enabled: !!companyDB,
+    refetchInterval: 5000,
+    queryFn: async (): Promise<AuditDocument[]> => {
+      let q = supabase
+        .from("audit_console_documents")
+        .select("*")
+        .eq("company_db", companyDB)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (runId) q = q.eq("audit_run_id", runId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useUploadAuditDocument() {
+  const { session } = useSap();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { file: File; runId?: string; docType: "nf" | "contract" | "other" }) => {
+      const companyDB = session?.companyDB;
+      if (!companyDB) throw new Error("Empresa não selecionada");
+      const path = `${companyDB}/${Date.now()}-${input.file.name.replace(/[^A-Za-z0-9._-]/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from("audit-console-docs").upload(path, input.file);
+      if (upErr) throw upErr;
+      const { data: doc, error: insErr } = await supabase
+        .from("audit_console_documents")
+        .insert({
+          company_db: companyDB,
+          audit_run_id: input.runId ?? null,
+          doc_type: input.docType,
+          storage_path: path,
+          original_filename: input.file.name,
+          mime_type: input.file.type || null,
+          status: "pending",
+        })
+        .select("id")
+        .single();
+      if (insErr || !doc) throw insErr ?? new Error("Falha ao registrar documento");
+      const { error: fnErr } = await supabase.functions.invoke("audit-console-analyze-doc", {
+        body: { documentId: doc.id },
+      });
+      if (fnErr) throw fnErr;
+      return doc.id;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["audit-console", "documents"] }),
+  });
+}
+

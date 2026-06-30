@@ -639,6 +639,65 @@ export type Database = {
           },
         ]
       }
+      audit_console_documents: {
+        Row: {
+          audit_run_id: string | null
+          company_db: string
+          created_at: string
+          divergences_created: number
+          doc_type: string
+          error_message: string | null
+          extracted: Json
+          id: string
+          mime_type: string | null
+          original_filename: string | null
+          status: string
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          audit_run_id?: string | null
+          company_db: string
+          created_at?: string
+          divergences_created?: number
+          doc_type: string
+          error_message?: string | null
+          extracted?: Json
+          id?: string
+          mime_type?: string | null
+          original_filename?: string | null
+          status?: string
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          audit_run_id?: string | null
+          company_db?: string
+          created_at?: string
+          divergences_created?: number
+          doc_type?: string
+          error_message?: string | null
+          extracted?: Json
+          id?: string
+          mime_type?: string | null
+          original_filename?: string | null
+          status?: string
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_console_documents_audit_run_id_fkey"
+            columns: ["audit_run_id"]
+            isOneToOne: false
+            referencedRelation: "audit_console_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_console_insights: {
         Row: {
           audit_run_id: string | null
