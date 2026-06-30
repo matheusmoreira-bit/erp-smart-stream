@@ -405,7 +405,7 @@ export default function Items() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex gap-1">
-                          {canSync && (
+                          {canSync && canWrite && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -425,7 +425,7 @@ export default function Items() {
                               <TooltipContent>Enviar ao SAP</TooltipContent>
                             </Tooltip>
                           )}
-                          {!isLocal && (
+                          {!isLocal && canWrite && (
                             <>
                               <Tooltip>
                                 <TooltipTrigger asChild>
