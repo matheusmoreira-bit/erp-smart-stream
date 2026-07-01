@@ -37,12 +37,14 @@ export default function ApprovalHistory() {
   const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
   const { expenses: purchaseExpenses } = useExpenses("purchase");
   const { expenses: salesExpenses } = useExpenses("sales");
-  const expensesByDocEntry = useMemo(() => {
-    const m = new Map<number, Expense>();
+  const { expensesByDocEntry, expensesById } = useMemo(() => {
+    const byDoc = new Map<number, Expense>();
+    const byId = new Map<string, Expense>();
     for (const e of [...purchaseExpenses, ...salesExpenses]) {
-      if (typeof e.sap_doc_entry === "number") m.set(e.sap_doc_entry, e);
+      byId.set(e.id, e);
+      if (typeof e.sap_doc_entry === "number") byDoc.set(e.sap_doc_entry, e);
     }
-    return m;
+    return { expensesByDocEntry: byDoc, expensesById: byId };
   }, [purchaseExpenses, salesExpenses]);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
 
@@ -161,12 +163,15 @@ export default function ApprovalHistory() {
           <div className="text-center py-16 text-muted-foreground">Carregando histórico...</div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
-            Nenhuma aprovação encontrada. Clique em "Sincronizar agora" para carregar do SAP Approval Hub.
+            Nenhuma aprovação encontrada. Aprovações do ERP Flow aparecem automaticamente;
+            para trazer decisões feitas direto no SAP, clique em "Sincronizar agora".
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((r) => {
-              const linked = typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined;
+              const linked =
+                (r.expense_id ? expensesById.get(r.expense_id) : undefined) ||
+                (typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined);
               return (
                 <HistoryCard
                   key={r.id}
@@ -200,9 +205,21 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-            {row.doc_type_name || "Documento"}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              {row.doc_type_name || "Documento"}
+            </span>
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                row.source === "erp_flow"
+                  ? "text-sky-600 bg-sky-500/10 border-sky-500/30"
+                  : "text-violet-600 bg-violet-500/10 border-violet-500/30"
+              }`}
+              title={row.source === "erp_flow" ? "Decisão registrada no ERP Flow" : "Decisão sincronizada do SAP Approval Hub"}
+            >
+              {row.source === "erp_flow" ? "ERP Flow" : "SAP"}
+            </span>
+          </div>
           <h3 className="font-mono font-semibold mt-1">#{row.doc_num || row.doc_entry || "—"}</h3>
         </div>
         <div className="text-right flex items-start gap-1">
