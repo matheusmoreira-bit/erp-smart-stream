@@ -8,8 +8,15 @@ import {
   Cable,
   AlertTriangle,
   History,
+  Receipt,
+  Wallet,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  useNfEntradaLinks,
+  useContasPagarLinks,
+} from "@/hooks/useRelationsMapDerived";
 
 type LogDecision =
   | "created"
@@ -49,15 +56,53 @@ function formatDateTime(iso?: string | null): string {
   }
 }
 
+function formatCurrency(value?: number | null, currency?: string | null) {
+  if (value === undefined || value === null) return "—";
+  const code = currency && /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: code }).format(value);
+}
+
+interface TimelineItem {
+  key: string;
+  when: string; // ISO
+  label: string;
+  detail?: string;
+  actor?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+}
+
+export interface ExpenseEventHistoryExpense {
+  id: string;
+  sap_doc_entry?: number | null;
+  sap_doc_num?: number | null;
+  company_db?: string | null;
+  supplier_code?: string | null;
+  currency?: string | null;
+  updated_at?: string;
+}
+
 interface Props {
-  expenseId: string | null | undefined;
+  expense: ExpenseEventHistoryExpense | null | undefined;
   /** Reload marker — muda quando o pedido é editado/aprovado etc. */
   refreshKey?: string | number;
 }
 
-export function ExpenseEventHistory({ expenseId, refreshKey }: Props) {
+export function ExpenseEventHistory({ expense, refreshKey }: Props) {
+  const expenseId = expense?.id;
   const [log, setLog] = useState<ApprovalLogRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  const derivedInput = {
+    expenseId: expense?.id || "",
+    sapDocEntry: expense?.sap_doc_entry ?? null,
+    sapDocNum: expense?.sap_doc_num ?? null,
+    companyDb: expense?.company_db ?? null,
+    supplierCode: expense?.supplier_code ?? null,
+    enabled: !!expense,
+  };
+  const nfLinks = useNfEntradaLinks(derivedInput);
+  const apLinks = useContasPagarLinks(derivedInput);
 
   useEffect(() => {
     if (!expenseId) {
@@ -81,48 +126,154 @@ export function ExpenseEventHistory({ expenseId, refreshKey }: Props) {
     };
   }, [expenseId, refreshKey]);
 
+  // Merge approval events + NF + AP into a single chronological timeline
+  const items: TimelineItem[] = [];
+
+  for (const row of log) {
+    const meta = DECISION_META[row.decision] ?? {
+      label: row.decision,
+      icon: FileText,
+      color: "text-muted-foreground",
+    };
+    const actor = row.approver_name
+      ? `${row.approver_name}${row.approver_email ? ` · ${row.approver_email}` : ""}${row.level_order ? ` · nível ${row.level_order}` : ""}`
+      : undefined;
+    items.push({
+      key: `log:${row.id}`,
+      when: row.decided_at,
+      label: meta.label,
+      detail: row.remarks || undefined,
+      actor,
+      icon: meta.icon,
+      color: meta.color,
+    });
+  }
+
+  for (const nf of nfLinks.data || []) {
+    const number = `NF ${nf.numero_nf || "—"}${nf.serie ? `/${nf.serie}` : ""}`;
+    items.push({
+      key: `nf-created:${nf.id}`,
+      when: nf.created_at,
+      label: `${number} vinculada`,
+      detail: [
+        nf.nome_fornecedor,
+        nf.valor_total != null ? formatCurrency(nf.valor_total, expense?.currency) : null,
+        nf.chave_acesso ? `Chave ${nf.chave_acesso}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      icon: Receipt,
+      color: "text-primary",
+    });
+    // Se a NF já foi baixada/completada (updated_at difere e status terminal), adiciona evento de baixa
+    const doneStatuses = new Set([
+      "completed",
+      "cancelled",
+      "erpflow_rejected",
+      "sap_rejected",
+      "integration_error",
+    ]);
+    if (nf.updated_at && nf.updated_at !== nf.created_at && doneStatuses.has(nf.status)) {
+      items.push({
+        key: `nf-done:${nf.id}`,
+        when: nf.updated_at,
+        label: `${number} — ${nf.status}`,
+        icon: nf.status === "completed" ? CheckCircle2 : AlertTriangle,
+        color: nf.status === "completed" ? "text-success" : "text-destructive",
+      });
+    }
+  }
+
+  for (const ap of apLinks.data?.payables || []) {
+    const label = `Título ${ap.numero_documento || "—"} (${ap.source.toUpperCase()})`;
+    if (ap.data_registro) {
+      items.push({
+        key: `ap-created:${ap.id}`,
+        when: ap.data_registro,
+        label: `${label} lançado em contas a pagar`,
+        detail: [
+          ap.fornecedor,
+          ap.valor_documento != null ? formatCurrency(ap.valor_documento, expense?.currency) : null,
+          ap.data_vencimento ? `Venc. ${formatDateTime(ap.data_vencimento).split(" ")[0]}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        icon: Wallet,
+        color: "text-primary",
+      });
+    }
+    if (ap.data_pagamento) {
+      items.push({
+        key: `ap-paid:${ap.id}`,
+        when: ap.data_pagamento,
+        label: `${label} pago`,
+        detail:
+          ap.valor_pago != null
+            ? `Valor pago ${formatCurrency(ap.valor_pago, expense?.currency)}`
+            : undefined,
+        icon: CheckCircle2,
+        color: "text-success",
+      });
+    } else if (ap.status && ap.status.toLowerCase().includes("pag")) {
+      // Fallback quando SAP indica pago mas não temos data (evita perder o evento)
+      items.push({
+        key: `ap-paid-nodate:${ap.id}`,
+        when: ap.data_vencimento || ap.data_registro || new Date().toISOString(),
+        label: `${label} marcado como pago`,
+        detail:
+          ap.valor_pago != null
+            ? `Valor pago ${formatCurrency(ap.valor_pago, expense?.currency)} (data exata indisponível)`
+            : "Data exata do pagamento indisponível",
+        icon: CheckCircle2,
+        color: "text-success",
+      });
+    }
+  }
+
+  items.sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
+
+  const busy = isLoading || nfLinks.isLoading || apLinks.isLoading;
+
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-      <div className="flex items-center gap-2">
-        <History className="w-4 h-4 text-primary" />
-        <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-          Histórico de eventos
-        </span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <History className="w-4 h-4 text-primary" />
+          <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+            Histórico de eventos
+          </span>
+        </div>
+        {busy && items.length > 0 && (
+          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+        )}
       </div>
 
-      {isLoading ? (
-        <p className="text-xs text-muted-foreground">Carregando…</p>
-      ) : log.length === 0 ? (
+      {busy && items.length === 0 ? (
+        <p className="text-xs text-muted-foreground flex items-center gap-2">
+          <Loader2 className="w-3 h-3 animate-spin" /> Carregando…
+        </p>
+      ) : items.length === 0 ? (
         <p className="text-xs text-muted-foreground">Nenhum evento registrado ainda.</p>
       ) : (
         <ol className="space-y-3 relative border-l border-border ml-2 pl-4">
-          {log.map((row) => {
-            const meta = DECISION_META[row.decision] ?? {
-              label: row.decision,
-              icon: FileText,
-              color: "text-muted-foreground",
-            };
-            const Icon = meta.icon;
+          {items.map((it) => {
+            const Icon = it.icon;
             return (
-              <li key={row.id} className="relative">
+              <li key={it.key} className="relative">
                 <span className="absolute -left-[22px] top-0.5 w-4 h-4 rounded-full bg-background border border-border flex items-center justify-center">
-                  <Icon className={`w-3 h-3 ${meta.color}`} />
+                  <Icon className={`w-3 h-3 ${it.color}`} />
                 </span>
                 <div className="flex items-baseline justify-between gap-2">
-                  <div className="text-xs font-medium">{meta.label}</div>
+                  <div className="text-xs font-medium">{it.label}</div>
                   <div className="text-[10px] text-muted-foreground font-mono shrink-0">
-                    {formatDateTime(row.decided_at)}
+                    {formatDateTime(it.when)}
                   </div>
                 </div>
-                {row.approver_name && (
-                  <div className="text-[11px] text-muted-foreground">
-                    {row.approver_name}
-                    {row.approver_email ? ` · ${row.approver_email}` : ""}
-                    {row.level_order ? ` · nível ${row.level_order}` : ""}
-                  </div>
+                {it.actor && (
+                  <div className="text-[11px] text-muted-foreground">{it.actor}</div>
                 )}
-                {row.remarks && (
-                  <div className="text-[11px] bg-muted/40 rounded p-2 mt-1.5">{row.remarks}</div>
+                {it.detail && (
+                  <div className="text-[11px] bg-muted/40 rounded p-2 mt-1.5 break-words">{it.detail}</div>
                 )}
               </li>
             );
