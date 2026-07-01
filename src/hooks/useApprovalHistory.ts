@@ -25,6 +25,10 @@ export interface ApprovalHistoryRow {
   stage_name: string | null;
   step: number | null;
   synced_at: string;
+  /** Fonte da decisão: 'sap' = SAP Approval Hub, 'erp_flow' = fluxo interno */
+  source?: "sap" | "erp_flow";
+  /** Preenchido apenas para rows internos (permite abrir o mapa de relações) */
+  expense_id?: string | null;
 }
 
 export interface ApprovalHistorySyncState {
@@ -45,15 +49,93 @@ export function useApprovalHistory(companyDb?: string | null) {
     setIsLoading(true);
     setError(null);
     try {
+      // 1) Aprovações SAP (approval_history)
       let q = supabase
         .from("approval_history")
         .select("*")
         .order("decision_date", { ascending: false, nullsFirst: false })
         .limit(2000);
       if (companyDb) q = q.eq("company_db", companyDb);
-      const { data, error } = await q;
-      if (error) throw error;
-      setRows((data || []) as ApprovalHistoryRow[]);
+      const { data: sapRows, error: sapErr } = await q;
+      if (sapErr) throw sapErr;
+
+      // 2) Aprovações internas do ERP Flow (expense_approval_log)
+      //    Traz decisão 'approved'/'rejected' e enriquece com dados da despesa.
+      let expensesQ = supabase
+        .from("expenses")
+        .select(
+          "id, supplier_code, supplier_name, total_amount, currency, sap_doc_entry, sap_doc_num, doc_type, requester_name, requester_email, company_db, created_at",
+        )
+        .limit(5000);
+      if (companyDb) expensesQ = expensesQ.eq("company_db", companyDb);
+      const { data: expenses } = await expensesQ;
+      const expensesById = new Map<string, any>((expenses || []).map((e: any) => [e.id, e]));
+
+      let logQ = supabase
+        .from("expense_approval_log")
+        .select("*")
+        .in("decision", ["approved", "rejected"])
+        .order("decided_at", { ascending: false, nullsFirst: false })
+        .limit(5000);
+      const { data: logRows } = await logQ;
+
+      const internalRows: ApprovalHistoryRow[] = ((logRows || []) as any[])
+        .map((l) => {
+          const e = expensesById.get(l.expense_id);
+          if (!e) return null; // expense fora da company atual
+          return {
+            id: `log-${l.id}`,
+            external_id: `erp-flow:${l.expense_id}:${l.level_order ?? 0}`,
+            company_db: e.company_db,
+            decision: l.decision === "approved" ? "Y" : "N",
+            decision_date: l.decided_at || l.created_at,
+            approver_code: l.approver_email || l.approver_name || null,
+            approver_name: l.approver_name || null,
+            approver_email: l.approver_email || null,
+            requester_code: e.requester_email || null,
+            requester_name: e.requester_name || null,
+            doc_object_type: null,
+            doc_type_name:
+              e.doc_type === "sales" ? "Pedido de Venda (ERP Flow)" : "Pedido de Compra (ERP Flow)",
+            doc_entry: typeof e.sap_doc_entry === "number" ? e.sap_doc_entry : null,
+            doc_num: typeof e.sap_doc_num === "number" ? e.sap_doc_num : null,
+            doc_total: Number(e.total_amount || 0),
+            currency: e.currency || "BRL",
+            card_code: e.supplier_code || null,
+            card_name: e.supplier_name || null,
+            remarks: l.remarks || null,
+            stage_name: l.level_order ? `Nível ${l.level_order}` : null,
+            step: l.level_order || null,
+            synced_at: l.decided_at || l.created_at,
+            source: "erp_flow" as const,
+            expense_id: l.expense_id,
+          } as ApprovalHistoryRow;
+        })
+        .filter(Boolean) as ApprovalHistoryRow[];
+
+      // Dedupe: se a mesma decisão já existe no SAP para o mesmo doc_entry/company_db,
+      // preserva a versão SAP (mais rica). Aqui só evita duplicação óbvia de par
+      // (company_db, doc_entry, decision, step) quando o SAP já sincronizou.
+      const sapKey = new Set(
+        ((sapRows || []) as ApprovalHistoryRow[])
+          .filter((r) => r.doc_entry != null)
+          .map((r) => `${r.company_db}|${r.doc_entry}|${r.decision}|${r.step ?? 0}`),
+      );
+      const filteredInternal = internalRows.filter((r) => {
+        if (r.doc_entry == null) return true;
+        return !sapKey.has(`${r.company_db}|${r.doc_entry}|${r.decision}|${r.step ?? 0}`);
+      });
+
+      const merged = [
+        ...((sapRows || []) as ApprovalHistoryRow[]).map((r) => ({ ...r, source: "sap" as const })),
+        ...filteredInternal,
+      ].sort((a, b) => {
+        const da = a.decision_date ? new Date(a.decision_date).getTime() : 0;
+        const db = b.decision_date ? new Date(b.decision_date).getTime() : 0;
+        return db - da;
+      });
+
+      setRows(merged);
 
       const { data: state } = await supabase
         .from("approval_history_sync_state")
