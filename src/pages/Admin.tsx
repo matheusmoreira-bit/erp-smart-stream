@@ -78,6 +78,7 @@ interface Company {
   tax_id: string | null;
   foreign_name: string | null;
   is_foreign: boolean;
+  is_test?: boolean;
 }
 
 const ERP_TYPE_LABELS: Record<string, { label: string; icon: typeof Server }> = {
@@ -350,7 +351,7 @@ export default function Admin() {
   // Company dialog
   const [companyDialog, setCompanyDialog] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "" as string, legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, targets: { ...DEFAULT_TARGETS } });
+  const [companyForm, setCompanyForm] = useState({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "sap", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "" as string, legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, is_test: false, targets: { ...DEFAULT_TARGETS } });
   const [saving, setSaving] = useState(false);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
@@ -445,7 +446,7 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "", legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, targets: { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "", legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, is_test: false, targets: { ...DEFAULT_TARGETS } });
     setWizardStep(1);
     setWizardCreds({});
     setShowWizardPasswords({});
@@ -454,7 +455,7 @@ export default function Admin() {
 
   const openEditCompany = async (c: Company) => {
     setEditingCompany(c);
-    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", default_currency: c.default_currency || "BRL", timezone: c.timezone || "America/Sao_Paulo", logo_url: c.logo_url || "", legal_name: c.legal_name || "", trade_name: c.trade_name || "", tax_id: c.tax_id || "", foreign_name: c.foreign_name || "", is_foreign: !!c.is_foreign, targets: c.targets || { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: c.company_db, display_name: c.display_name, service_layer_url: c.service_layer_url || "", is_active: c.is_active, erp_type: c.erp_type || "sap", default_currency: c.default_currency || "BRL", timezone: c.timezone || "America/Sao_Paulo", logo_url: c.logo_url || "", legal_name: c.legal_name || "", trade_name: c.trade_name || "", tax_id: c.tax_id || "", foreign_name: c.foreign_name || "", is_foreign: !!c.is_foreign, is_test: !!c.is_test, targets: c.targets || { ...DEFAULT_TARGETS } });
     setWizardStep(1);
     setShowWizardPasswords({});
     setWizardCreds({});
@@ -506,6 +507,7 @@ export default function Admin() {
           tax_id: companyForm.tax_id || null,
           foreign_name: companyForm.foreign_name || null,
           is_foreign: companyForm.is_foreign,
+          is_test: companyForm.is_test,
         })
         .eq("id", editingCompany.id);
       if (error) { toast.error("Erro ao atualizar"); hasError = true; }
@@ -525,6 +527,7 @@ export default function Admin() {
         tax_id: companyForm.tax_id || null,
         foreign_name: companyForm.foreign_name || null,
         is_foreign: companyForm.is_foreign,
+        is_test: companyForm.is_test,
       });
       if (error) { toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar"); hasError = true; }
     }
@@ -941,6 +944,13 @@ export default function Admin() {
                     onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_foreign: v }))}
                   />
                   <span className="text-sm text-foreground">Empresa estrangeira</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={companyForm.is_test}
+                    onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_test: v }))}
+                  />
+                  <span className="text-sm text-foreground">Empresa de teste</span>
                 </div>
               </div>
 
