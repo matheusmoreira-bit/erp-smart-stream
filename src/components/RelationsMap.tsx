@@ -542,22 +542,91 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
       }
       case "nf_entrada":
         return (
-          <DetailGrid
-            rows={[
-              ["Status", STATUS_LABELS[expense.status as keyof typeof STATUS_LABELS] || expense.status],
-              ["Atualizado em", formatDateTime(expense.updated_at)],
-            ]}
-          />
+          <div className="space-y-3">
+            <DetailGrid
+              rows={[
+                ["Status do PC", STATUS_LABELS[expense.status as keyof typeof STATUS_LABELS] || expense.status],
+                ["NFs vinculadas", nfLoading ? "Carregando…" : String(nfLinks.length)],
+              ]}
+            />
+            {nfLoading && nfLinks.length === 0 ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" /> Buscando NFs de entrada…
+              </div>
+            ) : nfLinks.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma NF de entrada vinculada a este pedido.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {nfLinks.map((nf) => (
+                  <li key={nf.id} className="border border-border/60 rounded-lg p-2.5 text-xs bg-muted/10">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-medium">
+                        NF {nf.numero_nf || "—"}{nf.serie ? `/${nf.serie}` : ""}
+                      </span>
+                      <span className="font-mono">{formatCurrency(nf.valor_total ?? undefined, expense.currency)}</span>
+                    </div>
+                    <div className="text-muted-foreground truncate">{nf.nome_fornecedor || "—"}</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <Badge variant="outline" className="text-[10px]">{nf.status}</Badge>
+                      <span className="font-mono text-[10px] text-muted-foreground">{formatDateTime(nf.created_at)}</span>
+                    </div>
+                    {nf.chave_acesso && (
+                      <div className="font-mono text-[10px] text-muted-foreground mt-1 break-all">
+                        {nf.chave_acesso}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         );
       case "pagamento":
         return (
-          <DetailGrid
-            rows={[
-              ["Valor", formatCurrency(expense.total_amount, expense.currency)],
-              ["Fornecedor", expense.supplier_name || "—"],
-              ["Atualizado em", formatDateTime(expense.updated_at)],
-            ]}
-          />
+          <div className="space-y-3">
+            <DetailGrid
+              rows={[
+                ["Valor do pedido", formatCurrency(expense.total_amount, expense.currency)],
+                ["Fornecedor", expense.supplier_name || "—"],
+                ["Títulos encontrados", apLoading ? "Carregando…" : String(apPayables.length)],
+              ]}
+            />
+            {apLoading && apPayables.length === 0 ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" /> Consultando contas a pagar no ERP…
+              </div>
+            ) : apPayables.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhum título de contas a pagar encontrado para este pedido.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {apPayables.map((ap) => (
+                  <li key={ap.id} className="border border-border/60 rounded-lg p-2.5 text-xs bg-muted/10">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-medium">Doc {ap.numero_documento || "—"}</span>
+                      <span className="font-mono">{formatCurrency(ap.valor_documento ?? undefined, expense.currency)}</span>
+                    </div>
+                    <div className="text-muted-foreground truncate">{ap.fornecedor || "—"}</div>
+                    <div className="flex items-center justify-between mt-1 gap-2">
+                      <Badge variant="outline" className="text-[10px] uppercase">{ap.source}</Badge>
+                      {ap.status && <span className="text-[10px]">{ap.status}</span>}
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        Venc: {ap.data_vencimento ? formatDateTime(ap.data_vencimento).split(" ")[0] : "—"}
+                      </span>
+                    </div>
+                    {ap.valor_pago !== null && ap.valor_pago !== undefined && (
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Pago: <span className="font-mono">{formatCurrency(ap.valor_pago, expense.currency)}</span>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         );
       case "finalizado":
         return (
