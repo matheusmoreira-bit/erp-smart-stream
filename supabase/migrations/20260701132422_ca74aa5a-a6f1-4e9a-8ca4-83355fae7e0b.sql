@@ -1,0 +1,2 @@
+DELETE FROM approval_rule_levels WHERE rule_id IN (SELECT id FROM approval_rules WHERE company_db='open_gaming_sa' AND priority < 9999);
+DELETE FROM approval_rules WHERE company_db='open_gaming_sa' AND priority < 9999;
