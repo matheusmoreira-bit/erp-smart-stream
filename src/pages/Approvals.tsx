@@ -727,7 +727,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     cardCode: e.supplier_code || "",
     cardName: e.supplier_name || "—",
     requester: e.requester_name || "—",
-    currentApprover: e.current_approver || "—",
+    currentApprover: e.current_approver && e.current_approver.trim() ? e.current_approver : "Administrador",
     approverEmail: "",
     currentStage: "Aprovação Interna",
     status: "pending",
