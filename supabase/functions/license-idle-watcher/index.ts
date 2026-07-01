@@ -123,7 +123,8 @@ async function sapLogin(baseUrl: string, user: string, pass: string, db: string)
 
 async function fetchHanaTable<T = unknown>(database: string, sessionId: string, table: string): Promise<T[]> {
   const params = new URLSearchParams({
-    SessionId: sessionId, DB: database, Table: table, _t: String(Date.now()),
+    SessionId: sessionId, DB: database, Table: table,
+    DynamicToken: await generateDynamicToken(), _t: String(Date.now()),
   });
   const resp = await fetch(`${HANA_VIEWS_URL}?${params}`, { method: "GET" });
   if (!resp.ok) throw new Error(`HANA falhou (${table}): ${resp.status}`);

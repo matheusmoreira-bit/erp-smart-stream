@@ -506,6 +506,7 @@ Deno.serve(async (req) => {
         SessionId: sessionId,
         DB: database,
         Table: tableName,
+        DynamicToken: await generateDynamicToken(),
         _t: String(Date.now()),
       });
 

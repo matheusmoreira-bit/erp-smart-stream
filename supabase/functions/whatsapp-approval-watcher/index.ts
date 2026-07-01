@@ -109,6 +109,7 @@ async function fetchApprovals(database: string, sessionId: string): Promise<Appr
     SessionId: sessionId,
     DB: database,
     View: "VW_APROVACOES_DETALHADAS",
+    DynamicToken: await generateDynamicToken(),
     _t: String(Date.now()),
   });
   const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`);
