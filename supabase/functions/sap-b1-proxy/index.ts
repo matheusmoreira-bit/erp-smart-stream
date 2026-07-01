@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -506,6 +507,7 @@ Deno.serve(async (req) => {
         SessionId: sessionId,
         DB: database,
         Table: tableName,
+        DynamicToken: await generateDynamicToken(),
         _t: String(Date.now()),
       });
 

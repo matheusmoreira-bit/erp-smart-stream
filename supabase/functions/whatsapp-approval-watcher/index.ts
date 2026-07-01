@@ -3,6 +3,7 @@
 // se a aprovação continuar pendente.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
@@ -109,6 +110,7 @@ async function fetchApprovals(database: string, sessionId: string): Promise<Appr
     SessionId: sessionId,
     DB: database,
     View: "VW_APROVACOES_DETALHADAS",
+    DynamicToken: await generateDynamicToken(),
     _t: String(Date.now()),
   });
   const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`);
