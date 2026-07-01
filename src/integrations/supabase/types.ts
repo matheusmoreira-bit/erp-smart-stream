@@ -1319,7 +1319,9 @@ export type Database = {
           currency: string
           current_approver: string | null
           current_level_order: number
+          doc_date: string | null
           doc_type: string
+          due_date: string | null
           id: string
           origin: string
           project: string | null
@@ -1351,7 +1353,9 @@ export type Database = {
           currency?: string
           current_approver?: string | null
           current_level_order?: number
+          doc_date?: string | null
           doc_type?: string
+          due_date?: string | null
           id?: string
           origin?: string
           project?: string | null
@@ -1383,7 +1387,9 @@ export type Database = {
           currency?: string
           current_approver?: string | null
           current_level_order?: number
+          doc_date?: string | null
           doc_type?: string
+          due_date?: string | null
           id?: string
           origin?: string
           project?: string | null
