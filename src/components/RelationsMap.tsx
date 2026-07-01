@@ -179,18 +179,20 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
             ? "current"
             : "pending";
       const reached = state === "done" || state === "current";
+      const nfCount = nfLinks.data?.length || 0;
+      const apCount = apLinks.data?.payables.length || 0;
       // hasDoc: there's something concrete to inspect at this stage
       const hasDoc =
         s.key === "rascunho" ||
         (s.key === "pendente_aprovacao" && (levels.length > 0 || log.length > 0)) ||
         (s.key === "aprovado" && reached) ||
         (s.key === "pc_lancado" && (!!expense.sap_doc_num || reached)) ||
-        (s.key === "nf_entrada" && reached) ||
-        (s.key === "pagamento" && reached) ||
+        (s.key === "nf_entrada" && (nfCount > 0 || reached)) ||
+        (s.key === "pagamento" && (apCount > 0 || reached)) ||
         (s.key === "finalizado" && reached);
       return { key: s.key, label: s.label, icon: s.icon, state, hasDoc };
     });
-  }, [expense, levels.length, log.length]);
+  }, [expense, levels.length, log.length, nfLinks.data, apLinks.data]);
 
   // Aprovadores: feitos, atual, próximos
   const approvedNames = useMemo(
