@@ -40,7 +40,9 @@ export interface ContaPagarLink {
   numero_documento: string | null;
   valor_documento: number | null;
   valor_pago: number | null;
+  data_registro: string | null;
   data_vencimento: string | null;
+  data_pagamento: string | null;
   status: string | null;
   numero_pedido: string | null;
   source: "sap" | "omie";
