@@ -945,6 +945,13 @@ export default function Admin() {
                   />
                   <span className="text-sm text-foreground">Empresa estrangeira</span>
                 </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={companyForm.is_test}
+                    onCheckedChange={(v) => setCompanyForm((f) => ({ ...f, is_test: v }))}
+                  />
+                  <span className="text-sm text-foreground">Empresa de teste</span>
+                </div>
               </div>
 
               {/* Identificação fiscal */}
