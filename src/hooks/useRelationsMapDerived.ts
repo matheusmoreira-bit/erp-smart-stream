@@ -68,7 +68,7 @@ export function useNfEntradaLinks({
       .select(
         "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,created_at,updated_at",
       )
-      .eq("sap_matched_po_doc_entry", sapDocEntry)
+      .eq("sap_matched_po_doc_entry", String(sapDocEntry) as unknown as number)
       .eq("sap_company_db", companyDb)
       .order("created_at", { ascending: false });
     if (error) throw error;
