@@ -503,11 +503,12 @@ Deno.serve(async (req) => {
         });
       }
 
+      const dynamicToken = await generateDynamicToken();
       const queryParams = new URLSearchParams({
         SessionId: sessionId,
         DB: database,
         Table: tableName,
-        DynamicToken: await generateDynamicToken(),
+        DynamicToken: dynamicToken,
         _t: String(Date.now()),
       });
 
@@ -523,7 +524,13 @@ Deno.serve(async (req) => {
       try {
         viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
           method: "GET",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-SessionId": sessionId,
+            "X-DB": database,
+            "X-Table": tableName,
+            "X-Dynamic-Token": dynamicToken,
+          },
         });
       } catch (e) {
         if (isAbortError(e)) {

@@ -106,14 +106,23 @@ async function sapFetchAllUsers(
 }
 
 async function fetchApprovals(database: string, sessionId: string): Promise<ApprovalRow[]> {
+  const dynamicToken = await generateDynamicToken();
+  const view = "VW_APROVACOES_DETALHADAS";
   const params = new URLSearchParams({
     SessionId: sessionId,
     DB: database,
-    View: "VW_APROVACOES_DETALHADAS",
-    DynamicToken: await generateDynamicToken(),
+    View: view,
+    DynamicToken: dynamicToken,
     _t: String(Date.now()),
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`);
+  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, {
+    headers: {
+      "X-SessionId": sessionId,
+      "X-DB": database,
+      "X-View": view,
+      "X-Dynamic-Token": dynamicToken,
+    },
+  });
   if (!resp.ok) throw new Error(`HANA view falhou: ${resp.status}`);
   const text = await resp.text();
   if (!text) return [];
