@@ -34,6 +34,7 @@ import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
+import { TestCompanyBanner } from "./components/TestCompanyBanner.tsx";
 
 const queryClient = new QueryClient();
 
