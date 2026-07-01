@@ -288,6 +288,20 @@ Deno.serve(async (req) => {
     if (itemsErr) throw new Error(`Erro ao carregar itens: ${itemsErr.message}`);
     if (!items || items.length === 0) throw new Error("Despesa sem itens — não é possível lançar no SAP");
 
+    // Centro de custo é obrigatório em cada linha (cabeçalho como fallback).
+    // Sem CC o SAP grava sem apropriação — bloqueamos antes de enviar.
+    const headerCc = String((expense as any).cost_center || "").trim();
+    const missingCcLines: number[] = [];
+    (items as any[]).forEach((it, idx) => {
+      const lineCc = String(it.cost_center || "").trim();
+      if (!lineCc && !headerCc) missingCcLines.push(idx + 1);
+    });
+    if (missingCcLines.length > 0) {
+      throw new Error(
+        `Centro de custo é obrigatório. Linha(s) sem centro de custo: ${missingCcLines.join(", ")}.`,
+      );
+    }
+
     // Lock anti-duplicação: impede dois cliques simultâneos de criar 2 POs no SAP.
     // Pulado se já há sap_doc_entry (caso de re-link de anexos tratado abaixo).
     if (!expense.sap_doc_entry) {
