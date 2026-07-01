@@ -124,6 +124,17 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
 
+  const derivedInput = {
+    expenseId: expense?.id || "",
+    sapDocEntry: expense?.sap_doc_entry ?? null,
+    sapDocNum: expense?.sap_doc_num ?? null,
+    companyDb: expense?.company_db ?? null,
+    supplierCode: expense?.supplier_code ?? null,
+    enabled: open && !!expense,
+  };
+  const nfLinks = useNfEntradaLinks(derivedInput);
+  const apLinks = useContasPagarLinks(derivedInput);
+
   useEffect(() => {
     if (!open || !expense) return;
     let cancelled = false;
