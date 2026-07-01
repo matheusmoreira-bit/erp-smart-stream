@@ -507,6 +507,7 @@ export default function Admin() {
           tax_id: companyForm.tax_id || null,
           foreign_name: companyForm.foreign_name || null,
           is_foreign: companyForm.is_foreign,
+          is_test: companyForm.is_test,
         })
         .eq("id", editingCompany.id);
       if (error) { toast.error("Erro ao atualizar"); hasError = true; }
