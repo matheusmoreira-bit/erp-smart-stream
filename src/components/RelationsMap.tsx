@@ -21,6 +21,13 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { STATUS_LABELS } from "@/hooks/useExpenses";
+import {
+  useNfEntradaLinks,
+  useContasPagarLinks,
+  type NfEntradaLink,
+  type ContaPagarLink,
+} from "@/hooks/useRelationsMapDerived";
+import { Loader2 } from "lucide-react";
 
 type LogDecision =
   | "created"
@@ -60,6 +67,7 @@ export interface RelationsMapExpense {
   currency?: string | null;
   supplier_name?: string | null;
   supplier_code?: string | null;
+  company_db?: string | null;
   created_at?: string;
   updated_at?: string;
 }
