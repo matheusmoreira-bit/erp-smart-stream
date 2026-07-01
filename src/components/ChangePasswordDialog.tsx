@@ -28,8 +28,14 @@ export function ChangePasswordDialog() {
   const [loading, setLoading] = useState(false);
   const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [applyAll, setApplyAll] = useState(true);
+  const [customPick, setCustomPick] = useState(false);
   const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
+
+  const isTest = (db: string) => db.toUpperCase().startsWith("TST");
+  const prodCompanies = otherCompanies.filter((c) => !isTest(c.company_db));
+  const testCompanies = otherCompanies.filter((c) => isTest(c.company_db));
+  const allProdSelected = prodCompanies.length > 0 && prodCompanies.every((c) => selected.has(c.company_db));
+  const allTestSelected = testCompanies.length > 0 && testCompanies.every((c) => selected.has(c.company_db));
 
   useEffect(() => {
     if (!open || !session) return;
@@ -44,8 +50,20 @@ export function ChangePasswordDialog() {
     setNewPassword("");
     setConfirmPassword("");
     setSelected(new Set(otherCompanies.map((o) => o.company_db)));
-    setApplyAll(true);
+    setCustomPick(false);
     setSummary(null);
+  };
+
+  const toggleGroup = (group: "prod" | "test", checked: boolean) => {
+    const list = group === "prod" ? prodCompanies : testCompanies;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      list.forEach((c) => {
+        if (checked) next.add(c.company_db);
+        else next.delete(c.company_db);
+      });
+      return next;
+    });
   };
 
   const toggle = (db: string) => {
