@@ -1016,6 +1016,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_foreign: boolean
+          is_test: boolean
           legal_name: string | null
           logo_url: string | null
           service_layer_url: string | null
@@ -1035,6 +1036,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_foreign?: boolean
+          is_test?: boolean
           legal_name?: string | null
           logo_url?: string | null
           service_layer_url?: string | null
@@ -1054,6 +1056,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_foreign?: boolean
+          is_test?: boolean
           legal_name?: string | null
           logo_url?: string | null
           service_layer_url?: string | null
