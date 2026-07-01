@@ -40,7 +40,9 @@ export interface ContaPagarLink {
   numero_documento: string | null;
   valor_documento: number | null;
   valor_pago: number | null;
+  data_registro: string | null;
   data_vencimento: string | null;
+  data_pagamento: string | null;
   status: string | null;
   numero_pedido: string | null;
   source: "sap" | "omie";
@@ -141,7 +143,9 @@ export function useContasPagarLinks({
         numero_documento: String(inv.DocNum),
         valor_documento: inv.DocTotal,
         valor_pago: inv.PaidToDate,
+        data_registro: inv.DocDate || null,
         data_vencimento: inv.DocDueDate,
+        data_pagamento: null, // SAP não expõe data do pagamento sem consultar VendorPayments
         status: inv.isFullyPaid
           ? "Pago"
           : inv.DocumentStatus === "bost_Close"
@@ -174,17 +178,22 @@ export function useContasPagarLinks({
           return false;
         });
 
-        const payables: ContaPagarLink[] = filtered.map((row) => ({
-          id: `omie:${row.codigo_lancamento_omie}`,
-          fornecedor: row.nome_cliente_fornecedor ?? null,
-          numero_documento: row.numero_documento ?? row.numero_documento_fiscal ?? null,
-          valor_documento: row.valor_documento ?? null,
-          valor_pago: row.valor_pago ?? null,
-          data_vencimento: row.data_vencimento ?? null,
-          status: row.status_titulo ?? null,
-          numero_pedido: row.numero_pedido ?? null,
-          source: "omie",
-        }));
+        const payables: ContaPagarLink[] = filtered.map((row) => {
+          const dataPag = (row as Record<string, unknown>)["data_pagamento"];
+          return {
+            id: `omie:${row.codigo_lancamento_omie}`,
+            fornecedor: row.nome_cliente_fornecedor ?? null,
+            numero_documento: row.numero_documento ?? row.numero_documento_fiscal ?? null,
+            valor_documento: row.valor_documento ?? null,
+            valor_pago: row.valor_pago ?? null,
+            data_registro: row.data_registro ?? row.data_emissao ?? null,
+            data_vencimento: row.data_vencimento ?? null,
+            data_pagamento: typeof dataPag === "string" ? dataPag : null,
+            status: row.status_titulo ?? null,
+            numero_pedido: row.numero_pedido ?? null,
+            source: "omie" as const,
+          };
+        });
 
         return { invoices: [], payables };
       } catch (e) {
