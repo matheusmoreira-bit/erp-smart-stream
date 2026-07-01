@@ -446,7 +446,7 @@ export default function Admin() {
   // Company CRUD
   const openNewCompany = () => {
     setEditingCompany(null);
-    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "", legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, targets: { ...DEFAULT_TARGETS } });
+    setCompanyForm({ company_db: "", display_name: "", service_layer_url: "", is_active: true, erp_type: "", default_currency: "BRL", timezone: "America/Sao_Paulo", logo_url: "", legal_name: "", trade_name: "", tax_id: "", foreign_name: "", is_foreign: false, is_test: false, targets: { ...DEFAULT_TARGETS } });
     setWizardStep(1);
     setWizardCreds({});
     setShowWizardPasswords({});
