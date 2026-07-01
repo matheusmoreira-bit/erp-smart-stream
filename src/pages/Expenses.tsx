@@ -614,15 +614,27 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const effectiveShowAll = isAdmin && showAll;
 
-  // Identifica DocEntries do SAP já vinculados a alguma despesa do ERP Flow,
-  // para não exibi-los duplicados quando o modo é "Ambos".
-  const flowSapDocEntries = new Set(
-    expenses
-      .map((e) => e.sap_doc_entry)
-      .filter((v): v is number => typeof v === "number"),
-  );
+  // Identifica DocEntries/DocNums do SAP já vinculados a alguma despesa do ERP Flow,
+  // para não exibi-los duplicados quando o modo é "Ambos". Dedup por (company_db + DocEntry)
+  // e também por (company_db + DocNum) — cobre casos onde apenas um dos dois foi persistido.
+  const sessionCompany = (session?.companyDB || "").toLowerCase();
+  const flowSapKeys = new Set<string>();
+  for (const e of expenses) {
+    const comp = (e.company_db || sessionCompany || "").toLowerCase();
+    const entry = e.sap_doc_entry != null ? Number(e.sap_doc_entry) : null;
+    const num = e.sap_doc_num != null ? Number(e.sap_doc_num) : null;
+    if (entry != null && Number.isFinite(entry)) flowSapKeys.add(`${comp}:entry:${entry}`);
+    if (num != null && Number.isFinite(num)) flowSapKeys.add(`${comp}:num:${num}`);
+  }
   const sapOnly = showSourceToggle && sourceMode === "both"
-    ? sapOrders.filter((o) => o.sap_doc_entry == null || !flowSapDocEntries.has(o.sap_doc_entry))
+    ? sapOrders.filter((o) => {
+        const comp = (o.company_db || sessionCompany || "").toLowerCase();
+        const entry = o.sap_doc_entry != null ? Number(o.sap_doc_entry) : null;
+        const num = o.sap_doc_num != null ? Number(o.sap_doc_num) : null;
+        if (entry != null && flowSapKeys.has(`${comp}:entry:${entry}`)) return false;
+        if (num != null && flowSapKeys.has(`${comp}:num:${num}`)) return false;
+        return true;
+      })
     : [];
 
   const applyFilters = (e: Expense, scoped: boolean) => {
