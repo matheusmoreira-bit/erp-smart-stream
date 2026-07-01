@@ -277,7 +277,7 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            <ExpenseEventHistory expenseId={expense.id} refreshKey={expense.updated_at} />
+            <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
 
 
 
