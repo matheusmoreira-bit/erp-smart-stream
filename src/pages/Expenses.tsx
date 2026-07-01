@@ -48,6 +48,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
+import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 import { RelationsMap } from "@/components/RelationsMap";
@@ -275,6 +276,10 @@ function ExpenseDetailModal({
                 )}
               </div>
             )}
+
+            <ExpenseEventHistory expenseId={expense.id} refreshKey={expense.updated_at} />
+
+
 
             {(showSubmit || showCancel || showRetrySap || showEdit || showApproval) && (
               <div className="border-t border-border pt-4 flex justify-end gap-3 flex-wrap">
