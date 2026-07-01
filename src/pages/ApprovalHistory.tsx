@@ -37,12 +37,14 @@ export default function ApprovalHistory() {
   const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
   const { expenses: purchaseExpenses } = useExpenses("purchase");
   const { expenses: salesExpenses } = useExpenses("sales");
-  const expensesByDocEntry = useMemo(() => {
-    const m = new Map<number, Expense>();
+  const { expensesByDocEntry, expensesById } = useMemo(() => {
+    const byDoc = new Map<number, Expense>();
+    const byId = new Map<string, Expense>();
     for (const e of [...purchaseExpenses, ...salesExpenses]) {
-      if (typeof e.sap_doc_entry === "number") m.set(e.sap_doc_entry, e);
+      byId.set(e.id, e);
+      if (typeof e.sap_doc_entry === "number") byDoc.set(e.sap_doc_entry, e);
     }
-    return m;
+    return { expensesByDocEntry: byDoc, expensesById: byId };
   }, [purchaseExpenses, salesExpenses]);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
 
