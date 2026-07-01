@@ -644,7 +644,7 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
 
   return (
     <Dialog open={!!stage} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon className="w-5 h-5 text-primary" />
