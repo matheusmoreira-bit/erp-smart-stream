@@ -35,6 +35,7 @@ export interface Company {
   tax_id?: string | null;
   foreign_name?: string | null;
   is_foreign?: boolean;
+  is_test?: boolean;
   default_currency?: string | null;
 }
 
