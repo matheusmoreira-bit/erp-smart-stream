@@ -527,6 +527,7 @@ export default function Admin() {
         tax_id: companyForm.tax_id || null,
         foreign_name: companyForm.foreign_name || null,
         is_foreign: companyForm.is_foreign,
+        is_test: companyForm.is_test,
       });
       if (error) { toast.error(error.message.includes("duplicate") ? "Código já existe" : "Erro ao criar"); hasError = true; }
     }
