@@ -454,6 +454,10 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         expense={expense}
         log={log}
         approverRows={approverRows}
+        nfLinks={nfLinks.data || []}
+        nfLoading={nfLinks.isLoading}
+        apPayables={apLinks.data?.payables || []}
+        apLoading={apLinks.isLoading}
         onClose={() => setDetailStage(null)}
       />
     </>
@@ -465,10 +469,14 @@ interface StageDetailProps {
   expense: RelationsMapExpense;
   log: ApprovalLogRow[];
   approverRows: (RuleLevelRow & { done: boolean; isCurrent: boolean })[];
+  nfLinks: NfEntradaLink[];
+  nfLoading: boolean;
+  apPayables: ContaPagarLink[];
+  apLoading: boolean;
   onClose: () => void;
 }
 
-function StageDetailDialog({ stage, expense, log, approverRows, onClose }: StageDetailProps) {
+function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoading, apPayables, apLoading, onClose }: StageDetailProps) {
   if (!stage) return null;
   const def = STAGE_DEFS.find((s) => s.key === stage);
   if (!def) return null;
