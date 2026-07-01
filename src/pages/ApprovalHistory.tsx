@@ -163,12 +163,15 @@ export default function ApprovalHistory() {
           <div className="text-center py-16 text-muted-foreground">Carregando histórico...</div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
-            Nenhuma aprovação encontrada. Clique em "Sincronizar agora" para carregar do SAP Approval Hub.
+            Nenhuma aprovação encontrada. Aprovações do ERP Flow aparecem automaticamente;
+            para trazer decisões feitas direto no SAP, clique em "Sincronizar agora".
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((r) => {
-              const linked = typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined;
+              const linked =
+                (r.expense_id ? expensesById.get(r.expense_id) : undefined) ||
+                (typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined);
               return (
                 <HistoryCard
                   key={r.id}
