@@ -452,10 +452,18 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           matchedRuleId = match.rule.id;
         } else {
           // Sem regra correspondente: NUNCA auto-aprovar. Vai para aprovação
-          // manual (admin/financeiro) — evita bypass como o ocorrido em SBO_CACTUS.
+          // administrativa — busca um admin padrão para exibir como aprovador.
           status = "pendente_aprovacao";
-          currentApprover = null;
           matchedRuleId = null;
+          try {
+            const { data: fallback } = await (supabase as any).rpc(
+              "get_default_expense_approver",
+              { _company_db: session.companyDB || null },
+            );
+            currentApprover = (typeof fallback === "string" && fallback.trim()) || "Administrador";
+          } catch {
+            currentApprover = "Administrador";
+          }
         }
       }
 
