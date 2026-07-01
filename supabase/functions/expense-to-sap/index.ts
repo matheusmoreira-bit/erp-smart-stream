@@ -463,11 +463,23 @@ Deno.serve(async (req) => {
     // shows up in audit even if the PO creation fails.
     if (attachmentEntry !== null) attachmentLinkStatus = "pending";
 
+    // Normalize dates to YYYY-MM-DD for SAP. Fallback to today when absent.
+    // The expense stores dates as ISO strings from a date input (already YYYY-MM-DD)
+    // or as timestamptz — slice(0,10) works for both without timezone drift.
+    const normalizeDate = (v: unknown): string => {
+      if (!v) return today;
+      const s = String(v);
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[1]}-${m[2]}-${m[3]}` : today;
+    };
+    const docDate = normalizeDate((expense as any).doc_date);
+    const dueDate = normalizeDate((expense as any).due_date ?? (expense as any).doc_date);
+
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
-      DocDate: today,
-      DocDueDate: today,
-      TaxDate: today,
+      DocDate: docDate,
+      DocDueDate: dueDate,
+      TaxDate: docDate,
       BPL_IDAssignedToInvoice: branchId,
       Comments: truncateSapText(
         (() => {

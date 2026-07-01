@@ -676,6 +676,8 @@ export function CreateExpenseModal({
         origin,
         skipRules,
         doc_type: mode,
+        doc_date: docDate || undefined,
+        due_date: dueDate || undefined,
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });

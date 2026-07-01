@@ -171,6 +171,8 @@ export interface CreateExpenseInput {
   skipRules?: boolean;
   branch_id?: number;
   doc_type?: ExpenseDocType;
+  doc_date?: string;
+  due_date?: string;
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
 }
@@ -479,6 +481,8 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           company_db: session.companyDB,
           branch_id: input.branch_id ?? 1,
           doc_type: input.doc_type || docType,
+          doc_date: input.doc_date || null,
+          due_date: input.due_date || null,
         } as any)
         .select()
         .single();
