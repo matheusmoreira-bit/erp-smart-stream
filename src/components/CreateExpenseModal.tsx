@@ -666,12 +666,18 @@ export function CreateExpenseModal({
         return;
       }
     }
+    if (!headerCostCenter?.code) {
+      toast.error("Centro de custo (padrão) é obrigatório");
+      return;
+    }
     setIsCreating(true);
     try {
       await onCreate({
         supplier_name: supplier.name,
         supplier_code: supplier.code || undefined,
         currency: currency || undefined,
+        cost_center: headerCostCenter?.code || undefined,
+        project: headerProject?.code || undefined,
         remarks: remarks || undefined,
         origin,
         skipRules,
@@ -969,12 +975,12 @@ export function CreateExpenseModal({
           {/* Header-level defaults: cascade to all items, user can override per line */}
           <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
             <CachedSearchCombobox
-              label="Centro de Custo (padrão p/ itens)"
+              label="Centro de Custo (padrão p/ itens) *"
               options={costCenterOptions}
               isLoading={costCentersLoading}
               value={headerCostCenter}
               onChange={applyHeaderCostCenter}
-              placeholder="Aplica a todos os itens…"
+              placeholder="Obrigatório — aplica a todos os itens…"
               portalContainer={dialogContainer}
             />
             <CachedSearchCombobox
