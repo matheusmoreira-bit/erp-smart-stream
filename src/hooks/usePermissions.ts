@@ -123,10 +123,10 @@ export function usePermissionGroups() {
     const existing = groups.find((g) => g.name === "Usuário");
     if (existing) return existing;
 
-    const defaultModules = ["expenses"];
+    const defaultModules = ["expenses", "approvals", "approval_history"];
     const { data } = await supabase
       .from("permission_groups")
-      .insert({ name: "Usuário", description: "Acesso padrão — apenas despesas" })
+      .insert({ name: "Usuário", description: "Acesso padrão — despesas e aprovações" })
       .select()
       .single();
     if (data) {
