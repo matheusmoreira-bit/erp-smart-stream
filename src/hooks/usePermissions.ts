@@ -53,7 +53,9 @@ export const ALL_MODULES = [
 export const SAP_MODULES = ALL_MODULES;
 
 // Default modules for users with no group
-const DEFAULT_MODULES = ["expenses"];
+// Aprovações fica sempre disponível — a tela em si já restringe aos docs
+// em que o usuário é aprovador ou substituto.
+const DEFAULT_MODULES = ["expenses", "approvals", "approval_history"];
 
 export function usePermissionGroups() {
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
@@ -121,10 +123,10 @@ export function usePermissionGroups() {
     const existing = groups.find((g) => g.name === "Usuário");
     if (existing) return existing;
 
-    const defaultModules = ["expenses"];
+    const defaultModules = ["expenses", "approvals", "approval_history"];
     const { data } = await supabase
       .from("permission_groups")
-      .insert({ name: "Usuário", description: "Acesso padrão — apenas despesas" })
+      .insert({ name: "Usuário", description: "Acesso padrão — despesas e aprovações" })
       .select()
       .single();
     if (data) {
