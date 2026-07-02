@@ -1183,6 +1183,8 @@ export default function ApprovalsPage() {
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
+  const { rules } = useApprovalRules();
+
 
   // Merge SAP approvals with internal pending expenses
   const internalPending = (expenses || [])
