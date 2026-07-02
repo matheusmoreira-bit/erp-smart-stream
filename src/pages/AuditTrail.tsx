@@ -90,7 +90,7 @@ export default function AuditTrailPage() {
       toast({ title: "Falha na verificação", description: error.message, variant: "destructive" });
       return;
     }
-    const row = Array.isArray(data) && data.length > 0 ? (data[0] as { first_broken_id: number | null; total_checked: number; ok: boolean }) : null;
+    const row = data && Array.isArray(data) && data.length > 0 ? (data[0] as { first_broken_id: number | null; total_checked: number; ok: boolean }) : null;
     if (row) {
       setVerifyResult({ ok: row.ok, total: Number(row.total_checked), broken: row.first_broken_id });
       toast({
