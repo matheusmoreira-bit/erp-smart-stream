@@ -54,6 +54,18 @@ interface RuleLevelRow {
   approver_email: string | null;
 }
 
+interface SapHistoryRow {
+  id: string;
+  approver_name: string | null;
+  approver_email: string | null;
+  decision: string | null; // 'Y' aprovado, 'N' rejeitado, 'W'/'P' pendente
+  decision_date: string | null;
+  step: number | null;
+  stage_name: string | null;
+  remarks: string | null;
+}
+
+
 export interface RelationsMapExpense {
   id: string;
   status: string;
@@ -121,6 +133,7 @@ function formatCurrency(value?: number, currency?: string | null) {
 export function RelationsMap({ open, onClose, expense, title }: Props) {
   const [log, setLog] = useState<ApprovalLogRow[]>([]);
   const [levels, setLevels] = useState<RuleLevelRow[]>([]);
+  const [sapHistory, setSapHistory] = useState<SapHistoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
 
@@ -140,7 +153,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
     let cancelled = false;
     (async () => {
       setIsLoading(true);
-      const [logRes, levelsRes] = await Promise.all([
+      const [logRes, levelsRes, sapRes] = await Promise.all([
         supabase
           .from("expense_approval_log")
           .select("*")
@@ -153,16 +166,26 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
               .eq("rule_id", expense.approval_rule_id)
               .order("level_order", { ascending: true })
           : Promise.resolve({ data: [] as RuleLevelRow[] }),
+        expense.sap_doc_entry && expense.company_db
+          ? supabase
+              .from("approval_history")
+              .select("id, approver_name, approver_email, decision, decision_date, step, stage_name, remarks")
+              .eq("company_db", expense.company_db)
+              .eq("doc_entry", expense.sap_doc_entry)
+              .order("step", { ascending: true })
+          : Promise.resolve({ data: [] as SapHistoryRow[] }),
       ]);
       if (cancelled) return;
       setLog(((logRes as any).data || []) as ApprovalLogRow[]);
       setLevels(((levelsRes as any).data || []) as RuleLevelRow[]);
+      setSapHistory(((sapRes as any).data || []) as SapHistoryRow[]);
       setIsLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, [open, expense]);
+
 
   const stages = useMemo(() => {
     if (!expense) return [] as { key: StageKey; label: string; icon: any; state: "done" | "current" | "pending" | "skipped"; hasDoc: boolean }[];
@@ -184,7 +207,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
       // hasDoc: there's something concrete to inspect at this stage
       const hasDoc =
         s.key === "rascunho" ||
-        (s.key === "pendente_aprovacao" && (levels.length > 0 || log.length > 0)) ||
+        (s.key === "pendente_aprovacao" && (levels.length > 0 || log.length > 0 || sapHistory.length > 0)) ||
         (s.key === "aprovado" && reached) ||
         (s.key === "pc_lancado" && (!!expense.sap_doc_num || reached)) ||
         (s.key === "nf_entrada" && (nfCount > 0 || reached)) ||
@@ -192,7 +215,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         (s.key === "finalizado" && reached);
       return { key: s.key, label: s.label, icon: s.icon, state, hasDoc };
     });
-  }, [expense, levels.length, log.length, nfLinks.data, apLinks.data]);
+  }, [expense, levels.length, log.length, sapHistory.length, nfLinks.data, apLinks.data]);
 
   // Aprovadores: feitos, atual, próximos
   const approvedNames = useMemo(
@@ -205,20 +228,86 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
     [log],
   );
 
-  const approverRows = useMemo(() => {
+  // Chain unificada: preferimos a regra local; senão, reconstruímos a partir do
+  // histórico SAP (approval_history) — mostra anteriores, atual e próximos com
+  // decisão registrada (aprovado/rejeitado/pendente).
+  type ChainRow = {
+    level_order: number;
+    approver_name: string;
+    approver_email: string | null;
+    done: boolean;
+    isCurrent: boolean;
+    rejected?: boolean;
+    decidedAt?: string | null;
+    remarks?: string | null;
+    stageName?: string | null;
+    source: "rule" | "sap";
+  };
+
+  const approverRows: ChainRow[] = useMemo(() => {
     if (!expense) return [];
-    return levels.map((lv) => {
-      const done = approvedNames.has(lv.approver_name.toLowerCase());
-      const isCurrent =
-        !done &&
-        !!expense.current_approver &&
-        expense.current_approver.toLowerCase() === lv.approver_name.toLowerCase();
-      return { ...lv, done, isCurrent };
-    });
-  }, [levels, approvedNames, expense]);
+    if (levels.length > 0) {
+      return levels.map((lv) => {
+        const done = approvedNames.has(lv.approver_name.toLowerCase());
+        const isCurrent =
+          !done &&
+          !!expense.current_approver &&
+          expense.current_approver.toLowerCase() === lv.approver_name.toLowerCase();
+        return { ...lv, done, isCurrent, source: "rule" as const };
+      });
+    }
+    // Fallback: reconstrói a partir do SAP approval_history
+    if (sapHistory.length === 0 && !expense.current_approver) return [];
+    const sorted = [...sapHistory].sort(
+      (a, b) => (a.step ?? 0) - (b.step ?? 0),
+    );
+    const rows: ChainRow[] = sorted
+      .filter((r) => (r.approver_name || r.approver_email))
+      .map((r, i) => {
+        const dec = (r.decision || "").toUpperCase();
+        const approved = dec === "Y" || dec === "APPROVED";
+        const rejected = dec === "N" || dec === "REJECTED";
+        return {
+          level_order: r.step ?? i + 1,
+          approver_name: r.approver_name || r.approver_email || "—",
+          approver_email: r.approver_email,
+          done: approved,
+          rejected,
+          isCurrent: false,
+          decidedAt: r.decision_date,
+          remarks: r.remarks,
+          stageName: r.stage_name,
+          source: "sap" as const,
+        };
+      });
+    // Se há aprovador atual conhecido mas ele não aparece na lista SAP, adiciona
+    if (
+      expense.current_approver &&
+      !rows.some(
+        (r) => r.approver_name.toLowerCase() === expense.current_approver!.toLowerCase() && !r.done && !r.rejected,
+      )
+    ) {
+      const maxStep = rows.reduce((m, r) => Math.max(m, r.level_order), 0);
+      rows.push({
+        level_order: maxStep + 1,
+        approver_name: expense.current_approver,
+        approver_email: null,
+        done: false,
+        isCurrent: true,
+        source: "sap",
+      });
+    } else {
+      // marca o primeiro sem decisão como atual
+      const firstPending = rows.find((r) => !r.done && !r.rejected);
+      if (firstPending) firstPending.isCurrent = true;
+    }
+    return rows;
+  }, [levels, approvedNames, expense, sapHistory]);
 
   const currentApproverRow = approverRows.find((r) => r.isCurrent);
-  const nextApproverRows = approverRows.filter((r) => !r.done && !r.isCurrent);
+  const nextApproverRows = approverRows.filter((r) => !r.done && !r.rejected && !r.isCurrent);
+
+
 
   if (!expense) return null;
 
@@ -369,79 +458,129 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                   </>
                 )}
 
-                {approverRows.filter((r) => r.done).length > 0 && (
+                {approverRows.filter((r) => r.done || r.rejected).length > 0 && (
                   <>
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                      Já aprovado por
+                      Anteriores
                     </div>
                     <div className="space-y-1.5">
                       {approverRows
-                        .filter((r) => r.done)
-                        .map((lv) => (
-                          <div
-                            key={`done-${lv.level_order}-${lv.approver_name}`}
-                            className="flex items-center gap-3 p-2 rounded-lg border border-success/30 bg-success/5"
-                          >
-                            <div className="w-6 h-6 rounded-full bg-success/20 text-success text-xs font-medium flex items-center justify-center">
-                              {lv.level_order}
+                        .filter((r) => r.done || r.rejected)
+                        .map((lv) => {
+                          const rejected = !!lv.rejected;
+                          return (
+                            <div
+                              key={`done-${lv.level_order}-${lv.approver_name}`}
+                              className={`flex items-center gap-3 p-2 rounded-lg border ${
+                                rejected
+                                  ? "border-destructive/30 bg-destructive/5"
+                                  : "border-success/30 bg-success/5"
+                              }`}
+                            >
+                              <div
+                                className={`w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center ${
+                                  rejected
+                                    ? "bg-destructive/20 text-destructive"
+                                    : "bg-success/20 text-success"
+                                }`}
+                              >
+                                {lv.level_order}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm">{lv.approver_name}</div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  {rejected ? "Rejeitou" : "Aprovou"}
+                                  {lv.decidedAt ? ` · ${formatDateTime(lv.decidedAt)}` : ""}
+                                  {lv.stageName ? ` · ${lv.stageName}` : ""}
+                                </div>
+                                {lv.remarks && (
+                                  <div className="text-[11px] mt-1 bg-muted/40 rounded p-1.5">{lv.remarks}</div>
+                                )}
+                              </div>
+                              {rejected ? (
+                                <XCircle className="w-4 h-4 text-destructive" />
+                              ) : (
+                                <ShieldCheck className="w-4 h-4 text-success" />
+                              )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm">{lv.approver_name}</div>
-                            </div>
-                            <ShieldCheck className="w-4 h-4 text-success" />
-                          </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   </>
                 )}
 
                 {approverRows.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    Nenhum aprovador previsto (regra de aprovação não associada).
+                    Nenhum aprovador previsto (documento sem regra local e sem histórico SAP disponível).
                   </p>
                 )}
               </section>
+
 
               {/* Trilha histórica */}
               <section>
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                   Histórico de eventos
                 </h3>
-                {isLoading ? (
-                  <p className="text-sm text-muted-foreground">Carregando…</p>
-                ) : log.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nenhum evento registrado ainda.</p>
-                ) : (
-                  <ol className="space-y-3 relative border-l border-border ml-2 pl-4">
-                    {log.map((row) => {
-                      const meta = DECISION_META[row.decision];
-                      const Icon = meta.icon;
-                      return (
-                        <li key={row.id} className="relative">
-                          <span className="absolute -left-[22px] top-0.5 w-4 h-4 rounded-full bg-background border border-border flex items-center justify-center">
-                            <Icon className={`w-3 h-3 ${meta.color}`} />
-                          </span>
-                          <div className="flex items-baseline justify-between gap-2">
-                            <div className="text-sm font-medium">{meta.label}</div>
-                            <div className="text-xs text-muted-foreground font-mono shrink-0">
-                              {formatDateTime(row.decided_at)}
+                {(() => {
+                  const sapEvents = sapHistory
+                    .filter((h) => (h.decision || "").toUpperCase() === "Y" || (h.decision || "").toUpperCase() === "N")
+                    .map((h) => ({
+                      id: `sap-${h.id}`,
+                      decision: ((h.decision || "").toUpperCase() === "N" ? "rejected" : "approved") as LogDecision,
+                      approver_name: h.approver_name,
+                      approver_email: h.approver_email,
+                      level_order: h.step,
+                      remarks: h.remarks,
+                      decided_at: h.decision_date || "",
+                      source: "SAP" as const,
+                    }));
+                  const localEvents = log.map((l) => ({ ...l, source: "ERP Flow" as const }));
+                  const events = [...localEvents, ...sapEvents].sort(
+                    (a, b) =>
+                      new Date(a.decided_at || 0).getTime() - new Date(b.decided_at || 0).getTime(),
+                  );
+                  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
+                  if (events.length === 0)
+                    return <p className="text-sm text-muted-foreground">Nenhum evento registrado ainda.</p>;
+                  return (
+                    <ol className="space-y-3 relative border-l border-border ml-2 pl-4">
+                      {events.map((row) => {
+                        const meta = DECISION_META[row.decision];
+                        const Icon = meta.icon;
+                        return (
+                          <li key={row.id} className="relative">
+                            <span className="absolute -left-[22px] top-0.5 w-4 h-4 rounded-full bg-background border border-border flex items-center justify-center">
+                              <Icon className={`w-3 h-3 ${meta.color}`} />
+                            </span>
+                            <div className="flex items-baseline justify-between gap-2">
+                              <div className="text-sm font-medium flex items-center gap-2">
+                                {meta.label}
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase tracking-wide">
+                                  {row.source}
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-muted-foreground font-mono shrink-0">
+                                {formatDateTime(row.decided_at)}
+                              </div>
                             </div>
-                          </div>
-                          {row.approver_name && (
-                            <div className="text-xs text-muted-foreground">
-                              {row.approver_name}
-                              {row.approver_email ? ` · ${row.approver_email}` : ""}
-                              {row.level_order ? ` · nível ${row.level_order}` : ""}
-                            </div>
-                          )}
-                          {row.remarks && (
-                            <div className="text-xs bg-muted/40 rounded p-2 mt-1.5">{row.remarks}</div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                )}
+                            {row.approver_name && (
+                              <div className="text-xs text-muted-foreground">
+                                {row.approver_name}
+                                {row.approver_email ? ` · ${row.approver_email}` : ""}
+                                {row.level_order ? ` · nível ${row.level_order}` : ""}
+                              </div>
+                            )}
+                            {row.remarks && (
+                              <div className="text-xs bg-muted/40 rounded p-2 mt-1.5">{row.remarks}</div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  );
+                })()}
+
               </section>
             </div>
           </div>
