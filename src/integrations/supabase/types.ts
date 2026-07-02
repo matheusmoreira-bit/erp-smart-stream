@@ -1068,6 +1068,42 @@ export type Database = {
         }
         Relationships: []
       }
+      document_drafts: {
+        Row: {
+          company_db: string
+          created_at: string
+          doc_type: string
+          expires_at: string
+          id: string
+          payload: Json
+          preview: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          doc_type: string
+          expires_at?: string
+          id?: string
+          payload?: Json
+          preview?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          doc_type?: string
+          expires_at?: string
+          id?: string
+          payload?: Json
+          preview?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_send_log: {
         Row: {
           created_at: string

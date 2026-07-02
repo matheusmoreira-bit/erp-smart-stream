@@ -1,108 +1,62 @@
 
-# Console de Auditoria — Fases 3 e 4
+# Esboços de Pedidos de Compra e Venda
 
-O schema já existe (`audit_console_runs/divergences/insights/logs/rules` + enums). O que falta é o motor que **gera dados** e a UI para **disparar e revisar**.
+Salvar automaticamente o preenchimento do modal de novo pedido, permitir retomar de onde parou e expirar em 15 dias.
 
-## Fase 3 — Motor, regras, insights, logs
+## Comportamento
 
-### 3.1 Edge function `audit-console-run` (motor)
-Cria um run e processa em background usando `EdgeRuntime.waitUntil`. Recebe `{ companyDB, scope, dateFrom, dateTo }`.
+- Ao abrir o modal de "Novo Pedido" (compra ou venda) e o usuário começar a digitar, o sistema cria/atualiza um **esboço** vinculado ao usuário + empresa + tipo (compra/venda).
+- Salvamento automático com **debounce de ~1s** a cada alteração (fornecedor/cliente, moeda, datas, observações, itens, centro de custo, projeto, arquivos anexados são registrados por nome — o binário fica no bucket só quando o pedido for efetivamente criado).
+- Ao **enviar o pedido**, o esboço correspondente é apagado.
+- Ao **fechar o modal sem enviar**, o esboço permanece.
+- Novo botão **"Esboços" com contador** no topo das telas de Compras (`/pages/Expenses.tsx`) e Vendas (`/pages/Sales.tsx`), ao lado do "+ Novo Pedido".
+- Ao clicar em um esboço da lista, o modal reabre já preenchido com os dados salvos.
+- Esboços expiram automaticamente após **15 dias** desde a última alteração (limpeza no acesso à listagem + índice para varredura futura).
 
-Pipeline por run:
-1. `INSERT audit_console_runs (status=pending, progress=0)`
-2. Para cada etapa, atualiza `current_step` + `progress_pct` e grava `audit_console_logs`
-3. Coleta dados do SAP via Service Layer (reusa `sapFetch` de `_shared/sap-fetch.ts` e credenciais via `system_credentials`):
-   - `PurchaseRequests`, `Quotations`, `PurchaseOrders`, `PurchaseDeliveryNotes`, `PurchaseInvoices`, `VendorPayments`, `BusinessPartners`
-   - filtra por `DocDate` entre `dateFrom`/`dateTo`
-4. Aplica regras (próximo item) → gera divergências
-5. Gera insights via Lovable AI (resumo executivo)
-6. Atualiza `status=completed`, totais e `finished_at`
+## Escopo
 
-### 3.2 Regras de divergência (catálogo inicial)
-Implementa direto no motor, parametrizáveis por `audit_console_rules`:
+- Documento tipo `purchase` (Expenses) e `sales` (Sales).
+- Um esboço por (usuário, empresa, tipo) — se o usuário já tem um esboço aberto e começa outro, atualiza o mesmo. A lista mostra todos, mas na prática costuma ter 1 por tipo.
 
-| Tipo enum                  | O que checa                                                              | Severidade default |
-|---------------------------|--------------------------------------------------------------------------|--------------------|
-| `missing_order`           | GRPO/PI sem PO de origem                                                | high               |
-| `missing_grpo`            | PI sem GRPO quando fornecedor exige                                     | medium             |
-| `missing_ap`              | GRPO sem PI após N dias (config `days`, default 30)                     | medium             |
-| `value_mismatch`          | `|PO.DocTotal − PI.DocTotal| > tolerance` (% ou $)                       | high               |
-| `vendor_mismatch`         | PI com `CardCode` diferente do PO                                       | critical           |
-| `payment_terms_mismatch`  | `PaymentGroupCode` PI ≠ PO                                              | medium             |
-| `duplicate_suspected`     | Mesma `CardCode` + valor + janela ±3 dias                               | high → fraud_flag  |
-| `date_anomaly`            | `PI.DocDate < PO.DocDate` ou fim de semana/feriado                      | low                |
-| `missing_approval`        | PO acima do limite sem `approval_history` correspondente                | high               |
-| `missing_payment`         | PI vencida há > 30d sem `VendorPayment`                                 | medium             |
+Adiantamentos e outros documentos ficam fora desta primeira versão.
 
-Regras default são *seedadas* via migração (`company_db = NULL` = global). Admin pode override por empresa.
+## Detalhes técnicos
 
-### 3.3 Insights IA
-Após o pipeline, chama Lovable AI (`google/gemini-3-flash-preview`) com o resumo das divergências e grava 3-5 linhas em `audit_console_insights` (executive summary + top riscos).
+### Banco
 
-### 3.4 UI — Disparar e acompanhar
-- **Botão "Nova auditoria"** em `AuditRunsList` → modal com `dateFrom/dateTo`, escopo (compras/vendas/financeiro/tudo), confirma e chama a edge function.
-- **Polling** do run ativo a cada 3s (substitui mensagem "Fase 3").
-- **Aba Regras**: tabela editável de `audit_console_rules` (ativar/desativar, ajustar `tolerance` e `default_severity`).
-- **Aba Logs**: lista `audit_console_logs` por run com filtro por nível.
-- **Aba Insights**: lista global de `audit_console_insights` (já existe hook).
+Nova tabela `public.document_drafts`:
 
-## Fase 4 — Análise documental
+- `id uuid pk`
+- `user_id uuid` (auth.uid do dono)
+- `company_db text`
+- `doc_type text check in ('purchase','sales')`
+- `payload jsonb` — snapshot dos campos do formulário (supplier, currency, dates, remarks, items, headerCostCenter, headerProject, file names/sizes)
+- `preview text` — resumo curto para a lista (ex.: "VDARA — R$ 1.200,00 · 3 itens")
+- `created_at timestamptz default now()`
+- `updated_at timestamptz default now()`
+- `expires_at timestamptz default now() + interval '15 days'`
 
-### 4.1 Bucket privado `audit-console-docs`
-Upload de NF (XML/PDF) ou contrato, por run.
+Índice em `(user_id, company_db, doc_type)` e em `expires_at`.
 
-### 4.2 Edge function `audit-console-analyze-doc`
-- Recebe `{ runId, storagePath, docType: 'nf' | 'contract' }`
-- Extrai texto: PDF → `pdf-parse` (npm); XML → parser nativo
-- Chama Lovable AI com structured output (Zod) para extrair: `vendor`, `total`, `items[]`, `dates`, `paymentTerms`
-- Confronta contra o SAP daquele run:
-  - NF: bate `CardCode`, `DocTotal`, itens com `PurchaseInvoices`
-  - Contrato: bate cláusulas (prazo, multa, vigência) com `PurchaseOrders`
-- Gera `audit_console_divergences` com `source_table='external_doc'`, `source_id=storagePath`
+RLS: usuário só vê/edita/apaga os próprios (`auth.uid() = user_id`). GRANTs padrão para `authenticated` + `service_role`.
 
-### 4.3 UI — Tab "Documentos"
-- Drag & drop multiplo
-- Lista de docs enviados por run + status (`pending/analyzed/failed`)
-- Linha clicável → modal com extração estruturada + divergências geradas
+Limpeza: `DELETE FROM document_drafts WHERE expires_at < now()` executado no hook de listagem (barato, pouca linha por usuário). Sem cron nesta versão.
 
-## Estrutura técnica
+### Frontend
 
-```text
-supabase/functions/
-  audit-console-run/           # motor (background via EdgeRuntime.waitUntil)
-  audit-console-analyze-doc/   # análise documental (Fase 4)
+- Novo hook `src/hooks/useDocumentDrafts.ts`:
+  - `useDrafts(docType)` — lista + contador.
+  - `saveDraft(docType, payload, preview)` — upsert por `(user_id, company_db, doc_type)`.
+  - `deleteDraft(id)`.
+  - `purgeExpired()` — chamado ao montar.
+- Em `CreateExpenseModal.tsx`:
+  - Novo prop opcional `initialDraft` para hidratar o form.
+  - `useEffect` com debounce salvando o estado atual quando `open === true` e há qualquer campo preenchido.
+  - Ao concluir criação com sucesso, chama `deleteDraft`.
+- Novo componente `src/components/DraftsPopover.tsx` — botão "Esboços (N)" que abre um popover listando os esboços daquele tipo com botão "Retomar" e "Descartar".
+- Renderizado em `Expenses.tsx` (compra) e `Sales.tsx` (venda), próximo ao botão de novo pedido.
 
-src/components/audit-console/
-  NewAuditRunDialog.tsx        # modal "Nova auditoria"
-  AuditRulesTable.tsx          # editor de regras
-  AuditLogsViewer.tsx          # tail de logs por run
-  AuditInsightsList.tsx        # lista global
-  AuditDocumentsTab.tsx        # Fase 4
-  AuditDocumentRow.tsx
+### Fora do escopo
 
-src/hooks/useAuditConsole.ts   # estender: useStartAuditRun, useAuditDocuments,
-                               # useUpdateRule, polling em useAuditRun quando pending
-
-supabase/migrations/<ts>_audit_console_phase3_4.sql
-  - tabela audit_console_documents (id, run_id, company_db, storage_path,
-    doc_type, extracted jsonb, status, error, created_at)
-  - GRANT + RLS análogo a divergences
-  - seed audit_console_rules com regras default (company_db NULL)
-  - bucket privado audit-console-docs via storage.buckets
-```
-
-## Considerações
-
-- **Credenciais SAP**: motor lê `system_credentials` por `company_db` e usa Service Layer (mesmo padrão de `sap-b1-proxy`).
-- **Run longo**: usa `EdgeRuntime.waitUntil(processRun())` retornando 202 imediato ao client, que faz polling.
-- **Idempotência**: bloqueia novo run para a mesma `company_db` se já existir um `pending` ativo.
-- **Custo IA**: insights = 1 chamada por run; análise documental = 1 por doc. Default Gemini Flash (barato).
-- **Permissões**: já garantidas por `can_access_audit_console` + role `admin` (não muda).
-- **Sem mock**: dados reais do SAP e da IA desde o primeiro run.
-
-## Fora de escopo (proposta para fase 5+)
-- Agendamento recorrente (cron) das auditorias
-- Workflow de aprovação das divergências revisadas (tabelas `audit_console_workflow_*` já existem mas ficam dormentes)
-- Export PDF do relatório executivo
-
-Posso seguir? Se sim, começo pela migração + motor (Fase 3) e depois Fase 4.
+- Não persistir binários dos anexos no esboço (só metadados). Ao retomar, mostrar aviso "Reanexe os arquivos" se havia algum.
+- Adiantamentos, NF Entrada e outros fluxos ficam para depois.

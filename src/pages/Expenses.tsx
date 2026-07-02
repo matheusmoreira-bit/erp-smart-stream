@@ -60,8 +60,10 @@ import {
   type Expense,
   type ExpenseStatus,
 } from "@/hooks/useExpenses";
-import { CreateExpenseModal } from "@/components/CreateExpenseModal";
+import { CreateExpenseModal, type ExpenseDraftHydration } from "@/components/CreateExpenseModal";
 import { EditExpenseModal } from "@/components/EditExpenseModal";
+import { DraftsPopover } from "@/components/DraftsPopover";
+import { useDocumentDrafts } from "@/hooks/useDocumentDrafts";
 import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -453,6 +455,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
+  const { refresh: refreshDrafts } = useDocumentDrafts(mode, session?.companyDB);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -794,9 +798,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
-          <Button onClick={() => setShowCreate(true)} className="gap-1.5">
-            <Plus className="w-4 h-4" /> {newButtonLabel}
-          </Button>
+          <div className="flex items-center gap-2">
+            <DraftsPopover
+              docType={mode}
+              companyDb={session?.companyDB}
+              onResume={(d) => {
+                setPendingDraft({ id: d.id, payload: d.payload });
+                setShowCreate(true);
+              }}
+            />
+            <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+              <Plus className="w-4 h-4" /> {newButtonLabel}
+            </Button>
+          </div>
         </div>
 
         {/* Summary */}
@@ -960,11 +974,15 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       <CreateExpenseModal
         open={showCreate}
-        onClose={() => setShowCreate(false)}
+        onClose={() => { setShowCreate(false); setPendingDraft(null); void refreshDrafts(); }}
         onCreate={handleCreate}
         sapSession={session}
         mode={mode}
+        initialDraft={pendingDraft}
+        onDraftConsumed={() => setPendingDraft(null)}
+        onDraftSaved={() => { void refreshDrafts(); }}
       />
+
 
       <RelationsMap
         open={!!relationsMapExpense}

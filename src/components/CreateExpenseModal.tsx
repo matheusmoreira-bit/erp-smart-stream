@@ -31,6 +31,7 @@ import { requestSupplierRegistration } from "@/lib/supplier-request-email";
 import { UserPlus } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
+import { saveDraft, deleteDraft } from "@/hooks/useDocumentDrafts";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -52,6 +53,11 @@ export interface PagCorpPrefill {
 
 export type ExpenseMode = "purchase" | "sales";
 
+export interface ExpenseDraftHydration {
+  id: string;
+  payload: any;
+}
+
 export function CreateExpenseModal({
   open,
   onClose,
@@ -62,6 +68,9 @@ export function CreateExpenseModal({
   origin = "manual",
   skipRules = false,
   mode = "purchase",
+  initialDraft,
+  onDraftSaved,
+  onDraftConsumed,
 }: {
   open: boolean;
   onClose: () => void;
@@ -72,6 +81,9 @@ export function CreateExpenseModal({
   origin?: "manual" | "pagcorp";
   skipRules?: boolean;
   mode?: ExpenseMode;
+  initialDraft?: ExpenseDraftHydration | null;
+  onDraftSaved?: (id: string | null) => void;
+  onDraftConsumed?: () => void;
 }) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
@@ -96,6 +108,8 @@ export function CreateExpenseModal({
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
   const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
   const [headerProject, setHeaderProject] = useState<SapSearchOption | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftHydrated, setDraftHydrated] = useState(false);
 
   // Cached SAP lists
   const supplierMapRow = useCallback((row: any) => ({
@@ -287,8 +301,83 @@ export function CreateExpenseModal({
       setPendingPrefill(null);
       setHeaderCostCenter(null);
       setHeaderProject(null);
+      setDraftId(null);
+      setDraftHydrated(false);
     }
   }, [open]);
+
+  // Hydrate from an existing draft when the user chose "Retomar"
+  useEffect(() => {
+    if (!open || !initialDraft || draftHydrated) return;
+    const p = initialDraft.payload || {};
+    setDraftId(initialDraft.id);
+    setDraftHydrated(true);
+    if (p.supplier) setSupplier(p.supplier);
+    if (p.currency) setCurrency(p.currency);
+    if (p.docDate) setDocDate(p.docDate);
+    if (p.dueDate) setDueDate(p.dueDate);
+    if (p.remarks) setRemarks(p.remarks);
+    if (p.headerCostCenter) setHeaderCostCenter(p.headerCostCenter);
+    if (p.headerProject) setHeaderProject(p.headerProject);
+    if (Array.isArray(p.items) && p.items.length > 0) setItems(p.items);
+    if (Array.isArray(p.fileNames) && p.fileNames.length > 0) {
+      toast.info(`Reanexe ${p.fileNames.length} arquivo(s): ${p.fileNames.join(", ")}`, { duration: 8000 });
+    }
+    setInitialized(true);
+    onDraftConsumed?.();
+  }, [open, initialDraft, draftHydrated, onDraftConsumed]);
+
+  // Autosave (debounced) while the modal is open and user has meaningful content
+  useEffect(() => {
+    if (!open) return;
+    if (isCreating) return;
+    const hasContent =
+      !!supplier ||
+      !!remarks.trim() ||
+      items.some((it) => (it.description || "").trim() || Number(it.unit_price) > 0);
+    if (!hasContent) return;
+    const companyDb = sapSession?.companyDB;
+    if (!companyDb) return;
+
+    const draftTotal = items.reduce((s, it) => s + (Number(it.line_total) || 0), 0);
+    const previewParts = [
+      supplier?.name || suggestedSupplierName || "(sem fornecedor)",
+      items.length > 0 ? `${items.length} ite${items.length > 1 ? "ns" : "m"}` : null,
+      draftTotal > 0 ? formatCurrency(draftTotal, currency || "BRL") : null,
+    ].filter(Boolean);
+    const preview = previewParts.join(" · ");
+
+    const payload = {
+      supplier,
+      currency,
+      docDate,
+      dueDate,
+      remarks,
+      items,
+      headerCostCenter,
+      headerProject,
+      fileNames: files.map((f) => f.name),
+    };
+
+    const t = setTimeout(async () => {
+      const id = await saveDraft({
+        docType: mode,
+        companyDb,
+        payload,
+        preview,
+        draftId,
+      });
+      if (id && id !== draftId) {
+        setDraftId(id);
+        onDraftSaved?.(id);
+      } else if (id) {
+        onDraftSaved?.(id);
+      }
+    }, 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isCreating, supplier, currency, docDate, dueDate, remarks, items, headerCostCenter, headerProject, files]);
+
 
   const extractUrlsFromObject = (obj: any): string[] => {
     const urls: string[] = [];
@@ -688,6 +777,10 @@ export function CreateExpenseModal({
         files: files.length > 0 ? files : undefined,
       });
       toast.success(isSales ? "Pedido de venda criado com sucesso!" : "Despesa criada com sucesso!");
+      if (draftId) {
+        void deleteDraft(draftId);
+        setDraftId(null);
+      }
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar despesa");
