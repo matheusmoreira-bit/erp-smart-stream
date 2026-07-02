@@ -372,6 +372,14 @@ Deno.serve(async (req) => {
     const alreadyIntegratedIds = new Set((existingLogs || []).map((r: any) => r.pagcorp_expense_id));
     const transactions = positiveList.filter((t) => !alreadyIntegratedIds.has(Number(t.id)));
 
+    snapshot.companyDb = companyDb;
+    snapshot.supplierCode = supplierCode;
+    snapshot.supplierName = supplierName;
+    snapshot.integratedBy = integratedBy;
+    snapshot.txIds = transactions.map((t) => t.id);
+    snapshot.totalAmount = transactions.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    snapshot.currency = String(transactions[0]?.currency || "").toUpperCase() || "BRL";
+
     if (transactions.length === 0) {
       const first = (existingLogs || [])[0] as any;
       return new Response(
