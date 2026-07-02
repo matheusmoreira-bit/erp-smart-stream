@@ -974,11 +974,15 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       <CreateExpenseModal
         open={showCreate}
-        onClose={() => setShowCreate(false)}
+        onClose={() => { setShowCreate(false); setPendingDraft(null); void refreshDrafts(); }}
         onCreate={handleCreate}
         sapSession={session}
         mode={mode}
+        initialDraft={pendingDraft}
+        onDraftConsumed={() => setPendingDraft(null)}
+        onDraftSaved={() => { void refreshDrafts(); }}
       />
+
 
       <RelationsMap
         open={!!relationsMapExpense}
