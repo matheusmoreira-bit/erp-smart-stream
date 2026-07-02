@@ -234,6 +234,7 @@ Deno.serve(async (req) => {
   let supabase: ReturnType<typeof createClient> | null = null;
   let pagcorpLog: any = null;
   let pagcorpLogWritten = false;
+  let expenseSnapshot: any = null;
   // Captured outside the try/catch so the error path can return the same
   // payload that was actually sent to SAP (used by the integration log UI).
   let lastSapPayload: Record<string, unknown> | null = null;
