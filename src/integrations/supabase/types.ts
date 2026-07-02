@@ -1005,6 +1005,63 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_trail: {
+        Row: {
+          actor_email: string | null
+          actor_id: string | null
+          actor_role: string | null
+          app_context: Json | null
+          changed_cols: string[] | null
+          id: number
+          new_data: Json | null
+          old_data: Json | null
+          op: string
+          prev_hash: string | null
+          row_hash: string
+          row_pk: Json | null
+          schema_name: string
+          session_jwt_sub: string | null
+          table_name: string
+          ts: string
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_role?: string | null
+          app_context?: Json | null
+          changed_cols?: string[] | null
+          id?: number
+          new_data?: Json | null
+          old_data?: Json | null
+          op: string
+          prev_hash?: string | null
+          row_hash: string
+          row_pk?: Json | null
+          schema_name: string
+          session_jwt_sub?: string | null
+          table_name: string
+          ts?: string
+        }
+        Update: {
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_role?: string | null
+          app_context?: Json | null
+          changed_cols?: string[] | null
+          id?: number
+          new_data?: Json | null
+          old_data?: Json | null
+          op?: string
+          prev_hash?: string | null
+          row_hash?: string
+          row_pk?: Json | null
+          schema_name?: string
+          session_jwt_sub?: string | null
+          table_name?: string
+          ts?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           company_db: string
@@ -3020,6 +3077,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _audit_canonicalize: { Args: { _data: Json }; Returns: string }
+      _audit_row_pk: { Args: { _row: Json; _tbl: unknown }; Returns: Json }
       can_access_audit_console: {
         Args: { _company_db: string }
         Returns: boolean
@@ -3081,6 +3140,7 @@ export type Database = {
         Returns: boolean
       }
       email_queue_dispatch: { Args: never; Returns: undefined }
+      enable_audit_on: { Args: { _table: string }; Returns: undefined }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
@@ -3144,6 +3204,14 @@ export type Database = {
       try_watcher_lock: {
         Args: { _name: string; _ttl_minutes?: number }
         Returns: boolean
+      }
+      verify_audit_chain: {
+        Args: { _limit?: number }
+        Returns: {
+          first_broken_id: number
+          ok: boolean
+          total_checked: number
+        }[]
       }
     }
     Enums: {
