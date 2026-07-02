@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
-import { sapQueryView, sapQuery, sapAction, sapLogin, sapLogout, clearClientCache } from "@/lib/sap-client";
+import { sapQueryView, sapQuery, sapQueryAll, sapAction, sapLogin, sapLogout, clearClientCache } from "@/lib/sap-client";
 import { sapUsersCache, type SapUser } from "@/lib/cache-repository";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -48,6 +48,19 @@ function normalizeSapUser(row: Record<string, unknown>): SapUser {
 
 function hasDisplayData(user: SapUser): boolean {
   return Boolean(user.UserName || user.UserCode || user.eMail || user.LastLoginDate);
+}
+
+async function fetchUsersFromServiceLayer(session: NonNullable<ReturnType<typeof useSap>["session"]>): Promise<SapUser[]> {
+  const { data } = await sapQueryAll(
+    session,
+    "Users",
+    {
+      $select: "InternalKey,UserCode,UserName,eMail,Locked,LastLoginDate,LastLoginTime",
+    },
+    false,
+  );
+
+  return (data.value as Record<string, unknown>[]).map((row) => normalizeSapUser(row));
 }
 
 export function useSapUsers() {
@@ -148,13 +161,19 @@ export function useSapUsers() {
 
       if (signal?.aborted) return;
 
-      const userList = result.data.map((row) => normalizeSapUser(row));
+      let userList = result.data.map((row) => normalizeSapUser(row));
+
+      if (!userList.some(hasDisplayData)) {
+        userList = await fetchUsersFromServiceLayer(session);
+      }
+
+      if (signal?.aborted) return;
 
       sapUsersCache.set(cacheKey, userList);
       setUsers(userList);
 
       // Persist to DB cache (30 min TTL)
-      if (userList.length > 0) {
+      if (userList.some(hasDisplayData)) {
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
         await supabase
           .from("sap_cache")
