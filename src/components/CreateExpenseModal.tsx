@@ -594,11 +594,11 @@ export function CreateExpenseModal({
       }
       if (doc.confidence) setAiConfidence(doc.confidence);
 
-      setAiWarning(null);
-      if (doc.client_warning) {
-        setAiWarning(doc.client_warning);
-        toast.warning(doc.client_warning, { duration: 8000 });
-      }
+      const warnings: string[] = [];
+      if (doc.client_warning) warnings.push(doc.client_warning);
+      if (doc.totals_warning) warnings.push(doc.totals_warning);
+      setAiWarning(warnings.length ? warnings.join("\n\n") : null);
+      for (const w of warnings) toast.warning(w, { duration: 8000 });
 
       toast.success("Documento processado pela IA! Valide o fornecedor e os itens nos campos abaixo.");
     } catch (e) {
@@ -912,7 +912,7 @@ export function CreateExpenseModal({
           {aiWarning && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
               <span className="text-destructive text-sm">⚠️</span>
-              <p className="text-sm text-destructive">{aiWarning}</p>
+              <p className="text-sm text-destructive whitespace-pre-line">{aiWarning}</p>
               <button onClick={() => setAiWarning(null)} className="ml-auto text-destructive/70 hover:text-destructive">
                 <X className="w-3.5 h-3.5" />
               </button>

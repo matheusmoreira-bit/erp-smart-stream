@@ -6,11 +6,76 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const COMPANY_NAMES: Record<string, string[]> = {
+// Static fallback aliases (used only if DB lookup fails)
+const FALLBACK_COMPANY_NAMES: Record<string, string[]> = {
   SBO_ANAGAMING: ["ana gaming", "anagaming"],
   SBO_CACTUS: ["cactus", "instituto cactus"],
   SBO_INSTITUTO_ANA: ["instituto ana", "instituto cactus"],
 };
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+function normalizeText(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/\b(s\.?\s*a\.?|s\.?\s*\/?\s*a\.?|ltda\.?|me|epp|eireli|inc\.?|llc|corp\.?|cia\.?)\b/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function onlyDigits(s: string): string {
+  return (s || "").replace(/\D+/g, "");
+}
+
+async function fetchCompanyContext(companyDB: string): Promise<{
+  aliases: string[];
+  taxIds: string[];
+  displayName: string | null;
+}> {
+  const aliases = new Set<string>();
+  const taxIds = new Set<string>();
+  let displayName: string | null = null;
+
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && companyDB) {
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/companies?company_db=eq.${encodeURIComponent(companyDB)}&select=display_name,legal_name,trade_name,foreign_name,tax_id`,
+        {
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+        },
+      );
+      if (r.ok) {
+        const rows = (await r.json()) as Array<Record<string, string | null>>;
+        for (const row of rows) {
+          for (const field of ["display_name", "legal_name", "trade_name", "foreign_name"] as const) {
+            const v = row[field];
+            if (v) {
+              const n = normalizeText(v);
+              if (n) aliases.add(n);
+              if (!displayName && field === "display_name") displayName = v;
+            }
+          }
+          const digits = onlyDigits(row.tax_id || "");
+          if (digits.length >= 8) taxIds.add(digits);
+        }
+      }
+    } catch (e) {
+      console.warn("companies lookup failed", e);
+    }
+  }
+
+  // Merge fallback aliases
+  for (const a of FALLBACK_COMPANY_NAMES[companyDB] || []) aliases.add(normalizeText(a));
+
+  return { aliases: [...aliases].filter(Boolean), taxIds: [...taxIds], displayName };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -186,15 +251,64 @@ Regras IMPORTANTES:
       });
     }
 
-    // Post-process: check if document client matches logged company
+    // Post-process: check company match and totals divergence
     const docs = Array.isArray(parsed) ? parsed : [parsed];
+    const companyCtx = companyDB ? await fetchCompanyContext(companyDB) : null;
+
     for (const doc of docs) {
-      if (companyDB && doc.client_name) {
-        const clientLower = doc.client_name.toLowerCase();
-        const companyAliases = COMPANY_NAMES[companyDB] || [];
-        const matches = companyAliases.some((alias) => clientLower.includes(alias));
-        if (!matches) {
-          doc.client_warning = `O destinatário do documento ("${doc.client_name}") não corresponde à empresa logada. O documento pode não pertencer a esta empresa.`;
+      // --- Company (recipient) match: name aliases + CNPJ ---
+      if (companyCtx && (companyCtx.aliases.length || companyCtx.taxIds.length)) {
+        const clientNorm = normalizeText(doc.client_name || "");
+        const clientCnpj = onlyDigits(doc.client_cnpj || "");
+
+        const cnpjMatch =
+          clientCnpj.length >= 8 &&
+          companyCtx.taxIds.some((t) => t === clientCnpj || t.endsWith(clientCnpj) || clientCnpj.endsWith(t));
+
+        const nameMatch =
+          !!clientNorm &&
+          companyCtx.aliases.some((a) => {
+            if (!a) return false;
+            if (clientNorm.includes(a) || a.includes(clientNorm)) return true;
+            // token overlap: at least 2 shared meaningful tokens (>=3 chars)
+            const at = new Set(a.split(" ").filter((x) => x.length >= 3));
+            const ct = new Set(clientNorm.split(" ").filter((x) => x.length >= 3));
+            let shared = 0;
+            for (const t of at) if (ct.has(t)) shared++;
+            return shared >= 2;
+          });
+
+        if (!cnpjMatch && !nameMatch && doc.client_name) {
+          const expected = companyCtx.displayName ? ` (esperado: "${companyCtx.displayName}")` : "";
+          doc.client_warning = `O destinatário do documento ("${doc.client_name}"${
+            doc.client_cnpj ? ` — CNPJ ${doc.client_cnpj}` : ""
+          }) não corresponde à empresa logada${expected}. Confirme antes de prosseguir.`;
+        }
+      }
+
+      // --- Totals divergence: sum(items) vs total_amount ---
+      const items = Array.isArray(doc.items) ? doc.items : [];
+      if (items.length > 0 && typeof doc.total_amount === "number" && doc.total_amount > 0) {
+        const sumItems = items.reduce((s: number, it: any) => {
+          const lt = Number(it.line_total);
+          if (Number.isFinite(lt) && lt !== 0) return s + lt;
+          const qty = Number(it.quantity) || 0;
+          const unit = Number(it.unit_price) || 0;
+          return s + qty * unit;
+        }, 0);
+        const total = Number(doc.total_amount);
+        const diff = Math.abs(sumItems - total);
+        const tolerance = Math.max(0.02, total * 0.005); // 0.5% or 2 cents
+        if (diff > tolerance) {
+          const fmt = (n: number) =>
+            n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          doc.totals_warning = `Divergência de valores: a soma das ${items.length} linha(s) é R$ ${fmt(
+            sumItems,
+          )}, mas o total do documento é R$ ${fmt(total)} (diferença R$ ${fmt(
+            diff,
+          )}). Revise os itens antes de criar a despesa.`;
+          doc.totals_sum_items = Number(sumItems.toFixed(2));
+          doc.totals_document = Number(total.toFixed(2));
         }
       }
     }
