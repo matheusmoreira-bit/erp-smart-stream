@@ -355,8 +355,11 @@ function ApprovalDetailModal({
   isActioning,
   isSuperUser,
   currentUserName,
+  currentUserEmail,
   approverCCs,
   formatCostCenter,
+  rules,
+  isAdmin,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -366,17 +369,40 @@ function ApprovalDetailModal({
   isActioning: boolean;
   isSuperUser: boolean;
   currentUserName: string;
+  currentUserEmail?: string;
   approverCCs: Set<string>;
   formatCostCenter: (code?: string | null) => string;
+  rules: ApprovalRule[];
+  isAdmin: boolean;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
+  const [showAllLines, setShowAllLines] = useState(false);
   const { session } = useSap();
 
   // Rateio — sempre derivado do doc atual
   const rateio = doc ? shouldShowRateio(doc) : { show: false, info: { isSplit: false, byCC: [], total: 0 } as RateioInfo };
   const [selectedCCs, setSelectedCCs] = useState<Set<string>>(new Set());
+
+  // Segmentação por regra — cada grupo de linhas pode cair em regras/aprovadores diferentes
+  const segments: ApprovalSegment[] = useMemo(
+    () => (doc ? segmentDocByRules(doc, rules) : []),
+    [doc, rules],
+  );
+  const segmented = isTrulySegmented(segments);
+  const mySegments = useMemo(
+    () => segmentsForApprover(segments, currentUserName, currentUserEmail),
+    [segments, currentUserName, currentUserEmail],
+  );
+  // Aprovador comum (não admin, não super) só vê linhas dos segmentos que lhe cabem.
+  const restrictToMySegments = segmented && !isAdmin && !isSuperUser && mySegments.length > 0 && !showAllLines;
+  const visibleLines = restrictToMySegments
+    ? mySegments.flatMap((s) => s.lines)
+    : (doc?.documentLines || []);
+  const visibleTotal = restrictToMySegments
+    ? mySegments.reduce((s, seg) => s + (doc?.currency !== "BRL" ? seg.amountFC : seg.amount), 0)
+    : (doc?.docTotal || 0);
 
   // Sempre que troca de documento, pré-seleciona CCs mapeados (ou nenhum se não houver mapping)
   // e limpa o campo de Observação para não vazar texto do card anterior.
@@ -387,6 +413,7 @@ function ApprovalDetailModal({
       .filter((code) => approverCCs.has(code));
     setSelectedCCs(new Set(preselected));
     setRemarks("");
+    setShowAllLines(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc?.approvalRequestId]);
 
