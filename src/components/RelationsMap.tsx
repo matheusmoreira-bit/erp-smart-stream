@@ -522,41 +522,65 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                   Histórico de eventos
                 </h3>
-                {isLoading ? (
-                  <p className="text-sm text-muted-foreground">Carregando…</p>
-                ) : log.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nenhum evento registrado ainda.</p>
-                ) : (
-                  <ol className="space-y-3 relative border-l border-border ml-2 pl-4">
-                    {log.map((row) => {
-                      const meta = DECISION_META[row.decision];
-                      const Icon = meta.icon;
-                      return (
-                        <li key={row.id} className="relative">
-                          <span className="absolute -left-[22px] top-0.5 w-4 h-4 rounded-full bg-background border border-border flex items-center justify-center">
-                            <Icon className={`w-3 h-3 ${meta.color}`} />
-                          </span>
-                          <div className="flex items-baseline justify-between gap-2">
-                            <div className="text-sm font-medium">{meta.label}</div>
-                            <div className="text-xs text-muted-foreground font-mono shrink-0">
-                              {formatDateTime(row.decided_at)}
+                {(() => {
+                  const sapEvents = sapHistory
+                    .filter((h) => (h.decision || "").toUpperCase() === "Y" || (h.decision || "").toUpperCase() === "N")
+                    .map((h) => ({
+                      id: `sap-${h.id}`,
+                      decision: ((h.decision || "").toUpperCase() === "N" ? "rejected" : "approved") as LogDecision,
+                      approver_name: h.approver_name,
+                      approver_email: h.approver_email,
+                      level_order: h.step,
+                      remarks: h.remarks,
+                      decided_at: h.decision_date || "",
+                      source: "SAP" as const,
+                    }));
+                  const localEvents = log.map((l) => ({ ...l, source: "ERP Flow" as const }));
+                  const events = [...localEvents, ...sapEvents].sort(
+                    (a, b) =>
+                      new Date(a.decided_at || 0).getTime() - new Date(b.decided_at || 0).getTime(),
+                  );
+                  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
+                  if (events.length === 0)
+                    return <p className="text-sm text-muted-foreground">Nenhum evento registrado ainda.</p>;
+                  return (
+                    <ol className="space-y-3 relative border-l border-border ml-2 pl-4">
+                      {events.map((row) => {
+                        const meta = DECISION_META[row.decision];
+                        const Icon = meta.icon;
+                        return (
+                          <li key={row.id} className="relative">
+                            <span className="absolute -left-[22px] top-0.5 w-4 h-4 rounded-full bg-background border border-border flex items-center justify-center">
+                              <Icon className={`w-3 h-3 ${meta.color}`} />
+                            </span>
+                            <div className="flex items-baseline justify-between gap-2">
+                              <div className="text-sm font-medium flex items-center gap-2">
+                                {meta.label}
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase tracking-wide">
+                                  {row.source}
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-muted-foreground font-mono shrink-0">
+                                {formatDateTime(row.decided_at)}
+                              </div>
                             </div>
-                          </div>
-                          {row.approver_name && (
-                            <div className="text-xs text-muted-foreground">
-                              {row.approver_name}
-                              {row.approver_email ? ` · ${row.approver_email}` : ""}
-                              {row.level_order ? ` · nível ${row.level_order}` : ""}
-                            </div>
-                          )}
-                          {row.remarks && (
-                            <div className="text-xs bg-muted/40 rounded p-2 mt-1.5">{row.remarks}</div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                )}
+                            {row.approver_name && (
+                              <div className="text-xs text-muted-foreground">
+                                {row.approver_name}
+                                {row.approver_email ? ` · ${row.approver_email}` : ""}
+                                {row.level_order ? ` · nível ${row.level_order}` : ""}
+                              </div>
+                            )}
+                            {row.remarks && (
+                              <div className="text-xs bg-muted/40 rounded p-2 mt-1.5">{row.remarks}</div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  );
+                })()}
+
               </section>
             </div>
           </div>
