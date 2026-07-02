@@ -755,9 +755,14 @@ export default function ApprovalRulesPage() {
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
-          <Button onClick={openCreate} className="gap-1.5">
-            <Plus className="w-4 h-4" /> Nova Regra
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setShowSimulator(true)} className="gap-1.5">
+              <PlayCircle className="w-4 h-4" /> Simular pedido
+            </Button>
+            <Button onClick={openCreate} className="gap-1.5">
+              <Plus className="w-4 h-4" /> Nova Regra
+            </Button>
+          </div>
         </div>
 
         {/* Summary */}
