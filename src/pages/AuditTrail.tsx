@@ -1,17 +1,32 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, ShieldCheck, ShieldAlert, Search } from "lucide-react";
+import { format } from "date-fns";
+import {
+  ArrowLeft,
+  RefreshCw,
+  ShieldCheck,
+  ShieldAlert,
+  Search,
+  CalendarIcon,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PageTitle } from "@/components/PageTitle";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface AuditTrailRow {
   id: number;
@@ -35,49 +50,131 @@ const OP_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {
   D: "destructive",
 };
 
+const PAGE_SIZES = [25, 50, 100, 200];
+
+function DateField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: Date | undefined;
+  onChange: (d: Date | undefined) => void;
+  placeholder: string;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn("w-[170px] justify-start text-left font-normal", !value && "text-muted-foreground")}
+        >
+          <CalendarIcon className="w-4 h-4 mr-2" />
+          {value ? format(value, "dd/MM/yyyy") : <span>{placeholder}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={value}
+          onSelect={onChange}
+          initialFocus
+          className={cn("p-3 pointer-events-auto")}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function AuditTrailPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<AuditTrailRow[]>([]);
+  const [total, setTotal] = useState<number>(0);
   const [tables, setTables] = useState<string[]>([]);
+  const [actors, setActors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Filters
   const [tableFilter, setTableFilter] = useState<string>("all");
   const [opFilter, setOpFilter] = useState<string>("all");
+  const [actorFilter, setActorFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
   const [search, setSearch] = useState("");
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Verify + detail
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<{ ok: boolean; total: number; broken: number | null } | null>(null);
   const [detail, setDetail] = useState<AuditTrailRow | null>(null);
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
   const load = useCallback(async () => {
     setIsLoading(true);
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
     let q = supabase
       .from("audit_trail" as never)
-      .select("id, ts, actor_id, actor_email, actor_role, schema_name, table_name, op, row_pk, old_data, new_data, changed_cols")
+      .select(
+        "id, ts, actor_id, actor_email, actor_role, schema_name, table_name, op, row_pk, old_data, new_data, changed_cols",
+        { count: "exact" },
+      )
       .order("id", { ascending: false })
-      .limit(500);
+      .range(from, to);
+
     if (tableFilter !== "all") q = q.eq("table_name", tableFilter);
     if (opFilter !== "all") q = q.eq("op", opFilter);
-    const { data, error } = await q;
+    if (actorFilter !== "all") q = q.eq("actor_email", actorFilter);
+    if (dateFrom) q = q.gte("ts", dateFrom.toISOString());
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      q = q.lte("ts", end.toISOString());
+    }
+    if (search.trim()) {
+      const s = search.trim();
+      // OR across actor_email / table_name / row_pk::text
+      q = q.or(
+        `actor_email.ilike.%${s}%,table_name.ilike.%${s}%,row_pk.cs.{"${s}"}`,
+      );
+    }
+
+    const { data, error, count } = await q;
     if (error) {
       toast({ title: "Erro ao carregar audit_trail", description: error.message, variant: "destructive" });
       setRows([]);
+      setTotal(0);
     } else {
       setRows((data as unknown as AuditTrailRow[]) || []);
+      setTotal(count || 0);
     }
     setIsLoading(false);
-  }, [tableFilter, opFilter]);
+  }, [tableFilter, opFilter, actorFilter, dateFrom, dateTo, search, page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Load distinct tables once
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [tableFilter, opFilter, actorFilter, dateFrom, dateTo, search, pageSize]);
+
+  // Load distinct tables + actors once
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("audit_trail" as never)
-        .select("table_name")
-        .limit(5000);
-      const set = new Set<string>();
-      ((data as unknown as { table_name: string }[]) || []).forEach(r => set.add(r.table_name));
-      setTables(Array.from(set).sort());
+      const [{ data: tData }, { data: aData }] = await Promise.all([
+        supabase.from("audit_trail" as never).select("table_name").limit(10000),
+        supabase.from("audit_trail" as never).select("actor_email").not("actor_email", "is", null).limit(10000),
+      ]);
+      const tSet = new Set<string>();
+      ((tData as unknown as { table_name: string }[]) || []).forEach(r => tSet.add(r.table_name));
+      setTables(Array.from(tSet).sort());
+      const aSet = new Set<string>();
+      ((aData as unknown as { actor_email: string | null }[]) || []).forEach(r => {
+        if (r.actor_email) aSet.add(r.actor_email);
+      });
+      setActors(Array.from(aSet).sort());
     })();
   }, []);
 
@@ -104,16 +201,29 @@ export default function AuditTrailPage() {
     }
   };
 
-  const filtered = rows.filter(r => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return (
-      r.actor_email?.toLowerCase().includes(s) ||
-      r.table_name.toLowerCase().includes(s) ||
-      JSON.stringify(r.row_pk || {}).toLowerCase().includes(s) ||
-      JSON.stringify(r.new_data || r.old_data || {}).toLowerCase().includes(s)
-    );
-  });
+  const clearFilters = () => {
+    setTableFilter("all");
+    setOpFilter("all");
+    setActorFilter("all");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    setSearch("");
+  };
+
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (tableFilter !== "all") n++;
+    if (opFilter !== "all") n++;
+    if (actorFilter !== "all") n++;
+    if (dateFrom) n++;
+    if (dateTo) n++;
+    if (search.trim()) n++;
+    return n;
+  }, [tableFilter, opFilter, actorFilter, dateFrom, dateTo, search]);
+
+  const rangeLabel = total === 0
+    ? "0 registros"
+    : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} de ${total.toLocaleString("pt-BR")}`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -170,32 +280,73 @@ export default function AuditTrailPage() {
           </Card>
         )}
 
-        <Card className="p-4 flex flex-wrap gap-3 items-center">
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por usuário, tabela, valor..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-9"
-            />
+        <Card className="p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Buscar</Label>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Usuário, tabela, chave..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Usuário / ator</Label>
+              <Select value={actorFilter} onValueChange={setActorFilter}>
+                <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os usuários</SelectItem>
+                  {actors.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Tabela</Label>
+              <Select value={tableFilter} onValueChange={setTableFilter}>
+                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as tabelas</SelectItem>
+                  {tables.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Operação</Label>
+              <Select value={opFilter} onValueChange={setOpFilter}>
+                <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="I">INSERT</SelectItem>
+                  <SelectItem value="U">UPDATE</SelectItem>
+                  <SelectItem value="D">DELETE</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Select value={tableFilter} onValueChange={setTableFilter}>
-            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Tabela" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as tabelas</SelectItem>
-              {tables.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={opFilter} onValueChange={setOpFilter}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Operação" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="I">INSERT</SelectItem>
-              <SelectItem value="U">UPDATE</SelectItem>
-              <SelectItem value="D">DELETE</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">De</Label>
+              <DateField value={dateFrom} onChange={setDateFrom} placeholder="Data inicial" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Até</Label>
+              <DateField value={dateTo} onChange={setDateTo} placeholder="Data final" />
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              {activeFilterCount > 0 && (
+                <>
+                  <Badge variant="secondary">{activeFilterCount} filtro{activeFilterCount > 1 ? "s" : ""}</Badge>
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    <X className="w-4 h-4 mr-1" /> Limpar
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         </Card>
 
         <Card>
@@ -213,9 +364,9 @@ export default function AuditTrailPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : rows.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Sem registros</TableCell></TableRow>
-              ) : filtered.map(r => (
+              ) : rows.map(r => (
                 <TableRow key={r.id} className="cursor-pointer" onClick={() => setDetail(r)}>
                   <TableCell className="font-mono text-xs">{r.id}</TableCell>
                   <TableCell className="text-xs">{new Date(r.ts).toLocaleString("pt-BR")}</TableCell>
@@ -239,6 +390,42 @@ export default function AuditTrailPage() {
               ))}
             </TableBody>
           </Table>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 border-t border-border">
+            <div className="text-xs text-muted-foreground">{rangeLabel}</div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Por página</span>
+                <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
+                  <SelectTrigger className="w-[80px] h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZES.map(s => <SelectItem key={s} value={String(s)}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1 || isLoading}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-xs px-2 min-w-[90px] text-center">
+                  Página {page} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages || isLoading}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </Card>
       </main>
 
