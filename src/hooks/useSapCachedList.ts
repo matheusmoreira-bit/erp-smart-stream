@@ -37,16 +37,16 @@ export function useSapCachedList({
 
     try {
       const companyDB = session?.companyDB;
-      // 1. Try Supabase cache first (works without SAP session), unless forced refresh
-      if (!forceRefresh) {
-        let cacheQuery = supabase
+      // 1. Try Supabase cache first — REQUIRE company_db to avoid leaking
+      //    cached data from another company's SAP base.
+      if (!forceRefresh && companyDB) {
+        const cacheQuery = supabase
           .from("sap_cache")
           .select("data, expires_at")
           .eq("cache_key", cacheKey)
+          .eq("company_db", companyDB)
           .order("updated_at", { ascending: false })
           .limit(1);
-
-        if (companyDB) cacheQuery = cacheQuery.eq("company_db", companyDB);
 
         const { data: cached } = await cacheQuery.maybeSingle();
 
