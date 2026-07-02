@@ -1798,9 +1798,13 @@ export default function ApprovalsPage() {
         isActioning={isActioning}
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
+        currentUserEmail={session.userName}
         approverCCs={getCostCentersForEmail(selectedDoc?.approverEmail || "")}
         formatCostCenter={formatCostCenter}
+        rules={rules}
+        isAdmin={isAdmin}
       />
+
 
       <RelationsMap
         open={!!relationsMapExpense}
