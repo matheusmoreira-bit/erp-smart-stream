@@ -84,13 +84,14 @@ export default function AuditTrailPage() {
   const runVerify = async () => {
     setVerifying(true);
     setVerifyResult(null);
-    const { data, error } = await supabase.rpc("verify_audit_chain" as never, {} as never);
+    const { data, error } = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: unknown; error: { message: string } | null }>)("verify_audit_chain");
     setVerifying(false);
     if (error) {
       toast({ title: "Falha na verificação", description: error.message, variant: "destructive" });
       return;
     }
-    const row = data && Array.isArray(data) && data.length > 0 ? (data[0] as { first_broken_id: number | null; total_checked: number; ok: boolean }) : null;
+    const arr = Array.isArray(data) ? data : [];
+    const row = arr.length > 0 ? (arr[0] as { first_broken_id: number | null; total_checked: number; ok: boolean }) : null;
     if (row) {
       setVerifyResult({ ok: row.ok, total: Number(row.total_checked), broken: row.first_broken_id });
       toast({
