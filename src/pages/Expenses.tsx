@@ -798,9 +798,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
-          <Button onClick={() => setShowCreate(true)} className="gap-1.5">
-            <Plus className="w-4 h-4" /> {newButtonLabel}
-          </Button>
+          <div className="flex items-center gap-2">
+            <DraftsPopover
+              docType={mode}
+              companyDb={session?.companyDB}
+              onResume={(d) => {
+                setPendingDraft({ id: d.id, payload: d.payload });
+                setShowCreate(true);
+              }}
+            />
+            <Button onClick={() => setShowCreate(true)} className="gap-1.5">
+              <Plus className="w-4 h-4" /> {newButtonLabel}
+            </Button>
+          </div>
         </div>
 
         {/* Summary */}
