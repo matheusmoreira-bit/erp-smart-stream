@@ -594,11 +594,11 @@ export function CreateExpenseModal({
       }
       if (doc.confidence) setAiConfidence(doc.confidence);
 
-      setAiWarning(null);
-      if (doc.client_warning) {
-        setAiWarning(doc.client_warning);
-        toast.warning(doc.client_warning, { duration: 8000 });
-      }
+      const warnings: string[] = [];
+      if (doc.client_warning) warnings.push(doc.client_warning);
+      if (doc.totals_warning) warnings.push(doc.totals_warning);
+      setAiWarning(warnings.length ? warnings.join("\n\n") : null);
+      for (const w of warnings) toast.warning(w, { duration: 8000 });
 
       toast.success("Documento processado pela IA! Valide o fornecedor e os itens nos campos abaixo.");
     } catch (e) {
