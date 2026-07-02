@@ -777,6 +777,10 @@ export function CreateExpenseModal({
         files: files.length > 0 ? files : undefined,
       });
       toast.success(isSales ? "Pedido de venda criado com sucesso!" : "Despesa criada com sucesso!");
+      if (draftId) {
+        void deleteDraft(draftId);
+        setDraftId(null);
+      }
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar despesa");
