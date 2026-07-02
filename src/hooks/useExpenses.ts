@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
+import { createNotification } from "@/lib/notifications";
 
 /* ───────────────── Item group enrichment ───────────────── */
 
@@ -510,6 +511,17 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           approverEmail: userIdentifier,
           levelOrder: 1,
         });
+        if (currentApprover && currentApprover !== "Administrador") {
+          await createNotification({
+            user_identifier: currentApprover,
+            title: "Nova aprovação pendente",
+            body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação.`,
+            category: "approval",
+            company_db: session.companyDB,
+            link: `/approvals`,
+            metadata: { expense_id: createdId },
+          });
+        }
       }
 
       if (input.items.length > 0) {
@@ -737,6 +749,26 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         approverName: actor,
         approverEmail: actor.includes("@") ? actor : null,
       });
+      // Notify current approver ASAP
+      try {
+        const { data: exp2 } = await supabase
+          .from("expenses")
+          .select("current_approver, supplier_name, total_amount, currency, company_db")
+          .eq("id", expenseId)
+          .maybeSingle();
+        const approver = (exp2 as any)?.current_approver as string | null;
+        if (approver && approver !== "Administrador") {
+          await createNotification({
+            user_identifier: approver,
+            title: "Nova aprovação pendente",
+            body: `${actor} enviou "${(exp2 as any).supplier_name}" (${(exp2 as any).currency || "BRL"} ${Number((exp2 as any).total_amount || 0).toFixed(2)}) para sua aprovação.`,
+            category: "approval",
+            company_db: (exp2 as any).company_db || undefined,
+            link: `/approvals`,
+            metadata: { expense_id: expenseId },
+          });
+        }
+      } catch { /* silent */ }
       await fetchExpenses();
     },
     [fetchExpenses, session]
@@ -812,6 +844,23 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           .update(updates)
           .eq("id", expenseId);
         if (updErr) throw updErr;
+        // Notify next approver ASAP
+        if (nextLevel?.approver_name && nextLevel.approver_name !== "Administrador") {
+          const { data: exp3 } = await supabase
+            .from("expenses")
+            .select("supplier_name, total_amount, currency, company_db, requester_name")
+            .eq("id", expenseId)
+            .maybeSingle();
+          await createNotification({
+            user_identifier: nextLevel.approver_name,
+            title: "Nova aprovação pendente",
+            body: `${(exp3 as any)?.requester_name || "Solicitante"} · ${(exp3 as any)?.supplier_name || ""} (${(exp3 as any)?.currency || "BRL"} ${Number((exp3 as any)?.total_amount || 0).toFixed(2)}) aguarda sua aprovação (nível ${currentLevel + 1}).`,
+            category: "approval",
+            company_db: (exp3 as any)?.company_db || undefined,
+            link: `/approvals`,
+            metadata: { expense_id: expenseId, level: currentLevel + 1 },
+          });
+        }
         await fetchExpenses();
         return;
       }
@@ -824,6 +873,27 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         .update(updates)
         .eq("id", expenseId);
       if (err) throw err;
+
+      // Notify requester of final approval
+      try {
+        const { data: exp4 } = await supabase
+          .from("expenses")
+          .select("requester_email, requester_name, supplier_name, total_amount, currency, company_db")
+          .eq("id", expenseId)
+          .maybeSingle();
+        const reqId = (exp4 as any)?.requester_email || (exp4 as any)?.requester_name;
+        if (reqId) {
+          await createNotification({
+            user_identifier: reqId,
+            title: "Pedido aprovado",
+            body: `Seu pedido "${(exp4 as any)?.supplier_name || ""}" (${(exp4 as any)?.currency || "BRL"} ${Number((exp4 as any)?.total_amount || 0).toFixed(2)}) foi aprovado em todos os níveis.`,
+            category: "approval",
+            company_db: (exp4 as any)?.company_db || undefined,
+            link: `/my-requests`,
+            metadata: { expense_id: expenseId },
+          });
+        }
+      } catch { /* silent */ }
 
       if (session?.erpType === "sap") {
         try {

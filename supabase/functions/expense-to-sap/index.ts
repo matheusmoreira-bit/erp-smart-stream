@@ -29,6 +29,61 @@ function truncateSapText(value: unknown, maxLength: number): string {
   return text.length > maxLength ? text.slice(0, maxLength) : text;
 }
 
+// Fire-and-forget notification about ERP integration attempts.
+// Sends to matheus.moreira@anagaming.com.br via the shared SMTP function.
+async function notifyErpIntegration(params: {
+  status: "success" | "error";
+  source: "expense" | "pagcorp";
+  entityId: string | number;
+  companyDb?: string | null;
+  docEntry?: number | null;
+  docNum?: number | null;
+  errorMessage?: string | null;
+  requester?: string | null;
+  supplier?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+}): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) return;
+    const ok = params.status === "success";
+    const subject = ok
+      ? `[ERP] Integração ${params.source} OK — ${params.companyDb || ""} · Doc ${params.docNum ?? params.docEntry ?? ""}`
+      : `[ERP] Falha integração ${params.source} — ${params.companyDb || ""} · #${params.entityId}`;
+    const rows: [string, string][] = [
+      ["Origem", params.source],
+      ["Empresa (DB)", params.companyDb || "-"],
+      ["ID interno", String(params.entityId)],
+      ["Solicitante", params.requester || "-"],
+      ["Fornecedor", params.supplier || "-"],
+      ["Valor", params.amount != null ? `${params.currency || "BRL"} ${Number(params.amount).toFixed(2)}` : "-"],
+      ["SAP DocEntry", params.docEntry != null ? String(params.docEntry) : "-"],
+      ["SAP DocNum", params.docNum != null ? String(params.docNum) : "-"],
+      ["Status", ok ? "SUCESSO" : "ERRO"],
+      ["Erro", params.errorMessage || "-"],
+    ];
+    const html = `<h2>${ok ? "Integração ao ERP concluída" : "Falha na integração ao ERP"}</h2>
+<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">
+${rows.map(([k, v]) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;background:#f8f8f8"><b>${k}</b></td><td style="padding:4px 8px;border:1px solid #ddd">${String(v).replace(/</g, "&lt;")}</td></tr>`).join("")}
+</table>`;
+    // fire-and-forget
+    fetch(`${supabaseUrl}/functions/v1/send-smtp-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}`, apikey: serviceKey },
+      body: JSON.stringify({
+        to: "matheus.moreira@anagaming.com.br",
+        subject,
+        html,
+        text: rows.map(([k, v]) => `${k}: ${v}`).join("\n"),
+      }),
+    }).catch((e) => console.warn("notifyErpIntegration send failed:", e));
+  } catch (e) {
+    console.warn("notifyErpIntegration error:", e);
+  }
+}
+
 async function getSapCredentials(
   supabase: ReturnType<typeof createClient>,
   companyDb?: string,
@@ -179,6 +234,7 @@ Deno.serve(async (req) => {
   let supabase: ReturnType<typeof createClient> | null = null;
   let pagcorpLog: any = null;
   let pagcorpLogWritten = false;
+  let expenseSnapshot: any = null;
   // Captured outside the try/catch so the error path can return the same
   // payload that was actually sent to SAP (used by the integration log UI).
   let lastSapPayload: Record<string, unknown> | null = null;
@@ -261,6 +317,7 @@ Deno.serve(async (req) => {
       .eq("id", expenseId)
       .single();
     if (expErr || !expense) throw new Error(`Despesa não encontrada: ${expErr?.message ?? ""}`);
+    expenseSnapshot = expense;
 
     // Guard: somente despesas totalmente aprovadas podem ser integradas ao SAP.
     // Status válidos: "aprovado" (primeira integração) ou estados pós-PC (re-link de anexos).
@@ -598,6 +655,19 @@ Deno.serve(async (req) => {
 
     await writePagCorpLog("success", undefined, sapResult.docEntry, sapResult.docNum, sapPayload, sapResult.response);
 
+    await notifyErpIntegration({
+      status: "success",
+      source: "expense",
+      entityId: expenseId || "",
+      companyDb: expenseSnapshot?.company_db,
+      docEntry: sapResult.docEntry,
+      docNum: sapResult.docNum,
+      requester: expenseSnapshot?.requester_name,
+      supplier: expenseSnapshot?.supplier_name,
+      amount: expenseSnapshot?.total_amount,
+      currency: expenseSnapshot?.currency,
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -620,6 +690,17 @@ Deno.serve(async (req) => {
     // Best-effort: persist whatever stage statuses we collected before the throw.
     await persistStatus({ sap_integration_error: msg });
     await writePagCorpLog("error", msg, undefined, undefined, lastSapPayload, lastSapResponse);
+    await notifyErpIntegration({
+      status: "error",
+      source: "expense",
+      entityId: expenseId || "",
+      companyDb: expenseSnapshot?.company_db,
+      errorMessage: msg,
+      requester: expenseSnapshot?.requester_name,
+      supplier: expenseSnapshot?.supplier_name,
+      amount: expenseSnapshot?.total_amount,
+      currency: expenseSnapshot?.currency,
+    });
     return new Response(
       JSON.stringify({
         success: false,

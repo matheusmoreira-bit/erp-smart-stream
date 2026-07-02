@@ -19,6 +19,59 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Fire-and-forget notification about ERP integration attempts (PagCorp path).
+async function notifyErpIntegration(params: {
+  status: "success" | "error";
+  entityIds: (string | number)[];
+  companyDb?: string | null;
+  docEntry?: number | null;
+  docNum?: number | null;
+  errorMessage?: string | null;
+  supplierCode?: string | null;
+  supplierName?: string | null;
+  totalAmount?: number | null;
+  currency?: string | null;
+  integratedBy?: string | null;
+}): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) return;
+    const ok = params.status === "success";
+    const subject = ok
+      ? `[ERP] Integração PagCorp OK — ${params.companyDb || ""} · Doc ${params.docNum ?? params.docEntry ?? ""}`
+      : `[ERP] Falha integração PagCorp — ${params.companyDb || ""} · tx ${params.entityIds.join(",")}`;
+    const rows: [string, string][] = [
+      ["Origem", "pagcorp"],
+      ["Empresa (DB)", params.companyDb || "-"],
+      ["Transações", params.entityIds.join(", ")],
+      ["Integrado por", params.integratedBy || "-"],
+      ["Fornecedor", `${params.supplierCode || "-"} ${params.supplierName || ""}`],
+      ["Valor", params.totalAmount != null ? `${params.currency || "BRL"} ${Number(params.totalAmount).toFixed(2)}` : "-"],
+      ["SAP DocEntry", params.docEntry != null ? String(params.docEntry) : "-"],
+      ["SAP DocNum", params.docNum != null ? String(params.docNum) : "-"],
+      ["Status", ok ? "SUCESSO" : "ERRO"],
+      ["Erro", params.errorMessage || "-"],
+    ];
+    const html = `<h2>${ok ? "Integração PagCorp → SAP concluída" : "Falha na integração PagCorp → SAP"}</h2>
+<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">
+${rows.map(([k, v]) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;background:#f8f8f8"><b>${k}</b></td><td style="padding:4px 8px;border:1px solid #ddd">${String(v).replace(/</g, "&lt;")}</td></tr>`).join("")}
+</table>`;
+    fetch(`${supabaseUrl}/functions/v1/send-smtp-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}`, apikey: serviceKey },
+      body: JSON.stringify({
+        to: "matheus.moreira@anagaming.com.br",
+        subject,
+        html,
+        text: rows.map(([k, v]) => `${k}: ${v}`).join("\n"),
+      }),
+    }).catch((e) => console.warn("notifyErpIntegration send failed:", e));
+  } catch (e) {
+    console.warn("notifyErpIntegration error:", e);
+  }
+}
+
 interface SapSession {
   baseUrl: string;
   cookies: string;
@@ -248,6 +301,17 @@ Deno.serve(async (req) => {
   // For consolidated mode we need to update multiple log rows on error
   const consolidatedLogIds: string[] = [];
 
+  // Snapshot for the ERP notification email (populated as we parse body/txs).
+  const snapshot: {
+    companyDb?: string;
+    supplierCode?: string;
+    supplierName?: string;
+    integratedBy?: string | null;
+    txIds: (string | number)[];
+    totalAmount?: number;
+    currency?: string;
+  } = { txIds: [] };
+
   try {
     const body = await req.json();
     const companyDb: string = body.companyDb;
@@ -307,6 +371,14 @@ Deno.serve(async (req) => {
       .eq("status", "success");
     const alreadyIntegratedIds = new Set((existingLogs || []).map((r: any) => r.pagcorp_expense_id));
     const transactions = positiveList.filter((t) => !alreadyIntegratedIds.has(Number(t.id)));
+
+    snapshot.companyDb = companyDb;
+    snapshot.supplierCode = supplierCode;
+    snapshot.supplierName = supplierName;
+    snapshot.integratedBy = integratedBy;
+    snapshot.txIds = transactions.map((t) => t.id);
+    snapshot.totalAmount = transactions.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    snapshot.currency = String(transactions[0]?.currency || "").toUpperCase() || "BRL";
 
     if (transactions.length === 0) {
       const first = (existingLogs || [])[0] as any;
@@ -538,6 +610,19 @@ Deno.serve(async (req) => {
       } as any,
     });
 
+    await notifyErpIntegration({
+      status: "success",
+      entityIds: snapshot.txIds,
+      companyDb: snapshot.companyDb,
+      docEntry: poResult.docEntry,
+      docNum: poResult.docNum,
+      supplierCode: snapshot.supplierCode,
+      supplierName: snapshot.supplierName,
+      totalAmount: snapshot.totalAmount,
+      currency: snapshot.currency,
+      integratedBy: snapshot.integratedBy,
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -560,6 +645,17 @@ Deno.serve(async (req) => {
         } as any)
         .in("id", consolidatedLogIds);
     }
+    await notifyErpIntegration({
+      status: "error",
+      entityIds: snapshot.txIds,
+      companyDb: snapshot.companyDb,
+      errorMessage: msg,
+      supplierCode: snapshot.supplierCode,
+      supplierName: snapshot.supplierName,
+      totalAmount: snapshot.totalAmount,
+      currency: snapshot.currency,
+      integratedBy: snapshot.integratedBy,
+    });
     return new Response(
       JSON.stringify({ success: false, error: msg, stages }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
