@@ -207,7 +207,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
       // hasDoc: there's something concrete to inspect at this stage
       const hasDoc =
         s.key === "rascunho" ||
-        (s.key === "pendente_aprovacao" && (levels.length > 0 || log.length > 0)) ||
+        (s.key === "pendente_aprovacao" && (levels.length > 0 || log.length > 0 || sapHistory.length > 0)) ||
         (s.key === "aprovado" && reached) ||
         (s.key === "pc_lancado" && (!!expense.sap_doc_num || reached)) ||
         (s.key === "nf_entrada" && (nfCount > 0 || reached)) ||
@@ -215,7 +215,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         (s.key === "finalizado" && reached);
       return { key: s.key, label: s.label, icon: s.icon, state, hasDoc };
     });
-  }, [expense, levels.length, log.length, nfLinks.data, apLinks.data]);
+  }, [expense, levels.length, log.length, sapHistory.length, nfLinks.data, apLinks.data]);
 
   // Aprovadores: feitos, atual, próximos
   const approvedNames = useMemo(
@@ -228,20 +228,86 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
     [log],
   );
 
-  const approverRows = useMemo(() => {
+  // Chain unificada: preferimos a regra local; senão, reconstruímos a partir do
+  // histórico SAP (approval_history) — mostra anteriores, atual e próximos com
+  // decisão registrada (aprovado/rejeitado/pendente).
+  type ChainRow = {
+    level_order: number;
+    approver_name: string;
+    approver_email: string | null;
+    done: boolean;
+    isCurrent: boolean;
+    rejected?: boolean;
+    decidedAt?: string | null;
+    remarks?: string | null;
+    stageName?: string | null;
+    source: "rule" | "sap";
+  };
+
+  const approverRows: ChainRow[] = useMemo(() => {
     if (!expense) return [];
-    return levels.map((lv) => {
-      const done = approvedNames.has(lv.approver_name.toLowerCase());
-      const isCurrent =
-        !done &&
-        !!expense.current_approver &&
-        expense.current_approver.toLowerCase() === lv.approver_name.toLowerCase();
-      return { ...lv, done, isCurrent };
-    });
-  }, [levels, approvedNames, expense]);
+    if (levels.length > 0) {
+      return levels.map((lv) => {
+        const done = approvedNames.has(lv.approver_name.toLowerCase());
+        const isCurrent =
+          !done &&
+          !!expense.current_approver &&
+          expense.current_approver.toLowerCase() === lv.approver_name.toLowerCase();
+        return { ...lv, done, isCurrent, source: "rule" as const };
+      });
+    }
+    // Fallback: reconstrói a partir do SAP approval_history
+    if (sapHistory.length === 0 && !expense.current_approver) return [];
+    const sorted = [...sapHistory].sort(
+      (a, b) => (a.step ?? 0) - (b.step ?? 0),
+    );
+    const rows: ChainRow[] = sorted
+      .filter((r) => (r.approver_name || r.approver_email))
+      .map((r, i) => {
+        const dec = (r.decision || "").toUpperCase();
+        const approved = dec === "Y" || dec === "APPROVED";
+        const rejected = dec === "N" || dec === "REJECTED";
+        return {
+          level_order: r.step ?? i + 1,
+          approver_name: r.approver_name || r.approver_email || "—",
+          approver_email: r.approver_email,
+          done: approved,
+          rejected,
+          isCurrent: false,
+          decidedAt: r.decision_date,
+          remarks: r.remarks,
+          stageName: r.stage_name,
+          source: "sap" as const,
+        };
+      });
+    // Se há aprovador atual conhecido mas ele não aparece na lista SAP, adiciona
+    if (
+      expense.current_approver &&
+      !rows.some(
+        (r) => r.approver_name.toLowerCase() === expense.current_approver!.toLowerCase() && !r.done && !r.rejected,
+      )
+    ) {
+      const maxStep = rows.reduce((m, r) => Math.max(m, r.level_order), 0);
+      rows.push({
+        level_order: maxStep + 1,
+        approver_name: expense.current_approver,
+        approver_email: null,
+        done: false,
+        isCurrent: true,
+        source: "sap",
+      });
+    } else {
+      // marca o primeiro sem decisão como atual
+      const firstPending = rows.find((r) => !r.done && !r.rejected);
+      if (firstPending) firstPending.isCurrent = true;
+    }
+    return rows;
+  }, [levels, approvedNames, expense, sapHistory]);
 
   const currentApproverRow = approverRows.find((r) => r.isCurrent);
-  const nextApproverRows = approverRows.filter((r) => !r.done && !r.isCurrent);
+  const nextApproverRows = approverRows.filter((r) => !r.done && !r.rejected && !r.isCurrent);
+
+
 
   if (!expense) return null;
 
