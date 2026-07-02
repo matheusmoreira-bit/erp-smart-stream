@@ -72,33 +72,13 @@ export function useSapUsers() {
 
   const fetchUsers = useCallback(async (forceRefresh = false, signal?: AbortSignal) => {
     if (!session || session.erpType !== "sap") {
-      // No session: try loading from DB cache
-      setIsLoading(true);
-      setError(null);
-      try {
-        const { data: dbCache } = await supabase
-          .from("sap_cache")
-          .select("data, expires_at")
-          .eq("cache_key", "users")
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (signal?.aborted) return;
-
-        if (dbCache?.data && Array.isArray(dbCache.data)) {
-          const userList = (dbCache.data as Record<string, unknown>[]).map(normalizeSapUser);
-          if (userList.some(hasDisplayData)) {
-            setUsers(userList);
-            return;
-          }
-        }
-      } catch {
-        // ignore DB cache errors
-      } finally {
-        if (!signal?.aborted) setIsLoading(false);
+      // No SAP session: do NOT read cache without company_db, because that
+      // would surface users from another company's base to the current view.
+      if (!signal?.aborted) {
+        setUsers([]);
+        setError(null);
+        setIsLoading(false);
       }
-      setUsers([]);
       return;
     }
 
