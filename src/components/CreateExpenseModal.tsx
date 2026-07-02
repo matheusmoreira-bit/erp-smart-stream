@@ -301,8 +301,82 @@ export function CreateExpenseModal({
       setPendingPrefill(null);
       setHeaderCostCenter(null);
       setHeaderProject(null);
+      setDraftId(null);
+      setDraftHydrated(false);
     }
   }, [open]);
+
+  // Hydrate from an existing draft when the user chose "Retomar"
+  useEffect(() => {
+    if (!open || !initialDraft || draftHydrated) return;
+    const p = initialDraft.payload || {};
+    setDraftId(initialDraft.id);
+    setDraftHydrated(true);
+    if (p.supplier) setSupplier(p.supplier);
+    if (p.currency) setCurrency(p.currency);
+    if (p.docDate) setDocDate(p.docDate);
+    if (p.dueDate) setDueDate(p.dueDate);
+    if (p.remarks) setRemarks(p.remarks);
+    if (p.headerCostCenter) setHeaderCostCenter(p.headerCostCenter);
+    if (p.headerProject) setHeaderProject(p.headerProject);
+    if (Array.isArray(p.items) && p.items.length > 0) setItems(p.items);
+    if (Array.isArray(p.fileNames) && p.fileNames.length > 0) {
+      toast.info(`Reanexe ${p.fileNames.length} arquivo(s): ${p.fileNames.join(", ")}`, { duration: 8000 });
+    }
+    setInitialized(true);
+    onDraftConsumed?.();
+  }, [open, initialDraft, draftHydrated, onDraftConsumed]);
+
+  // Autosave (debounced) while the modal is open and user has meaningful content
+  useEffect(() => {
+    if (!open) return;
+    if (isCreating) return;
+    const hasContent =
+      !!supplier ||
+      !!remarks.trim() ||
+      items.some((it) => (it.description || "").trim() || Number(it.unit_price) > 0);
+    if (!hasContent) return;
+    const companyDb = sapSession?.companyDB;
+    if (!companyDb) return;
+
+    const previewParts = [
+      supplier?.name || suggestedSupplierName || "(sem fornecedor)",
+      items.length > 0 ? `${items.length} ite${items.length > 1 ? "ns" : "m"}` : null,
+      total > 0 ? formatCurrency(total, currency || "BRL") : null,
+    ].filter(Boolean);
+    const preview = previewParts.join(" · ");
+
+    const payload = {
+      supplier,
+      currency,
+      docDate,
+      dueDate,
+      remarks,
+      items,
+      headerCostCenter,
+      headerProject,
+      fileNames: files.map((f) => f.name),
+    };
+
+    const t = setTimeout(async () => {
+      const id = await saveDraft({
+        docType: mode,
+        companyDb,
+        payload,
+        preview,
+        draftId,
+      });
+      if (id && id !== draftId) {
+        setDraftId(id);
+        onDraftSaved?.(id);
+      } else if (id) {
+        onDraftSaved?.(id);
+      }
+    }, 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isCreating, supplier, currency, docDate, dueDate, remarks, items, headerCostCenter, headerProject, files]);
+
 
   const extractUrlsFromObject = (obj: any): string[] => {
     const urls: string[] = [];
