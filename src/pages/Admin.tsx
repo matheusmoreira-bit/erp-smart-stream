@@ -686,6 +686,13 @@ export default function Admin() {
             Administradores
           </button>
           <button
+            onClick={() => navigate("/backoffice/audit-trail")}
+            className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Shield className="w-4 h-4 inline mr-1.5" />
+            Audit Trail
+          </button>
+          <button
             onClick={() => navigate("/backoffice/sap-users")}
             className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
           >
