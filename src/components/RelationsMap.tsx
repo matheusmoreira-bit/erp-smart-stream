@@ -133,6 +133,7 @@ function formatCurrency(value?: number, currency?: string | null) {
 export function RelationsMap({ open, onClose, expense, title }: Props) {
   const [log, setLog] = useState<ApprovalLogRow[]>([]);
   const [levels, setLevels] = useState<RuleLevelRow[]>([]);
+  const [sapHistory, setSapHistory] = useState<SapHistoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
 
@@ -152,7 +153,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
     let cancelled = false;
     (async () => {
       setIsLoading(true);
-      const [logRes, levelsRes] = await Promise.all([
+      const [logRes, levelsRes, sapRes] = await Promise.all([
         supabase
           .from("expense_approval_log")
           .select("*")
@@ -165,16 +166,26 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
               .eq("rule_id", expense.approval_rule_id)
               .order("level_order", { ascending: true })
           : Promise.resolve({ data: [] as RuleLevelRow[] }),
+        expense.sap_doc_entry && expense.company_db
+          ? supabase
+              .from("approval_history")
+              .select("id, approver_name, approver_email, decision, decision_date, step, stage_name, remarks")
+              .eq("company_db", expense.company_db)
+              .eq("doc_entry", expense.sap_doc_entry)
+              .order("step", { ascending: true })
+          : Promise.resolve({ data: [] as SapHistoryRow[] }),
       ]);
       if (cancelled) return;
       setLog(((logRes as any).data || []) as ApprovalLogRow[]);
       setLevels(((levelsRes as any).data || []) as RuleLevelRow[]);
+      setSapHistory(((sapRes as any).data || []) as SapHistoryRow[]);
       setIsLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, [open, expense]);
+
 
   const stages = useMemo(() => {
     if (!expense) return [] as { key: StageKey; label: string; icon: any; state: "done" | "current" | "pending" | "skipped"; hasDoc: boolean }[];
