@@ -1,0 +1,225 @@
+import type { ApprovalRule, RuleCriterion, RuleDocType } from "@/hooks/useApprovalRules";
+import type { ApprovalDoc, DocumentLine } from "@/hooks/useApprovals";
+
+/**
+ * Avalia um critério contra um contexto. Mesmo shape usado pelo simulador
+ * (`RuleSimulator`) e pela criação de despesas (`useExpenses`).
+ */
+export function evaluateCriterion(
+  c: RuleCriterion,
+  ctx: Record<string, unknown>,
+): boolean {
+  const raw = ctx[c.field];
+  if (raw === undefined || raw === null) return false;
+  const val = String(raw).toLowerCase();
+  const target = String(c.value ?? "").toLowerCase();
+
+  switch (c.operator) {
+    case "greater_than":
+      return Number(raw) > Number(c.value);
+    case "less_than":
+      return Number(raw) < Number(c.value);
+    case "between":
+      return (
+        Number(raw) >= Number(c.value) &&
+        Number(raw) <= Number(c.value2 ?? c.value)
+      );
+    case "equal":
+      return val === target;
+    case "not_equal":
+      return val !== target;
+    case "contains":
+      return val.includes(target);
+    case "not_contains":
+      return !val.includes(target);
+    case "like": {
+      const pattern = target.replace(/%/g, ".*").replace(/_/g, ".");
+      try {
+        return new RegExp(`^${pattern}$`).test(val);
+      } catch {
+        return false;
+      }
+    }
+    default:
+      return false;
+  }
+}
+
+function inferDocTypeFromName(name?: string): RuleDocType {
+  const n = (name || "").toLowerCase();
+  if (n.includes("venda") || n.includes("cliente") || n.includes("sales")) return "sales";
+  return "purchase";
+}
+
+/**
+ * Escolhe a regra vencedora para um contexto: apenas ativas, doc_type compatível,
+ * maior prioridade primeiro; a primeira cujos critérios TODOS batem vence.
+ */
+export function findMatchingRule(
+  rules: ApprovalRule[],
+  ctx: Record<string, unknown>,
+  docType: RuleDocType,
+): ApprovalRule | null {
+  const scoped = rules
+    .filter((r) => r.is_active)
+    .filter((r) => {
+      const rdt = r.doc_type;
+      return !rdt || rdt === "both" || rdt === docType;
+    })
+    .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+
+  for (const r of scoped) {
+    const criteria = Array.isArray(r.criteria) ? r.criteria : [];
+    if (criteria.length === 0) continue;
+    if (criteria.every((c) => evaluateCriterion(c, ctx))) return r;
+  }
+  return null;
+}
+
+export interface ApprovalSegment {
+  /** Chave do agrupamento — código do centro de custo ou "__no_cc__". */
+  costCenter: string;
+  lines: DocumentLine[];
+  amount: number;
+  amountFC: number;
+  pct: number;
+  rule: ApprovalRule | null;
+  /** Emails/nomes na cadeia (ordenados por level_order). */
+  approverEmails: string[];
+  approverNames: string[];
+}
+
+function toList(arr: string[]): string {
+  return ` ${arr
+    .map((x) => (x || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ")} `;
+}
+
+/**
+ * Agrupa as linhas do documento por CostingCode e resolve, para cada grupo,
+ * qual regra do app aplicaria e qual seria a cadeia de aprovadores.
+ *
+ * Se todos os grupos resolverem para a MESMA regra (mesmo id), retorna um único
+ * segmento com todas as linhas — significa "sem segmentação".
+ */
+export function segmentDocByRules(
+  doc: ApprovalDoc,
+  rules: ApprovalRule[],
+): ApprovalSegment[] {
+  const lines = Array.isArray(doc.documentLines) ? doc.documentLines : [];
+  if (lines.length === 0) return [];
+
+  const docType = inferDocTypeFromName(doc.docTypeName);
+  const totalAll = lines.reduce((s, l) => s + Number(l.LineTotal || 0), 0);
+  const groups = new Map<string, DocumentLine[]>();
+  for (const l of lines) {
+    const key = (l.CostingCode || "").trim() || "__no_cc__";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(l);
+  }
+
+  const segments: ApprovalSegment[] = [];
+  for (const [cc, groupLines] of groups.entries()) {
+    const amount = groupLines.reduce((s, l) => s + Number(l.LineTotal || 0), 0);
+    const amountFC = groupLines.reduce(
+      (s, l) => s + Number(l.LineTotalFC ?? l.LineTotal ?? 0),
+      0,
+    );
+    const ctx: Record<string, unknown> = {
+      total_amount: doc.currency !== "BRL" ? amountFC : amount,
+      cost_center: cc === "__no_cc__" ? "" : cc,
+      project: (groupLines.find((l) => l.Project)?.Project || "").trim(),
+      requester_name: doc.requester || "",
+      supplier_name: doc.cardName || "",
+      currency: (doc.currency || "BRL").toUpperCase(),
+      doc_type: docType,
+      item_codes: toList(groupLines.map((l) => l.ItemCode || "")),
+      item_groups: "",
+    };
+    const rule = findMatchingRule(rules, ctx, docType);
+    const levels = rule ? [...rule.levels].sort((a, b) => a.level_order - b.level_order) : [];
+    segments.push({
+      costCenter: cc,
+      lines: groupLines,
+      amount,
+      amountFC,
+      pct: totalAll > 0 ? (amount / totalAll) * 100 : 0,
+      rule,
+      approverEmails: levels
+        .map((l) => (l.approver_email || "").trim().toLowerCase())
+        .filter(Boolean),
+      approverNames: levels
+        .map((l) => (l.approver_name || "").trim())
+        .filter(Boolean),
+    });
+  }
+
+  // Se todos os segmentos apontam para a mesma regra (ou todos sem regra), colapsa.
+  const distinctRuleIds = new Set(segments.map((s) => s.rule?.id || "__none__"));
+  if (distinctRuleIds.size <= 1) {
+    const total = segments.reduce((s, x) => s + x.amount, 0);
+    const totalFC = segments.reduce((s, x) => s + x.amountFC, 0);
+    const first = segments[0];
+    return [
+      {
+        costCenter: "__all__",
+        lines,
+        amount: total,
+        amountFC: totalFC,
+        pct: 100,
+        rule: first?.rule || null,
+        approverEmails: first?.approverEmails || [],
+        approverNames: first?.approverNames || [],
+      },
+    ];
+  }
+
+  return segments.sort((a, b) => b.amount - a.amount);
+}
+
+/** True se as segmentações realmente diferem entre grupos (mais de 1 regra distinta). */
+export function isTrulySegmented(segments: ApprovalSegment[]): boolean {
+  if (segments.length <= 1) return false;
+  const ids = new Set(segments.map((s) => s.rule?.id || "__none__"));
+  return ids.size > 1;
+}
+
+/**
+ * Normaliza um identificador de aprovador (email OU nome) para comparação.
+ * Aceita "matheus.moreira", "matheus.moreira@empresa", "Matheus Moreira".
+ */
+function normalizeApproverKey(v: string): string {
+  const s = (v || "").trim().toLowerCase();
+  if (!s) return "";
+  // pega prefixo antes de @ para casar por login SAP com email da regra
+  return s.includes("@") ? s.split("@")[0] : s;
+}
+
+/**
+ * Retorna os segmentos onde o usuário informado aparece na cadeia de aprovadores.
+ * Match tolerante: por email completo, por prefixo do email (login) e por nome.
+ */
+export function segmentsForApprover(
+  segments: ApprovalSegment[],
+  userName?: string,
+  userEmail?: string,
+): ApprovalSegment[] {
+  const keys = new Set<string>();
+  if (userName) keys.add(normalizeApproverKey(userName));
+  if (userEmail) {
+    keys.add((userEmail || "").trim().toLowerCase());
+    keys.add(normalizeApproverKey(userEmail));
+  }
+  if (keys.size === 0) return [];
+  return segments.filter((seg) => {
+    const emails = seg.approverEmails.map((e) => e.toLowerCase());
+    const emailPrefixes = emails.map((e) => normalizeApproverKey(e));
+    const names = seg.approverNames.map((n) => normalizeApproverKey(n));
+    for (const k of keys) {
+      if (!k) continue;
+      if (emails.includes(k) || emailPrefixes.includes(k) || names.includes(k)) return true;
+    }
+    return false;
+  });
+}
