@@ -16,6 +16,20 @@ const FALLBACK_COMPANY_NAMES: Record<string, string[]> = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
+// Configurable name-similarity threshold (Jaccard over meaningful tokens).
+// Values >= threshold count as a match. Default 0.5.
+const NAME_MATCH_THRESHOLD = Math.min(
+  1,
+  Math.max(0, Number(Deno.env.get("COMPANY_NAME_MATCH_THRESHOLD") || "0.5")),
+);
+
+// Legal-form suffixes / noise tokens stripped before comparison.
+const STOP_TOKENS = new Set([
+  "sa", "s/a", "ltda", "me", "epp", "eireli", "inc", "llc", "corp", "cia",
+  "co", "company", "companhia", "group", "grupo", "holding", "holdings",
+  "the", "de", "da", "do", "das", "dos", "e", "and", "of",
+]);
+
 function normalizeText(s: string): string {
   return (s || "")
     .toLowerCase()
@@ -27,8 +41,49 @@ function normalizeText(s: string): string {
     .trim();
 }
 
+function meaningfulTokens(s: string): string[] {
+  return normalizeText(s)
+    .split(" ")
+    .filter((t) => t.length >= 3 && !STOP_TOKENS.has(t));
+}
+
+function jaccard(a: string[], b: string[]): number {
+  if (!a.length || !b.length) return 0;
+  const sa = new Set(a);
+  const sb = new Set(b);
+  let inter = 0;
+  for (const t of sa) if (sb.has(t)) inter++;
+  const union = sa.size + sb.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
 function onlyDigits(s: string): string {
   return (s || "").replace(/\D+/g, "");
+}
+
+// Normalize a tax id for comparison. For CNPJ (14 digits), also expose the
+// 8-digit "raiz" (root) so branch differences don't cause false negatives.
+function normalizeTaxId(s: string): { full: string; root: string | null } {
+  const d = onlyDigits(s);
+  if (!d) return { full: "", root: null };
+  // CNPJ raiz = first 8 digits
+  if (d.length === 14) return { full: d, root: d.slice(0, 8) };
+  return { full: d, root: null };
+}
+
+function taxIdsMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const na = normalizeTaxId(a);
+  const nb = normalizeTaxId(b);
+  if (!na.full || !nb.full) return false;
+  if (na.full === nb.full) return true;
+  // Match by CNPJ root (same headquarter, different branch)
+  if (na.root && nb.root && na.root === nb.root) return true;
+  // Fallback: one contains the other with substantial overlap (>=8 digits)
+  const shorter = na.full.length <= nb.full.length ? na.full : nb.full;
+  const longer = na.full.length > nb.full.length ? na.full : nb.full;
+  if (shorter.length >= 8 && longer.endsWith(shorter)) return true;
+  return false;
 }
 
 async function fetchCompanyContext(companyDB: string): Promise<{
