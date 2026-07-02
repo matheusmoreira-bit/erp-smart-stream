@@ -18,7 +18,9 @@ import {
   Pencil,
   ShoppingCart,
   Tag,
+  PlayCircle,
 } from "lucide-react";
+import { RuleSimulator } from "@/components/RuleSimulator";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
