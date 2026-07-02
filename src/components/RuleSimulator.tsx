@@ -23,6 +23,7 @@ import {
   type RuleCriterion,
   type RuleDocType,
 } from "@/hooks/useApprovalRules";
+import { evaluateCriterion } from "@/lib/approvalSegments";
 
 function fieldLabel(field: string): string {
   return FIELD_OPTIONS.find((f) => f.value === field)?.label || field;
@@ -33,43 +34,6 @@ function criterionSummary(c: RuleCriterion): string {
   const op = OPERATOR_LABELS[c.operator];
   if (c.operator === "between") return `${f} ${op} ${c.value} e ${c.value2}`;
   return `${f} ${op} ${c.value}`;
-}
-
-function evaluateCriterion(c: RuleCriterion, ctx: Record<string, unknown>): boolean {
-  const raw = ctx[c.field];
-  if (raw === undefined || raw === null) return false;
-  const val = String(raw).toLowerCase();
-  const target = String(c.value ?? "").toLowerCase();
-
-  switch (c.operator) {
-    case "greater_than":
-      return Number(raw) > Number(c.value);
-    case "less_than":
-      return Number(raw) < Number(c.value);
-    case "between":
-      return (
-        Number(raw) >= Number(c.value) &&
-        Number(raw) <= Number(c.value2 ?? c.value)
-      );
-    case "equal":
-      return val === target;
-    case "not_equal":
-      return val !== target;
-    case "contains":
-      return val.includes(target);
-    case "not_contains":
-      return !val.includes(target);
-    case "like": {
-      const pattern = target.replace(/%/g, ".*").replace(/_/g, ".");
-      try {
-        return new RegExp(`^${pattern}$`).test(val);
-      } catch {
-        return false;
-      }
-    }
-    default:
-      return false;
-  }
 }
 
 interface SimulationInput {
