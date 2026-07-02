@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
+import { createNotification } from "@/lib/notifications";
 
 /* ───────────────── Item group enrichment ───────────────── */
 
