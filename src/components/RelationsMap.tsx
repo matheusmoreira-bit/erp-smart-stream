@@ -54,6 +54,18 @@ interface RuleLevelRow {
   approver_email: string | null;
 }
 
+interface SapHistoryRow {
+  id: string;
+  approver_name: string | null;
+  approver_email: string | null;
+  decision: string | null; // 'Y' aprovado, 'N' rejeitado, 'W'/'P' pendente
+  decision_date: string | null;
+  step: number | null;
+  stage_name: string | null;
+  remarks: string | null;
+}
+
+
 export interface RelationsMapExpense {
   id: string;
   status: string;
