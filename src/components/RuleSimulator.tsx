@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { PlayCircle, CheckCircle2, XCircle, Trophy, Users as UsersIcon } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { PlayCircle, CheckCircle2, XCircle, Trophy, Users as UsersIcon, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,10 @@ import {
   type RuleDocType,
 } from "@/hooks/useApprovalRules";
 import { evaluateCriterion } from "@/lib/approvalSegments";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { useSapUsers } from "@/hooks/useSapUsers";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 function fieldLabel(field: string): string {
   return FIELD_OPTIONS.find((f) => f.value === field)?.label || field;
@@ -38,49 +42,45 @@ function criterionSummary(c: RuleCriterion): string {
 
 interface SimulationInput {
   total_amount: string;
-  cost_center: string;
-  project: string;
-  requester_name: string;
-  supplier_name: string;
+  cost_center: SapSearchOption | null;
+  project: SapSearchOption | null;
+  requester: SapSearchOption | null;
+  supplier: SapSearchOption | null;
   currency: string;
   doc_type: RuleDocType;
-  item_codes: string;
-  item_groups: string;
+  item_codes: SapSearchOption[];
+  item_groups: SapSearchOption[];
 }
 
 const EMPTY: SimulationInput = {
   total_amount: "",
-  cost_center: "",
-  project: "",
-  requester_name: "",
-  supplier_name: "",
+  cost_center: null,
+  project: null,
+  requester: null,
+  supplier: null,
   currency: "BRL",
   doc_type: "purchase",
-  item_codes: "",
-  item_groups: "",
+  item_codes: [],
+  item_groups: [],
 };
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
-/**
- * Constrói o contexto que o `findMatchingRule` monta em runtime — mesmo shape
- * usado pelo hook `useExpenses` para avaliar regras na criação de despesas.
- */
 function buildContext(input: SimulationInput): Record<string, unknown> {
-  const toList = (s: string) =>
-    ` ${s
-      .split(/[\s,;]+/)
-      .map((x) => x.trim().toLowerCase())
+  const toList = (items: SapSearchOption[]) =>
+    ` ${items
+      .flatMap((i) => [i.code, i.name])
+      .map((x) => (x || "").trim().toLowerCase())
       .filter(Boolean)
       .join(" ")} `;
   return {
     total_amount: Number(input.total_amount || 0),
-    cost_center: input.cost_center.trim(),
-    project: input.project.trim(),
-    requester_name: input.requester_name.trim(),
-    supplier_name: input.supplier_name.trim(),
+    cost_center: (input.cost_center?.code || "").trim(),
+    project: (input.project?.code || "").trim(),
+    requester_name: (input.requester?.code || input.requester?.name || "").trim(),
+    supplier_name: (input.supplier?.name || "").trim(),
     currency: input.currency.trim().toUpperCase(),
     doc_type: input.doc_type,
     item_codes: toList(input.item_codes),
@@ -109,10 +109,84 @@ export function RuleSimulator({
   const setField = <K extends keyof SimulationInput>(k: K, v: SimulationInput[K]) =>
     setInput((prev) => ({ ...prev, [k]: v }));
 
+  /* ── Data sources (cached SAP lists, mesmos usados na criação de despesa) ── */
+  const supplierMapRow = useCallback(
+    (row: any) => ({
+      code: row.CardCode,
+      name: row.CardName,
+      extra: row.FederalTaxID || undefined,
+      details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
+    } as SapSearchOption),
+    [],
+  );
+  const isSales = input.doc_type === "sales";
+  const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
+    cacheKey: isSales ? "customers_active_v2" : "suppliers_active_v2",
+    endpoint: "BusinessPartners",
+    params: isSales
+      ? { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer' and Frozen eq 'tNO'" }
+      : { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
+    mapRow: supplierMapRow,
+    enabled: open,
+  });
+
+  const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
+  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+    cacheKey: isSales ? "items_sales_active_v3" : "items_purchase_active_v3",
+    endpoint: "Items",
+    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    mapRow: itemMapRow,
+    enabled: open,
+  });
+
+  const costCenterMapRow = useCallback(
+    (row: any) => ({ code: row.CenterCode, name: row.CenterName }),
+    [],
+  );
+  const { options: rawCostCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "ProfitCenters",
+    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    mapRow: costCenterMapRow,
+    enabled: open,
+  });
+  const costCenterOptions = useMemo(
+    () => rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
+    [rawCostCenterOptions],
+  );
+
+  const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
+  const { options: projectOptions, isLoading: projectsLoading } = useSapCachedList({
+    cacheKey: "projects",
+    endpoint: "Projects",
+    params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
+    mapRow: projectMapRow,
+    enabled: open,
+  });
+
+  const { options: itemGroupOptions, isLoading: itemGroupsLoading } = useSapCachedList({
+    cacheKey: "item_groups",
+    endpoint: "ItemGroups",
+    params: { $select: "Number,GroupName", $orderby: "GroupName" },
+    mapRow: (r: any) => ({ code: String(r.Number), name: r.GroupName }),
+    enabled: open,
+  });
+
+  const { users: sapUsers, isLoading: sapUsersLoading } = useSapUsers();
+  const requesterOptions = useMemo<SapSearchOption[]>(
+    () =>
+      sapUsers.map((u) => ({
+        code: u.UserCode,
+        name: u.UserName || u.UserCode,
+        extra: u.eMail || undefined,
+      })),
+    [sapUsers],
+  );
+
+  /* ── Simulation ── */
   const results = useMemo<Match[]>(() => {
     if (!ran) return [];
     const ctx = buildContext(input);
-    // mesma lógica do runtime: só regras ativas + filtro por doc_type
     const scoped = rules
       .filter((r) => r.is_active)
       .filter((r) => {
@@ -127,8 +201,7 @@ export function RuleSimulator({
         criterion: c,
         passed: evaluateCriterion(c, ctx),
       }));
-      const allMatched =
-        criteria.length > 0 && perCriterion.every((p) => p.passed);
+      const allMatched = criteria.length > 0 && perCriterion.every((p) => p.passed);
       return { rule: r, perCriterion, allMatched };
     });
   }, [ran, input, rules]);
@@ -140,6 +213,22 @@ export function RuleSimulator({
     setInput(EMPTY);
     setRan(false);
   };
+
+  /* ── Multi-add helpers for chips ── */
+  const addTag = (key: "item_codes" | "item_groups", opt: SapSearchOption | null) => {
+    if (!opt) return;
+    setInput((prev) => {
+      if (prev[key].some((x) => x.code === opt.code)) return prev;
+      return { ...prev, [key]: [...prev[key], opt] };
+    });
+  };
+  const removeTag = (key: "item_codes" | "item_groups", code: string) => {
+    setInput((prev) => ({ ...prev, [key]: prev[key].filter((x) => x.code !== code) }));
+  };
+
+  // Reset combobox after each pick — use a bump key
+  const [itemPickKey, setItemPickKey] = useState(0);
+  const [groupPickKey, setGroupPickKey] = useState(0);
 
   return (
     <Dialog
@@ -165,7 +254,6 @@ export function RuleSimulator({
             seriam aplicadas. A avaliação usa exatamente a mesma lógica da criação de despesas.
           </p>
 
-          {/* Inputs */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">
@@ -209,71 +297,123 @@ export function RuleSimulator({
                 className="h-9 text-sm"
               />
             </div>
+
             <div>
               <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">
                 Centro de Custo
               </label>
-              <Input
+              <CachedSearchCombobox
+                options={costCenterOptions}
+                isLoading={costCentersLoading}
                 value={input.cost_center}
-                onChange={(e) => setField("cost_center", e.target.value)}
-                placeholder="Ex: 1.9.1.2"
-                className="h-9 text-sm"
+                onChange={(v) => setField("cost_center", v)}
+                placeholder="Buscar centro de custo..."
               />
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">
                 Projeto
               </label>
-              <Input
+              <CachedSearchCombobox
+                options={projectOptions}
+                isLoading={projectsLoading}
                 value={input.project}
-                onChange={(e) => setField("project", e.target.value)}
-                placeholder="Ex: BET.BET"
-                className="h-9 text-sm"
+                onChange={(v) => setField("project", v)}
+                placeholder="Buscar projeto..."
               />
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">
                 Solicitante
               </label>
-              <Input
-                value={input.requester_name}
-                onChange={(e) => setField("requester_name", e.target.value)}
-                placeholder="Ex: priscila.iaralhan"
-                className="h-9 text-sm"
+              <CachedSearchCombobox
+                options={requesterOptions}
+                isLoading={sapUsersLoading}
+                value={input.requester}
+                onChange={(v) => setField("requester", v)}
+                placeholder="Buscar usuário..."
               />
             </div>
-            <div className="col-span-2 md:col-span-2">
+
+            <div className="col-span-2 md:col-span-3">
               <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">
-                Fornecedor
+                {isSales ? "Cliente" : "Fornecedor"}
               </label>
-              <Input
-                value={input.supplier_name}
-                onChange={(e) => setField("supplier_name", e.target.value)}
-                placeholder="Ex: MILLENA MARIA SILVEIRA GUEDES"
-                className="h-9 text-sm"
+              <CachedSearchCombobox
+                options={supplierOptions}
+                isLoading={suppliersLoading}
+                value={input.supplier}
+                onChange={(v) => setField("supplier", v)}
+                placeholder={isSales ? "Buscar cliente..." : "Buscar fornecedor..."}
               />
             </div>
-            <div>
+
+            <div className="col-span-2 md:col-span-3">
               <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">
                 Códigos dos Itens
               </label>
-              <Input
-                value={input.item_codes}
-                onChange={(e) => setField("item_codes", e.target.value)}
-                placeholder="Ex: IMP001, FOL002"
-                className="h-9 text-sm"
+              <CachedSearchCombobox
+                key={`item-${itemPickKey}`}
+                options={itemOptions}
+                isLoading={itemsLoading}
+                value={null}
+                onChange={(v) => {
+                  addTag("item_codes", v);
+                  setItemPickKey((k) => k + 1);
+                }}
+                placeholder="Buscar item para adicionar..."
               />
+              {input.item_codes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {input.item_codes.map((it) => (
+                    <Badge key={it.code} variant="secondary" className="gap-1 text-[11px]">
+                      <span className="font-mono">{it.code}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="truncate max-w-[180px]">{it.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeTag("item_codes", it.code)}
+                        className="hover:text-destructive"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="col-span-2">
+
+            <div className="col-span-2 md:col-span-3">
               <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">
                 Grupos dos Itens
               </label>
-              <Input
-                value={input.item_groups}
-                onChange={(e) => setField("item_groups", e.target.value)}
-                placeholder="Ex: Impostos, Folha"
-                className="h-9 text-sm"
+              <CachedSearchCombobox
+                key={`group-${groupPickKey}`}
+                options={itemGroupOptions}
+                isLoading={itemGroupsLoading}
+                value={null}
+                onChange={(v) => {
+                  addTag("item_groups", v);
+                  setGroupPickKey((k) => k + 1);
+                }}
+                placeholder="Buscar grupo para adicionar..."
               />
+              {input.item_groups.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {input.item_groups.map((g) => (
+                    <Badge key={g.code} variant="secondary" className="gap-1 text-[11px]">
+                      <span className="truncate max-w-[220px]">{g.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeTag("item_groups", g.code)}
+                        className="hover:text-destructive"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -291,10 +431,8 @@ export function RuleSimulator({
             )}
           </div>
 
-          {/* Results */}
           {ran && (
             <div className="space-y-4">
-              {/* Winner */}
               {winner ? (
                 <div className="rounded-lg border border-success/40 bg-success/5 p-4 space-y-3">
                   <div className="flex items-center gap-2">
@@ -350,7 +488,6 @@ export function RuleSimulator({
                 </div>
               )}
 
-              {/* All applicable rules */}
               {matched.length > 1 && (
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
@@ -380,7 +517,6 @@ export function RuleSimulator({
                 </div>
               )}
 
-              {/* Diagnostic */}
               <details className="rounded-lg border border-border bg-muted/10 p-3">
                 <summary className="cursor-pointer text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Diagnóstico completo — {results.length} regras avaliadas
