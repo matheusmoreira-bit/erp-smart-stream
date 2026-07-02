@@ -339,10 +339,11 @@ export function CreateExpenseModal({
     const companyDb = sapSession?.companyDB;
     if (!companyDb) return;
 
+    const draftTotal = items.reduce((s, it) => s + (Number(it.line_total) || 0), 0);
     const previewParts = [
       supplier?.name || suggestedSupplierName || "(sem fornecedor)",
       items.length > 0 ? `${items.length} ite${items.length > 1 ? "ns" : "m"}` : null,
-      total > 0 ? formatCurrency(total, currency || "BRL") : null,
+      draftTotal > 0 ? formatCurrency(draftTotal, currency || "BRL") : null,
     ].filter(Boolean);
     const preview = previewParts.join(" · ");
 
