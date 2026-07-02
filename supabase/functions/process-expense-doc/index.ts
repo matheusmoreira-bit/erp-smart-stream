@@ -251,15 +251,64 @@ Regras IMPORTANTES:
       });
     }
 
-    // Post-process: check if document client matches logged company
+    // Post-process: check company match and totals divergence
     const docs = Array.isArray(parsed) ? parsed : [parsed];
+    const companyCtx = companyDB ? await fetchCompanyContext(companyDB) : null;
+
     for (const doc of docs) {
-      if (companyDB && doc.client_name) {
-        const clientLower = doc.client_name.toLowerCase();
-        const companyAliases = COMPANY_NAMES[companyDB] || [];
-        const matches = companyAliases.some((alias) => clientLower.includes(alias));
-        if (!matches) {
-          doc.client_warning = `O destinatário do documento ("${doc.client_name}") não corresponde à empresa logada. O documento pode não pertencer a esta empresa.`;
+      // --- Company (recipient) match: name aliases + CNPJ ---
+      if (companyCtx && (companyCtx.aliases.length || companyCtx.taxIds.length)) {
+        const clientNorm = normalizeText(doc.client_name || "");
+        const clientCnpj = onlyDigits(doc.client_cnpj || "");
+
+        const cnpjMatch =
+          clientCnpj.length >= 8 &&
+          companyCtx.taxIds.some((t) => t === clientCnpj || t.endsWith(clientCnpj) || clientCnpj.endsWith(t));
+
+        const nameMatch =
+          !!clientNorm &&
+          companyCtx.aliases.some((a) => {
+            if (!a) return false;
+            if (clientNorm.includes(a) || a.includes(clientNorm)) return true;
+            // token overlap: at least 2 shared meaningful tokens (>=3 chars)
+            const at = new Set(a.split(" ").filter((x) => x.length >= 3));
+            const ct = new Set(clientNorm.split(" ").filter((x) => x.length >= 3));
+            let shared = 0;
+            for (const t of at) if (ct.has(t)) shared++;
+            return shared >= 2;
+          });
+
+        if (!cnpjMatch && !nameMatch && doc.client_name) {
+          const expected = companyCtx.displayName ? ` (esperado: "${companyCtx.displayName}")` : "";
+          doc.client_warning = `O destinatário do documento ("${doc.client_name}"${
+            doc.client_cnpj ? ` — CNPJ ${doc.client_cnpj}` : ""
+          }) não corresponde à empresa logada${expected}. Confirme antes de prosseguir.`;
+        }
+      }
+
+      // --- Totals divergence: sum(items) vs total_amount ---
+      const items = Array.isArray(doc.items) ? doc.items : [];
+      if (items.length > 0 && typeof doc.total_amount === "number" && doc.total_amount > 0) {
+        const sumItems = items.reduce((s: number, it: any) => {
+          const lt = Number(it.line_total);
+          if (Number.isFinite(lt) && lt !== 0) return s + lt;
+          const qty = Number(it.quantity) || 0;
+          const unit = Number(it.unit_price) || 0;
+          return s + qty * unit;
+        }, 0);
+        const total = Number(doc.total_amount);
+        const diff = Math.abs(sumItems - total);
+        const tolerance = Math.max(0.02, total * 0.005); // 0.5% or 2 cents
+        if (diff > tolerance) {
+          const fmt = (n: number) =>
+            n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          doc.totals_warning = `Divergência de valores: a soma das ${items.length} linha(s) é R$ ${fmt(
+            sumItems,
+          )}, mas o total do documento é R$ ${fmt(total)} (diferença R$ ${fmt(
+            diff,
+          )}). Revise os itens antes de criar a despesa.`;
+          doc.totals_sum_items = Number(sumItems.toFixed(2));
+          doc.totals_document = Number(total.toFixed(2));
         }
       }
     }
