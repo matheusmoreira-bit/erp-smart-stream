@@ -266,9 +266,9 @@ export function CreateExpenseModal({
     }
   }, [open, prefill, initialized]);
 
-  // Reset when modal closes
+  // Reset when modal closes (sempre, mesmo sem prefill)
   useEffect(() => {
-    if (!open && initialized) {
+    if (!open) {
       setInitialized(false);
       setSupplier(null);
       setCurrency("");
@@ -288,7 +288,7 @@ export function CreateExpenseModal({
       setHeaderCostCenter(null);
       setHeaderProject(null);
     }
-  }, [open, initialized]);
+  }, [open]);
 
   const extractUrlsFromObject = (obj: any): string[] => {
     const urls: string[] = [];
