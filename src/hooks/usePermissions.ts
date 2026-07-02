@@ -52,10 +52,24 @@ export const ALL_MODULES = [
 // Legacy compat aliases
 export const SAP_MODULES = ALL_MODULES;
 
-// Default modules for users with no group
-// Aprovações fica sempre disponível — a tela em si já restringe aos docs
-// em que o usuário é aprovador ou substituto.
-const DEFAULT_MODULES = ["expenses", "approvals", "approval_history"];
+// Default modules for users with no group assigned.
+// Regra: todo usuário é também aprovador e tem acesso ao fluxo operacional
+// (compras/vendas/adiantamentos/NF/fornecedores/itens em leitura). Grupos
+// específicos só são criados para módulos de backoffice (permissões,
+// credenciais, integrações, auditoria, cartões corporativos, etc.).
+// As telas em si já filtram o que cada pessoa pode ver (ex.: Aprovações só
+// lista documentos em que o usuário é aprovador/substituto).
+const DEFAULT_MODULES = [
+  "expenses",
+  "sales",
+  "approvals",
+  "approval_history",
+  "suppliers",
+  "items",
+  "financial_review",
+  "nf_entrada",
+  "notifications",
+];
 
 export function usePermissionGroups() {
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
