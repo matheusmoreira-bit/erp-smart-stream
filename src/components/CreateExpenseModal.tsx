@@ -52,6 +52,11 @@ export interface PagCorpPrefill {
 
 export type ExpenseMode = "purchase" | "sales";
 
+export interface ExpenseDraftHydration {
+  id: string;
+  payload: any;
+}
+
 export function CreateExpenseModal({
   open,
   onClose,
@@ -62,6 +67,9 @@ export function CreateExpenseModal({
   origin = "manual",
   skipRules = false,
   mode = "purchase",
+  initialDraft,
+  onDraftSaved,
+  onDraftConsumed,
 }: {
   open: boolean;
   onClose: () => void;
@@ -72,6 +80,9 @@ export function CreateExpenseModal({
   origin?: "manual" | "pagcorp";
   skipRules?: boolean;
   mode?: ExpenseMode;
+  initialDraft?: ExpenseDraftHydration | null;
+  onDraftSaved?: (id: string | null) => void;
+  onDraftConsumed?: () => void;
 }) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
