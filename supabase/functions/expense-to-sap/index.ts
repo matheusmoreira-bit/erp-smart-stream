@@ -317,6 +317,7 @@ Deno.serve(async (req) => {
       .eq("id", expenseId)
       .single();
     if (expErr || !expense) throw new Error(`Despesa não encontrada: ${expErr?.message ?? ""}`);
+    expenseSnapshot = expense;
 
     // Guard: somente despesas totalmente aprovadas podem ser integradas ao SAP.
     // Status válidos: "aprovado" (primeira integração) ou estados pós-PC (re-link de anexos).
