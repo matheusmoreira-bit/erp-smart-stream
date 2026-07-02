@@ -301,6 +301,17 @@ Deno.serve(async (req) => {
   // For consolidated mode we need to update multiple log rows on error
   const consolidatedLogIds: string[] = [];
 
+  // Snapshot for the ERP notification email (populated as we parse body/txs).
+  const snapshot: {
+    companyDb?: string;
+    supplierCode?: string;
+    supplierName?: string;
+    integratedBy?: string | null;
+    txIds: (string | number)[];
+    totalAmount?: number;
+    currency?: string;
+  } = { txIds: [] };
+
   try {
     const body = await req.json();
     const companyDb: string = body.companyDb;
