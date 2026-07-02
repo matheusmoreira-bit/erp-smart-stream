@@ -511,6 +511,17 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           approverEmail: userIdentifier,
           levelOrder: 1,
         });
+        if (currentApprover && currentApprover !== "Administrador") {
+          await createNotification({
+            user_identifier: currentApprover,
+            title: "Nova aprovação pendente",
+            body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação.`,
+            category: "approval",
+            company_db: session.companyDB,
+            link: `/approvals`,
+            metadata: { expense_id: createdId },
+          });
+        }
       }
 
       if (input.items.length > 0) {
