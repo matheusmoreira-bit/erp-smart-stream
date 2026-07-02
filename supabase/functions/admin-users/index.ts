@@ -81,7 +81,8 @@ Deno.serve(async (req) => {
 
     // CREATE (invite) user
     if (method === "POST") {
-      const { email } = await req.json();
+      const body = await req.json();
+      const { email, assignAdmin = true } = body ?? {};
       if (!email || typeof email !== "string" || !email.includes("@")) {
         return new Response(JSON.stringify({ error: "Email inválido" }), {
           status: 400,
@@ -101,8 +102,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Assign admin role
-      if (inviteData.user) {
+      // Optionally assign admin role
+      if (inviteData.user && assignAdmin) {
         await adminClient.from("user_roles").upsert(
           { user_id: inviteData.user.id, role: "admin" },
           { onConflict: "user_id,role" }
