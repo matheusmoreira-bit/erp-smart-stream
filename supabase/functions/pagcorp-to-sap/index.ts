@@ -610,6 +610,19 @@ Deno.serve(async (req) => {
       } as any,
     });
 
+    await notifyErpIntegration({
+      status: "success",
+      entityIds: snapshot.txIds,
+      companyDb: snapshot.companyDb,
+      docEntry: poResult.docEntry,
+      docNum: poResult.docNum,
+      supplierCode: snapshot.supplierCode,
+      supplierName: snapshot.supplierName,
+      totalAmount: snapshot.totalAmount,
+      currency: snapshot.currency,
+      integratedBy: snapshot.integratedBy,
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -632,6 +645,17 @@ Deno.serve(async (req) => {
         } as any)
         .in("id", consolidatedLogIds);
     }
+    await notifyErpIntegration({
+      status: "error",
+      entityIds: snapshot.txIds,
+      companyDb: snapshot.companyDb,
+      errorMessage: msg,
+      supplierCode: snapshot.supplierCode,
+      supplierName: snapshot.supplierName,
+      totalAmount: snapshot.totalAmount,
+      currency: snapshot.currency,
+      integratedBy: snapshot.integratedBy,
+    });
     return new Response(
       JSON.stringify({ success: false, error: msg, stages }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
