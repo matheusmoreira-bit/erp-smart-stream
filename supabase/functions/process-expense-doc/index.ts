@@ -311,35 +311,37 @@ Regras IMPORTANTES:
     const companyCtx = companyDB ? await fetchCompanyContext(companyDB) : null;
 
     for (const doc of docs) {
-      // --- Company (recipient) match: name aliases + CNPJ ---
+      // --- Company (recipient) match: normalized tax_id + name similarity ---
       if (companyCtx && (companyCtx.aliases.length || companyCtx.taxIds.length)) {
         const clientNorm = normalizeText(doc.client_name || "");
-        const clientCnpj = onlyDigits(doc.client_cnpj || "");
+        const clientTokens = meaningfulTokens(doc.client_name || "");
 
-        const cnpjMatch =
-          clientCnpj.length >= 8 &&
-          companyCtx.taxIds.some((t) => t === clientCnpj || t.endsWith(clientCnpj) || clientCnpj.endsWith(t));
+        // 1) Strict tax-id match (full digits, CNPJ raiz, or partial >=8 digits)
+        const taxIdMatch = companyCtx.taxIds.some((t) => taxIdsMatch(t, doc.client_cnpj || ""));
 
-        const nameMatch =
-          !!clientNorm &&
-          companyCtx.aliases.some((a) => {
-            if (!a) return false;
-            if (clientNorm.includes(a) || a.includes(clientNorm)) return true;
-            // token overlap: at least 2 shared meaningful tokens (>=3 chars)
-            const at = new Set(a.split(" ").filter((x) => x.length >= 3));
-            const ct = new Set(clientNorm.split(" ").filter((x) => x.length >= 3));
-            let shared = 0;
-            for (const t of at) if (ct.has(t)) shared++;
-            return shared >= 2;
-          });
+        // 2) Name similarity via Jaccard over meaningful tokens, plus substring safety net
+        let bestScore = 0;
+        for (const a of companyCtx.aliases) {
+          if (!a) continue;
+          if (clientNorm && (clientNorm.includes(a) || a.includes(clientNorm))) {
+            bestScore = 1;
+            break;
+          }
+          const score = jaccard(meaningfulTokens(a), clientTokens);
+          if (score > bestScore) bestScore = score;
+        }
+        const nameMatch = bestScore >= NAME_MATCH_THRESHOLD;
 
-        if (!cnpjMatch && !nameMatch && doc.client_name) {
+        if (!taxIdMatch && !nameMatch && doc.client_name) {
           const expected = companyCtx.displayName ? ` (esperado: "${companyCtx.displayName}")` : "";
           doc.client_warning = `O destinatário do documento ("${doc.client_name}"${
             doc.client_cnpj ? ` — CNPJ ${doc.client_cnpj}` : ""
           }) não corresponde à empresa logada${expected}. Confirme antes de prosseguir.`;
+          doc.client_match_score = Number(bestScore.toFixed(2));
+          doc.client_match_threshold = NAME_MATCH_THRESHOLD;
         }
       }
+
 
       // --- Totals divergence: sum(items) vs total_amount ---
       const items = Array.isArray(doc.items) ? doc.items : [];
