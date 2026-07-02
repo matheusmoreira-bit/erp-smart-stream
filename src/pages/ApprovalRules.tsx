@@ -18,7 +18,9 @@ import {
   Pencil,
   ShoppingCart,
   Tag,
+  PlayCircle,
 } from "lucide-react";
+import { RuleSimulator } from "@/components/RuleSimulator";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -630,6 +632,7 @@ export default function ApprovalRulesPage() {
   const { getLabel } = useCompanies(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRule, setEditingRule] = useState<ApprovalRule | null>(null);
+  const [showSimulator, setShowSimulator] = useState(false);
   const [search, setSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -752,9 +755,14 @@ export default function ApprovalRulesPage() {
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
-          <Button onClick={openCreate} className="gap-1.5">
-            <Plus className="w-4 h-4" /> Nova Regra
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setShowSimulator(true)} className="gap-1.5">
+              <PlayCircle className="w-4 h-4" /> Simular pedido
+            </Button>
+            <Button onClick={openCreate} className="gap-1.5">
+              <Plus className="w-4 h-4" /> Nova Regra
+            </Button>
+          </div>
         </div>
 
         {/* Summary */}
@@ -873,6 +881,12 @@ export default function ApprovalRulesPage() {
         sapUsers={sapUsers}
         sapUsersLoading={sapUsersLoading}
         editing={editingRule}
+      />
+
+      <RuleSimulator
+        open={showSimulator}
+        onClose={() => setShowSimulator(false)}
+        rules={rules}
       />
     </div>
   );
