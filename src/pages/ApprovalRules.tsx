@@ -882,6 +882,12 @@ export default function ApprovalRulesPage() {
         sapUsersLoading={sapUsersLoading}
         editing={editingRule}
       />
+
+      <RuleSimulator
+        open={showSimulator}
+        onClose={() => setShowSimulator(false)}
+        rules={rules}
+      />
     </div>
   );
 }
