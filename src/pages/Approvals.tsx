@@ -40,6 +40,8 @@ import { Split } from "lucide-react";
 import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
+import { segmentDocByRules, segmentsForApprover, isTrulySegmented, type ApprovalSegment } from "@/lib/approvalSegments";
+import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
 
@@ -353,8 +355,11 @@ function ApprovalDetailModal({
   isActioning,
   isSuperUser,
   currentUserName,
+  currentUserEmail,
   approverCCs,
   formatCostCenter,
+  rules,
+  isAdmin,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -364,17 +369,40 @@ function ApprovalDetailModal({
   isActioning: boolean;
   isSuperUser: boolean;
   currentUserName: string;
+  currentUserEmail?: string;
   approverCCs: Set<string>;
   formatCostCenter: (code?: string | null) => string;
+  rules: ApprovalRule[];
+  isAdmin: boolean;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
+  const [showAllLines, setShowAllLines] = useState(false);
   const { session } = useSap();
 
   // Rateio — sempre derivado do doc atual
   const rateio = doc ? shouldShowRateio(doc) : { show: false, info: { isSplit: false, byCC: [], total: 0 } as RateioInfo };
   const [selectedCCs, setSelectedCCs] = useState<Set<string>>(new Set());
+
+  // Segmentação por regra — cada grupo de linhas pode cair em regras/aprovadores diferentes
+  const segments: ApprovalSegment[] = useMemo(
+    () => (doc ? segmentDocByRules(doc, rules) : []),
+    [doc, rules],
+  );
+  const segmented = isTrulySegmented(segments);
+  const mySegments = useMemo(
+    () => segmentsForApprover(segments, currentUserName, currentUserEmail),
+    [segments, currentUserName, currentUserEmail],
+  );
+  // Aprovador comum (não admin, não super) só vê linhas dos segmentos que lhe cabem.
+  const restrictToMySegments = segmented && !isAdmin && !isSuperUser && mySegments.length > 0 && !showAllLines;
+  const visibleLines = restrictToMySegments
+    ? mySegments.flatMap((s) => s.lines)
+    : (doc?.documentLines || []);
+  const visibleTotal = restrictToMySegments
+    ? mySegments.reduce((s, seg) => s + (doc?.currency !== "BRL" ? seg.amountFC : seg.amount), 0)
+    : (doc?.docTotal || 0);
 
   // Sempre que troca de documento, pré-seleciona CCs mapeados (ou nenhum se não houver mapping)
   // e limpa o campo de Observação para não vazar texto do card anterior.
@@ -385,6 +413,7 @@ function ApprovalDetailModal({
       .filter((code) => approverCCs.has(code));
     setSelectedCCs(new Set(preselected));
     setRemarks("");
+    setShowAllLines(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc?.approvalRequestId]);
 
@@ -555,10 +584,119 @@ function ApprovalDetailModal({
               </div>
             )}
 
+            {/* Painel de segmentação por regra */}
+            {segmented && (
+              <div className="border border-primary/30 bg-primary/5 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Split className="w-4 h-4 text-primary" />
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Aprovação segmentada por regra
+                  </h4>
+                  <Badge variant="outline" className="text-[10px]">
+                    {segments.length} segmentos
+                  </Badge>
+                  {restrictToMySegments && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">
+                      Vendo só sua parte
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  As linhas deste documento caem em regras de aprovação diferentes. Cada aprovador
+                  vê apenas as linhas e o valor da sua alçada.
+                </p>
+                <div className="space-y-1.5">
+                  {segments.map((seg) => {
+                    const isMine = mySegments.some((m) => m.costCenter === seg.costCenter);
+                    return (
+                      <div
+                        key={seg.costCenter}
+                        className={`rounded-lg border p-2.5 text-xs ${
+                          isMine
+                            ? "border-emerald-500/40 bg-emerald-500/5"
+                            : "border-border bg-background/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-medium text-foreground truncate">
+                              {seg.costCenter === "__no_cc__"
+                                ? "Sem centro de custo"
+                                : formatCostCenter(seg.costCenter)}
+                            </span>
+                            {isMine && (
+                              <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-600">
+                                Sua alçada
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="font-mono font-semibold text-foreground">
+                            {formatCurrency(
+                              doc.currency !== "BRL" ? seg.amountFC : seg.amount,
+                              doc.currency,
+                            )}{" "}
+                            <span className="text-muted-foreground font-normal">
+                              ({seg.pct.toFixed(1)}%)
+                            </span>
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {seg.rule?.name || "Sem regra correspondente"}
+                          </span>
+                          {seg.approverNames.length > 0 && (
+                            <>
+                              <span>·</span>
+                              <span>{seg.approverNames.join(" → ")}</span>
+                            </>
+                          )}
+                          <span>·</span>
+                          <span>{seg.lines.length} linha{seg.lines.length === 1 ? "" : "s"}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {segmented && !isAdmin && !isSuperUser && mySegments.length > 0 && (
+                  <div className="pt-2 border-t border-primary/20 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-muted-foreground">
+                      Total dos seus segmentos:{" "}
+                      <span className="font-mono font-semibold text-foreground">
+                        {formatCurrency(visibleTotal, doc.currency)}
+                      </span>
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setShowAllLines((v) => !v)}
+                    >
+                      {showAllLines ? "Ver só minha parte" : "Ver documento completo"}
+                    </Button>
+                  </div>
+                )}
+                {segmented && mySegments.length === 0 && !isAdmin && !isSuperUser && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    Nenhum segmento deste documento aponta para você como aprovador — pode ser
+                    que você esteja atuando por delegação ou uma regra fora do escopo do app.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Document Lines */}
-            {doc.documentLines.length > 0 && (
+            {visibleLines.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Itens do Documento</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Itens do Documento
+                    {restrictToMySegments && (
+                      <span className="ml-2 normal-case tracking-normal text-[10px] text-muted-foreground">
+                        (mostrando {visibleLines.length} de {doc.documentLines.length})
+                      </span>
+                    )}
+                  </p>
+                </div>
                 <div className="border border-border rounded-lg overflow-hidden">
                   <table className="w-full text-xs">
                     <thead>
@@ -572,7 +710,7 @@ function ApprovalDetailModal({
                       </tr>
                     </thead>
                     <tbody>
-                      {doc.documentLines.map((line, i) => (
+                      {visibleLines.map((line, i) => (
                         <tr key={i} className="border-b border-border/50">
                           <td className="py-2 px-3 font-mono text-muted-foreground">{line.ItemCode}</td>
                           <td className="py-2 px-3 text-foreground">{line.Description}</td>
@@ -1045,6 +1183,8 @@ export default function ApprovalsPage() {
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
+  const { rules } = useApprovalRules();
+
 
   // Merge SAP approvals with internal pending expenses
   const internalPending = (expenses || [])
@@ -1660,9 +1800,13 @@ export default function ApprovalsPage() {
         isActioning={isActioning}
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
+        currentUserEmail={session.userName}
         approverCCs={getCostCentersForEmail(selectedDoc?.approverEmail || "")}
         formatCostCenter={formatCostCenter}
+        rules={rules}
+        isAdmin={isAdmin}
       />
+
 
       <RelationsMap
         open={!!relationsMapExpense}
