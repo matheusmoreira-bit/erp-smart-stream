@@ -137,10 +137,20 @@ export function usePermissionGroups() {
     const existing = groups.find((g) => g.name === "Usuário");
     if (existing) return existing;
 
-    const defaultModules = ["expenses", "approvals", "approval_history"];
+    const defaultModules = [
+      "expenses",
+      "sales",
+      "approvals",
+      "approval_history",
+      "suppliers",
+      "items",
+      "financial_review",
+      "nf_entrada",
+      "notifications",
+    ];
     const { data } = await supabase
       .from("permission_groups")
-      .insert({ name: "Usuário", description: "Acesso padrão — despesas e aprovações" })
+      .insert({ name: "Usuário", description: "Acesso padrão — fluxo operacional + aprovações" })
       .select()
       .single();
     if (data) {
