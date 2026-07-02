@@ -690,6 +690,17 @@ Deno.serve(async (req) => {
     // Best-effort: persist whatever stage statuses we collected before the throw.
     await persistStatus({ sap_integration_error: msg });
     await writePagCorpLog("error", msg, undefined, undefined, lastSapPayload, lastSapResponse);
+    await notifyErpIntegration({
+      status: "error",
+      source: "expense",
+      entityId: expenseId || "",
+      companyDb: expenseSnapshot?.company_db,
+      errorMessage: msg,
+      requester: expenseSnapshot?.requester_name,
+      supplier: expenseSnapshot?.supplier_name,
+      amount: expenseSnapshot?.total_amount,
+      currency: expenseSnapshot?.currency,
+    });
     return new Response(
       JSON.stringify({
         success: false,
