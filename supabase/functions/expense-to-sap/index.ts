@@ -29,6 +29,61 @@ function truncateSapText(value: unknown, maxLength: number): string {
   return text.length > maxLength ? text.slice(0, maxLength) : text;
 }
 
+// Fire-and-forget notification about ERP integration attempts.
+// Sends to matheus.moreira@anagaming.com.br via the shared SMTP function.
+async function notifyErpIntegration(params: {
+  status: "success" | "error";
+  source: "expense" | "pagcorp";
+  entityId: string | number;
+  companyDb?: string | null;
+  docEntry?: number | null;
+  docNum?: number | null;
+  errorMessage?: string | null;
+  requester?: string | null;
+  supplier?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+}): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) return;
+    const ok = params.status === "success";
+    const subject = ok
+      ? `[ERP] Integração ${params.source} OK — ${params.companyDb || ""} · Doc ${params.docNum ?? params.docEntry ?? ""}`
+      : `[ERP] Falha integração ${params.source} — ${params.companyDb || ""} · #${params.entityId}`;
+    const rows: [string, string][] = [
+      ["Origem", params.source],
+      ["Empresa (DB)", params.companyDb || "-"],
+      ["ID interno", String(params.entityId)],
+      ["Solicitante", params.requester || "-"],
+      ["Fornecedor", params.supplier || "-"],
+      ["Valor", params.amount != null ? `${params.currency || "BRL"} ${Number(params.amount).toFixed(2)}` : "-"],
+      ["SAP DocEntry", params.docEntry != null ? String(params.docEntry) : "-"],
+      ["SAP DocNum", params.docNum != null ? String(params.docNum) : "-"],
+      ["Status", ok ? "SUCESSO" : "ERRO"],
+      ["Erro", params.errorMessage || "-"],
+    ];
+    const html = `<h2>${ok ? "Integração ao ERP concluída" : "Falha na integração ao ERP"}</h2>
+<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">
+${rows.map(([k, v]) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;background:#f8f8f8"><b>${k}</b></td><td style="padding:4px 8px;border:1px solid #ddd">${String(v).replace(/</g, "&lt;")}</td></tr>`).join("")}
+</table>`;
+    // fire-and-forget
+    fetch(`${supabaseUrl}/functions/v1/send-smtp-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}`, apikey: serviceKey },
+      body: JSON.stringify({
+        to: "matheus.moreira@anagaming.com.br",
+        subject,
+        html,
+        text: rows.map(([k, v]) => `${k}: ${v}`).join("\n"),
+      }),
+    }).catch((e) => console.warn("notifyErpIntegration send failed:", e));
+  } catch (e) {
+    console.warn("notifyErpIntegration error:", e);
+  }
+}
+
 async function getSapCredentials(
   supabase: ReturnType<typeof createClient>,
   companyDb?: string,
