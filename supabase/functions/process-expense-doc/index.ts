@@ -6,11 +6,76 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const COMPANY_NAMES: Record<string, string[]> = {
+// Static fallback aliases (used only if DB lookup fails)
+const FALLBACK_COMPANY_NAMES: Record<string, string[]> = {
   SBO_ANAGAMING: ["ana gaming", "anagaming"],
   SBO_CACTUS: ["cactus", "instituto cactus"],
   SBO_INSTITUTO_ANA: ["instituto ana", "instituto cactus"],
 };
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+function normalizeText(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/\b(s\.?\s*a\.?|s\.?\s*\/?\s*a\.?|ltda\.?|me|epp|eireli|inc\.?|llc|corp\.?|cia\.?)\b/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function onlyDigits(s: string): string {
+  return (s || "").replace(/\D+/g, "");
+}
+
+async function fetchCompanyContext(companyDB: string): Promise<{
+  aliases: string[];
+  taxIds: string[];
+  displayName: string | null;
+}> {
+  const aliases = new Set<string>();
+  const taxIds = new Set<string>();
+  let displayName: string | null = null;
+
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && companyDB) {
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/companies?company_db=eq.${encodeURIComponent(companyDB)}&select=display_name,legal_name,trade_name,foreign_name,tax_id`,
+        {
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+        },
+      );
+      if (r.ok) {
+        const rows = (await r.json()) as Array<Record<string, string | null>>;
+        for (const row of rows) {
+          for (const field of ["display_name", "legal_name", "trade_name", "foreign_name"] as const) {
+            const v = row[field];
+            if (v) {
+              const n = normalizeText(v);
+              if (n) aliases.add(n);
+              if (!displayName && field === "display_name") displayName = v;
+            }
+          }
+          const digits = onlyDigits(row.tax_id || "");
+          if (digits.length >= 8) taxIds.add(digits);
+        }
+      }
+    } catch (e) {
+      console.warn("companies lookup failed", e);
+    }
+  }
+
+  // Merge fallback aliases
+  for (const a of FALLBACK_COMPANY_NAMES[companyDB] || []) aliases.add(normalizeText(a));
+
+  return { aliases: [...aliases].filter(Boolean), taxIds: [...taxIds], displayName };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
