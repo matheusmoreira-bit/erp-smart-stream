@@ -60,8 +60,10 @@ import {
   type Expense,
   type ExpenseStatus,
 } from "@/hooks/useExpenses";
-import { CreateExpenseModal } from "@/components/CreateExpenseModal";
+import { CreateExpenseModal, type ExpenseDraftHydration } from "@/components/CreateExpenseModal";
 import { EditExpenseModal } from "@/components/EditExpenseModal";
+import { DraftsPopover } from "@/components/DraftsPopover";
+import { useDocumentDrafts } from "@/hooks/useDocumentDrafts";
 import { useCompanies } from "@/hooks/useCompanies";
 
 function formatCurrency(value: number, currency: string = "BRL") {
