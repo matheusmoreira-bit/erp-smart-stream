@@ -458,38 +458,64 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                   </>
                 )}
 
-                {approverRows.filter((r) => r.done).length > 0 && (
+                {approverRows.filter((r) => r.done || r.rejected).length > 0 && (
                   <>
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                      Já aprovado por
+                      Anteriores
                     </div>
                     <div className="space-y-1.5">
                       {approverRows
-                        .filter((r) => r.done)
-                        .map((lv) => (
-                          <div
-                            key={`done-${lv.level_order}-${lv.approver_name}`}
-                            className="flex items-center gap-3 p-2 rounded-lg border border-success/30 bg-success/5"
-                          >
-                            <div className="w-6 h-6 rounded-full bg-success/20 text-success text-xs font-medium flex items-center justify-center">
-                              {lv.level_order}
+                        .filter((r) => r.done || r.rejected)
+                        .map((lv) => {
+                          const rejected = !!lv.rejected;
+                          return (
+                            <div
+                              key={`done-${lv.level_order}-${lv.approver_name}`}
+                              className={`flex items-center gap-3 p-2 rounded-lg border ${
+                                rejected
+                                  ? "border-destructive/30 bg-destructive/5"
+                                  : "border-success/30 bg-success/5"
+                              }`}
+                            >
+                              <div
+                                className={`w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center ${
+                                  rejected
+                                    ? "bg-destructive/20 text-destructive"
+                                    : "bg-success/20 text-success"
+                                }`}
+                              >
+                                {lv.level_order}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm">{lv.approver_name}</div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  {rejected ? "Rejeitou" : "Aprovou"}
+                                  {lv.decidedAt ? ` · ${formatDateTime(lv.decidedAt)}` : ""}
+                                  {lv.stageName ? ` · ${lv.stageName}` : ""}
+                                </div>
+                                {lv.remarks && (
+                                  <div className="text-[11px] mt-1 bg-muted/40 rounded p-1.5">{lv.remarks}</div>
+                                )}
+                              </div>
+                              {rejected ? (
+                                <XCircle className="w-4 h-4 text-destructive" />
+                              ) : (
+                                <ShieldCheck className="w-4 h-4 text-success" />
+                              )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm">{lv.approver_name}</div>
-                            </div>
-                            <ShieldCheck className="w-4 h-4 text-success" />
-                          </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   </>
                 )}
 
                 {approverRows.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    Nenhum aprovador previsto (regra de aprovação não associada).
+                    Nenhum aprovador previsto (documento sem regra local e sem histórico SAP disponível).
                   </p>
                 )}
               </section>
+
 
               {/* Trilha histórica */}
               <section>
