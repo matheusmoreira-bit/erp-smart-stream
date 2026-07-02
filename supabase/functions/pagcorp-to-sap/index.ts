@@ -19,6 +19,59 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Fire-and-forget notification about ERP integration attempts (PagCorp path).
+async function notifyErpIntegration(params: {
+  status: "success" | "error";
+  entityIds: (string | number)[];
+  companyDb?: string | null;
+  docEntry?: number | null;
+  docNum?: number | null;
+  errorMessage?: string | null;
+  supplierCode?: string | null;
+  supplierName?: string | null;
+  totalAmount?: number | null;
+  currency?: string | null;
+  integratedBy?: string | null;
+}): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) return;
+    const ok = params.status === "success";
+    const subject = ok
+      ? `[ERP] Integração PagCorp OK — ${params.companyDb || ""} · Doc ${params.docNum ?? params.docEntry ?? ""}`
+      : `[ERP] Falha integração PagCorp — ${params.companyDb || ""} · tx ${params.entityIds.join(",")}`;
+    const rows: [string, string][] = [
+      ["Origem", "pagcorp"],
+      ["Empresa (DB)", params.companyDb || "-"],
+      ["Transações", params.entityIds.join(", ")],
+      ["Integrado por", params.integratedBy || "-"],
+      ["Fornecedor", `${params.supplierCode || "-"} ${params.supplierName || ""}`],
+      ["Valor", params.totalAmount != null ? `${params.currency || "BRL"} ${Number(params.totalAmount).toFixed(2)}` : "-"],
+      ["SAP DocEntry", params.docEntry != null ? String(params.docEntry) : "-"],
+      ["SAP DocNum", params.docNum != null ? String(params.docNum) : "-"],
+      ["Status", ok ? "SUCESSO" : "ERRO"],
+      ["Erro", params.errorMessage || "-"],
+    ];
+    const html = `<h2>${ok ? "Integração PagCorp → SAP concluída" : "Falha na integração PagCorp → SAP"}</h2>
+<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">
+${rows.map(([k, v]) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;background:#f8f8f8"><b>${k}</b></td><td style="padding:4px 8px;border:1px solid #ddd">${String(v).replace(/</g, "&lt;")}</td></tr>`).join("")}
+</table>`;
+    fetch(`${supabaseUrl}/functions/v1/send-smtp-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}`, apikey: serviceKey },
+      body: JSON.stringify({
+        to: "matheus.moreira@anagaming.com.br",
+        subject,
+        html,
+        text: rows.map(([k, v]) => `${k}: ${v}`).join("\n"),
+      }),
+    }).catch((e) => console.warn("notifyErpIntegration send failed:", e));
+  } catch (e) {
+    console.warn("notifyErpIntegration error:", e);
+  }
+}
+
 interface SapSession {
   baseUrl: string;
   cookies: string;
