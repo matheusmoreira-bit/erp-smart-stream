@@ -53,7 +53,9 @@ export const ALL_MODULES = [
 export const SAP_MODULES = ALL_MODULES;
 
 // Default modules for users with no group
-const DEFAULT_MODULES = ["expenses"];
+// Aprovações fica sempre disponível — a tela em si já restringe aos docs
+// em que o usuário é aprovador ou substituto.
+const DEFAULT_MODULES = ["expenses", "approvals", "approval_history"];
 
 export function usePermissionGroups() {
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
