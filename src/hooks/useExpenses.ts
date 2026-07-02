@@ -749,6 +749,26 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         approverName: actor,
         approverEmail: actor.includes("@") ? actor : null,
       });
+      // Notify current approver ASAP
+      try {
+        const { data: exp2 } = await supabase
+          .from("expenses")
+          .select("current_approver, supplier_name, total_amount, currency, company_db")
+          .eq("id", expenseId)
+          .maybeSingle();
+        const approver = (exp2 as any)?.current_approver as string | null;
+        if (approver && approver !== "Administrador") {
+          await createNotification({
+            user_identifier: approver,
+            title: "Nova aprovação pendente",
+            body: `${actor} enviou "${(exp2 as any).supplier_name}" (${(exp2 as any).currency || "BRL"} ${Number((exp2 as any).total_amount || 0).toFixed(2)}) para sua aprovação.`,
+            category: "approval",
+            company_db: (exp2 as any).company_db || undefined,
+            link: `/approvals`,
+            metadata: { expense_id: expenseId },
+          });
+        }
+      } catch { /* silent */ }
       await fetchExpenses();
     },
     [fetchExpenses, session]
