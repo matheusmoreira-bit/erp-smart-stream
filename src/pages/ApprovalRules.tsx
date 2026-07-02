@@ -632,6 +632,7 @@ export default function ApprovalRulesPage() {
   const { getLabel } = useCompanies(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRule, setEditingRule] = useState<ApprovalRule | null>(null);
+  const [showSimulator, setShowSimulator] = useState(false);
   const [search, setSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
