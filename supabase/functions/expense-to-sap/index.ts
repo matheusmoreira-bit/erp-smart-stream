@@ -655,6 +655,19 @@ Deno.serve(async (req) => {
 
     await writePagCorpLog("success", undefined, sapResult.docEntry, sapResult.docNum, sapPayload, sapResult.response);
 
+    await notifyErpIntegration({
+      status: "success",
+      source: "expense",
+      entityId: expenseId || "",
+      companyDb: expenseSnapshot?.company_db,
+      docEntry: sapResult.docEntry,
+      docNum: sapResult.docNum,
+      requester: expenseSnapshot?.requester_name,
+      supplier: expenseSnapshot?.supplier_name,
+      amount: expenseSnapshot?.total_amount,
+      currency: expenseSnapshot?.currency,
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
