@@ -40,6 +40,8 @@ import { Split } from "lucide-react";
 import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
+import { segmentDocByRules, segmentsForApprover, isTrulySegmented, type ApprovalSegment } from "@/lib/approvalSegments";
+import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
 
