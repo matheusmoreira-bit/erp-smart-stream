@@ -21,6 +21,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
+import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -292,22 +293,48 @@ Deno.serve(async (req) => {
   } as any);
 
   if (!isFinalLevel) {
-    const nextLevel = levels.find((l) => l.level_order === currentLevel + 1) || null;
+    // Self-approval guard: skip any subsequent level whose approver is the
+    // requester. If every remaining level matches → Juliana fallback (final).
+    const picked = pickApproverSkippingRequester(
+      levels as any,
+      (exp as any).requester_name,
+      (exp as any).requester_email,
+      currentLevel + 1,
+    );
+    const nextLevelOrder = picked.level_order;
+    const nextApproverName = picked.approver_name;
+    const nextApproverEmail = picked.approver_email;
+    const jumped = nextLevelOrder > currentLevel + 1 || picked.fallback_used;
+
     const updates: Record<string, unknown> = {
-      current_level_order: currentLevel + 1,
-      current_approver: nextLevel?.approver_name || null,
+      current_level_order: nextLevelOrder,
+      current_approver: nextApproverName || null,
     };
     if (remarks) updates.remarks = remarks;
     const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
     if (updErr) return json(500, { error: `Falha ao avançar de nível: ${updErr.message}` });
+
+    if (jumped) {
+      await admin.from("expense_approval_log").insert({
+        expense_id: expenseId,
+        decision: "approved",
+        approver_name: "Sistema",
+        approver_email: null,
+        level_order: nextLevelOrder,
+        remarks: picked.fallback_used
+          ? `Solicitante era o aprovador desta alçada — redirecionado para ${SELF_APPROVAL_FALLBACK.name}.`
+          : `Nível(is) pulado(s) automaticamente: solicitante era o aprovador designado.`,
+      } as any);
+    }
+
     return json(200, {
       ok: true,
       action: "approve",
       finalized: false,
       overrideUsed: isOverride && !isMatch,
-      nextApproverName: nextLevel?.approver_name || null,
-      nextApproverEmail: nextLevel?.approver_email || null,
-      currentLevel: currentLevel + 1,
+      nextApproverName,
+      nextApproverEmail,
+      currentLevel: nextLevelOrder,
       expense: {
         id: expenseId,
         requester_name: (exp as any).requester_name,
