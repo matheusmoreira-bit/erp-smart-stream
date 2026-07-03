@@ -755,7 +755,9 @@ export function CreateExpenseModal({
         return;
       }
     }
-    if (!headerCostCenter?.code) {
+    // Em pedidos de venda, o centro de custo é propriedade da linha no SAP —
+    // não exigimos CC padrão no cabeçalho (as linhas já foram validadas acima).
+    if (!isSales && !headerCostCenter?.code) {
       toast.error("Centro de custo (padrão) é obrigatório");
       return;
     }
