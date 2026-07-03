@@ -27,7 +27,7 @@ export interface ApprovalDoc {
   attachmentEntry: number;
   attachmentNames: string;
   documentLines: DocumentLine[];
-
+  internalAttachments?: Array<{ id: string; file_name: string; file_path: string; file_size?: number }>;
 }
 
 export interface DocumentLine {
