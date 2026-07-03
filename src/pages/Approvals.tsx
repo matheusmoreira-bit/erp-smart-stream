@@ -875,6 +875,12 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     approvalModel: "Regra Interna",
     daysOpen: Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000),
     attachmentNames: "",
+    internalAttachments: (e.attachments || []).map((a) => ({
+      id: a.id,
+      file_name: a.file_name,
+      file_path: a.file_path,
+      file_size: a.file_size,
+    })),
     documentLines: (e.items || []).map((it) => ({
       ItemCode: it.item_code || "",
       Description: it.description,
