@@ -99,7 +99,7 @@ const App = () => (
 
               {/* Cadastros */}
               <Route path="/cadastros/fornecedores" element={<Suppliers />} />
-              <Route path="/cadastros/fornecedores/importar-cartoes" element={<SuppliersImportPagCorp />} />
+              
               <Route path="/cadastros/itens" element={<Items />} />
               <Route path="/cadastros/intercompany" element={<Intercompany />} />
 
