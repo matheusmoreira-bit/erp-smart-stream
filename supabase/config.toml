@@ -31,3 +31,6 @@ verify_jwt = false
 
 [functions.expense-approval-action]
 verify_jwt = false
+
+[functions.expense-mutation]
+verify_jwt = false
