@@ -12,7 +12,7 @@ import {
   XCircle,
   AlertCircle,
   LogOut,
-  Sparkles,
+  
   Upload,
   CloudUpload,
   Loader2,
@@ -370,10 +370,6 @@ export default function Suppliers() {
               >
                 {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 Reenviar pendentes/erros {pendingCount > 0 && `(${pendingCount})`}
-              </Button>
-              <Button variant="outline" onClick={() => navigate("/cadastros/fornecedores/importar-cartoes")} className="gap-2">
-                <Sparkles className="w-4 h-4" />
-                Importar do PagCorp
               </Button>
               <Button onClick={() => setCreating(true)} className="gap-2">
                 <Plus className="w-4 h-4" />

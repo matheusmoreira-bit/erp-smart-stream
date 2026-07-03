@@ -22,7 +22,7 @@ import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import AdvancePayments from "./pages/AdvancePayments.tsx";
 import NfEntrada from "./pages/NfEntrada.tsx";
-import SuppliersImportPagCorp from "./pages/SuppliersImportPagCorp.tsx";
+
 import AuditHub from "./pages/AuditHub.tsx";
 import IntegrationsHub from "./pages/IntegrationsHub.tsx";
 import Notifications from "./pages/Notifications.tsx";
@@ -99,7 +99,7 @@ const App = () => (
 
               {/* Cadastros */}
               <Route path="/cadastros/fornecedores" element={<Suppliers />} />
-              <Route path="/cadastros/fornecedores/importar-cartoes" element={<SuppliersImportPagCorp />} />
+              
               <Route path="/cadastros/itens" element={<Items />} />
               <Route path="/cadastros/intercompany" element={<Intercompany />} />
 

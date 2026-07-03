@@ -1,62 +1,26 @@
+## Objetivo
 
-# Esboços de Pedidos de Compra e Venda
+Remover a entrada "Importar do PagCorp" da tela de Fornecedores e confirmar que o botão "Atualizar" já refaz o cache a partir do SAP.
 
-Salvar automaticamente o preenchimento do modal de novo pedido, permitir retomar de onde parou e expirar em 15 dias.
+## Mudanças
 
-## Comportamento
+### 1. Remover a opção "Importar do PagCorp"
+- Em `src/pages/Suppliers.tsx`: remover o botão "Importar do PagCorp" (linhas 374–377) e o ícone `Sparkles` do import, se ficar sem uso.
+- Em `src/App.tsx`: remover a rota `/cadastros/fornecedores/importar-cartoes` e o import de `SuppliersImportPagCorp`.
+- Apagar o arquivo `src/pages/SuppliersImportPagCorp.tsx`, que fica órfão.
 
-- Ao abrir o modal de "Novo Pedido" (compra ou venda) e o usuário começar a digitar, o sistema cria/atualiza um **esboço** vinculado ao usuário + empresa + tipo (compra/venda).
-- Salvamento automático com **debounce de ~1s** a cada alteração (fornecedor/cliente, moeda, datas, observações, itens, centro de custo, projeto, arquivos anexados são registrados por nome — o binário fica no bucket só quando o pedido for efetivamente criado).
-- Ao **enviar o pedido**, o esboço correspondente é apagado.
-- Ao **fechar o modal sem enviar**, o esboço permanece.
-- Novo botão **"Esboços" com contador** no topo das telas de Compras (`/pages/Expenses.tsx`) e Vendas (`/pages/Sales.tsx`), ao lado do "+ Novo Pedido".
-- Ao clicar em um esboço da lista, o modal reabre já preenchido com os dados salvos.
-- Esboços expiram automaticamente após **15 dias** desde a última alteração (limpeza no acesso à listagem + índice para varredura futura).
+Mantidos intactos: `useImportPagCorpSuppliers`, `PagCorpCandidateRow`, tabela `pagcorp_supplier_links` e demais integrações PagCorp usadas em outras telas (PagCorp, PagCorpMapping etc.). Somente a porta de entrada pela tela de Fornecedores é removida.
 
-## Escopo
+### 2. Botão "Atualizar" já atualiza o cache a partir do SAP
 
-- Documento tipo `purchase` (Expenses) e `sales` (Sales).
-- Um esboço por (usuário, empresa, tipo) — se o usuário já tem um esboço aberto e começa outro, atualiza o mesmo. A lista mostra todos, mas na prática costuma ter 1 por tipo.
+Verifiquei o fluxo atual e ele já faz exatamente o pedido — nenhuma alteração necessária:
 
-Adiantamentos e outros documentos ficam fora desta primeira versão.
+- `Suppliers.tsx` (botão Atualizar) chama `refresh()` do hook `useSuppliers`.
+- `useSuppliers.refresh` → `reloadSap()` do `useSapCachedList`.
+- `useSapCachedList.reload()` chama `load(true)` (`forceRefresh = true`), que pula a leitura de `sap_cache`, faz `sapQueryAll` no SAP Service Layer (paginação completa via `sap-b1-proxy queryAll`, filtro `CardType eq 'cSupplier'`) e faz `upsert` do resultado em `sap_cache` com TTL de 1 semana.
 
-## Detalhes técnicos
+Ou seja: cada clique em "Atualizar" já vai ao SAP, traz a lista completa de fornecedores e regrava o cache da empresa ativa. Vou apenas confirmar isso no código; não há mudança de comportamento aqui.
 
-### Banco
+## Observação sobre o caso OpenGaming
 
-Nova tabela `public.document_drafts`:
-
-- `id uuid pk`
-- `user_id uuid` (auth.uid do dono)
-- `company_db text`
-- `doc_type text check in ('purchase','sales')`
-- `payload jsonb` — snapshot dos campos do formulário (supplier, currency, dates, remarks, items, headerCostCenter, headerProject, file names/sizes)
-- `preview text` — resumo curto para a lista (ex.: "VDARA — R$ 1.200,00 · 3 itens")
-- `created_at timestamptz default now()`
-- `updated_at timestamptz default now()`
-- `expires_at timestamptz default now() + interval '15 days'`
-
-Índice em `(user_id, company_db, doc_type)` e em `expires_at`.
-
-RLS: usuário só vê/edita/apaga os próprios (`auth.uid() = user_id`). GRANTs padrão para `authenticated` + `service_role`.
-
-Limpeza: `DELETE FROM document_drafts WHERE expires_at < now()` executado no hook de listagem (barato, pouca linha por usuário). Sem cron nesta versão.
-
-### Frontend
-
-- Novo hook `src/hooks/useDocumentDrafts.ts`:
-  - `useDrafts(docType)` — lista + contador.
-  - `saveDraft(docType, payload, preview)` — upsert por `(user_id, company_db, doc_type)`.
-  - `deleteDraft(id)`.
-  - `purgeExpired()` — chamado ao montar.
-- Em `CreateExpenseModal.tsx`:
-  - Novo prop opcional `initialDraft` para hidratar o form.
-  - `useEffect` com debounce salvando o estado atual quando `open === true` e há qualquer campo preenchido.
-  - Ao concluir criação com sucesso, chama `deleteDraft`.
-- Novo componente `src/components/DraftsPopover.tsx` — botão "Esboços (N)" que abre um popover listando os esboços daquele tipo com botão "Retomar" e "Descartar".
-- Renderizado em `Expenses.tsx` (compra) e `Sales.tsx` (venda), próximo ao botão de novo pedido.
-
-### Fora do escopo
-
-- Não persistir binários dos anexos no esboço (só metadados). Ao retomar, mostrar aviso "Reanexe os arquivos" se havia algum.
-- Adiantamentos, NF Entrada e outros fluxos ficam para depois.
+Confirmado no diagnóstico anterior: o SAP da OpenGaming (`SBO_OPENGAMING`) tem exatamente 247 BusinessPartners, todos `cSupplier`, e o cache já reflete os 247. Ou seja, hoje o "Atualizar" já traria o mesmo resultado — se algum fornecedor específico não aparece, é porque não existe nesse CompanyDB (pode estar em `tst_open_gaming`, que tem 329). Posso investigar CardCodes/CNPJs pontuais depois, se quiser.
