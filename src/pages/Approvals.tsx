@@ -760,6 +760,44 @@ function ApprovalDetailModal({
               </div>
             )}
 
+            {/* Internal (Storage) attachments */}
+            {doc.internalAttachments && doc.internalAttachments.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Paperclip className="w-3 h-3" /> Anexos
+                </p>
+                <div className="space-y-1">
+                  {doc.internalAttachments.map((att) => (
+                    <button
+                      key={att.id}
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const { supabase } = await import("@/integrations/supabase/client");
+                          const { data, error } = await supabase.storage
+                            .from("expense-attachments")
+                            .createSignedUrl(att.file_path, 300);
+                          if (error || !data?.signedUrl) throw error || new Error("URL indisponível");
+                          window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+                        } catch (e) {
+                          console.error("Erro ao abrir anexo:", e);
+                          toast.error("Não foi possível abrir o anexo");
+                        }
+                      }}
+                      className="w-full text-left text-xs bg-muted/20 hover:bg-muted/40 px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
+                      title="Abrir anexo em nova aba"
+                    >
+                      <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-foreground underline decoration-dotted flex-1">{att.file_name}</span>
+                      {typeof att.file_size === "number" && (
+                        <span className="text-[10px] text-muted-foreground shrink-0">{(att.file_size / 1024).toFixed(0)} KB</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
 
             {/* Super-user warning */}
             {isOtherApprover && (
@@ -875,6 +913,12 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     approvalModel: "Regra Interna",
     daysOpen: Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000),
     attachmentNames: "",
+    internalAttachments: (e.attachments || []).map((a) => ({
+      id: a.id,
+      file_name: a.file_name,
+      file_path: a.file_path,
+      file_size: a.file_size,
+    })),
     documentLines: (e.items || []).map((it) => ({
       ItemCode: it.item_code || "",
       Description: it.description,
