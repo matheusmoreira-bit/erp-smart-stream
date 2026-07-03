@@ -871,7 +871,7 @@ export default function ApprovalRulesPage() {
             </Button>
           )}
           <div className="text-xs text-muted-foreground sm:ml-auto whitespace-nowrap">
-            {filteredRules.length} de {rules.length}
+            {filteredRules.length} de {activeTab === "custom" ? customRules.length : standardRules.length}
           </div>
         </div>
 
