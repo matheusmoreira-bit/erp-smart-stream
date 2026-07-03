@@ -50,6 +50,7 @@ export default function NfEntrada() {
   const [logs, setLogs] = useState<NfEntradaLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return items.filter((it) => {
