@@ -144,6 +144,7 @@ async function fetchInvoicesForEmpresa(
       retencoes: "todas",
     });
     const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
+    console.log(`[mastertax-pull] GET ${target}`);
 
     let resp: Response;
     try {
