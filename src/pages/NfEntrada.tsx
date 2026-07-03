@@ -344,6 +344,13 @@ export default function NfEntrada() {
         </div>
       </main>
 
+      <EditNfEntradaDialog
+        item={editItem}
+        open={!!editItem}
+        onOpenChange={(o) => !o && setEditItem(null)}
+        onSaved={refresh}
+      />
+
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="max-w-3xl">
