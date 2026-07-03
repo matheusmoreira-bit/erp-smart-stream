@@ -152,6 +152,8 @@ export interface Expense {
   created_by_email?: string;
   company_db?: string;
   branch_id?: number;
+  doc_date?: string;
+  due_date?: string;
   created_at: string;
   updated_at: string;
   items?: ExpenseItem[];
