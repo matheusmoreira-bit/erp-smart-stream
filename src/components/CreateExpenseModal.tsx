@@ -1074,6 +1074,29 @@ export function CreateExpenseModal({
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
           </div>
 
+          {/* Tipo de rateio — força regras de aprovação específicas (só compras) */}
+          {!isSales && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Tipo de rateio</label>
+              <Select value={rateioType} onValueChange={(v) => setRateioType(v as RateioType)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(RATEIO_TYPE_LABELS) as RateioType[]).map((k) => (
+                    <SelectItem key={k} value={k}>{RATEIO_TYPE_LABELS[k]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {rateioType !== "padrao" && (
+                <p className="text-[11px] text-muted-foreground">
+                  Este tipo força a regra de aprovação correspondente e ignora a matriz normal.
+                  {rateioType === "viagens" && " Viagens seguem o fluxo de Reembolso."}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Header-level defaults: cascade to all items, user can override per line */}
           <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
             <CachedSearchCombobox
