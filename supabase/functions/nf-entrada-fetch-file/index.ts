@@ -154,9 +154,18 @@ Deno.serve(async (req) => {
     const paths = kind === "xml" ? XML_PATHS(row.chave_acesso) : PDF_PATHS(row.chave_acesso);
     const dl = await downloadFromMastertax(creds, paths, kind);
     if ("error" in dl) {
-      return new Response(JSON.stringify({ error: `Falha ao baixar ${kind.toUpperCase()}: ${dl.error}` }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const allNotFound = /HTTP 404/.test(dl.error) && !/HTTP (?!404)\d{3}/.test(dl.error);
+      return new Response(
+        JSON.stringify({
+          error: allNotFound
+            ? `${kind.toUpperCase()} não disponível no MasterTax para esta NF.`
+            : `Falha ao baixar ${kind.toUpperCase()}: ${dl.error}`,
+          code: allNotFound ? "FILE_NOT_FOUND" : "FETCH_FAILED",
+          fallback: true,
+          detail: dl.error,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const ext = kind === "xml" ? "xml" : "pdf";
