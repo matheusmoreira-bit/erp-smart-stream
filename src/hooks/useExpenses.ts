@@ -154,6 +154,7 @@ export interface Expense {
   branch_id?: number;
   doc_date?: string;
   due_date?: string;
+  rateio_type?: string | null;
   created_at: string;
   updated_at: string;
   items?: ExpenseItem[];
