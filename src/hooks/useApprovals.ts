@@ -15,7 +15,9 @@ export interface ApprovalDoc {
   cardCode: string;
   cardName: string;
   requester: string;
+  requesterCode?: string;
   currentApprover: string;
+  approverCode?: string;
   approverEmail: string;
   currentStage: string;
   status: "pending" | "approved" | "rejected" | "generated";
@@ -506,7 +508,9 @@ async function fetchApprovalsViaServiceLayer(
       cardCode: draft.CardCode || "",
       cardName: draft.CardName || "—",
       requester: originator?.UserName || originator?.UserCode || "—",
+      requesterCode: originator?.UserCode || "",
       currentApprover: approver?.UserName || approver?.UserCode || "—",
+      approverCode: approver?.UserCode || "",
       approverEmail: approver?.eMail || "",
       currentStage: stageName !== "—" ? stageName : templateName,
       status: "pending",
