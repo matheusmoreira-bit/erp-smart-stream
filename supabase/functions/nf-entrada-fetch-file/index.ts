@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
 
     const { data: row } = await supabase
       .from("nf_entrada_imports")
-      .select("id, chave_acesso, sap_company_db, xml_storage_path, pdf_storage_path")
+      .select("id, chave_acesso, sap_company_db, xml_storage_path, pdf_storage_path, raw_mastertax")
       .eq("id", importId).maybeSingle();
     if (!row) {
       return new Response(JSON.stringify({ error: "NF não encontrada" }), {
@@ -171,17 +171,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    const paths = kind === "xml" ? XML_PATHS(row.chave_acesso) : PDF_PATHS(row.chave_acesso);
+    const candidates = extractCandidateIds(row.raw_mastertax, row.chave_acesso);
+    const buildPaths = kind === "xml" ? XML_PATHS : PDF_PATHS;
+    const paths = candidates.flatMap((c) => buildPaths(c));
     const dl = await downloadFromMastertax(creds, paths, kind);
     if ("error" in dl) {
       const allNotFound = /HTTP 404/.test(dl.error) && !/HTTP (?!404)\d{3}/.test(dl.error);
       return new Response(
         JSON.stringify({
           error: allNotFound
-            ? `${kind.toUpperCase()} não disponível no MasterTax para esta NF.`
-            : `Falha ao baixar ${kind.toUpperCase()}: ${dl.error}`,
+            ? `${kind.toUpperCase()} indisponível no MasterTax para esta NF.`
+            : `Falha ao baixar ${kind.toUpperCase()} (verifique credenciais MasterTax).`,
           code: allNotFound ? "FILE_NOT_FOUND" : "FETCH_FAILED",
-          fallback: true,
           detail: dl.error,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
