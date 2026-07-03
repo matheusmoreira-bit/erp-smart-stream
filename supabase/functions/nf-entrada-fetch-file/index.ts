@@ -1,12 +1,17 @@
 // Edge function: nf-entrada-fetch-file
-// Baixa o XML ou PDF de uma NF da Master Tax sob demanda, faz upload no
-// bucket `nf-entrada-files` e devolve uma signed URL.
-// Usa o `chave_acesso` salvo (que é o id retornado pelo MasterTax) e tenta
-// múltiplos endpoints conhecidos. Em caso de sucesso, persiste o caminho em
-// `xml_storage_path` / `pdf_storage_path` para evitar download repetido.
+// Baixa o XML ou PDF (DANFSE) de uma NF de serviço da Master Tax sob demanda,
+// faz upload no bucket `nf-entrada-files` e devolve uma signed URL.
+//
+// MasterTax (endpoints validados):
+//   GET /api/notas-servico/xml/{id}     → JSON { retorno: { xml: "<xml…>" } }
+//   GET /api/notas-servico/danfse/{id}  → application/zip contendo o PDF do DANFSE
+//
+// `{id}` é o UUID interno retornado pelo MasterTax (campo `id` no listing),
+// não a chave de acesso. Ele fica em `raw_mastertax.id`.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { unzip } from "https://esm.sh/fflate@0.8.2";
 
 const DEFAULT_BASE_URL = "https://api.mastertax.app";
 
@@ -24,7 +29,6 @@ async function loadCredsForCompany(
     .select("company_db, credential_key, credential_value")
     .eq("system_name", "mastertax");
   const rows = (data || []) as Array<{ company_db: string | null; credential_key: string; credential_value: string }>;
-  // Group by company_db
   const grouped = new Map<string, Record<string, string>>();
   for (const r of rows) {
     const key = r.company_db || "_global";
@@ -32,7 +36,6 @@ async function loadCredsForCompany(
     bucket[r.credential_key] = r.credential_value ?? "";
     grouped.set(key, bucket);
   }
-  // Try exact match, then global, then any
   const tryKeys = [companyDb || "", "_global", ...Array.from(grouped.keys())];
   for (const k of tryKeys) {
     const kv = grouped.get(k);
@@ -49,80 +52,73 @@ function authHeader(token: string): string {
   return token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`;
 }
 
-const XML_PATHS = (id: string) => [
-  `/api/notas-servico/${encodeURIComponent(id)}/xml`,
-  `/api/notas-servico/${encodeURIComponent(id)}/xml-nfse`,
-  `/api/notas-servico/${encodeURIComponent(id)}/arquivo-xml`,
-  `/api/notas-servico/${encodeURIComponent(id)}/download-xml`,
-  `/api/notas-servico/xml/${encodeURIComponent(id)}`,
-];
-const PDF_PATHS = (id: string) => [
-  `/api/notas-servico/${encodeURIComponent(id)}/pdf`,
-  `/api/notas-servico/${encodeURIComponent(id)}/pdf-nfse`,
-  `/api/notas-servico/${encodeURIComponent(id)}/danfse`,
-  `/api/notas-servico/${encodeURIComponent(id)}/arquivo-pdf`,
-  `/api/notas-servico/${encodeURIComponent(id)}/download-pdf`,
-  `/api/notas-servico/pdf/${encodeURIComponent(id)}`,
-];
-
-function extractCandidateIds(raw: unknown, chaveAcesso: string): string[] {
-  const ids = new Set<string>();
-  if (chaveAcesso) ids.add(chaveAcesso);
+function extractInternalId(raw: unknown, fallback: string): string | null {
   const r = raw as Record<string, unknown> | null | undefined;
   if (r && typeof r === "object") {
-    for (const k of ["id", "id_nota", "idNota", "nota_id", "notaId", "codigo", "codigo_verificacao"]) {
-      const v = r[k];
-      if (v != null && (typeof v === "string" || typeof v === "number")) {
-        const s = String(v).trim();
-        if (s) ids.add(s);
-      }
-    }
+    const v = r.id;
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number") return String(v);
   }
-  return Array.from(ids);
+  // fallback (may still work if the caller passed the correct id)
+  return fallback || null;
 }
 
-async function downloadFromMastertax(
-  creds: MasterTaxCreds, paths: string[], expectContains: string,
-): Promise<{ bytes: Uint8Array; contentType: string } | { error: string }> {
-  const errors: string[] = [];
-  for (const p of paths) {
-    const url = `${creds.base_url}${p}`;
-    try {
-      const r = await fetch(url, {
-        headers: { Authorization: authHeader(creds.token), Accept: "*/*" },
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!r.ok) {
-        errors.push(`${p} → HTTP ${r.status}`);
-        continue;
-      }
-      const ct = r.headers.get("content-type") || "";
-      const buf = new Uint8Array(await r.arrayBuffer());
-      // Algumas APIs devolvem JSON com base64 dentro
-      if (ct.includes("application/json")) {
-        try {
-          const j = JSON.parse(new TextDecoder().decode(buf));
-          const b64 = j?.arquivo || j?.base64 || j?.xml || j?.pdf || j?.conteudo || j?.data;
-          if (typeof b64 === "string" && b64.length > 100) {
-            const bin = atob(b64.replace(/\s+/g, ""));
-            const bytes = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-            return { bytes, contentType: expectContains === "xml" ? "application/xml" : "application/pdf" };
-          }
-        } catch { /* ignore */ }
-        errors.push(`${p} → JSON sem campo de arquivo reconhecível`);
-        continue;
-      }
-      if (buf.byteLength < 100) {
-        errors.push(`${p} → resposta vazia (${buf.byteLength}b)`);
-        continue;
-      }
-      return { bytes: buf, contentType: ct || (expectContains === "xml" ? "application/xml" : "application/pdf") };
-    } catch (e) {
-      errors.push(`${p} → ${(e as Error).message}`);
+async function unzipToPdf(bytes: Uint8Array): Promise<Uint8Array | null> {
+  return await new Promise((resolve) => {
+    unzip(bytes, (err, files) => {
+      if (err || !files) return resolve(null);
+      const entries = Object.entries(files);
+      // Prefer .pdf; else first non-empty file
+      let pick = entries.find(([n]) => n.toLowerCase().endsWith(".pdf"));
+      if (!pick) pick = entries.find(([, b]) => b && b.byteLength > 0);
+      resolve(pick ? pick[1] : null);
+    });
+  });
+}
+
+async function fetchXml(creds: MasterTaxCreds, id: string): Promise<{ bytes: Uint8Array; contentType: string } | { error: string }> {
+  const url = `${creds.base_url}/api/notas-servico/xml/${encodeURIComponent(id)}`;
+  const r = await fetch(url, {
+    headers: { Authorization: authHeader(creds.token), Accept: "application/json" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  const text = await r.text();
+  if (!r.ok) return { error: `HTTP ${r.status}: ${text.slice(0, 200)}` };
+  try {
+    const j = JSON.parse(text);
+    const xml = j?.retorno?.xml ?? j?.retorno?.arquivo ?? j?.xml;
+    if (typeof xml === "string" && xml.trim().length > 0) {
+      const body = xml.trim().startsWith("<") ? xml : atob(xml.replace(/\s+/g, ""));
+      return { bytes: new TextEncoder().encode(body), contentType: "application/xml" };
     }
+    return { error: "JSON sem campo `retorno.xml`" };
+  } catch (e) {
+    return { error: `JSON inválido: ${(e as Error).message}` };
   }
-  return { error: errors.join(" | ") };
+}
+
+async function fetchPdf(creds: MasterTaxCreds, id: string): Promise<{ bytes: Uint8Array; contentType: string } | { error: string }> {
+  const url = `${creds.base_url}/api/notas-servico/danfse/${encodeURIComponent(id)}`;
+  const r = await fetch(url, {
+    headers: { Authorization: authHeader(creds.token), Accept: "*/*" },
+    signal: AbortSignal.timeout(45_000),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    return { error: `HTTP ${r.status}: ${t.slice(0, 200)}` };
+  }
+  const ct = (r.headers.get("content-type") || "").toLowerCase();
+  const buf = new Uint8Array(await r.arrayBuffer());
+  // MasterTax devolve ZIP com o PDF dentro
+  if (ct.includes("zip") || (buf[0] === 0x50 && buf[1] === 0x4b)) {
+    const pdf = await unzipToPdf(buf);
+    if (!pdf) return { error: "Não foi possível extrair o PDF do ZIP DANFSE" };
+    return { bytes: pdf, contentType: "application/pdf" };
+  }
+  if (ct.includes("pdf") || (buf[0] === 0x25 && buf[1] === 0x50)) {
+    return { bytes: buf, contentType: "application/pdf" };
+  }
+  return { error: `Formato inesperado (${ct || "sem content-type"})` };
 }
 
 Deno.serve(async (req) => {
@@ -171,19 +167,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    const candidates = extractCandidateIds(row.raw_mastertax, row.chave_acesso);
-    const buildPaths = kind === "xml" ? XML_PATHS : PDF_PATHS;
-    const paths = candidates.flatMap((c) => buildPaths(c));
-    const dl = await downloadFromMastertax(creds, paths, kind);
+    const mtId = extractInternalId(row.raw_mastertax, row.chave_acesso);
+    if (!mtId) {
+      return new Response(JSON.stringify({ error: "ID interno MasterTax ausente nesta NF" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const dl = kind === "xml" ? await fetchXml(creds, mtId) : await fetchPdf(creds, mtId);
     if ("error" in dl) {
-      const allNotFound = /HTTP 404/.test(dl.error) && !/HTTP (?!404)\d{3}/.test(dl.error);
+      const notFound = /HTTP 404/.test(dl.error);
       return new Response(
         JSON.stringify({
-          error: allNotFound
+          error: notFound
             ? `${kind.toUpperCase()} indisponível no MasterTax para esta NF.`
-            : `Falha ao baixar ${kind.toUpperCase()} (verifique credenciais MasterTax).`,
-          code: allNotFound ? "FILE_NOT_FOUND" : "FETCH_FAILED",
-          detail: dl.error,
+            : `Falha ao baixar ${kind.toUpperCase()}: ${dl.error}`,
+          code: notFound ? "FILE_NOT_FOUND" : "FETCH_FAILED",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
