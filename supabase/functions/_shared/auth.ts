@@ -212,11 +212,26 @@ export async function validateSapSession(req: Request) {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
   const baseUrl = await getSapBaseUrl(admin, companyDB);
-  // Cheap session-scoped check: list one user. Any valid B1SESSION succeeds.
-  const resp = await fetch(`${baseUrl}/Users?$top=1&$select=UserCode`, {
-    headers: { Cookie: `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}` },
+  // Cheap session-scoped check. We can't hit /Users because regular (non-super)
+  // B1 users get 403 "not permitted to query the object:Users" — which would
+  // wrongly look like an invalid session. Probe the caller's own record via
+  // /Users('<code>'), and if SAP still refuses (older SL versions), fall back
+  // to the service-document root which any valid B1SESSION can read.
+  const cookie = `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}`;
+  const escaped = sapUser.replace(/'/g, "''");
+  let resp = await fetch(`${baseUrl}/Users('${encodeURIComponent(escaped)}')?$select=UserCode`, {
+    headers: { Cookie: cookie },
   });
-  if (!resp.ok) return null;
+  // 401 = bad session. 403/404 = session is fine, permission/lookup issue.
+  if (resp.status === 401) return null;
+  if (!resp.ok && resp.status !== 403 && resp.status !== 404) {
+    // Fallback: service-document root requires only a valid session.
+    await resp.body?.cancel().catch(() => {});
+    resp = await fetch(`${baseUrl}/`, { headers: { Cookie: cookie } });
+    if (resp.status === 401) return null;
+    if (!resp.ok) return null;
+  }
+  await resp.body?.cancel().catch(() => {});
   return { id: `sap:${companyDB}:${sapUser}`, email: sapUser, companyDB, userName: sapUser, source: "sap_session" as const };
 }
 
