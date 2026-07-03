@@ -51,15 +51,35 @@ function authHeader(token: string): string {
 
 const XML_PATHS = (id: string) => [
   `/api/notas-servico/${encodeURIComponent(id)}/xml`,
+  `/api/notas-servico/${encodeURIComponent(id)}/xml-nfse`,
   `/api/notas-servico/${encodeURIComponent(id)}/arquivo-xml`,
+  `/api/notas-servico/${encodeURIComponent(id)}/download-xml`,
   `/api/notas-servico/xml/${encodeURIComponent(id)}`,
 ];
 const PDF_PATHS = (id: string) => [
   `/api/notas-servico/${encodeURIComponent(id)}/pdf`,
+  `/api/notas-servico/${encodeURIComponent(id)}/pdf-nfse`,
   `/api/notas-servico/${encodeURIComponent(id)}/danfse`,
   `/api/notas-servico/${encodeURIComponent(id)}/arquivo-pdf`,
+  `/api/notas-servico/${encodeURIComponent(id)}/download-pdf`,
   `/api/notas-servico/pdf/${encodeURIComponent(id)}`,
 ];
+
+function extractCandidateIds(raw: unknown, chaveAcesso: string): string[] {
+  const ids = new Set<string>();
+  if (chaveAcesso) ids.add(chaveAcesso);
+  const r = raw as Record<string, unknown> | null | undefined;
+  if (r && typeof r === "object") {
+    for (const k of ["id", "id_nota", "idNota", "nota_id", "notaId", "codigo", "codigo_verificacao"]) {
+      const v = r[k];
+      if (v != null && (typeof v === "string" || typeof v === "number")) {
+        const s = String(v).trim();
+        if (s) ids.add(s);
+      }
+    }
+  }
+  return Array.from(ids);
+}
 
 async function downloadFromMastertax(
   creds: MasterTaxCreds, paths: string[], expectContains: string,
