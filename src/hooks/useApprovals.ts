@@ -15,7 +15,9 @@ export interface ApprovalDoc {
   cardCode: string;
   cardName: string;
   requester: string;
+  requesterCode?: string;
   currentApprover: string;
+  approverCode?: string;
   approverEmail: string;
   currentStage: string;
   status: "pending" | "approved" | "rejected" | "generated";
