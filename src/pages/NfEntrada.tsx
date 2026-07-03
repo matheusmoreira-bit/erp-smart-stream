@@ -17,6 +17,7 @@ import {
   type NfEntradaImport, type NfEntradaLog, type NfEntradaStatus,
 } from "@/hooks/useNfEntrada";
 import { PageTitle } from "@/components/PageTitle";
+import { EditNfEntradaDialog } from "@/components/EditNfEntradaDialog";
 
 const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending_expense: { label: "Pendente despesa", variant: "outline" },
