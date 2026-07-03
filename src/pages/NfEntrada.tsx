@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight } from "lucide-react";
+import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
   type NfEntradaImport, type NfEntradaLog, type NfEntradaStatus,
 } from "@/hooks/useNfEntrada";
 import { PageTitle } from "@/components/PageTitle";
+import { EditNfEntradaDialog } from "@/components/EditNfEntradaDialog";
 
 const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending_expense: { label: "Pendente despesa", variant: "outline" },
@@ -60,6 +61,7 @@ export default function NfEntrada() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editItem, setEditItem] = useState<NfEntradaImport | null>(null);
 
   const filtered = useMemo(() => {
     return items.filter((it) => {
@@ -285,6 +287,10 @@ export default function NfEntrada() {
                             disabled={busyId === it.id} onClick={() => handleReprocess(it.id)}>
                             <RotateCw className="w-4 h-4" />
                           </Button>
+                          <Button variant="ghost" size="icon" title="Editar"
+                            onClick={() => setEditItem(it)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" title="Cancelar"
                             disabled={busyId === it.id || it.status === "cancelled" || it.status === "completed"}
                             onClick={() => handleCancel(it.id)}>
@@ -337,6 +343,13 @@ export default function NfEntrada() {
           </Table>
         </div>
       </main>
+
+      <EditNfEntradaDialog
+        item={editItem}
+        open={!!editItem}
+        onOpenChange={(o) => !o && setEditItem(null)}
+        onSaved={refresh}
+      />
 
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
