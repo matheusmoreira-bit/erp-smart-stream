@@ -499,20 +499,37 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
       const userIdentifier = session.userName.includes("@") ? session.userName : `${session.userName}`;
 
-      const { data: expense, error: err } = await supabase
-        .from("expenses")
-        .insert({
+      // Enrich items with items_group data client-side (server just persists
+      // whatever we send). SAP session is required to hit Service Layer.
+      const enrichedItems = input.items.map((item) => {
+        const code = (item.item_code || "").trim();
+        const meta = code ? enriched[code] : undefined;
+        return {
+          item_code: item.item_code || null,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          line_total: item.line_total,
+          cost_center: item.cost_center || input.cost_center || null,
+          project: item.project || input.project || null,
+          items_group_code: meta?.items_group_code ?? null,
+          items_group_name: meta?.items_group_name ?? null,
+        };
+      });
+
+      // Server-side create (RLS on expenses is closed; anon can no longer
+      // INSERT). The edge function overrides requester identity with the
+      // authenticated SAP user, so client cannot forge who owns the doc.
+      const createResp = await invokeExpenseMutation<{ ok: true; expense: any }>({
+        action: "create",
+        input: {
           supplier_code: input.supplier_code || null,
           supplier_name: input.supplier_name,
-          total_amount: totalAmount,
           currency: input.currency || "BRL",
           cost_center: input.cost_center || null,
           project: input.project || null,
           remarks: input.remarks || null,
-          status: status as any,
-          requester_name: session.userName,
-          requester_email: userIdentifier,
-          created_by_email: userIdentifier,
+          status,
           current_approver: currentApprover,
           approval_rule_id: matchedRuleId,
           origin,
@@ -521,66 +538,28 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           doc_type: input.doc_type || docType,
           doc_date: input.doc_date || null,
           due_date: input.due_date || null,
-        } as any)
-        .select()
-        .single();
-
-      if (err) throw err;
-
-      const createdId = (expense as any).id as string;
-      // Log de criação + envio para aprovação (quando aplicável)
-      await logExpenseDecision(createdId, "created", {
-        approverName: session.userName,
-        approverEmail: userIdentifier,
-        remarks: input.remarks || null,
+          items: enrichedItems,
+        },
       });
-      if (status === "pendente_aprovacao") {
-        await logExpenseDecision(createdId, "submitted", {
-          approverName: session.userName,
-          approverEmail: userIdentifier,
-          levelOrder: 1,
+      const expense = createResp.expense;
+      const createdId = expense.id as string;
+
+      if (status === "pendente_aprovacao" && currentApprover && currentApprover !== "Administrador") {
+        await createNotification({
+          user_identifier: currentApprover,
+          title: "Nova aprovação pendente",
+          body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação.`,
+          category: "approval",
+          company_db: session.companyDB,
+          link: `/approvals`,
+          metadata: { expense_id: createdId },
         });
-        if (currentApprover && currentApprover !== "Administrador") {
-          await createNotification({
-            user_identifier: currentApprover,
-            title: "Nova aprovação pendente",
-            body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação.`,
-            category: "approval",
-            company_db: session.companyDB,
-            link: `/approvals`,
-            metadata: { expense_id: createdId },
-          });
-        }
       }
 
-      if (input.items.length > 0) {
-        const { error: itemsErr } = await supabase.from("expense_items").insert(
-          input.items.map((item) => {
-            const code = (item.item_code || "").trim();
-            const e = code ? enriched[code] : undefined;
-            return {
-              expense_id: (expense as any).id,
-              item_code: item.item_code || null,
-              description: item.description,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              line_total: item.line_total,
-              cost_center: item.cost_center || input.cost_center || null,
-              project: item.project || input.project || null,
-              items_group_code: e?.items_group_code ?? null,
-              items_group_name: e?.items_group_name ?? null,
-            };
-          })
-        );
-        if (itemsErr) throw itemsErr;
-      }
-
-      // Upload attachments to storage and persist references so the SAP
-      // integration can later upload them to SAP B1 Attachments2.
+      // Upload attachments to storage (still client-side; bucket policies
+      // gate that), then register the rows through the edge function.
       if (input.files && input.files.length > 0) {
-        const expenseId = (expense as any).id;
         const attachmentRows: {
-          expense_id: string;
           file_path: string;
           file_name: string;
           file_size: number;
@@ -590,7 +569,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
         for (const file of input.files) {
           const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-          const path = `${expenseId}/${Date.now()}_${safeName}`;
+          const path = `${createdId}/${Date.now()}_${safeName}`;
           const { error: upErr } = await supabase.storage
             .from("expense-attachments")
             .upload(path, file, {
@@ -603,7 +582,6 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             continue;
           }
           attachmentRows.push({
-            expense_id: expenseId,
             file_path: path,
             file_name: file.name,
             file_size: file.size,
@@ -612,17 +590,19 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         }
 
         if (attachmentRows.length > 0) {
-          const { error: attErr } = await supabase
-            .from("expense_attachments")
-            .insert(attachmentRows);
-          if (attErr) {
+          try {
+            await invokeExpenseMutation({
+              action: "attachments_add",
+              expense_id: createdId,
+              attachments: attachmentRows,
+            });
+          } catch (attErr) {
             console.error("Falha ao registrar anexos:", attErr);
-            throw new Error(`Falha ao registrar anexos no banco: ${attErr.message}`);
+            throw new Error(`Falha ao registrar anexos no banco: ${attErr instanceof Error ? attErr.message : String(attErr)}`);
           }
         }
 
         if (failedUploads.length > 0) {
-          // Surface failures so the user knows the SAP integration won't have attachments.
           throw new Error(
             `Falha ao enviar ${failedUploads.length} anexo(s): ${failedUploads.join("; ")}`,
           );
@@ -634,6 +614,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     },
     [session, fetchExpenses, docType]
   );
+
 
   const updateExpense = useCallback(
     async (
