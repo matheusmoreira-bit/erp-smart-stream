@@ -140,7 +140,7 @@ async function fetchInvoicesForEmpresa(
       quantidade: String(limite),
       ordenar: "dataEmissao",
       sentido: "desc",
-      tipo: "Prestador",
+      tipo: "Tomador",
       retencoes: "todas",
     });
     const target = `${creds.base_url}/api/notas-servico?${params.toString()}`;
