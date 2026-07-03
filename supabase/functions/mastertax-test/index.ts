@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     const authHeader = token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`;
 
     const today = new Date();
-    const start = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const start = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
     const results: Array<{
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
       perEmpresa: results,
       bodyPreview: lastPreview,
       hint: allOk
-        ? `Conexão OK — Master Tax respondeu para ${empresaIds.length} empresa(s) (${totalNotasSum} nota(s) nos últimos 7 dias).`
+        ? `Conexão OK — Master Tax respondeu para ${empresaIds.length} empresa(s) (${totalNotasSum} nota(s) nos últimos 60 dias).`
         : `${totalOk}/${empresaIds.length} empresa(s) responderam OK. Verifique os IDs com falha.`,
     });
   } catch (err) {
