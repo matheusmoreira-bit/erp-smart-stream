@@ -51,15 +51,35 @@ function authHeader(token: string): string {
 
 const XML_PATHS = (id: string) => [
   `/api/notas-servico/${encodeURIComponent(id)}/xml`,
+  `/api/notas-servico/${encodeURIComponent(id)}/xml-nfse`,
   `/api/notas-servico/${encodeURIComponent(id)}/arquivo-xml`,
+  `/api/notas-servico/${encodeURIComponent(id)}/download-xml`,
   `/api/notas-servico/xml/${encodeURIComponent(id)}`,
 ];
 const PDF_PATHS = (id: string) => [
   `/api/notas-servico/${encodeURIComponent(id)}/pdf`,
+  `/api/notas-servico/${encodeURIComponent(id)}/pdf-nfse`,
   `/api/notas-servico/${encodeURIComponent(id)}/danfse`,
   `/api/notas-servico/${encodeURIComponent(id)}/arquivo-pdf`,
+  `/api/notas-servico/${encodeURIComponent(id)}/download-pdf`,
   `/api/notas-servico/pdf/${encodeURIComponent(id)}`,
 ];
+
+function extractCandidateIds(raw: unknown, chaveAcesso: string): string[] {
+  const ids = new Set<string>();
+  if (chaveAcesso) ids.add(chaveAcesso);
+  const r = raw as Record<string, unknown> | null | undefined;
+  if (r && typeof r === "object") {
+    for (const k of ["id", "id_nota", "idNota", "nota_id", "notaId", "codigo", "codigo_verificacao"]) {
+      const v = r[k];
+      if (v != null && (typeof v === "string" || typeof v === "number")) {
+        const s = String(v).trim();
+        if (s) ids.add(s);
+      }
+    }
+  }
+  return Array.from(ids);
+}
 
 async function downloadFromMastertax(
   creds: MasterTaxCreds, paths: string[], expectContains: string,
@@ -125,7 +145,7 @@ Deno.serve(async (req) => {
 
     const { data: row } = await supabase
       .from("nf_entrada_imports")
-      .select("id, chave_acesso, sap_company_db, xml_storage_path, pdf_storage_path")
+      .select("id, chave_acesso, sap_company_db, xml_storage_path, pdf_storage_path, raw_mastertax")
       .eq("id", importId).maybeSingle();
     if (!row) {
       return new Response(JSON.stringify({ error: "NF não encontrada" }), {
@@ -151,17 +171,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    const paths = kind === "xml" ? XML_PATHS(row.chave_acesso) : PDF_PATHS(row.chave_acesso);
+    const candidates = extractCandidateIds(row.raw_mastertax, row.chave_acesso);
+    const buildPaths = kind === "xml" ? XML_PATHS : PDF_PATHS;
+    const paths = candidates.flatMap((c) => buildPaths(c));
     const dl = await downloadFromMastertax(creds, paths, kind);
     if ("error" in dl) {
       const allNotFound = /HTTP 404/.test(dl.error) && !/HTTP (?!404)\d{3}/.test(dl.error);
       return new Response(
         JSON.stringify({
           error: allNotFound
-            ? `${kind.toUpperCase()} não disponível no MasterTax para esta NF.`
-            : `Falha ao baixar ${kind.toUpperCase()}: ${dl.error}`,
+            ? `${kind.toUpperCase()} indisponível no MasterTax para esta NF.`
+            : `Falha ao baixar ${kind.toUpperCase()} (verifique credenciais MasterTax).`,
           code: allNotFound ? "FILE_NOT_FOUND" : "FETCH_FAILED",
-          fallback: true,
           detail: dl.error,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
