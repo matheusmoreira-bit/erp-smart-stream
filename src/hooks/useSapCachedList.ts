@@ -4,7 +4,16 @@ import { sapQueryAll } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
-const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
+const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
+// Chaves com atualização mais frequente (dados que mudam com frequência no ERP)
+const CACHE_TTL_OVERRIDES: Record<string, number> = {
+  items_purchase_active_v3: 4 * 60 * 60 * 1000, // 4h
+  items_sales_active_v3: 4 * 60 * 60 * 1000,
+  items_active_v2: 4 * 60 * 60 * 1000,
+  suppliers_active_v2: 4 * 60 * 60 * 1000,
+  customers_active_v2: 4 * 60 * 60 * 1000,
+};
+const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE_TTL_MS;
 
 interface UseSapCachedListParams {
   cacheKey: string;
@@ -86,7 +95,7 @@ export function useSapCachedList({
 
       // 3. Only cache non-empty results
       if (rows.length > 0) {
-        const expiresAt = new Date(Date.now() + CACHE_TTL_MS).toISOString();
+        const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
         await supabase
           .from("sap_cache")
           .upsert(
