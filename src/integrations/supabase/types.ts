@@ -1421,6 +1421,7 @@ export type Database = {
           id: string
           origin: string
           project: string | null
+          rateio_type: string | null
           remarks: string | null
           requester_email: string | null
           requester_name: string
@@ -1455,6 +1456,7 @@ export type Database = {
           id?: string
           origin?: string
           project?: string | null
+          rateio_type?: string | null
           remarks?: string | null
           requester_email?: string | null
           requester_name: string
@@ -1489,6 +1491,7 @@ export type Database = {
           id?: string
           origin?: string
           project?: string | null
+          rateio_type?: string | null
           remarks?: string | null
           requester_email?: string | null
           requester_name?: string

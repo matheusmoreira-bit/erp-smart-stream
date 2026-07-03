@@ -154,6 +154,7 @@ export interface Expense {
   branch_id?: number;
   doc_date?: string;
   due_date?: string;
+  rateio_type?: string | null;
   created_at: string;
   updated_at: string;
   items?: ExpenseItem[];
@@ -176,9 +177,20 @@ export interface CreateExpenseInput {
   doc_type?: ExpenseDocType;
   doc_date?: string;
   due_date?: string;
+  rateio_type?: RateioType | null;
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
 }
+
+export type RateioType = "padrao" | "folha" | "imposto" | "reembolso" | "viagens";
+
+export const RATEIO_TYPE_LABELS: Record<RateioType, string> = {
+  padrao: "Não (Padrão)",
+  folha: "Folha",
+  imposto: "Imposto",
+  reembolso: "Reembolso",
+  viagens: "Viagens",
+};
 
 const STATUS_LABELS: Record<ExpenseStatus, string> = {
   rascunho: "Rascunho",
@@ -449,52 +461,84 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
       // Evaluate approval rules for manual expenses (PagCorp skips rules)
       if (!input.skipRules && origin === "manual") {
-        // CC do cabeçalho pode estar vazio — usar o(s) CC(s) dos itens como fallback
-        // para evitar bypass quando o rateio fica somente nas linhas.
-        const itemCostCenters = Array.from(
-          new Set(
-            (input.items || [])
-              .map((it) => (it.cost_center || "").trim())
-              .filter((cc) => cc.length > 0),
-          ),
-        );
-        const headerCc = (input.cost_center || "").trim();
-        const candidateCcs = headerCc ? [headerCc] : itemCostCenters;
-
-        let match: Awaited<ReturnType<typeof findMatchingRule>> = null;
-        for (const cc of (candidateCcs.length > 0 ? candidateCcs : [""])) {
-          const ctx = {
-            total_amount: totalAmount,
-            cost_center: cc,
-            project: input.project || "",
-            requester_name: session.userName,
-            supplier_name: input.supplier_name,
-            currency: input.currency || "BRL",
-            doc_type: docType,
-            item_codes: itemCtx.item_codes,
-            item_groups: itemCtx.item_groups,
-          };
-          match = await findMatchingRule(ctx, session.companyDB || null, docType);
-          if (match) break;
+        // Tipo de rateio no cabeçalho força uma regra específica (override)
+        const rt = input.rateio_type && input.rateio_type !== "padrao" ? input.rateio_type : null;
+        if (rt) {
+          const namePrefix =
+            rt === "folha" ? "Folha"
+            : rt === "imposto" ? "Impostos"
+            : "Reembolso"; // reembolso e viagens caem no mesmo fluxo
+          const { data: forced } = await (supabase as any)
+            .from("approval_rules")
+            .select("id")
+            .eq("is_active", true)
+            .eq("priority", 9999)
+            .eq("company_db", session.companyDB || "")
+            .ilike("name", `${namePrefix}%`)
+            .order("name")
+            .limit(1);
+          const forcedRule = Array.isArray(forced) && forced.length > 0 ? forced[0] : null;
+          if (forcedRule) {
+            const { data: lvls } = await supabase
+              .from("approval_rule_levels")
+              .select("*")
+              .eq("rule_id", forcedRule.id)
+              .order("level_order", { ascending: true })
+              .limit(1);
+            const first = lvls && lvls.length > 0 ? lvls[0] as any : null;
+            status = "pendente_aprovacao";
+            currentApprover = first?.approver_name || null;
+            matchedRuleId = forcedRule.id;
+          }
         }
 
-        if (match) {
-          status = "pendente_aprovacao";
-          currentApprover = match.firstApprover?.name || null;
-          matchedRuleId = match.rule.id;
-        } else {
-          // Sem regra correspondente: NUNCA auto-aprovar. Vai para aprovação
-          // administrativa — busca um admin padrão para exibir como aprovador.
-          status = "pendente_aprovacao";
-          matchedRuleId = null;
-          try {
-            const { data: fallback } = await (supabase as any).rpc(
-              "get_default_expense_approver",
-              { _company_db: session.companyDB || null },
-            );
-            currentApprover = (typeof fallback === "string" && fallback.trim()) || "Administrador";
-          } catch {
-            currentApprover = "Administrador";
+        // Sem override, roda a matriz normal
+        if (!matchedRuleId) {
+          const itemCostCenters = Array.from(
+            new Set(
+              (input.items || [])
+                .map((it) => (it.cost_center || "").trim())
+                .filter((cc) => cc.length > 0),
+            ),
+          );
+          const headerCc = (input.cost_center || "").trim();
+          const candidateCcs = headerCc ? [headerCc] : itemCostCenters;
+
+          let match: Awaited<ReturnType<typeof findMatchingRule>> = null;
+          for (const cc of (candidateCcs.length > 0 ? candidateCcs : [""])) {
+            const ctx = {
+              total_amount: totalAmount,
+              cost_center: cc,
+              project: input.project || "",
+              requester_name: session.userName,
+              supplier_name: input.supplier_name,
+              currency: input.currency || "BRL",
+              doc_type: docType,
+              item_codes: itemCtx.item_codes,
+              item_groups: itemCtx.item_groups,
+            };
+            match = await findMatchingRule(ctx, session.companyDB || null, docType);
+            if (match) break;
+          }
+
+          if (match) {
+            status = "pendente_aprovacao";
+            currentApprover = match.firstApprover?.name || null;
+            matchedRuleId = match.rule.id;
+          } else {
+            // Sem regra correspondente: NUNCA auto-aprovar. Vai para aprovação
+            // administrativa — busca um admin padrão para exibir como aprovador.
+            status = "pendente_aprovacao";
+            matchedRuleId = null;
+            try {
+              const { data: fallback } = await (supabase as any).rpc(
+                "get_default_expense_approver",
+                { _company_db: session.companyDB || null },
+              );
+              currentApprover = (typeof fallback === "string" && fallback.trim()) || "Administrador";
+            } catch {
+              currentApprover = "Administrador";
+            }
           }
         }
       }
@@ -540,6 +584,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           doc_type: input.doc_type || docType,
           doc_date: input.doc_date || null,
           due_date: input.due_date || null,
+          rateio_type: input.rateio_type || null,
           items: enrichedItems,
         },
       });
