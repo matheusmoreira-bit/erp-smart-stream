@@ -373,15 +373,22 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
       const expenseIds = (data || []).map((e: any) => e.id);
       let itemsMap: Record<string, ExpenseItem[]> = {};
+      let attachmentsMap: Record<string, ExpenseAttachment[]> = {};
       if (expenseIds.length > 0) {
-        const { data: items } = await supabase
-          .from("expense_items")
-          .select("*")
-          .in("expense_id", expenseIds);
+        const [{ data: items }, { data: atts }] = await Promise.all([
+          supabase.from("expense_items").select("*").in("expense_id", expenseIds),
+          supabase.from("expense_attachments").select("*").in("expense_id", expenseIds),
+        ]);
         if (items) {
           for (const item of items as any[]) {
             if (!itemsMap[item.expense_id]) itemsMap[item.expense_id] = [];
             itemsMap[item.expense_id].push(item);
+          }
+        }
+        if (atts) {
+          for (const a of atts as any[]) {
+            if (!attachmentsMap[a.expense_id]) attachmentsMap[a.expense_id] = [];
+            attachmentsMap[a.expense_id].push(a);
           }
         }
       }
@@ -390,6 +397,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         (data || []).map((e: any) => ({
           ...e,
           items: itemsMap[e.id] || [],
+          attachments: attachmentsMap[e.id] || [],
         }))
       );
     } catch (e) {
