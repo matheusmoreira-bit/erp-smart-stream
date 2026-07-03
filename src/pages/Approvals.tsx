@@ -932,6 +932,30 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
   } as ApprovalDoc & { __internalId?: string };
 }
 
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+    dp[i][j] = a[i-1] === b[j-1]
+      ? dp[i-1][j-1]
+      : 1 + Math.min(dp[i-1][j-1], dp[i-1][j], dp[i][j-1]);
+  }
+  return dp[m][n];
+}
+
+function tokensMatch(aTok: string, uTok: string): boolean {
+  if (aTok === uTok) return true;
+  // tolerate typos on tokens of 5+ chars: allow small edit distance
+  if (aTok.length >= 5 && uTok.length >= 5) {
+    const tol = Math.min(aTok.length, uTok.length) >= 7 ? 2 : 1;
+    if (editDistance(aTok, uTok) <= tol) return true;
+  }
+  return false;
+}
+
 function approverMatches(approver: string, userName: string): boolean {
   if (!approver || !userName) return false;
   const a = approver.toLowerCase().trim();
@@ -941,8 +965,9 @@ function approverMatches(approver: string, userName: string): boolean {
   const aTokens = a.replace(/[._-]/g, " ").split(/\s+/).filter(Boolean);
   const uTokens = u.replace(/[._-]/g, " ").split(/\s+/).filter(Boolean);
   if (aTokens.length === 0 || uTokens.length === 0) return false;
-  // match if all user tokens appear in approver tokens (or vice-versa)
-  const allIn = (src: string[], tgt: string[]) => src.every((t) => tgt.includes(t));
+  // match if all user tokens have a fuzzy-matching counterpart in approver tokens (or vice-versa)
+  const allIn = (src: string[], tgt: string[]) =>
+    src.every((t) => tgt.some((x) => tokensMatch(t, x)));
   return allIn(uTokens, aTokens) || allIn(aTokens, uTokens);
 }
 
