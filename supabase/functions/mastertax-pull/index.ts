@@ -389,7 +389,6 @@ async function tryMatchExistingPo(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  console.warn(`[mastertax-pull] invoked v2-tomador`);
 
   const _startedAt = Date.now();
   let _http = 200;
