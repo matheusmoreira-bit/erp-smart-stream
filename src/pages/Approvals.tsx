@@ -947,14 +947,14 @@ function editDistance(a: string, b: string): number {
 }
 
 function tokensMatch(aTok: string, uTok: string): boolean {
-  if (aTok === uTok) return true;
-  // tolerate typos on tokens of 5+ chars: allow small edit distance
-  if (aTok.length >= 5 && uTok.length >= 5) {
-    const tol = Math.min(aTok.length, uTok.length) >= 7 ? 2 : 1;
-    if (editDistance(aTok, uTok) <= tol) return true;
-  }
-  return false;
+  // Strict equality only. Fuzzy edit-distance matching was removed after a
+  // false positive: an unrelated user (e.g. "samuel.ramos") was accepted as
+  // an approver because their token differed by <=2 chars from a legitimate
+  // approver token. Server-side authorization is the real gate, but keeping
+  // the UI strict prevents surfacing an Approve button to non-approvers.
+  return aTok === uTok;
 }
+
 
 function approverMatches(approver: string, userName: string): boolean {
   if (!approver || !userName) return false;
