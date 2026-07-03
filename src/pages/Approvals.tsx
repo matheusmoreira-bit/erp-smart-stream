@@ -773,12 +773,15 @@ function ApprovalDetailModal({
                       type="button"
                       onClick={async () => {
                         try {
-                          const { supabase } = await import("@/integrations/supabase/client");
-                          const { data, error } = await supabase.storage
-                            .from("expense-attachments")
-                            .createSignedUrl(att.file_path, 300);
-                          if (error || !data?.signedUrl) throw error || new Error("URL indisponível");
-                          window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+                          const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+                          const res = await sapFunctionFetch("expense-attachment-storage", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ action: "sign", file_path: att.file_path }),
+                          });
+                          const data = await res.json().catch(() => null);
+                          if (!res.ok || !data?.signed_url) throw new Error(data?.error || "URL indisponível");
+                          window.open(data.signed_url, "_blank", "noopener,noreferrer");
                         } catch (e) {
                           console.error("Erro ao abrir anexo:", e);
                           toast.error("Não foi possível abrir o anexo");
