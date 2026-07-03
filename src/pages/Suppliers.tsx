@@ -12,7 +12,7 @@ import {
   XCircle,
   AlertCircle,
   LogOut,
-  Sparkles,
+  
   Upload,
   CloudUpload,
   Loader2,
