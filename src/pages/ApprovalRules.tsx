@@ -44,6 +44,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
@@ -636,10 +637,17 @@ export default function ApprovalRulesPage() {
   const [search, setSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
+
+  const CUSTOM_PRIORITY = 9999;
+  const isCustomRule = (r: ApprovalRule) => (r.priority || 0) >= CUSTOM_PRIORITY;
+  const standardRules = useMemo(() => rules.filter((r) => !isCustomRule(r)), [rules]);
+  const customRules = useMemo(() => rules.filter(isCustomRule), [rules]);
 
   const filteredRules = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rules.filter((r) => {
+    const source = activeTab === "custom" ? customRules : standardRules;
+    return source.filter((r) => {
       if (docTypeFilter !== "all" && (r.doc_type || "both") !== docTypeFilter) return false;
       if (statusFilter === "active" && !r.is_active) return false;
       if (statusFilter === "inactive" && r.is_active) return false;
@@ -664,7 +672,7 @@ export default function ApprovalRulesPage() {
         return true;
       return false;
     });
-  }, [rules, search, docTypeFilter, statusFilter]);
+  }, [standardRules, customRules, activeTab, search, docTypeFilter, statusFilter]);
 
   useEffect(() => {
     if (!session) navigate("/");
@@ -783,6 +791,39 @@ export default function ApprovalRulesPage() {
           </div>
         </div>
 
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "standard" | "custom")}>
+          <TabsList className="grid grid-cols-2 w-full sm:w-[520px]">
+            <TabsTrigger value="standard" className="gap-1.5">
+              <Settings2 className="w-3.5 h-3.5" />
+              Regras padrão
+              <span className="ml-1 text-[10px] font-mono bg-muted/60 px-1.5 py-0.5 rounded">
+                {standardRules.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="custom" className="gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              Regras personalizadas
+              <span className="ml-1 text-[10px] font-mono bg-muted/60 px-1.5 py-0.5 rounded">
+                {customRules.length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {activeTab === "custom" && (
+          <div className="glass-card p-4 border-l-2 border-l-primary/40">
+            <p className="text-sm text-foreground font-medium mb-1 flex items-center gap-1.5">
+              <Shield className="w-4 h-4 text-primary" />
+              Regras personalizadas (prioridade {CUSTOM_PRIORITY})
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Regras de sobreposição aplicadas por tipo de rateio ou item — Fiscal (IMP), Folha (FOL) e Reembolso.
+              Quando aplicáveis, elas prevalecem sobre a matriz normal de centro de custo e valor.
+            </p>
+          </div>
+        )}
+
         {/* Search & Filters */}
         <div className="glass-card p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
           <div className="relative flex-1 min-w-[200px]">
@@ -830,7 +871,7 @@ export default function ApprovalRulesPage() {
             </Button>
           )}
           <div className="text-xs text-muted-foreground sm:ml-auto whitespace-nowrap">
-            {filteredRules.length} de {rules.length}
+            {filteredRules.length} de {activeTab === "custom" ? customRules.length : standardRules.length}
           </div>
         </div>
 
