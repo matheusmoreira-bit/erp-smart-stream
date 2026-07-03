@@ -637,6 +637,12 @@ export default function ApprovalRulesPage() {
   const [search, setSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
+
+  const CUSTOM_PRIORITY = 9999;
+  const isCustomRule = (r: ApprovalRule) => (r.priority || 0) >= CUSTOM_PRIORITY;
+  const standardRules = useMemo(() => rules.filter((r) => !isCustomRule(r)), [rules]);
+  const customRules = useMemo(() => rules.filter(isCustomRule), [rules]);
 
   const filteredRules = useMemo(() => {
     const q = search.trim().toLowerCase();
