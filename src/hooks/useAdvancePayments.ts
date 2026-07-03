@@ -166,22 +166,25 @@ export function useAdvancePayments() {
       if (input.files?.length) {
         const advId = row.id;
         const rows: any[] = [];
+        const { sapFunctionFetch } = await import("@/lib/auth-fetch");
         for (const file of input.files) {
-          const safe = file.name.replace(/[^\w.\-]+/g, "_");
-          const path = `advances/${advId}/${Date.now()}_${safe}`;
-          const { error: upErr } = await supabase.storage
-            .from("expense-attachments")
-            .upload(path, file, {
-              contentType: file.type || "application/octet-stream",
-              upsert: false,
-            });
-          if (upErr) throw new Error(`Falha ao enviar anexo ${file.name}: ${upErr.message}`);
+          const fd = new FormData();
+          fd.append("advance_id", advId);
+          fd.append("file", file, file.name);
+          const res = await sapFunctionFetch("expense-attachment-storage", {
+            method: "POST",
+            body: fd,
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || `Falha ao enviar anexo ${file.name}: ${res.status}`);
+          }
           rows.push({
             advance_id: advId,
-            file_path: path,
-            file_name: file.name,
-            file_size: file.size,
-            mime_type: file.type || "application/octet-stream",
+            file_path: data.file_path,
+            file_name: data.file_name,
+            file_size: data.file_size,
+            mime_type: data.mime_type,
             uploaded_by: uid,
           });
         }

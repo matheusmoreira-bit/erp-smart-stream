@@ -34,3 +34,6 @@ verify_jwt = false
 
 [functions.expense-mutation]
 verify_jwt = false
+
+[functions.expense-attachment-storage]
+verify_jwt = false

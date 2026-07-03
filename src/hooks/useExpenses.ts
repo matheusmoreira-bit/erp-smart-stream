@@ -556,8 +556,8 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         });
       }
 
-      // Upload attachments to storage (still client-side; bucket policies
-      // gate that), then register the rows through the edge function.
+      // Upload attachments through the edge function (bucket policies for
+      // anon/authenticated are closed — only the service role can write).
       if (input.files && input.files.length > 0) {
         const attachmentRows: {
           file_path: string;
@@ -568,25 +568,28 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         const failedUploads: string[] = [];
 
         for (const file of input.files) {
-          const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-          const path = `${createdId}/${Date.now()}_${safeName}`;
-          const { error: upErr } = await supabase.storage
-            .from("expense-attachments")
-            .upload(path, file, {
-              contentType: file.type || "application/octet-stream",
-              upsert: false,
+          try {
+            const fd = new FormData();
+            fd.append("expense_id", createdId);
+            fd.append("file", file, file.name);
+            const res = await sapFunctionFetch("expense-attachment-storage", {
+              method: "POST",
+              body: fd,
             });
-          if (upErr) {
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data?.ok) {
+              throw new Error(data?.error || `upload retornou ${res.status}`);
+            }
+            attachmentRows.push({
+              file_path: data.file_path,
+              file_name: data.file_name,
+              file_size: data.file_size,
+              mime_type: data.mime_type,
+            });
+          } catch (upErr) {
             console.error("Falha ao subir anexo", file.name, upErr);
-            failedUploads.push(`${file.name}: ${upErr.message}`);
-            continue;
+            failedUploads.push(`${file.name}: ${upErr instanceof Error ? upErr.message : String(upErr)}`);
           }
-          attachmentRows.push({
-            file_path: path,
-            file_name: file.name,
-            file_size: file.size,
-            mime_type: file.type || "application/octet-stream",
-          });
         }
 
         if (attachmentRows.length > 0) {
