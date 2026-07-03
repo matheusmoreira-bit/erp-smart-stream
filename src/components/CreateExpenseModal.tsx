@@ -108,6 +108,7 @@ export function CreateExpenseModal({
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
   const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
   const [headerProject, setHeaderProject] = useState<SapSearchOption | null>(null);
+  const [rateioType, setRateioType] = useState<RateioType>("padrao");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
 
