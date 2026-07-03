@@ -61,6 +61,7 @@ export default function NfEntrada() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editItem, setEditItem] = useState<NfEntradaImport | null>(null);
 
   const filtered = useMemo(() => {
     return items.filter((it) => {
