@@ -791,6 +791,39 @@ export default function ApprovalRulesPage() {
           </div>
         </div>
 
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "standard" | "custom")}>
+          <TabsList className="grid grid-cols-2 w-full sm:w-[520px]">
+            <TabsTrigger value="standard" className="gap-1.5">
+              <Settings2 className="w-3.5 h-3.5" />
+              Regras padrão
+              <span className="ml-1 text-[10px] font-mono bg-muted/60 px-1.5 py-0.5 rounded">
+                {standardRules.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="custom" className="gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              Regras personalizadas
+              <span className="ml-1 text-[10px] font-mono bg-muted/60 px-1.5 py-0.5 rounded">
+                {customRules.length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {activeTab === "custom" && (
+          <div className="glass-card p-4 border-l-2 border-l-primary/40">
+            <p className="text-sm text-foreground font-medium mb-1 flex items-center gap-1.5">
+              <Shield className="w-4 h-4 text-primary" />
+              Regras personalizadas (prioridade {CUSTOM_PRIORITY})
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Regras de sobreposição aplicadas por tipo de rateio ou item — Fiscal (IMP), Folha (FOL) e Reembolso.
+              Quando aplicáveis, elas prevalecem sobre a matriz normal de centro de custo e valor.
+            </p>
+          </div>
+        )}
+
         {/* Search & Filters */}
         <div className="glass-card p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
           <div className="relative flex-1 min-w-[200px]">
