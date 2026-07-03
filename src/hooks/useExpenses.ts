@@ -802,101 +802,53 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   const approveExpense = useCallback(
     async (expenseId: string, remarks?: string) => {
       const actor = session?.userName || "";
-      const actorEmail = actor.includes("@") ? actor : null;
 
-      // Carrega o estado atual + regra + níveis para decidir se ainda há níveis acima.
-      const { data: exp, error: expErr } = await (supabase
-        .from("expenses") as any)
-        .select("id, approval_rule_id, current_level_order, status")
-        .eq("id", expenseId)
-        .single();
-      if (expErr || !exp) throw expErr || new Error("Despesa não encontrada");
-      if (exp.status !== "pendente_aprovacao") {
-        throw new Error(
-          `Despesa não está pendente de aprovação (status atual: ${exp.status}).`,
-        );
-      }
-
-      const currentLevel = Number(exp.current_level_order || 1);
-      let levels: RuleLevelRow[] = [];
-      if (exp.approval_rule_id) {
-        const { data: lvls } = await supabase
-          .from("approval_rule_levels")
-          .select("*")
-          .eq("rule_id", exp.approval_rule_id)
-          .order("level_order", { ascending: true });
-        levels = (lvls || []) as RuleLevelRow[];
-      }
-
-      const totalLevels = levels.length || 1;
-      const isFinalLevel = currentLevel >= totalLevels;
-
-      // Registra a decisão deste nível
-      await logExpenseDecision(expenseId, "approved", {
-        approverName: actor,
-        approverEmail: actorEmail,
-        levelOrder: currentLevel,
-        remarks: remarks || null,
+      // Server-side authorization: the edge function verifies that the caller
+      // (SAP session or Cloud admin) is the designated approver for the
+      // CURRENT level before flipping the status. This is the security
+      // boundary — do NOT bypass it with a direct supabase.from("expenses")
+      // update, or any signed-in user could approve someone else's document.
+      const resp = await sapFunctionFetch("expense-approval-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expense_id: expenseId, action: "approve", remarks: remarks || undefined }),
       });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok || !payload?.ok) {
+        throw new Error(payload?.error || `Falha ao aprovar (HTTP ${resp.status})`);
+      }
 
-      if (!isFinalLevel) {
-        // Avança para o próximo nível — NÃO integra ao SAP ainda.
-        const nextLevel = levels.find((l) => l.level_order === currentLevel + 1);
-        const updates: any = {
-          current_level_order: currentLevel + 1,
-          current_approver: nextLevel?.approver_name || null,
-        };
-        if (remarks) updates.remarks = remarks;
-        const { error: updErr } = await supabase
-          .from("expenses")
-          .update(updates)
-          .eq("id", expenseId);
-        if (updErr) throw updErr;
-        // Notify next approver ASAP
-        if (nextLevel?.approver_name && nextLevel.approver_name !== "Administrador") {
-          const { data: exp3 } = await supabase
-            .from("expenses")
-            .select("supplier_name, total_amount, currency, company_db, requester_name")
-            .eq("id", expenseId)
-            .maybeSingle();
+      const finalized: boolean = !!payload.finalized;
+      const nextApproverName: string | null = payload.nextApproverName || null;
+      const exp3 = payload.expense || {};
+
+      if (!finalized) {
+        // Notify next approver ASAP (unchanged UX)
+        if (nextApproverName && nextApproverName !== "Administrador") {
           await createNotification({
-            user_identifier: nextLevel.approver_name,
+            user_identifier: nextApproverName,
             title: "Nova aprovação pendente",
-            body: `${(exp3 as any)?.requester_name || "Solicitante"} · ${(exp3 as any)?.supplier_name || ""} (${(exp3 as any)?.currency || "BRL"} ${Number((exp3 as any)?.total_amount || 0).toFixed(2)}) aguarda sua aprovação (nível ${currentLevel + 1}).`,
+            body: `${exp3.requester_name || "Solicitante"} · ${exp3.supplier_name || ""} (${exp3.currency || "BRL"} ${Number(exp3.total_amount || 0).toFixed(2)}) aguarda sua aprovação (nível ${payload.currentLevel || ""}).`,
             category: "approval",
-            company_db: (exp3 as any)?.company_db || undefined,
+            company_db: exp3.company_db || undefined,
             link: `/approvals`,
-            metadata: { expense_id: expenseId, level: currentLevel + 1 },
+            metadata: { expense_id: expenseId, level: payload.currentLevel },
           });
         }
         await fetchExpenses();
         return;
       }
 
-      // Último nível: aprova de fato e integra ao SAP
-      const updates: any = { status: "aprovado" };
-      if (remarks) updates.remarks = remarks;
-      const { error: err } = await supabase
-        .from("expenses")
-        .update(updates)
-        .eq("id", expenseId);
-      if (err) throw err;
-
-      // Notify requester of final approval
+      // Final level → notify requester and trigger SAP integration
       try {
-        const { data: exp4 } = await supabase
-          .from("expenses")
-          .select("requester_email, requester_name, supplier_name, total_amount, currency, company_db")
-          .eq("id", expenseId)
-          .maybeSingle();
-        const reqId = (exp4 as any)?.requester_email || (exp4 as any)?.requester_name;
+        const reqId = exp3.requester_email || exp3.requester_name;
         if (reqId) {
           await createNotification({
             user_identifier: reqId,
             title: "Pedido aprovado",
-            body: `Seu pedido "${(exp4 as any)?.supplier_name || ""}" (${(exp4 as any)?.currency || "BRL"} ${Number((exp4 as any)?.total_amount || 0).toFixed(2)}) foi aprovado em todos os níveis.`,
+            body: `Seu pedido "${exp3.supplier_name || ""}" (${exp3.currency || "BRL"} ${Number(exp3.total_amount || 0).toFixed(2)}) foi aprovado em todos os níveis.`,
             category: "approval",
-            company_db: (exp4 as any)?.company_db || undefined,
+            company_db: exp3.company_db || undefined,
             link: `/my-requests`,
             metadata: { expense_id: expenseId },
           });
@@ -951,23 +903,22 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
   const rejectExpense = useCallback(
     async (expenseId: string, remarks?: string) => {
-      const updates: any = { status: "rejeitado" };
-      if (remarks) updates.remarks = remarks;
-      const { error: err } = await supabase
-        .from("expenses")
-        .update(updates)
-        .eq("id", expenseId);
-      if (err) throw err;
-      const actor = session?.userName || "";
-      await logExpenseDecision(expenseId, "rejected", {
-        approverName: actor,
-        approverEmail: actor.includes("@") ? actor : null,
-        remarks: remarks || null,
+      // Same server-side authorization as approveExpense — never flip the
+      // status directly from the client.
+      const resp = await sapFunctionFetch("expense-approval-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expense_id: expenseId, action: "reject", remarks: remarks || undefined }),
       });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok || !payload?.ok) {
+        throw new Error(payload?.error || `Falha ao rejeitar (HTTP ${resp.status})`);
+      }
       await fetchExpenses();
     },
     [fetchExpenses, session]
   );
+
 
   useEffect(() => {
     fetchExpenses();
