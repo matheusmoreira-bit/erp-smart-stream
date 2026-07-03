@@ -216,6 +216,27 @@ async function invokeExpenseToSap(body: Record<string, unknown>) {
   return data;
 }
 
+/**
+ * Wrapper for all write operations that used to run as anon updates against
+ * public.expenses / expense_items / expense_attachments / expense_approval_log.
+ * The RLS on those tables is now closed (no anon INSERT/UPDATE/DELETE), so all
+ * mutations MUST go through `expense-mutation` which authorizes the caller
+ * against the SAP session (or Cloud admin JWT) and executes with service role.
+ */
+async function invokeExpenseMutation<T = any>(payload: Record<string, unknown>): Promise<T> {
+  const res = await sapFunctionFetch("expense-mutation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || (data && data.ok === false)) {
+    throw new Error(data?.error || `expense-mutation returned ${res.status}`);
+  }
+  return data as T;
+}
+
+
 /* ───────────────── Rule Evaluation ───────────────── */
 
 interface RuleCriterion {
@@ -330,19 +351,19 @@ async function logExpenseDecision(
   } = {},
 ) {
   try {
-    await supabase.from("expense_approval_log").insert({
+    await invokeExpenseMutation({
+      action: "log_decision",
       expense_id: expenseId,
       decision,
-      approver_name: opts.approverName ?? null,
-      approver_email: opts.approverEmail ?? null,
-      level_order: opts.levelOrder ?? null,
+      levelOrder: opts.levelOrder ?? null,
       remarks: opts.remarks ?? null,
-    } as any);
+    });
   } catch (e) {
-    // Não bloqueia o fluxo principal se o log falhar (ex.: RLS), só registra.
+    // Log-only path — never block the main flow if the audit write fails.
     console.warn("Falha ao registrar log de aprovação:", e);
   }
 }
+
 
 /* ───────────────── Hook ───────────────── */
 
@@ -478,20 +499,37 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
       const userIdentifier = session.userName.includes("@") ? session.userName : `${session.userName}`;
 
-      const { data: expense, error: err } = await supabase
-        .from("expenses")
-        .insert({
+      // Enrich items with items_group data client-side (server just persists
+      // whatever we send). SAP session is required to hit Service Layer.
+      const enrichedItems = input.items.map((item) => {
+        const code = (item.item_code || "").trim();
+        const meta = code ? enriched[code] : undefined;
+        return {
+          item_code: item.item_code || null,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          line_total: item.line_total,
+          cost_center: item.cost_center || input.cost_center || null,
+          project: item.project || input.project || null,
+          items_group_code: meta?.items_group_code ?? null,
+          items_group_name: meta?.items_group_name ?? null,
+        };
+      });
+
+      // Server-side create (RLS on expenses is closed; anon can no longer
+      // INSERT). The edge function overrides requester identity with the
+      // authenticated SAP user, so client cannot forge who owns the doc.
+      const createResp = await invokeExpenseMutation<{ ok: true; expense: any }>({
+        action: "create",
+        input: {
           supplier_code: input.supplier_code || null,
           supplier_name: input.supplier_name,
-          total_amount: totalAmount,
           currency: input.currency || "BRL",
           cost_center: input.cost_center || null,
           project: input.project || null,
           remarks: input.remarks || null,
-          status: status as any,
-          requester_name: session.userName,
-          requester_email: userIdentifier,
-          created_by_email: userIdentifier,
+          status,
           current_approver: currentApprover,
           approval_rule_id: matchedRuleId,
           origin,
@@ -500,66 +538,28 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           doc_type: input.doc_type || docType,
           doc_date: input.doc_date || null,
           due_date: input.due_date || null,
-        } as any)
-        .select()
-        .single();
-
-      if (err) throw err;
-
-      const createdId = (expense as any).id as string;
-      // Log de criação + envio para aprovação (quando aplicável)
-      await logExpenseDecision(createdId, "created", {
-        approverName: session.userName,
-        approverEmail: userIdentifier,
-        remarks: input.remarks || null,
+          items: enrichedItems,
+        },
       });
-      if (status === "pendente_aprovacao") {
-        await logExpenseDecision(createdId, "submitted", {
-          approverName: session.userName,
-          approverEmail: userIdentifier,
-          levelOrder: 1,
+      const expense = createResp.expense;
+      const createdId = expense.id as string;
+
+      if (status === "pendente_aprovacao" && currentApprover && currentApprover !== "Administrador") {
+        await createNotification({
+          user_identifier: currentApprover,
+          title: "Nova aprovação pendente",
+          body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação.`,
+          category: "approval",
+          company_db: session.companyDB,
+          link: `/approvals`,
+          metadata: { expense_id: createdId },
         });
-        if (currentApprover && currentApprover !== "Administrador") {
-          await createNotification({
-            user_identifier: currentApprover,
-            title: "Nova aprovação pendente",
-            body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação.`,
-            category: "approval",
-            company_db: session.companyDB,
-            link: `/approvals`,
-            metadata: { expense_id: createdId },
-          });
-        }
       }
 
-      if (input.items.length > 0) {
-        const { error: itemsErr } = await supabase.from("expense_items").insert(
-          input.items.map((item) => {
-            const code = (item.item_code || "").trim();
-            const e = code ? enriched[code] : undefined;
-            return {
-              expense_id: (expense as any).id,
-              item_code: item.item_code || null,
-              description: item.description,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              line_total: item.line_total,
-              cost_center: item.cost_center || input.cost_center || null,
-              project: item.project || input.project || null,
-              items_group_code: e?.items_group_code ?? null,
-              items_group_name: e?.items_group_name ?? null,
-            };
-          })
-        );
-        if (itemsErr) throw itemsErr;
-      }
-
-      // Upload attachments to storage and persist references so the SAP
-      // integration can later upload them to SAP B1 Attachments2.
+      // Upload attachments to storage (still client-side; bucket policies
+      // gate that), then register the rows through the edge function.
       if (input.files && input.files.length > 0) {
-        const expenseId = (expense as any).id;
         const attachmentRows: {
-          expense_id: string;
           file_path: string;
           file_name: string;
           file_size: number;
@@ -569,7 +569,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
         for (const file of input.files) {
           const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-          const path = `${expenseId}/${Date.now()}_${safeName}`;
+          const path = `${createdId}/${Date.now()}_${safeName}`;
           const { error: upErr } = await supabase.storage
             .from("expense-attachments")
             .upload(path, file, {
@@ -582,7 +582,6 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             continue;
           }
           attachmentRows.push({
-            expense_id: expenseId,
             file_path: path,
             file_name: file.name,
             file_size: file.size,
@@ -591,17 +590,19 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         }
 
         if (attachmentRows.length > 0) {
-          const { error: attErr } = await supabase
-            .from("expense_attachments")
-            .insert(attachmentRows);
-          if (attErr) {
+          try {
+            await invokeExpenseMutation({
+              action: "attachments_add",
+              expense_id: createdId,
+              attachments: attachmentRows,
+            });
+          } catch (attErr) {
             console.error("Falha ao registrar anexos:", attErr);
-            throw new Error(`Falha ao registrar anexos no banco: ${attErr.message}`);
+            throw new Error(`Falha ao registrar anexos no banco: ${attErr instanceof Error ? attErr.message : String(attErr)}`);
           }
         }
 
         if (failedUploads.length > 0) {
-          // Surface failures so the user knows the SAP integration won't have attachments.
           throw new Error(
             `Falha ao enviar ${failedUploads.length} anexo(s): ${failedUploads.join("; ")}`,
           );
@@ -613,6 +614,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     },
     [session, fetchExpenses, docType]
   );
+
 
   const updateExpense = useCallback(
     async (
@@ -626,103 +628,54 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     ) => {
       if (!session) throw new Error("Sessão SAP não encontrada");
 
-      // Load current expense to validate status
-      const { data: current, error: getErr } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("id", expenseId)
-        .single();
-      if (getErr) throw getErr;
-      const status = (current as any).status as ExpenseStatus;
-      const hasSapError = !!(current as any).sap_integration_error;
-      const alreadyInSap = !!((current as any).sap_doc_entry || (current as any).sap_doc_num);
-      const editableForFix = status === "aprovado" && hasSapError && !alreadyInSap;
-      if (status !== "rascunho" && status !== "pendente_aprovacao" && !editableForFix) {
-        throw new Error("Somente pedidos em rascunho, pendentes de aprovação ou aprovados com erro de integração podem ser alterados.");
-      }
-
-      const updates: any = {};
-      if (input.supplier_name !== undefined) updates.supplier_name = input.supplier_name;
-      if (input.supplier_code !== undefined) updates.supplier_code = input.supplier_code;
-      if (input.remarks !== undefined) updates.remarks = input.remarks;
-
-      if (input.items && input.items.length > 0) {
-        const totalAmount = input.items.reduce((s, i) => s + i.line_total, 0);
-        updates.total_amount = totalAmount;
-      }
-
-      // Quando o usuário edita após erro de integração, limpe o erro para
-      // permitir nova tentativa limpa.
-      if (editableForFix) {
-        updates.sap_integration_error = null;
-      }
-
-      if (Object.keys(updates).length > 0) {
-        const { error: upErr } = await supabase
-          .from("expenses")
-          .update(updates)
-          .eq("id", expenseId);
-        if (upErr) throw upErr;
-      }
-
+      let enrichedItems: any[] | undefined;
       if (input.items) {
-        const { error: delErr } = await supabase
-          .from("expense_items")
-          .delete()
-          .eq("expense_id", expenseId);
-        if (delErr) throw delErr;
-
         const enrichedUpd = await enrichItemsWithGroup(input.items, session);
-
-        const { error: insErr } = await supabase.from("expense_items").insert(
-          input.items.map((item) => {
-            const code = (item.item_code || "").trim();
-            const e = code ? enrichedUpd[code] : undefined;
-            return {
-              expense_id: expenseId,
-              item_code: item.item_code || null,
-              description: item.description,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              line_total: item.line_total,
-              cost_center: item.cost_center || null,
-              project: item.project || null,
-              items_group_code: e?.items_group_code ?? null,
-              items_group_name: e?.items_group_name ?? null,
-            };
-          })
-        );
-        if (insErr) throw insErr;
+        enrichedItems = input.items.map((item) => {
+          const code = (item.item_code || "").trim();
+          const e = code ? enrichedUpd[code] : undefined;
+          return {
+            item_code: item.item_code || null,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            line_total: item.line_total,
+            cost_center: item.cost_center || null,
+            project: item.project || null,
+            items_group_code: e?.items_group_code ?? null,
+            items_group_name: e?.items_group_name ?? null,
+          };
+        });
       }
 
-      const actorEmail = session.userName.includes("@") ? session.userName : session.userName;
-      await supabase.rpc("insert_audit_log", {
-        p_action: "update_expense",
-        p_entity_type: "expense",
-        p_entity_id: expenseId,
-        p_actor_email: actorEmail,
-        p_company_db: session.companyDB || null,
-        p_details: {
-          doc_type: (current as any).doc_type || docType,
-          previous_total: (current as any).total_amount,
-          new_total: updates.total_amount ?? (current as any).total_amount,
-          updated_fields: Object.keys(updates),
-          items_count: input.items?.length,
-        } as any,
+      // Ownership + status guards live in the edge function (RLS is closed).
+      await invokeExpenseMutation({
+        action: "update",
+        expense_id: expenseId,
+        input: {
+          supplier_name: input.supplier_name,
+          supplier_code: input.supplier_code,
+          remarks: input.remarks,
+          items: enrichedItems,
+        },
       });
 
       await fetchExpenses();
     },
-    [session, fetchExpenses, docType]
+    [session, fetchExpenses]
   );
 
   const submitForApproval = useCallback(
     async (expenseId: string) => {
-      // Pre-validate: ensure at least one approval rule applies
+      // Pre-validate: ensure at least one approval rule applies. This is a
+      // best-effort client check — the edge function still performs the
+      // real state transition (and its own ownership check).
+      let approverToNotify: string | null = null;
+      let notifyPayload: any = null;
       try {
         const { data: exp } = await supabase
           .from("expenses")
-          .select("total_amount, cost_center, company_db")
+          .select("total_amount, cost_center, company_db, current_approver, supplier_name, currency")
           .eq("id", expenseId)
           .maybeSingle();
         if (exp) {
@@ -740,43 +693,29 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
               "Nenhuma regra de aprovação aplicável encontrada para esta despesa. Verifique valor, centro de custo e regras ativas antes de submeter."
             );
           }
+          approverToNotify = (exp as any).current_approver || null;
+          notifyPayload = exp;
         }
       } catch (e) {
         if (e instanceof Error && e.message.includes("Nenhuma regra")) throw e;
-        // RPC failure should not block submission silently
         console.warn("check_applicable_approval_rules failed:", e);
       }
 
-      const { error: err } = await supabase
-        .from("expenses")
-        .update({ status: "pendente_aprovacao" as any })
-        .eq("id", expenseId);
-      if (err) throw err;
-      const actor = session?.userName || "";
-      await logExpenseDecision(expenseId, "submitted", {
-        approverName: actor,
-        approverEmail: actor.includes("@") ? actor : null,
-      });
-      // Notify current approver ASAP
-      try {
-        const { data: exp2 } = await supabase
-          .from("expenses")
-          .select("current_approver, supplier_name, total_amount, currency, company_db")
-          .eq("id", expenseId)
-          .maybeSingle();
-        const approver = (exp2 as any)?.current_approver as string | null;
-        if (approver && approver !== "Administrador") {
+      await invokeExpenseMutation({ action: "submit", expense_id: expenseId });
+
+      if (approverToNotify && approverToNotify !== "Administrador" && notifyPayload) {
+        try {
           await createNotification({
-            user_identifier: approver,
+            user_identifier: approverToNotify,
             title: "Nova aprovação pendente",
-            body: `${actor} enviou "${(exp2 as any).supplier_name}" (${(exp2 as any).currency || "BRL"} ${Number((exp2 as any).total_amount || 0).toFixed(2)}) para sua aprovação.`,
+            body: `${session?.userName || ""} enviou "${notifyPayload.supplier_name}" (${notifyPayload.currency || "BRL"} ${Number(notifyPayload.total_amount || 0).toFixed(2)}) para sua aprovação.`,
             category: "approval",
-            company_db: (exp2 as any).company_db || undefined,
+            company_db: notifyPayload.company_db || undefined,
             link: `/approvals`,
             metadata: { expense_id: expenseId },
           });
-        }
-      } catch { /* silent */ }
+        } catch { /* silent */ }
+      }
       await fetchExpenses();
     },
     [fetchExpenses, session]
@@ -784,20 +723,13 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
   const cancelExpense = useCallback(
     async (expenseId: string) => {
-      const { error: err } = await supabase
-        .from("expenses")
-        .update({ status: "cancelado" as any })
-        .eq("id", expenseId);
-      if (err) throw err;
-      const actor = session?.userName || "";
-      await logExpenseDecision(expenseId, "cancelled", {
-        approverName: actor,
-        approverEmail: actor.includes("@") ? actor : null,
-      });
+      await invokeExpenseMutation({ action: "cancel", expense_id: expenseId });
       await fetchExpenses();
     },
-    [fetchExpenses, session]
+    [fetchExpenses]
   );
+
+
 
   const approveExpense = useCallback(
     async (expenseId: string, remarks?: string) => {
