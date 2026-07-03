@@ -203,106 +203,133 @@ export default function NfEntrada() {
           </div>
         )}
 
-        <div className="rounded-md border border-border">
+        <div className="rounded-md border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8" />
                 <TableHead>NF</TableHead>
-                <TableHead>Série</TableHead>
                 <TableHead>Fornecedor</TableHead>
-                <TableHead>CNPJ</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
-                <TableHead>Emissão</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Importação</TableHead>
-                <TableHead>Despesa</TableHead>
-                <TableHead>PO SAP</TableHead>
-                <TableHead>NF SAP</TableHead>
-                <TableHead>Vínculo SAP</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead className="w-28">Emissão</TableHead>
+                <TableHead className="w-56">Status</TableHead>
+                <TableHead className="text-right w-[220px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
               )}
               {!loading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   Nenhuma NF importada ainda. Configure os secrets <code>MASTERTAX_BASE_URL</code> e <code>MASTERTAX_TOKEN</code> e clique em "Buscar Master Tax agora".
                 </TableCell></TableRow>
               )}
               {filtered.map((it) => {
                 const s = STATUS_LABELS[it.status];
+                const isOpen = expandedId === it.id;
+                const toggle = () => setExpandedId(isOpen ? null : it.id);
                 return (
-                  <TableRow key={it.id}>
-                    <TableCell className="font-mono text-xs">{it.numero_nf || "—"}</TableCell>
-                    <TableCell className="text-xs">{it.serie || "—"}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{it.nome_fornecedor || "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{it.cnpj_fornecedor || "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(it.valor_total)}</TableCell>
-                    <TableCell>{formatDate(it.data_emissao)}</TableCell>
-                    <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
-                    <TableCell>{formatDate(it.created_at)}</TableCell>
-                    <TableCell className="font-mono text-xs">{it.expense_id?.slice(0, 8) || "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{it.sap_po_draft_id || "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{it.sap_invoice_draft_id || "—"}</TableCell>
-                    <TableCell className="text-xs">
-                      {it.sap_matched_card_code || it.sap_match_reason ? (
-                        <div className="flex flex-col gap-0.5">
-                          {it.sap_matched_card_code && (
-                            <span className="font-mono">
-                              {it.sap_matched_card_code}
-                              {it.sap_matched_po_doc_entry && (
-                                <span className="text-muted-foreground">
-                                  {" "}· {it.sap_matched_po_is_draft ? "esboço" : "PC"} {it.sap_matched_po_doc_entry}
-                                </span>
-                              )}
-                            </span>
-                          )}
-                          {it.sap_match_reason && (
-                            <span className="text-muted-foreground truncate max-w-[200px]" title={it.sap_match_reason}>
-                              {it.sap_match_reason}
-                            </span>
-                          )}
+                  <>
+                    <TableRow
+                      key={it.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={toggle}
+                      data-state={isOpen ? "selected" : undefined}
+                    >
+                      <TableCell className="pr-0">
+                        <ChevronRight
+                          className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        <div>{it.numero_nf || "—"}</div>
+                        {it.serie && <div className="text-[10px] text-muted-foreground">série {it.serie}</div>}
+                      </TableCell>
+                      <TableCell className="max-w-[260px]">
+                        <div className="truncate">{it.nome_fornecedor || "—"}</div>
+                        {it.cnpj_fornecedor && (
+                          <div className="text-[10px] text-muted-foreground font-mono">{it.cnpj_fornecedor}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCurrency(it.valor_total)}</TableCell>
+                      <TableCell className="text-xs">{formatDate(it.data_emissao)}</TableCell>
+                      <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 justify-end">
+                          <Button variant="ghost" size="icon" title="Ver XML"
+                            disabled={busyId === it.id} onClick={() => openFile(it.id, "xml")}>
+                            <FileCode2 className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Ver PDF"
+                            disabled={busyId === it.id} onClick={() => openFile(it.id, "pdf")}>
+                            <FileText className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Histórico" onClick={() => setDetail(it)}>
+                            <History className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Refazer vínculo SAP (sem duplicar)"
+                            disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
+                            onClick={() => handleRematch(it.id)}>
+                            <Link2 className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Reprocessar"
+                            disabled={busyId === it.id} onClick={() => handleReprocess(it.id)}>
+                            <RotateCw className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Cancelar"
+                            disabled={busyId === it.id || it.status === "cancelled" || it.status === "completed"}
+                            onClick={() => handleCancel(it.id)}>
+                            <XCircle className="w-4 h-4" />
+                          </Button>
                         </div>
-                      ) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button variant="ghost" size="icon" title="Ver XML"
-                          disabled={busyId === it.id} onClick={() => openFile(it.id, "xml")}>
-                          <FileCode2 className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" title="Ver PDF"
-                          disabled={busyId === it.id} onClick={() => openFile(it.id, "pdf")}>
-                          <FileText className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" title="Histórico" onClick={() => setDetail(it)}>
-                          <History className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" title="Refazer vínculo SAP (sem duplicar)"
-                          disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
-                          onClick={() => handleRematch(it.id)}>
-                          <Link2 className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" title="Reprocessar"
-                          disabled={busyId === it.id} onClick={() => handleReprocess(it.id)}>
-                          <RotateCw className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" title="Cancelar"
-                          disabled={busyId === it.id || it.status === "cancelled" || it.status === "completed"}
-                          onClick={() => handleCancel(it.id)}>
-                          <XCircle className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      </TableCell>
+                    </TableRow>
+                    {isOpen && (
+                      <TableRow key={`${it.id}-details`} className="bg-muted/20 hover:bg-muted/20">
+                        <TableCell />
+                        <TableCell colSpan={6} className="py-4">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
+                            <DetailField label="Série" value={it.serie} />
+                            <DetailField label="CNPJ" value={it.cnpj_fornecedor} mono />
+                            <DetailField label="Importação" value={formatDate(it.created_at)} />
+                            <DetailField label="Despesa" value={it.expense_id?.slice(0, 8) || null} mono />
+                            <DetailField label="PO SAP" value={it.sap_po_draft_id} mono />
+                            <DetailField label="NF SAP" value={it.sap_invoice_draft_id} mono />
+                            <div className="col-span-2 md:col-span-2">
+                              <div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-1">Vínculo SAP</div>
+                              {it.sap_matched_card_code || it.sap_match_reason ? (
+                                <div className="flex flex-col gap-0.5">
+                                  {it.sap_matched_card_code && (
+                                    <span className="font-mono">
+                                      {it.sap_matched_card_code}
+                                      {it.sap_matched_po_doc_entry && (
+                                        <span className="text-muted-foreground">
+                                          {" "}· {it.sap_matched_po_is_draft ? "esboço" : "PC"} {it.sap_matched_po_doc_entry}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                  {it.sap_match_reason && (
+                                    <span className="text-muted-foreground">{it.sap_match_reason}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 );
               })}
             </TableBody>
           </Table>
         </div>
       </main>
+
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="max-w-3xl">
