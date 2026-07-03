@@ -39,6 +39,15 @@ function formatDate(s: string | null) {
   return new Date(s).toLocaleDateString("pt-BR");
 }
 
+function DetailField({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
+  return (
+    <div>
+      <div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-1">{label}</div>
+      <div className={mono ? "font-mono" : ""}>{value || <span className="text-muted-foreground">—</span>}</div>
+    </div>
+  );
+}
+
 export default function NfEntrada() {
   const navigate = useNavigate();
   const { toast } = useToast();
