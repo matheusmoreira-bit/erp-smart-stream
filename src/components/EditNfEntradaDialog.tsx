@@ -108,7 +108,7 @@ export function EditNfEntradaDialog({ item, open, onOpenChange, onSaved }: EditN
         step: "manual_edit",
         message: `Edição manual: data ${dataEmissao}, valor ${valorNum ?? "—"}, fornecedor ${supplier?.name || "—"}`,
         actor: "manual:user",
-        payload: patch as unknown as Record<string, unknown>,
+        payload: JSON.parse(JSON.stringify(patch)),
       });
 
       toast({ title: "NF atualizada" });
