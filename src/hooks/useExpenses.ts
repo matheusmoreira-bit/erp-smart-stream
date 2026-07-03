@@ -216,6 +216,27 @@ async function invokeExpenseToSap(body: Record<string, unknown>) {
   return data;
 }
 
+/**
+ * Wrapper for all write operations that used to run as anon updates against
+ * public.expenses / expense_items / expense_attachments / expense_approval_log.
+ * The RLS on those tables is now closed (no anon INSERT/UPDATE/DELETE), so all
+ * mutations MUST go through `expense-mutation` which authorizes the caller
+ * against the SAP session (or Cloud admin JWT) and executes with service role.
+ */
+async function invokeExpenseMutation<T = any>(payload: Record<string, unknown>): Promise<T> {
+  const res = await sapFunctionFetch("expense-mutation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || (data && data.ok === false)) {
+    throw new Error(data?.error || `expense-mutation returned ${res.status}`);
+  }
+  return data as T;
+}
+
+
 /* ───────────────── Rule Evaluation ───────────────── */
 
 interface RuleCriterion {
