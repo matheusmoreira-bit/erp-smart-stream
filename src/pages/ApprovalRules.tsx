@@ -646,7 +646,8 @@ export default function ApprovalRulesPage() {
 
   const filteredRules = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rules.filter((r) => {
+    const source = activeTab === "custom" ? customRules : standardRules;
+    return source.filter((r) => {
       if (docTypeFilter !== "all" && (r.doc_type || "both") !== docTypeFilter) return false;
       if (statusFilter === "active" && !r.is_active) return false;
       if (statusFilter === "inactive" && r.is_active) return false;
@@ -671,7 +672,7 @@ export default function ApprovalRulesPage() {
         return true;
       return false;
     });
-  }, [rules, search, docTypeFilter, statusFilter]);
+  }, [standardRules, customRules, activeTab, search, docTypeFilter, statusFilter]);
 
   useEffect(() => {
     if (!session) navigate("/");
