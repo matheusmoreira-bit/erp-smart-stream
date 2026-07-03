@@ -141,6 +141,31 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     if (rc && rc !== companyDb) return json(400, { error: "Regra pertence a outra empresa" });
   }
 
+  // Self-approval guard: when the requester matches the level's approver,
+  // skip forward to the next level. If every level matches, fall back to
+  // Juliana Gavineli (global validator, all companies).
+  let resolvedApprover: string | null = input.current_approver || null;
+  let resolvedApproverEmail: string | null = null;
+  let resolvedLevel = 1;
+  let fallbackUsed = false;
+  if (status === "pendente_aprovacao" && ruleId) {
+    const { data: lvls } = await admin
+      .from("approval_rule_levels")
+      .select("level_order, approver_name, approver_email")
+      .eq("rule_id", ruleId)
+      .order("level_order", { ascending: true });
+    const picked = pickApproverSkippingRequester(
+      (lvls || []) as any,
+      requesterName,
+      requesterEmail,
+      1,
+    );
+    resolvedApprover = picked.approver_name || resolvedApprover;
+    resolvedApproverEmail = picked.approver_email;
+    resolvedLevel = picked.level_order;
+    fallbackUsed = picked.fallback_used;
+  }
+
   const insertPayload: Record<string, unknown> = {
     supplier_code: input.supplier_code || null,
     supplier_name: input.supplier_name || "",
@@ -153,7 +178,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     requester_name: requesterName,
     requester_email: requesterEmail,
     created_by_email: requesterEmail,
-    current_approver: input.current_approver || null,
+    current_approver: resolvedApprover,
     approval_rule_id: ruleId,
     origin: input.origin || "manual",
     company_db: companyDb,
@@ -161,7 +186,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     doc_type: input.doc_type || "purchase",
     doc_date: input.doc_date || null,
     due_date: input.due_date || null,
-    current_level_order: status === "pendente_aprovacao" ? 1 : null,
+    current_level_order: status === "pendente_aprovacao" ? resolvedLevel : null,
   };
 
   const { data: expense, error: expErr } = await admin
