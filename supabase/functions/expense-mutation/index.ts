@@ -348,9 +348,34 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     return json(409, { error: `Despesa não está em rascunho (status: ${current.status})` });
   }
 
+  // Recompute approver with self-approval guard on submit.
+  let resolvedLevel = current.current_level_order || 1;
+  let resolvedApprover: string | null = current.current_approver || null;
+  let fallbackUsed = false;
+  if (current.approval_rule_id) {
+    const { data: lvls } = await admin
+      .from("approval_rule_levels")
+      .select("level_order, approver_name, approver_email")
+      .eq("rule_id", current.approval_rule_id)
+      .order("level_order", { ascending: true });
+    const picked = pickApproverSkippingRequester(
+      (lvls || []) as any,
+      current.requester_name,
+      current.requester_email,
+      resolvedLevel,
+    );
+    resolvedLevel = picked.level_order;
+    resolvedApprover = picked.approver_name || resolvedApprover;
+    fallbackUsed = picked.fallback_used;
+  }
+
   const { error } = await admin
     .from("expenses")
-    .update({ status: "pendente_aprovacao", current_level_order: current.current_level_order || 1 })
+    .update({
+      status: "pendente_aprovacao",
+      current_level_order: resolvedLevel,
+      current_approver: resolvedApprover,
+    })
     .eq("id", expenseId);
   if (error) return json(500, { error: `Falha ao submeter: ${error.message}` });
 
@@ -359,6 +384,10 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     decision: "submitted",
     approver_name: caller.identity,
     approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
+    level_order: resolvedLevel,
+    remarks: fallbackUsed
+      ? `Solicitante coincide com o(s) aprovador(es) da regra — direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
+      : null,
   } as any);
 
   return json(200, { ok: true, expense: current });
