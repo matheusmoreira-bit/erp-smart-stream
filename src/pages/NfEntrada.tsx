@@ -287,6 +287,10 @@ export default function NfEntrada() {
                             disabled={busyId === it.id} onClick={() => handleReprocess(it.id)}>
                             <RotateCw className="w-4 h-4" />
                           </Button>
+                          <Button variant="ghost" size="icon" title="Editar"
+                            onClick={() => setEditItem(it)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" title="Cancelar"
                             disabled={busyId === it.id || it.status === "cancelled" || it.status === "completed"}
                             onClick={() => handleCancel(it.id)}>
