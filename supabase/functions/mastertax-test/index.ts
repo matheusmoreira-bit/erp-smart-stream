@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
         quantidade: "1",
         ordenar: "dataEmissao",
         sentido: "desc",
-        tipo: "Prestador",
+        tipo: "Tomador",
         retencoes: "todas",
       });
       const target = `${baseUrl}/api/notas-servico?${params.toString()}`;
