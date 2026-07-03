@@ -179,6 +179,12 @@ function ExpenseDetailModal({
                 <p className="text-xs text-muted-foreground">Data de Criação</p>
                 <p className="text-foreground">{formatDate(expense.created_at)}</p>
               </div>
+              {expense.due_date && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Data de Vencimento</p>
+                  <p className="text-foreground">{formatDate(expense.due_date)}</p>
+                </div>
+              )}
               {expense.current_approver && (
                 <div>
                   <p className="text-xs text-muted-foreground">Aprovador Atual</p>
