@@ -81,17 +81,22 @@ export function EditNfEntradaDialog({ item, open, onOpenChange, onSaved }: EditN
     }
     setSaving(true);
     try {
-      const patch: Record<string, unknown> = {
+      const valorNum = valorTotal ? Number(valorTotal) : null;
+      const patch = {
         numero_nf: numero || null,
         serie: serie || null,
         data_emissao: dataEmissao,
-        valor_total: valorTotal ? Number(valorTotal) : null,
+        valor_total: valorNum,
+        ...(supplier
+          ? {
+              nome_fornecedor: supplier.name || null,
+              ...(supplier.extra
+                ? { cnpj_fornecedor: supplier.extra.replace(/\D/g, "") || null }
+                : {}),
+              ...(supplier.code ? { sap_matched_card_code: supplier.code } : {}),
+            }
+          : {}),
       };
-      if (supplier) {
-        patch.nome_fornecedor = supplier.name || null;
-        if (supplier.extra) patch.cnpj_fornecedor = supplier.extra.replace(/\D/g, "") || null;
-        if (supplier.code) patch.sap_matched_card_code = supplier.code;
-      }
       const { error } = await supabase
         .from("nf_entrada_imports")
         .update(patch)
@@ -101,9 +106,9 @@ export function EditNfEntradaDialog({ item, open, onOpenChange, onSaved }: EditN
       await supabase.from("nf_entrada_logs").insert({
         import_id: item.id,
         step: "manual_edit",
-        message: `Edição manual: data ${dataEmissao}, valor ${patch.valor_total ?? "—"}, fornecedor ${supplier?.name || "—"}`,
+        message: `Edição manual: data ${dataEmissao}, valor ${valorNum ?? "—"}, fornecedor ${supplier?.name || "—"}`,
         actor: "manual:user",
-        payload: patch,
+        payload: patch as unknown as Record<string, unknown>,
       });
 
       toast({ title: "NF atualizada" });
