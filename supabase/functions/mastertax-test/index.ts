@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
         quantidade: "1",
         ordenar: "dataEmissao",
         sentido: "desc",
-        tipo: "Prestador",
+        tipo: "Tomador",
         retencoes: "todas",
       });
       const target = `${baseUrl}/api/notas-servico?${params.toString()}`;
@@ -149,8 +149,13 @@ Deno.serve(async (req) => {
       try { parsed = JSON.parse(bodyText); } catch { parsed = null; }
       let totalNotas: number | null = null;
       if (parsed && typeof parsed === "object") {
-        const meta = parsed.meta || parsed.pagination || parsed;
-        if (typeof meta?.total === "number") totalNotas = meta.total;
+        const candidates = [parsed?.retorno, parsed?.meta, parsed?.pagination, parsed];
+        for (const c of candidates) {
+          if (c && typeof c === "object" && typeof (c as any).total === "number") {
+            totalNotas = (c as any).total;
+            break;
+          }
+        }
       }
       if (resp.ok) {
         totalOk++;
