@@ -330,7 +330,7 @@ export default function NfEntrada() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>
