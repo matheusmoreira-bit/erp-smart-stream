@@ -228,7 +228,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       decision: "submitted",
       approver_name: caller.identity,
       approver_email: caller.email || (caller.identity.includes("@") ? caller.identity : null),
-      level_order: 1,
+      level_order: resolvedLevel,
+      remarks: fallbackUsed
+        ? `Solicitante coincide com o(s) aprovador(es) da regra — direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
+        : (resolvedLevel > 1
+          ? `Nível(is) anterior(es) puladod(s): solicitante era o aprovador designado.`
+          : null),
     } as any);
   }
 
