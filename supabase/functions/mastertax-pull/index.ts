@@ -158,6 +158,7 @@ async function fetchInvoicesForEmpresa(
       break;
     }
     const raw = await resp.text().catch(() => "");
+    console.log(`[mastertax-pull] resp status=${resp.status} bodyPreview=${raw.slice(0,200)}`);
     if (!resp.ok) {
       errors.push(`[${empresaId}] HTTP ${resp.status}: ${raw.slice(0, 160)}`);
       break;
