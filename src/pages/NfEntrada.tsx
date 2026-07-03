@@ -239,9 +239,8 @@ export default function NfEntrada() {
                 const isOpen = expandedId === it.id;
                 const toggle = () => setExpandedId(isOpen ? null : it.id);
                 return (
-                  <>
+                  <Fragment key={it.id}>
                     <TableRow
-                      key={it.id}
                       className="cursor-pointer hover:bg-muted/40"
                       onClick={toggle}
                       data-state={isOpen ? "selected" : undefined}
