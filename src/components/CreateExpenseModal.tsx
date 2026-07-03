@@ -782,8 +782,13 @@ export function CreateExpenseModal({
         setDraftId(null);
       }
       onClose();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao criar despesa");
+    } catch (e: any) {
+      console.error("Erro ao criar despesa:", e);
+      const msg =
+        (e && (e.message || e.error_description || e.details || e.hint)) ||
+        (typeof e === "string" ? e : "") ||
+        "Erro ao criar despesa";
+      toast.error(msg);
     } finally {
       setIsCreating(false);
     }
