@@ -176,9 +176,20 @@ export interface CreateExpenseInput {
   doc_type?: ExpenseDocType;
   doc_date?: string;
   due_date?: string;
+  rateio_type?: RateioType | null;
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
 }
+
+export type RateioType = "padrao" | "folha" | "imposto" | "reembolso" | "viagens";
+
+export const RATEIO_TYPE_LABELS: Record<RateioType, string> = {
+  padrao: "Não (Padrão)",
+  folha: "Folha",
+  imposto: "Imposto",
+  reembolso: "Reembolso",
+  viagens: "Viagens",
+};
 
 const STATUS_LABELS: Record<ExpenseStatus, string> = {
   rascunho: "Rascunho",
