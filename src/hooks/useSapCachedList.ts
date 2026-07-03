@@ -95,7 +95,7 @@ export function useSapCachedList({
 
       // 3. Only cache non-empty results
       if (rows.length > 0) {
-        const expiresAt = new Date(Date.now() + CACHE_TTL_MS).toISOString();
+        const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
         await supabase
           .from("sap_cache")
           .upsert(
