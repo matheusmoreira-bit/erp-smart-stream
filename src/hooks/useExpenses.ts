@@ -584,6 +584,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           doc_type: input.doc_type || docType,
           doc_date: input.doc_date || null,
           due_date: input.due_date || null,
+          rateio_type: input.rateio_type || null,
           items: enrichedItems,
         },
       });
