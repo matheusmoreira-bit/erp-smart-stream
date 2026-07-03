@@ -351,19 +351,19 @@ async function logExpenseDecision(
   } = {},
 ) {
   try {
-    await supabase.from("expense_approval_log").insert({
+    await invokeExpenseMutation({
+      action: "log_decision",
       expense_id: expenseId,
       decision,
-      approver_name: opts.approverName ?? null,
-      approver_email: opts.approverEmail ?? null,
-      level_order: opts.levelOrder ?? null,
+      levelOrder: opts.levelOrder ?? null,
       remarks: opts.remarks ?? null,
-    } as any);
+    });
   } catch (e) {
-    // Não bloqueia o fluxo principal se o log falhar (ex.: RLS), só registra.
+    // Log-only path — never block the main flow if the audit write fails.
     console.warn("Falha ao registrar log de aprovação:", e);
   }
 }
+
 
 /* ───────────────── Hook ───────────────── */
 
