@@ -208,6 +208,8 @@ function ExpenseDetailModal({
                     <thead>
                       <tr className="bg-muted/30 border-b border-border">
                         <th className="text-left py-2 px-3 text-muted-foreground">Descrição</th>
+                        <th className="text-left py-2 px-3 text-muted-foreground">Centro de Custo</th>
+                        <th className="text-left py-2 px-3 text-muted-foreground">Projeto</th>
                         <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
                         <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
                         <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
@@ -217,6 +219,8 @@ function ExpenseDetailModal({
                       {expense.items.map((item, i) => (
                         <tr key={i} className="border-b border-border/50">
                           <td className="py-2 px-3 text-foreground">{item.description}</td>
+                          <td className="py-2 px-3 text-foreground">{item.cost_center || expense.cost_center || "—"}</td>
+                          <td className="py-2 px-3 text-foreground">{item.project || expense.project || "—"}</td>
                           <td className="py-2 px-3 text-right font-mono">{item.quantity}</td>
                           <td className="py-2 px-3 text-right font-mono">{formatCurrency(item.unit_price)}</td>
                           <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(item.line_total)}</td>
