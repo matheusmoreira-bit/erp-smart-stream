@@ -74,8 +74,8 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const companyDb = String(body.company_db || "").trim();
-    const fromUser = String(body.from_user_code || "").trim().toLowerCase();
-    const toUser = String(body.to_user_code || "").trim().toLowerCase();
+    const fromUser = String(body.from_user_code || "").trim();
+    const toUser = String(body.to_user_code || "").trim();
     const costCenter = String(body.cost_center || "").trim();
     const dryRun = body.dry_run !== false; // default true; require explicit dry_run=false to execute
     const reason = String(body.reason || "Transferência administrativa de aprovações pendentes").slice(0, 500);
