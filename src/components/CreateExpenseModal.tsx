@@ -870,6 +870,21 @@ export function CreateExpenseModal({
         void deleteDraft(draftId);
         setDraftId(null);
       }
+
+      // Se houver grupos de fornecedores adiados (regra 2 — anexos com
+      // fornecedores diferentes), abrimos automaticamente o próximo em vez
+      // de fechar o modal, mantendo o encadeamento pedido pelo usuário.
+      if (deferredGroups.length > 0) {
+        const [next, ...rest] = deferredGroups;
+        resetFormForNextDeferred(next);
+        setDeferredGroups(rest);
+        toast.info(
+          `Agora criando a despesa de ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} restante(s))` : ""}.`,
+          { duration: 6000 },
+        );
+        return;
+      }
+
       onClose();
     } catch (e: any) {
       console.error("Erro ao criar despesa:", e);
