@@ -528,8 +528,19 @@ function ExpenseCard({
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
           <Calendar className="w-3.5 h-3.5 text-primary/70" />
-          <span>{formatDate(expense.created_at)}</span>
+          <span>Criado: {formatDate(expense.created_at)}</span>
         </div>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Calendar className="w-3.5 h-3.5 text-primary/70" />
+          <span>
+            Doc: {expense.doc_date ? formatDate(expense.doc_date) : "—"}
+            {"  ·  "}
+            Vence: <span className={expense.due_date ? "text-foreground font-medium" : "text-destructive font-medium"}>
+              {expense.due_date ? formatDate(expense.due_date) : "sem data"}
+            </span>
+          </span>
+        </div>
+
       </div>
     </motion.div>
   );
