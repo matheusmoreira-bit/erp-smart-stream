@@ -1102,10 +1102,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onApprove={handleApprove}
         onReject={handleReject}
         onViewIntegration={handleViewIntegration}
+        onAddAttachments={async (id, files) => { await addAttachments(id, files); }}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         canEdit={selectedExpense ? canCancel(selectedExpense) : false}
         canRetrySap={session.erpType === "sap" && (isAdmin || (selectedExpense ? canCancel(selectedExpense) : false))}
         canApprove={selectedExpense ? canApprove(selectedExpense) : false}
+        canAddAttachments={
+          !!selectedExpense &&
+          (selectedExpense.status === "rascunho" || selectedExpense.status === "pendente_aprovacao") &&
+          (isAdmin || canCancel(selectedExpense))
+        }
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
         isRetrying={isRetrying}
