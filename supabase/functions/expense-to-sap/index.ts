@@ -548,7 +548,10 @@ Deno.serve(async (req) => {
 
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
-      DocDate: docDate,
+      // DocDate = data de lançamento no SAP: sempre HOJE.
+      // TaxDate = data do documento (emissão da NF), vem do formulário.
+      // DocDueDate = data de vencimento, vem do formulário.
+      DocDate: today,
       DocDueDate: dueDate,
       TaxDate: docDate,
       BPL_IDAssignedToInvoice: branchId,
