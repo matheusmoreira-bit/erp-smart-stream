@@ -978,7 +978,9 @@ function ApprovalDetailModal({
               )}
               {isActioning
                 ? "Processando…"
-                : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
+                : actionError
+                  ? "Tentar novamente"
+                  : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
