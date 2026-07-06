@@ -481,17 +481,34 @@ function ApprovalDetailModal({
   const confirmRiskAction = async () => {
     if (!riskConfirm || !doc || isActioning) return;
     setActionError(null);
+    setErrorKind(null);
     try {
       await onAction(doc.approvalRequestId, riskConfirm.action, remarks, {
         idempotencyKey: riskConfirm.idempotencyKey,
       });
       setRiskConfirm(null);
     } catch (e) {
-      // Mantém o modal aberto para o usuário revisar e tentar novamente
-      // — o retry reutiliza a mesma Idempotency-Key.
+      // Mantém o modal aberto. Distingue erro da mutação (retry reexecuta
+      // com mesma Idempotency-Key) de erro de refresh (retry só atualiza).
+      const isRefresh = e instanceof Error && e.name === "RefreshError";
+      setErrorKind(isRefresh ? "refresh" : "mutation");
       setActionError(e instanceof Error ? e.message : "Erro ao processar ação");
     }
   };
+
+  const retryRefreshFromModal = async () => {
+    if (isActioning) return;
+    setActionError(null);
+    setErrorKind(null);
+    try {
+      await onRetryRefresh();
+      setRiskConfirm(null);
+    } catch (e) {
+      setErrorKind("refresh");
+      setActionError(e instanceof Error ? e.message : "Erro ao atualizar a lista");
+    }
+  };
+
 
   return (
     <>
