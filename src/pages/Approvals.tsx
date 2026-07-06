@@ -951,10 +951,19 @@ function ApprovalDetailModal({
                   </div>
                 )}
               </div>
-            </AlertDialogDescription>
+          </AlertDialogDescription>
           </AlertDialogHeader>
+          {actionError && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive">
+              <XOctagon className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="text-xs space-y-1 min-w-0">
+                <p className="font-semibold">Falha ao processar a ação</p>
+                <p className="break-words whitespace-pre-wrap">{actionError}</p>
+              </div>
+            </div>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActioning}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isActioning}>{actionError ? "Fechar" : "Cancelar"}</AlertDialogCancel>
             <Button
               onClick={confirmRiskAction}
               disabled={isActioning}
