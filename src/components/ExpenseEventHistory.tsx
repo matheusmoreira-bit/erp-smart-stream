@@ -343,7 +343,17 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
                   <Icon className={`w-3 h-3 ${it.color}`} />
                 </span>
                 <div className="flex items-baseline justify-between gap-2">
-                  <div className="text-xs font-medium">{it.label}</div>
+                  <div className="text-xs font-medium flex items-center gap-1.5">
+                    {it.label}
+                    {it.reconstructed && (
+                      <span
+                        title="Evento reconstruído a partir dos dados do pedido (anterior ao log detalhado)"
+                        className="text-[9px] font-normal uppercase tracking-wider text-muted-foreground border border-border rounded px-1 py-0.5"
+                      >
+                        reconstruído
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-muted-foreground font-mono shrink-0">
                     {formatDateTime(it.when)}
                   </div>
