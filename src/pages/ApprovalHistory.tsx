@@ -136,7 +136,7 @@ export default function ApprovalHistory() {
               className="pl-9"
             />
           </div>
-          {isAdmin && (
+          {canViewAll && (
             <Select value={scope} onValueChange={(v) => setScope(v as "mine" | "all")}>
               <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
