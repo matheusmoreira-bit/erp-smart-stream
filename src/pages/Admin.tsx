@@ -51,6 +51,7 @@ import AuditLogTable from "@/components/AuditLogTable";
 import IntegrationsTab from "@/components/IntegrationsTab";
 import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
+import TransferApprovalsTool from "@/components/TransferApprovalsTool";
 import {
   Select,
   SelectContent,
