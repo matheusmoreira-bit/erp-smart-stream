@@ -1521,72 +1521,110 @@ export default function ApprovalsPage() {
   ) => {
     if (!session) return;
     setActionPhase("sending");
+    const internalDoc = (selectedDoc as any)?.__internalId;
     try {
-      // Internal expense doc has negative approvalRequestId and __internalId
-      const internalDoc = (selectedDoc as any)?.__internalId;
-      if (internalDoc) {
-        if (action === "approve") {
-          await approveExpense(internalDoc, remarks, opts?.idempotencyKey);
-          toast.success("Despesa interna aprovada!");
+      // ===== Fase 1: mutação (aprovar/rejeitar) =====
+      try {
+        if (internalDoc) {
+          if (action === "approve") {
+            await approveExpense(internalDoc, remarks, opts?.idempotencyKey);
+            toast.success("Despesa interna aprovada!");
+          } else {
+            await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
+            toast.success("Despesa interna rejeitada.");
+          }
         } else {
-          await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
-          toast.success("Despesa interna rejeitada.");
+          const endpoint = `ApprovalRequests(${code})`;
+          const body: Record<string, unknown> = {
+            ApprovalRequestDecisions: [{
+              Status: action === "approve" ? "ardApproved" : "ardNotApproved",
+              Remarks: remarks || undefined,
+            }],
+          };
+          await sapAction(session, endpoint, "PATCH", body);
+          clearClientCache();
+          toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
+
+          const doc = approvals.find((a) => a.approvalRequestId === code);
+          const { logAuditAction } = await import("@/hooks/useAuditLog");
+          await logAuditAction({
+            action: action === "approve" ? "approve" : "reject",
+            entity_type: "approval_request",
+            entity_id: String(code),
+            actor_email: session.userName,
+            company_db: session.companyDB,
+            details: {
+              docNum: doc?.docNum,
+              docType: doc?.docTypeName,
+              cardName: doc?.cardName,
+              docTotal: doc?.docTotal,
+              currency: doc?.currency,
+              approver: doc?.currentApprover,
+              isSuperUser,
+              remarks,
+            },
+          });
         }
-        // Aguarda o refresh terminar ANTES de fechar o modal, garantindo
-        // que a lista já reflita o novo status quando o usuário voltar.
-        setActionPhase("refreshing");
-        await refreshExpenses();
-        setSelectedDoc(null);
-        return;
+      } catch (mutationErr) {
+        console.error("Approval action error:", mutationErr);
+        const message = mutationErr instanceof Error ? mutationErr.message : "Erro ao processar ação";
+        toast.error(message);
+        throw mutationErr instanceof Error ? mutationErr : new Error(message);
       }
 
-      const endpoint = `ApprovalRequests(${code})`;
-      const body: Record<string, unknown> = {
-        ApprovalRequestDecisions: [{
-          Status: action === "approve" ? "ardApproved" : "ardNotApproved",
-          Remarks: remarks || undefined,
-        }],
-      };
-
-      await sapAction(session, endpoint, "PATCH", body);
-      clearClientCache();
-      toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
-
-      const doc = approvals.find((a) => a.approvalRequestId === code);
-      const { logAuditAction } = await import("@/hooks/useAuditLog");
-      await logAuditAction({
-        action: action === "approve" ? "approve" : "reject",
-        entity_type: "approval_request",
-        entity_id: String(code),
-        actor_email: session.userName,
-        company_db: session.companyDB,
-        details: {
-          docNum: doc?.docNum,
-          docType: doc?.docTypeName,
-          cardName: doc?.cardName,
-          docTotal: doc?.docTotal,
-          currency: doc?.currency,
-          approver: doc?.currentApprover,
-          isSuperUser,
-          remarks,
-        },
-      });
-
-      // Aguarda o refresh do SAP terminar antes de fechar o modal — assim
-      // a lista de aprovações já reflete o novo estado (linha removida ou
-      // aprovador atualizado) no momento em que o usuário volta para ela.
+      // ===== Fase 2: refresh da lista =====
+      // A ação já foi registrada com sucesso. Se o refresh falhar, mantemos o
+      // modal aberto e sinalizamos com um erro específico para o usuário poder
+      // apenas retentar a atualização (sem reexecutar a decisão).
       setActionPhase("refreshing");
-      await refresh();
-      setSelectedDoc(null);
-    } catch (e) {
-      console.error("Approval action error:", e);
-      const message = e instanceof Error ? e.message : "Erro ao processar ação";
-      toast.error(message);
-      throw e instanceof Error ? e : new Error(message);
+      try {
+        if (internalDoc) {
+          await refreshExpenses();
+        } else {
+          await refresh();
+        }
+        setSelectedDoc(null);
+      } catch (refreshErr) {
+        console.error("Refresh após ação falhou:", refreshErr);
+        const detail = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+        toast.error(
+          `A ação foi registrada, mas não conseguimos atualizar a lista: ${detail}`,
+        );
+        const err = new Error(
+          "A decisão foi registrada, mas falhou ao atualizar a lista. Tente atualizar novamente.",
+        );
+        (err as Error & { name: string }).name = "RefreshError";
+        throw err;
+      }
     } finally {
       setActionPhase("idle");
     }
   };
+
+  const handleRetryRefresh = async () => {
+    const internalDoc = (selectedDoc as any)?.__internalId;
+    setActionPhase("refreshing");
+    try {
+      if (internalDoc) {
+        await refreshExpenses();
+      } else {
+        await refresh();
+      }
+      setSelectedDoc(null);
+    } catch (refreshErr) {
+      console.error("Retry refresh falhou:", refreshErr);
+      const detail = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+      toast.error(`Ainda não foi possível atualizar a lista: ${detail}`);
+      const err = new Error(
+        "Não foi possível atualizar a lista. Verifique sua conexão e tente novamente.",
+      );
+      (err as Error & { name: string }).name = "RefreshError";
+      throw err;
+    } finally {
+      setActionPhase("idle");
+    }
+  };
+
 
   const handleDelegate = async (params: { userInternalKey: number; userName: string; userEmail: string; reason: string }) => {
     if (!session || !delegationDoc) return;
