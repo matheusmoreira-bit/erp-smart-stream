@@ -922,7 +922,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     currentStage: "Aprovação Interna",
     status: "pending",
     docDate: e.created_at,
-    dueDate: "",
+    dueDate: e.due_date || "",
     remarks: e.remarks || "",
     approvalModel: "Regra Interna",
     daysOpen: Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000),
