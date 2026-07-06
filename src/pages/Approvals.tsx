@@ -461,15 +461,19 @@ function ApprovalDetailModal({
     // Sempre confirmar antes de aprovar/rejeitar — mostra resumo do que
     // está sendo decidido e destaca quando é super-usuário agindo em
     // documento de outro aprovador.
+    setActionError(null);
     setRiskConfirm({ action });
   };
 
   const confirmRiskAction = async () => {
     if (!riskConfirm || !doc || isActioning) return;
+    setActionError(null);
     try {
       await onAction(doc.approvalRequestId, riskConfirm.action, remarks);
-    } finally {
       setRiskConfirm(null);
+    } catch (e) {
+      // Mantém o modal aberto para o usuário revisar e tentar novamente.
+      setActionError(e instanceof Error ? e.message : "Erro ao processar ação");
     }
   };
 
