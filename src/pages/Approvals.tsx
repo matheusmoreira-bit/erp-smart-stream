@@ -884,7 +884,19 @@ function ApprovalDetailModal({
 
       {/* Confirmação de aprovação / rejeição — sempre exibida com resumo */}
       <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v && !isActioning) { setRiskConfirm(null); setActionError(null); } }}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          role="alertdialog"
+          aria-modal="true"
+          aria-busy={isActioning || undefined}
+          onKeyDown={(e) => {
+            // Atalho: Ctrl/Cmd+Enter confirma a ação (evita disparo acidental
+            // com Enter simples). Esc é tratado nativamente pelo Radix.
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !isActioning) {
+              e.preventDefault();
+              void confirmRiskAction();
+            }
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               {riskConfirm?.action === "approve" ? (
@@ -950,11 +962,18 @@ function ApprovalDetailModal({
                     </p>
                   </div>
                 )}
+                <p className="text-[10px] text-muted-foreground pt-1">
+                  Atalhos: <kbd className="px-1 py-0.5 rounded border border-border bg-muted font-mono">Esc</kbd> cancela · <kbd className="px-1 py-0.5 rounded border border-border bg-muted font-mono">Ctrl</kbd>+<kbd className="px-1 py-0.5 rounded border border-border bg-muted font-mono">Enter</kbd> confirma.
+                </p>
               </div>
           </AlertDialogDescription>
           </AlertDialogHeader>
           {actionError && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive">
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+            >
               <XOctagon className="w-4 h-4 mt-0.5 shrink-0" />
               <div className="text-xs space-y-1 min-w-0">
                 <p className="font-semibold">Falha ao processar a ação</p>
@@ -963,10 +982,17 @@ function ApprovalDetailModal({
             </div>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActioning}>{actionError ? "Fechar" : "Cancelar"}</AlertDialogCancel>
+            <AlertDialogCancel
+              disabled={isActioning}
+              autoFocus={!actionError}
+            >
+              {actionError ? "Fechar" : "Cancelar"}
+            </AlertDialogCancel>
             <Button
               onClick={confirmRiskAction}
               disabled={isActioning}
+              autoFocus={!!actionError}
+              aria-keyshortcuts="Control+Enter Meta+Enter"
               className={`gap-1.5 ${riskConfirm?.action === "reject" ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
             >
               {isActioning ? (
