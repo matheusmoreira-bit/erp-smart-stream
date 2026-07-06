@@ -1557,7 +1557,15 @@ export function CreateExpenseModal({
             <Button variant="outline" onClick={requestClose} disabled={isCreating}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="gap-1.5">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              {isSales ? "Criar Pedido de Venda" : "Criar Despesa"}
+              {isCreating
+                ? "Salvando…"
+                : isProcessing
+                  ? "Aguardando IA…"
+                  : deferredGroups.length > 0
+                    ? `${isSales ? "Criar Pedido" : "Criar Despesa"} (1 de ${deferredGroups.length + 1})`
+                    : isSales
+                      ? "Criar Pedido de Venda"
+                      : "Criar Despesa"}
             </Button>
           </div>
         </div>
