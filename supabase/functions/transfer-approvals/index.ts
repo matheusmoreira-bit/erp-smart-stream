@@ -76,14 +76,19 @@ Deno.serve(async (req) => {
     const companyDb = String(body.company_db || "").trim();
     const fromUser = String(body.from_user_code || "").trim().toLowerCase();
     const toUser = String(body.to_user_code || "").trim().toLowerCase();
+    const costCenter = String(body.cost_center || "").trim();
     const dryRun = body.dry_run !== false; // default true; require explicit dry_run=false to execute
     const reason = String(body.reason || "Transferência administrativa de aprovações pendentes").slice(0, 500);
 
-    if (!companyDb || !fromUser || !toUser) {
-      return new Response(JSON.stringify({ error: "company_db, from_user_code e to_user_code são obrigatórios" }),
+    if (!companyDb || !toUser) {
+      return new Response(JSON.stringify({ error: "company_db e to_user_code são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (fromUser === toUser) {
+    if (!fromUser && !costCenter) {
+      return new Response(JSON.stringify({ error: "informe from_user_code e/ou cost_center como filtro" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (fromUser && fromUser === toUser) {
       return new Response(JSON.stringify({ error: "from_user_code e to_user_code devem ser diferentes" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -106,42 +111,61 @@ Deno.serve(async (req) => {
     const sapCompanyDb = (creds.company_db && !/^https?:\/\//i.test(creds.company_db)) ? creds.company_db : companyDb;
 
     const s = await sapLogin(baseUrl, sapCompanyDb, creds.username, creds.password);
-    const results: any = { dryRun, transferred: [], skipped: [], errors: [] };
+    const results: any = { dryRun, filter: { fromUser: fromUser || null, costCenter: costCenter || null }, transferred: [], skipped: [], errors: [] };
 
     try {
-      // Resolve InternalKey for both users (case-insensitive on UserCode)
+      // Resolve InternalKey for users (case-insensitive on UserCode)
       const usersResp = await sap(s, "Users?$select=InternalKey,UserCode,UserName,eMail&$top=1000");
       const users: Array<{ InternalKey: number; UserCode: string; UserName?: string; eMail?: string }> = usersResp.value || [];
       const findUser = (code: string) => users.find((u) => (u.UserCode || "").toLowerCase() === code);
-      const from = findUser(fromUser);
+      const from = fromUser ? findUser(fromUser) : null;
       const to = findUser(toUser);
-      if (!from) throw new Error(`Usuário SAP de origem '${fromUser}' não encontrado`);
+      if (fromUser && !from) throw new Error(`Usuário SAP de origem '${fromUser}' não encontrado`);
       if (!to) throw new Error(`Usuário SAP de destino '${toUser}' não encontrado`);
-      results.fromUser = { code: from.UserCode, internalKey: from.InternalKey, email: from.eMail };
+      if (from) results.fromUser = { code: from.UserCode, internalKey: from.InternalKey, email: from.eMail };
       results.toUser = { code: to.UserCode, internalKey: to.InternalKey, email: to.eMail };
 
       // List pending approval requests. Status: rsPending is the pending queue.
-      // We fetch and then filter by pending decision UserID matching `from`.
       const reqResp = await sap(
         s,
-        "ApprovalRequests?$filter=Status eq 'rsPending'&$select=Code,DocEntry,DocumentType,OriginatorID,Status&$expand=ApprovalRequestDecisions&$top=500",
+        "ApprovalRequests?$filter=Status eq 'rsPending'&$select=Code,DocEntry,DocumentType,DraftEntry,OriginatorID,Status&$expand=ApprovalRequestDecisions&$top=500",
       );
       const requests: any[] = reqResp.value || [];
+
+      // Draft cost-center cache to avoid duplicate GETs
+      const draftCcCache = new Map<number, string[]>();
+      async function draftCostCenters(docEntry: number): Promise<string[]> {
+        if (draftCcCache.has(docEntry)) return draftCcCache.get(docEntry)!;
+        try {
+          const d = await sap(s, `Drafts(${docEntry})?$select=DocumentLines`);
+          const lines: any[] = d?.DocumentLines || [];
+          const ccs = Array.from(new Set(lines.map((l) => String(l?.CostingCode || "").trim()).filter(Boolean)));
+          draftCcCache.set(docEntry, ccs);
+          return ccs;
+        } catch {
+          draftCcCache.set(docEntry, []);
+          return [];
+        }
+      }
 
       for (const r of requests) {
         try {
           const decisions: any[] = r.ApprovalRequestDecisions || [];
           const pending = decisions.find((d) => d.Status === "asWithoutDecision" || d.Status === "asPending");
           if (!pending) { results.skipped.push({ code: r.Code, reason: "sem decisão pendente" }); continue; }
-          if (Number(pending.UserID) !== Number(from.InternalKey)) {
-            // not lucas's turn — skip
-            continue;
+          if (from && Number(pending.UserID) !== Number(from.InternalKey)) continue;
+          if (Number(pending.UserID) === Number(to.InternalKey)) continue; // já é do destino
+
+          if (costCenter) {
+            const draftEntry = Number(r.DraftEntry || r.DocEntry);
+            const ccs = await draftCostCenters(draftEntry);
+            if (!ccs.includes(costCenter)) continue;
           }
 
           if (dryRun) {
             results.transferred.push({
               code: r.Code, docEntry: r.DocEntry, documentType: r.DocumentType,
-              step: pending.ApprovalRequestStep, wouldSetUserID: to.InternalKey,
+              step: pending.ApprovalRequestStep, currentUserID: pending.UserID, wouldSetUserID: to.InternalKey,
             });
             continue;
           }
@@ -152,11 +176,14 @@ Deno.serve(async (req) => {
             ],
           });
 
+          const fromLabel = from?.UserCode || `UserID ${pending.UserID}`;
+          const reasonSuffix = costCenter ? ` (CC ${costCenter})` : "";
+
           // Notification for the new approver
           await sb.from("notifications").insert({
             user_identifier: to.UserCode.toLowerCase(),
             title: "Aprovação transferida para você",
-            body: `A aprovação ${r.DocumentType ?? ""}${r.DocEntry ? " #" + r.DocEntry : ""} do usuário ${from.UserCode} foi transferida para você.`,
+            body: `A aprovação ${r.DocumentType ?? ""}${r.DocEntry ? " #" + r.DocEntry : ""} foi transferida para você${reasonSuffix}.`,
             category: "approval",
             company_db: companyDb,
             link: "/aprovacoes",
@@ -164,8 +191,9 @@ Deno.serve(async (req) => {
               approvalRequestCode: r.Code,
               docEntry: r.DocEntry,
               documentType: r.DocumentType,
-              transferredFrom: from.UserCode,
+              transferredFrom: fromLabel,
               transferredBy: caller.email || caller.id,
+              costCenter: costCenter || null,
               reason,
             },
           });
@@ -180,15 +208,16 @@ Deno.serve(async (req) => {
             company_db: companyDb,
             details: {
               docEntry: r.DocEntry, documentType: r.DocumentType,
-              from: from.UserCode, to: to.UserCode,
-              fromInternalKey: from.InternalKey, toInternalKey: to.InternalKey,
+              from: fromLabel, to: to.UserCode,
+              fromInternalKey: pending.UserID, toInternalKey: to.InternalKey,
+              costCenter: costCenter || null,
               reason,
             },
           });
 
           results.transferred.push({
             code: r.Code, docEntry: r.DocEntry, documentType: r.DocumentType,
-            step: pending.ApprovalRequestStep, newUserID: to.InternalKey,
+            step: pending.ApprovalRequestStep, previousUserID: pending.UserID, newUserID: to.InternalKey,
           });
         } catch (e) {
           results.errors.push({ code: r.Code, error: (e as Error).message });
