@@ -1,0 +1,3 @@
+UPDATE public.expenses SET status = 'cancelado', updated_at = now() WHERE id = '03af9154-f9a4-49ca-9031-2e2682ace3bf';
+INSERT INTO public.expense_approval_log (expense_id, level_order, approver_name, approver_email, decision, remarks, decided_at, created_at)
+VALUES ('03af9154-f9a4-49ca-9031-2e2682ace3bf', 0, 'matheus.moreira', 'matheus.moreira', 'cancelled', 'Cancelamento manual - será relançado manualmente no SAP', now(), now());
