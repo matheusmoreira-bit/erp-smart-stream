@@ -181,10 +181,12 @@ Deno.serve(async (req) => {
         });
       }
       if ((prior as any).completed_at && (prior as any).status_code) {
-        return json(
-          (prior as any).status_code,
-          (prior as any).response ?? { ok: true, replayed: true },
-        );
+        // Replay: reentrega a MESMA resposta gravada, marcada com
+        // `replayed: true` para que o cliente possa avisar o usuário que a
+        // ação já havia sido processada anteriormente (evita confusão sobre
+        // duplicidade em retries por perda de conexão).
+        const cached = (prior as any).response ?? { ok: true };
+        return json((prior as any).status_code, { ...cached, replayed: true });
       }
       return json(409, {
         error: "Requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
