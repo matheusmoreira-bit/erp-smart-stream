@@ -50,7 +50,11 @@ const DECISION_META: Record<LogDecision, { label: string; icon: React.ComponentT
 function formatDateTime(iso?: string | null): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    return new Date(iso).toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: "America/Sao_Paulo",
+    });
   } catch {
     return iso;
   }
