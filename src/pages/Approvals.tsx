@@ -1288,7 +1288,7 @@ export default function ApprovalsPage() {
 
   // Filter: por padrão mostra apenas aprovações em que o usuário é aprovador OU solicitante.
   // Admin pode usar o toggle "Ver todas" para visualizar todos os lançamentos.
-  const effectiveShowAll = isAdmin && showAll;
+  const effectiveShowAll = canToggleShowAll && showAll;
   const sessionUser = (session.userName || "").toLowerCase().trim();
   const codeEq = (code?: string) => !!code && code.toLowerCase().trim() === sessionUser;
   const userApprovals = effectiveShowAll
