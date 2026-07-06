@@ -779,6 +779,50 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     [fetchExpenses]
   );
 
+  /**
+   * Anexa novos arquivos a uma despesa já criada (útil para pedidos em
+   * fluxo de aprovação). Autorização (owner / admin / super) é validada
+   * no edge function; aqui apenas orquestramos upload + registro.
+   */
+  const addAttachments = useCallback(
+    async (expenseId: string, files: File[]) => {
+      if (!files.length) return;
+      const rows: Array<{ file_path: string; file_name: string; file_size: number; mime_type: string }> = [];
+      const failed: string[] = [];
+      for (const file of files) {
+        try {
+          const fd = new FormData();
+          fd.append("expense_id", expenseId);
+          fd.append("file", file, file.name);
+          const res = await sapFunctionFetch("expense-attachment-storage", { method: "POST", body: fd });
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data?.ok) throw new Error(data?.error || `upload retornou ${res.status}`);
+          rows.push({
+            file_path: data.file_path,
+            file_name: data.file_name,
+            file_size: data.file_size,
+            mime_type: data.mime_type,
+          });
+        } catch (err) {
+          failed.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (rows.length > 0) {
+        await invokeExpenseMutation({
+          action: "attachments_add",
+          expense_id: expenseId,
+          attachments: rows,
+        });
+      }
+      await fetchExpenses();
+      if (failed.length > 0) {
+        throw new Error(`Falha ao enviar ${failed.length} anexo(s): ${failed.join("; ")}`);
+      }
+      return { inserted: rows.length };
+    },
+    [fetchExpenses]
+  );
+
 
 
   const approveExpense = useCallback(
@@ -918,5 +962,6 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     approveExpense,
     rejectExpense,
     retrySapIntegration,
+    addAttachments,
   };
 }

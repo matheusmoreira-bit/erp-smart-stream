@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
@@ -124,10 +124,12 @@ function ExpenseDetailModal({
   onApprove,
   onReject,
   onViewIntegration,
+  onAddAttachments,
   canCancel,
   canEdit,
   canRetrySap,
   canApprove,
+  canAddAttachments,
   isSubmitting,
   isCancelling,
   isRetrying,
@@ -143,16 +145,20 @@ function ExpenseDetailModal({
   onApprove: (expense: Expense) => void;
   onReject: (expense: Expense) => void;
   onViewIntegration: () => void;
+  onAddAttachments: (id: string, files: File[]) => Promise<void>;
   canCancel: boolean;
   canEdit: boolean;
   canRetrySap: boolean;
   canApprove: boolean;
+  canAddAttachments: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
   isRetrying: boolean;
   isActioning: boolean;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   if (!expense) return null;
 
   const showSubmit = expense.status === "rascunho";
@@ -272,13 +278,53 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            {expense.attachments && expense.attachments.length > 0 && (
+            {((expense.attachments && expense.attachments.length > 0) || canAddAttachments) && (
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <Paperclip className="w-3 h-3" /> Anexos
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                    <Paperclip className="w-3 h-3" /> Anexos
+                  </p>
+                  {canAddAttachments && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length === 0) return;
+                          e.target.value = "";
+                          setUploading(true);
+                          try {
+                            await onAddAttachments(expense.id, files);
+                            toast.success(`${files.length} anexo(s) enviado(s)`);
+                          } catch (err: any) {
+                            toast.error(err?.message || "Falha no upload");
+                          } finally {
+                            setUploading(false);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs px-2"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {uploading ? (
+                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Enviando…</>
+                        ) : (
+                          <><Plus className="w-3 h-3 mr-1" /> Anexar arquivos</>
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </div>
                 <div className="space-y-1">
-                  {expense.attachments.map((att) => (
+                  {(expense.attachments || []).map((att) => (
                     <button
                       key={att.id}
                       type="button"
@@ -307,6 +353,9 @@ function ExpenseDetailModal({
                       )}
                     </button>
                   ))}
+                  {(!expense.attachments || expense.attachments.length === 0) && (
+                    <p className="text-[11px] text-muted-foreground italic">Nenhum anexo ainda.</p>
+                  )}
                 </div>
               </div>
             )}
@@ -551,7 +600,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const { session, logout } = useSap();
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense } = useExpenses(mode);
+  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
   const [search, setSearch] = useState("");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -1053,10 +1102,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onApprove={handleApprove}
         onReject={handleReject}
         onViewIntegration={handleViewIntegration}
+        onAddAttachments={async (id, files) => { await addAttachments(id, files); }}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         canEdit={selectedExpense ? canCancel(selectedExpense) : false}
         canRetrySap={session.erpType === "sap" && (isAdmin || (selectedExpense ? canCancel(selectedExpense) : false))}
         canApprove={selectedExpense ? canApprove(selectedExpense) : false}
+        canAddAttachments={
+          !!selectedExpense &&
+          (selectedExpense.status === "rascunho" || selectedExpense.status === "pendente_aprovacao") &&
+          (isAdmin || canCancel(selectedExpense))
+        }
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
         isRetrying={isRetrying}
