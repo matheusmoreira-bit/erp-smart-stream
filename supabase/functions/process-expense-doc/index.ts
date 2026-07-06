@@ -191,6 +191,8 @@ serve(async (req) => {
 Analise os documentos enviados e extraia as seguintes informações em formato JSON:
 
 {
+  "is_fiscal_document": true,
+  "document_kind": "invoice | receipt | nota_fiscal | comprovante_pagamento | boleto | contrato | outro",
   "supplier_name": "Nome do fornecedor/empresa emissora (quem VENDEU/prestou serviço)",
   "supplier_cnpj": "Identificação fiscal do fornecedor — CNPJ/CPF (BR), EIN (US), VAT-ID (UE/UK), RFC (MX), CUIT (AR), RUT (CL/UY), NIF/CIF (ES/PT), etc. Sem máscara/pontuação para BR; mantém o formato original para internacional.",
   "supplier_country": "ISO-3166 alpha-2 do país do fornecedor (ex.: 'BR', 'US', 'GB', 'DE'). 'BR' por padrão se claramente brasileiro; deduza de moeda/idioma/endereço para outros casos.",
