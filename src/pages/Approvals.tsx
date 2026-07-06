@@ -463,9 +463,11 @@ function ApprovalDetailModal({
     setRiskConfirm({ action });
   };
 
-  const confirmRiskAction = () => {
-    if (riskConfirm && doc) {
-      onAction(doc.approvalRequestId, riskConfirm.action, remarks);
+  const confirmRiskAction = async () => {
+    if (!riskConfirm || !doc || isActioning) return;
+    try {
+      await onAction(doc.approvalRequestId, riskConfirm.action, remarks);
+    } finally {
       setRiskConfirm(null);
     }
   };
