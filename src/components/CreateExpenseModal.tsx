@@ -1374,7 +1374,7 @@ export function CreateExpenseModal({
           </div>
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose} disabled={isCreating}>Cancelar</Button>
+            <Button variant="outline" onClick={requestClose} disabled={isCreating}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="gap-1.5">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               {isSales ? "Criar Pedido de Venda" : "Criar Despesa"}
