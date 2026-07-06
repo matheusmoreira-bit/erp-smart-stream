@@ -883,7 +883,7 @@ function ApprovalDetailModal({
       </Dialog>
 
       {/* Confirmação de aprovação / rejeição — sempre exibida com resumo */}
-      <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v && !isActioning) setRiskConfirm(null); }}>
+      <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v && !isActioning) { setRiskConfirm(null); setActionError(null); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
