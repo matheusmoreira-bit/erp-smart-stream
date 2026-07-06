@@ -1015,11 +1015,13 @@ function ApprovalDetailModal({
               ) : (
                 <XCircle className="w-4 h-4" />
               )}
-              {isActioning
-                ? "Processando…"
-                : actionError
-                  ? "Tentar novamente"
-                  : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
+              {actionPhase === "sending"
+                ? "Enviando decisão…"
+                : actionPhase === "refreshing"
+                  ? "Atualizando lista…"
+                  : actionError
+                    ? "Tentar novamente"
+                    : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
