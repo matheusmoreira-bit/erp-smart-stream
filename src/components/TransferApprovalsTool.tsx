@@ -91,11 +91,12 @@ export default function TransferApprovalsTool() {
         <h3 className="font-semibold text-foreground">Transferir aprovações pendentes</h3>
       </div>
       <p className="text-xs text-muted-foreground">
-        Reatribui todas as aprovações SAP pendentes de um usuário para outro dentro da mesma empresa
-        e envia notificação in-app ao novo aprovador. Faça o preview antes de executar.
+        Reatribui aprovações SAP pendentes para outro aprovador dentro da mesma empresa e envia
+        notificação in-app. Filtre por usuário de origem e/ou centro de custo (informe pelo menos um).
+        Faça o preview antes de executar.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Empresa</Label>
           <Select value={companyDb} onValueChange={setCompanyDb}>
@@ -110,12 +111,16 @@ export default function TransferApprovalsTool() {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">De (UserCode SAP)</Label>
-          <Input value={fromUser} onChange={(e) => setFromUser(e.target.value)} placeholder="lucas.pereira" />
-        </div>
-        <div className="space-y-1.5">
           <Label className="text-xs">Para (UserCode SAP)</Label>
           <Input value={toUser} onChange={(e) => setToUser(e.target.value)} placeholder="juliana.gavineli" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">De (UserCode SAP) — opcional</Label>
+          <Input value={fromUser} onChange={(e) => setFromUser(e.target.value)} placeholder="ex: lucas.silva" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Centro de custo — opcional</Label>
+          <Input value={costCenter} onChange={(e) => setCostCenter(e.target.value)} placeholder="ex: 1.8.1.4" />
         </div>
       </div>
 
@@ -123,6 +128,7 @@ export default function TransferApprovalsTool() {
         <Label className="text-xs">Motivo (aparece no audit log)</Label>
         <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </div>
+
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" disabled={loading} onClick={() => run(true)}>
