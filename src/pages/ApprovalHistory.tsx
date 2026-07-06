@@ -5,6 +5,7 @@ import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, C
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { useApprovalHistory, type ApprovalHistoryRow } from "@/hooks/useApprovalHistory";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useCompanies } from "@/hooks/useCompanies";
