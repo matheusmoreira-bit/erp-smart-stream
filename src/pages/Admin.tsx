@@ -844,6 +844,8 @@ export default function Admin() {
 
         {activeTab === "admin_users" && <AdminUsersManager />}
 
+        {activeTab === "tools" && <TransferApprovalsTool />}
+
         {activeTab === "audit" && (
           <>
             <div className="flex items-center justify-between mb-6">
