@@ -962,5 +962,6 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     approveExpense,
     rejectExpense,
     retrySapIntegration,
+    addAttachments,
   };
 }
