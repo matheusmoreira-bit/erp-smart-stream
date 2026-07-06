@@ -462,17 +462,28 @@ function ApprovalDetailModal({
     // está sendo decidido e destaca quando é super-usuário agindo em
     // documento de outro aprovador.
     setActionError(null);
-    setRiskConfirm({ action });
+    // Gera uma chave de idempotência por INTENÇÃO do usuário (um clique em
+    // Aprovar/Rejeitar). A mesma chave é reutilizada em "Tentar novamente"
+    // após erro, garantindo que o servidor não processe a mesma ação duas
+    // vezes caso a primeira resposta tenha se perdido.
+    const idempotencyKey =
+      (typeof crypto !== "undefined" && "randomUUID" in crypto)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setRiskConfirm({ action, idempotencyKey });
   };
 
   const confirmRiskAction = async () => {
     if (!riskConfirm || !doc || isActioning) return;
     setActionError(null);
     try {
-      await onAction(doc.approvalRequestId, riskConfirm.action, remarks);
+      await onAction(doc.approvalRequestId, riskConfirm.action, remarks, {
+        idempotencyKey: riskConfirm.idempotencyKey,
+      });
       setRiskConfirm(null);
     } catch (e) {
-      // Mantém o modal aberto para o usuário revisar e tentar novamente.
+      // Mantém o modal aberto para o usuário revisar e tentar novamente
+      // — o retry reutiliza a mesma Idempotency-Key.
       setActionError(e instanceof Error ? e.message : "Erro ao processar ação");
     }
   };
