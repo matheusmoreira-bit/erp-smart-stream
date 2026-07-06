@@ -1919,13 +1919,22 @@ export default function ApprovalsPage() {
         formatCostCenter={formatCostCenter}
         rules={rules}
         isAdmin={isAdmin}
-        canApprove={
-          !!selectedDoc && (
-            isAdmin ||
+        canApprove={(() => {
+          if (!selectedDoc) return false;
+          // Bloqueia auto-aprovação: quem criou/solicitou o documento
+          // nunca pode aprovar, mesmo sendo admin ou SAP Superuser.
+          const isRequester =
+            codeEq(selectedDoc.requesterCode) ||
+            approverMatches(selectedDoc.requester, session.userName);
+          if (isRequester) return false;
+          const isDesignated =
             codeEq(selectedDoc.approverCode) ||
-            approverMatches(selectedDoc.currentApprover, session.userName)
-          )
-        }
+            approverMatches(selectedDoc.currentApprover, session.userName) ||
+            matchesSubstitutedOfficial(selectedDoc.currentApprover) ||
+            (!!selectedDoc.approverEmail &&
+              officialIdentifiers.includes(selectedDoc.approverEmail.toLowerCase()));
+          return isAdmin || isDesignated;
+        })()}
       />
 
 

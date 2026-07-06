@@ -292,6 +292,36 @@ Deno.serve(async (req) => {
     });
   }
 
+  // ── Self-approval guard ───────────────────────────────────────────────
+  // Ninguém — nem admins/super-usuários — pode aprovar um documento que
+  // ele próprio criou. Rejeição continua permitida (útil para cancelar o
+  // próprio pedido). Só bloqueia a ação "approve".
+  if (action === "approve") {
+    const requesterEmail = normalize((exp as any).requester_email || "");
+    const requesterName = normalize((exp as any).requester_name || "");
+    const callerNorm = normalize(callerIdentity || "");
+    const callerEmailNorm = normalize(callerEmail || "");
+    const isSelfApproval =
+      (!!requesterEmail &&
+        (requesterEmail === callerEmailNorm ||
+          requesterEmail === callerNorm ||
+          emailPrefix(requesterEmail) === emailPrefix(callerEmailNorm || callerNorm))) ||
+      (!!requesterName &&
+        (requesterName === callerNorm ||
+          emailPrefix(requesterName) === emailPrefix(callerNorm)));
+    if (isSelfApproval) {
+      console.warn("[expense-approval-action] self-approval blocked", {
+        expenseId,
+        caller: callerIdentity,
+        requesterEmail,
+        requesterName,
+      });
+      return json(403, {
+        error: "Você não pode aprovar um documento que você mesmo criou.",
+      });
+    }
+  }
+
   const actor = callerIdentity || callerEmail || "cloud-admin";
   const actorEmail = callerEmail || (actor.includes("@") ? actor : null);
   const substitutionNote = substitution
