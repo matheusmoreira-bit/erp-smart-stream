@@ -2048,6 +2048,7 @@ export default function ApprovalsPage() {
         onAction={handleApprovalAction}
         onDelegate={(d) => setDelegationDoc(d)}
         isActioning={isActioning}
+        actionPhase={actionPhase}
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
         currentUserEmail={session.userName}
