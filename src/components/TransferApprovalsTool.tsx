@@ -163,7 +163,7 @@ export default function TransferApprovalsTool() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Executar transferência de aprovações?"
-        description={`Todas as aprovações SAP pendentes de ${fromUser} serão reatribuídas para ${toUser} em ${companyDb}. Essa ação é registrada no audit log.`}
+        description={`As aprovações SAP pendentes${fromUser ? ` de ${fromUser}` : ""}${costCenter ? ` no CC ${costCenter}` : ""} serão reatribuídas para ${toUser} em ${companyDb}. Essa ação é registrada no audit log.`}
         confirmLabel="Transferir"
         destructive
         onConfirm={() => run(false)}
