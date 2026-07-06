@@ -114,10 +114,19 @@ Deno.serve(async (req) => {
     const results: any = { dryRun, filter: { fromUser: fromUser || null, costCenter: costCenter || null }, transferred: [], skipped: [], errors: [] };
 
     try {
-      // Resolve InternalKey for users (case-insensitive on UserCode)
+      // Resolve InternalKey for users. Match by UserCode or UserName (case-insensitive)
+      // so the caller can pass either the SAP login or the display name (e.g. "Lucas Pereira").
       const usersResp = await sap(s, "Users?$select=InternalKey,UserCode,UserName,eMail&$top=1000");
       const users: Array<{ InternalKey: number; UserCode: string; UserName?: string; eMail?: string }> = usersResp.value || [];
-      const findUser = (code: string) => users.find((u) => (u.UserCode || "").toLowerCase() === code);
+      const norm = (v: string) => v.trim().toLowerCase();
+      const findUser = (needle: string) => {
+        const n = norm(needle);
+        return users.find((u) =>
+          norm(u.UserCode || "") === n ||
+          norm(u.UserName || "") === n ||
+          norm((u.eMail || "").split("@")[0]) === n,
+        );
+      };
       const from = fromUser ? findUser(fromUser) : null;
       const to = findUser(toUser);
       if (fromUser && !from) throw new Error(`Usuário SAP de origem '${fromUser}' não encontrado`);
