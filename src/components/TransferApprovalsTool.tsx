@@ -61,8 +61,9 @@ export default function TransferApprovalsTool() {
       const { data, error } = await supabase.functions.invoke("transfer-approvals", {
         body: {
           company_db: companyDb,
-          from_user_code: fromUser.trim(),
+          from_user_code: fromUser.trim() || undefined,
           to_user_code: toUser.trim(),
+          cost_center: costCenter.trim() || undefined,
           reason,
           dry_run: dryRun,
         },
