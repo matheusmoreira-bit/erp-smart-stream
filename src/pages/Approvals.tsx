@@ -1530,6 +1530,7 @@ export default function ApprovalsPage() {
         }
         // Aguarda o refresh terminar ANTES de fechar o modal, garantindo
         // que a lista já reflita o novo status quando o usuário voltar.
+        setActionPhase("refreshing");
         await refreshExpenses();
         setSelectedDoc(null);
         return;
