@@ -51,6 +51,7 @@ import AuditLogTable from "@/components/AuditLogTable";
 import IntegrationsTab from "@/components/IntegrationsTab";
 import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
+import TransferApprovalsTool from "@/components/TransferApprovalsTool";
 import {
   Select,
   SelectContent,
@@ -363,7 +364,7 @@ export default function Admin() {
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   // Audit log
-  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions" | "admin_users">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions" | "admin_users" | "tools">("companies");
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
   const auditCompanyDb = auditCompanyFilter === "all" ? undefined : auditCompanyFilter;
   const { entries: auditEntries, isLoading: auditLoading, refresh: auditRefresh } = useAuditLog(auditCompanyDb);
@@ -686,6 +687,17 @@ export default function Admin() {
             Administradores
           </button>
           <button
+            onClick={() => setActiveTab("tools")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "tools"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <RefreshCw className="w-4 h-4 inline mr-1.5" />
+            Ferramentas
+          </button>
+          <button
             onClick={() => navigate("/backoffice/audit-trail")}
             className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -831,6 +843,8 @@ export default function Admin() {
         {activeTab === "permissions" && <PermissionManager />}
 
         {activeTab === "admin_users" && <AdminUsersManager />}
+
+        {activeTab === "tools" && <TransferApprovalsTool />}
 
         {activeTab === "audit" && (
           <>
