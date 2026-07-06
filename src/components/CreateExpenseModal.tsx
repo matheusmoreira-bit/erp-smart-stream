@@ -1570,19 +1570,72 @@ export function CreateExpenseModal({
                 abriremos automaticamente uma nova despesa para o próximo.
               </p>
               <div className="space-y-2">
-                {supplierPicker?.groups.map((g) => (
-                  <button
-                    key={g.supplierKey}
-                    type="button"
-                    onClick={() => chooseFirstSupplierGroup(g.supplierKey)}
-                    className="w-full rounded-md border border-border bg-muted/30 hover:bg-muted/60 transition p-3 text-left"
-                  >
-                    <div className="font-medium">{g.supplierLabel}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {g.docs.length} documento(s): {g.docs.map((d) => d.file.name).join(", ")}
-                    </div>
-                  </button>
-                ))}
+                {supplierPicker?.groups.map((g) => {
+                  // Resumo por fornecedor: contagem de arquivos, linhas e total estimado.
+                  const lineCount = g.docs.reduce(
+                    (acc, d) => acc + (Array.isArray(d.extracted?.items) ? d.extracted.items.length : 0),
+                    0,
+                  );
+                  const estimatedTotal = g.docs.reduce((acc, d) => {
+                    const items = Array.isArray(d.extracted?.items) ? d.extracted.items : [];
+                    const sumItems = items.reduce((s: number, it: any) => {
+                      const lt = Number(it?.line_total);
+                      if (Number.isFinite(lt) && lt !== 0) return s + lt;
+                      const qty = Number(it?.quantity) || 0;
+                      const up = Number(it?.unit_price) || 0;
+                      return s + qty * up;
+                    }, 0);
+                    if (sumItems > 0) return acc + sumItems;
+                    const fallback = Number(d.extracted?.total_amount) || 0;
+                    return acc + fallback;
+                  }, 0);
+                  const currencies = Array.from(
+                    new Set(
+                      g.docs
+                        .map((d) => String(d.extracted?.currency || "").toUpperCase())
+                        .filter(Boolean),
+                    ),
+                  );
+                  const currency = currencies[0] || "BRL";
+                  const totalStr = estimatedTotal > 0
+                    ? new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency,
+                        maximumFractionDigits: 2,
+                      }).format(estimatedTotal)
+                    : "—";
+                  return (
+                    <button
+                      key={g.supplierKey}
+                      type="button"
+                      onClick={() => chooseFirstSupplierGroup(g.supplierKey)}
+                      className="w-full rounded-md border border-border bg-muted/30 hover:bg-muted/60 transition p-3 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{g.supplierLabel}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {g.docs.length} arquivo(s) · {lineCount} linha(s)
+                            {currencies.length > 1 && (
+                              <span className="ml-1 text-amber-600">
+                                (moedas diferentes: {currencies.join(", ")})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                            {g.docs.map((d) => d.file.name).join(", ")}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Total est.
+                          </div>
+                          <div className="font-semibold tabular-nums">{totalStr}</div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
               {supplierPicker && supplierPicker.nonFiscal.length > 0 && (
                 <p className="text-xs text-muted-foreground">
