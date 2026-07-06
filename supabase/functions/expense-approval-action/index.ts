@@ -458,6 +458,7 @@ Deno.serve(async (req) => {
       level_order: currentLevel,
       remarks: mergedRemarks,
     } as any);
+    await writeAuditLog("rejected", currentLevel);
     return await respond(200, {
       ok: true,
       action: "reject",
