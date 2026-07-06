@@ -179,6 +179,18 @@ export function CreateExpenseModal({
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // ─── Fluxo multi-documento ────────────────────────────────────────────
+  // Quando o usuário anexa >1 nota/recibo, aplicamos as regras:
+  //   1) MESMO fornecedor  → mescla todas as linhas numa despesa só.
+  //   2) FORNECEDORES DIFERENTES → o usuário escolhe qual criar primeiro; o
+  //      restante fica em `deferredGroups` e, ao terminar de submeter a atual,
+  //      o modal se rehidrata automaticamente com o próximo grupo.
+  //   3) Documentos NÃO-fiscais (classificados por IA como "outro") apenas
+  //      viram anexo — não preenchem a despesa.
+  interface DocGroup { supplierKey: string; supplierLabel: string; docs: Array<{ file: File; extracted: any }>; }
+  const [deferredGroups, setDeferredGroups] = useState<DocGroup[]>([]);
+  const [supplierPicker, setSupplierPicker] = useState<{ groups: DocGroup[]; nonFiscal: File[] } | null>(null);
+
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
     origin === "pagcorp" ? sapSession?.companyDB : undefined,
