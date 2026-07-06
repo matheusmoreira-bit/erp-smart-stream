@@ -428,6 +428,66 @@ export type Database = {
         }
         Relationships: []
       }
+      approver_substitutes: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          ends_at: string
+          granted_by_email: string
+          granted_by_id: string | null
+          id: string
+          official_email: string
+          official_name: string | null
+          reason: string | null
+          revoked_at: string | null
+          revoked_by_email: string | null
+          revoked_by_id: string | null
+          revoked_reason: string | null
+          starts_at: string
+          substitute_email: string
+          substitute_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          ends_at: string
+          granted_by_email: string
+          granted_by_id?: string | null
+          id?: string
+          official_email: string
+          official_name?: string | null
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by_email?: string | null
+          revoked_by_id?: string | null
+          revoked_reason?: string | null
+          starts_at?: string
+          substitute_email: string
+          substitute_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          ends_at?: string
+          granted_by_email?: string
+          granted_by_id?: string | null
+          id?: string
+          official_email?: string
+          official_name?: string | null
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by_email?: string | null
+          revoked_by_id?: string | null
+          revoked_reason?: string | null
+          starts_at?: string
+          substitute_email?: string
+          substitute_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_console_accounts_payable: {
         Row: {
           card_code: string | null
@@ -3082,6 +3142,16 @@ export type Database = {
     Functions: {
       _audit_canonicalize: { Args: { _data: Json }; Returns: string }
       _audit_row_pk: { Args: { _row: Json; _tbl: unknown }; Returns: Json }
+      active_officials_for_substitute: {
+        Args: { _substitute_identifier: string }
+        Returns: {
+          company_db: string
+          ends_at: string
+          id: string
+          official_email: string
+          official_name: string
+        }[]
+      }
       can_access_audit_console: {
         Args: { _company_db: string }
         Returns: boolean
