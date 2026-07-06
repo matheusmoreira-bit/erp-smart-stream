@@ -1527,8 +1527,10 @@ export default function ApprovalsPage() {
           await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
           toast.success("Despesa interna rejeitada.");
         }
+        // Aguarda o refresh terminar ANTES de fechar o modal, garantindo
+        // que a lista já reflita o novo status quando o usuário voltar.
+        await refreshExpenses();
         setSelectedDoc(null);
-        refreshExpenses();
         return;
       }
 
@@ -1564,8 +1566,11 @@ export default function ApprovalsPage() {
         },
       });
 
+      // Aguarda o refresh do SAP terminar antes de fechar o modal — assim
+      // a lista de aprovações já reflete o novo estado (linha removida ou
+      // aprovador atualizado) no momento em que o usuário volta para ela.
+      await refresh();
       setSelectedDoc(null);
-      refresh();
     } catch (e) {
       console.error("Approval action error:", e);
       const message = e instanceof Error ? e.message : "Erro ao processar ação";
