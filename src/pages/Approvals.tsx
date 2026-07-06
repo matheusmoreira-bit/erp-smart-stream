@@ -1508,7 +1508,12 @@ export default function ApprovalsPage() {
   const totalValue = filtered.reduce((sum, a) => sum + a.docTotal, 0);
   const overdueCount = filtered.filter((a) => isOverdue(a.dueDate)).length;
 
-  const handleApprovalAction = async (code: number, action: "approve" | "reject", remarks: string) => {
+  const handleApprovalAction = async (
+    code: number,
+    action: "approve" | "reject",
+    remarks: string,
+    opts?: { idempotencyKey?: string },
+  ) => {
     if (!session) return;
     setIsActioning(true);
     try {
@@ -1516,10 +1521,10 @@ export default function ApprovalsPage() {
       const internalDoc = (selectedDoc as any)?.__internalId;
       if (internalDoc) {
         if (action === "approve") {
-          await approveExpense(internalDoc, remarks);
+          await approveExpense(internalDoc, remarks, opts?.idempotencyKey);
           toast.success("Despesa interna aprovada!");
         } else {
-          await rejectExpense(internalDoc, remarks);
+          await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
           toast.success("Despesa interna rejeitada.");
         }
         setSelectedDoc(null);
