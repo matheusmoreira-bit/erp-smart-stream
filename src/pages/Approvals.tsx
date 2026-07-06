@@ -367,7 +367,7 @@ function ApprovalDetailModal({
   doc: ApprovalDoc | null;
   open: boolean;
   onClose: () => void;
-  onAction: (code: number, action: "approve" | "reject", remarks: string) => Promise<void>;
+  onAction: (code: number, action: "approve" | "reject", remarks: string, opts?: { idempotencyKey?: string }) => Promise<void>;
   onDelegate: (doc: ApprovalDoc) => void;
   isActioning: boolean;
   isSuperUser: boolean;
