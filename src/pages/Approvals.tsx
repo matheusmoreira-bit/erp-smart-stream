@@ -1571,6 +1571,7 @@ export default function ApprovalsPage() {
       // Aguarda o refresh do SAP terminar antes de fechar o modal — assim
       // a lista de aprovações já reflete o novo estado (linha removida ou
       // aprovador atualizado) no momento em que o usuário volta para ela.
+      setActionPhase("refreshing");
       await refresh();
       setSelectedDoc(null);
     } catch (e) {
@@ -1579,7 +1580,7 @@ export default function ApprovalsPage() {
       toast.error(message);
       throw e instanceof Error ? e : new Error(message);
     } finally {
-      setIsActioning(false);
+      setActionPhase("idle");
     }
   };
 
