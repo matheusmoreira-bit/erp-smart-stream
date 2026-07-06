@@ -28,8 +28,9 @@ interface TransferResult {
 export default function TransferApprovalsTool() {
   const [companies, setCompanies] = useState<CompanyOpt[]>([]);
   const [companyDb, setCompanyDb] = useState("open_gaming_sa");
-  const [fromUser, setFromUser] = useState("lucas.pereira");
+  const [fromUser, setFromUser] = useState("");
   const [toUser, setToUser] = useState("juliana.gavineli");
+  const [costCenter, setCostCenter] = useState("");
   const [reason, setReason] = useState("Transferência administrativa de aprovações pendentes");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TransferResult | null>(null);
@@ -42,11 +43,15 @@ export default function TransferApprovalsTool() {
   }, []);
 
   const run = async (dryRun: boolean) => {
-    if (!companyDb || !fromUser.trim() || !toUser.trim()) {
-      toast.error("Preencha empresa, usuário de origem e destino");
+    if (!companyDb || !toUser.trim()) {
+      toast.error("Preencha empresa e usuário de destino");
       return;
     }
-    if (fromUser.trim().toLowerCase() === toUser.trim().toLowerCase()) {
+    if (!fromUser.trim() && !costCenter.trim()) {
+      toast.error("Informe usuário de origem e/ou centro de custo");
+      return;
+    }
+    if (fromUser.trim() && fromUser.trim().toLowerCase() === toUser.trim().toLowerCase()) {
       toast.error("Origem e destino devem ser diferentes");
       return;
     }
@@ -56,8 +61,9 @@ export default function TransferApprovalsTool() {
       const { data, error } = await supabase.functions.invoke("transfer-approvals", {
         body: {
           company_db: companyDb,
-          from_user_code: fromUser.trim(),
+          from_user_code: fromUser.trim() || undefined,
           to_user_code: toUser.trim(),
+          cost_center: costCenter.trim() || undefined,
           reason,
           dry_run: dryRun,
         },
@@ -85,11 +91,12 @@ export default function TransferApprovalsTool() {
         <h3 className="font-semibold text-foreground">Transferir aprovações pendentes</h3>
       </div>
       <p className="text-xs text-muted-foreground">
-        Reatribui todas as aprovações SAP pendentes de um usuário para outro dentro da mesma empresa
-        e envia notificação in-app ao novo aprovador. Faça o preview antes de executar.
+        Reatribui aprovações SAP pendentes para outro aprovador dentro da mesma empresa e envia
+        notificação in-app. Filtre por usuário de origem e/ou centro de custo (informe pelo menos um).
+        Faça o preview antes de executar.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Empresa</Label>
           <Select value={companyDb} onValueChange={setCompanyDb}>
@@ -104,12 +111,16 @@ export default function TransferApprovalsTool() {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">De (UserCode SAP)</Label>
-          <Input value={fromUser} onChange={(e) => setFromUser(e.target.value)} placeholder="lucas.pereira" />
-        </div>
-        <div className="space-y-1.5">
           <Label className="text-xs">Para (UserCode SAP)</Label>
           <Input value={toUser} onChange={(e) => setToUser(e.target.value)} placeholder="juliana.gavineli" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">De (UserCode SAP) — opcional</Label>
+          <Input value={fromUser} onChange={(e) => setFromUser(e.target.value)} placeholder="ex: lucas.silva" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Centro de custo — opcional</Label>
+          <Input value={costCenter} onChange={(e) => setCostCenter(e.target.value)} placeholder="ex: 1.8.1.4" />
         </div>
       </div>
 
@@ -117,6 +128,7 @@ export default function TransferApprovalsTool() {
         <Label className="text-xs">Motivo (aparece no audit log)</Label>
         <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
       </div>
+
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" disabled={loading} onClick={() => run(true)}>
@@ -151,7 +163,7 @@ export default function TransferApprovalsTool() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Executar transferência de aprovações?"
-        description={`Todas as aprovações SAP pendentes de ${fromUser} serão reatribuídas para ${toUser} em ${companyDb}. Essa ação é registrada no audit log.`}
+        description={`As aprovações SAP pendentes${fromUser ? ` de ${fromUser}` : ""}${costCenter ? ` no CC ${costCenter}` : ""} serão reatribuídas para ${toUser} em ${companyDb}. Essa ação é registrada no audit log.`}
         confirmLabel="Transferir"
         destructive
         onConfirm={() => run(false)}
