@@ -1450,6 +1450,26 @@ export default function ApprovalsPage() {
     .map(mapInternalExpense);
 
   const allApprovals: ApprovalDoc[] = [...internalPending, ...approvals];
+
+  // Mantém o documento aberto no modal sincronizado com o MESMO snapshot que
+  // alimenta a lista. Sempre que `allApprovals` for atualizado (após um
+  // refresh do servidor), substituímos o `selectedDoc` pela versão mais nova
+  // encontrada no snapshot — garantindo que linhas do documento, valores,
+  // aprovador atual etc. não fiquem defasados em relação à listagem.
+  useEffect(() => {
+    setSelectedDoc((current) => {
+      if (!current) return current;
+      const keyOf = (d: ApprovalDoc) => {
+        const internalId = (d as unknown as { __internalId?: string }).__internalId;
+        return internalId ? `internal:${internalId}` : `sap:${d.approvalRequestId}`;
+      };
+      const currentKey = keyOf(current);
+      const fresh = allApprovals.find((d) => keyOf(d) === currentKey);
+      return fresh ?? current;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approvals, purchaseExpenses, salesExpenses]);
+
   const allCostCenterCodes = useMemo(
     () => new Set(allApprovals.flatMap((doc) => {
       const rateio = shouldShowRateio(doc);
