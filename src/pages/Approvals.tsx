@@ -361,6 +361,7 @@ function ApprovalDetailModal({
   formatCostCenter,
   rules,
   isAdmin,
+  canApprove,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -375,6 +376,7 @@ function ApprovalDetailModal({
   formatCostCenter: (code?: string | null) => string;
   rules: ApprovalRule[];
   isAdmin: boolean;
+  canApprove: boolean;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
