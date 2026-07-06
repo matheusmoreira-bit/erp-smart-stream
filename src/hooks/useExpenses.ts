@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { sapQuery, type SapSession } from "@/lib/sap-client";
@@ -591,75 +592,91 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       const expense = createResp.expense;
       const createdId = expense.id as string;
 
-      if (status === "pendente_aprovacao" && currentApprover && currentApprover !== "Administrador") {
-        await createNotification({
-          user_identifier: currentApprover,
-          title: "Nova aprovação pendente",
-          body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação.`,
-          category: "approval",
-          company_db: session.companyDB,
-          link: `/approvals`,
-          metadata: { expense_id: createdId },
-        });
-      }
-
-      // Upload attachments through the edge function (bucket policies for
-      // anon/authenticated are closed — only the service role can write).
-      if (input.files && input.files.length > 0) {
-        const attachmentRows: {
-          file_path: string;
-          file_name: string;
-          file_size: number;
-          mime_type: string;
-        }[] = [];
-        const failedUploads: string[] = [];
-
-        for (const file of input.files) {
-          try {
-            const fd = new FormData();
-            fd.append("expense_id", createdId);
-            fd.append("file", file, file.name);
-            const res = await sapFunctionFetch("expense-attachment-storage", {
-              method: "POST",
-              body: fd,
-            });
-            const data = await res.json().catch(() => null);
-            if (!res.ok || !data?.ok) {
-              throw new Error(data?.error || `upload retornou ${res.status}`);
-            }
-            attachmentRows.push({
-              file_path: data.file_path,
-              file_name: data.file_name,
-              file_size: data.file_size,
-              mime_type: data.mime_type,
-            });
-          } catch (upErr) {
-            console.error("Falha ao subir anexo", file.name, upErr);
-            failedUploads.push(`${file.name}: ${upErr instanceof Error ? upErr.message : String(upErr)}`);
-          }
+      // ─── Fast path ────────────────────────────────────────────────────
+      // A despesa já foi PERSISTIDA no servidor. Retornamos imediatamente
+      // para o chamador (modal) fechar e o usuário ver o feedback. As
+      // etapas restantes (notificar aprovador, enviar anexos, refresh da
+      // lista) rodam em segundo plano com toasts próprios em caso de
+      // falha — assim o tempo percebido de lançamento cai drasticamente.
+      const finalize = async () => {
+        // 1) Notificar próximo aprovador (não bloqueia o retorno)
+        if (
+          status === "pendente_aprovacao" &&
+          currentApprover &&
+          currentApprover !== "Administrador"
+        ) {
+          createNotification({
+            user_identifier: currentApprover,
+            title: "Nova aprovação pendente",
+            body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação.`,
+            category: "approval",
+            company_db: session.companyDB,
+            link: `/approvals`,
+            metadata: { expense_id: createdId },
+          }).catch((err) => console.warn("Notificação ao aprovador falhou:", err));
         }
 
-        if (attachmentRows.length > 0) {
-          try {
-            await invokeExpenseMutation({
-              action: "attachments_add",
-              expense_id: createdId,
-              attachments: attachmentRows,
-            });
-          } catch (attErr) {
-            console.error("Falha ao registrar anexos:", attErr);
-            throw new Error(`Falha ao registrar anexos no banco: ${attErr instanceof Error ? attErr.message : String(attErr)}`);
-          }
-        }
-
-        if (failedUploads.length > 0) {
-          throw new Error(
-            `Falha ao enviar ${failedUploads.length} anexo(s): ${failedUploads.join("; ")}`,
+        // 2) Upload de anexos em PARALELO (era serial → gargalo principal)
+        if (input.files && input.files.length > 0) {
+          const results = await Promise.allSettled(
+            input.files.map(async (file) => {
+              const fd = new FormData();
+              fd.append("expense_id", createdId);
+              fd.append("file", file, file.name);
+              const res = await sapFunctionFetch("expense-attachment-storage", {
+                method: "POST",
+                body: fd,
+              });
+              const data = await res.json().catch(() => null);
+              if (!res.ok || !data?.ok) {
+                throw new Error(data?.error || `upload retornou ${res.status}`);
+              }
+              return {
+                file_path: data.file_path as string,
+                file_name: data.file_name as string,
+                file_size: data.file_size as number,
+                mime_type: data.mime_type as string,
+              };
+            }),
           );
-        }
-      }
 
-      await fetchExpenses();
+          const uploaded = results
+            .map((r, i) => ({ r, name: input.files![i].name }))
+            .filter((x) => x.r.status === "fulfilled")
+            .map((x) => (x.r as PromiseFulfilledResult<{ file_path: string; file_name: string; file_size: number; mime_type: string }>).value);
+          const failed = results
+            .map((r, i) => ({ r, name: input.files![i].name }))
+            .filter((x) => x.r.status === "rejected")
+            .map((x) => `${x.name}: ${((x.r as PromiseRejectedResult).reason instanceof Error ? ((x.r as PromiseRejectedResult).reason as Error).message : String((x.r as PromiseRejectedResult).reason))}`);
+
+          if (uploaded.length > 0) {
+            try {
+              await invokeExpenseMutation({
+                action: "attachments_add",
+                expense_id: createdId,
+                attachments: uploaded,
+              });
+            } catch (attErr) {
+              console.error("Falha ao registrar anexos:", attErr);
+              toast.error(
+                `Despesa criada, mas falhou ao registrar ${uploaded.length} anexo(s): ${attErr instanceof Error ? attErr.message : String(attErr)}`,
+              );
+            }
+          }
+          if (failed.length > 0) {
+            toast.error(
+              `Despesa criada, mas ${failed.length} anexo(s) falharam ao enviar: ${failed.join("; ")}`,
+            );
+          }
+        }
+
+        // 3) Refresh final para a lista refletir o novo item
+        fetchExpenses().catch((err) => console.warn("refresh pós-criação falhou:", err));
+      };
+
+      // Fire-and-forget: não bloqueia a resposta ao chamador.
+      void finalize();
+
       return { expense, status, origin };
     },
     [session, fetchExpenses, docType]
