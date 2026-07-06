@@ -82,7 +82,37 @@ function formatDate(dateStr: string) {
   }
 }
 
+/* ─── Backfill button (reprocessa anexo com IA para extrair data de vencimento) ─── */
+function BackfillDueDateButton({ expenseId }: { expenseId: string }) {
+  const [loading, setLoading] = useState(false);
+  const handle = async () => {
+    setLoading(true);
+    try {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("expense-backfill-due-date", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "one", expense_id: expenseId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "Falha ao reprocessar");
+      toast.success(`Data de vencimento atualizada: ${data.updated?.due_date}`);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao reprocessar");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={handle} disabled={loading}>
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCw className="w-3 h-3 mr-1" />}
+      Reprocessar com IA
+    </Button>
+  );
+}
+
 /* ─── Detail Modal ─── */
+
 function ExpenseDetailModal({
   expense,
   open,
