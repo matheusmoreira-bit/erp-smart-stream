@@ -1510,7 +1510,9 @@ export default function ApprovalsPage() {
       refresh();
     } catch (e) {
       console.error("Approval action error:", e);
-      toast.error(e instanceof Error ? e.message : "Erro ao processar ação");
+      const message = e instanceof Error ? e.message : "Erro ao processar ação";
+      toast.error(message);
+      throw e instanceof Error ? e : new Error(message);
     } finally {
       setIsActioning(false);
     }
