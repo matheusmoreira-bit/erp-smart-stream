@@ -513,9 +513,9 @@ function ApprovalDetailModal({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Data de Vencimento</p>
-                <p className={overdue ? "text-destructive font-semibold" : "text-foreground"}>
-                  {formatDate(doc.dueDate)}
-                  {overdue && " ⚠ Vencido"}
+                <p className={!doc.dueDate ? "text-destructive font-semibold" : overdue ? "text-destructive font-semibold" : "text-foreground"}>
+                  {doc.dueDate ? formatDate(doc.dueDate) : "sem data"}
+                  {overdue && doc.dueDate && " ⚠ Vencido"}
                 </p>
               </div>
               {doc.daysOpen > 0 && (
