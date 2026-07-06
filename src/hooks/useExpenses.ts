@@ -826,7 +826,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
 
   const approveExpense = useCallback(
-    async (expenseId: string, remarks?: string) => {
+    async (expenseId: string, remarks?: string, idempotencyKey?: string) => {
       const actor = session?.userName || "";
 
       // Server-side authorization: the edge function verifies that the caller
@@ -834,9 +834,11 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // CURRENT level before flipping the status. This is the security
       // boundary — do NOT bypass it with a direct supabase.from("expenses")
       // update, or any signed-in user could approve someone else's document.
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
       const resp = await sapFunctionFetch("expense-approval-action", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ expense_id: expenseId, action: "approve", remarks: remarks || undefined }),
       });
       const payload = await resp.json().catch(() => ({}));
@@ -928,12 +930,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   );
 
   const rejectExpense = useCallback(
-    async (expenseId: string, remarks?: string) => {
+    async (expenseId: string, remarks?: string, idempotencyKey?: string) => {
       // Same server-side authorization as approveExpense — never flip the
       // status directly from the client.
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
       const resp = await sapFunctionFetch("expense-approval-action", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ expense_id: expenseId, action: "reject", remarks: remarks || undefined }),
       });
       const payload = await resp.json().catch(() => ({}));
