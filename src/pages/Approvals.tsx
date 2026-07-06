@@ -353,6 +353,7 @@ function ApprovalDetailModal({
   open,
   onClose,
   onAction,
+  onRetryRefresh,
   onDelegate,
   isActioning,
   actionPhase,
