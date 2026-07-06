@@ -844,23 +844,31 @@ function ApprovalDetailModal({
                     Delegar
                   </Button>
                 )}
-                <Button
-                  variant="destructive"
-                  onClick={() => handleAction("reject")}
-                  disabled={isActioning}
-                  className="gap-1.5"
-                >
-                  {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                  Rejeitar
-                </Button>
-                <Button
-                  onClick={() => handleAction("approve")}
-                  disabled={isActioning}
-                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                  Aprovar
-                </Button>
+                {canApprove ? (
+                  <>
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleAction("reject")}
+                      disabled={isActioning}
+                      className="gap-1.5"
+                    >
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                      Rejeitar
+                    </Button>
+                    <Button
+                      onClick={() => handleAction("approve")}
+                      disabled={isActioning}
+                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                      Aprovar
+                    </Button>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic self-center">
+                    Somente leitura — você não é o aprovador deste documento
+                  </span>
+                )}
               </div>
             </div>
           </div>
