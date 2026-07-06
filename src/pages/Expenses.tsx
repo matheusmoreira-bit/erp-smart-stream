@@ -278,13 +278,53 @@ function ExpenseDetailModal({
               </div>
             )}
 
-            {expense.attachments && expense.attachments.length > 0 && (
+            {((expense.attachments && expense.attachments.length > 0) || canAddAttachments) && (
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <Paperclip className="w-3 h-3" /> Anexos
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                    <Paperclip className="w-3 h-3" /> Anexos
+                  </p>
+                  {canAddAttachments && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length === 0) return;
+                          e.target.value = "";
+                          setUploading(true);
+                          try {
+                            await onAddAttachments(expense.id, files);
+                            toast.success(`${files.length} anexo(s) enviado(s)`);
+                          } catch (err: any) {
+                            toast.error(err?.message || "Falha no upload");
+                          } finally {
+                            setUploading(false);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs px-2"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {uploading ? (
+                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Enviando…</>
+                        ) : (
+                          <><Plus className="w-3 h-3 mr-1" /> Anexar arquivos</>
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </div>
                 <div className="space-y-1">
-                  {expense.attachments.map((att) => (
+                  {(expense.attachments || []).map((att) => (
                     <button
                       key={att.id}
                       type="button"
@@ -313,6 +353,9 @@ function ExpenseDetailModal({
                       )}
                     </button>
                   ))}
+                  {(!expense.attachments || expense.attachments.length === 0) && (
+                    <p className="text-[11px] text-muted-foreground italic">Nenhum anexo ainda.</p>
+                  )}
                 </div>
               </div>
             )}
