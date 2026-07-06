@@ -355,6 +355,7 @@ function ApprovalDetailModal({
   onAction,
   onDelegate,
   isActioning,
+  actionPhase,
   isSuperUser,
   currentUserName,
   currentUserEmail,
@@ -370,6 +371,7 @@ function ApprovalDetailModal({
   onAction: (code: number, action: "approve" | "reject", remarks: string, opts?: { idempotencyKey?: string }) => Promise<void>;
   onDelegate: (doc: ApprovalDoc) => void;
   isActioning: boolean;
+  actionPhase: "idle" | "sending" | "refreshing";
   isSuperUser: boolean;
   currentUserName: string;
   currentUserEmail?: string;
@@ -1013,11 +1015,13 @@ function ApprovalDetailModal({
               ) : (
                 <XCircle className="w-4 h-4" />
               )}
-              {isActioning
-                ? "Processando…"
-                : actionError
-                  ? "Tentar novamente"
-                  : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
+              {actionPhase === "sending"
+                ? "Enviando decisão…"
+                : actionPhase === "refreshing"
+                  ? "Atualizando lista…"
+                  : actionError
+                    ? "Tentar novamente"
+                    : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1370,7 +1374,8 @@ export default function ApprovalsPage() {
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
-  const [isActioning, setIsActioning] = useState(false);
+  const [actionPhase, setActionPhase] = useState<"idle" | "sending" | "refreshing">("idle");
+  const isActioning = actionPhase !== "idle";
   const isSuperUser = session?.isSuperUser ?? false;
   const isAdmin = isLovableAdmin || isSuperUser;
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
@@ -1515,7 +1520,7 @@ export default function ApprovalsPage() {
     opts?: { idempotencyKey?: string },
   ) => {
     if (!session) return;
-    setIsActioning(true);
+    setActionPhase("sending");
     try {
       // Internal expense doc has negative approvalRequestId and __internalId
       const internalDoc = (selectedDoc as any)?.__internalId;
@@ -1529,6 +1534,7 @@ export default function ApprovalsPage() {
         }
         // Aguarda o refresh terminar ANTES de fechar o modal, garantindo
         // que a lista já reflita o novo status quando o usuário voltar.
+        setActionPhase("refreshing");
         await refreshExpenses();
         setSelectedDoc(null);
         return;
@@ -1569,6 +1575,7 @@ export default function ApprovalsPage() {
       // Aguarda o refresh do SAP terminar antes de fechar o modal — assim
       // a lista de aprovações já reflete o novo estado (linha removida ou
       // aprovador atualizado) no momento em que o usuário volta para ela.
+      setActionPhase("refreshing");
       await refresh();
       setSelectedDoc(null);
     } catch (e) {
@@ -1577,7 +1584,7 @@ export default function ApprovalsPage() {
       toast.error(message);
       throw e instanceof Error ? e : new Error(message);
     } finally {
-      setIsActioning(false);
+      setActionPhase("idle");
     }
   };
 
@@ -2045,6 +2052,7 @@ export default function ApprovalsPage() {
         onAction={handleApprovalAction}
         onDelegate={(d) => setDelegationDoc(d)}
         isActioning={isActioning}
+        actionPhase={actionPhase}
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
         currentUserEmail={session.userName}
