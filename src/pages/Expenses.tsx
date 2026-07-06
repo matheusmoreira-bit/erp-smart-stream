@@ -82,7 +82,37 @@ function formatDate(dateStr: string) {
   }
 }
 
+/* ─── Backfill button (reprocessa anexo com IA para extrair data de vencimento) ─── */
+function BackfillDueDateButton({ expenseId }: { expenseId: string }) {
+  const [loading, setLoading] = useState(false);
+  const handle = async () => {
+    setLoading(true);
+    try {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("expense-backfill-due-date", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "one", expense_id: expenseId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "Falha ao reprocessar");
+      toast.success(`Data de vencimento atualizada: ${data.updated?.due_date}`);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao reprocessar");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={handle} disabled={loading}>
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCw className="w-3 h-3 mr-1" />}
+      Reprocessar com IA
+    </Button>
+  );
+}
+
 /* ─── Detail Modal ─── */
+
 function ExpenseDetailModal({
   expense,
   open,
@@ -179,18 +209,28 @@ function ExpenseDetailModal({
                 <p className="text-xs text-muted-foreground">Data de Criação</p>
                 <p className="text-foreground">{formatDate(expense.created_at)}</p>
               </div>
-              {expense.due_date && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Data de Vencimento</p>
-                  <p className="text-foreground">{formatDate(expense.due_date)}</p>
+              <div>
+                <p className="text-xs text-muted-foreground">Data do Documento</p>
+                <p className="text-foreground">{expense.doc_date ? formatDate(expense.doc_date) : "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Data de Vencimento</p>
+                <div className="flex items-center gap-2">
+                  <p className={expense.due_date ? "text-foreground" : "text-muted-foreground"}>
+                    {expense.due_date ? formatDate(expense.due_date) : "—"}
+                  </p>
+                  {!expense.due_date && expense.status === "pendente_aprovacao" && (expense.attachments?.length ?? 0) > 0 && (
+                    <BackfillDueDateButton expenseId={expense.id} />
+                  )}
                 </div>
-              )}
+              </div>
               {expense.current_approver && (
                 <div>
                   <p className="text-xs text-muted-foreground">Aprovador Atual</p>
                   <p className="text-foreground font-medium">{expense.current_approver}</p>
                 </div>
               )}
+
             </div>
 
             {expense.remarks && (
@@ -488,8 +528,19 @@ function ExpenseCard({
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
           <Calendar className="w-3.5 h-3.5 text-primary/70" />
-          <span>{formatDate(expense.created_at)}</span>
+          <span>Criado: {formatDate(expense.created_at)}</span>
         </div>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Calendar className="w-3.5 h-3.5 text-primary/70" />
+          <span>
+            Doc: {expense.doc_date ? formatDate(expense.doc_date) : "—"}
+            {"  ·  "}
+            Vence: <span className={expense.due_date ? "text-foreground font-medium" : "text-destructive font-medium"}>
+              {expense.due_date ? formatDate(expense.due_date) : "sem data"}
+            </span>
+          </span>
+        </div>
+
       </div>
     </motion.div>
   );
