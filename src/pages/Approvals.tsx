@@ -1516,7 +1516,7 @@ export default function ApprovalsPage() {
     opts?: { idempotencyKey?: string },
   ) => {
     if (!session) return;
-    setIsActioning(true);
+    setActionPhase("sending");
     try {
       // Internal expense doc has negative approvalRequestId and __internalId
       const internalDoc = (selectedDoc as any)?.__internalId;
