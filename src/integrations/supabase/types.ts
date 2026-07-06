@@ -1411,6 +1411,89 @@ export type Database = {
           },
         ]
       }
+      expense_audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_identity: string
+          actor_source: string
+          company_db: string | null
+          created_at: string
+          decision: string
+          expense_id: string
+          id: string
+          idempotency_key: string | null
+          ip_address: string | null
+          is_cloud_admin: boolean
+          is_sap_superuser: boolean
+          level_order: number | null
+          override_used: boolean
+          reason: string | null
+          remarks: string | null
+          request_id: string | null
+          substituted_for_email: string | null
+          substituted_for_name: string | null
+          substitution_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_identity: string
+          actor_source: string
+          company_db?: string | null
+          created_at?: string
+          decision: string
+          expense_id: string
+          id?: string
+          idempotency_key?: string | null
+          ip_address?: string | null
+          is_cloud_admin?: boolean
+          is_sap_superuser?: boolean
+          level_order?: number | null
+          override_used?: boolean
+          reason?: string | null
+          remarks?: string | null
+          request_id?: string | null
+          substituted_for_email?: string | null
+          substituted_for_name?: string | null
+          substitution_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_identity?: string
+          actor_source?: string
+          company_db?: string | null
+          created_at?: string
+          decision?: string
+          expense_id?: string
+          id?: string
+          idempotency_key?: string | null
+          ip_address?: string | null
+          is_cloud_admin?: boolean
+          is_sap_superuser?: boolean
+          level_order?: number | null
+          override_used?: boolean
+          reason?: string | null
+          remarks?: string | null
+          request_id?: string | null
+          substituted_for_email?: string | null
+          substituted_for_name?: string | null
+          substitution_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_audit_log_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_items: {
         Row: {
           cost_center: string | null
