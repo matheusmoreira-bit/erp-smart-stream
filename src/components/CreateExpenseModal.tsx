@@ -695,6 +695,29 @@ export function CreateExpenseModal({
   };
 
 
+  // Encadeia a próxima despesa quando existem grupos adiados de anexos com
+  // fornecedores diferentes. Zera cabeçalho/itens/anexos/rascunho e aplica
+  // o grupo pendente ao formulário — o modal segue aberto.
+  const resetFormForNextDeferred = (next: DocGroup) => {
+    setSupplier(null);
+    setSuggestedSupplierName(undefined);
+    setAiSupplierData(null);
+    setCurrency("");
+    setCurrencyWarning(null);
+    setCurrencyOptions(null);
+    setDocDate("");
+    setDueDate("");
+    setRemarks("");
+    setHeaderCostCenter(null);
+    setHeaderProject(null);
+    setAiWarning(null);
+    setAiConfidence(null);
+    setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
+    setFiles(next.docs.map((d) => d.file));
+    setDraftId(null);
+    applyFiscalGroup(next.docs.map((d) => d.extracted));
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
