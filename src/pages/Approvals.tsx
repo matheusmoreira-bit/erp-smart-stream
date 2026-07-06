@@ -30,6 +30,7 @@ import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useSapUsers } from "@/hooks/useSapUsers";
