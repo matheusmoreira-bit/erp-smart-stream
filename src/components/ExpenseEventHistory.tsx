@@ -74,15 +74,23 @@ interface TimelineItem {
   actor?: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+  reconstructed?: boolean;
 }
 
 export interface ExpenseEventHistoryExpense {
   id: string;
+  status?: string | null;
+  requester_name?: string | null;
+  requester_email?: string | null;
+  current_approver?: string | null;
   sap_doc_entry?: number | null;
   sap_doc_num?: number | null;
+  sap_integration_error?: string | null;
+  sap_integration_last_attempt_at?: string | null;
   company_db?: string | null;
   supplier_code?: string | null;
   currency?: string | null;
+  created_at?: string;
   updated_at?: string;
 }
 
@@ -132,8 +140,10 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
 
   // Merge approval events + NF + AP into a single chronological timeline
   const items: TimelineItem[] = [];
+  const seenDecisions = new Set<LogDecision>();
 
   for (const row of log) {
+    seenDecisions.add(row.decision);
     const meta = DECISION_META[row.decision] ?? {
       label: row.decision,
       icon: FileText,
@@ -152,6 +162,71 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
       color: meta.color,
     });
   }
+
+  // ── Fallback / reconstructed events ─────────────────────────────────
+  // Pedidos antigos foram criados antes do sistema de log existir, então
+  // reconstruímos os principais marcos a partir dos campos da despesa.
+  const status = (expense?.status || "").toLowerCase();
+  const createdAt = expense?.created_at;
+  const updatedAt = expense?.updated_at;
+  const requester = expense?.requester_name || expense?.requester_email || undefined;
+
+  const addFallback = (
+    decision: LogDecision,
+    when: string | null | undefined,
+    actor?: string,
+    detail?: string,
+  ) => {
+    if (!when) return;
+    if (seenDecisions.has(decision)) return;
+    const meta = DECISION_META[decision];
+    items.push({
+      key: `fallback:${decision}`,
+      when,
+      label: meta.label,
+      detail,
+      actor,
+      icon: meta.icon,
+      color: meta.color,
+      reconstructed: true,
+    });
+    seenDecisions.add(decision);
+  };
+
+  addFallback("created", createdAt, requester);
+
+  const terminalByStatus: Record<string, LogDecision | undefined> = {
+    aprovado: "approved",
+    integrado: "approved",
+    rejeitado: "rejected",
+    cancelado: "cancelled",
+  };
+  const terminal = terminalByStatus[status];
+  if (terminal) {
+    addFallback(
+      terminal,
+      updatedAt,
+      terminal === "approved" ? expense?.current_approver || undefined : undefined,
+    );
+  }
+
+  if (expense?.sap_doc_num || expense?.sap_doc_entry) {
+    addFallback(
+      "integrated",
+      expense?.sap_integration_last_attempt_at || updatedAt,
+      undefined,
+      expense?.sap_doc_num ? `Nº SAP ${expense.sap_doc_num}` : undefined,
+    );
+  }
+  if (expense?.sap_integration_error) {
+    addFallback(
+      "integration_failed",
+      expense?.sap_integration_last_attempt_at || updatedAt,
+      undefined,
+      expense.sap_integration_error,
+    );
+  }
+
 
   for (const nf of nfLinks.data || []) {
     const number = `NF ${nf.numero_nf || "—"}${nf.serie ? `/${nf.serie}` : ""}`;
