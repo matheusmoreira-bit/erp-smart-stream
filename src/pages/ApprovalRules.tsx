@@ -823,7 +823,7 @@ export default function ApprovalRulesPage() {
           <SubstituteApproversTab isAdmin={isAdmin} />
         ) : null}
 
-        {activeTab === "custom" && (
+        {activeTab !== "substitutes" && activeTab === "custom" && (
           <div className="glass-card p-4 border-l-2 border-l-primary/40">
             <p className="text-sm text-foreground font-medium mb-1 flex items-center gap-1.5">
               <Shield className="w-4 h-4 text-primary" />
@@ -836,6 +836,7 @@ export default function ApprovalRulesPage() {
           </div>
         )}
 
+        {activeTab !== "substitutes" && (<>
         {/* Search & Filters */}
         <div className="glass-card p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
           <div className="relative flex-1 min-w-[200px]">
@@ -925,6 +926,7 @@ export default function ApprovalRulesPage() {
             ))}
           </div>
         )}
+        </>)}
       </main>
 
       <RuleFormModal
