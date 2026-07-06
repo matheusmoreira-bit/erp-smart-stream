@@ -179,6 +179,18 @@ export function CreateExpenseModal({
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // ─── Fluxo multi-documento ────────────────────────────────────────────
+  // Quando o usuário anexa >1 nota/recibo, aplicamos as regras:
+  //   1) MESMO fornecedor  → mescla todas as linhas numa despesa só.
+  //   2) FORNECEDORES DIFERENTES → o usuário escolhe qual criar primeiro; o
+  //      restante fica em `deferredGroups` e, ao terminar de submeter a atual,
+  //      o modal se rehidrata automaticamente com o próximo grupo.
+  //   3) Documentos NÃO-fiscais (classificados por IA como "outro") apenas
+  //      viram anexo — não preenchem a despesa.
+  interface DocGroup { supplierKey: string; supplierLabel: string; docs: Array<{ file: File; extracted: any }>; }
+  const [deferredGroups, setDeferredGroups] = useState<DocGroup[]>([]);
+  const [supplierPicker, setSupplierPicker] = useState<{ groups: DocGroup[]; nonFiscal: File[] } | null>(null);
+
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
     origin === "pagcorp" ? sapSession?.companyDB : undefined,
@@ -314,6 +326,8 @@ export function CreateExpenseModal({
       setHeaderProject(null);
       setDraftId(null);
       setDraftHydrated(false);
+      setDeferredGroups([]);
+      setSupplierPicker(null);
     }
   }, [open]);
 
@@ -480,6 +494,105 @@ export function CreateExpenseModal({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Aplica UM grupo de documentos fiscais (todos do MESMO fornecedor).
+  // Usa o primeiro doc como fonte do cabeçalho e concatena os itens de todos.
+  const applyFiscalGroup = (docs: any[]) => {
+    if (!docs.length) return;
+    const doc = docs[0];
+
+    if (doc.supplier_name) setSuggestedSupplierName(doc.supplier_name);
+    const addr = doc.supplier_address || {};
+    const country = (addr.country || doc.supplier_country || "BR")
+      .toString()
+      .toUpperCase()
+      .slice(0, 2);
+    setAiSupplierData({
+      card_name: doc.supplier_name || "",
+      federal_tax_id: doc.supplier_cnpj || doc.supplier_tax_id || "",
+      email: doc.supplier_email || "",
+      phone1: doc.supplier_phone1 || "",
+      phone2: doc.supplier_phone2 || "",
+      currency: doc.currency || "",
+      bill_to_country: country,
+      bill_to_street: addr.street || "",
+      bill_to_building: addr.building || "",
+      bill_to_block: addr.block || "",
+      bill_to_zip: addr.zip
+        ? country === "BR"
+          ? String(addr.zip).replace(/\D/g, "")
+          : String(addr.zip).trim()
+        : "",
+      bill_to_city: addr.city || "",
+      bill_to_state: addr.state
+        ? country === "BR"
+          ? String(addr.state).toUpperCase().slice(0, 2)
+          : String(addr.state).trim()
+        : "",
+    });
+    if (doc.document_date) setDocDate(doc.document_date);
+    if (doc.due_date) setDueDate(doc.due_date);
+    if (doc.remarks) setRemarks(doc.remarks);
+    const costCenterValue = (doc.cost_center_confidence ?? 0) > 0.95 ? (doc.cost_center_hint || "") : "";
+    const projectValue = (doc.project_confidence ?? 0) > 0.95 ? (doc.project_hint || "") : "";
+
+    // Concatena as linhas de TODOS os documentos do grupo (mesmo fornecedor).
+    const allItems = docs.flatMap((d) => Array.isArray(d.items) ? d.items : []);
+    if (allItems.length > 0) {
+      setItems(
+        allItems.map((item: any) => {
+          const qty = Number(item.quantity) || 1;
+          let unit = Number(item.unit_price) || 0;
+          const lineTotalRaw = Number(item.line_total) || 0;
+          if (unit === 0 && lineTotalRaw !== 0 && qty !== 0) unit = lineTotalRaw / qty;
+          const lineTotal = lineTotalRaw !== 0 ? lineTotalRaw : qty * unit;
+          return {
+            description: item.description || "",
+            quantity: qty,
+            unit_price: unit,
+            line_total: lineTotal,
+            cost_center: costCenterValue,
+            project: projectValue,
+            item_code: item.item_code_match || "",
+            sapItem: null,
+            searchHint: item.item_search_hint || "",
+          };
+        }),
+      );
+      if (origin === "pagcorp") setCardDefaultsApplied(false);
+    } else if (doc.total_amount && Number(doc.total_amount) > 0) {
+      const fallbackDesc =
+        doc.remarks || (doc.supplier_name ? `Despesa - ${doc.supplier_name}` : "Despesa");
+      setItems([{
+        description: fallbackDesc,
+        quantity: 1,
+        unit_price: Number(doc.total_amount),
+        line_total: Number(doc.total_amount),
+        cost_center: costCenterValue,
+        project: projectValue,
+        item_code: "",
+        sapItem: null,
+        searchHint: "",
+      }]);
+      if (origin === "pagcorp") setCardDefaultsApplied(false);
+    }
+    if (doc.confidence) setAiConfidence(doc.confidence);
+
+    const warnings: string[] = [];
+    if (doc.client_warning) warnings.push(doc.client_warning);
+    if (doc.totals_warning) warnings.push(doc.totals_warning);
+    setAiWarning(warnings.length ? warnings.join("\n\n") : null);
+    for (const w of warnings) toast.warning(w, { duration: 8000 });
+  };
+
+  // Chave estável para agrupar documentos pelo mesmo fornecedor
+  // (prioriza tax id normalizado; usa nome normalizado como fallback).
+  const supplierKeyOf = (doc: any): string => {
+    const taxRaw = String(doc?.supplier_cnpj || doc?.supplier_tax_id || "").replace(/\D+/g, "");
+    if (taxRaw.length >= 8) return `tax:${taxRaw.length === 14 ? taxRaw.slice(0, 8) : taxRaw}`;
+    const name = String(doc?.supplier_name || "").trim().toLowerCase();
+    return name ? `name:${name}` : "unknown";
+  };
+
   const processWithAI = async (filesToProcess: File[]) => {
     setIsProcessing(true);
     setAiConfidence(null);
@@ -496,7 +609,7 @@ export function CreateExpenseModal({
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: formData,
-        }
+        },
       );
 
       if (!resp.ok) {
@@ -505,119 +618,106 @@ export function CreateExpenseModal({
       }
 
       const { result } = await resp.json();
-      const docs = Array.isArray(result) ? result : [result];
+      const docs: any[] = Array.isArray(result) ? result : [result];
 
-      if (docs.length > 1) {
-        const supplierNames = docs.map((d: any) => d.supplier_name?.trim().toLowerCase()).filter(Boolean);
-        const uniqueSuppliers = [...new Set(supplierNames)];
-        if (uniqueSuppliers.length > 1) {
-          const names = docs.map((d: any) => d.supplier_name).filter(Boolean);
-          toast.error(`Os documentos são de fornecedores diferentes (${names.join(", ")}). Cada despesa deve conter documentos de um único fornecedor.`, { duration: 8000 });
-          setAiWarning(`Fornecedores diferentes detectados: ${names.join(", ")}. Remova os documentos inconsistentes.`);
-          setIsProcessing(false);
-          return;
-        }
-      }
+      // Casa cada `doc` extraído com o `File` correspondente (mesma ordem).
+      const paired = docs.map((d, i) => ({ file: filesToProcess[i], extracted: d }));
 
-      const doc = docs[0];
+      // ─── Regra 3: não-fiscais viram só anexo ───────────────────────────
+      const fiscal = paired.filter((p) => p.extracted?.is_fiscal_document !== false);
+      const nonFiscal = paired.filter((p) => p.extracted?.is_fiscal_document === false);
 
-      if (doc.supplier_name) setSuggestedSupplierName(doc.supplier_name);
-      // Capture supplier data for "Cadastrar Fornecedor" fallback (incluindo
-      // endereço, e-mail, telefones, país e moeda extraídos pela IA do documento)
-      const addr = doc.supplier_address || {};
-      const country = (addr.country || doc.supplier_country || "BR")
-        .toString()
-        .toUpperCase()
-        .slice(0, 2);
-      setAiSupplierData({
-        card_name: doc.supplier_name || "",
-        federal_tax_id: doc.supplier_cnpj || doc.supplier_tax_id || "",
-        email: doc.supplier_email || "",
-        phone1: doc.supplier_phone1 || "",
-        phone2: doc.supplier_phone2 || "",
-        currency: doc.currency || "",
-        bill_to_country: country,
-        bill_to_street: addr.street || "",
-        bill_to_building: addr.building || "",
-        bill_to_block: addr.block || "",
-        bill_to_zip: addr.zip
-          ? country === "BR"
-            ? String(addr.zip).replace(/\D/g, "")
-            : String(addr.zip).trim()
-          : "",
-        bill_to_city: addr.city || "",
-        bill_to_state: addr.state
-          ? country === "BR"
-            ? String(addr.state).toUpperCase().slice(0, 2)
-            : String(addr.state).trim()
-          : "",
-      });
-      if (doc.document_date) setDocDate(doc.document_date);
-      if (doc.due_date) setDueDate(doc.due_date);
-      if (doc.remarks) setRemarks(doc.remarks);
-      const costCenterValue = (doc.cost_center_confidence ?? 0) > 0.95 ? (doc.cost_center_hint || "") : "";
-      const projectValue = (doc.project_confidence ?? 0) > 0.95 ? (doc.project_hint || "") : "";
-
-      if (doc.items && doc.items.length > 0) {
-        setItems(
-          doc.items.map((item: any) => {
-            const qty = Number(item.quantity) || 1;
-            let unit = Number(item.unit_price) || 0;
-            const lineTotalRaw = Number(item.line_total) || 0;
-            // Derive unit_price from line_total / qty when AI returned only the total
-            if (unit === 0 && lineTotalRaw !== 0 && qty !== 0) {
-              unit = lineTotalRaw / qty;
-            }
-            const lineTotal = lineTotalRaw !== 0 ? lineTotalRaw : qty * unit;
-            return {
-              description: item.description || "",
-              quantity: qty,
-              unit_price: unit,
-              line_total: lineTotal,
-              cost_center: costCenterValue,
-              project: projectValue,
-              item_code: item.item_code_match || "",
-              sapItem: null,
-              searchHint: item.item_search_hint || "",
-            };
-          })
+      if (nonFiscal.length > 0) {
+        toast.info(
+          `${nonFiscal.length} anexo(s) sem conteúdo fiscal — serão salvos como anexo apenas: ${nonFiscal.map((p) => p.file.name).join(", ")}`,
+          { duration: 7000 },
         );
-        if (origin === "pagcorp") setCardDefaultsApplied(false);
-      } else if (doc.total_amount && Number(doc.total_amount) > 0) {
-        // Fallback: no items detected, create single line with total amount
-        const fallbackDesc =
-          doc.remarks ||
-          (doc.supplier_name ? `Despesa - ${doc.supplier_name}` : "Despesa");
-        setItems([
-          {
-            description: fallbackDesc,
-            quantity: 1,
-            unit_price: Number(doc.total_amount),
-            line_total: Number(doc.total_amount),
-            cost_center: costCenterValue,
-            project: projectValue,
-            item_code: "",
-            sapItem: null,
-            searchHint: "",
-          },
-        ]);
-        if (origin === "pagcorp") setCardDefaultsApplied(false);
       }
-      if (doc.confidence) setAiConfidence(doc.confidence);
 
-      const warnings: string[] = [];
-      if (doc.client_warning) warnings.push(doc.client_warning);
-      if (doc.totals_warning) warnings.push(doc.totals_warning);
-      setAiWarning(warnings.length ? warnings.join("\n\n") : null);
-      for (const w of warnings) toast.warning(w, { duration: 8000 });
+      if (fiscal.length === 0) {
+        setAiWarning("Nenhum documento fiscal reconhecido — os arquivos ficarão apenas como anexo.");
+        return;
+      }
 
-      toast.success("Documento processado pela IA! Valide o fornecedor e os itens nos campos abaixo.");
+      // ─── Agrupa fiscais por fornecedor ────────────────────────────────
+      const groupMap = new Map<string, DocGroup>();
+      for (const p of fiscal) {
+        const key = supplierKeyOf(p.extracted);
+        const label = String(p.extracted?.supplier_name || "Fornecedor não identificado");
+        const g = groupMap.get(key);
+        if (g) g.docs.push(p);
+        else groupMap.set(key, { supplierKey: key, supplierLabel: label, docs: [p] });
+      }
+      const groups = Array.from(groupMap.values());
+
+      // ─── Regra 1: mesmo fornecedor → mescla linhas ────────────────────
+      if (groups.length === 1) {
+        applyFiscalGroup(groups[0].docs.map((d) => d.extracted));
+        const nDocs = groups[0].docs.length;
+        toast.success(
+          nDocs > 1
+            ? `${nDocs} documentos do mesmo fornecedor processados — todas as linhas foram mescladas.`
+            : "Documento processado pela IA! Valide o fornecedor e os itens nos campos abaixo.",
+        );
+        return;
+      }
+
+      // ─── Regra 2: fornecedores diferentes → perguntar ao usuário ──────
+      setSupplierPicker({
+        groups,
+        nonFiscal: nonFiscal.map((p) => p.file),
+      });
     } catch (e) {
       console.error("AI processing error:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao processar com IA");
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
+  const chooseFirstSupplierGroup = (chosenKey: string) => {
+    if (!supplierPicker) return;
+    const chosen = supplierPicker.groups.find((g) => g.supplierKey === chosenKey);
+    const rest = supplierPicker.groups.filter((g) => g.supplierKey !== chosenKey);
+    if (!chosen) return;
+
+    // Anexos ativos = arquivos do grupo escolhido + não-fiscais soltos.
+    // Os arquivos dos grupos adiados ficam guardados em `deferredGroups`
+    // e voltam a aparecer no modal quando reabrirmos para eles.
+    const chosenFiles = chosen.docs.map((d) => d.file);
+    setFiles([...chosenFiles, ...supplierPicker.nonFiscal]);
+    applyFiscalGroup(chosen.docs.map((d) => d.extracted));
+    setDeferredGroups(rest);
+    setSupplierPicker(null);
+    toast.success(
+      `Criando 1º: ${chosen.supplierLabel}. Ao terminar, abriremos ${rest.length} nova(s) despesa(s) para os demais fornecedores.`,
+      { duration: 7000 },
+    );
+  };
+
+
+  // Encadeia a próxima despesa quando existem grupos adiados de anexos com
+  // fornecedores diferentes. Zera cabeçalho/itens/anexos/rascunho e aplica
+  // o grupo pendente ao formulário — o modal segue aberto.
+  const resetFormForNextDeferred = (next: DocGroup) => {
+    setSupplier(null);
+    setSuggestedSupplierName(undefined);
+    setAiSupplierData(null);
+    setCurrency("");
+    setCurrencyWarning(null);
+    setCurrencyOptions(null);
+    setDocDate("");
+    setDueDate("");
+    setRemarks("");
+    setHeaderCostCenter(null);
+    setHeaderProject(null);
+    setAiWarning(null);
+    setAiConfidence(null);
+    setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
+    setFiles(next.docs.map((d) => d.file));
+    setDraftId(null);
+    applyFiscalGroup(next.docs.map((d) => d.extracted));
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -795,6 +895,21 @@ export function CreateExpenseModal({
         void deleteDraft(draftId);
         setDraftId(null);
       }
+
+      // Se houver grupos de fornecedores adiados (regra 2 — anexos com
+      // fornecedores diferentes), abrimos automaticamente o próximo em vez
+      // de fechar o modal, mantendo o encadeamento pedido pelo usuário.
+      if (deferredGroups.length > 0) {
+        const [next, ...rest] = deferredGroups;
+        resetFormForNextDeferred(next);
+        setDeferredGroups(rest);
+        toast.info(
+          `Agora criando a despesa de ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} restante(s))` : ""}.`,
+          { duration: 6000 },
+        );
+        return;
+      }
+
       onClose();
     } catch (e: any) {
       console.error("Erro ao criar despesa:", e);
@@ -1439,6 +1554,51 @@ export function CreateExpenseModal({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Picker de fornecedor — quando 2+ anexos fiscais têm fornecedores
+        diferentes, o usuário escolhe qual despesa criar PRIMEIRO. Os demais
+        grupos ficam adiados e abrem automaticamente após a submissão. */}
+    <AlertDialog open={!!supplierPicker} onOpenChange={(v) => { if (!v) setSupplierPicker(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Anexos com fornecedores diferentes</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              <p>
+                Detectamos <strong>{supplierPicker?.groups.length}</strong> fornecedores nos anexos enviados. Cada despesa
+                deve conter documentos de um único fornecedor — escolha por qual começar. Assim que você submeter,
+                abriremos automaticamente uma nova despesa para o próximo.
+              </p>
+              <div className="space-y-2">
+                {supplierPicker?.groups.map((g) => (
+                  <button
+                    key={g.supplierKey}
+                    type="button"
+                    onClick={() => chooseFirstSupplierGroup(g.supplierKey)}
+                    className="w-full rounded-md border border-border bg-muted/30 hover:bg-muted/60 transition p-3 text-left"
+                  >
+                    <div className="font-medium">{g.supplierLabel}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {g.docs.length} documento(s): {g.docs.map((d) => d.file.name).join(", ")}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {supplierPicker && supplierPicker.nonFiscal.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Anexos não-fiscais ({supplierPicker.nonFiscal.map((f) => f.name).join(", ")}) irão junto com a
+                  primeira despesa como anexo.
+                </p>
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
   </>
   );
 }
