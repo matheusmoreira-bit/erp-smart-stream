@@ -141,6 +141,71 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // ── Idempotência ───────────────────────────────────────────────────────
+  // Aceita `Idempotency-Key` ou `x-idempotency-key`. Se a mesma chave já
+  // teve resposta gravada, replicamos a resposta original. Se está em
+  // processamento (linha reservada, ainda sem resposta), devolvemos 409
+  // — protege contra reenvios por perda de conexão / duplo clique.
+  const idempotencyKey =
+    (req.headers.get("idempotency-key") || req.headers.get("x-idempotency-key") || "").trim();
+
+  const respond = async (status: number, body: unknown): Promise<Response> => {
+    if (idempotencyKey) {
+      try {
+        await admin
+          .from("expense_action_idempotency")
+          .update({
+            status_code: status,
+            response: body as Record<string, unknown>,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("idempotency_key", idempotencyKey);
+      } catch (e) {
+        console.warn("[expense-approval-action] falha ao gravar idempotência:", e);
+      }
+    }
+    return json(status, body);
+  };
+
+  if (idempotencyKey) {
+    // 1) Já existe? → devolve a resposta gravada (ou 409 se ainda em curso).
+    const { data: prior } = await admin
+      .from("expense_action_idempotency")
+      .select("idempotency_key, expense_id, action, status_code, response, completed_at")
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+    if (prior) {
+      if ((prior as any).expense_id !== expenseId || (prior as any).action !== action) {
+        return json(422, {
+          error: "Idempotency-Key já utilizada para outra requisição.",
+        });
+      }
+      if ((prior as any).completed_at && (prior as any).status_code) {
+        return json(
+          (prior as any).status_code,
+          (prior as any).response ?? { ok: true, replayed: true },
+        );
+      }
+      return json(409, {
+        error: "Requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
+      });
+    }
+    // 2) Reserva a chave — falha por conflito indica corrida com outro request.
+    const { error: reserveErr } = await admin
+      .from("expense_action_idempotency")
+      .insert({
+        idempotency_key: idempotencyKey,
+        expense_id: expenseId,
+        action,
+      });
+    if (reserveErr) {
+      return json(409, {
+        error: "Requisição idêntica em processamento (conflito ao reservar a chave).",
+      });
+    }
+  }
+
+
   // ── Identify caller ────────────────────────────────────────────────────
   const sapSessionHeader = req.headers.get("x-sap-session")?.trim() || "";
   const sapRouteHeader = req.headers.get("x-sap-route")?.trim() || "";
