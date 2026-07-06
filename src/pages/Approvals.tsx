@@ -30,6 +30,7 @@ import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useSapUsers } from "@/hooks/useSapUsers";
@@ -360,6 +361,7 @@ function ApprovalDetailModal({
   formatCostCenter,
   rules,
   isAdmin,
+  canApprove,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -374,6 +376,7 @@ function ApprovalDetailModal({
   formatCostCenter: (code?: string | null) => string;
   rules: ApprovalRule[];
   isAdmin: boolean;
+  canApprove: boolean;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
@@ -841,23 +844,31 @@ function ApprovalDetailModal({
                     Delegar
                   </Button>
                 )}
-                <Button
-                  variant="destructive"
-                  onClick={() => handleAction("reject")}
-                  disabled={isActioning}
-                  className="gap-1.5"
-                >
-                  {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                  Rejeitar
-                </Button>
-                <Button
-                  onClick={() => handleAction("approve")}
-                  disabled={isActioning}
-                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                  Aprovar
-                </Button>
+                {canApprove ? (
+                  <>
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleAction("reject")}
+                      disabled={isActioning}
+                      className="gap-1.5"
+                    >
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                      Rejeitar
+                    </Button>
+                    <Button
+                      onClick={() => handleAction("approve")}
+                      disabled={isActioning}
+                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                      Aprovar
+                    </Button>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic self-center">
+                    Somente leitura — você não é o aprovador deste documento
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1240,9 +1251,12 @@ export default function ApprovalsPage() {
   const [isActioning, setIsActioning] = useState(false);
   const isSuperUser = session?.isSuperUser ?? false;
   const isAdmin = isLovableAdmin || isSuperUser;
-  // Admins veem tudo por padrão (toggle ligado); demais usuários só veem o que aprovam/criaram.
-  const [showAll, setShowAll] = useState<boolean>(isAdmin);
-  useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
+  const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
+  // "Ver todas" fica ligado por padrão para admins e para grupos com acesso view-all
+  // (Financeiro / Fiscal / Contábil). Demais usuários seguem restritos ao seu escopo.
+  const canToggleShowAll = isAdmin || canViewAllApprovals;
+  const [showAll, setShowAll] = useState<boolean>(canToggleShowAll);
+  useEffect(() => { setShowAll(canToggleShowAll); }, [canToggleShowAll]);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [isDelegating, setIsDelegating] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
@@ -1284,7 +1298,7 @@ export default function ApprovalsPage() {
 
   // Filter: por padrão mostra apenas aprovações em que o usuário é aprovador OU solicitante.
   // Admin pode usar o toggle "Ver todas" para visualizar todos os lançamentos.
-  const effectiveShowAll = isAdmin && showAll;
+  const effectiveShowAll = canToggleShowAll && showAll;
   const sessionUser = (session.userName || "").toLowerCase().trim();
   const codeEq = (code?: string) => !!code && code.toLowerCase().trim() === sessionUser;
   const userApprovals = effectiveShowAll
@@ -1612,7 +1626,7 @@ export default function ApprovalsPage() {
               className="pl-9 bg-muted/30 border-border"
             />
           </div>
-          {isAdmin && (
+          {canToggleShowAll && (
             <div className="flex items-center gap-2 glass-card px-3 py-2">
               <ShieldAlert className="w-4 h-4 text-amber-400" />
               <Label htmlFor="show-all" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
@@ -1881,6 +1895,13 @@ export default function ApprovalsPage() {
         formatCostCenter={formatCostCenter}
         rules={rules}
         isAdmin={isAdmin}
+        canApprove={
+          !!selectedDoc && (
+            isAdmin ||
+            codeEq(selectedDoc.approverCode) ||
+            approverMatches(selectedDoc.currentApprover, session.userName)
+          )
+        }
       />
 
 

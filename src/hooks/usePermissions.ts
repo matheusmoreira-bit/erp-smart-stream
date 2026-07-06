@@ -29,6 +29,7 @@ export const ALL_MODULES = [
   { key: "sales", label: "Vendas" },
   { key: "approvals", label: "Aprovações — Pendentes" },
   { key: "approval_history", label: "Aprovações — Histórico" },
+  { key: "approvals_view_all", label: "Aprovações — Ver todas (somente leitura)" },
   { key: "approval_rules", label: "Regras de Aprovação" },
   { key: "pagcorp", label: "Cartões Corporativos" },
   { key: "users", label: "Usuários" },

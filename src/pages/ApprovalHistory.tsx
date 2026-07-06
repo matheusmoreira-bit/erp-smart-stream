@@ -5,6 +5,7 @@ import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, C
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { useApprovalHistory, type ApprovalHistoryRow } from "@/hooks/useApprovalHistory";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -33,6 +34,8 @@ export default function ApprovalHistory() {
   const { session } = useSap();
   const { isAdmin: isLovableAdmin } = useAuth();
   const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
+  const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
+  const canViewAll = isAdmin || canViewAllApprovals;
   const { getLabel } = useCompanies(true);
   const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
   const { expenses: purchaseExpenses } = useExpenses("purchase");
@@ -50,16 +53,16 @@ export default function ApprovalHistory() {
 
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
-  // Admin vê tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
-  const [scope, setScope] = useState<"mine" | "all">(isAdmin ? "all" : "mine");
-  useEffect(() => { setScope(isAdmin ? "all" : "mine"); }, [isAdmin]);
+  // Admin/view-all veem tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
+  const [scope, setScope] = useState<"mine" | "all">(canViewAll ? "all" : "mine");
+  useEffect(() => { setScope(canViewAll ? "all" : "mine"); }, [canViewAll]);
 
   const myKeys = useMemo(() => {
     const list = [(session?.userName || "").toLowerCase()].filter(Boolean);
     return new Set(list);
   }, [session]);
 
-  const effectiveScope: "mine" | "all" = isAdmin ? scope : "mine";
+  const effectiveScope: "mine" | "all" = canViewAll ? scope : "mine";
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -133,7 +136,7 @@ export default function ApprovalHistory() {
               className="pl-9"
             />
           </div>
-          {isAdmin && (
+          {canViewAll && (
             <Select value={scope} onValueChange={(v) => setScope(v as "mine" | "all")}>
               <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
