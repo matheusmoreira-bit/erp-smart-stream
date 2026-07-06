@@ -595,7 +595,11 @@ export function CreateExpenseModal({
 
   const processWithAI = async (filesToProcess: File[]) => {
     setIsProcessing(true);
+    // Reseta estado herdado de tentativas anteriores para que um retry
+    // não mostre picker/warning/confidence obsoletos ao usuário.
     setAiConfidence(null);
+    setAiWarning(null);
+    setSupplierPicker(null);
     try {
       const formData = new FormData();
       filesToProcess.forEach((f) => formData.append("files", f));
@@ -613,19 +617,35 @@ export function CreateExpenseModal({
       );
 
       if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.error || "Erro ao processar");
+        const err = await resp.json().catch(() => ({} as any));
+        const detail = err?.error || `HTTP ${resp.status}`;
+        const names = filesToProcess.map((f) => f.name).join(", ");
+        throw new Error(
+          filesToProcess.length > 1
+            ? `Falha ao processar ${filesToProcess.length} anexo(s) (${names}): ${detail}`
+            : `Falha ao processar "${names}": ${detail}`,
+        );
       }
 
       const { result } = await resp.json();
       const docs: any[] = Array.isArray(result) ? result : [result];
 
       // Casa cada `doc` extraído com o `File` correspondente (mesma ordem).
-      const paired = docs.map((d, i) => ({ file: filesToProcess[i], extracted: d }));
+      // Se o servidor devolveu menos entradas do que arquivos, avisamos por
+      // nome quais não voltaram — os arquivos ficam no modal para retry.
+      const paired = filesToProcess.map((file, i) => ({ file, extracted: docs[i] }));
+      const missing = paired.filter((p) => !p.extracted || typeof p.extracted !== "object");
+      if (missing.length > 0) {
+        toast.error(
+          `Falha ao interpretar ${missing.length} anexo(s): ${missing.map((p) => p.file.name).join(", ")}. Reenvie os arquivos e tente processar novamente.`,
+          { duration: 9000 },
+        );
+      }
+      const valid = paired.filter((p) => p.extracted && typeof p.extracted === "object");
 
       // ─── Regra 3: não-fiscais viram só anexo ───────────────────────────
-      const fiscal = paired.filter((p) => p.extracted?.is_fiscal_document !== false);
-      const nonFiscal = paired.filter((p) => p.extracted?.is_fiscal_document === false);
+      const fiscal = valid.filter((p) => p.extracted?.is_fiscal_document !== false);
+      const nonFiscal = valid.filter((p) => p.extracted?.is_fiscal_document === false);
 
       if (nonFiscal.length > 0) {
         toast.info(
@@ -669,7 +689,13 @@ export function CreateExpenseModal({
       });
     } catch (e) {
       console.error("AI processing error:", e);
-      toast.error(e instanceof Error ? e.message : "Erro ao processar com IA");
+      // Garante estado limpo para um novo retry (sem picker/warning presos).
+      setSupplierPicker(null);
+      setAiConfidence(null);
+      const msg = e instanceof Error ? e.message : "Erro ao processar com IA";
+      toast.error(`${msg} — os arquivos foram mantidos no modal, clique em processar novamente.`, {
+        duration: 9000,
+      });
     } finally {
       setIsProcessing(false);
     }
