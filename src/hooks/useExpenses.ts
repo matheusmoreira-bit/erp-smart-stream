@@ -930,12 +930,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   );
 
   const rejectExpense = useCallback(
-    async (expenseId: string, remarks?: string) => {
+    async (expenseId: string, remarks?: string, idempotencyKey?: string) => {
       // Same server-side authorization as approveExpense — never flip the
       // status directly from the client.
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
       const resp = await sapFunctionFetch("expense-approval-action", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ expense_id: expenseId, action: "reject", remarks: remarks || undefined }),
       });
       const payload = await resp.json().catch(() => ({}));
