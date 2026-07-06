@@ -370,6 +370,7 @@ function ApprovalDetailModal({
   open: boolean;
   onClose: () => void;
   onAction: (code: number, action: "approve" | "reject", remarks: string, opts?: { idempotencyKey?: string }) => Promise<void>;
+  onRetryRefresh: () => Promise<void>;
   onDelegate: (doc: ApprovalDoc) => void;
   isActioning: boolean;
   actionPhase: "idle" | "sending" | "refreshing";
