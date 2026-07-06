@@ -28,8 +28,9 @@ interface TransferResult {
 export default function TransferApprovalsTool() {
   const [companies, setCompanies] = useState<CompanyOpt[]>([]);
   const [companyDb, setCompanyDb] = useState("open_gaming_sa");
-  const [fromUser, setFromUser] = useState("lucas.pereira");
+  const [fromUser, setFromUser] = useState("");
   const [toUser, setToUser] = useState("juliana.gavineli");
+  const [costCenter, setCostCenter] = useState("");
   const [reason, setReason] = useState("Transferência administrativa de aprovações pendentes");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TransferResult | null>(null);
