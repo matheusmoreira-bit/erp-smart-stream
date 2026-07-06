@@ -381,6 +381,7 @@ function ApprovalDetailModal({
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
   const [showAllLines, setShowAllLines] = useState(false);
   const { session } = useSap();
@@ -460,15 +461,19 @@ function ApprovalDetailModal({
     // Sempre confirmar antes de aprovar/rejeitar — mostra resumo do que
     // está sendo decidido e destaca quando é super-usuário agindo em
     // documento de outro aprovador.
+    setActionError(null);
     setRiskConfirm({ action });
   };
 
   const confirmRiskAction = async () => {
     if (!riskConfirm || !doc || isActioning) return;
+    setActionError(null);
     try {
       await onAction(doc.approvalRequestId, riskConfirm.action, remarks);
-    } finally {
       setRiskConfirm(null);
+    } catch (e) {
+      // Mantém o modal aberto para o usuário revisar e tentar novamente.
+      setActionError(e instanceof Error ? e.message : "Erro ao processar ação");
     }
   };
 
@@ -878,7 +883,7 @@ function ApprovalDetailModal({
       </Dialog>
 
       {/* Confirmação de aprovação / rejeição — sempre exibida com resumo */}
-      <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v && !isActioning) setRiskConfirm(null); }}>
+      <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v && !isActioning) { setRiskConfirm(null); setActionError(null); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -946,10 +951,19 @@ function ApprovalDetailModal({
                   </div>
                 )}
               </div>
-            </AlertDialogDescription>
+          </AlertDialogDescription>
           </AlertDialogHeader>
+          {actionError && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive">
+              <XOctagon className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="text-xs space-y-1 min-w-0">
+                <p className="font-semibold">Falha ao processar a ação</p>
+                <p className="break-words whitespace-pre-wrap">{actionError}</p>
+              </div>
+            </div>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActioning}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isActioning}>{actionError ? "Fechar" : "Cancelar"}</AlertDialogCancel>
             <Button
               onClick={confirmRiskAction}
               disabled={isActioning}
@@ -964,7 +978,9 @@ function ApprovalDetailModal({
               )}
               {isActioning
                 ? "Processando…"
-                : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
+                : actionError
+                  ? "Tentar novamente"
+                  : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1510,7 +1526,9 @@ export default function ApprovalsPage() {
       refresh();
     } catch (e) {
       console.error("Approval action error:", e);
-      toast.error(e instanceof Error ? e.message : "Erro ao processar ação");
+      const message = e instanceof Error ? e.message : "Erro ao processar ação";
+      toast.error(message);
+      throw e instanceof Error ? e : new Error(message);
     } finally {
       setIsActioning(false);
     }
