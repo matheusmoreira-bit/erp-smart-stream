@@ -380,7 +380,7 @@ function ApprovalDetailModal({
   canApprove: boolean;
 }) {
   const [remarks, setRemarks] = useState("");
-  const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" } | null>(null);
+  const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject"; idempotencyKey: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
   const [showAllLines, setShowAllLines] = useState(false);
