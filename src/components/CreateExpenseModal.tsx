@@ -1084,8 +1084,46 @@ export function CreateExpenseModal({
           <DialogTitle>{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
 
+        {/* Barra de progresso do fluxo: classificação IA, salvamento e fila
+            de despesas encadeadas (deferredGroups da regra de fornecedores
+            diferentes). Fica sempre visível para o usuário saber o estado. */}
+        {(isProcessing || isCreating || deferredGroups.length > 0) && (
+          <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+            {isProcessing && (
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                <span>
+                  Classificando {files.length} anexo(s) com IA — identificando fornecedor, itens e tipo do documento…
+                </span>
+              </div>
+            )}
+            {isCreating && (
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                <span>
+                  Salvando {isSales ? "pedido de venda" : "despesa"}
+                  {files.length > 0 ? ` e enviando ${files.length} anexo(s)` : ""}…
+                </span>
+              </div>
+            )}
+            {deferredGroups.length > 0 && !isCreating && !isProcessing && (
+              <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                <span className="mt-0.5">📋</span>
+                <div className="flex-1">
+                  <div className="text-foreground font-medium">
+                    Fila: {deferredGroups.length} despesa(s) aguardando após esta
+                  </div>
+                  <div className="mt-0.5 truncate">
+                    Próximas: {deferredGroups.map((g) => g.supplierLabel).join(" → ")}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-4 mt-2">
+
           {origin === "pagcorp" && mappingInfo && (
             <PagCorpCardMappingBanner
               status={mappingInfo.status}
@@ -1519,7 +1557,15 @@ export function CreateExpenseModal({
             <Button variant="outline" onClick={requestClose} disabled={isCreating}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="gap-1.5">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              {isSales ? "Criar Pedido de Venda" : "Criar Despesa"}
+              {isCreating
+                ? "Salvando…"
+                : isProcessing
+                  ? "Aguardando IA…"
+                  : deferredGroups.length > 0
+                    ? `${isSales ? "Criar Pedido" : "Criar Despesa"} (1 de ${deferredGroups.length + 1})`
+                    : isSales
+                      ? "Criar Pedido de Venda"
+                      : "Criar Despesa"}
             </Button>
           </div>
         </div>
