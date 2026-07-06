@@ -1005,12 +1005,26 @@ function ApprovalDetailModal({
             <div
               role="alert"
               aria-live="assertive"
-              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+              className={`flex items-start gap-2 rounded-md border p-3 ${
+                errorKind === "refresh"
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                  : "border-destructive/40 bg-destructive/10 text-destructive"
+              }`}
             >
               <XOctagon className="w-4 h-4 mt-0.5 shrink-0" />
               <div className="text-xs space-y-1 min-w-0">
-                <p className="font-semibold">Falha ao processar a ação</p>
+                <p className="font-semibold">
+                  {errorKind === "refresh"
+                    ? "Decisão registrada, mas a lista não atualizou"
+                    : "Falha ao processar a ação"}
+                </p>
                 <p className="break-words whitespace-pre-wrap">{actionError}</p>
+                {errorKind === "refresh" && (
+                  <p className="text-[11px] opacity-80">
+                    A ação já foi enviada com sucesso — não reenvie a decisão. Clique em
+                    "Atualizar novamente" para recarregar a lista.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -1022,14 +1036,22 @@ function ApprovalDetailModal({
               {actionError ? "Fechar" : "Cancelar"}
             </AlertDialogCancel>
             <Button
-              onClick={confirmRiskAction}
+              onClick={errorKind === "refresh" ? retryRefreshFromModal : confirmRiskAction}
               disabled={isActioning}
               autoFocus={!!actionError}
               aria-keyshortcuts="Control+Enter Meta+Enter"
-              className={`gap-1.5 ${riskConfirm?.action === "reject" ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
+              className={`gap-1.5 ${
+                errorKind === "refresh"
+                  ? "bg-amber-600 hover:bg-amber-700 text-white"
+                  : riskConfirm?.action === "reject"
+                    ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+              }`}
             >
               {isActioning ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : errorKind === "refresh" ? (
+                <RefreshCw className="w-4 h-4" />
               ) : riskConfirm?.action === "approve" ? (
                 <CheckCircle className="w-4 h-4" />
               ) : (
@@ -1039,9 +1061,11 @@ function ApprovalDetailModal({
                 ? "Enviando decisão…"
                 : actionPhase === "refreshing"
                   ? "Atualizando lista…"
-                  : actionError
-                    ? "Tentar novamente"
-                    : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
+                  : errorKind === "refresh"
+                    ? "Atualizar novamente"
+                    : actionError
+                      ? "Tentar novamente"
+                      : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
