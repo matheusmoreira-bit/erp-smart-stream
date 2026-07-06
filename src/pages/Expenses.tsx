@@ -179,18 +179,28 @@ function ExpenseDetailModal({
                 <p className="text-xs text-muted-foreground">Data de Criação</p>
                 <p className="text-foreground">{formatDate(expense.created_at)}</p>
               </div>
-              {expense.due_date && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Data de Vencimento</p>
-                  <p className="text-foreground">{formatDate(expense.due_date)}</p>
+              <div>
+                <p className="text-xs text-muted-foreground">Data do Documento</p>
+                <p className="text-foreground">{expense.doc_date ? formatDate(expense.doc_date) : "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Data de Vencimento</p>
+                <div className="flex items-center gap-2">
+                  <p className={expense.due_date ? "text-foreground" : "text-muted-foreground"}>
+                    {expense.due_date ? formatDate(expense.due_date) : "—"}
+                  </p>
+                  {!expense.due_date && expense.status === "pendente_aprovacao" && (expense.attachments?.length ?? 0) > 0 && (
+                    <BackfillDueDateButton expenseId={expense.id} />
+                  )}
                 </div>
-              )}
+              </div>
               {expense.current_approver && (
                 <div>
                   <p className="text-xs text-muted-foreground">Aprovador Atual</p>
                   <p className="text-foreground font-medium">{expense.current_approver}</p>
                 </div>
               )}
+
             </div>
 
             {expense.remarks && (
