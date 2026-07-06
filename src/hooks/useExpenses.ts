@@ -659,14 +659,26 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             } catch (attErr) {
               console.error("Falha ao registrar anexos:", attErr);
               toast.error(
-                `Despesa criada, mas falhou ao registrar ${uploaded.length} anexo(s): ${attErr instanceof Error ? attErr.message : String(attErr)}`,
+                `Despesa criada, mas falhou ao registrar ${uploaded.length} anexo(s) no servidor: ${attErr instanceof Error ? attErr.message : String(attErr)}. Reabra a despesa e reanexe os arquivos.`,
+                { duration: 10000 },
               );
             }
           }
           if (failed.length > 0) {
-            toast.error(
-              `Despesa criada, mas ${failed.length} anexo(s) falharam ao enviar: ${failed.join("; ")}`,
-            );
+            // Um toast por arquivo (até 3), depois consolida o restante,
+            // sempre nomeando o arquivo para o usuário poder reanexar.
+            const shown = failed.slice(0, 3);
+            for (const f of shown) {
+              toast.error(`Falha ao enviar anexo "${f}". Reabra a despesa criada e reanexe o arquivo.`, {
+                duration: 9000,
+              });
+            }
+            if (failed.length > shown.length) {
+              toast.error(
+                `+ ${failed.length - shown.length} outro(s) anexo(s) falharam ao enviar. Reabra a despesa para reanexá-los.`,
+                { duration: 9000 },
+              );
+            }
           }
         }
 
