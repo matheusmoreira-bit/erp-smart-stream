@@ -2090,6 +2090,7 @@ export default function ApprovalsPage() {
         open={!!selectedDoc}
         onClose={() => setSelectedDoc(null)}
         onAction={handleApprovalAction}
+        onRetryRefresh={handleRetryRefresh}
         onDelegate={(d) => setDelegationDoc(d)}
         isActioning={isActioning}
         actionPhase={actionPhase}
