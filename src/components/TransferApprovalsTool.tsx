@@ -43,11 +43,15 @@ export default function TransferApprovalsTool() {
   }, []);
 
   const run = async (dryRun: boolean) => {
-    if (!companyDb || !fromUser.trim() || !toUser.trim()) {
-      toast.error("Preencha empresa, usuário de origem e destino");
+    if (!companyDb || !toUser.trim()) {
+      toast.error("Preencha empresa e usuário de destino");
       return;
     }
-    if (fromUser.trim().toLowerCase() === toUser.trim().toLowerCase()) {
+    if (!fromUser.trim() && !costCenter.trim()) {
+      toast.error("Informe usuário de origem e/ou centro de custo");
+      return;
+    }
+    if (fromUser.trim() && fromUser.trim().toLowerCase() === toUser.trim().toLowerCase()) {
       toast.error("Origem e destino devem ser diferentes");
       return;
     }
