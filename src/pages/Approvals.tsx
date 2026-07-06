@@ -463,9 +463,11 @@ function ApprovalDetailModal({
     setRiskConfirm({ action });
   };
 
-  const confirmRiskAction = () => {
-    if (riskConfirm && doc) {
-      onAction(doc.approvalRequestId, riskConfirm.action, remarks);
+  const confirmRiskAction = async () => {
+    if (!riskConfirm || !doc || isActioning) return;
+    try {
+      await onAction(doc.approvalRequestId, riskConfirm.action, remarks);
+    } finally {
       setRiskConfirm(null);
     }
   };
@@ -876,7 +878,7 @@ function ApprovalDetailModal({
       </Dialog>
 
       {/* Confirmação de aprovação / rejeição — sempre exibida com resumo */}
-      <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v) setRiskConfirm(null); }}>
+      <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v && !isActioning) setRiskConfirm(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -947,13 +949,23 @@ function ApprovalDetailModal({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
+            <AlertDialogCancel disabled={isActioning}>Cancelar</AlertDialogCancel>
+            <Button
               onClick={confirmRiskAction}
-              className={riskConfirm?.action === "reject" ? "bg-destructive hover:bg-destructive/90" : "bg-emerald-600 hover:bg-emerald-700"}
+              disabled={isActioning}
+              className={`gap-1.5 ${riskConfirm?.action === "reject" ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
             >
-              Sim, {riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}
-            </AlertDialogAction>
+              {isActioning ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : riskConfirm?.action === "approve" ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : (
+                <XCircle className="w-4 h-4" />
+              )}
+              {isActioning
+                ? "Processando…"
+                : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
