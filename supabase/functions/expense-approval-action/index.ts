@@ -313,7 +313,7 @@ Deno.serve(async (req) => {
       approver_name: actor,
       approver_email: actorEmail,
       level_order: currentLevel,
-      remarks,
+      remarks: mergedRemarks,
     } as any);
     return json(200, {
       ok: true,
@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
     approver_name: actor,
     approver_email: actorEmail,
     level_order: currentLevel,
-    remarks,
+    remarks: mergedRemarks,
   } as any);
 
   if (!isFinalLevel) {
