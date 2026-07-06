@@ -457,11 +457,10 @@ function ApprovalDetailModal({
   const isOtherApprover = isSuperUser && doc.currentApprover.toLowerCase() !== currentUserName.toLowerCase();
 
   const handleAction = (action: "approve" | "reject") => {
-    if (isOtherApprover) {
-      setRiskConfirm({ action });
-    } else {
-      onAction(doc.approvalRequestId, action, remarks);
-    }
+    // Sempre confirmar antes de aprovar/rejeitar — mostra resumo do que
+    // está sendo decidido e destaca quando é super-usuário agindo em
+    // documento de outro aprovador.
+    setRiskConfirm({ action });
   };
 
   const confirmRiskAction = () => {
