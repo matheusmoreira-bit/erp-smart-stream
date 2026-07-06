@@ -24,6 +24,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
@@ -798,8 +808,133 @@ export function CreateExpenseModal({
     }
   };
 
+  const [closeConfirm, setCloseConfirm] = useState(false);
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (isCreating) return false;
+    if (supplier) return true;
+    if (suggestedSupplierName) return true;
+    if (currency) return true;
+    if (docDate) return true;
+    if (dueDate) return true;
+    if (remarks && remarks.trim().length > 0) return true;
+    if (headerCostCenter) return true;
+    if (headerProject) return true;
+    if (files.length > 0) return true;
+    if (
+      items.some(
+        (it) =>
+          (it.description && it.description.trim().length > 0) ||
+          (it.item_code && String(it.item_code).trim().length > 0) ||
+          Number(it.quantity) > 0 ||
+          Number(it.unit_price) > 0 ||
+          Number(it.line_total) > 0 ||
+          it.sapItem ||
+          it.sapCostCenter ||
+          it.sapProject,
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }, [
+    isCreating,
+    supplier,
+    suggestedSupplierName,
+    currency,
+    docDate,
+    dueDate,
+    remarks,
+    headerCostCenter,
+    headerProject,
+    files,
+    items,
+  ]);
+
+  const requestClose = useCallback(() => {
+    if (isCreating) return;
+    if (hasUnsavedChanges) {
+      setCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [hasUnsavedChanges, isCreating, onClose]);
+
+  const handleSaveDraftAndClose = useCallback(async () => {
+    const companyDb = sapSession?.companyDB;
+    setCloseConfirm(false);
+    if (!companyDb) {
+      onClose();
+      return;
+    }
+    try {
+      const draftTotal = items.reduce((s, it) => s + (Number(it.line_total) || 0), 0);
+      const previewParts = [
+        supplier?.name || suggestedSupplierName || "(sem fornecedor)",
+        items.length > 0 ? `${items.length} ite${items.length > 1 ? "ns" : "m"}` : null,
+        draftTotal > 0 ? formatCurrency(draftTotal, currency || "BRL") : null,
+      ].filter(Boolean);
+      const preview = previewParts.join(" · ");
+      const id = await saveDraft({
+        docType: mode,
+        companyDb,
+        payload: {
+          supplier,
+          currency,
+          docDate,
+          dueDate,
+          remarks,
+          items,
+          headerCostCenter,
+          headerProject,
+          fileNames: files.map((f) => f.name),
+        },
+        preview,
+        draftId,
+      });
+      if (id) {
+        onDraftSaved?.(id);
+        toast.success("Esboço salvo. Você pode retomar mais tarde.");
+      }
+    } catch (e) {
+      console.error("Falha ao salvar esboço:", e);
+      toast.error("Não foi possível salvar o esboço.");
+    } finally {
+      onClose();
+    }
+  }, [
+    sapSession?.companyDB,
+    items,
+    supplier,
+    suggestedSupplierName,
+    currency,
+    docDate,
+    dueDate,
+    remarks,
+    headerCostCenter,
+    headerProject,
+    files,
+    draftId,
+    mode,
+    onClose,
+    onDraftSaved,
+  ]);
+
+  const handleDiscardAndClose = useCallback(async () => {
+    setCloseConfirm(false);
+    if (draftId) {
+      try {
+        await deleteDraft(draftId);
+      } catch (e) {
+        console.warn("Falha ao descartar esboço:", e);
+      }
+    }
+    onClose();
+  }, [draftId, onClose]);
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) requestClose(); }}>
       <DialogContent
         ref={setDialogContainer}
         className="max-w-2xl max-h-[85vh] overflow-y-auto"
@@ -807,6 +942,7 @@ export function CreateExpenseModal({
         <DialogHeader>
           <DialogTitle>{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
+
 
         <div className="space-y-4 mt-2">
           {origin === "pagcorp" && mappingInfo && (
@@ -1239,7 +1375,7 @@ export function CreateExpenseModal({
           </div>
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose} disabled={isCreating}>Cancelar</Button>
+            <Button variant="outline" onClick={requestClose} disabled={isCreating}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="gap-1.5">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               {isSales ? "Criar Pedido de Venda" : "Criar Despesa"}
@@ -1248,5 +1384,27 @@ export function CreateExpenseModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Sair sem finalizar?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Você já preencheu campos deste {isSales ? "pedido de venda" : "pedido de compra"}.
+            O que deseja fazer?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel className="sm:mr-auto">Continuar editando</AlertDialogCancel>
+          <Button variant="outline" onClick={handleDiscardAndClose}>
+            Sair sem salvar
+          </Button>
+          <AlertDialogAction onClick={handleSaveDraftAndClose}>
+            Salvar como esboço
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 }
