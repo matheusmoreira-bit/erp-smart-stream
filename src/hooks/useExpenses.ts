@@ -952,6 +952,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         throw new Error(payload?.error || `Falha ao rejeitar (HTTP ${resp.status})`);
       }
       await fetchExpenses();
+      return { replayed: !!payload.replayed };
     },
     [fetchExpenses, session]
   );
