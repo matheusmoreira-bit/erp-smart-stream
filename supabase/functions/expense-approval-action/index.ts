@@ -396,6 +396,54 @@ Deno.serve(async (req) => {
     ? [remarks, substitutionNote].filter(Boolean).join(" — ")
     : remarks;
 
+  // ── Audit log (rastreabilidade) ───────────────────────────────────────
+  // Gravado SEMPRE na tabela `expense_audit_log`, além do
+  // `expense_approval_log` que alimenta a UI. Captura contexto extra
+  // (IP, user-agent, request-id, flags de override/substituição) para
+  // auditoria posterior. Falhas ao gravar não bloqueiam a decisão.
+  const clientIp =
+    (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
+    req.headers.get("x-real-ip") ||
+    req.headers.get("cf-connecting-ip") ||
+    null;
+  const userAgent = req.headers.get("user-agent") || null;
+  const requestId =
+    req.headers.get("x-request-id") ||
+    req.headers.get("cf-ray") ||
+    null;
+  const actorSource: "sap" | "cloud_admin" | "unknown" =
+    sapValidated ? "sap" : (isCloudAdmin ? "cloud_admin" : "unknown");
+  const overrideUsed = (isCloudAdmin || isSuperUser) && !isMatch;
+
+  const writeAuditLog = async (decision: "approved" | "rejected", levelOrder: number) => {
+    try {
+      await admin.from("expense_audit_log").insert({
+        expense_id: expenseId,
+        action,
+        decision,
+        level_order: levelOrder,
+        actor_identity: actor,
+        actor_email: actorEmail,
+        actor_source: actorSource,
+        is_cloud_admin: isCloudAdmin,
+        is_sap_superuser: isSuperUser,
+        override_used: overrideUsed,
+        substitution_id: substitution?.id ?? null,
+        substituted_for_email: substitution?.official_email ?? null,
+        substituted_for_name: substitution?.official_name ?? null,
+        reason: remarks,
+        remarks: mergedRemarks,
+        ip_address: clientIp,
+        user_agent: userAgent,
+        request_id: requestId,
+        idempotency_key: idempotencyKey || null,
+        company_db: (exp as any).company_db ?? null,
+      } as any);
+    } catch (e) {
+      console.warn("[expense-approval-action] falha ao gravar audit log:", e);
+    }
+  };
+
   // ── Execute ────────────────────────────────────────────────────────────
   if (action === "reject") {
     const updates: Record<string, unknown> = { status: "rejeitado" };
