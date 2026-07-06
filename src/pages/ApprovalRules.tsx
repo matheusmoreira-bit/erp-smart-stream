@@ -19,7 +19,10 @@ import {
   ShoppingCart,
   Tag,
   PlayCircle,
+  UserCog,
 } from "lucide-react";
+import SubstituteApproversTab from "@/components/SubstituteApproversTab";
+import { useAuth } from "@/hooks/useAuth";
 import { RuleSimulator } from "@/components/RuleSimulator";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -637,7 +640,8 @@ export default function ApprovalRulesPage() {
   const [search, setSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
+  const [activeTab, setActiveTab] = useState<"standard" | "custom" | "substitutes">("standard");
+  const { isAdmin } = useAuth();
 
   const CUSTOM_PRIORITY = 9999;
   const isCustomRule = (r: ApprovalRule) => (r.priority || 0) >= CUSTOM_PRIORITY;
@@ -792,8 +796,8 @@ export default function ApprovalRulesPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "standard" | "custom")}>
-          <TabsList className="grid grid-cols-2 w-full sm:w-[520px]">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+          <TabsList className="grid grid-cols-3 w-full sm:w-[720px]">
             <TabsTrigger value="standard" className="gap-1.5">
               <Settings2 className="w-3.5 h-3.5" />
               Regras padrão
@@ -808,10 +812,18 @@ export default function ApprovalRulesPage() {
                 {customRules.length}
               </span>
             </TabsTrigger>
+            <TabsTrigger value="substitutes" className="gap-1.5">
+              <UserCog className="w-3.5 h-3.5" />
+              Substitutos
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {activeTab === "custom" && (
+        {activeTab === "substitutes" ? (
+          <SubstituteApproversTab isAdmin={isAdmin} />
+        ) : null}
+
+        {activeTab !== "substitutes" && activeTab === "custom" && (
           <div className="glass-card p-4 border-l-2 border-l-primary/40">
             <p className="text-sm text-foreground font-medium mb-1 flex items-center gap-1.5">
               <Shield className="w-4 h-4 text-primary" />
@@ -824,6 +836,7 @@ export default function ApprovalRulesPage() {
           </div>
         )}
 
+        {activeTab !== "substitutes" && (<>
         {/* Search & Filters */}
         <div className="glass-card p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
           <div className="relative flex-1 min-w-[200px]">
@@ -913,6 +926,7 @@ export default function ApprovalRulesPage() {
             ))}
           </div>
         )}
+        </>)}
       </main>
 
       <RuleFormModal
