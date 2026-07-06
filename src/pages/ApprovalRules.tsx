@@ -19,7 +19,10 @@ import {
   ShoppingCart,
   Tag,
   PlayCircle,
+  UserCog,
 } from "lucide-react";
+import SubstituteApproversTab from "@/components/SubstituteApproversTab";
+import { useAuth } from "@/hooks/useAuth";
 import { RuleSimulator } from "@/components/RuleSimulator";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -637,7 +640,8 @@ export default function ApprovalRulesPage() {
   const [search, setSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
+  const [activeTab, setActiveTab] = useState<"standard" | "custom" | "substitutes">("standard");
+  const { isAdmin } = useAuth();
 
   const CUSTOM_PRIORITY = 9999;
   const isCustomRule = (r: ApprovalRule) => (r.priority || 0) >= CUSTOM_PRIORITY;
