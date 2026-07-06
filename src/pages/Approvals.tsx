@@ -875,18 +875,75 @@ function ApprovalDetailModal({
         </DialogContent>
       </Dialog>
 
-      {/* Risk confirmation dialog for super-user acting on another's document */}
+      {/* Confirmação de aprovação / rejeição — sempre exibida com resumo */}
       <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v) setRiskConfirm(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-amber-400" />
-              Ação em documento de outro aprovador
+              {riskConfirm?.action === "approve" ? (
+                <CheckCircle className="w-5 h-5 text-emerald-500" />
+              ) : (
+                <XCircle className="w-5 h-5 text-destructive" />
+              )}
+              Confirmar {riskConfirm?.action === "approve" ? "aprovação" : "rejeição"}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a <strong>{riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}</strong> o documento <strong>#{doc?.docNum}</strong> que está atribuído ao aprovador <strong>{doc?.currentApprover}</strong>.
-              <br /><br />
-              Esta ação será registrada como realizada por super-usuário. Deseja continuar?
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  Você está prestes a{" "}
+                  <strong>
+                    {riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}
+                  </strong>{" "}
+                  o documento abaixo. Confirme os dados antes de prosseguir.
+                </p>
+                <div className="rounded-md border border-border bg-muted/40 p-3 space-y-1.5">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Tipo</span>
+                    <span className="font-medium">{doc?.docTypeName}</span>
+                  </div>
+                  {doc?.docNum ? (
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Documento</span>
+                      <span className="font-mono">#{doc.docNum}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Fornecedor</span>
+                    <span className="font-medium text-right break-words">{doc?.cardName || "—"}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Solicitante</span>
+                    <span className="text-right break-words">{doc?.requester || "—"}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Aprovador atual</span>
+                    <span className="text-right break-words">{doc?.currentApprover || "—"}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 pt-1 border-t border-border/60 mt-1">
+                    <span className="text-muted-foreground">Valor total</span>
+                    <span className="font-mono font-semibold">
+                      {doc ? formatCurrency(doc.docTotal, doc.currency) : "—"}
+                    </span>
+                  </div>
+                </div>
+                {remarks && (
+                  <div className="rounded-md border border-border bg-muted/20 p-2">
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">
+                      Comentário
+                    </div>
+                    <div className="text-xs break-words whitespace-pre-wrap">{remarks}</div>
+                  </div>
+                )}
+                {isOtherApprover && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400">
+                    <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+                    <p className="text-xs">
+                      Você está agindo como <strong>super-usuário</strong> em um documento
+                      atribuído a outro aprovador. A ação ficará registrada com essa marcação.
+                    </p>
+                  </div>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
