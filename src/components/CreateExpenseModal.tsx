@@ -933,6 +933,7 @@ export function CreateExpenseModal({
   }, [draftId, onClose]);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) requestClose(); }}>
       <DialogContent
         ref={setDialogContainer}
