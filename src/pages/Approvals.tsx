@@ -1895,6 +1895,13 @@ export default function ApprovalsPage() {
         formatCostCenter={formatCostCenter}
         rules={rules}
         isAdmin={isAdmin}
+        canApprove={
+          !!selectedDoc && (
+            isAdmin ||
+            codeEq(selectedDoc.approverCode) ||
+            approverMatches(selectedDoc.currentApprover, session.userName)
+          )
+        }
       />
 
 
