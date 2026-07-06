@@ -1383,5 +1383,27 @@ export function CreateExpenseModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Sair sem finalizar?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Você já preencheu campos deste {isSales ? "pedido de venda" : "pedido de compra"}.
+            O que deseja fazer?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel className="sm:mr-auto">Continuar editando</AlertDialogCancel>
+          <Button variant="outline" onClick={handleDiscardAndClose}>
+            Sair sem salvar
+          </Button>
+          <AlertDialogAction onClick={handleSaveDraftAndClose}>
+            Salvar como esboço
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 }
