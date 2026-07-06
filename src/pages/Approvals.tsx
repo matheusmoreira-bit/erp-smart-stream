@@ -1370,7 +1370,8 @@ export default function ApprovalsPage() {
   const [search, setSearch] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
-  const [isActioning, setIsActioning] = useState(false);
+  const [actionPhase, setActionPhase] = useState<"idle" | "sending" | "refreshing">("idle");
+  const isActioning = actionPhase !== "idle";
   const isSuperUser = session?.isSuperUser ?? false;
   const isAdmin = isLovableAdmin || isSuperUser;
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
