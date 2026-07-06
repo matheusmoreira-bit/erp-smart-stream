@@ -846,13 +846,15 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         throw new Error(payload?.error || `Falha ao aprovar (HTTP ${resp.status})`);
       }
 
+      const replayed: boolean = !!payload.replayed;
       const finalized: boolean = !!payload.finalized;
       const nextApproverName: string | null = payload.nextApproverName || null;
       const exp3 = payload.expense || {};
 
       if (!finalized) {
-        // Notify next approver ASAP (unchanged UX)
-        if (nextApproverName && nextApproverName !== "Administrador") {
+        // Notify next approver ASAP (unchanged UX) — skip on replay to
+        // avoid double-notifying the next approver.
+        if (!replayed && nextApproverName && nextApproverName !== "Administrador") {
           await createNotification({
             user_identifier: nextApproverName,
             title: "Nova aprovação pendente",
@@ -864,44 +866,49 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           });
         }
         await fetchExpenses();
-        return;
+        return { replayed };
       }
 
-      // Final level → notify requester and trigger SAP integration
-      try {
-        const reqId = exp3.requester_email || exp3.requester_name;
-        if (reqId) {
-          await createNotification({
-            user_identifier: reqId,
-            title: "Pedido aprovado",
-            body: `Seu pedido "${exp3.supplier_name || ""}" (${exp3.currency || "BRL"} ${Number(exp3.total_amount || 0).toFixed(2)}) foi aprovado em todos os níveis.`,
-            category: "approval",
-            company_db: exp3.company_db || undefined,
-            link: `/my-requests`,
-            metadata: { expense_id: expenseId },
-          });
-        }
-      } catch { /* silent */ }
-
-      if (session?.erpType === "sap") {
+      // Final level → notify requester and trigger SAP integration.
+      // Em caso de replay (retry idempotente), pulamos a notificação para
+      // não duplicá-la, mas ainda garantimos o refresh da lista.
+      if (!replayed) {
         try {
-          await invokeExpenseToSap({
-            expense_id: expenseId,
-            sap_session_id: session.sessionId,
-            sap_route_id: session.routeId,
-            sap_company_db: session.companyDB,
-            sap_session_expires_at: session.expiresAt,
-          });
-          await logExpenseDecision(expenseId, "integrated", { approverName: actor });
-        } catch (sapErr) {
-          const msg = sapErr instanceof Error ? sapErr.message : "Erro desconhecido";
-          await logExpenseDecision(expenseId, "integration_failed", { remarks: msg });
-          await fetchExpenses();
-          throw new Error(`Despesa aprovada, mas falhou ao integrar no SAP: ${msg}`);
+          const reqId = exp3.requester_email || exp3.requester_name;
+          if (reqId) {
+            await createNotification({
+              user_identifier: reqId,
+              title: "Pedido aprovado",
+              body: `Seu pedido "${exp3.supplier_name || ""}" (${exp3.currency || "BRL"} ${Number(exp3.total_amount || 0).toFixed(2)}) foi aprovado em todos os níveis.`,
+              category: "approval",
+              company_db: exp3.company_db || undefined,
+              link: `/my-requests`,
+              metadata: { expense_id: expenseId },
+            });
+          }
+        } catch { /* silent */ }
+
+        if (session?.erpType === "sap") {
+          try {
+            await invokeExpenseToSap({
+              expense_id: expenseId,
+              sap_session_id: session.sessionId,
+              sap_route_id: session.routeId,
+              sap_company_db: session.companyDB,
+              sap_session_expires_at: session.expiresAt,
+            });
+            await logExpenseDecision(expenseId, "integrated", { approverName: actor });
+          } catch (sapErr) {
+            const msg = sapErr instanceof Error ? sapErr.message : "Erro desconhecido";
+            await logExpenseDecision(expenseId, "integration_failed", { remarks: msg });
+            await fetchExpenses();
+            throw new Error(`Despesa aprovada, mas falhou ao integrar no SAP: ${msg}`);
+          }
         }
       }
 
       await fetchExpenses();
+      return { replayed };
     },
     [fetchExpenses, session]
   );
@@ -945,6 +952,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         throw new Error(payload?.error || `Falha ao rejeitar (HTTP ${resp.status})`);
       }
       await fetchExpenses();
+      return { replayed: !!payload.replayed };
     },
     [fetchExpenses, session]
   );

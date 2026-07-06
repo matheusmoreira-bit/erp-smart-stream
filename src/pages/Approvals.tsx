@@ -1590,12 +1590,23 @@ export default function ApprovalsPage() {
       // ===== Fase 1: mutação (aprovar/rejeitar) =====
       try {
         if (internalDoc) {
-          if (action === "approve") {
-            await approveExpense(internalDoc, remarks, opts?.idempotencyKey);
-            toast.success("Despesa interna aprovada!");
+          const result = action === "approve"
+            ? await approveExpense(internalDoc, remarks, opts?.idempotencyKey)
+            : await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
+          // Retry idempotente: o servidor detectou a mesma Idempotency-Key
+          // e reentregou a resposta original — avisamos o usuário para que
+          // ele saiba que a ação NÃO foi processada duas vezes.
+          if (result?.replayed) {
+            toast.info(
+              action === "approve"
+                ? "Esta aprovação já havia sido registrada anteriormente — nenhuma ação duplicada foi processada."
+                : "Esta rejeição já havia sido registrada anteriormente — nenhuma ação duplicada foi processada.",
+              { duration: 6000 },
+            );
           } else {
-            await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
-            toast.success("Despesa interna rejeitada.");
+            toast.success(
+              action === "approve" ? "Despesa interna aprovada!" : "Despesa interna rejeitada.",
+            );
           }
         } else {
           const endpoint = `ApprovalRequests(${code})`;
