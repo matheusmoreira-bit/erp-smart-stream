@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "informe from_user_code e/ou cost_center como filtro" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (fromUser && fromUser === toUser) {
+    if (fromUser && fromUser.toLowerCase() === toUser.toLowerCase()) {
       return new Response(JSON.stringify({ error: "from_user_code e to_user_code devem ser diferentes" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
