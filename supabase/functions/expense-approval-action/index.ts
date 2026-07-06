@@ -234,7 +234,7 @@ Deno.serve(async (req) => {
   let sapValidated: Awaited<ReturnType<typeof validateSapSession>> = null;
   if (sapSessionHeader && sapUserHeader && sapCompanyHeader) {
     sapValidated = await validateSapSession(req);
-    if (!sapValidated) return json(401, { error: "Sessão SAP inválida ou expirada" });
+    if (!sapValidated) return await respond(401, { error: "Sessão SAP inválida ou expirada" });
     // Use SAP user as caller identity when available (matches how the app stores approvers).
     if (!callerIdentity) callerIdentity = sapValidated.userName;
     // Cheap superuser check + mapping check
@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
   }
 
   if (!callerIdentity && !isCloudAdmin) {
-    return json(401, { error: "Não autenticado" });
+    return await respond(401, { error: "Não autenticado" });
   }
 
   // ── Load expense ───────────────────────────────────────────────────────
@@ -268,10 +268,10 @@ Deno.serve(async (req) => {
     .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db")
     .eq("id", expenseId)
     .maybeSingle();
-  if (expErr) return json(500, { error: `Falha ao carregar despesa: ${expErr.message}` });
-  if (!exp) return json(404, { error: "Despesa não encontrada" });
+  if (expErr) return await respond(500, { error: `Falha ao carregar despesa: ${expErr.message}` });
+  if (!exp) return await respond(404, { error: "Despesa não encontrada" });
   if ((exp as any).status !== "pendente_aprovacao") {
-    return json(409, { error: `Despesa não está pendente de aprovação (status atual: ${(exp as any).status}).` });
+    return await respond(409, { error: `Despesa não está pendente de aprovação (status atual: ${(exp as any).status}).` });
   }
 
   const currentLevel = Number((exp as any).current_level_order || 1);
@@ -351,7 +351,7 @@ Deno.serve(async (req) => {
       designatedEmail,
       currentLevel,
     });
-    return json(403, {
+    return await respond(403, {
       error: "Você não é o aprovador atribuído deste documento.",
       designatedApprover: designatedName,
     });
@@ -381,7 +381,7 @@ Deno.serve(async (req) => {
         requesterEmail,
         requesterName,
       });
-      return json(403, {
+      return await respond(403, {
         error: "Você não pode aprovar um documento que você mesmo criou.",
       });
     }
@@ -401,7 +401,7 @@ Deno.serve(async (req) => {
     const updates: Record<string, unknown> = { status: "rejeitado" };
     if (remarks) updates.remarks = remarks;
     const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-    if (updErr) return json(500, { error: `Falha ao rejeitar: ${updErr.message}` });
+    if (updErr) return await respond(500, { error: `Falha ao rejeitar: ${updErr.message}` });
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "rejected",
@@ -410,7 +410,7 @@ Deno.serve(async (req) => {
       level_order: currentLevel,
       remarks: mergedRemarks,
     } as any);
-    return json(200, {
+    return await respond(200, {
       ok: true,
       action: "reject",
       finalized: true,
@@ -457,7 +457,7 @@ Deno.serve(async (req) => {
     };
     if (remarks) updates.remarks = remarks;
     const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-    if (updErr) return json(500, { error: `Falha ao avançar de nível: ${updErr.message}` });
+    if (updErr) return await respond(500, { error: `Falha ao avançar de nível: ${updErr.message}` });
 
     if (jumped) {
       await admin.from("expense_approval_log").insert({
@@ -472,7 +472,7 @@ Deno.serve(async (req) => {
       } as any);
     }
 
-    return json(200, {
+    return await respond(200, {
       ok: true,
       action: "approve",
       finalized: false,
@@ -497,9 +497,9 @@ Deno.serve(async (req) => {
   const updates: Record<string, unknown> = { status: "aprovado" };
   if (remarks) updates.remarks = remarks;
   const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-  if (updErr) return json(500, { error: `Falha ao aprovar: ${updErr.message}` });
+  if (updErr) return await respond(500, { error: `Falha ao aprovar: ${updErr.message}` });
 
-  return json(200, {
+  return await respond(200, {
     ok: true,
     action: "approve",
     finalized: true,
