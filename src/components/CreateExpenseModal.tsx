@@ -1386,20 +1386,54 @@ export function CreateExpenseModal({
     </Dialog>
 
     <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
-      <AlertDialogContent>
+      <AlertDialogContent
+        role="alertdialog"
+        aria-modal="true"
+        onKeyDown={(e) => {
+          // Ctrl/Cmd+S salva como esboço; Ctrl/Cmd+Backspace/Delete descarta.
+          // Enter simples confirma a opção segura (Continuar editando) via Radix.
+          if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+            e.preventDefault();
+            void handleSaveDraftAndClose();
+          } else if (
+            (e.ctrlKey || e.metaKey) &&
+            (e.key === "Backspace" || e.key === "Delete")
+          ) {
+            e.preventDefault();
+            void handleDiscardAndClose();
+          }
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>Sair sem finalizar?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Você já preencheu campos deste {isSales ? "pedido de venda" : "pedido de compra"}.
-            O que deseja fazer?
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                Você já preencheu campos deste {isSales ? "pedido de venda" : "pedido de compra"}.
+                O que deseja fazer?
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Atalhos:{" "}
+                <kbd className="px-1 py-0.5 rounded border border-border bg-muted font-mono">Esc</kbd>{" "}
+                continua editando ·{" "}
+                <kbd className="px-1 py-0.5 rounded border border-border bg-muted font-mono">Ctrl</kbd>+
+                <kbd className="px-1 py-0.5 rounded border border-border bg-muted font-mono">S</kbd>{" "}
+                salva esboço.
+              </p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-          <AlertDialogCancel className="sm:mr-auto">Continuar editando</AlertDialogCancel>
+          <AlertDialogCancel className="sm:mr-auto" autoFocus>
+            Continuar editando
+          </AlertDialogCancel>
           <Button variant="outline" onClick={handleDiscardAndClose}>
             Sair sem salvar
           </Button>
-          <AlertDialogAction onClick={handleSaveDraftAndClose}>
+          <AlertDialogAction
+            onClick={handleSaveDraftAndClose}
+            aria-keyshortcuts="Control+S Meta+S"
+          >
             Salvar como esboço
           </AlertDialogAction>
         </AlertDialogFooter>
