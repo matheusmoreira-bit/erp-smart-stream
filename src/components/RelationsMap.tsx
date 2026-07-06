@@ -536,9 +536,79 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                       remarks: h.remarks,
                       decided_at: h.decision_date || "",
                       source: "SAP" as const,
+                      reconstructed: false,
                     }));
-                  const localEvents = log.map((l) => ({ ...l, source: "ERP Flow" as const }));
-                  const events = [...localEvents, ...sapEvents].sort(
+                  const localEvents = log.map((l) => ({
+                    ...l,
+                    source: "ERP Flow" as const,
+                    reconstructed: false,
+                  }));
+
+                  // Fallback: pedidos antigos podem não ter linhas em
+                  // `expense_approval_log`. Reconstruímos os principais
+                  // marcos a partir dos campos da própria despesa.
+                  const status = (expense.status || "").toLowerCase();
+                  const seen = new Set<LogDecision>();
+                  for (const ev of [...localEvents, ...sapEvents]) seen.add(ev.decision);
+
+                  const fallback: Array<typeof localEvents[number]> = [];
+                  const pushFallback = (
+                    decision: LogDecision,
+                    when: string | null | undefined,
+                    approver_name?: string | null,
+                    remarks?: string | null,
+                  ) => {
+                    if (!when || seen.has(decision)) return;
+                    seen.add(decision);
+                    fallback.push({
+                      id: `fallback-${decision}`,
+                      decision,
+                      approver_name: approver_name ?? null,
+                      approver_email: null,
+                      level_order: null,
+                      remarks: remarks ?? null,
+                      decided_at: when,
+                      source: "ERP Flow" as const,
+                      reconstructed: true,
+                    });
+                  };
+                  pushFallback(
+                    "created",
+                    expense.created_at,
+                    expense.requester_name || expense.requester_email || null,
+                  );
+                  const terminalByStatus: Record<string, LogDecision | undefined> = {
+                    aprovado: "approved",
+                    integrado: "approved",
+                    rejeitado: "rejected",
+                    cancelado: "cancelled",
+                  };
+                  const terminal = terminalByStatus[status];
+                  if (terminal) {
+                    pushFallback(
+                      terminal,
+                      expense.updated_at,
+                      terminal === "approved" ? expense.current_approver ?? null : null,
+                    );
+                  }
+                  if (expense.sap_doc_num || expense.sap_doc_entry) {
+                    pushFallback(
+                      "integrated",
+                      expense.sap_integration_last_attempt_at || expense.updated_at,
+                      null,
+                      expense.sap_doc_num ? `Nº SAP ${expense.sap_doc_num}` : null,
+                    );
+                  }
+                  if (expense.sap_integration_error) {
+                    pushFallback(
+                      "integration_failed",
+                      expense.sap_integration_last_attempt_at || expense.updated_at,
+                      null,
+                      expense.sap_integration_error,
+                    );
+                  }
+
+                  const events = [...localEvents, ...sapEvents, ...fallback].sort(
                     (a, b) =>
                       new Date(a.decided_at || 0).getTime() - new Date(b.decided_at || 0).getTime(),
                   );
@@ -556,11 +626,20 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                               <Icon className={`w-3 h-3 ${meta.color}`} />
                             </span>
                             <div className="flex items-baseline justify-between gap-2">
-                              <div className="text-sm font-medium flex items-center gap-2">
+                              <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
                                 {meta.label}
                                 <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase tracking-wide">
                                   {row.source}
                                 </Badge>
+                                {row.reconstructed && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] px-1 py-0 uppercase tracking-wide text-muted-foreground"
+                                    title="Evento reconstruído a partir dos dados do pedido (anterior ao log detalhado)"
+                                  >
+                                    reconstruído
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-xs text-muted-foreground font-mono shrink-0">
                                 {formatDateTime(row.decided_at)}
