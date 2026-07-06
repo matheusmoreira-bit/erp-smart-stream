@@ -82,6 +82,8 @@ export interface RelationsMapExpense {
   company_db?: string | null;
   created_at?: string;
   updated_at?: string;
+  sap_integration_error?: string | null;
+  sap_integration_last_attempt_at?: string | null;
 }
 
 interface Props {
