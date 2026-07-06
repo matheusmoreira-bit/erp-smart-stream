@@ -355,6 +355,7 @@ function ApprovalDetailModal({
   onAction,
   onDelegate,
   isActioning,
+  actionPhase,
   isSuperUser,
   currentUserName,
   currentUserEmail,
