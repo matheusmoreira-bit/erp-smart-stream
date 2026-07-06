@@ -326,6 +326,8 @@ export function CreateExpenseModal({
       setHeaderProject(null);
       setDraftId(null);
       setDraftHydrated(false);
+      setDeferredGroups([]);
+      setSupplierPicker(null);
     }
   }, [open]);
 
