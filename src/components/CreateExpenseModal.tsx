@@ -1554,6 +1554,51 @@ export function CreateExpenseModal({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Picker de fornecedor — quando 2+ anexos fiscais têm fornecedores
+        diferentes, o usuário escolhe qual despesa criar PRIMEIRO. Os demais
+        grupos ficam adiados e abrem automaticamente após a submissão. */}
+    <AlertDialog open={!!supplierPicker} onOpenChange={(v) => { if (!v) setSupplierPicker(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Anexos com fornecedores diferentes</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              <p>
+                Detectamos <strong>{supplierPicker?.groups.length}</strong> fornecedores nos anexos enviados. Cada despesa
+                deve conter documentos de um único fornecedor — escolha por qual começar. Assim que você submeter,
+                abriremos automaticamente uma nova despesa para o próximo.
+              </p>
+              <div className="space-y-2">
+                {supplierPicker?.groups.map((g) => (
+                  <button
+                    key={g.supplierKey}
+                    type="button"
+                    onClick={() => chooseFirstSupplierGroup(g.supplierKey)}
+                    className="w-full rounded-md border border-border bg-muted/30 hover:bg-muted/60 transition p-3 text-left"
+                  >
+                    <div className="font-medium">{g.supplierLabel}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {g.docs.length} documento(s): {g.docs.map((d) => d.file.name).join(", ")}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {supplierPicker && supplierPicker.nonFiscal.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Anexos não-fiscais ({supplierPicker.nonFiscal.map((f) => f.name).join(", ")}) irão junto com a
+                  primeira despesa como anexo.
+                </p>
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
   </>
   );
 }
