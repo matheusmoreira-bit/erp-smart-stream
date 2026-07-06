@@ -1241,9 +1241,12 @@ export default function ApprovalsPage() {
   const [isActioning, setIsActioning] = useState(false);
   const isSuperUser = session?.isSuperUser ?? false;
   const isAdmin = isLovableAdmin || isSuperUser;
-  // Admins veem tudo por padrão (toggle ligado); demais usuários só veem o que aprovam/criaram.
-  const [showAll, setShowAll] = useState<boolean>(isAdmin);
-  useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
+  const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
+  // "Ver todas" fica ligado por padrão para admins e para grupos com acesso view-all
+  // (Financeiro / Fiscal / Contábil). Demais usuários seguem restritos ao seu escopo.
+  const canToggleShowAll = isAdmin || canViewAllApprovals;
+  const [showAll, setShowAll] = useState<boolean>(canToggleShowAll);
+  useEffect(() => { setShowAll(canToggleShowAll); }, [canToggleShowAll]);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [isDelegating, setIsDelegating] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
