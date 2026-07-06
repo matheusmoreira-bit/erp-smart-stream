@@ -126,6 +126,10 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   const companyDb = String(input.company_db || caller.companyDB || "").trim();
   if (!companyDb) return json(400, { error: "company_db é obrigatório" });
 
+  // Data de vencimento é obrigatória para todo pedido criado via ERP Flow.
+  const dueDate = input.due_date ? String(input.due_date).trim() : "";
+  if (!dueDate) return json(400, { error: "Data de vencimento é obrigatória" });
+
   // If pendente_aprovacao and approval_rule_id provided, verify rule exists & is active.
   const ruleId = input.approval_rule_id ? String(input.approval_rule_id) : null;
   if (ruleId) {
