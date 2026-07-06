@@ -124,10 +124,12 @@ function ExpenseDetailModal({
   onApprove,
   onReject,
   onViewIntegration,
+  onAddAttachments,
   canCancel,
   canEdit,
   canRetrySap,
   canApprove,
+  canAddAttachments,
   isSubmitting,
   isCancelling,
   isRetrying,
@@ -143,16 +145,20 @@ function ExpenseDetailModal({
   onApprove: (expense: Expense) => void;
   onReject: (expense: Expense) => void;
   onViewIntegration: () => void;
+  onAddAttachments: (id: string, files: File[]) => Promise<void>;
   canCancel: boolean;
   canEdit: boolean;
   canRetrySap: boolean;
   canApprove: boolean;
+  canAddAttachments: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
   isRetrying: boolean;
   isActioning: boolean;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   if (!expense) return null;
 
   const showSubmit = expense.status === "rascunho";
