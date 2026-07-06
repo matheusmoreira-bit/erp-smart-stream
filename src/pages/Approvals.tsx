@@ -39,6 +39,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { Split } from "lucide-react";
 import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
+import { useActiveOfficialsForMe } from "@/hooks/useApproverSubstitutes";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
 import { segmentDocByRules, segmentsForApprover, isTrulySegmented, type ApprovalSegment } from "@/lib/approvalSegments";
@@ -1269,6 +1270,7 @@ export default function ApprovalsPage() {
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
+  const { officials: activeOfficials } = useActiveOfficialsForMe();
   const { rules } = useApprovalRules();
 
 
@@ -1298,9 +1300,29 @@ export default function ApprovalsPage() {
 
   // Filter: por padrão mostra apenas aprovações em que o usuário é aprovador OU solicitante.
   // Admin pode usar o toggle "Ver todas" para visualizar todos os lançamentos.
+  // Se o usuário tem substituição ativa, os documentos dos aprovadores oficiais também aparecem.
   const effectiveShowAll = canToggleShowAll && showAll;
   const sessionUser = (session.userName || "").toLowerCase().trim();
-  const codeEq = (code?: string) => !!code && code.toLowerCase().trim() === sessionUser;
+  const officialIdentifiers = useMemo(
+    () => activeOfficials.flatMap((o) => {
+      const e = (o.official_email || "").toLowerCase();
+      const prefix = e.split("@")[0];
+      const name = (o.official_name || "").toLowerCase();
+      return [e, prefix, name].filter(Boolean);
+    }),
+    [activeOfficials],
+  );
+  const codeEq = (code?: string) => {
+    if (!code) return false;
+    const c = code.toLowerCase().trim();
+    if (c === sessionUser) return true;
+    return officialIdentifiers.includes(c);
+  };
+  const matchesSubstitutedOfficial = (approver: string) => {
+    if (!approver || officialIdentifiers.length === 0) return false;
+    const a = approver.toLowerCase().trim();
+    return officialIdentifiers.some((id) => id === a || a.includes(id) || id.includes(a));
+  };
   const userApprovals = effectiveShowAll
     ? allApprovals
     : allApprovals.filter(
@@ -1308,7 +1330,9 @@ export default function ApprovalsPage() {
           codeEq(a.approverCode) ||
           codeEq(a.requesterCode) ||
           approverMatches(a.currentApprover, session.userName) ||
-          approverMatches(a.requester, session.userName),
+          approverMatches(a.requester, session.userName) ||
+          matchesSubstitutedOfficial(a.currentApprover) ||
+          (a.approverEmail && officialIdentifiers.includes(a.approverEmail.toLowerCase())),
       );
 
 
