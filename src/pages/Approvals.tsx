@@ -353,6 +353,7 @@ function ApprovalDetailModal({
   open,
   onClose,
   onAction,
+  onRetryRefresh,
   onDelegate,
   isActioning,
   actionPhase,
@@ -369,6 +370,7 @@ function ApprovalDetailModal({
   open: boolean;
   onClose: () => void;
   onAction: (code: number, action: "approve" | "reject", remarks: string, opts?: { idempotencyKey?: string }) => Promise<void>;
+  onRetryRefresh: () => Promise<void>;
   onDelegate: (doc: ApprovalDoc) => void;
   isActioning: boolean;
   actionPhase: "idle" | "sending" | "refreshing";
@@ -384,6 +386,7 @@ function ApprovalDetailModal({
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject"; idempotencyKey: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<"mutation" | "refresh" | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
   const [showAllLines, setShowAllLines] = useState(false);
   const { session } = useSap();
@@ -478,17 +481,34 @@ function ApprovalDetailModal({
   const confirmRiskAction = async () => {
     if (!riskConfirm || !doc || isActioning) return;
     setActionError(null);
+    setErrorKind(null);
     try {
       await onAction(doc.approvalRequestId, riskConfirm.action, remarks, {
         idempotencyKey: riskConfirm.idempotencyKey,
       });
       setRiskConfirm(null);
     } catch (e) {
-      // Mantém o modal aberto para o usuário revisar e tentar novamente
-      // — o retry reutiliza a mesma Idempotency-Key.
+      // Mantém o modal aberto. Distingue erro da mutação (retry reexecuta
+      // com mesma Idempotency-Key) de erro de refresh (retry só atualiza).
+      const isRefresh = e instanceof Error && e.name === "RefreshError";
+      setErrorKind(isRefresh ? "refresh" : "mutation");
       setActionError(e instanceof Error ? e.message : "Erro ao processar ação");
     }
   };
+
+  const retryRefreshFromModal = async () => {
+    if (isActioning) return;
+    setActionError(null);
+    setErrorKind(null);
+    try {
+      await onRetryRefresh();
+      setRiskConfirm(null);
+    } catch (e) {
+      setErrorKind("refresh");
+      setActionError(e instanceof Error ? e.message : "Erro ao atualizar a lista");
+    }
+  };
+
 
   return (
     <>
@@ -985,12 +1005,26 @@ function ApprovalDetailModal({
             <div
               role="alert"
               aria-live="assertive"
-              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+              className={`flex items-start gap-2 rounded-md border p-3 ${
+                errorKind === "refresh"
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                  : "border-destructive/40 bg-destructive/10 text-destructive"
+              }`}
             >
               <XOctagon className="w-4 h-4 mt-0.5 shrink-0" />
               <div className="text-xs space-y-1 min-w-0">
-                <p className="font-semibold">Falha ao processar a ação</p>
+                <p className="font-semibold">
+                  {errorKind === "refresh"
+                    ? "Decisão registrada, mas a lista não atualizou"
+                    : "Falha ao processar a ação"}
+                </p>
                 <p className="break-words whitespace-pre-wrap">{actionError}</p>
+                {errorKind === "refresh" && (
+                  <p className="text-[11px] opacity-80">
+                    A ação já foi enviada com sucesso — não reenvie a decisão. Clique em
+                    "Atualizar novamente" para recarregar a lista.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -1002,14 +1036,22 @@ function ApprovalDetailModal({
               {actionError ? "Fechar" : "Cancelar"}
             </AlertDialogCancel>
             <Button
-              onClick={confirmRiskAction}
+              onClick={errorKind === "refresh" ? retryRefreshFromModal : confirmRiskAction}
               disabled={isActioning}
               autoFocus={!!actionError}
               aria-keyshortcuts="Control+Enter Meta+Enter"
-              className={`gap-1.5 ${riskConfirm?.action === "reject" ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
+              className={`gap-1.5 ${
+                errorKind === "refresh"
+                  ? "bg-amber-600 hover:bg-amber-700 text-white"
+                  : riskConfirm?.action === "reject"
+                    ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+              }`}
             >
               {isActioning ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : errorKind === "refresh" ? (
+                <RefreshCw className="w-4 h-4" />
               ) : riskConfirm?.action === "approve" ? (
                 <CheckCircle className="w-4 h-4" />
               ) : (
@@ -1019,9 +1061,11 @@ function ApprovalDetailModal({
                 ? "Enviando decisão…"
                 : actionPhase === "refreshing"
                   ? "Atualizando lista…"
-                  : actionError
-                    ? "Tentar novamente"
-                    : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
+                  : errorKind === "refresh"
+                    ? "Atualizar novamente"
+                    : actionError
+                      ? "Tentar novamente"
+                      : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1521,72 +1565,110 @@ export default function ApprovalsPage() {
   ) => {
     if (!session) return;
     setActionPhase("sending");
+    const internalDoc = (selectedDoc as any)?.__internalId;
     try {
-      // Internal expense doc has negative approvalRequestId and __internalId
-      const internalDoc = (selectedDoc as any)?.__internalId;
-      if (internalDoc) {
-        if (action === "approve") {
-          await approveExpense(internalDoc, remarks, opts?.idempotencyKey);
-          toast.success("Despesa interna aprovada!");
+      // ===== Fase 1: mutação (aprovar/rejeitar) =====
+      try {
+        if (internalDoc) {
+          if (action === "approve") {
+            await approveExpense(internalDoc, remarks, opts?.idempotencyKey);
+            toast.success("Despesa interna aprovada!");
+          } else {
+            await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
+            toast.success("Despesa interna rejeitada.");
+          }
         } else {
-          await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
-          toast.success("Despesa interna rejeitada.");
+          const endpoint = `ApprovalRequests(${code})`;
+          const body: Record<string, unknown> = {
+            ApprovalRequestDecisions: [{
+              Status: action === "approve" ? "ardApproved" : "ardNotApproved",
+              Remarks: remarks || undefined,
+            }],
+          };
+          await sapAction(session, endpoint, "PATCH", body);
+          clearClientCache();
+          toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
+
+          const doc = approvals.find((a) => a.approvalRequestId === code);
+          const { logAuditAction } = await import("@/hooks/useAuditLog");
+          await logAuditAction({
+            action: action === "approve" ? "approve" : "reject",
+            entity_type: "approval_request",
+            entity_id: String(code),
+            actor_email: session.userName,
+            company_db: session.companyDB,
+            details: {
+              docNum: doc?.docNum,
+              docType: doc?.docTypeName,
+              cardName: doc?.cardName,
+              docTotal: doc?.docTotal,
+              currency: doc?.currency,
+              approver: doc?.currentApprover,
+              isSuperUser,
+              remarks,
+            },
+          });
         }
-        // Aguarda o refresh terminar ANTES de fechar o modal, garantindo
-        // que a lista já reflita o novo status quando o usuário voltar.
-        setActionPhase("refreshing");
-        await refreshExpenses();
-        setSelectedDoc(null);
-        return;
+      } catch (mutationErr) {
+        console.error("Approval action error:", mutationErr);
+        const message = mutationErr instanceof Error ? mutationErr.message : "Erro ao processar ação";
+        toast.error(message);
+        throw mutationErr instanceof Error ? mutationErr : new Error(message);
       }
 
-      const endpoint = `ApprovalRequests(${code})`;
-      const body: Record<string, unknown> = {
-        ApprovalRequestDecisions: [{
-          Status: action === "approve" ? "ardApproved" : "ardNotApproved",
-          Remarks: remarks || undefined,
-        }],
-      };
-
-      await sapAction(session, endpoint, "PATCH", body);
-      clearClientCache();
-      toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
-
-      const doc = approvals.find((a) => a.approvalRequestId === code);
-      const { logAuditAction } = await import("@/hooks/useAuditLog");
-      await logAuditAction({
-        action: action === "approve" ? "approve" : "reject",
-        entity_type: "approval_request",
-        entity_id: String(code),
-        actor_email: session.userName,
-        company_db: session.companyDB,
-        details: {
-          docNum: doc?.docNum,
-          docType: doc?.docTypeName,
-          cardName: doc?.cardName,
-          docTotal: doc?.docTotal,
-          currency: doc?.currency,
-          approver: doc?.currentApprover,
-          isSuperUser,
-          remarks,
-        },
-      });
-
-      // Aguarda o refresh do SAP terminar antes de fechar o modal — assim
-      // a lista de aprovações já reflete o novo estado (linha removida ou
-      // aprovador atualizado) no momento em que o usuário volta para ela.
+      // ===== Fase 2: refresh da lista =====
+      // A ação já foi registrada com sucesso. Se o refresh falhar, mantemos o
+      // modal aberto e sinalizamos com um erro específico para o usuário poder
+      // apenas retentar a atualização (sem reexecutar a decisão).
       setActionPhase("refreshing");
-      await refresh();
-      setSelectedDoc(null);
-    } catch (e) {
-      console.error("Approval action error:", e);
-      const message = e instanceof Error ? e.message : "Erro ao processar ação";
-      toast.error(message);
-      throw e instanceof Error ? e : new Error(message);
+      try {
+        if (internalDoc) {
+          await refreshExpenses();
+        } else {
+          await refresh();
+        }
+        setSelectedDoc(null);
+      } catch (refreshErr) {
+        console.error("Refresh após ação falhou:", refreshErr);
+        const detail = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+        toast.error(
+          `A ação foi registrada, mas não conseguimos atualizar a lista: ${detail}`,
+        );
+        const err = new Error(
+          "A decisão foi registrada, mas falhou ao atualizar a lista. Tente atualizar novamente.",
+        );
+        (err as Error & { name: string }).name = "RefreshError";
+        throw err;
+      }
     } finally {
       setActionPhase("idle");
     }
   };
+
+  const handleRetryRefresh = async () => {
+    const internalDoc = (selectedDoc as any)?.__internalId;
+    setActionPhase("refreshing");
+    try {
+      if (internalDoc) {
+        await refreshExpenses();
+      } else {
+        await refresh();
+      }
+      setSelectedDoc(null);
+    } catch (refreshErr) {
+      console.error("Retry refresh falhou:", refreshErr);
+      const detail = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+      toast.error(`Ainda não foi possível atualizar a lista: ${detail}`);
+      const err = new Error(
+        "Não foi possível atualizar a lista. Verifique sua conexão e tente novamente.",
+      );
+      (err as Error & { name: string }).name = "RefreshError";
+      throw err;
+    } finally {
+      setActionPhase("idle");
+    }
+  };
+
 
   const handleDelegate = async (params: { userInternalKey: number; userName: string; userEmail: string; reason: string }) => {
     if (!session || !delegationDoc) return;
@@ -2050,6 +2132,7 @@ export default function ApprovalsPage() {
         open={!!selectedDoc}
         onClose={() => setSelectedDoc(null)}
         onAction={handleApprovalAction}
+        onRetryRefresh={handleRetryRefresh}
         onDelegate={(d) => setDelegationDoc(d)}
         isActioning={isActioning}
         actionPhase={actionPhase}
