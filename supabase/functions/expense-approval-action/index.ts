@@ -485,6 +485,7 @@ Deno.serve(async (req) => {
     level_order: currentLevel,
     remarks: mergedRemarks,
   } as any);
+  await writeAuditLog("approved", currentLevel);
 
   if (!isFinalLevel) {
     // Self-approval guard: skip any subsequent level whose approver is the
