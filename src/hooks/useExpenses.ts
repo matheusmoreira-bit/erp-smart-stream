@@ -846,13 +846,15 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         throw new Error(payload?.error || `Falha ao aprovar (HTTP ${resp.status})`);
       }
 
+      const replayed: boolean = !!payload.replayed;
       const finalized: boolean = !!payload.finalized;
       const nextApproverName: string | null = payload.nextApproverName || null;
       const exp3 = payload.expense || {};
 
       if (!finalized) {
-        // Notify next approver ASAP (unchanged UX)
-        if (nextApproverName && nextApproverName !== "Administrador") {
+        // Notify next approver ASAP (unchanged UX) — skip on replay to
+        // avoid double-notifying the next approver.
+        if (!replayed && nextApproverName && nextApproverName !== "Administrador") {
           await createNotification({
             user_identifier: nextApproverName,
             title: "Nova aprovação pendente",
@@ -864,7 +866,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           });
         }
         await fetchExpenses();
-        return;
+        return { replayed };
       }
 
       // Final level → notify requester and trigger SAP integration
