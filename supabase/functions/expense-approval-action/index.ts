@@ -234,7 +234,51 @@ Deno.serve(async (req) => {
   const isOverride = isCloudAdmin || isSuperUser;
   const isMatch = !!callerIdentity && isDesignatedApprover(callerIdentity, designatedName, designatedEmail);
 
-  if (!isOverride && !isMatch) {
+  // ── Substitute-approver check ─────────────────────────────────────────
+  // A caller who is not the designated approver may still act if they have
+  // an ACTIVE substitution row where they are the substitute for the
+  // designated approver (matched by email or email prefix).
+  let substitution: {
+    id: string;
+    official_email: string;
+    official_name: string | null;
+    granted_by_email: string;
+    starts_at: string;
+    ends_at: string;
+  } | null = null;
+
+  if (!isOverride && !isMatch && callerIdentity) {
+    const callerCandidates = [normalize(callerIdentity), normalize(callerEmail || "")].filter(Boolean);
+    const officialCandidates = [normalize(designatedEmail || ""), normalize(designatedName || "")]
+      .filter(Boolean)
+      .flatMap((v) => [v, emailPrefix(v)])
+      .filter(Boolean);
+
+    if (callerCandidates.length && officialCandidates.length) {
+      const { data: subs } = await admin
+        .from("approver_substitutes")
+        .select("id, official_email, official_name, substitute_email, granted_by_email, starts_at, ends_at, revoked_at")
+        .is("revoked_at", null)
+        .lte("starts_at", new Date().toISOString())
+        .gte("ends_at", new Date().toISOString());
+      const hit = (subs || []).find((s: any) => {
+        const subEmail = normalize(s.substitute_email);
+        const subPrefix = emailPrefix(subEmail);
+        const offEmail = normalize(s.official_email);
+        const offPrefix = emailPrefix(offEmail);
+        const callerHit = callerCandidates.some(
+          (c) => c === subEmail || c === subPrefix || emailPrefix(c) === subPrefix,
+        );
+        const officialHit = officialCandidates.some(
+          (o) => o === offEmail || o === offPrefix || emailPrefix(o) === offPrefix,
+        );
+        return callerHit && officialHit;
+      });
+      if (hit) substitution = hit as any;
+    }
+  }
+
+  if (!isOverride && !isMatch && !substitution) {
     console.warn("[expense-approval-action] denied", {
       expenseId,
       caller: callerIdentity,
@@ -250,6 +294,12 @@ Deno.serve(async (req) => {
 
   const actor = callerIdentity || callerEmail || "cloud-admin";
   const actorEmail = callerEmail || (actor.includes("@") ? actor : null);
+  const substitutionNote = substitution
+    ? `Ação executada por SUBSTITUTO (${actor}) em nome de ${substitution.official_name || substitution.official_email}. Autorização concedida por ${substitution.granted_by_email}, válida de ${substitution.starts_at} a ${substitution.ends_at}.`
+    : null;
+  const mergedRemarks = substitutionNote
+    ? [remarks, substitutionNote].filter(Boolean).join(" — ")
+    : remarks;
 
   // ── Execute ────────────────────────────────────────────────────────────
   if (action === "reject") {
