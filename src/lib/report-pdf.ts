@@ -756,6 +756,12 @@ export interface QueueSummaryEntry {
   aiWarnings: string[];
   errorMessage?: string;
   fileNames: string[];
+  /**
+   * ID estável do evento na fila (ex.: `supplierKey`) — usado na seção de
+   * evidências para permitir rastreabilidade cruzada com logs internos.
+   * Opcional para compat: se ausente, o relatório mostra "—".
+   */
+  id?: string;
 }
 
 export interface QueueSummaryOptions {
