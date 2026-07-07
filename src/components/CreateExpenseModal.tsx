@@ -1058,6 +1058,7 @@ export function CreateExpenseModal({
     cached.push(...deferredGroups);
     cancelledGroupsRef.current = cached;
     setDeferredGroups([]);
+    schedulePersist();
     setSupplierPicker(null);
     setAiWarning(null);
     setAiConfidence(null);
