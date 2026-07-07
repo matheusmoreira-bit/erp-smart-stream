@@ -109,13 +109,19 @@ Deno.serve(async (req) => {
     // ('finalizado' e 'cancelado' são terminais e não precisam de polling contínuo).
     let query = sb
       .from("expenses")
-      .select("id, company_db, sap_doc_entry, status, supplier_name")
+      .select("id, company_db, sap_doc_entry, status, supplier_name, sap_sync_attempts")
       .not("sap_doc_entry", "is", null)
       .not("status", "in", "(finalizado,cancelado,rascunho)")
       .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
       .limit(200);
 
-    if (expenseIdsFilter) query = query.in("id", expenseIdsFilter);
+    if (expenseIdsFilter) {
+      // Execução manual ignora janela de backoff — usuário decidiu forçar.
+      query = query.in("id", expenseIdsFilter);
+    } else {
+      // Execução automática respeita sap_sync_next_retry_at (backoff).
+      query = query.or("sap_sync_next_retry_at.is.null,sap_sync_next_retry_at.lte." + new Date().toISOString());
+    }
 
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
