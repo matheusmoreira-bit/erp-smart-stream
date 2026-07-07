@@ -623,12 +623,21 @@ export function CreateExpenseModal({
   };
 
   const processWithAI = async (filesToProcess: File[]) => {
+    // Guard anti-duplicação: se já há classificação IA em andamento, ignora
+    // a nova solicitação (evita chamadas paralelas ao endpoint e estado
+    // inconsistente ao clicar em "Tentar novamente" repetidas vezes).
+    if (isProcessing) return;
+    if (!filesToProcess || filesToProcess.length === 0) return;
     setIsProcessing(true);
     // Reseta estado herdado de tentativas anteriores para que um retry
     // não mostre picker/warning/confidence obsoletos ao usuário.
     setAiConfidence(null);
     setAiWarning(null);
     setSupplierPicker(null);
+    // Limpa o histórico da fila anterior — o retry começa "do zero" e vai
+    // reconstruir o queueHistory quando a IA voltar com novos grupos.
+    setQueueHistory([]);
+    setJustCancelled(false);
     const controller = new AbortController();
     aiAbortRef.current = controller;
     try {
