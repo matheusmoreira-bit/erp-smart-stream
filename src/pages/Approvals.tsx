@@ -1341,6 +1341,9 @@ function MyRequestsTab() {
     );
   });
 
+  const { visibleItems: visibleRequests, hasMore: reqHasMore, loadMore: reqLoadMore, sentinelRef: reqSentinelRef, total: reqTotal, initial: reqInitial } =
+    useLazyList(filtered, { initial: 30, step: 10, resetDeps: [search, statusFilter] });
+
   const counts = {
     all: requests.length,
     pending: requests.filter((r) => r.status === "pending").length,
