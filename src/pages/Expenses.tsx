@@ -1542,7 +1542,28 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </Button>
               );
             })()}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={() => setAdvancedOpen(true)}
+              aria-label={`Filtros avançados${activeAdvancedCount > 0 ? ` (${activeAdvancedCount} ativos)` : ""}`}
+            >
+              <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Filtros avançados</span>
+              <span className="sm:hidden">Refinar</span>
+              {activeAdvancedCount > 0 && (
+                <span
+                  className="ml-1 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold flex items-center justify-center"
+                  aria-hidden="true"
+                >
+                  {activeAdvancedCount}
+                </span>
+              )}
+            </Button>
           </div>
+
 
           {/* Filters (collapsed on mobile, inline on desktop) */}
           <div
