@@ -133,9 +133,24 @@ export function useApprovalHistory(companyDb?: string | null) {
         return !sapKey.has(`${r.company_db}|${r.doc_entry}|${r.decision}|${r.step ?? 0}`);
       });
 
+      // Parse "Ação executada por SUBSTITUTO (X) em nome de Y" a partir do
+      // campo `remarks` para linhas vindas do SAP (que ainda não têm colunas
+      // dedicadas de substituição no `approval_history`).
+      const SUBSTITUTE_RE = /SUBSTITUTO\s*\(([^)]+)\)\s*em nome de\s+([^—<]+?)(?:\s*<([^>]+)>)?\s*(?:—|\.|$)/i;
+      const parseSubstitution = (r: ApprovalHistoryRow): ApprovalHistoryRow => {
+        if (r.substituted_for_email || r.substituted_for_name) return r;
+        const m = r.remarks?.match(SUBSTITUTE_RE);
+        if (!m) return r;
+        return {
+          ...r,
+          substituted_for_name: (m[2] || "").trim() || null,
+          substituted_for_email: (m[3] || "").trim() || null,
+        };
+      };
+
       const merged = [
-        ...((sapRows || []) as ApprovalHistoryRow[]).map((r) => ({ ...r, source: "sap" as const })),
-        ...filteredInternal,
+        ...((sapRows || []) as ApprovalHistoryRow[]).map((r) => parseSubstitution({ ...r, source: "sap" as const })),
+        ...filteredInternal.map(parseSubstitution),
       ].sort((a, b) => {
         const da = a.decision_date ? new Date(a.decision_date).getTime() : 0;
         const db = b.decision_date ? new Date(b.decision_date).getTime() : 0;
