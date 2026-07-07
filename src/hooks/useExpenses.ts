@@ -702,6 +702,8 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         supplier_name?: string;
         supplier_code?: string | null;
         remarks?: string | null;
+        doc_date?: string | null;
+        due_date?: string | null;
         items?: Omit<ExpenseItem, "id">[];
       }
     ) => {
@@ -735,6 +737,8 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           supplier_name: input.supplier_name,
           supplier_code: input.supplier_code,
           remarks: input.remarks,
+          doc_date: input.doc_date,
+          due_date: input.due_date,
           items: enrichedItems,
         },
       });
