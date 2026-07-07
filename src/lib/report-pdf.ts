@@ -904,16 +904,47 @@ export async function exportQueueSummaryJson(opts: QueueSummaryOptions): Promise
 //
 // Derivam-se a partir dos campos opcionais de `QueueSummaryEntry`. Ficam
 // centralizados aqui para PDF e CSV emitirem exatamente as mesmas colunas.
+//
+// Regra: `classifiedAt` e `completedAt` SEMPRE saem em ISO 8601 (UTC, sufixo
+// "Z"). Quando não houver data válida, a célula fica vazia e o gerador conta
+// as ausências para emitir um aviso agregado no cabeçalho do PDF/CSV — isso
+// evita que auditor confunda "vazio" com "erro de exportação".
 
-function auditTimestamp(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "—";
+/**
+ * Converte um timestamp (ms) para ISO 8601 estrito.
+ * Retorna `{ iso: "" , missing: true }` quando o valor é ausente/ inválido,
+ * permitindo ao caller contar ausências e emitir aviso.
+ */
+function toAuditIso(ms: number | null | undefined): { iso: string; missing: boolean } {
+  if (ms === null || ms === undefined) return { iso: "", missing: true };
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return { iso: "", missing: true };
   try {
-    return new Date(ms).toLocaleString("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      dateStyle: "short",
-      timeStyle: "medium",
-    });
-  } catch { return String(ms); }
+    const d = new Date(ms);
+    const iso = d.toISOString(); // sempre "YYYY-MM-DDTHH:mm:ss.sssZ"
+    if (!iso || Number.isNaN(d.getTime())) return { iso: "", missing: true };
+    return { iso, missing: false };
+  } catch {
+    return { iso: "", missing: true };
+  }
+}
+
+/**
+ * Percorre a lista contando quantos `classifiedAt` / `completedAt` estão
+ * ausentes ou inválidos. Usado pelas exportações para gerar o aviso agregado.
+ */
+function countMissingAuditTimestamps(entries: QueueSummaryEntry[]): {
+  missingClassified: number;
+  missingCompleted: number;
+} {
+  let missingClassified = 0;
+  let missingCompleted = 0;
+  for (const e of entries) {
+    if (toAuditIso(e.classifiedAt).missing) missingClassified++;
+    // `completedAt` só é obrigatório para status finais (success/failed/cancelled).
+    const isFinal = e.status === "success" || e.status === "failed" || e.status === "cancelled";
+    if (isFinal && toAuditIso(e.completedAt).missing) missingCompleted++;
+  }
+  return { missingClassified, missingCompleted };
 }
 
 function auditStatusReason(e: QueueSummaryEntry): string {
