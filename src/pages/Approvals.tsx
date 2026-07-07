@@ -131,8 +131,17 @@ function ApprovalCard({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all ${overdue ? "border-destructive/40" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir aprovação ${doc.docTypeName} nº ${doc.docNum}, ${doc.cardName}, valor ${formatCurrency(doc.docTotal, doc.currency)}${overdue ? ", vencida" : ""}`}
+      className={`glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all ${overdue ? "border-destructive/40" : ""}`}
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div className="flex items-start justify-between">
         <div>
@@ -2158,18 +2167,32 @@ export default function ApprovalsPage() {
               </div>
             </PopoverContent>
           </Popover>
-          <div className="flex items-center border border-border rounded-lg overflow-hidden">
+          <div
+            role="group"
+            aria-label="Alternar entre visualização em cards e tabela"
+            className="flex items-center border border-border rounded-lg overflow-hidden"
+          >
             <button
+              type="button"
               onClick={() => setViewMode("cards")}
-              className={`p-2 transition-colors ${viewMode === "cards" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              aria-pressed={viewMode === "cards"}
+              aria-label="Visualizar como cards"
+              title="Cards"
+              className={`p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${viewMode === "cards" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Cards</span>
             </button>
             <button
+              type="button"
               onClick={() => setViewMode("table")}
-              className={`p-2 transition-colors ${viewMode === "table" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              aria-pressed={viewMode === "table"}
+              aria-label="Visualizar como tabela"
+              title="Tabela"
+              className={`p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${viewMode === "table" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
-              <List className="w-4 h-4" />
+              <List className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Tabela</span>
             </button>
           </div>
         </div>

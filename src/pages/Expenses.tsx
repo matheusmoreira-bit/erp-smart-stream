@@ -23,6 +23,7 @@ import {
   Link2,
   AlertTriangle,
   Network,
+  Eye,
   Paperclip,
   FileDown,
   SlidersHorizontal,
@@ -635,12 +636,22 @@ function ExpenseCard({
   originBadge?: "erp_flow" | "erp";
   onRelationsMap?: () => void;
 }) {
+  const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? " · ERP" : "";
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all"
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir lançamento ${expense.supplier_name}, solicitante ${expense.requester_name}, valor ${formatCurrency(expense.total_amount, expense.currency)}, status ${STATUS_LABELS[expense.status] || expense.status}${originLabel}`}
+      className="glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all"
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div className="flex items-start justify-between">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -1402,17 +1413,30 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                           {formatCurrency(exp.total_amount, exp.currency)}
                         </td>
                         <td className="px-4 py-2.5 text-right">
-                          {origin === "erp_flow" && (
+                          <div className="inline-flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-primary"
-                              title="Mapa de relações"
-                              onClick={(ev) => { ev.stopPropagation(); setRelationsMapExpense(exp); }}
+                              aria-label={`Abrir lançamento de ${exp.supplier_name}`}
+                              title="Ver detalhes"
+                              onClick={(ev) => { ev.stopPropagation(); openExpense(exp, origin); }}
                             >
-                              <Network className="w-4 h-4" />
+                              <Eye className="w-4 h-4" aria-hidden="true" />
                             </Button>
-                          )}
+                            {origin === "erp_flow" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                aria-label={`Mapa de relações de ${exp.supplier_name}`}
+                                title="Mapa de relações"
+                                onClick={(ev) => { ev.stopPropagation(); setRelationsMapExpense(exp); }}
+                              >
+                                <Network className="w-4 h-4" aria-hidden="true" />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
