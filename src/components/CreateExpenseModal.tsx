@@ -14,6 +14,7 @@ import {
 import { exportQueueSummaryPdf } from "@/lib/report-pdf";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -237,6 +238,10 @@ export function CreateExpenseModal({
   const [showQueueSummary, setShowQueueSummary] = useState(false);
   // Confirmação antes de reenviar apenas os erros do resumo da fila.
   const [confirmRetryFailed, setConfirmRetryFailed] = useState(false);
+  // Rastreia uma sessão ativa de "Reenviar apenas erros" — chaves dos grupos
+  // que estamos reprocessando — para renderizar barra/contador dedicado.
+  // null = nenhuma sessão de retentativa em andamento.
+  const [retryingKeys, setRetryingKeys] = useState<Set<string> | null>(null);
   // Detalhes de um grupo (deferredGroup / concluído / com erro / cancelado)
   // abertos em modal para inspeção antes de fechar. Guarda o snapshot da
   // entry (sempre disponível) + o DocGroup original (quando o cache ainda tem).
@@ -469,6 +474,19 @@ export function CreateExpenseModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Encerra a sessão de retentativa quando todos os grupos reprocessados
+  // saíram de "pending"/"queued" (mantém a barra visível por 4s para o usuário
+  // ver o status final antes de desaparecer).
+  useEffect(() => {
+    if (!retryingKeys || retryingKeys.size === 0) return;
+    const entries = queueHistory.filter((e) => retryingKeys.has(e.supplierKey));
+    if (entries.length === 0) return;
+    const stillRunning = entries.some((e) => e.status === "pending" || e.status === "queued");
+    if (stillRunning) return;
+    const t = setTimeout(() => setRetryingKeys(null), 4000);
+    return () => clearTimeout(t);
+  }, [queueHistory, retryingKeys]);
 
   // Hydrate from an existing draft when the user chose "Retomar"
   useEffect(() => {
@@ -1621,6 +1639,36 @@ export function CreateExpenseModal({
                       <div className="text-foreground font-medium mb-1">
                         Fila de fornecedores ({queueHistory.filter((e) => e.status === "success").length}/{queueHistory.length} concluídas)
                       </div>
+                      {retryingKeys && retryingKeys.size > 0 && (() => {
+                        const retryEntries = queueHistory.filter((e) => retryingKeys.has(e.supplierKey));
+                        const total = retryingKeys.size;
+                        const okCount = retryEntries.filter((e) => e.status === "success").length;
+                        const failCount = retryEntries.filter((e) => e.status === "failed").length;
+                        const doneCount = okCount + failCount;
+                        const active = retryEntries.find((e) => e.status === "pending");
+                        const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+                        const finished = doneCount >= total;
+                        return (
+                          <div className="mb-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-medium text-primary flex items-center gap-1.5">
+                                <Sparkles className="w-3 h-3" />
+                                {finished ? "Retentativa concluída" : "Reenviando erros"}
+                              </span>
+                              <span className="tabular-nums text-muted-foreground">
+                                {doneCount}/{total} reprocessados
+                                {failCount > 0 && ` · ${failCount} falha(s)`}
+                              </span>
+                            </div>
+                            <Progress value={pct} className="h-1.5" />
+                            {!finished && active && (
+                              <div className="text-[10px] text-muted-foreground truncate">
+                                Atual: {active.supplierLabel}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <ul className="space-y-0.5">
                         {queueHistory.map((e, idx) => {
                           const icon =
@@ -2674,6 +2722,7 @@ export function CreateExpenseModal({
                 return e;
               }));
               setDeferredGroups(rest);
+              setRetryingKeys(new Set(groups.map((g) => g.supplierKey)));
               resetFormForNextDeferred(first);
               setShowQueueSummary(false);
               setJustCancelled(false);
