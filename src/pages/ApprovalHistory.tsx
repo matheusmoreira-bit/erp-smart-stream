@@ -287,17 +287,21 @@ export default function ApprovalHistory() {
 
           {(() => {
             const anySel = substituteFilter.includes("__any__");
+            const anySel = substituteFilter.includes("__any__");
             const noneSel = substituteFilter.includes("__none__");
             const specificKeys = substituteFilter.filter((k) => k !== "__any__" && k !== "__none__");
-            const summary = substituteFilter.length === 0
-              ? "Substituto: todos"
-              : anySel
-                ? "Somente por substituto"
-                : noneSel
-                  ? "Somente pelo próprio aprovador"
-                  : specificKeys.length === 1
-                    ? (substitutedOptions.find((o) => o.key === specificKeys[0])?.label || specificKeys[0])
-                    : `${specificKeys.length} substituídos`;
+            const hasSearch = substituteSearch.trim().length > 0;
+            const summary = hasSearch
+              ? `Busca: "${substituteSearch.trim()}"`
+              : substituteFilter.length === 0
+                ? "Substituto: todos"
+                : anySel
+                  ? "Somente por substituto"
+                  : noneSel
+                    ? "Somente pelo próprio aprovador"
+                    : specificKeys.length === 1
+                      ? (substitutedOptions.find((o) => o.key === specificKeys[0])?.label || specificKeys[0])
+                      : `${specificKeys.length} substituídos`;
             const toggleExclusive = (key: "__any__" | "__none__") => {
               setSubstituteFilter((prev) => prev.includes(key) ? [] : [key]);
             };
@@ -307,6 +311,7 @@ export default function ApprovalHistory() {
                 return cleaned.includes(key) ? cleaned.filter((k) => k !== key) : [...cleaned, key];
               });
             };
+            const disableSelection = anySel || noneSel || hasSearch;
             return (
               <Popover>
                 <PopoverTrigger asChild>
