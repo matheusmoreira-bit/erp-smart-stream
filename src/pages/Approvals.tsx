@@ -2040,9 +2040,15 @@ export default function ApprovalsPage() {
           const substitutionNote = onBehalfOf
             ? `Ação executada por SUBSTITUTO (${session.userName}) em nome de ${onBehalfOf.name}${onBehalfOf.email ? ` <${onBehalfOf.email}>` : ""}.`
             : null;
-          const remarksForSap = substitutionNote
-            ? [remarks, substitutionNote].filter(Boolean).join(" — ")
-            : remarks;
+          const roleNote =
+            actingRole === "delegation"
+              ? `Ação executada por DELEGAÇÃO (${session.userName}).`
+              : actingRole === "approver" && !substitutionNote
+                ? null
+                : null;
+          const remarksForSap = [remarks, substitutionNote, roleNote]
+            .filter(Boolean)
+            .join(" — ") || remarks;
 
           const endpoint = `ApprovalRequests(${code})`;
           const body: Record<string, unknown> = {
