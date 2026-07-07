@@ -667,7 +667,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const navigate = useNavigate();
   const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
-  const [search, setSearch] = useState("");
+  // Filtros persistidos por modo (purchase/sales) para manter seleção ao trocar de tela.
+  const filterKey = (name: string) => `expenses:${mode}:${name}`;
+  const [search, setSearch] = usePersistedState<string>(filterKey("search"), "");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<"erp_flow" | "erp" | undefined>(undefined);
