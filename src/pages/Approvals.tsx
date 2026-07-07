@@ -1528,7 +1528,23 @@ export default function ApprovalsPage() {
     .filter((e) => e.status === "pendente_aprovacao")
     .map(mapInternalExpense);
 
-  const allApprovals: ApprovalDoc[] = [...internalPending, ...approvals];
+  // Deduplica por chave única — evita mostrar o mesmo lançamento duas vezes
+  // quando o usuário é aprovador principal E substituto ativo do aprovador
+  // atual (ou tem múltiplas regras de substituição sobrepostas).
+  const allApprovals: ApprovalDoc[] = useMemo(() => {
+    const merged: ApprovalDoc[] = [...internalPending, ...approvals];
+    const seen = new Set<string>();
+    const out: ApprovalDoc[] = [];
+    for (const d of merged) {
+      const internalId = (d as unknown as { __internalId?: string }).__internalId;
+      const key = internalId ? `internal:${internalId}` : `sap:${d.approvalRequestId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(d);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approvals, expenses]);
 
   // Mantém o documento aberto no modal sincronizado com o MESMO snapshot que
   // alimenta a lista. Sempre que `allApprovals` for atualizado (após um
