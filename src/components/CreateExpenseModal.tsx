@@ -2933,6 +2933,8 @@ export function CreateExpenseModal({
               setQueueHistory([]);
               failedGroupsRef.current = new Map();
               cancelledGroupsRef.current = [];
+              // Limpa também o estado persistido — usuário finalizou.
+              void clearQueueState(queueScope);
               onClose();
             }}
           >
