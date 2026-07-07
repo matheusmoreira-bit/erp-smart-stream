@@ -1222,7 +1222,60 @@ export function CreateExpenseModal({
       toast.error("Centro de custo (padrão) é obrigatório");
       return;
     }
+    // Guard duro anti-double-submit: `isCreating` (estado) protege a UI, mas
+    // um duplo clique rápido cabe na janela entre o clique e o setState —
+    // o ref pega isso. Rejeita silenciosamente com log auditável.
+    if (hasInFlightGuardTripped(submitInFlightRef) || isCreating) {
+      console.info(DEDUP_LOG, "handleSubmit ignorado: já há criação em vôo", {
+        isCreating,
+        refFlag: submitInFlightRef.current,
+      });
+      return;
+    }
+    submitInFlightRef.current = true;
     setIsCreating(true);
+
+    // ---- Dedup cross-user: hash dos anexos e checagem antes do onCreate ----
+    // Objetivo: se outro usuário (ou este mesmo) já lançou uma despesa com
+    // qualquer um destes arquivos, o backend bloqueia antes de gastar a
+    // chamada de criação. `fail-closed`: se a consulta falhar, aborta.
+    let fileHashes: string[] = [];
+    if (files.length > 0) {
+      try {
+        fileHashes = await Promise.all(files.map((f) => hashFileContent(f)));
+        const novel = fileHashes.filter((h) => !claimedHashesRef.current.has(h));
+        if (novel.length > 0) {
+          const existing = await findExistingClaims(supabase, novel);
+          if (existing.length > 0) {
+            const names = existing
+              .map((e) => e.file_name || e.file_hash.slice(0, 8))
+              .join(", ");
+            console.warn(DEDUP_LOG, "duplicata cross-user detectada", { existing });
+            toast.error(
+              `Este documento já foi lançado por outro usuário: ${names}. ` +
+                `Remova o anexo duplicado ou verifique com o responsável antes de continuar.`,
+              { duration: 10000 },
+            );
+            submitInFlightRef.current = false;
+            setIsCreating(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error(DEDUP_LOG, "verificação de duplicata falhou (abortando submit):", e);
+        toast.error("Não foi possível verificar duplicidade dos anexos. Tente novamente.");
+        submitInFlightRef.current = false;
+        setIsCreating(false);
+        return;
+      }
+    }
+
+    console.info(DEDUP_LOG, "handleSubmit START", {
+      supplier: supplier.name,
+      fileCount: files.length,
+      hashes: fileHashes.map((h) => h.slice(0, 12)),
+    });
+
     try {
       await onCreate({
         supplier_name: supplier.name,
@@ -1240,6 +1293,33 @@ export function CreateExpenseModal({
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });
+
+      // Reivindica os hashes APÓS sucesso — se o insert falhar por corrida,
+      // apenas logamos (a despesa foi criada; a colisão vira aviso no próximo
+      // submit que tocar o mesmo arquivo).
+      if (fileHashes.length > 0) {
+        const { data: userRes } = await supabase.auth.getUser();
+        const uid = userRes?.user?.id;
+        if (uid) {
+          const res = await claimDocumentHashes(
+            supabase,
+            uid,
+            fileHashes.map((h, i) => ({
+              fileHash: h,
+              fileName: files[i]?.name,
+              fileSize: files[i]?.size,
+              companyDb: sapSession?.companyDB ?? null,
+              docType: mode,
+              supplierLabel: supplier.name,
+            })),
+          );
+          if (res.conflict) {
+            console.warn(DEDUP_LOG, "claim colidiu após create (corrida com outro usuário)");
+          } else {
+            fileHashes.forEach((h) => claimedHashesRef.current.add(h));
+          }
+        }
+      }
       toast.success(isSales ? "Pedido de venda criado com sucesso!" : "Despesa criada com sucesso!");
       if (draftId) {
         void deleteDraft(draftId);
