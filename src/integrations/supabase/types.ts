@@ -3601,6 +3601,7 @@ export type Database = {
         Args: { _company_db?: string }
         Returns: string
       }
+      get_sap_sync_health: { Args: { _last_n?: number }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
