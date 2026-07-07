@@ -3147,6 +3147,112 @@ export function CreateExpenseModal({
                 })}
               </div>
             </div>
+
+            {/* Resumo de auditoria — mesmos campos que vão para PDF/CSV/JSON.
+                Permite conferir e copiar antes de exportar. */}
+            {(() => {
+              const AI_MODEL = "n-2.5-flash"; // TODO: expor por evento quando houver múltiplos
+              const models = Array.from(new Set(queueHistory.map(() => AI_MODEL)));
+              // Categorização idêntica à STATUS_REASON_LEGEND em report-pdf.ts
+              const reasonCounts: Array<[string, number]> = [
+                ["Concluído com sucesso", queueHistory.filter((e) => e.status === "success").length],
+                ["Falha (com mensagem)", queueHistory.filter((e) => e.status === "failed" && !!e.errorMessage?.trim()).length],
+                ["Falha não detalhada", queueHistory.filter((e) => e.status === "failed" && !e.errorMessage?.trim()).length],
+                ["Cancelado pelo usuário", queueHistory.filter((e) => e.status === "cancelled").length],
+                ["Em processamento", queueHistory.filter((e) => e.status === "pending").length],
+                ["Aguardando na fila", queueHistory.filter((e) => e.status === "queued").length],
+              ].filter(([, n]) => n > 0);
+              const missingClassified = queueHistory.filter((e) => !e.classifiedAt).length;
+              const missingCompleted = queueHistory.filter(
+                (e) => (e.status === "success" || e.status === "failed" || e.status === "cancelled") && !e.completedAt,
+              ).length;
+
+              const buildPlainText = () => {
+                const lines: string[] = [];
+                lines.push(`Resumo de auditoria — ${isSales ? "Pedidos de venda" : "Despesas"}`);
+                lines.push(`Total de eventos: ${queueHistory.length}`);
+                lines.push(`Modelo(s) IA: ${models.join(", ") || "—"}`);
+                lines.push(`Schema JSON: v${QUEUE_SUMMARY_JSON_SCHEMA_VERSION}`);
+                lines.push(`Limite de confiança: ${Math.round(aiConfidenceThreshold * 100)}%`);
+                lines.push("");
+                lines.push("Contagem por motivo:");
+                for (const [label, n] of reasonCounts) lines.push(`  - ${label}: ${n}`);
+                if (missingClassified > 0 || missingCompleted > 0) {
+                  lines.push("");
+                  lines.push(`Aviso auditoria: ${missingClassified} sem "Classificado em" · ${missingCompleted} sem "Concluído em" (status final).`);
+                }
+                lines.push("");
+                lines.push(`Gerado em: ${new Date().toISOString()}`);
+                return lines.join("\n");
+              };
+
+              if (queueHistory.length === 0) return null;
+              return (
+                <div className="mt-3 rounded-md border border-border bg-muted/30 p-3 text-xs space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold text-foreground text-[13px]">Resumo de auditoria</div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 gap-1.5 text-[11px]"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(buildPlainText());
+                          toast.success("Resumo de auditoria copiado.");
+                        } catch (err) {
+                          console.error("[audit-summary-copy] falha", err);
+                          toast.error("Não foi possível copiar (verifique permissões do navegador).");
+                        }
+                      }}
+                      title="Copia o resumo para o clipboard em texto simples"
+                    >
+                      <ClipboardCopy className="w-3.5 h-3.5" />
+                      Copiar
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-muted-foreground">Modelo(s) IA</div>
+                      <div className="font-mono text-[11px] break-all">{models.join(", ") || "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Versão do schema JSON</div>
+                      <div className="font-mono text-[11px]">v{QUEUE_SUMMARY_JSON_SCHEMA_VERSION}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Total de eventos</div>
+                      <div className="font-medium">{queueHistory.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Limite de confiança</div>
+                      <div className="font-medium">{Math.round(aiConfidenceThreshold * 100)}%</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground mb-1">Contagem por motivo</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {reasonCounts.length === 0 && <span className="text-muted-foreground">—</span>}
+                      {reasonCounts.map(([label, n]) => (
+                        <span
+                          key={label}
+                          className="inline-flex items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[11px]"
+                        >
+                          <span>{label}</span>
+                          <span className="font-semibold tabular-nums">{n}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {(missingClassified > 0 || missingCompleted > 0) && (
+                    <div className="text-amber-700 dark:text-amber-400 text-[11px]">
+                      Aviso: {missingClassified} sem "Classificado em" · {missingCompleted} sem "Concluído em" (status final).
+                      Células vazias no PDF/CSV representam ausência de dado, não erro.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col sm:flex-row gap-2">
