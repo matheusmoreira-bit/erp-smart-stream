@@ -2403,6 +2403,7 @@ export function CreateExpenseModal({
               placeholder={`Digite nome, código ou CNPJ do ${bpLabel.toLowerCase()}...`}
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
+              required
             />
             {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
               <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
