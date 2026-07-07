@@ -1622,6 +1622,14 @@ export function CreateExpenseModal({
                                   · ⚠ {e.aiWarnings.length}
                                 </span>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => openDetailsFor(e)}
+                                className="ml-auto text-[10px] text-primary hover:underline shrink-0"
+                                title="Ver arquivos, linhas e alertas classificados pela IA"
+                              >
+                                Ver detalhes
+                              </button>
                             </li>
                           );
                         })}
