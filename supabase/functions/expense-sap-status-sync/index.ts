@@ -72,18 +72,30 @@ Deno.serve(async (req) => {
   }
 
   const results: Array<{ id: string; docEntry?: number; poStatus?: string; expenseStatus?: string; error?: string }> = [];
+  const startedAt = Date.now();
+
+  // Permite forçar sincronia de IDs específicos via POST body { expenseIds: string[] }
+  let expenseIdsFilter: string[] | null = null;
+  let trigger = "cron";
+  if (req.method === "POST") {
+    try {
+      const body = await req.json();
+      if (Array.isArray(body?.expenseIds) && body.expenseIds.length) {
+        expenseIdsFilter = body.expenseIds.map((v: unknown) => String(v));
+        trigger = "manual";
+      }
+    } catch { /* body opcional */ }
+  }
+
+  // Registra a execução em curso
+  const { data: runRow } = await sb
+    .from("expense_sap_sync_runs")
+    .insert({ trigger, status: "running" })
+    .select("id")
+    .single();
+  const runId = (runRow as { id?: string } | null)?.id ?? null;
 
   try {
-    // Permite forçar sincronia de IDs específicos via POST body { expenseIds: string[] }
-    let expenseIdsFilter: string[] | null = null;
-    if (req.method === "POST") {
-      try {
-        const body = await req.json();
-        if (Array.isArray(body?.expenseIds) && body.expenseIds.length) {
-          expenseIdsFilter = body.expenseIds.map((v: unknown) => String(v));
-        }
-      } catch { /* body opcional */ }
-    }
 
     // Alvos: expenses com sap_doc_entry preenchido e status não-terminal
     // ('finalizado' e 'cancelado' são terminais e não precisam de polling contínuo).
@@ -183,14 +195,43 @@ Deno.serve(async (req) => {
       }
     }
 
+    const errors = results.filter((r) => r.error);
+    const updated = results.filter((r) => r.expenseStatus);
+    const skipped = results.filter((r) => r.error === "test_base");
+    if (runId) {
+      await sb.from("expense_sap_sync_runs").update({
+        status: "ok",
+        finished_at: new Date().toISOString(),
+        duration_ms: Date.now() - startedAt,
+        processed_count: results.length,
+        updated_count: updated.length,
+        error_count: errors.length,
+        skipped_count: skipped.length,
+        results,
+        errors,
+      }).eq("id", runId);
+    }
     await releaseWatcherLock(sb, "expense-sap-status-sync", "ok", `processed=${results.length}`);
-    return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
+    return new Response(JSON.stringify({ ok: true, runId, processed: results.length, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     const msg = (e as Error).message;
+    const errors = results.filter((r) => r.error);
+    if (runId) {
+      await sb.from("expense_sap_sync_runs").update({
+        status: "error",
+        finished_at: new Date().toISOString(),
+        duration_ms: Date.now() - startedAt,
+        processed_count: results.length,
+        error_count: errors.length,
+        results,
+        errors,
+        error_message: msg,
+      }).eq("id", runId);
+    }
     await releaseWatcherLock(sb, "expense-sap-status-sync", "error", msg);
-    return new Response(JSON.stringify({ ok: false, error: msg, results }), {
+    return new Response(JSON.stringify({ ok: false, runId, error: msg, results }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1586,6 +1586,54 @@ export type Database = {
           },
         ]
       }
+      expense_sap_sync_runs: {
+        Row: {
+          duration_ms: number | null
+          error_count: number
+          error_message: string | null
+          errors: Json
+          finished_at: string | null
+          id: string
+          processed_count: number
+          results: Json
+          skipped_count: number
+          started_at: string
+          status: string
+          trigger: string
+          updated_count: number
+        }
+        Insert: {
+          duration_ms?: number | null
+          error_count?: number
+          error_message?: string | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          processed_count?: number
+          results?: Json
+          skipped_count?: number
+          started_at?: string
+          status?: string
+          trigger?: string
+          updated_count?: number
+        }
+        Update: {
+          duration_ms?: number | null
+          error_count?: number
+          error_message?: string | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          processed_count?: number
+          results?: Json
+          skipped_count?: number
+          started_at?: string
+          status?: string
+          trigger?: string
+          updated_count?: number
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           approval_rule_id: string | null
