@@ -13,8 +13,11 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
 import { PageTitle } from "@/components/PageTitle";
+import { ChevronDown } from "lucide-react";
 
 
 function formatCurrency(value?: number | null, currency = "BRL") {
@@ -54,12 +57,13 @@ export default function ApprovalHistory() {
 
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
-  // Filtro de rastreabilidade de substituto:
-  //   "all"  → não filtra
-  //   "any"  → apenas decisões executadas por substituto
-  //   "none" → apenas decisões executadas pelo próprio aprovador oficial
-  //   "<key>" → substituição específica (chave = email || nome)
-  const [substituteFilter, setSubstituteFilter] = useState<string>("all");
+  // Filtro de rastreabilidade de substituto (multi-seleção):
+  //   [] (vazio) → não filtra
+  //   ["__any__"]  → apenas decisões executadas por substituto
+  //   ["__none__"] → apenas decisões executadas pelo próprio aprovador oficial
+  //   ["<key1>","<key2>",...] → substituídos específicos (chave = email || nome)
+  // "__any__"/"__none__" são mutuamente exclusivos entre si e com chaves específicas.
+  const [substituteFilter, setSubstituteFilter] = useState<string[]>([]);
   // Admin/view-all veem tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
   const [scope, setScope] = useState<"mine" | "all">(canViewAll ? "all" : "mine");
   useEffect(() => { setScope(canViewAll ? "all" : "mine"); }, [canViewAll]);
@@ -104,16 +108,18 @@ export default function ApprovalHistory() {
       }
       if (decision !== "all" && r.decision !== decision) return false;
 
-      // Filtro por substituto
-      if (substituteFilter !== "all") {
+      // Filtro por substituto (multi-seleção)
+      if (substituteFilter.length > 0) {
         const email = (r.substituted_for_email || "").toLowerCase();
         const name = (r.substituted_for_name || "").toLowerCase();
         const hasSubstitution = !!(email || name);
-        if (substituteFilter === "any" && !hasSubstitution) return false;
-        if (substituteFilter === "none" && hasSubstitution) return false;
-        if (substituteFilter !== "any" && substituteFilter !== "none") {
+        if (substituteFilter.includes("__any__")) {
+          if (!hasSubstitution) return false;
+        } else if (substituteFilter.includes("__none__")) {
+          if (hasSubstitution) return false;
+        } else {
           const key = email || name;
-          if (key !== substituteFilter) return false;
+          if (!substituteFilter.includes(key)) return false;
         }
       }
 
@@ -243,24 +249,78 @@ export default function ApprovalHistory() {
             </SelectContent>
           </Select>
 
-          <Select value={substituteFilter} onValueChange={setSubstituteFilter}>
-            <SelectTrigger className="w-64" title="Filtrar por aprovações executadas por substituto">
-              <SelectValue placeholder="Substituto" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Substituto: todos</SelectItem>
-              <SelectItem value="any">Somente por substituto</SelectItem>
-              <SelectItem value="none">Somente pelo próprio aprovador</SelectItem>
-              {substitutedOptions.length > 0 && (
-                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Em nome de
-                </div>
-              )}
-              {substitutedOptions.map((o) => (
-                <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {(() => {
+            const anySel = substituteFilter.includes("__any__");
+            const noneSel = substituteFilter.includes("__none__");
+            const specificKeys = substituteFilter.filter((k) => k !== "__any__" && k !== "__none__");
+            const summary = substituteFilter.length === 0
+              ? "Substituto: todos"
+              : anySel
+                ? "Somente por substituto"
+                : noneSel
+                  ? "Somente pelo próprio aprovador"
+                  : specificKeys.length === 1
+                    ? (substitutedOptions.find((o) => o.key === specificKeys[0])?.label || specificKeys[0])
+                    : `${specificKeys.length} substituídos`;
+            const toggleExclusive = (key: "__any__" | "__none__") => {
+              setSubstituteFilter((prev) => prev.includes(key) ? [] : [key]);
+            };
+            const toggleKey = (key: string) => {
+              setSubstituteFilter((prev) => {
+                const cleaned = prev.filter((k) => k !== "__any__" && k !== "__none__");
+                return cleaned.includes(key) ? cleaned.filter((k) => k !== key) : [...cleaned, key];
+              });
+            };
+            return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-64 justify-between font-normal" title="Filtrar por aprovações executadas por substituto">
+                    <span className="truncate">{summary}</span>
+                    <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-2" align="start">
+                  <div className="max-h-80 overflow-y-auto space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setSubstituteFilter([])}
+                      className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent"
+                    >
+                      Substituto: todos
+                    </button>
+                    <label className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer">
+                      <Checkbox checked={anySel} onCheckedChange={() => toggleExclusive("__any__")} />
+                      Somente por substituto
+                    </label>
+                    <label className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer">
+                      <Checkbox checked={noneSel} onCheckedChange={() => toggleExclusive("__none__")} />
+                      Somente pelo próprio aprovador
+                    </label>
+                    {substitutedOptions.length > 0 && (
+                      <>
+                        <div className="px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Em nome de
+                        </div>
+                        {substitutedOptions.map((o) => (
+                          <label
+                            key={o.key}
+                            className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${anySel || noneSel ? "opacity-50" : ""}`}
+                          >
+                            <Checkbox
+                              checked={specificKeys.includes(o.key)}
+                              disabled={anySel || noneSel}
+                              onCheckedChange={() => toggleKey(o.key)}
+                            />
+                            <span className="truncate">{o.label}</span>
+                          </label>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            );
+          })()}
         </div>
 
         {syncState?.last_status === "error" && (
