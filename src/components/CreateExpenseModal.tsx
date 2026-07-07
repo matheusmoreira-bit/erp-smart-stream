@@ -885,6 +885,39 @@ export function CreateExpenseModal({
     );
   };
 
+  // Retoma a fila a partir do próximo grupo cancelado (mantém os concluídos
+  // com sucesso intactos e não roda a IA de novo — reaproveita os DocGroup
+  // em cache). Se algum grupo com falha estiver adiante, "Reenviar apenas
+  // erros" continua sendo o caminho — este botão foca em resumir a fila.
+  const resumeCancelledQueue = () => {
+    const groups = cancelledGroupsRef.current;
+    if (!groups || groups.length === 0) {
+      toast.error("Nenhum grupo cancelado disponível para retomar.");
+      return;
+    }
+    const [first, ...rest] = groups;
+    // Atualiza status no histórico: 'pending' para o primeiro retomado,
+    // 'queued' para o restante. Mantém 'success' e 'failed' inalterados.
+    setQueueHistory((prev) => prev.map((e) => {
+      if (e.supplierKey === first.supplierKey) {
+        return { ...e, status: "pending", errorMessage: undefined };
+      }
+      if (rest.some((g) => g.supplierKey === e.supplierKey)) {
+        return { ...e, status: "queued", errorMessage: undefined };
+      }
+      return e;
+    }));
+    setDeferredGroups(rest);
+    resetFormForNextDeferred(first);
+    cancelledGroupsRef.current = [];
+    setShowQueueSummary(false);
+    setJustCancelled(false);
+    toast.info(
+      `Retomando fila a partir de ${first.supplierLabel}${rest.length > 0 ? ` (+${rest.length} depois)` : ""}.`,
+      { duration: 6000 },
+    );
+  };
+
   // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
   const chooseFirstSupplierGroup = (chosenKey: string) => {
     if (!supplierPicker) return;
