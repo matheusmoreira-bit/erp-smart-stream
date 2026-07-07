@@ -611,6 +611,7 @@ Deno.serve(async (req) => {
         request_id: requestId,
         idempotency_key: idempotencyKey || null,
         company_db: (exp as any).company_db ?? null,
+        action_role: actionRole,
       } as any);
     } catch (e) {
       console.warn("[expense-approval-action] falha ao gravar audit log:", e);
