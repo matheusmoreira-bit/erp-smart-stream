@@ -132,11 +132,13 @@ async function mirrorBucket(
   bucket: string,
   driveFolderId: string,
   log: (m: string) => void,
-): Promise<{ copied: number; skipped: number; errors: number }> {
-  const out = { copied: 0, skipped: 0, errors: 0 };
-  const walk = async (prefix: string) => {
+  deadline: number,
+): Promise<{ copied: number; skipped: number; errors: number; done: boolean }> {
+  const out = { copied: 0, skipped: 0, errors: 0, done: true };
+  const walk = async (prefix: string): Promise<boolean> => {
     let offset = 0;
     while (true) {
+      if (Date.now() > deadline) { out.done = false; return false; }
       const { data, error } = await supabase.storage.from(bucket).list(prefix, {
         limit: 100,
         offset,
@@ -145,10 +147,11 @@ async function mirrorBucket(
       if (error) throw new Error(`list ${bucket}/${prefix}: ${error.message}`);
       if (!data?.length) break;
       for (const item of data) {
+        if (Date.now() > deadline) { out.done = false; return false; }
         const full = prefix ? `${prefix}/${item.name}` : item.name;
         if (item.id === null || (!item.metadata && item.name && !item.name.includes("."))) {
-          // folder
-          await walk(full);
+          const ok = await walk(full);
+          if (!ok) return false;
           continue;
         }
         const flatName = full.replace(/\//g, "__");
@@ -163,6 +166,7 @@ async function mirrorBucket(
           const ct = (item.metadata as any)?.mimetype || "application/octet-stream";
           await uploadFile(flatName, driveFolderId, ct, buf);
           out.copied++;
+          if (out.copied % 10 === 0) log(`${bucket}: ${out.copied} copiados, ${out.skipped} pulados`);
         } catch (e) {
           out.errors++;
           log(`erro ${bucket}/${full}: ${(e as Error).message}`);
@@ -171,10 +175,12 @@ async function mirrorBucket(
       if (data.length < 100) break;
       offset += 100;
     }
+    return true;
   };
   await walk("");
   return out;
 }
+
 
 async function cleanupOldSnapshots(dataFolderId: string): Promise<number> {
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 3600 * 1000).toISOString();
