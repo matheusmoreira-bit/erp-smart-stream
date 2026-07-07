@@ -1375,6 +1375,8 @@ export function CreateExpenseModal({
       toast.error(msg);
     } finally {
       setIsCreating(false);
+      submitInFlightRef.current = false;
+      console.info(DEDUP_LOG, "handleSubmit END");
     }
   };
 
