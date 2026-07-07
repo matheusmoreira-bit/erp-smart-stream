@@ -25,14 +25,5 @@ export default function ApprovalsHub() {
     }
   }, [tabParam, active, setParams]);
 
-  return (
-    <div>
-      <HubTabs
-        tabs={tabs.map((t) => ({ key: t.key, label: t.label }))}
-        active={active}
-        onChange={(k) => setParams({ tab: k }, { replace: true })}
-      />
-      {active === "history" ? <ApprovalHistory /> : <Approvals />}
-    </div>
-  );
+  return active === "history" ? <ApprovalHistory /> : <Approvals />;
 }
