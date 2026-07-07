@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
     // 1) Já existe? → devolve a resposta gravada (ou 409 se ainda em curso).
     const { data: prior, error: priorErr } = await admin
       .from("expense_action_idempotency")
-      .select("idempotency_key, expense_id, action, status_code, response, completed_at")
+      .select("idempotency_key, expense_id, action, status_code, response, completed_at, created_at")
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
     if (priorErr) {
@@ -264,15 +264,47 @@ Deno.serve(async (req) => {
         const cached = (prior as any).response ?? { ok: true };
         return json((prior as any).status_code, { ...cached, replayed: true, requestId });
       }
-      stageLog("idempotency_conflict", "warn", {
-        requestId, idempotencyKey, reason: "in_flight",
-      });
-      return json(409, {
-        error: "Já existe uma requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
-        stage: "idempotency_conflict",
-        requestId,
-      });
+      // Reserva em andamento. Se ela é antiga (>5min), o request original
+      // provavelmente crashed antes de gravar a resposta — assumimos como
+      // stale, apagamos e permitimos a nova tentativa reusar a mesma chave.
+      // O cron `purge-expense-action-idempotency` faz a limpeza definitiva,
+      // mas o cliente não precisa esperar por ele para reenviar.
+      const priorAgeMs = Date.now() - new Date((prior as any).created_at).getTime();
+      const STALE_MS = 5 * 60 * 1000;
+      if (priorAgeMs > STALE_MS) {
+        stageLog("idempotency_reserve", "warn", {
+          requestId, idempotencyKey, phase: "takeover_stale", priorAgeMs,
+        });
+        const { error: delErr } = await admin
+          .from("expense_action_idempotency")
+          .delete()
+          .eq("idempotency_key", idempotencyKey)
+          .is("completed_at", null); // safe-guard contra corrida com outra reserva
+        if (delErr) {
+          stageLog("idempotency_reserve", "error", {
+            requestId, idempotencyKey, phase: "takeover_delete", error: delErr.message,
+          });
+          return json(500, {
+            error: `Falha ao recuperar reserva de idempotência travada: ${delErr.message}`,
+            stage: "idempotency_reserve",
+            requestId,
+          });
+        }
+        // Cai para o INSERT abaixo (código 23505 vira 409 se outra
+        // requisição chegar aqui ao mesmo tempo — comportamento correto).
+      } else {
+        stageLog("idempotency_conflict", "warn", {
+          requestId, idempotencyKey, reason: "in_flight", priorAgeMs,
+        });
+        return json(409, {
+          error: "Já existe uma requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
+          stage: "idempotency_conflict",
+          requestId,
+          inFlightAgeMs: priorAgeMs,
+        });
+      }
     }
+
     // 2) Reserva a chave — falha por conflito indica corrida com outro request.
     const { error: reserveErr } = await admin
       .from("expense_action_idempotency")

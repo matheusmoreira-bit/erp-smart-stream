@@ -3340,6 +3340,18 @@ export type Database = {
               sample_rule_id: string
             }[]
           }
+      check_expense_action_idempotency_consistency: {
+        Args: never
+        Returns: {
+          completed: number
+          expired_completed: number
+          in_flight: number
+          oldest_completed: string
+          oldest_in_flight: string
+          stale_in_flight: number
+          total: number
+        }[]
+      }
       check_external_api_access: {
         Args: { _company_db: string; _user_code: string }
         Returns: {
@@ -3410,6 +3422,16 @@ export type Database = {
       }
       preview_next_codigo: { Args: { p_item_base_id: string }; Returns: string }
       prune_old_integration_data: { Args: never; Returns: undefined }
+      purge_expense_action_idempotency: {
+        Args: {
+          _completed_retention_hours?: number
+          _stale_reservation_minutes?: number
+        }
+        Returns: {
+          completed_removed: number
+          stale_removed: number
+        }[]
+      }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
