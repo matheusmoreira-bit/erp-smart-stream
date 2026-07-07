@@ -233,6 +233,13 @@ export function CreateExpenseModal({
   }
   const [queueHistory, setQueueHistory] = useState<QueueEntry[]>([]);
   const [showQueueSummary, setShowQueueSummary] = useState(false);
+  // Detalhes de um grupo (deferredGroup / concluído / com erro / cancelado)
+  // abertos em modal para inspeção antes de fechar. Guarda o snapshot da
+  // entry (sempre disponível) + o DocGroup original (quando o cache ainda tem).
+  const [detailsView, setDetailsView] = useState<{
+    entry: QueueEntry;
+    group: DocGroup | null;
+  } | null>(null);
   // Marca que o usuário acabou de cancelar o processamento/fila. Habilita o
   // botão "Tentar novamente" enquanto os anexos permanecerem no modal.
   const [justCancelled, setJustCancelled] = useState(false);
@@ -922,6 +929,24 @@ export function CreateExpenseModal({
   };
 
   // Atualiza o status de uma entrada da fila pela chave do fornecedor.
+  // Procura o DocGroup original (com arquivos + extração da IA) para uma
+  // dada entry da fila. Verifica todos os caches onde ele pode estar vivo:
+  // grupo atual em edição, deferidos, cancelados e com falha.
+  const findDocGroupByKey = (supplierKey: string): DocGroup | null => {
+    if (currentGroupRef.current?.supplierKey === supplierKey) return currentGroupRef.current;
+    const inDeferred = deferredGroups.find((g) => g.supplierKey === supplierKey);
+    if (inDeferred) return inDeferred;
+    const inCancelled = cancelledGroupsRef.current.find((g) => g.supplierKey === supplierKey);
+    if (inCancelled) return inCancelled;
+    const inFailed = failedGroupsRef.current.get(supplierKey);
+    if (inFailed) return inFailed;
+    return null;
+  };
+
+  const openDetailsFor = (entry: QueueEntry) => {
+    setDetailsView({ entry, group: findDocGroupByKey(entry.supplierKey) });
+  };
+
   const updateQueueEntry = (key: string, patch: Partial<QueueEntry>) => {
     setQueueHistory((prev) => prev.map((e) => (e.supplierKey === key ? { ...e, ...patch } : e)));
   };
@@ -1597,6 +1622,14 @@ export function CreateExpenseModal({
                                   · ⚠ {e.aiWarnings.length}
                                 </span>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => openDetailsFor(e)}
+                                className="ml-auto text-[10px] text-primary hover:underline shrink-0"
+                                title="Ver arquivos, linhas e alertas classificados pela IA"
+                              >
+                                Ver detalhes
+                              </button>
                             </li>
                           );
                         })}
@@ -2415,6 +2448,17 @@ export function CreateExpenseModal({
                           {e.fileNames.join(", ")}
                         </div>
                       )}
+                      <div className="pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[11px] text-primary"
+                          onClick={() => openDetailsFor(e)}
+                        >
+                          Ver detalhes
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -2487,6 +2531,156 @@ export function CreateExpenseModal({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Detalhes de um grupo: arquivos, linhas extraídas pela IA e alertas.
+        Abre-se sobre o modal principal e sobre o resumo, permitindo inspeção
+        antes do usuário fechar. Quando o DocGroup original ainda está em cache
+        (grupo atual, deferido, cancelado ou com falha), mostra a extração
+        completa; caso contrário, usa apenas o snapshot da QueueEntry. */}
+    <Dialog open={!!detailsView} onOpenChange={(v) => { if (!v) setDetailsView(null); }}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            Detalhes: {detailsView?.entry.supplierLabel}
+          </DialogTitle>
+        </DialogHeader>
+        {detailsView && (() => {
+          const { entry, group } = detailsView;
+          const currencyFmt = (v: number) =>
+            new Intl.NumberFormat("pt-BR", { style: "currency", currency: entry.currency || "BRL" }).format(v);
+          return (
+            <div className="space-y-4 text-sm">
+              {/* Metadados agregados */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div><span className="text-muted-foreground">Arquivos:</span> {entry.fileCount}</div>
+                <div><span className="text-muted-foreground">Linhas:</span> {entry.lineCount}</div>
+                <div>
+                  <span className="text-muted-foreground">Total estimado:</span>{" "}
+                  {entry.estimatedTotal > 0 ? currencyFmt(entry.estimatedTotal) : "—"}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Confiança IA:</span>{" "}
+                  {entry.aiConfidence !== null ? `${Math.round(entry.aiConfidence * 100)}%` : "—"}
+                  {isLowConfidence(entry.aiConfidence) && (
+                    <span className="ml-1 text-amber-700 dark:text-amber-400 font-semibold">⚠ revisar</span>
+                  )}
+                </div>
+                {entry.currencies.length > 1 && (
+                  <div className="col-span-2 text-amber-700 dark:text-amber-400">
+                    ⚠ Moedas divergentes: {entry.currencies.join(", ")}
+                  </div>
+                )}
+              </div>
+
+              {/* Alertas agregados da entry */}
+              {entry.aiWarnings.length > 0 && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                  <div className="font-medium">Alertas da IA:</div>
+                  {entry.aiWarnings.map((w, i) => (
+                    <div key={i} className="flex gap-1.5">
+                      <span>⚠</span>
+                      <span className="whitespace-pre-line">{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {entry.errorMessage && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  <div className="font-medium mb-0.5">Erro:</div>
+                  {entry.errorMessage}
+                </div>
+              )}
+
+              {/* Detalhe por arquivo. Quando temos o DocGroup, exibimos a
+                  extração completa (itens, totais, avisos por documento). */}
+              {group ? (
+                <div className="space-y-3">
+                  {group.docs.map((d, docIdx) => {
+                    const items: any[] = Array.isArray(d.extracted?.items) ? d.extracted.items : [];
+                    const conf = Number(d.extracted?.confidence);
+                    const total = Number(d.extracted?.total_amount);
+                    const warns = [d.extracted?.client_warning, d.extracted?.totals_warning].filter(Boolean);
+                    return (
+                      <div key={docIdx} className="rounded-md border p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">📎 {d.file.name}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {(d.file.size / 1024).toFixed(1)} KB
+                              {d.extracted?.doc_type && ` · ${d.extracted.doc_type}`}
+                              {d.extracted?.currency && ` · ${d.extracted.currency}`}
+                            </div>
+                          </div>
+                          {Number.isFinite(conf) && conf > 0 && (
+                            <div className={`text-[11px] shrink-0 ${isLowConfidence(conf) ? "text-amber-700 dark:text-amber-400 font-semibold" : "text-muted-foreground"}`}>
+                              IA {Math.round(conf * 100)}%
+                            </div>
+                          )}
+                        </div>
+                        {warns.length > 0 && (
+                          <div className="text-[11px] text-amber-700 dark:text-amber-400 space-y-0.5">
+                            {warns.map((w, i) => (
+                              <div key={i}>⚠ {String(w)}</div>
+                            ))}
+                          </div>
+                        )}
+                        {items.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-[11px]">
+                              <thead className="text-muted-foreground">
+                                <tr className="border-b">
+                                  <th className="text-left py-1 pr-2">Descrição</th>
+                                  <th className="text-right py-1 px-2">Qtd</th>
+                                  <th className="text-right py-1 px-2">Unit.</th>
+                                  <th className="text-right py-1 pl-2">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {items.map((it, i) => {
+                                  const qty = Number(it?.quantity) || 0;
+                                  const up = Number(it?.unit_price) || 0;
+                                  const lt = Number(it?.line_total) || qty * up;
+                                  return (
+                                    <tr key={i} className="border-b border-border/50">
+                                      <td className="py-1 pr-2">{it?.description || "—"}</td>
+                                      <td className="py-1 px-2 text-right tabular-nums">{qty}</td>
+                                      <td className="py-1 px-2 text-right tabular-nums">{currencyFmt(up)}</td>
+                                      <td className="py-1 pl-2 text-right tabular-nums">{currencyFmt(lt)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-muted-foreground italic">Nenhuma linha extraída.</div>
+                        )}
+                        {Number.isFinite(total) && total > 0 && (
+                          <div className="text-[11px] text-right text-muted-foreground">
+                            Total do documento: <span className="text-foreground font-medium">{currencyFmt(total)}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground space-y-1">
+                  <div className="font-medium text-foreground">Detalhes por arquivo indisponíveis</div>
+                  <div>
+                    A extração original deste grupo não está mais em cache (o modal
+                    já concluiu ou descartou os dados). Arquivos processados:
+                  </div>
+                  <ul className="list-disc list-inside">
+                    {entry.fileNames.map((n, i) => <li key={i}>{n}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </DialogContent>
+    </Dialog>
 
   </>
   );
