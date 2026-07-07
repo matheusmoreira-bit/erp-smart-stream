@@ -689,11 +689,24 @@ export function CreateExpenseModal({
   };
 
   const processWithAI = async (filesToProcess: File[]) => {
-    // Guard anti-duplicação: se já há classificação IA em andamento, ignora
-    // a nova solicitação (evita chamadas paralelas ao endpoint e estado
-    // inconsistente ao clicar em "Tentar novamente" repetidas vezes).
-    if (isProcessing) return;
+    // Guard anti-duplicação: `isProcessing` (estado) + `aiInFlightRef` (síncrono).
+    // O ref pega o intervalo entre o clique e o setState — evita 2ª chamada
+    // após "cancelar → tentar novamente" quando o usuário clica duas vezes
+    // rápido, ou quando o React 18 dispara o handler duas vezes no StrictMode.
+    if (isProcessing || hasInFlightGuardTripped(aiInFlightRef)) {
+      console.info(DEDUP_LOG, "processWithAI ignorado: já há chamada em vôo", {
+        isProcessing,
+        refFlag: aiInFlightRef.current,
+        fileCount: filesToProcess?.length ?? 0,
+      });
+      return;
+    }
     if (!filesToProcess || filesToProcess.length === 0) return;
+    aiInFlightRef.current = true;
+    console.info(DEDUP_LOG, "processWithAI START", {
+      fileCount: filesToProcess.length,
+      names: filesToProcess.map((f) => f.name),
+    });
     setIsProcessing(true);
     // Reseta estado herdado de tentativas anteriores para que um retry
     // não mostre picker/warning/confidence obsoletos ao usuário.
