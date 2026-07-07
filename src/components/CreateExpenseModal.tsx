@@ -1454,6 +1454,19 @@ export function CreateExpenseModal({
                     Tentar novamente
                   </Button>
                 )}
+                {/* Retomar fila — reaproveita os DocGroups em cache dos
+                    grupos que estavam pendentes/enfileirados no cancelamento,
+                    sem chamar a IA de novo. Mantém os grupos concluídos. */}
+                {justCancelled && !isProcessing && !isCreating && cancelledGroupsRef.current.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={resumeCancelledQueue}
+                  >
+                    ▶ Retomar fila ({cancelledGroupsRef.current.length})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
