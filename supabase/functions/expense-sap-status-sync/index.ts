@@ -14,6 +14,14 @@ interface ExpenseRow {
   sap_doc_entry: number | null;
   status: string;
   supplier_name: string;
+  sap_sync_attempts?: number | null;
+}
+
+// Backoff exponencial: 1, 2, 4, 8, 16, 32, 60min (cap 60), depois desiste (deixa em sync_error).
+const MAX_RETRY_ATTEMPTS = 8;
+function nextRetryDelayMs(attempts: number): number {
+  const minutes = Math.min(60, Math.pow(2, Math.max(0, attempts - 1)));
+  return minutes * 60_000;
 }
 
 function buildBaseUrl(raw: string): string {
