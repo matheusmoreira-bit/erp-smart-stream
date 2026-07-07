@@ -34,6 +34,7 @@ import SapUsersAdmin from "./pages/SapUsersAdmin.tsx";
 import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
 import AuditTrail from "./pages/AuditTrail.tsx";
 import TransferApprovalsHistory from "./pages/TransferApprovalsHistory.tsx";
+import SapStatusSync from "./pages/SapStatusSync.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
