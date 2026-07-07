@@ -830,3 +830,207 @@ export function exportLowConfidenceReviewCsv(opts: LowConfidenceReviewOptions): 
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// ─── Relatório do fluxo de compras (super-user) ─────────────────────────────
+// Consolida tempos por etapa (classificação IA → fila → formulário → submit),
+// identifica gargalos e lista os DocGroups "deferred" com suas classificações
+// e alertas. Serve como snapshot operacional para diagnosticar demoras.
+
+export interface PurchaseFlowQueueEntry extends QueueSummaryEntry {
+  classifiedAt?: number;
+  promotedAt?: number;
+  submittedAt?: number;
+  completedAt?: number;
+}
+
+/** Snapshot minimalista de um DocGroup adiado (usado no relatório). */
+export interface PurchaseFlowDeferredGroup {
+  supplierLabel: string;
+  docs: Array<{
+    fileName: string;
+    docType?: string | null;
+    currency?: string | null;
+    confidence?: number | null;
+    warnings: string[];
+  }>;
+}
+
+export interface PurchaseFlowReportOptions {
+  entries: PurchaseFlowQueueEntry[];
+  deferredGroups: PurchaseFlowDeferredGroup[];
+  confidenceThreshold: number;
+  kindLabel?: string;
+  fileName?: string;
+}
+
+function fmtDuration(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  const rs = Math.round(s % 60);
+  return `${m}m${rs.toString().padStart(2, "0")}s`;
+}
+
+function stats(values: number[]): { avg: number; max: number; p95: number; n: number } {
+  if (values.length === 0) return { avg: 0, max: 0, p95: 0, n: 0 };
+  const sorted = [...values].sort((a, b) => a - b);
+  const sum = sorted.reduce((a, b) => a + b, 0);
+  const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95));
+  return { avg: sum / sorted.length, max: sorted[sorted.length - 1], p95: sorted[idx], n: sorted.length };
+}
+
+export async function exportPurchaseFlowReportPdf(opts: PurchaseFlowReportOptions): Promise<void> {
+  const { entries, deferredGroups, confidenceThreshold } = opts;
+  const kind = opts.kindLabel || "Compras";
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  drawHeader(doc, `Fluxo de ${kind} — tempos e gargalos`, `${entries.length} grupo(s) processado(s)`);
+
+  // Calcula durações por etapa quando os timestamps existem. Grupos parciais
+  // (ex.: cancelados no meio) só contribuem com as etapas que completaram.
+  const queueTimes: number[] = [];   // classifiedAt → promotedAt
+  const formTimes: number[] = [];    // promotedAt → submittedAt
+  const submitTimes: number[] = [];  // submittedAt → completedAt
+  const totalTimes: number[] = [];   // classifiedAt → completedAt
+
+  for (const e of entries) {
+    if (e.classifiedAt && e.promotedAt && e.promotedAt >= e.classifiedAt) queueTimes.push(e.promotedAt - e.classifiedAt);
+    if (e.promotedAt && e.submittedAt && e.submittedAt >= e.promotedAt) formTimes.push(e.submittedAt - e.promotedAt);
+    if (e.submittedAt && e.completedAt && e.completedAt >= e.submittedAt) submitTimes.push(e.completedAt - e.submittedAt);
+    if (e.classifiedAt && e.completedAt && e.completedAt >= e.classifiedAt) totalTimes.push(e.completedAt - e.classifiedAt);
+  }
+
+  const stepStats: Array<{ label: string; s: ReturnType<typeof stats> }> = [
+    { label: "Espera na fila (IA → form)", s: stats(queueTimes) },
+    { label: "Formulário (form → submit)", s: stats(formTimes) },
+    { label: "Persistência (submit → ERP)", s: stats(submitTimes) },
+  ];
+  const totalS = stats(totalTimes);
+
+  // Gargalo = etapa com maior tempo médio dentre as que têm amostra.
+  const withData = stepStats.filter((x) => x.s.n > 0);
+  const bottleneck = withData.length > 0
+    ? withData.reduce((a, b) => (b.s.avg > a.s.avg ? b : a))
+    : null;
+
+  let cursorY = 24;
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  const summary: Array<[string, string]> = [
+    ["Grupos com tempo total medido", `${totalS.n} / ${entries.length}`],
+    ["Tempo total — média / máx / p95", `${fmtDuration(totalS.avg)} / ${fmtDuration(totalS.max)} / ${fmtDuration(totalS.p95)}`],
+    ["Gargalo (maior média)", bottleneck ? `${bottleneck.label} — ${fmtDuration(bottleneck.s.avg)}` : "—"],
+    ["Grupos adiados (deferred)", String(deferredGroups.length)],
+    ["Baixa confiança (< " + Math.round(confidenceThreshold * 100) + "%)", String(entries.filter((e) => e.aiConfidence !== null && e.aiConfidence < confidenceThreshold).length)],
+  ];
+  for (const [k, v] of summary) { doc.text(`${k}: ${v}`, 10, cursorY); cursorY += 4; }
+  cursorY += 2;
+  doc.setTextColor(0, 0, 0);
+
+  // Tabela: estatísticas por etapa.
+  autoTable(doc, {
+    startY: cursorY,
+    head: [["Etapa", "Amostras", "Média", "P95", "Máx"]],
+    body: stepStats.map((x) => [
+      x.label + (bottleneck && x.label === bottleneck.label ? "  ⚠ gargalo" : ""),
+      String(x.s.n),
+      fmtDuration(x.s.avg),
+      fmtDuration(x.s.p95),
+      fmtDuration(x.s.max),
+    ]),
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 80 },
+      1: { cellWidth: 20, halign: "right" },
+      2: { cellWidth: 26, halign: "right" },
+      3: { cellWidth: 26, halign: "right" },
+      4: { cellWidth: 26, halign: "right" },
+    },
+    margin: { left: 8, right: 8 },
+  });
+
+  // Tabela: tempos por grupo (só os que têm ao menos uma etapa medida).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : cursorY + 8;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+  doc.text("Tempos por grupo", 10, y); y += 4;
+  doc.setFont("helvetica", "normal");
+  autoTable(doc, {
+    startY: y,
+    head: [["#", "Fornecedor", "Status", "Fila", "Form", "Submit", "Total"]],
+    body: entries.map((e, i) => {
+      const qt = e.classifiedAt && e.promotedAt ? e.promotedAt - e.classifiedAt : null;
+      const ft = e.promotedAt && e.submittedAt ? e.submittedAt - e.promotedAt : null;
+      const st = e.submittedAt && e.completedAt ? e.completedAt - e.submittedAt : null;
+      const tt = e.classifiedAt && e.completedAt ? e.completedAt - e.classifiedAt : null;
+      return [
+        String(i + 1),
+        e.supplierLabel,
+        STATUS_LABEL[e.status],
+        fmtDuration(qt),
+        fmtDuration(ft),
+        fmtDuration(st),
+        fmtDuration(tt),
+      ];
+    }),
+    styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 8, halign: "right" },
+      2: { cellWidth: 22 },
+      3: { cellWidth: 20, halign: "right" },
+      4: { cellWidth: 20, halign: "right" },
+      5: { cellWidth: 20, halign: "right" },
+      6: { cellWidth: 22, halign: "right" },
+    },
+    margin: { left: 8, right: 8 },
+  });
+
+  // Classificações e alertas dos deferredGroups.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : y + 8;
+  const pageH = doc.internal.pageSize.getHeight();
+  if (y > pageH - 30) { doc.addPage(); y = 15; }
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+  doc.text(`Grupos adiados (${deferredGroups.length})`, 10, y); y += 5;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+  if (deferredGroups.length === 0) {
+    doc.setTextColor(120, 120, 120);
+    doc.text("Nenhum grupo adiado no momento.", 12, y); y += 4;
+    doc.setTextColor(0, 0, 0);
+  } else {
+    for (const g of deferredGroups) {
+      if (y > pageH - 20) { doc.addPage(); y = 15; }
+      doc.setFont("helvetica", "bold"); doc.text(g.supplierLabel, 10, y); doc.setFont("helvetica", "normal"); y += 4;
+      for (const d of g.docs) {
+        if (y > pageH - 15) { doc.addPage(); y = 15; }
+        const conf = d.confidence !== null && d.confidence !== undefined && Number.isFinite(d.confidence)
+          ? `${Math.round(d.confidence * 100)}%${d.confidence < confidenceThreshold ? " ⚠" : ""}`
+          : "—";
+        const line = `• ${d.fileName} — tipo: ${d.docType || "—"} · moeda: ${d.currency || "—"} · IA: ${conf}`;
+        for (const lw of doc.splitTextToSize(line, 190)) {
+          if (y > pageH - 15) { doc.addPage(); y = 15; }
+          doc.text(lw, 12, y); y += 3.5;
+        }
+        if (d.warnings.length > 0) {
+          doc.setTextColor(150, 100, 0);
+          for (const w of d.warnings) {
+            for (const lw of doc.splitTextToSize(`   ⚠ ${w}`, 188)) {
+              if (y > pageH - 15) { doc.addPage(); y = 15; }
+              doc.text(lw, 14, y); y += 3.5;
+            }
+          }
+          doc.setTextColor(0, 0, 0);
+        }
+      }
+      y += 2;
+    }
+  }
+
+  drawFooter(doc, await currentUserEmail());
+  doc.save(`${safeFileName(opts.fileName || "fluxo_compras")}_${Date.now()}.pdf`);
+}
