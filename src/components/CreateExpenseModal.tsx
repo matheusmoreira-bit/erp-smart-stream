@@ -2114,11 +2114,57 @@ export function CreateExpenseModal({
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          {(() => {
+            const failedKeys = queueHistory
+              .filter((e) => e.status === "failed")
+              .map((e) => e.supplierKey)
+              .filter((k) => failedGroupsRef.current.has(k));
+            if (failedKeys.length === 0) return null;
+            return (
+              <Button
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => {
+                  // Retenta somente os grupos com falha, reaproveitando os
+                  // DocGroups em cache (File + extracted) — sem chamar a IA
+                  // de novo e sem tocar nas despesas já criadas com sucesso.
+                  const groups = failedKeys
+                    .map((k) => failedGroupsRef.current.get(k))
+                    .filter((g): g is DocGroup => !!g);
+                  if (groups.length === 0) return;
+                  const [first, ...rest] = groups;
+                  // Reajusta o histórico: pendente/enfileirado para os que
+                  // vão retentar; mantém 'success' e limpa errorMessage.
+                  setQueueHistory((prev) => prev.map((e) => {
+                    if (e.supplierKey === first.supplierKey) {
+                      return { ...e, status: "pending", errorMessage: undefined };
+                    }
+                    if (rest.some((g) => g.supplierKey === e.supplierKey)) {
+                      return { ...e, status: "queued", errorMessage: undefined };
+                    }
+                    return e;
+                  }));
+                  setDeferredGroups(rest);
+                  resetFormForNextDeferred(first);
+                  setShowQueueSummary(false);
+                  setJustCancelled(false);
+                  toast.info(
+                    `Retentando ${groups.length} despesa(s) com erro. Comece por ${first.supplierLabel}.`,
+                    { duration: 6000 },
+                  );
+                }}
+              >
+                <Sparkles className="w-4 h-4" />
+                Reenviar apenas erros ({failedKeys.length})
+              </Button>
+            );
+          })()}
           <AlertDialogAction
             onClick={() => {
               setShowQueueSummary(false);
               setQueueHistory([]);
+              failedGroupsRef.current = new Map();
               onClose();
             }}
           >
