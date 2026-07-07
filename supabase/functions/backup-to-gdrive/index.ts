@@ -233,10 +233,11 @@ async function runBackup(supabase: Sup, log: (m: string) => void) {
       }
     }
 
-    const expenseAttach = await mirrorBucket(supabase, "expense-attachments", attachId, log);
-    log(`expense-attachments: ${expenseAttach.copied} copiados, ${expenseAttach.skipped} já existentes, ${expenseAttach.errors} erros`);
-    const nfAttach = await mirrorBucket(supabase, "nf-entrada-files", nfId, log);
-    log(`nf-entrada-files: ${nfAttach.copied} copiados, ${nfAttach.skipped} já existentes, ${nfAttach.errors} erros`);
+    const deadline = Date.now() + 240_000; // 4 min de wall budget para mirrors
+    const expenseAttach = await mirrorBucket(supabase, "expense-attachments", attachId, log, deadline);
+    log(`expense-attachments: ${expenseAttach.copied} copiados, ${expenseAttach.skipped} pulados, ${expenseAttach.errors} erros, done=${expenseAttach.done}`);
+    const nfAttach = await mirrorBucket(supabase, "nf-entrada-files", nfId, log, deadline);
+    log(`nf-entrada-files: ${nfAttach.copied} copiados, ${nfAttach.skipped} pulados, ${nfAttach.errors} erros, done=${nfAttach.done}`);
 
     const removed = await cleanupOldSnapshots(dataRootId);
     log(`retenção: ${removed} snapshots antigos removidos`);
@@ -251,13 +252,20 @@ async function runBackup(supabase: Sup, log: (m: string) => void) {
       snapshots_pruned: removed,
     };
     await uploadFile("manifest.json", snapshotId, "application/json", JSON.stringify(manifest, null, 2));
-    await releaseWatcherLock(supabase, WATCHER_NAME, "ok", `snapshot ${stamp}`);
-    log(`FIM snapshot ${stamp}`);
+    const complete = expenseAttach.done && nfAttach.done;
+    await releaseWatcherLock(
+      supabase,
+      WATCHER_NAME,
+      complete ? "ok" : "partial",
+      complete ? `snapshot ${stamp}` : `snapshot ${stamp} parcial — próxima execução continua`,
+    );
+    log(`FIM snapshot ${stamp} (complete=${complete})`);
   } catch (e) {
     const msg = (e as Error).message;
     log(`ERRO: ${msg}`);
     await releaseWatcherLock(supabase, WATCHER_NAME, "error", msg);
   }
+
 }
 
 // @ts-ignore - EdgeRuntime é disponível no runtime Deno da Supabase
