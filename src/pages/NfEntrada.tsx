@@ -89,6 +89,16 @@ export default function NfEntrada() {
       .finally(() => setLogsLoading(false));
   }, [detail, toast]);
 
+  // Sync `?doc=<id>` with the currently opened NF for shareable links.
+  useEffect(() => { setDocParam(detail?.id ?? null); }, [detail]);
+  useEffect(() => {
+    const id = readDocParam();
+    if (!id || detail) return;
+    const found = items.find((it) => it.id === id);
+    if (found) setDetail(found);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
   async function openFile(id: string, kind: "xml" | "pdf") {
     setBusyId(id);
     try {
