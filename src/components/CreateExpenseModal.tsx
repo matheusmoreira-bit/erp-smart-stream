@@ -138,6 +138,7 @@ export function CreateExpenseModal({
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isGeneratingFlowReport, setIsGeneratingFlowReport] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [currency, setCurrency] = useState("");
   const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
