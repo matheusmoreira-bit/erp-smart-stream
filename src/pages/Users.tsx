@@ -110,10 +110,23 @@ export default function UsersPage() {
     }
   };
 
+  // Bases sem HANA (ex.: open_gaming_sa) só retornam usuários via Service Layer,
+  // que não popula `LastLoginDate`. Nesse caso o filtro "recorrentes" (últimos 60d)
+  // esvaziaria a tela — detectamos e caímos para "todos" automaticamente.
+  const hasAnyLoginData = useMemo(
+    () => users.some((u) => !!u.LastLoginDate),
+    [users],
+  );
+  useEffect(() => {
+    if (!isLoading && users.length > 0 && !hasAnyLoginData && viewMode === "recorrentes") {
+      setViewMode("todos");
+    }
+  }, [isLoading, users.length, hasAnyLoginData, viewMode]);
+
   const filteredUsers = useMemo(() => {
     let list = users;
 
-    if (viewMode === "recorrentes") {
+    if (viewMode === "recorrentes" && hasAnyLoginData) {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 60);
       list = list.filter((u) => {
@@ -136,7 +149,7 @@ export default function UsersPage() {
     return [...list].sort((a, b) =>
       (a.UserName || a.UserCode || "").localeCompare(b.UserName || b.UserCode || "", "pt-BR", { sensitivity: "base" })
     );
-  }, [users, search, viewMode]);
+  }, [users, search, viewMode, hasAnyLoginData]);
 
   const handleConfirm = async () => {
     if (!confirmAction) return;
