@@ -672,7 +672,7 @@ Deno.serve(async (req) => {
           const solicitanteTag = requesterCode ? ` [Solicitante: ${requesterCode}]` : "";
           return `${prefix} — ${expense.requester_name}${solicitanteTag}${expense.remarks ? ` — ${expense.remarks}` : ""}`;
         })(),
-        253,
+        190,
       ),
       // Campo dedicado no SAP (UDF) — quando existir na base, permite filtrar
       // pelos pedidos criados por um usuário específico sem depender do texto.
