@@ -2678,6 +2678,7 @@ export function CreateExpenseModal({
                 return e;
               }));
               setDeferredGroups(rest);
+              setRetryingKeys(new Set(groups.map((g) => g.supplierKey)));
               resetFormForNextDeferred(first);
               setShowQueueSummary(false);
               setJustCancelled(false);
