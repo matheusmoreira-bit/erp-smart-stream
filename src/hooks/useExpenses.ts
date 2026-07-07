@@ -978,6 +978,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   const retrySapIntegration = useCallback(
     async (expenseId: string) => {
       if (!session || session.erpType !== "sap") throw new Error("Faça login no SAP pela tela antes de integrar.");
+      if (!session.isSuperUser) {
+        throw new Error("Apenas super-usuários podem reintegrar manualmente ao SAP.");
+      }
       try {
         const data = await invokeExpenseToSap({
           expense_id: expenseId,
