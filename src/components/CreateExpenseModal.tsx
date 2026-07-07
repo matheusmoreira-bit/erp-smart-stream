@@ -2605,6 +2605,41 @@ export function CreateExpenseModal({
             </div>
           </div>
 
+          {(() => {
+            if (!dueDate) return null;
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const due = new Date(`${dueDate}T00:00:00`);
+            const diffDays = Math.round((due.getTime() - today.getTime()) / 86400000);
+            if (diffDays > 2) return null;
+            const overdue = diffDays < 0;
+            return (
+              <div
+                role="alert"
+                className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
+                  overdue
+                    ? "border-destructive/50 bg-destructive/10 text-destructive"
+                    : "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                }`}
+              >
+                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold">
+                    {overdue
+                      ? `Pedido vencido há ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? "dia" : "dias"} — risco de pagamento em atraso.`
+                      : diffDays === 0
+                        ? "Vencimento é hoje — risco de pagamento em atraso."
+                        : `Vencimento em ${diffDays} ${diffDays === 1 ? "dia" : "dias"} — risco de pagamento em atraso.`}
+                  </p>
+                  <p className="mt-0.5 opacity-90">
+                    Recomendamos renegociar o prazo com o fornecedor antes de lançar, para evitar multas e juros.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
+
+
 
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>
