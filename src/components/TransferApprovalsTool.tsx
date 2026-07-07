@@ -87,9 +87,17 @@ export default function TransferApprovalsTool() {
 
   return (
     <div className="glass-card p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <ArrowRightLeft className="w-4 h-4 text-primary" />
-        <h3 className="font-semibold text-foreground">Transferir aprovações pendentes</h3>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <ArrowRightLeft className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Transferir aprovações pendentes</h3>
+        </div>
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/backoffice/transfer-history">
+            <History className="w-4 h-4 mr-1.5" />
+            Ver histórico
+          </Link>
+        </Button>
       </div>
       <p className="text-xs text-muted-foreground">
         Reatribui aprovações SAP pendentes para outro aprovador dentro da mesma empresa e envia
