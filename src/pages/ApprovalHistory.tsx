@@ -41,7 +41,9 @@ export default function ApprovalHistory() {
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
   const canViewAll = isAdmin || canViewAllApprovals;
   const { getLabel } = useCompanies(true);
-  const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
+  // Placeholder — o hook real é chamado abaixo após declararmos os filtros.
   const { expenses: purchaseExpenses } = useExpenses("purchase");
   const { expenses: salesExpenses } = useExpenses("sales");
   const { expensesByDocEntry, expensesById } = useMemo(() => {
@@ -91,6 +93,16 @@ export default function ApprovalHistory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decision, substituteFilter]);
 
+  // Reseta paginação quando filtros mudam.
+  useEffect(() => { setPage(1); }, [decision, substituteFilter, session?.companyDB]);
+
+  // Hook com filtros aplicados no banco + paginação incremental.
+  const { rows, hasMore, syncState, isLoading, isSyncing, sync } = useApprovalHistory(
+    session?.companyDB,
+    { decision, substituteFilter, page, pageSize: PAGE_SIZE },
+  );
+
+
 
   const myKeys = useMemo(() => {
     const list = [(session?.userName || "").toLowerCase()].filter(Boolean);
@@ -115,10 +127,11 @@ export default function ApprovalHistory() {
       .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   }, [rows]);
 
+  // Filtros de decisão e substituto agora são aplicados no banco.
+  // Aqui só resta o filtro de escopo ("minhas") e a busca textual livre.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
-      // Apenas decisões finalizadas (aprovado/rejeitado). Pendentes (W) ficam fora do histórico.
       if (r.decision !== "Y" && r.decision !== "N") return false;
       if (effectiveScope === "mine") {
         const candidates = [
@@ -130,23 +143,6 @@ export default function ApprovalHistory() {
           .some((v) => myKeys.has(String(v).toLowerCase()));
         if (!hit) return false;
       }
-      if (decision !== "all" && r.decision !== decision) return false;
-
-      // Filtro por substituto (multi-seleção)
-      if (substituteFilter.length > 0) {
-        const email = (r.substituted_for_email || "").toLowerCase();
-        const name = (r.substituted_for_name || "").toLowerCase();
-        const hasSubstitution = !!(email || name);
-        if (substituteFilter.includes("__any__")) {
-          if (!hasSubstitution) return false;
-        } else if (substituteFilter.includes("__none__")) {
-          if (hasSubstitution) return false;
-        } else {
-          const key = email || name;
-          if (!substituteFilter.includes(key)) return false;
-        }
-      }
-
       if (!q) return true;
       return [
         r.card_name, r.card_code, r.requester_name, r.approver_name,
@@ -154,7 +150,8 @@ export default function ApprovalHistory() {
         r.doc_type_name, String(r.doc_num || ""), r.remarks, r.stage_name,
       ].some((v) => (v || "").toString().toLowerCase().includes(q));
     });
-  }, [rows, query, decision, effectiveScope, myKeys, substituteFilter]);
+  }, [rows, query, effectiveScope, myKeys]);
+
 
 
 
@@ -361,20 +358,33 @@ export default function ApprovalHistory() {
             para trazer decisões feitas direto no SAP, clique em "Sincronizar agora".
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((r) => {
-              const linked =
-                (r.expense_id ? expensesById.get(r.expense_id) : undefined) ||
-                (typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined);
-              return (
-                <HistoryCard
-                  key={r.id}
-                  row={r}
-                  onRelationsMap={linked ? () => setRelationsMapExpense(linked) : undefined}
-                />
-              );
-            })}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map((r) => {
+                const linked =
+                  (r.expense_id ? expensesById.get(r.expense_id) : undefined) ||
+                  (typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined);
+                return (
+                  <HistoryCard
+                    key={r.id}
+                    row={r}
+                    onRelationsMap={linked ? () => setRelationsMapExpense(linked) : undefined}
+                  />
+                );
+              })}
+            </div>
+            {hasMore && (
+              <div className="flex justify-center mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Carregando..." : "Carregar mais"}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </main>
 
