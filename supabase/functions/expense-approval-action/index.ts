@@ -489,6 +489,9 @@ Deno.serve(async (req) => {
     approver_email: actorEmail,
     level_order: currentLevel,
     remarks: mergedRemarks,
+    substitution_id: substitution?.id ?? null,
+    substituted_for_email: substitution?.official_email ?? null,
+    substituted_for_name: substitution?.official_name ?? null,
   } as any);
   await writeAuditLog("approved", currentLevel);
 
