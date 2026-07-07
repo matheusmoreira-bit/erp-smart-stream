@@ -108,16 +108,18 @@ export default function ApprovalHistory() {
       }
       if (decision !== "all" && r.decision !== decision) return false;
 
-      // Filtro por substituto
-      if (substituteFilter !== "all") {
+      // Filtro por substituto (multi-seleção)
+      if (substituteFilter.length > 0) {
         const email = (r.substituted_for_email || "").toLowerCase();
         const name = (r.substituted_for_name || "").toLowerCase();
         const hasSubstitution = !!(email || name);
-        if (substituteFilter === "any" && !hasSubstitution) return false;
-        if (substituteFilter === "none" && hasSubstitution) return false;
-        if (substituteFilter !== "any" && substituteFilter !== "none") {
+        if (substituteFilter.includes("__any__")) {
+          if (!hasSubstitution) return false;
+        } else if (substituteFilter.includes("__none__")) {
+          if (hasSubstitution) return false;
+        } else {
           const key = email || name;
-          if (key !== substituteFilter) return false;
+          if (!substituteFilter.includes(key)) return false;
         }
       }
 
