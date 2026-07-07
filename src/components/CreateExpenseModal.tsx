@@ -3175,6 +3175,61 @@ export function CreateExpenseModal({
               </>
             );
           })()}
+          {/* Relatório operacional do fluxo de compras — restrito a super-users.
+              Consolida tempos por etapa, gargalos e classificações/alertas dos
+              grupos adiados. Útil para diagnosticar demora e revisar backlog. */}
+          {sapSession?.isSuperUser && queueHistory.length > 0 && (
+            <Button
+              variant="outline"
+              className="gap-1.5 border-primary/50 text-primary hover:bg-primary/10"
+              onClick={() => {
+                exportPurchaseFlowReportPdf({
+                  entries: queueHistory.map((e) => ({
+                    supplierLabel: e.supplierLabel,
+                    status: e.status,
+                    fileCount: e.fileCount,
+                    lineCount: e.lineCount,
+                    estimatedTotal: e.estimatedTotal,
+                    currency: e.currency,
+                    currencies: e.currencies,
+                    aiConfidence: e.aiConfidence,
+                    aiWarnings: e.aiWarnings,
+                    errorMessage: e.errorMessage,
+                    fileNames: e.fileNames,
+                    classifiedAt: e.classifiedAt,
+                    promotedAt: e.promotedAt,
+                    submittedAt: e.submittedAt,
+                    completedAt: e.completedAt,
+                  })),
+                  deferredGroups: deferredGroups.map((g) => ({
+                    supplierLabel: g.supplierLabel,
+                    docs: g.docs.map((d) => {
+                      const conf = Number(d.extracted?.confidence);
+                      const warns = [d.extracted?.client_warning, d.extracted?.totals_warning]
+                        .filter(Boolean)
+                        .map((w) => String(w));
+                      return {
+                        fileName: d.file.name,
+                        docType: (d.extracted?.doc_type as string | undefined) ?? null,
+                        currency: (d.extracted?.currency as string | undefined) ?? null,
+                        confidence: Number.isFinite(conf) && conf > 0 ? conf : null,
+                        warnings: warns,
+                      };
+                    }),
+                  })),
+                  confidenceThreshold: aiConfidenceThreshold,
+                  kindLabel: isSales ? "Pedidos de venda" : "Despesas",
+                  fileName: `fluxo_${isSales ? "vendas" : "compras"}`,
+                }).catch((err) => {
+                  console.error("[purchase-flow-pdf] falha", err);
+                  toast.error("Não foi possível gerar o PDF do fluxo.");
+                });
+              }}
+            >
+              <FileDown className="w-4 h-4" />
+              Fluxo de compras (super-user)
+            </Button>
+          )}
           <AlertDialogAction
             onClick={() => {
               setShowQueueSummary(false);
