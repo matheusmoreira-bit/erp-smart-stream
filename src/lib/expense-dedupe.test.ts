@@ -146,6 +146,7 @@ describe("cenário cancelar/retentar", () => {
       if (hasInFlightGuardTripped(ref)) return "skipped";
       ref.current = true;
       try {
+        await new Promise((r) => setTimeout(r, 5));
         return "ran";
       } finally {
         ref.current = false;
@@ -154,8 +155,7 @@ describe("cenário cancelar/retentar", () => {
     expect(await call()).toBe("ran"); // 1ª tentativa
     // cancelamento externo -> ref já foi liberado pelo finally
     expect(await call()).toBe("ran"); // retentativa
-    // duplo-click imediato: a 2ª chamada síncrona ainda enxerga ref=false,
-    // então testamos o caso de reentrada concorrente:
+    // duplo-click imediato: só uma das reentrâncias deve rodar.
     const [x, y] = await Promise.all([call(), call()]);
     expect([x, y].sort()).toEqual(["ran", "skipped"]);
   });
