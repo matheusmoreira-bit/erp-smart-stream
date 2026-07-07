@@ -1335,6 +1335,43 @@ export function CreateExpenseModal({
   // prévia em vez de disparar direto.
   const resumeCancelledQueue = () => { void openResumePreview(); };
 
+  // Pausa "leve": só marca a flag; a interrupção acontece no próximo ponto
+  // seguro (após o grupo em edição ser salvo). NÃO aborta IA em andamento
+  // — para isso o usuário deve usar "Cancelar" (que preserva a fila
+  // cancelada para retomada posterior via "Retomar fila").
+  const pauseProcessing = () => {
+    pausedRef.current = true;
+    setIsPaused(true);
+    const nextLabel = deferredGroups[0]?.supplierLabel;
+    toast.info(
+      nextLabel
+        ? `Pausa solicitada. Após concluir o grupo atual, a fila para em "${nextLabel}".`
+        : "Pausa solicitada. A fila para após o grupo atual.",
+      { duration: 6000 },
+    );
+  };
+
+  // Retoma da pausa: pega o próximo deferredGroup e abre o formulário nele,
+  // exatamente como o auto-avanço faria — sem tocar em concluídos, erros
+  // ou cancelados.
+  const resumeFromPause = () => {
+    pausedRef.current = false;
+    setIsPaused(false);
+    if (deferredGroups.length === 0) {
+      toast.info("Nenhum grupo pendente na fila para retomar.");
+      return;
+    }
+    const [next, ...rest] = deferredGroups;
+    setDeferredGroups(rest);
+    resetFormForNextDeferred(next);
+    updateQueueEntry(next.supplierKey, { status: "pending" });
+    setShowQueueSummary(false);
+    toast.info(
+      `Retomado: ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} depois)` : ""}.`,
+      { duration: 6000 },
+    );
+  };
+
   // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
   const chooseFirstSupplierGroup = (chosenKey: string) => {
     if (!supplierPicker) return;
