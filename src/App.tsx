@@ -58,6 +58,8 @@ const App = () => (
               <Route path="/backoffice/sap-users" element={<AdminRoute><SapUsersAdmin /></AdminRoute>} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
               <Route path="/backoffice/audit-trail" element={<AdminRoute><AuditTrail /></AdminRoute>} />
+              <Route path="/backoffice/transfer-history" element={<AdminRoute><TransferApprovalsHistory /></AdminRoute>} />
+
 
               {/* Analytics */}
               <Route path="/analytics" element={<AnalyticsPage />} />
