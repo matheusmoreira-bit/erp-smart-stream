@@ -60,12 +60,57 @@ const TEMPLATE_VARS = [
   { key: "link", desc: "Link direto para a aprovação" },
 ];
 
+interface TestSample {
+  source: "real" | "sample";
+  expense_id: string;
+  supplier: string;
+  currency: string;
+  amount: number;
+  due_date: string;
+  requester: string;
+  approver: string;
+  doc_type: string;
+}
+
+const PUBLIC_APP_URL = "https://erp-flow.cactuscorporation.com";
+
+function formatDateBR(iso: string) {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function renderTemplate(tpl: string, sample: TestSample): { text: string; link: string } {
+  const days = Math.max(
+    1,
+    Math.floor((Date.now() - new Date(`${sample.due_date}T00:00:00`).getTime()) / 86400000),
+  );
+  const amount = new Intl.NumberFormat("pt-BR", { style: "currency", currency: sample.currency || "BRL" })
+    .format(sample.amount);
+  const link = `${PUBLIC_APP_URL}/aprovacoes?doc=${encodeURIComponent("internal:" + sample.expense_id)}`;
+  const vars: Record<string, string> = {
+    supplier: sample.supplier,
+    currency: sample.currency,
+    amount,
+    due_date: formatDateBR(sample.due_date),
+    days_overdue: String(days),
+    requester: sample.requester,
+    approver: sample.approver,
+    doc_type: sample.doc_type,
+    link,
+  };
+  const text = tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
+  return { text, link };
+}
+
 export function OverdueRemindersTab() {
   const [settings, setSettings] = useState<OverdueSettings | null>(null);
   const [logs, setLogs] = useState<OverdueLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testResult, setTestResult] = useState<{ sample: TestSample; text: string; link: string } | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
