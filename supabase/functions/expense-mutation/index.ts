@@ -290,6 +290,8 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   if (input.supplier_name !== undefined) updates.supplier_name = input.supplier_name;
   if (input.supplier_code !== undefined) updates.supplier_code = input.supplier_code;
   if (input.remarks !== undefined) updates.remarks = input.remarks;
+  if (input.doc_date !== undefined) updates.doc_date = input.doc_date || null;
+  if (input.due_date !== undefined) updates.due_date = input.due_date || null;
 
   const items: any[] | undefined = Array.isArray(input.items) ? input.items : undefined;
   if (items && items.length > 0) {

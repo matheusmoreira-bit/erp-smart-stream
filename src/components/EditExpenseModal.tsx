@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2, Network } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Plus, Trash2, Network, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,10 +12,47 @@ import {
 import { toast } from "sonner";
 import type { Expense, ExpenseItem } from "@/hooks/useExpenses";
 import { RelationsMap } from "@/components/RelationsMap";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: code }).format(value);
+}
+
+// Estilos para campos válidos/obrigatórios — mesmo padrão do CreateExpenseModal.
+const validClass = "bg-green-500/5 border-green-500/50";
+const requiredClass = "bg-amber-500/5 border-amber-500/50";
+function fieldClass(filled: boolean) {
+  return filled ? validClass : requiredClass;
+}
+
+function ValidLabel({
+  children,
+  filled,
+  required = true,
+}: {
+  children: React.ReactNode;
+  filled: boolean;
+  required?: boolean;
+}) {
+  return (
+    <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+      <span>{children}</span>
+      {filled ? (
+        <CheckCircle2 className="w-3 h-3 text-green-500" aria-label="Preenchido" />
+      ) : required ? (
+        <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+      ) : null}
+    </label>
+  );
+}
+
+interface EditItem extends Omit<ExpenseItem, "id"> {
+  sapItem?: SapSearchOption | null;
+  sapCostCenter?: SapSearchOption | null;
+  sapProject?: SapSearchOption | null;
 }
 
 interface Props {
@@ -24,7 +61,10 @@ interface Props {
   onClose: () => void;
   onSave: (input: {
     supplier_name?: string;
+    supplier_code?: string | null;
     remarks?: string | null;
+    doc_date?: string | null;
+    due_date?: string | null;
     items?: Omit<ExpenseItem, "id">[];
   }) => Promise<void>;
   mode?: "purchase" | "sales";
@@ -33,16 +73,82 @@ interface Props {
 export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purchase" }: Props) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
+
+  const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [supplierName, setSupplierName] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [items, setItems] = useState<Omit<ExpenseItem, "id">[]>([]);
+  const [docDate, setDocDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [items, setItems] = useState<EditItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showRelationsMap, setShowRelationsMap] = useState(false);
+  const dialogContentRef = useRef<HTMLDivElement>(null);
+  const [dialogContainer, setDialogContainer] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setDialogContainer(dialogContentRef.current);
+  }, [open]);
 
+  // === SAP cached lists (mesma origem do formulário de criação) ===
+  const supplierMapRow = useCallback(
+    (row: any) =>
+      ({
+        code: row.CardCode,
+        name: row.CardName,
+        extra: row.FederalTaxID || undefined,
+        details: {
+          fantasyName: row.AliasName || undefined,
+          taxId: row.FederalTaxID || undefined,
+        },
+      }) as SapSearchOption,
+    [],
+  );
+  const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
+    cacheKey: isSales ? "customers_active_v2" : "suppliers_active_v2",
+    endpoint: "BusinessPartners",
+    params: isSales
+      ? { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer' and Frozen eq 'tNO'" }
+      : { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
+    mapRow: supplierMapRow,
+  });
+
+  const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
+  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+    cacheKey: isSales ? "items_sales_active_v3" : "items_purchase_active_v3",
+    endpoint: "Items",
+    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    mapRow: itemMapRow,
+  });
+
+  const costCenterMapRow = useCallback(
+    (row: any) => ({ code: row.CenterCode, name: row.CenterName }),
+    [],
+  );
+  const { options: rawCostCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "ProfitCenters",
+    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    mapRow: costCenterMapRow,
+  });
+  const costCenterOptions = useMemo(
+    () => rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
+    [rawCostCenterOptions],
+  );
+
+  const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
+  const { options: projectOptions, isLoading: projectsLoading } = useSapCachedList({
+    cacheKey: "projects",
+    endpoint: "Projects",
+    params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
+    mapRow: projectMapRow,
+  });
+
+  // Popula estado inicial ao abrir / trocar despesa
   useEffect(() => {
     if (open && expense) {
       setSupplierName(expense.supplier_name || "");
       setRemarks(expense.remarks || "");
+      setDocDate(expense.doc_date ? expense.doc_date.slice(0, 10) : "");
+      setDueDate(expense.due_date ? expense.due_date.slice(0, 10) : "");
       setItems(
         (expense.items || []).map((it) => ({
           item_code: it.item_code,
@@ -52,14 +158,56 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           line_total: Number(it.line_total) || 0,
           cost_center: it.cost_center,
           project: it.project,
-        }))
+          sapItem: null,
+          sapCostCenter: null,
+          sapProject: null,
+        })),
       );
+      setSupplier(null);
     }
   }, [open, expense]);
 
+  // Resolve o fornecedor no cache quando as opções carregarem
+  useEffect(() => {
+    if (!expense || supplier) return;
+    if (supplierOptions.length === 0) return;
+    const code = (expense.supplier_code || "").trim();
+    const found =
+      (code && supplierOptions.find((o) => o.code === code)) ||
+      supplierOptions.find(
+        (o) => o.name.toLowerCase() === (expense.supplier_name || "").toLowerCase(),
+      );
+    if (found) {
+      setSupplier(found);
+      setSupplierName(found.name);
+    }
+  }, [expense, supplier, supplierOptions]);
+
+  // Resolve item/centro/projeto por linha quando as opções carregarem
+  useEffect(() => {
+    setItems((prev) =>
+      prev.map((it) => {
+        const next = { ...it };
+        if (!next.sapItem && it.item_code) {
+          const found = itemOptions.find((o) => o.code === it.item_code);
+          if (found) next.sapItem = found;
+        }
+        if (!next.sapCostCenter && it.cost_center) {
+          const found = costCenterOptions.find((o) => o.code === it.cost_center);
+          if (found) next.sapCostCenter = found;
+        }
+        if (!next.sapProject && it.project) {
+          const found = projectOptions.find((o) => o.code === it.project);
+          if (found) next.sapProject = found;
+        }
+        return next;
+      }),
+    );
+  }, [itemOptions, costCenterOptions, projectOptions]);
+
   if (!expense) return null;
 
-  const updateItem = (i: number, field: keyof ExpenseItem, value: string | number) => {
+  const updateItem = (i: number, field: keyof EditItem, value: string | number) => {
     setItems((prev) => {
       const next = [...prev];
       (next[i] as any)[field] = value;
@@ -73,7 +221,17 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const addItem = () =>
     setItems((p) => [
       ...p,
-      { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
+      {
+        description: "",
+        quantity: 1,
+        unit_price: 0,
+        line_total: 0,
+        cost_center: "",
+        project: "",
+        sapItem: null,
+        sapCostCenter: null,
+        sapProject: null,
+      },
     ]);
 
   const removeItem = (i: number) => {
@@ -88,17 +246,21 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
       toast.error(`Informe o ${bpLabel.toLowerCase()}`);
       return;
     }
+    if (!docDate) {
+      toast.error("Informe a data do documento");
+      return;
+    }
+    if (!dueDate) {
+      toast.error("Informe a data de vencimento");
+      return;
+    }
     if (items.some((i) => !i.description.trim())) {
       toast.error("Todos os itens devem ter descrição");
       return;
     }
     for (let idx = 0; idx < items.length; idx++) {
-      const it: any = items[idx];
+      const it = items[idx];
       const n = idx + 1;
-      if (!it.item_code || !String(it.item_code).trim()) {
-        toast.error(`Item ${n}: código do item é obrigatório`);
-        return;
-      }
       if (!Number(it.quantity) || Number(it.quantity) <= 0) {
         toast.error(`Item ${n}: quantidade deve ser maior que zero`);
         return;
@@ -116,8 +278,19 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     try {
       await onSave({
         supplier_name: supplierName.trim(),
+        supplier_code: supplier?.code || null,
         remarks: remarks || null,
-        items,
+        doc_date: docDate || null,
+        due_date: dueDate || null,
+        items: items.map((it) => ({
+          item_code: it.item_code,
+          description: it.description,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          line_total: it.line_total,
+          cost_center: it.cost_center,
+          project: it.project,
+        })),
       });
       toast.success("Pedido atualizado com sucesso!");
       onClose();
@@ -130,7 +303,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent ref={dialogContentRef} className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-3 pr-6">
             <span>Editar {isSales ? "Pedido de Venda" : "Pedido de Compra"}</span>
@@ -146,12 +319,63 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
+          {/* Fornecedor / Cliente com busca */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">{bpLabel} *</label>
-            <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} className="h-9 text-sm" />
-            {expense.supplier_code && (
-              <p className="text-xs text-muted-foreground mt-1 font-mono">Código: {expense.supplier_code}</p>
+            <CachedSearchCombobox
+              label={`${bpLabel} *`}
+              options={supplierOptions}
+              isLoading={suppliersLoading}
+              value={supplier}
+              onChange={(val) => {
+                setSupplier(val);
+                setSupplierName(val?.name || "");
+              }}
+              placeholder={`Digite nome, código ou CNPJ do ${bpLabel.toLowerCase()}...`}
+              suggestedQuery={!supplier && supplierName ? supplierName : undefined}
+              portalContainer={dialogContainer}
+              required
+            />
+            {(supplier?.code || expense.supplier_code) && (
+              <p className="text-xs text-muted-foreground mt-1 font-mono">
+                Código: {supplier?.code || expense.supplier_code}
+              </p>
             )}
+          </div>
+
+          {/* Datas */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                <span>Data do Documento *</span>
+                {docDate ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                )}
+              </label>
+              <Input
+                type="date"
+                value={docDate}
+                onChange={(e) => setDocDate(e.target.value)}
+                className={`text-sm h-9 ${fieldClass(!!docDate)}`}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                <span>Data de Vencimento *</span>
+                {dueDate ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                )}
+              </label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className={`text-sm h-9 ${fieldClass(!!dueDate)}`}
+              />
+            </div>
           </div>
 
           <div>
@@ -167,58 +391,138 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
               </Button>
             </div>
             <div className="space-y-3">
-              {items.map((item, i) => (
-                <div key={i} className="border border-border/50 rounded-lg p-3 space-y-2 bg-muted/10">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Item {i + 1}</span>
-                    <Button variant="ghost" size="icon" onClick={() => removeItem(i)} disabled={items.length <= 1} className="h-6 w-6 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-12 gap-2">
-                    <div className="col-span-3">
-                      <label className="text-[10px] text-muted-foreground">
-                        Código SAP <span className="opacity-60">(opcional)</span>
-                      </label>
-                      <Input
-                        value={item.item_code || ""}
-                        onChange={(e) => updateItem(i, "item_code", e.target.value)}
-                        placeholder="Ex.: 10001"
-                        className="text-sm h-8 font-mono"
+              {items.map((item, i) => {
+                const descFilled = !!(item.description || "").trim();
+                const qtyFilled = Number(item.quantity) > 0;
+                const priceFilled = Number(item.unit_price) > 0;
+                const ccFilled = !!(item.cost_center || "").trim();
+                const projFilled = !!(item.project || "").trim();
+                return (
+                  <div key={i} className="border border-border/50 rounded-lg p-3 space-y-2 bg-muted/10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase">Item {i + 1}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeItem(i)}
+                        disabled={items.length <= 1}
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+
+                    {/* Busca item SAP */}
+                    <CachedSearchCombobox
+                      label="Item SAP (opcional)"
+                      options={itemOptions}
+                      isLoading={itemsLoading}
+                      value={item.sapItem || null}
+                      onChange={(val) => {
+                        setItems((prev) => {
+                          const updated = [...prev];
+                          const currentDesc = (updated[i].description || "").trim();
+                          const nextDesc = currentDesc ? currentDesc : (val?.name || "");
+                          updated[i] = {
+                            ...updated[i],
+                            sapItem: val,
+                            item_code: val?.code || "",
+                            description: nextDesc,
+                          };
+                          return updated;
+                        });
+                      }}
+                      placeholder="Buscar item SAP por nome ou código..."
+                      suggestedQuery={!item.sapItem && item.item_code ? item.item_code : undefined}
+                      portalContainer={dialogContainer}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Deixe o Código SAP em branco para enviar como linha de serviço (sem item).
+                    </p>
+
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-6">
+                        <ValidLabel filled={descFilled}>Descrição *</ValidLabel>
+                        <Input
+                          value={item.description}
+                          onChange={(e) => updateItem(i, "description", e.target.value)}
+                          className={`text-sm h-8 ${fieldClass(descFilled)}`}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <ValidLabel filled={qtyFilled}>Qtd</ValidLabel>
+                        <Input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)}
+                          className={`text-sm h-8 ${fieldClass(qtyFilled)}`}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <ValidLabel filled={priceFilled}>Preço Unit.</ValidLabel>
+                        <Input
+                          type="number"
+                          value={item.unit_price}
+                          onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
+                          className={`text-sm h-8 ${fieldClass(priceFilled)}`}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] text-muted-foreground">Total</label>
+                        <Input
+                          value={formatCurrency(item.line_total, expense.currency)}
+                          readOnly
+                          className="text-sm h-8 bg-muted/30 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <CachedSearchCombobox
+                        label="Centro de Custo *"
+                        options={costCenterOptions}
+                        isLoading={costCentersLoading}
+                        value={item.sapCostCenter || null}
+                        onChange={(val) => {
+                          setItems((prev) => {
+                            const updated = [...prev];
+                            updated[i] = {
+                              ...updated[i],
+                              sapCostCenter: val,
+                              cost_center: val?.code || "",
+                            };
+                            return updated;
+                          });
+                        }}
+                        placeholder="Buscar centro de custo..."
+                        suggestedQuery={!item.sapCostCenter && item.cost_center ? item.cost_center : undefined}
+                        portalContainer={dialogContainer}
+                        required
+                      />
+                      <CachedSearchCombobox
+                        label="Projeto"
+                        options={projectOptions}
+                        isLoading={projectsLoading}
+                        value={item.sapProject || null}
+                        onChange={(val) => {
+                          setItems((prev) => {
+                            const updated = [...prev];
+                            updated[i] = {
+                              ...updated[i],
+                              sapProject: val,
+                              project: val?.code || "",
+                            };
+                            return updated;
+                          });
+                        }}
+                        placeholder="Buscar projeto..."
+                        suggestedQuery={!item.sapProject && item.project ? item.project : undefined}
+                        portalContainer={dialogContainer}
                       />
                     </div>
-                    <div className="col-span-3">
-                      <label className="text-[10px] text-muted-foreground">Descrição *</label>
-                      <Input value={item.description} onChange={(e) => updateItem(i, "description", e.target.value)} className="text-sm h-8" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="text-[10px] text-muted-foreground">Qtd</label>
-                      <Input type="number" value={item.quantity} onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)} className="text-sm h-8" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="text-[10px] text-muted-foreground">Preço Unit.</label>
-                      <Input type="number" value={item.unit_price} onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)} className="text-sm h-8" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="text-[10px] text-muted-foreground">Total</label>
-                      <Input value={formatCurrency(item.line_total, expense.currency)} readOnly className="text-sm h-8 bg-muted/30 font-mono" />
-                    </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    Deixe o Código SAP em branco para enviar como linha de serviço (sem item).
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">Centro de Custo</label>
-                      <Input value={item.cost_center || ""} onChange={(e) => updateItem(i, "cost_center", e.target.value)} className="text-sm h-8" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">Projeto</label>
-                      <Input value={item.project || ""} onChange={(e) => updateItem(i, "project", e.target.value)} className="text-sm h-8" />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="flex justify-end mt-3">
               <p className="text-sm font-medium text-foreground">
