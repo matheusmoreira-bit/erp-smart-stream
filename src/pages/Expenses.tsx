@@ -1145,18 +1145,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 className="pl-9 bg-muted/30 border-border"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="lg:hidden gap-1.5 shrink-0"
-              onClick={() => setFiltersOpen((v) => !v)}
-              aria-expanded={filtersOpen}
-              aria-controls="expenses-filters"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              Filtros
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
-            </Button>
+            {(() => {
+              const activeFilters =
+                (statusFilter !== "all" ? 1 : 0) +
+                (sourceMode !== "flow" ? 1 : 0) +
+                (showAll !== isAdmin ? 1 : 0);
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="lg:hidden gap-1.5 shrink-0"
+                  onClick={() => setFiltersOpen((v) => !v)}
+                  aria-expanded={filtersOpen}
+                  aria-controls="expenses-filters"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  Filtros
+                  {activeFilters > 0 && (
+                    <span className="ml-1 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold flex items-center justify-center">
+                      {activeFilters}
+                    </span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+                </Button>
+              );
+            })()}
           </div>
 
           {/* Filters (collapsed on mobile, inline on desktop) */}
