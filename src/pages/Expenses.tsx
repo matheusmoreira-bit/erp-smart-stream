@@ -78,6 +78,7 @@ import { CreateExpenseModal, type ExpenseDraftHydration } from "@/components/Cre
 import { EditExpenseModal } from "@/components/EditExpenseModal";
 import { DraftsPopover } from "@/components/DraftsPopover";
 import { useDocumentDrafts } from "@/hooks/useDocumentDrafts";
+import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { useCompanies } from "@/hooks/useCompanies";
 import { usePersistedState } from "@/hooks/usePersistedState";
 
