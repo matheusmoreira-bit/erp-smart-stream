@@ -3295,6 +3295,7 @@ export function CreateExpenseModal({
                 try {
                   await exportPurchaseFlowReportPdf({
                     entries: queueHistory.map((e) => ({
+                      id: e.supplierKey,
                       supplierLabel: e.supplierLabel,
                       status: e.status,
                       fileCount: e.fileCount,
