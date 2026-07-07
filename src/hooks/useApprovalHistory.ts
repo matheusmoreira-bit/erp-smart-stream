@@ -80,9 +80,11 @@ export function useApprovalHistory(
   const {
     decision = "all",
     substituteFilter = [],
+    substituteSearch = "",
     page = 1,
     pageSize = 50,
   } = filters;
+  const trimmedSubSearch = substituteSearch.trim();
 
   const [rows, setRows] = useState<ApprovalHistoryRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
