@@ -577,6 +577,17 @@ Deno.serve(async (req) => {
     sapValidated ? "sap" : (isCloudAdmin ? "cloud_admin" : "unknown");
   const overrideUsed = (isCloudAdmin || isSuperUser) && !isMatch;
 
+  // Papel do ator no momento da decisão — usado por auditoria e UI de
+  // histórico ("quem aprovou e com qual papel"):
+  //   - substitute      → agiu via approver_substitute vigente
+  //   - admin_override  → agiu como Cloud admin/SAP superuser sem ser o
+  //                       aprovador designado (override explícito)
+  //   - approver        → aprovador designado do nível corrente (inclui
+  //                       delegações do SAP, que reatribuem o approver)
+  const actionRole: "substitute" | "admin_override" | "approver" = substitution
+    ? "substitute"
+    : (overrideUsed ? "admin_override" : "approver");
+
   const writeAuditLog = async (decision: "approved" | "rejected", levelOrder: number) => {
     try {
       await admin.from("expense_audit_log").insert({
@@ -600,6 +611,7 @@ Deno.serve(async (req) => {
         request_id: requestId,
         idempotency_key: idempotencyKey || null,
         company_db: (exp as any).company_db ?? null,
+        action_role: actionRole,
       } as any);
     } catch (e) {
       console.warn("[expense-approval-action] falha ao gravar audit log:", e);
@@ -628,6 +640,7 @@ Deno.serve(async (req) => {
       substitution_id: substitution?.id ?? null,
       substituted_for_email: substitution?.official_email ?? null,
       substituted_for_name: substitution?.official_name ?? null,
+      action_role: actionRole,
     } as any);
     await writeAuditLog("rejected", currentLevel);
     stageLog("update_reject", "info", { requestId, expenseId, currentLevel });
@@ -660,6 +673,7 @@ Deno.serve(async (req) => {
     substitution_id: substitution?.id ?? null,
     substituted_for_email: substitution?.official_email ?? null,
     substituted_for_name: substitution?.official_name ?? null,
+    action_role: actionRole,
   } as any);
   await writeAuditLog("approved", currentLevel);
 

@@ -1912,7 +1912,88 @@ export default function ApprovalsPage() {
     }
 
     const doc = selectedDoc;
+
+    // Papel do usuário na ação — usado para registrar no histórico:
+    //   - substitute → grant vigente cobrindo a docDate
+    //   - delegation → SAP recebeu delegate_approval prévio que apontou p/ mim
+    //   - approver   → aprovador designado direto do fluxo
+    const resolveActingRole = async (
+      d: typeof doc,
+      grantsSnapshot: typeof substituteGrants,
+    ): Promise<"approver" | "substitute" | "delegation"> => {
+      if (!d) return "approver";
+      const docRefTs = (() => {
+        const dt = d.docDate;
+        const t = dt ? new Date(dt).getTime() : NaN;
+        return Number.isFinite(t) ? t : Date.now();
+      })();
+      const approverEmailLower = (d.approverEmail || "").toLowerCase().trim();
+      const approverNameLower = (d.currentApprover || "").toLowerCase().trim();
+      const asSubstitute = grantsSnapshot.some((g) => {
+        const startsTs = new Date(g.starts_at).getTime();
+        const endsTs = new Date(g.ends_at).getTime();
+        if (!(startsTs <= docRefTs && docRefTs < endsTs)) return false;
+        const ge = (g.official_email || "").toLowerCase();
+        const gPrefix = ge.split("@")[0];
+        const gn = (g.official_name || "").toLowerCase();
+        if (approverEmailLower) {
+          if (approverEmailLower === ge) return true;
+          if (gPrefix && approverEmailLower.startsWith(`${gPrefix}@`)) return true;
+        }
+        if (approverNameLower) {
+          if (gPrefix && (approverNameLower === gPrefix || approverNameLower.includes(gPrefix))) return true;
+          if (gn && (approverNameLower === gn || approverNameLower.includes(gn) || gn.includes(approverNameLower))) return true;
+        }
+        return false;
+      });
+      if (asSubstitute) return "substitute";
+      // Checa se recebi essa aprovação via delegate_approval registrado no
+      // audit_log — se sim, marcamos como "delegation".
+      try {
+        const { data: audit } = await supabase
+          .from("audit_log")
+          .select("details")
+          .eq("action", "delegate_approval")
+          .eq("entity_id", String(code))
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const row = (audit || [])[0] as any;
+        const det = row?.details || {};
+        const me = (session.userName || "").toLowerCase().trim();
+        const newEmail = (det.newApproverEmail || "").toLowerCase();
+        const newName = (det.newApproverName || "").toLowerCase();
+        if (me && (me === newEmail || me === newName || (newEmail && me === newEmail.split("@")[0]))) {
+          return "delegation";
+        }
+      } catch { /* ignore */ }
+      return "approver";
+    };
+
     if (!canApproveDocWith(doc, liveGrants)) {
+      // Registra a tentativa negada no histórico (auditoria).
+      try {
+        const attemptedRole = await resolveActingRole(doc, liveGrants);
+        const { logAuditAction } = await import("@/hooks/useAuditLog");
+        await logAuditAction({
+          action: "approval_attempt_denied",
+          entity_type: doc && (doc as any).__internalId ? "expense" : "approval_request",
+          entity_id: String((doc as any)?.__internalId || code),
+          actor_email: session.userName,
+          company_db: session.companyDB,
+          details: {
+            attemptedAction: action,
+            attemptedRole,
+            reason: "permission_expired_between_render_and_click",
+            docNum: doc?.docNum,
+            docType: doc?.docTypeName,
+            cardName: doc?.cardName,
+            approver: doc?.currentApprover,
+            approverEmail: doc?.approverEmail,
+            docDate: doc?.docDate,
+          },
+        });
+      } catch { /* logging não pode bloquear a UX */ }
+
       toast.error(
         "Sua permissão para aprovar/rejeitar este documento expirou (substituição encerrada, delegação retirada ou aprovador alterado). Atualize a página e tente novamente.",
         { duration: 7000 },
@@ -1920,6 +2001,9 @@ export default function ApprovalsPage() {
       setActionPhase("idle");
       return;
     }
+
+    // Papel efetivo com o qual o usuário está agindo (para logs de sucesso).
+    const actingRole = await resolveActingRole(doc, liveGrants);
 
     setActionPhase("sending");
     const internalDoc = (selectedDoc as any)?.__internalId;
@@ -1956,9 +2040,15 @@ export default function ApprovalsPage() {
           const substitutionNote = onBehalfOf
             ? `Ação executada por SUBSTITUTO (${session.userName}) em nome de ${onBehalfOf.name}${onBehalfOf.email ? ` <${onBehalfOf.email}>` : ""}.`
             : null;
-          const remarksForSap = substitutionNote
-            ? [remarks, substitutionNote].filter(Boolean).join(" — ")
-            : remarks;
+          const roleNote =
+            actingRole === "delegation"
+              ? `Ação executada por DELEGAÇÃO (${session.userName}).`
+              : actingRole === "approver" && !substitutionNote
+                ? null
+                : null;
+          const remarksForSap = [remarks, substitutionNote, roleNote]
+            .filter(Boolean)
+            .join(" — ") || remarks;
 
           const endpoint = `ApprovalRequests(${code})`;
           const body: Record<string, unknown> = {
@@ -1990,6 +2080,7 @@ export default function ApprovalsPage() {
               substitutedForName: onBehalfOf?.name ?? null,
               substitutedForEmail: onBehalfOf?.email ?? null,
               actedAsSubstitute: !!onBehalfOf,
+              actingRole,
             },
           });
         }
