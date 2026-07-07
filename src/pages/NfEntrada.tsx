@@ -370,8 +370,19 @@ export default function NfEntrada() {
           </DialogHeader>
           {detail && (
             <div className="space-y-3">
-              <div className="text-xs text-muted-foreground">
-                Chave de acesso: <span className="font-mono">{detail.chave_acesso}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground">
+                  Chave de acesso: <span className="font-mono">{detail.chave_acesso}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => void copyDocLink(window.location.pathname, detail.id)}
+                  title="Copiar link direto desta NF"
+                >
+                  <Link2 className="w-3.5 h-3.5" aria-hidden="true" /> Copiar link
+                </Button>
               </div>
               <div className="rounded-md border border-border p-3 text-xs space-y-1">
                 <div className="flex items-center justify-between gap-2">
