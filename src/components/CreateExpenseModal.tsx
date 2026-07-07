@@ -1343,8 +1343,20 @@ export function CreateExpenseModal({
                                 {idx + 1}. {e.supplierLabel}
                               </span>
                               {e.aiConfidence !== null && (
-                                <span className="text-[10px] opacity-70 shrink-0">
+                                <span
+                                  className={`text-[10px] shrink-0 ${
+                                    isLowConfidence(e.aiConfidence)
+                                      ? "text-amber-700 dark:text-amber-500 font-semibold"
+                                      : "opacity-70"
+                                  }`}
+                                  title={
+                                    isLowConfidence(e.aiConfidence)
+                                      ? `Confiança abaixo do limite (${Math.round(aiConfidenceThreshold * 100)}%) — revise os dados extraídos.`
+                                      : undefined
+                                  }
+                                >
                                   · IA {Math.round(e.aiConfidence * 100)}%
+                                  {isLowConfidence(e.aiConfidence) && " ⚠ revisar"}
                                 </span>
                               )}
                               {e.aiWarnings.length > 0 && (
