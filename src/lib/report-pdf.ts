@@ -1359,7 +1359,12 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     "ID do evento", "Fornecedor", "Status", "Arquivos", "Linhas", "Moeda",
     "Moedas detectadas", "Total estimado", "Confiança IA (%)", "Limite (%)",
     "Baixa confiança?", "Alertas IA", "Erro", "Nomes dos anexos",
+    // Trilha de auditoria — timestamps ISO 8601 (UTC) para facilitar parse
+    // em ferramentas de análise; a versão human-readable fica no PDF.
+    "Classificado em (ISO)", "Concluído em (ISO)", "Modelo IA", "Motivo do status",
   ];
+  const toIso = (ms?: number | null) =>
+    (ms && Number.isFinite(ms) && ms > 0) ? new Date(ms).toISOString() : "";
   const rows = entries.map((e) => [
     e.id || "",
     e.supplierLabel,
@@ -1375,6 +1380,10 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     (e.aiWarnings || []).join(" | "),
     e.errorMessage || "",
     (e.fileNames || []).join(" | "),
+    toIso(e.classifiedAt),
+    toIso(e.completedAt),
+    e.aiModel || "",
+    auditStatusReason(e),
   ]);
 
   const body = [header, ...rows].map((r) => r.map(csvEscape).join(";")).join("\r\n");
