@@ -1063,66 +1063,89 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder={searchPlaceholder}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-muted/30 border-border"
-            />
-          </div>
-          <div className="flex gap-1">
-            {statusOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setStatusFilter(opt.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  statusFilter === opt.value
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {showSourceToggle && (
-            <div className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs">
-              <button
-                onClick={() => setSourceMode("flow")}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  sourceMode === "flow"
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Apenas ERP Flow
-              </button>
-              <button
-                onClick={() => setSourceMode("both")}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors flex items-center gap-1.5 ${
-                  sourceMode === "both"
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Ambos (ERP Flow + ERP)
-                {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" />}
-              </button>
+        <div className="space-y-3">
+          {/* Search row + mobile filter toggle */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 lg:max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder={searchPlaceholder}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 bg-muted/30 border-border"
+              />
             </div>
-          )}
-          {isAdmin && (
-            <div className="flex items-center gap-2 glass-card px-3 py-2 ml-auto">
-              <ShieldAlert className="w-4 h-4 text-amber-400" />
-              <Label htmlFor="show-all-expenses" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-                Ver todos os lançamentos
-              </Label>
-              <Switch id="show-all-expenses" checked={showAll} onCheckedChange={setShowAll} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="lg:hidden gap-1.5 shrink-0"
+              onClick={() => setFiltersOpen((v) => !v)}
+              aria-expanded={filtersOpen}
+              aria-controls="expenses-filters"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Filtros
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+            </Button>
+          </div>
+
+          {/* Filters (collapsed on mobile, inline on desktop) */}
+          <div
+            id="expenses-filters"
+            className={`${filtersOpen ? "flex" : "hidden"} lg:flex flex-col lg:flex-row lg:items-center gap-3 lg:flex-wrap`}
+          >
+            <div className="flex gap-1 flex-wrap">
+              {statusOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setStatusFilter(opt.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    statusFilter === opt.value
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
-          )}
+            {showSourceToggle && (
+              <div className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs w-full sm:w-auto">
+                <button
+                  onClick={() => setSourceMode("flow")}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors ${
+                    sourceMode === "flow"
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Apenas ERP Flow
+                </button>
+                <button
+                  onClick={() => setSourceMode("both")}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                    sourceMode === "both"
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Ambos (ERP Flow + ERP)
+                  {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" />}
+                </button>
+              </div>
+            )}
+            {isAdmin && (
+              <div className="flex items-center gap-2 glass-card px-3 py-2 lg:ml-auto">
+                <ShieldAlert className="w-4 h-4 text-amber-400" />
+                <Label htmlFor="show-all-expenses" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                  Ver todos os lançamentos
+                </Label>
+                <Switch id="show-all-expenses" checked={showAll} onCheckedChange={setShowAll} />
+              </div>
+            )}
+          </div>
         </div>
+
 
 
         {/* Content */}
