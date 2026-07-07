@@ -2231,13 +2231,16 @@ export default function ApprovalsPage() {
               <tbody>
                 {visibleApprovals.map((doc, i) => {
                   const overdue = isOverdue(doc.dueDate);
+                  const internalId = (doc as any).__internalId as string | undefined;
+                  const linkedExpense = internalId ? expenses.find((e) => e.id === internalId) : undefined;
                   return (
                     <motion.tr
                       key={doc.approvalRequestId}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: i * 0.02 }}
-                      className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${overdue ? "bg-destructive/5" : ""}`}
+                      className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${overdue ? "bg-destructive/5" : ""}`}
+                      onClick={() => setSelectedDoc(doc)}
                     >
                       <td className="py-3 px-3">
                         <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
@@ -2252,9 +2255,28 @@ export default function ApprovalsPage() {
                         {overdue && <span className="ml-1 text-[10px]">⚠</span>}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedDoc(doc)} className="text-primary hover:text-primary/80">
-                          <Eye className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-primary hover:text-primary/80"
+                            title="Ver detalhes"
+                            onClick={(ev) => { ev.stopPropagation(); setSelectedDoc(doc); }}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {linkedExpense && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-primary"
+                              title="Mapa de relações"
+                              onClick={(ev) => { ev.stopPropagation(); setRelationsMapExpense(linkedExpense); }}
+                            >
+                              <Network className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </motion.tr>
                   );
