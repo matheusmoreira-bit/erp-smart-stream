@@ -1450,6 +1450,8 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
       ([cur, v]) => `# Total ${cur}: ${formatCurrency(v, cur)}`,
     ),
     ...auditWarning,
+    `# --- Legenda "Motivo do status" ---`,
+    ...STATUS_REASON_LEGEND.map((r) => `# ${r.label}: ${r.description}`),
     "",
   ];
 
