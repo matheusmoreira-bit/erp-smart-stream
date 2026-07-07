@@ -2173,7 +2173,33 @@ export function CreateExpenseModal({
               <span className="text-sm font-medium text-foreground">Processar com IA</span>
               <span className="text-xs text-muted-foreground">(preenche campos automaticamente)</span>
             </div>
-            <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
+            <div className="flex items-center gap-2">
+              {/* Limpa o cache de respostas da IA (memória + localStorage)
+                  para forçar novas chamadas na próxima extração. Útil quando
+                  a IA errou e você reeditou um documento com o mesmo conteúdo,
+                  ou quer reavaliar com um modelo/prompt atualizado. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  const n = aiResponseCacheRef.current.size;
+                  aiResponseCacheRef.current = new Map();
+                  clearAiResponseCache(aiCacheScope);
+                  toast.success(
+                    n > 0
+                      ? `Cache da IA limpo (${n} item(ns) removido(s)). Próximas extrações serão reenviadas.`
+                      : "Cache da IA já estava vazio.",
+                  );
+                }}
+                title="Limpar cache de respostas da IA (memória + navegador)"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                Limpar cache IA
+              </Button>
+              <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
+            </div>
           </div>
 
           {/* File Upload */}
