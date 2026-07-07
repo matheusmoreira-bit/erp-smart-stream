@@ -628,6 +628,39 @@ function SortableTh<K extends string>({
   );
 }
 
+function SortableCell<K extends string>({
+  label,
+  k,
+  sortKey,
+  sortDir,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  k: K;
+  sortKey: K;
+  sortDir: "asc" | "desc";
+  onSort: (k: K) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === k;
+  return (
+    <div role="columnheader" className={`py-2.5 text-xs font-medium ${align === "right" ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${active ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        <span>{label}</span>
+        {active ? (
+          sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+        ) : (
+          <ChevronsUpDown className="w-3 h-3 opacity-50" />
+        )}
+      </button>
+    </div>
+  );
+
 /* ─── Expense Card ─── */
 function ExpenseCard({
   expense,
