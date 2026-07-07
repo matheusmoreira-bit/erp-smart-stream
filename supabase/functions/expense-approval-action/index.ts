@@ -569,10 +569,7 @@ Deno.serve(async (req) => {
     req.headers.get("cf-connecting-ip") ||
     null;
   const userAgent = req.headers.get("user-agent") || null;
-  const requestId =
-    req.headers.get("x-request-id") ||
-    req.headers.get("cf-ray") ||
-    null;
+  // requestId já foi definido no topo do handler (linha ~155).
   const actorSource: "sap" | "cloud_admin" | "unknown" =
     sapValidated ? "sap" : (isCloudAdmin ? "cloud_admin" : "unknown");
   const overrideUsed = (isCloudAdmin || isSuperUser) && !isMatch;
