@@ -181,6 +181,61 @@ export function OverdueRemindersTab() {
     }
   };
 
+  const runTest = async () => {
+    if (!settings) return;
+    setTestLoading(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: expRows } = await supabase
+        .from("expenses")
+        .select("id, doc_type, supplier_name, requester_name, current_approver, total_amount, currency, due_date")
+        .eq("status", "pendente_aprovacao")
+        .lt("due_date", today)
+        .not("due_date", "is", null)
+        .order("due_date", { ascending: true })
+        .limit(1);
+      const real = (expRows as Array<{
+        id: string; doc_type: string; supplier_name: string; requester_name: string;
+        current_approver: string | null; total_amount: number; currency: string; due_date: string;
+      }> | null)?.[0];
+
+      const yesterday = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+      const sample: TestSample = real
+        ? {
+            source: "real",
+            expense_id: real.id,
+            supplier: real.supplier_name || "—",
+            currency: real.currency || "BRL",
+            amount: Number(real.total_amount || 0),
+            due_date: real.due_date,
+            requester: real.requester_name || "—",
+            approver: real.current_approver || "—",
+            doc_type: real.doc_type || "documento",
+          }
+        : {
+            source: "sample",
+            expense_id: "00000000-0000-0000-0000-000000000000",
+            supplier: "Fornecedor Exemplo LTDA",
+            currency: "BRL",
+            amount: 1234.56,
+            due_date: yesterday,
+            requester: "Santiago Macedo",
+            approver: "Leonardo Rossini",
+            doc_type: "Nota Fiscal",
+          };
+
+      const { text, link } = renderTemplate(settings.template, sample);
+      setTestResult({ sample, text, link });
+      setTestOpen(true);
+    } catch (e) {
+      toast.error("Falha ao gerar teste", { description: (e as Error).message });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const hasLinkVar = settings?.template.includes("{{link}}") ?? false;
+
   if (loading || !settings) {
     return <div className="glass-card p-6 text-center text-muted-foreground">Carregando…</div>;
   }
