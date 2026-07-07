@@ -1629,8 +1629,22 @@ export default function ApprovalsPage() {
         });
         setDocParam(null);
         navigate(`${salesHit ? "/vendas" : "/compras"}?doc=${encodeURIComponent(rawId)}`);
+      } else {
+        // Documento não existe (id inválido, empresa diferente ou sem permissão
+        // de visualização). Limpa o `?doc=` e mantém o usuário na listagem.
+        toast.error("Documento não encontrado.", {
+          description: "O link pode estar inválido, pertencer a outra empresa ou você não tem permissão para visualizá-lo.",
+        });
+        setDocParam(null);
       }
+    } else {
+      // Chave `sap:<id>` inexistente na listagem carregada.
+      toast.error("Aprovação SAP não encontrada.", {
+        description: "A solicitação pode já ter sido processada ou não está mais disponível.",
+      });
+      setDocParam(null);
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approvals, purchaseExpenses, salesExpenses, isLoading, isLoadingPurchase, isLoadingSales]);
 
