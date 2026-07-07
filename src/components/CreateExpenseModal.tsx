@@ -217,6 +217,9 @@ export function CreateExpenseModal({
   }
   const [queueHistory, setQueueHistory] = useState<QueueEntry[]>([]);
   const [showQueueSummary, setShowQueueSummary] = useState(false);
+  // Marca que o usuário acabou de cancelar o processamento/fila. Habilita o
+  // botão "Tentar novamente" enquanto os anexos permanecerem no modal.
+  const [justCancelled, setJustCancelled] = useState(false);
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
