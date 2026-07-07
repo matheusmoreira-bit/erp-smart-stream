@@ -53,6 +53,12 @@ export interface ApprovalHistoryFilters {
    * - keys         → substituídos específicos (email lowercased ou nome lowercased)
    */
   substituteFilter?: string[];
+  /**
+   * Busca livre por partial match em `substituted_for_name`/`substituted_for_email`.
+   * Se preenchida, sobrepõe `substituteFilter` (implica "há substituição" com
+   * match parcial case-insensitive em nome ou email).
+   */
+  substituteSearch?: string;
   /** Página atual (1-based). */
   page?: number;
   /** Tamanho da página. Default 50. */
@@ -74,9 +80,11 @@ export function useApprovalHistory(
   const {
     decision = "all",
     substituteFilter = [],
+    substituteSearch = "",
     page = 1,
     pageSize = 50,
   } = filters;
+  const trimmedSubSearch = substituteSearch.trim();
 
   const [rows, setRows] = useState<ApprovalHistoryRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -92,14 +100,18 @@ export function useApprovalHistory(
     setIsLoading(true);
     setError(null);
     try {
-      const mode: "all" | "any" | "none" | "specific" =
-        substituteFilter.includes("__any__")
-          ? "any"
-          : substituteFilter.includes("__none__")
-            ? "none"
-            : substituteFilter.length > 0
-              ? "specific"
-              : "all";
+      // Busca livre por substituído sobrepõe qualquer modo do multi-select.
+      const searchActive = trimmedSubSearch.length > 0;
+      const mode: "all" | "any" | "none" | "specific" | "search" =
+        searchActive
+          ? "search"
+          : substituteFilter.includes("__any__")
+            ? "any"
+            : substituteFilter.includes("__none__")
+              ? "none"
+              : substituteFilter.length > 0
+                ? "specific"
+                : "all";
       const specificKeys = substituteFilter.filter(
         (k) => k !== "__any__" && k !== "__none__",
       );
@@ -128,6 +140,10 @@ export function useApprovalHistory(
         // Narrow para linhas com marca de substituto; a filtragem por chave
         // específica acontece após parseSubstitution (nomes podem ter espaços/vírgulas).
         q = q.ilike("remarks", "%SUBSTITUTO%");
+      } else if (mode === "search") {
+        // Partial match dentro do texto de `remarks` (que contém "em nome de <nome> <email>").
+        const esc = escapePgrstList(trimmedSubSearch);
+        q = q.ilike("remarks", `%SUBSTITUTO%${esc}%`);
       }
       const { data: sapRows, error: sapErr } = await q;
       if (sapErr) throw sapErr;
@@ -160,6 +176,11 @@ export function useApprovalHistory(
           orParts.push(`substituted_for_name.ilike.${k}`);
         }
         logQ = logQ.or(orParts.join(","));
+      } else if (mode === "search") {
+        const k = escapePgrstList(trimmedSubSearch);
+        logQ = logQ.or(
+          `substituted_for_email.ilike.%${k}%,substituted_for_name.ilike.%${k}%`,
+        );
       }
       const { data: logRows } = await logQ;
 
@@ -263,6 +284,16 @@ export function useApprovalHistory(
         });
       }
 
+      // Busca livre por substituído (partial match em nome/email pós-parse).
+      if (mode === "search") {
+        const needle = trimmedSubSearch.toLowerCase();
+        merged = merged.filter((r) => {
+          const email = (r.substituted_for_email || "").toLowerCase();
+          const name = (r.substituted_for_name || "").toLowerCase();
+          return email.includes(needle) || name.includes(needle);
+        });
+      }
+
       const pageRows = merged.slice(0, window);
       setRows(pageRows);
       setHasMore(merged.length > window);
@@ -279,7 +310,7 @@ export function useApprovalHistory(
       setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyDb, decision, substituteKey, page, pageSize]);
+  }, [companyDb, decision, substituteKey, trimmedSubSearch, page, pageSize]);
 
   const sync = useCallback(async () => {
     setIsSyncing(true);

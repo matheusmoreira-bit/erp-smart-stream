@@ -68,18 +68,22 @@ export default function ApprovalHistory() {
     return s.split(",").map((v) => decodeURIComponent(v)).filter(Boolean);
   })();
 
+  const initialSubSearch = searchParams.get("subq") || "";
+
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">(initialDecision);
-  // Filtro de rastreabilidade de substituto (multi-seleção):
-  //   [] (vazio) → não filtra
-  //   ["__any__"]  → apenas decisões executadas por substituto
-  //   ["__none__"] → apenas decisões executadas pelo próprio aprovador oficial
-  //   ["<key1>","<key2>",...] → substituídos específicos (chave = email || nome)
-  // "__any__"/"__none__" são mutuamente exclusivos entre si e com chaves específicas.
   const [substituteFilter, setSubstituteFilter] = useState<string[]>(initialSubstitute);
-  // Admin/view-all veem tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
+  // Busca livre por substituído (partial match em nome/email).
+  const [substituteSearch, setSubstituteSearch] = useState<string>(initialSubSearch);
   const [scope, setScope] = useState<"mine" | "all">(canViewAll ? "all" : "mine");
   useEffect(() => { setScope(canViewAll ? "all" : "mine"); }, [canViewAll]);
+
+  // Debounce da busca livre p/ não bombardear o banco a cada tecla.
+  const [debouncedSubSearch, setDebouncedSubSearch] = useState(substituteSearch);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSubSearch(substituteSearch), 300);
+    return () => clearTimeout(t);
+  }, [substituteSearch]);
 
   // Sincroniza filtros na URL para permitir compartilhamento e navegação.
   useEffect(() => {
@@ -87,20 +91,31 @@ export default function ApprovalHistory() {
     if (decision === "all") next.delete("decision"); else next.set("decision", decision);
     if (substituteFilter.length === 0) next.delete("sub");
     else next.set("sub", substituteFilter.map((v) => encodeURIComponent(v)).join(","));
+    if (!debouncedSubSearch.trim()) next.delete("subq");
+    else next.set("subq", debouncedSubSearch.trim());
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decision, substituteFilter]);
+  }, [decision, substituteFilter, debouncedSubSearch]);
 
   // Reseta paginação quando filtros mudam.
-  useEffect(() => { setPage(1); }, [decision, substituteFilter, session?.companyDB]);
+  useEffect(() => {
+    setPage(1);
+  }, [decision, substituteFilter, debouncedSubSearch, session?.companyDB]);
 
   // Hook com filtros aplicados no banco + paginação incremental.
   const { rows, hasMore, syncState, isLoading, isSyncing, sync } = useApprovalHistory(
     session?.companyDB,
-    { decision, substituteFilter, page, pageSize: PAGE_SIZE },
+    {
+      decision,
+      substituteFilter,
+      substituteSearch: debouncedSubSearch,
+      page,
+      pageSize: PAGE_SIZE,
+    },
   );
+
 
 
 
@@ -274,15 +289,18 @@ export default function ApprovalHistory() {
             const anySel = substituteFilter.includes("__any__");
             const noneSel = substituteFilter.includes("__none__");
             const specificKeys = substituteFilter.filter((k) => k !== "__any__" && k !== "__none__");
-            const summary = substituteFilter.length === 0
-              ? "Substituto: todos"
-              : anySel
-                ? "Somente por substituto"
-                : noneSel
-                  ? "Somente pelo próprio aprovador"
-                  : specificKeys.length === 1
-                    ? (substitutedOptions.find((o) => o.key === specificKeys[0])?.label || specificKeys[0])
-                    : `${specificKeys.length} substituídos`;
+            const hasSearch = substituteSearch.trim().length > 0;
+            const summary = hasSearch
+              ? `Busca: "${substituteSearch.trim()}"`
+              : substituteFilter.length === 0
+                ? "Substituto: todos"
+                : anySel
+                  ? "Somente por substituto"
+                  : noneSel
+                    ? "Somente pelo próprio aprovador"
+                    : specificKeys.length === 1
+                      ? (substitutedOptions.find((o) => o.key === specificKeys[0])?.label || specificKeys[0])
+                      : `${specificKeys.length} substituídos`;
             const toggleExclusive = (key: "__any__" | "__none__") => {
               setSubstituteFilter((prev) => prev.includes(key) ? [] : [key]);
             };
@@ -292,6 +310,7 @@ export default function ApprovalHistory() {
                 return cleaned.includes(key) ? cleaned.filter((k) => k !== key) : [...cleaned, key];
               });
             };
+            const disableSelection = anySel || noneSel || hasSearch;
             return (
               <Popover>
                 <PopoverTrigger asChild>
@@ -300,21 +319,38 @@ export default function ApprovalHistory() {
                     <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-72 p-2" align="start">
+                <PopoverContent className="w-80 p-2" align="start">
+                  <div className="px-1 pb-2 space-y-1">
+                    <Input
+                      value={substituteSearch}
+                      onChange={(e) => setSubstituteSearch(e.target.value)}
+                      placeholder="Buscar por nome ou e-mail do substituído..."
+                      className="h-8 text-sm"
+                    />
+                    {hasSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setSubstituteSearch("")}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                      >
+                        Limpar busca
+                      </button>
+                    )}
+                  </div>
                   <div className="max-h-80 overflow-y-auto space-y-0.5">
                     <button
                       type="button"
-                      onClick={() => setSubstituteFilter([])}
+                      onClick={() => { setSubstituteFilter([]); setSubstituteSearch(""); }}
                       className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent"
                     >
                       Substituto: todos
                     </button>
-                    <label className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer">
-                      <Checkbox checked={anySel} onCheckedChange={() => toggleExclusive("__any__")} />
+                    <label className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${hasSearch ? "opacity-50" : ""}`}>
+                      <Checkbox checked={anySel} disabled={hasSearch} onCheckedChange={() => toggleExclusive("__any__")} />
                       Somente por substituto
                     </label>
-                    <label className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer">
-                      <Checkbox checked={noneSel} onCheckedChange={() => toggleExclusive("__none__")} />
+                    <label className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${hasSearch ? "opacity-50" : ""}`}>
+                      <Checkbox checked={noneSel} disabled={hasSearch} onCheckedChange={() => toggleExclusive("__none__")} />
                       Somente pelo próprio aprovador
                     </label>
                     {substitutedOptions.length > 0 && (
@@ -325,11 +361,11 @@ export default function ApprovalHistory() {
                         {substitutedOptions.map((o) => (
                           <label
                             key={o.key}
-                            className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${anySel || noneSel ? "opacity-50" : ""}`}
+                            className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${disableSelection ? "opacity-50" : ""}`}
                           >
                             <Checkbox
                               checked={specificKeys.includes(o.key)}
-                              disabled={anySel || noneSel}
+                              disabled={disableSelection}
                               onCheckedChange={() => toggleKey(o.key)}
                             />
                             <span className="truncate">{o.label}</span>
