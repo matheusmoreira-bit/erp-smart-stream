@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import Approvals from "./Approvals";
 import ApprovalHistory from "./ApprovalHistory";
 import { useModuleAccess } from "@/hooks/usePermissions";
-import { HubTabs } from "@/components/HubTabs";
+
 
 export default function ApprovalsHub() {
   const [params, setParams] = useSearchParams();
