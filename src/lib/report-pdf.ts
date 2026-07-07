@@ -43,6 +43,40 @@ function safeFileName(s: string): string {
   return s.replace(/[^A-Za-z0-9-_]+/g, "_").slice(0, 80) || "relatorio";
 }
 
+/**
+ * Timestamp compacto em America/Sao_Paulo no formato `YYYYMMDD-HHmmss`,
+ * seguro para nome de arquivo (sem `:` nem espaços). Usado nas exportações
+ * para dar rastreabilidade instantânea sobre quando o arquivo foi gerado.
+ */
+function exportTimestampTag(d: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(d).reduce<Record<string, string>>((acc, p) => {
+    if (p.type !== "literal") acc[p.type] = p.value;
+    return acc;
+  }, {});
+  return `${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}${parts.second}`;
+}
+
+/**
+ * Descobre o "modelo IA" dominante nas entradas para embutir no nome do
+ * arquivo. Se houver um único modelo, usa ele; se houver vários, usa
+ * `multi`; se nenhum, usa `sem-modelo`. Retorno já é seguro para filename.
+ */
+function dominantAiModelTag(entries: Array<{ aiModel?: string | null }>): string {
+  const models = new Set<string>();
+  for (const e of entries) {
+    const m = (e.aiModel || "").trim();
+    if (m) models.add(m);
+  }
+  if (models.size === 0) return "sem-modelo";
+  if (models.size === 1) return safeFileName([...models][0]);
+  return "multi";
+}
+
 function drawHeader(doc: jsPDF, title: string, subtitle?: string) {
   const pageW = doc.internal.pageSize.getWidth();
   doc.setFillColor(15, 23, 42); // slate-900
