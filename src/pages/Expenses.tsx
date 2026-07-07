@@ -1386,24 +1386,50 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </div>
             </div>
 
-            {/* Infinite scroll sentinel + counter */}
-            {hasMoreLocal ? (
-              <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-6 text-xs text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <span>Carregando mais… ({visibleItems.length} de {filtered.length})</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setVisibleCount((c) => Math.min(c + PAGE_STEP, filtered.length))}
-                >
-                  Mostrar mais
-                </Button>
+            {/* Pagination controls (compartilhada entre cards e tabela) */}
+            {sorted.length > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span>
+                    Mostrando <span className="text-foreground font-medium">{pageStart + 1}</span>–
+                    <span className="text-foreground font-medium">{Math.min(pageStart + pageSize, sorted.length)}</span> de{" "}
+                    <span className="text-foreground font-medium">{sorted.length}</span>
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="hidden sm:inline">·</span>
+                    <label htmlFor="page-size" className="whitespace-nowrap">por página</label>
+                    <select
+                      id="page-size"
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="bg-background border border-border rounded-md px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      {PAGE_SIZE_OPTIONS.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 self-end sm:self-auto">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPage(1)} disabled={page <= 1} aria-label="Primeira página">
+                    <ChevronLeft className="w-3.5 h-3.5" /><ChevronLeft className="w-3.5 h-3.5 -ml-2.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} aria-label="Anterior">
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="px-2 whitespace-nowrap">
+                    Página <span className="text-foreground font-medium">{page}</span> de{" "}
+                    <span className="text-foreground font-medium">{totalPages}</span>
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} aria-label="Próxima">
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPage(totalPages)} disabled={page >= totalPages} aria-label="Última página">
+                    <ChevronRight className="w-3.5 h-3.5" /><ChevronRight className="w-3.5 h-3.5 -ml-2.5" />
+                  </Button>
+                </div>
               </div>
-            ) : filtered.length > INITIAL_PAGE_STEP ? (
-              <div className="text-center py-4 text-xs text-muted-foreground">
-                {filtered.length} registro(s) exibidos
-              </div>
-            ) : null}
+            )}
             {showSourceToggle && sourceMode === "both" && sapHasMore && (
               <div className="flex justify-center mt-6">
                 <Button variant="outline" onClick={loadMoreSap} disabled={isLoadingMoreSap} className="gap-2">
