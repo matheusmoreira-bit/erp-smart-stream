@@ -1340,6 +1340,9 @@ export type Database = {
           id: string
           level_order: number | null
           remarks: string | null
+          substituted_for_email: string | null
+          substituted_for_name: string | null
+          substitution_id: string | null
         }
         Insert: {
           approver_email?: string | null
@@ -1351,6 +1354,9 @@ export type Database = {
           id?: string
           level_order?: number | null
           remarks?: string | null
+          substituted_for_email?: string | null
+          substituted_for_name?: string | null
+          substitution_id?: string | null
         }
         Update: {
           approver_email?: string | null
@@ -1362,6 +1368,9 @@ export type Database = {
           id?: string
           level_order?: number | null
           remarks?: string | null
+          substituted_for_email?: string | null
+          substituted_for_name?: string | null
+          substitution_id?: string | null
         }
         Relationships: [
           {
