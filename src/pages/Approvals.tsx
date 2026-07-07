@@ -197,6 +197,17 @@ function ApprovalCard({
           <User className="w-3.5 h-3.5 text-primary/70" />
           <span>Aprovador: <span className="text-foreground font-medium">{doc.currentApprover}</span></span>
         </div>
+        {onBehalfOf && (
+          <div
+            className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1"
+            title={`Você está aprovando como substituto de ${onBehalfOf.name}`}
+          >
+            <UserCog className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">
+              Aprovando em nome de <span className="font-semibold">{onBehalfOf.name}</span>
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-muted-foreground">
           <FileText className="w-3.5 h-3.5 text-primary/70" />
           <span>Solicitante: <span className="text-foreground font-medium">{doc.requester}</span></span>
