@@ -733,6 +733,23 @@ Deno.serve(async (req) => {
       currency: expenseSnapshot?.currency,
     });
 
+    // Contingência: se o pedido foi integrado sem nenhum anexo vinculado
+    // (integração de anexos desligada ou nenhum arquivo enviado), avisa via
+    // WhatsApp para lançamento manual.
+    if (attachmentEntry === null) {
+      await notifyMissingAttachmentWhatsApp({
+        companyDb: expenseSnapshot?.company_db,
+        entityId: expenseId || "",
+        docEntry: sapResult.docEntry,
+        docNum: sapResult.docNum,
+        requester: expenseSnapshot?.requester_name,
+        supplier: expenseSnapshot?.supplier_name,
+        amount: expenseSnapshot?.total_amount,
+        currency: expenseSnapshot?.currency,
+        reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+      });
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
