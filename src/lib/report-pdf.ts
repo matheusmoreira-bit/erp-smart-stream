@@ -781,6 +781,108 @@ const STATUS_LABEL: Record<QueueSummaryEntry["status"], string> = {
   queued: "Na fila",
 };
 
+// ---- Export JSON assinado/versionado do resumo final ----------------------
+//
+// Mantém EXATAMENTE os mesmos campos do PDF (mesmos totais, entradas e
+// evidências). Adiciona um envelope com:
+//   - `schemaVersion`     — versão do formato deste JSON (bump em quebras).
+//   - `generatedAt`       — ISO 8601 UTC.
+//   - `generatedAtLocal`  — string legível pt-BR / America/Sao_Paulo.
+//   - `generatedBy`       — e-mail do usuário autenticado (ou null).
+//   - `kindLabel`         — "Despesas" / "Pedidos de venda".
+//   - `confidenceThreshold`
+//   - `totals`            — resumo agregado (idem PDF).
+//   - `perCurrencyTotals` — total estimado por moeda.
+//   - `entries`           — mesmas chaves do PDF (id, supplierLabel, status,
+//                            fileCount, lineCount, currencies, aiConfidence,
+//                            aiWarnings, errorMessage, fileNames, ...).
+//   - `signature`         — { algorithm: "SHA-256", hash }: hash do payload
+//                            (envelope SEM o campo `signature`) — permite
+//                            reprocessar em outro sistema e conferir se o
+//                            conteúdo foi alterado, sem necessidade de chave.
+//
+// "Assinado" aqui = hash criptográfico do conteúdo canônico (mesma técnica
+// usada no carimbo de auditoria do PDF). Chave assimétrica exigiria segredo
+// no servidor; ficou fora de escopo. O hash é suficiente para versionar e
+// detectar adulteração acidental.
+
+export const QUEUE_SUMMARY_JSON_SCHEMA_VERSION = "1.0.0";
+
+export interface QueueSummaryJsonEnvelope {
+  schemaVersion: string;
+  generatedAt: string;
+  generatedAtLocal: string;
+  generatedBy: string | null;
+  kindLabel: string;
+  confidenceThreshold: number;
+  totals: {
+    entries: number;
+    success: number;
+    failed: number;
+    cancelled: number;
+    pending: number;
+    lowConfidence: number;
+    files: number;
+    lines: number;
+  };
+  perCurrencyTotals: Array<{ currency: string; total: number }>;
+  entries: QueueSummaryEntry[];
+  signature: { algorithm: "SHA-256"; hash: string };
+}
+
+export async function buildQueueSummaryJson(
+  opts: QueueSummaryOptions,
+): Promise<QueueSummaryJsonEnvelope> {
+  const { entries, confidenceThreshold } = opts;
+  const totals = {
+    entries: entries.length,
+    success: entries.filter((e) => e.status === "success").length,
+    failed: entries.filter((e) => e.status === "failed" || !!e.errorMessage).length,
+    cancelled: entries.filter((e) => e.status === "cancelled").length,
+    pending: entries.filter((e) => e.status === "pending" || e.status === "queued").length,
+    lowConfidence: entries.filter(
+      (e) => e.aiConfidence !== null && e.aiConfidence < confidenceThreshold,
+    ).length,
+    files: entries.reduce((s, e) => s + (e.fileCount ?? 0), 0),
+    lines: entries.reduce((s, e) => s + (e.lineCount ?? 0), 0),
+  };
+  const perCurrency = new Map<string, number>();
+  for (const e of entries) {
+    const cur = e.currency || "BRL";
+    perCurrency.set(cur, (perCurrency.get(cur) ?? 0) + (e.estimatedTotal || 0));
+  }
+  const now = new Date();
+  const generatedBy = await currentUserEmail();
+
+  const envelopeWithoutSig = {
+    schemaVersion: QUEUE_SUMMARY_JSON_SCHEMA_VERSION,
+    generatedAt: now.toISOString(),
+    generatedAtLocal: now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+    generatedBy,
+    kindLabel: opts.kindLabel || "Despesas",
+    confidenceThreshold,
+    totals,
+    perCurrencyTotals: Array.from(perCurrency.entries()).map(([currency, total]) => ({ currency, total })),
+    entries,
+  };
+  const hash = await sha256Hex(stableStringify(envelopeWithoutSig));
+  return { ...envelopeWithoutSig, signature: { algorithm: "SHA-256", hash } };
+}
+
+export async function exportQueueSummaryJson(opts: QueueSummaryOptions): Promise<void> {
+  const envelope = await buildQueueSummaryJson(opts);
+  const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const base = safeFileName(opts.fileName || "resumo_fila_ia");
+  a.download = `${base}_v${QUEUE_SUMMARY_JSON_SCHEMA_VERSION}_${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 /**
  * Desenha uma seção "Evidências" com uma linha por fornecedor, contendo o ID
  * do evento (para rastreabilidade), a contagem de anexos e os nomes dos
