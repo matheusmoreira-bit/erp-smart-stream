@@ -2499,16 +2499,27 @@ export function CreateExpenseModal({
             </div>
           )}
 
-          {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa */}
+          {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa.
+              Padrão visual: verde + check quando preenchido, âmbar + triângulo quando obrigatório vazio. */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                Moeda *{loadingCurrencies && <span className="ml-1 text-muted-foreground">(carregando…)</span>}
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                <span>Moeda *</span>
+                {currency ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                )}
+                {loadingCurrencies && <span className="ml-1 text-muted-foreground">(carregando…)</span>}
               </label>
               {currencyOptions ? (
                 <Select value={currency} onValueChange={setCurrency}>
                   <SelectTrigger
-                    className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+                    className={`text-sm h-9 ${
+                      currency
+                        ? "bg-green-500/5 border-green-500/50 font-medium"
+                        : "bg-amber-500/5 border-amber-500/50"
+                    }`}
                   >
                     <SelectValue placeholder="Selecione a moeda" />
                   </SelectTrigger>
@@ -2523,19 +2534,56 @@ export function CreateExpenseModal({
                   value={currency}
                   readOnly
                   placeholder="Definida pelo fornecedor"
-                  className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+                  className={`text-sm h-9 ${
+                    currency
+                      ? "bg-green-500/5 border-green-500/50 font-medium"
+                      : "bg-amber-500/5 border-amber-500/50"
+                  }`}
                 />
               )}
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Data do Documento *</label>
-              <Input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="text-sm h-9" />
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                <span>Data do Documento *</span>
+                {docDate ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                )}
+              </label>
+              <Input
+                type="date"
+                value={docDate}
+                onChange={(e) => setDocDate(e.target.value)}
+                className={`text-sm h-9 ${
+                  docDate
+                    ? "bg-green-500/5 border-green-500/50"
+                    : "bg-amber-500/5 border-amber-500/50"
+                }`}
+              />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Data de Vencimento *</label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="text-sm h-9" />
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                <span>Data de Vencimento *</span>
+                {dueDate ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                )}
+              </label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className={`text-sm h-9 ${
+                  dueDate
+                    ? "bg-green-500/5 border-green-500/50"
+                    : "bg-amber-500/5 border-amber-500/50"
+                }`}
+              />
             </div>
           </div>
+
 
           <div>
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
