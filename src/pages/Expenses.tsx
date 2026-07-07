@@ -1550,7 +1550,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               ))}
             </div>
             {/* Skeleton table (widescreen) */}
-            <div className="hidden xl:block glass-card overflow-hidden">
+            <div className={`glass-card overflow-hidden ${viewMode === "table" ? "" : "hidden"}`}>
               <div className="p-3 space-y-2">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="grid grid-cols-8 gap-3 items-center py-2 border-b border-border/40 last:border-0">
