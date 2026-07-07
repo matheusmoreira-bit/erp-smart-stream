@@ -1094,14 +1094,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const filtersToggleRef = useRef<HTMLButtonElement | null>(null);
   const filtersPanelRef = useRef<HTMLDivElement | null>(null);
   const filtersJustOpened = useRef(false);
+  const filtersJustClosed = useRef(false);
   useEffect(() => {
     if (filtersOpen && filtersJustOpened.current) {
-      // Move o foco para o primeiro controle do painel ao abrir.
       const first = filtersPanelRef.current?.querySelector<HTMLElement>(
         "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
       );
       first?.focus();
       filtersJustOpened.current = false;
+    } else if (!filtersOpen && filtersJustClosed.current) {
+      filtersToggleRef.current?.focus();
+      filtersJustClosed.current = false;
     }
   }, [filtersOpen]);
 
