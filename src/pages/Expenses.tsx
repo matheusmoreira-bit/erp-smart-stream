@@ -33,6 +33,8 @@ import {
   ChevronsUpDown,
   ArrowUp,
   ArrowDown,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { supabase } from "@/integrations/supabase/client";
@@ -1084,6 +1086,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // ─── Paginação (mesma página para cards mobile e tabela desktop) ───
   const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
   const [pageSize, setPageSize] = usePersistedState<number>(filterKey("pageSize"), 30);
+  const [viewMode, setViewMode] = usePersistedState<"cards" | "table">(filterKey("viewMode"), "cards");
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   // Reset apenas para mudanças que alteram fortemente a listagem (busca, ordenação, tamanho de página, modo compra/venda).
@@ -1491,8 +1494,37 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <XIcon className="w-3.5 h-3.5 mr-1" /> Limpar filtros
               </Button>
             )}
+            <div
+              role="group"
+              aria-label="Alternar entre visualização em cards e tabela"
+              className="flex items-center border border-border rounded-lg overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setViewMode("cards")}
+                aria-pressed={viewMode === "cards"}
+                aria-label="Visualizar como cards"
+                title="Cards"
+                className={`p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${viewMode === "cards" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <LayoutGrid className="w-4 h-4" aria-hidden="true" />
+                <span className="sr-only">Cards</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                aria-pressed={viewMode === "table"}
+                aria-label="Visualizar como lista"
+                title="Lista"
+                className={`p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${viewMode === "table" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <List className="w-4 h-4" aria-hidden="true" />
+                <span className="sr-only">Lista</span>
+              </button>
+            </div>
           </div>
         </section>
+
 
 
 
@@ -1501,7 +1533,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <div aria-busy="true" aria-live="polite">
             <span className="sr-only">Carregando lançamentos…</span>
             {/* Skeleton cards (mobile / tablet / laptop) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "cards" ? "" : "hidden"}`}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="glass-card p-4 space-y-3">
                   <div className="flex items-center justify-between gap-2">
@@ -1518,7 +1550,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               ))}
             </div>
             {/* Skeleton table (widescreen) */}
-            <div className="hidden xl:block glass-card overflow-hidden">
+            <div className={`glass-card overflow-hidden ${viewMode === "table" ? "" : "hidden"}`}>
               <div className="p-3 space-y-2">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="grid grid-cols-8 gap-3 items-center py-2 border-b border-border/40 last:border-0">
@@ -1550,7 +1582,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         ) : (
           <>
             {/* Card grid (mobile / tablet / laptop) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "cards" ? "" : "hidden"}`}>
               {visibleItems.map(({ exp, origin }) => (
                 <ExpenseCard
                   key={exp.id}
@@ -1563,7 +1595,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             </div>
 
             {/* Table view (widescreen) */}
-            <div className="hidden xl:block glass-card overflow-hidden">
+            <div className={`glass-card overflow-hidden ${viewMode === "table" ? "" : "hidden"}`}>
               {visibleItems.length >= 50 ? (
                 <VirtualExpensesTable
                   items={visibleItems}
@@ -1714,7 +1746,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               <div className="mt-6 space-y-4">
                 {isLoadingMoreSap && (
                   <div
-                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden"
+                    className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "cards" ? "" : "hidden"}`}
                     aria-busy="true"
                     aria-live="polite"
                   >
