@@ -54,6 +54,12 @@ export default function ApprovalHistory() {
 
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
+  // Filtro de rastreabilidade de substituto:
+  //   "all"  → não filtra
+  //   "any"  → apenas decisões executadas por substituto
+  //   "none" → apenas decisões executadas pelo próprio aprovador oficial
+  //   "<key>" → substituição específica (chave = email || nome)
+  const [substituteFilter, setSubstituteFilter] = useState<string>("all");
   // Admin/view-all veem tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
   const [scope, setScope] = useState<"mine" | "all">(canViewAll ? "all" : "mine");
   useEffect(() => { setScope(canViewAll ? "all" : "mine"); }, [canViewAll]);
@@ -64,6 +70,22 @@ export default function ApprovalHistory() {
   }, [session]);
 
   const effectiveScope: "mine" | "all" = canViewAll ? scope : "mine";
+
+  // Lista de oficiais substituídos presentes nos dados — alimenta o Select.
+  const substitutedOptions = useMemo(() => {
+    const map = new Map<string, string>(); // key -> label
+    for (const r of rows) {
+      const email = (r.substituted_for_email || "").trim();
+      const name = (r.substituted_for_name || "").trim();
+      if (!email && !name) continue;
+      const key = (email || name).toLowerCase();
+      const label = name && email ? `${name} <${email}>` : name || email;
+      if (!map.has(key)) map.set(key, label);
+    }
+    return Array.from(map.entries())
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -81,6 +103,20 @@ export default function ApprovalHistory() {
         if (!hit) return false;
       }
       if (decision !== "all" && r.decision !== decision) return false;
+
+      // Filtro por substituto
+      if (substituteFilter !== "all") {
+        const email = (r.substituted_for_email || "").toLowerCase();
+        const name = (r.substituted_for_name || "").toLowerCase();
+        const hasSubstitution = !!(email || name);
+        if (substituteFilter === "any" && !hasSubstitution) return false;
+        if (substituteFilter === "none" && hasSubstitution) return false;
+        if (substituteFilter !== "any" && substituteFilter !== "none") {
+          const key = email || name;
+          if (key !== substituteFilter) return false;
+        }
+      }
+
       if (!q) return true;
       return [
         r.card_name, r.card_code, r.requester_name, r.approver_name,
@@ -88,7 +124,7 @@ export default function ApprovalHistory() {
         r.doc_type_name, String(r.doc_num || ""), r.remarks, r.stage_name,
       ].some((v) => (v || "").toString().toLowerCase().includes(q));
     });
-  }, [rows, query, decision, effectiveScope, myKeys]);
+  }, [rows, query, decision, effectiveScope, myKeys, substituteFilter]);
 
 
 
