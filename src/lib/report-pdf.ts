@@ -1277,6 +1277,11 @@ export async function exportPurchaseFlowReportPdf(opts: PurchaseFlowReportOption
     }
   }
 
-  drawFooter(doc, await currentUserEmail());
+  await finalizePdf(doc, "Fluxo de compras", {
+    kindLabel: opts.kindLabel,
+    confidenceThreshold: opts.confidenceThreshold,
+    entries: opts.entries,
+    deferredGroups: opts.deferredGroups,
+  });
   doc.save(`${safeFileName(opts.fileName || "fluxo_compras")}_${Date.now()}.pdf`);
 }
