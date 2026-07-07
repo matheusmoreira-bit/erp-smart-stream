@@ -763,6 +763,18 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), isAdmin);
   useEffect(() => { if (!isAdmin) setShowAll(false); }, [isAdmin, setShowAll]);
 
+  // Preserva a posição de rolagem ao aplicar mudanças de filtro/paginação que
+  // reordenam a lista mas não devem "puxar" o usuário de volta ao topo.
+  const preserveScroll = useCallback((cb: () => void) => {
+    const y = typeof window !== "undefined" ? window.scrollY : 0;
+    cb();
+    if (typeof window === "undefined") return;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: y });
+      requestAnimationFrame(() => window.scrollTo({ top: y }));
+    });
+  }, []);
+
   // Origem dos pedidos: padrão "Apenas ERP Flow"; "Ambos" também busca direto do ERP (SAP).
   const [sourceMode, setSourceMode] = usePersistedState<"flow" | "both">(filterKey("source"), "flow");
   const [sapOrders, setSapOrders] = useState<Expense[]>([]);
