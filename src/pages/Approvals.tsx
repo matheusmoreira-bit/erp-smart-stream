@@ -131,8 +131,17 @@ function ApprovalCard({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all ${overdue ? "border-destructive/40" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir aprovação ${doc.docTypeName} nº ${doc.docNum}, ${doc.cardName}, valor ${formatCurrency(doc.docTotal, doc.currency)}${overdue ? ", vencida" : ""}`}
+      className={`glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all ${overdue ? "border-destructive/40" : ""}`}
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div className="flex items-start justify-between">
         <div>
