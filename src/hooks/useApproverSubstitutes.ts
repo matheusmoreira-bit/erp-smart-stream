@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSap } from "@/contexts/SapContext";
 
 export interface ApproverSubstitute {
   id: string;
@@ -101,15 +102,19 @@ export function useApproverSubstitutes() {
 
 /** Lista officials cujas substituições ativas apontam para o usuário logado. */
 export function useActiveOfficialsForMe() {
+  const { session } = useSap();
   const [officials, setOfficials] = useState<
     Array<{ official_email: string; official_name: string | null; id: string; ends_at: string }>
   >([]);
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
-    const email = userData.user?.email;
-    if (!email) { setOfficials([]); return; }
-    // RLS allows the substitute to read their own rows
+    const authEmail = (userData.user?.email || "").toLowerCase();
+    // Também consideramos o SAP userName (ex.: "Leonardo.Rossini") — necessário
+    // para usuários que só têm sessão no ERP e não em Lovable Cloud.
+    const sapUser = (session?.userName || "").toLowerCase().trim();
+    if (!authEmail && !sapUser) { setOfficials([]); return; }
+
     const nowIso = new Date().toISOString();
     const { data } = await supabase
       .from("approver_substitutes" as never)
@@ -117,11 +122,15 @@ export function useActiveOfficialsForMe() {
       .is("revoked_at", null)
       .lte("starts_at", nowIso)
       .gte("ends_at", nowIso);
-    const emailLower = email.toLowerCase();
-    const prefix = emailLower.split("@")[0];
+
+    const authPrefix = authEmail.split("@")[0];
+    const sapPrefix = sapUser.split("@")[0];
     const mine = ((data as ApproverSubstitute[]) || []).filter((r) => {
       const s = (r.substitute_email || "").toLowerCase();
-      return s === emailLower || s.split("@")[0] === prefix;
+      const sPrefix = s.split("@")[0];
+      if (authEmail && (s === authEmail || sPrefix === authPrefix)) return true;
+      if (sapUser && (s === sapUser || sPrefix === sapPrefix)) return true;
+      return false;
     });
     setOfficials(mine.map((r) => ({
       official_email: r.official_email,
@@ -129,7 +138,7 @@ export function useActiveOfficialsForMe() {
       id: r.id,
       ends_at: r.ends_at,
     })));
-  }, []);
+  }, [session?.userName]);
 
   useEffect(() => { load(); }, [load]);
 
