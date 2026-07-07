@@ -13,7 +13,7 @@ import {
   Play,
   FileDown,
 } from "lucide-react";
-import { exportQueueSummaryPdf, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv } from "@/lib/report-pdf";
+import { exportQueueSummaryPdf, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv, exportPurchaseFlowReportPdf } from "@/lib/report-pdf";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
@@ -250,6 +250,12 @@ export function CreateExpenseModal({
     aiWarnings: string[];
     status: QueueStatus;
     errorMessage?: string;
+    // Timestamps (ms epoch) do fluxo — usados no relatório de fluxo de
+    // compras (super-user) para medir tempo por etapa e gargalos.
+    classifiedAt?: number;   // IA concluiu classificação → entrada criada
+    promotedAt?: number;     // status virou "pending" (grupo abre no form)
+    submittedAt?: number;    // usuário clicou "Salvar"
+    completedAt?: number;    // sucesso / falha / cancelamento final
   }
   const [queueHistory, setQueueHistory] = useState<QueueEntry[]>([]);
   const [showQueueSummary, setShowQueueSummary] = useState(false);
@@ -1147,8 +1153,11 @@ export function CreateExpenseModal({
     // Marca no histórico tudo que estava pendente/enfileirado como cancelado
     // e abre o resumo final para o usuário conferir o que foi processado.
     setQueueHistory((prev) => {
+      const now = Date.now();
       const next = prev.map((e) =>
-        e.status === "pending" || e.status === "queued" ? { ...e, status: "cancelled" as QueueStatus } : e,
+        e.status === "pending" || e.status === "queued"
+          ? { ...e, status: "cancelled" as QueueStatus, completedAt: e.completedAt ?? now }
+          : e,
       );
       if (next.length > 0) setShowQueueSummary(true);
       return next;
@@ -1437,7 +1446,7 @@ export function CreateExpenseModal({
     const [next, ...rest] = deferredGroups;
     setDeferredGroups(rest);
     resetFormForNextDeferred(next);
-    updateQueueEntry(next.supplierKey, { status: "pending" });
+    updateQueueEntry(next.supplierKey, { status: "pending", promotedAt: Date.now() });
     setShowQueueSummary(false);
     toast.info(
       `Retomado: ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} depois)` : ""}.`,
@@ -1467,9 +1476,10 @@ export function CreateExpenseModal({
     // Inicializa o histórico da fila com todos os fornecedores despachados,
     // marcando o escolhido como "pendente" (em andamento) e os demais como
     // "enfileirados". Preserva a ordem de execução.
+    const now = Date.now();
     setQueueHistory([
-      { ...summarizeGroup(chosen), status: "pending" },
-      ...rest.map((g) => ({ ...summarizeGroup(g), status: "queued" as QueueStatus })),
+      { ...summarizeGroup(chosen), status: "pending", classifiedAt: now, promotedAt: now },
+      ...rest.map((g) => ({ ...summarizeGroup(g), status: "queued" as QueueStatus, classifiedAt: now })),
     ]);
     toast.success(
       `Criando 1º: ${chosen.supplierLabel}. Ao terminar, abriremos ${rest.length} nova(s) despesa(s) para os demais fornecedores.`,
@@ -1708,6 +1718,13 @@ export function CreateExpenseModal({
       hashes: fileHashes.map((h) => h.slice(0, 12)),
     });
 
+    // Marca o início do submit no histórico da fila (usado no relatório
+    // de fluxo de compras — mede tempo do form até o clique em Salvar).
+    {
+      const pending = queueHistory.find((e) => e.status === "pending");
+      if (pending) updateQueueEntry(pending.supplierKey, { submittedAt: Date.now() });
+    }
+
     try {
       await onCreate({
         supplier_name: supplier.name,
@@ -1806,7 +1823,7 @@ export function CreateExpenseModal({
       // e limpa a marca de falha (caso fosse um retry de erro).
       const currentEntry = queueHistory.find((e) => e.status === "pending");
       if (currentEntry) {
-        updateQueueEntry(currentEntry.supplierKey, { status: "success", errorMessage: undefined });
+        updateQueueEntry(currentEntry.supplierKey, { status: "success", errorMessage: undefined, completedAt: Date.now() });
         failedGroupsRef.current.delete(currentEntry.supplierKey);
         schedulePersist();
       }
@@ -1830,7 +1847,7 @@ export function CreateExpenseModal({
         resetFormForNextDeferred(next);
         setDeferredGroups(rest);
         // Promove a próxima entrada do histórico para "pendente".
-        updateQueueEntry(next.supplierKey, { status: "pending" });
+        updateQueueEntry(next.supplierKey, { status: "pending", promotedAt: Date.now() });
         toast.info(
           `Agora criando a despesa de ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} restante(s))` : ""}.`,
           { duration: 6000 },
@@ -1855,7 +1872,7 @@ export function CreateExpenseModal({
       // no cache para o botão "Reenviar apenas erros" no resumo).
       const currentEntry = queueHistory.find((e) => e.status === "pending");
       if (currentEntry) {
-        updateQueueEntry(currentEntry.supplierKey, { status: "failed", errorMessage: msg });
+        updateQueueEntry(currentEntry.supplierKey, { status: "failed", errorMessage: msg, completedAt: Date.now() });
         if (currentGroupRef.current && currentGroupRef.current.supplierKey === currentEntry.supplierKey) {
           failedGroupsRef.current.set(currentEntry.supplierKey, currentGroupRef.current);
           schedulePersist();
@@ -3158,6 +3175,61 @@ export function CreateExpenseModal({
               </>
             );
           })()}
+          {/* Relatório operacional do fluxo de compras — restrito a super-users.
+              Consolida tempos por etapa, gargalos e classificações/alertas dos
+              grupos adiados. Útil para diagnosticar demora e revisar backlog. */}
+          {sapSession?.isSuperUser && queueHistory.length > 0 && (
+            <Button
+              variant="outline"
+              className="gap-1.5 border-primary/50 text-primary hover:bg-primary/10"
+              onClick={() => {
+                exportPurchaseFlowReportPdf({
+                  entries: queueHistory.map((e) => ({
+                    supplierLabel: e.supplierLabel,
+                    status: e.status,
+                    fileCount: e.fileCount,
+                    lineCount: e.lineCount,
+                    estimatedTotal: e.estimatedTotal,
+                    currency: e.currency,
+                    currencies: e.currencies,
+                    aiConfidence: e.aiConfidence,
+                    aiWarnings: e.aiWarnings,
+                    errorMessage: e.errorMessage,
+                    fileNames: e.fileNames,
+                    classifiedAt: e.classifiedAt,
+                    promotedAt: e.promotedAt,
+                    submittedAt: e.submittedAt,
+                    completedAt: e.completedAt,
+                  })),
+                  deferredGroups: deferredGroups.map((g) => ({
+                    supplierLabel: g.supplierLabel,
+                    docs: g.docs.map((d) => {
+                      const conf = Number(d.extracted?.confidence);
+                      const warns = [d.extracted?.client_warning, d.extracted?.totals_warning]
+                        .filter(Boolean)
+                        .map((w) => String(w));
+                      return {
+                        fileName: d.file.name,
+                        docType: (d.extracted?.doc_type as string | undefined) ?? null,
+                        currency: (d.extracted?.currency as string | undefined) ?? null,
+                        confidence: Number.isFinite(conf) && conf > 0 ? conf : null,
+                        warnings: warns,
+                      };
+                    }),
+                  })),
+                  confidenceThreshold: aiConfidenceThreshold,
+                  kindLabel: isSales ? "Pedidos de venda" : "Despesas",
+                  fileName: `fluxo_${isSales ? "vendas" : "compras"}`,
+                }).catch((err) => {
+                  console.error("[purchase-flow-pdf] falha", err);
+                  toast.error("Não foi possível gerar o PDF do fluxo.");
+                });
+              }}
+            >
+              <FileDown className="w-4 h-4" />
+              Fluxo de compras (super-user)
+            </Button>
+          )}
           <AlertDialogAction
             onClick={() => {
               setShowQueueSummary(false);
