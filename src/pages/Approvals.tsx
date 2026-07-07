@@ -1518,8 +1518,8 @@ export default function ApprovalsPage() {
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache } = useApprovals();
-  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense } = useExpenses("purchase");
-  const { expenses: salesExpenses, refresh: refreshSales } = useExpenses("sales");
+  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense, isLoading: isLoadingPurchase } = useExpenses("purchase");
+  const { expenses: salesExpenses, refresh: refreshSales, isLoading: isLoadingSales } = useExpenses("sales");
   const expenses = [...purchaseExpenses, ...salesExpenses];
   const refreshExpenses = () => Promise.all([refreshPurchase(), refreshSales()]);
   const { getLabel } = useCompanies(true);
