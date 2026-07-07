@@ -15,7 +15,7 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
-import { exportQueueSummaryPdf, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv, exportPurchaseFlowReportPdf } from "@/lib/report-pdf";
+import { exportQueueSummaryPdf, exportQueueSummaryJson, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv, exportPurchaseFlowReportPdf } from "@/lib/report-pdf";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
@@ -3208,6 +3208,41 @@ export function CreateExpenseModal({
           >
             <FileDown className="w-4 h-4" />
             Exportar PDF
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-1.5"
+            disabled={queueHistory.length === 0}
+            onClick={() => {
+              exportQueueSummaryJson({
+                entries: queueHistory.map((e) => ({
+                  id: e.supplierKey,
+                  supplierLabel: e.supplierLabel,
+                  status: e.status,
+                  fileCount: e.fileCount,
+                  lineCount: e.lineCount,
+                  estimatedTotal: e.estimatedTotal,
+                  currency: e.currency,
+                  currencies: e.currencies,
+                  aiConfidence: e.aiConfidence,
+                  aiWarnings: e.aiWarnings,
+                  errorMessage: e.errorMessage,
+                  fileNames: e.fileNames,
+                })),
+                confidenceThreshold: aiConfidenceThreshold,
+                kindLabel: isSales ? "Pedidos de venda" : "Despesas",
+                fileName: `resumo_fila_ia_${isSales ? "vendas" : "despesas"}`,
+              })
+                .then(() => toast.success("JSON assinado exportado (SHA-256)."))
+                .catch((err) => {
+                  console.error("[queue-summary-json] falha", err);
+                  toast.error("Não foi possível gerar o JSON do resumo.");
+                });
+            }}
+            title="Exporta o mesmo conteúdo do PDF como JSON versionado e com hash SHA-256 do payload"
+          >
+            <FileDown className="w-4 h-4" />
+            Exportar JSON
           </Button>
           {(() => {
             const mapEntries = () => queueHistory.map((e) => ({
