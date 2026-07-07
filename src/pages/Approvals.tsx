@@ -28,6 +28,7 @@ import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2 } from "lucide-react";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
