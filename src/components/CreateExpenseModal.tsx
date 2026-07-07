@@ -3166,6 +3166,33 @@ export function CreateExpenseModal({
               </Button>
             );
           })()}
+          {failedGroupsRef.current.size > 0 && (
+            <Button
+              variant="ghost"
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                const n = failedGroupsRef.current.size;
+                // Remove somente o contexto de erro: o cache dos grupos com
+                // falha (failedGroupsRef) e as entradas "failed" do resumo.
+                // NÃO mexe em deferredGroups, cancelledGroups nem no cache
+                // de respostas da IA (há botão dedicado "Limpar cache IA").
+                failedGroupsRef.current = new Map();
+                setQueueHistory((prev) => prev.filter((e) => e.status !== "failed"));
+                // Força regravação do snapshot persistido sem esperar debounce
+                // do próximo setState — evita ressurgir após F5.
+                schedulePersist();
+                toast.success(
+                  n > 0
+                    ? `Contexto de ${n} erro(s) limpo — resumo atualizado.`
+                    : "Nenhum erro em cache.",
+                );
+              }}
+              title="Remove os grupos com erro (failedGroupsRef) e as linhas ❌ do resumo, sem fechar o modal"
+            >
+              <Trash2 className="w-4 h-4" />
+              Limpar contexto de erros ({failedGroupsRef.current.size})
+            </Button>
+          )}
           {cancelledGroupsRef.current.length > 0 && (
             <Button variant="outline" className="gap-1.5" onClick={resumeCancelledQueue}>
               ▶ Retomar fila ({cancelledGroupsRef.current.length})
