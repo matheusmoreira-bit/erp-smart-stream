@@ -1869,7 +1869,7 @@ export function CreateExpenseModal({
       // no cache para o botão "Reenviar apenas erros" no resumo).
       const currentEntry = queueHistory.find((e) => e.status === "pending");
       if (currentEntry) {
-        updateQueueEntry(currentEntry.supplierKey, { status: "failed", errorMessage: msg });
+        updateQueueEntry(currentEntry.supplierKey, { status: "failed", errorMessage: msg, completedAt: Date.now() });
         if (currentGroupRef.current && currentGroupRef.current.supplierKey === currentEntry.supplierKey) {
           failedGroupsRef.current.set(currentEntry.supplierKey, currentGroupRef.current);
           schedulePersist();
