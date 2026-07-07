@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Clock,
@@ -99,12 +99,14 @@ function ApprovalCard({
   approverCCs,
   formatCostCenter,
   onRelationsMap,
+  onBehalfOf,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
   approverCCs: Set<string>;
   formatCostCenter: (code?: string | null) => string;
   onRelationsMap?: () => void;
+  onBehalfOf?: { name: string; email: string } | null;
 }) {
   const overdue = isOverdue(doc.dueDate);
   const { show: showRateio, info } = shouldShowRateio(doc);
@@ -195,6 +197,17 @@ function ApprovalCard({
           <User className="w-3.5 h-3.5 text-primary/70" />
           <span>Aprovador: <span className="text-foreground font-medium">{doc.currentApprover}</span></span>
         </div>
+        {onBehalfOf && (
+          <div
+            className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1"
+            title={`Você está aprovando como substituto de ${onBehalfOf.name}`}
+          >
+            <UserCog className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">
+              Aprovando em nome de <span className="font-semibold">{onBehalfOf.name}</span>
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-muted-foreground">
           <FileText className="w-3.5 h-3.5 text-primary/70" />
           <span>Solicitante: <span className="text-foreground font-medium">{doc.requester}</span></span>
@@ -377,6 +390,7 @@ function ApprovalDetailModal({
   rules,
   isAdmin,
   canApprove,
+  onBehalfOf,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -394,6 +408,7 @@ function ApprovalDetailModal({
   rules: ApprovalRule[];
   isAdmin: boolean;
   canApprove: boolean;
+  onBehalfOf?: { name: string; email: string } | null;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject"; idempotencyKey: string } | null>(null);
@@ -535,6 +550,21 @@ function ApprovalDetailModal({
               <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
             </DialogTitle>
           </DialogHeader>
+
+          {onBehalfOf && (
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              <UserCog className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>
+                Você está aprovando em nome de{" "}
+                <strong className="font-semibold">{onBehalfOf.name}</strong>
+                {onBehalfOf.email && (
+                  <span className="text-amber-600/80 dark:text-amber-400/80"> · {onBehalfOf.email}</span>
+                )}
+                . A ação será registrada como sua, na condição de substituto ativo.
+              </span>
+            </div>
+          )}
+
 
           <div className="flex flex-wrap justify-end gap-2 -mt-2">
             <Button
@@ -1628,6 +1658,38 @@ export default function ApprovalsPage() {
     const a = approver.toLowerCase().trim();
     return officialIdentifiers.some((id) => id === a || a.includes(id) || id.includes(a));
   };
+  // Retorna o aprovador oficial substituído por este documento — ou null se o
+  // usuário é o aprovador/solicitante direto (não está atuando como substituto).
+  const getSubstitutedOfficial = useCallback((d: ApprovalDoc): { name: string; email: string } | null => {
+    if (activeOfficials.length === 0) return null;
+    // Match direto (não é substituição)
+    const directCode = (code?: string) => !!code && code.toLowerCase().trim() === sessionUser;
+    if (
+      directCode(d.approverCode) ||
+      directCode(d.requesterCode) ||
+      approverMatches(d.currentApprover, session.userName) ||
+      approverMatches(d.requester, session.userName)
+    ) return null;
+    const approver = (d.currentApprover || "").toLowerCase().trim();
+    const email = (d.approverEmail || "").toLowerCase().trim();
+    for (const o of activeOfficials) {
+      const e = (o.official_email || "").toLowerCase();
+      const prefix = e.split("@")[0];
+      const name = (o.official_name || "").toLowerCase();
+      if (email && (email === e || (prefix && email.startsWith(prefix + "@")))) {
+        return { name: o.official_name || o.official_email, email: o.official_email };
+      }
+      if (approver) {
+        if (prefix && (approver === prefix || approver.includes(prefix) || prefix.includes(approver))) {
+          return { name: o.official_name || o.official_email, email: o.official_email };
+        }
+        if (name && (approver === name || approver.includes(name) || name.includes(approver))) {
+          return { name: o.official_name || o.official_email, email: o.official_email };
+        }
+      }
+    }
+    return null;
+  }, [activeOfficials, sessionUser, session.userName]);
   const userApprovals = effectiveShowAll
     ? allApprovals
     : allApprovals.filter(
@@ -2249,9 +2311,26 @@ export default function ApprovalsPage() {
 
 
 
+        {activeOfficials.length > 0 && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+            <UserCog className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">Modo substituto ativo</p>
+              <p className="text-xs mt-0.5 text-amber-700/80 dark:text-amber-300/80">
+                Você pode aprovar em nome de{" "}
+                <span className="font-semibold">
+                  {activeOfficials.map((o) => o.official_name || o.official_email).join(", ")}
+                </span>
+                . Os documentos correspondentes aparecem marcados na lista.
+              </p>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="glass-card p-4 border-destructive/30 bg-destructive/10 text-sm text-destructive">{error}</div>
         )}
+
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -2275,6 +2354,7 @@ export default function ApprovalsPage() {
                   onOpen={() => setSelectedDoc(doc)}
                   approverCCs={getCostCentersForEmail(doc.approverEmail)}
                   formatCostCenter={formatCostCenter}
+                  onBehalfOf={getSubstitutedOfficial(doc)}
                   onRelationsMap={(() => {
                     const internalId = (doc as any).__internalId as string | undefined;
                     if (!internalId) return undefined;
@@ -2306,6 +2386,7 @@ export default function ApprovalsPage() {
                   const overdue = isOverdue(doc.dueDate);
                   const internalId = (doc as any).__internalId as string | undefined;
                   const linkedExpense = internalId ? expenses.find((e) => e.id === internalId) : undefined;
+                  const onBehalfOf = getSubstitutedOfficial(doc);
                   return (
                     <motion.tr
                       key={doc.approvalRequestId}
@@ -2321,7 +2402,20 @@ export default function ApprovalsPage() {
                       <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">#{doc.docNum}</td>
                       <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
                       <td className="py-3 px-3 text-foreground">{doc.cardName}</td>
-                      <td className="py-3 px-3 text-foreground font-medium">{doc.currentApprover}</td>
+                      <td className="py-3 px-3 text-foreground font-medium">
+                        <div className="flex flex-col gap-1">
+                          <span>{doc.currentApprover}</span>
+                          {onBehalfOf && (
+                            <span
+                              className="inline-flex items-center gap-1 self-start text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5"
+                              title={`Você está aprovando como substituto de ${onBehalfOf.name}`}
+                            >
+                              <UserCog className="w-3 h-3" aria-hidden="true" />
+                              em nome de {onBehalfOf.name}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3 px-3 text-muted-foreground">{doc.requester}</td>
                       <td className={`py-3 px-3 font-mono text-xs ${overdue ? "text-destructive font-semibold" : "text-muted-foreground"}`}>
                         {formatDate(doc.dueDate)}
@@ -2393,6 +2487,7 @@ export default function ApprovalsPage() {
         formatCostCenter={formatCostCenter}
         rules={rules}
         isAdmin={isAdmin}
+        onBehalfOf={selectedDoc ? getSubstitutedOfficial(selectedDoc) : null}
         canApprove={(() => {
           if (!selectedDoc) return false;
           // Bloqueia auto-aprovação: quem criou/solicitou o documento
