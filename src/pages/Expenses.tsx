@@ -1196,7 +1196,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <>
             {/* Card grid (mobile / tablet / laptop) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 xl:hidden">
-              {filtered.map(({ exp, origin }) => (
+              {visibleItems.map(({ exp, origin }) => (
                 <ExpenseCard
                   key={exp.id}
                   expense={exp}
