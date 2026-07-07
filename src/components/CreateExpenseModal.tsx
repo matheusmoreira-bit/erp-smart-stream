@@ -2479,35 +2479,7 @@ export function CreateExpenseModal({
               <Button
                 variant="outline"
                 className="gap-1.5"
-                onClick={() => {
-                  // Retenta somente os grupos com falha, reaproveitando os
-                  // DocGroups em cache (File + extracted) — sem chamar a IA
-                  // de novo e sem tocar nas despesas já criadas com sucesso.
-                  const groups = failedKeys
-                    .map((k) => failedGroupsRef.current.get(k))
-                    .filter((g): g is DocGroup => !!g);
-                  if (groups.length === 0) return;
-                  const [first, ...rest] = groups;
-                  // Reajusta o histórico: pendente/enfileirado para os que
-                  // vão retentar; mantém 'success' e limpa errorMessage.
-                  setQueueHistory((prev) => prev.map((e) => {
-                    if (e.supplierKey === first.supplierKey) {
-                      return { ...e, status: "pending", errorMessage: undefined };
-                    }
-                    if (rest.some((g) => g.supplierKey === e.supplierKey)) {
-                      return { ...e, status: "queued", errorMessage: undefined };
-                    }
-                    return e;
-                  }));
-                  setDeferredGroups(rest);
-                  resetFormForNextDeferred(first);
-                  setShowQueueSummary(false);
-                  setJustCancelled(false);
-                  toast.info(
-                    `Retentando ${groups.length} despesa(s) com erro. Comece por ${first.supplierLabel}.`,
-                    { duration: 6000 },
-                  );
-                }}
+                onClick={() => setConfirmRetryFailed(true)}
               >
                 <Sparkles className="w-4 h-4" />
                 Reenviar apenas erros ({failedKeys.length})
