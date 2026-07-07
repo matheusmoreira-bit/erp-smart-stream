@@ -667,7 +667,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [sapHasMore, setSapHasMore] = useState(false);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
   const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
-  const SAP_PAGE_SIZE = 100;
+  const SAP_PAGE_STEP = 100;
 
   const fetchSapPage = useCallback(
     async (skip: number): Promise<Expense[]> => {
@@ -678,7 +678,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         {
           $select: "DocEntry,DocNum,CardCode,CardName,DocTotal,DocCurrency,DocDate,CreationDate,DocumentStatus,Comments",
           $orderby: "DocDate desc",
-          $top: String(SAP_PAGE_SIZE),
+          $top: String(SAP_PAGE_STEP),
           $skip: String(skip),
         },
         false,
@@ -715,7 +715,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         const mapped = await fetchSapPage(0);
         if (cancelled) return;
         setSapOrders(mapped);
-        setSapHasMore(mapped.length === SAP_PAGE_SIZE);
+        setSapHasMore(mapped.length === SAP_PAGE_STEP);
       } catch (e) {
         if (!cancelled) {
           toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
@@ -739,7 +739,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         const dedup = next.filter((n) => !seen.has(n.sap_doc_entry));
         return [...prev, ...dedup];
       });
-      setSapHasMore(next.length === SAP_PAGE_SIZE);
+      setSapHasMore(next.length === SAP_PAGE_STEP);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao carregar mais pedidos do ERP");
     } finally {
@@ -845,11 +845,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
 
   // ─── Lazy load: 30 iniciais + 10 por scroll ───────────────────
-  const INITIAL_PAGE_SIZE = 30;
+  const INITIAL_PAGE_STEP = 30;
   const PAGE_STEP = 10;
-  const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_SIZE);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_STEP);
   useEffect(() => {
-    setVisibleCount(INITIAL_PAGE_SIZE);
+    setVisibleCount(INITIAL_PAGE_STEP);
   }, [search, statusFilter, sourceMode, showAll, mode]);
   const visibleItems = filtered.slice(0, visibleCount);
   const hasMoreLocal = visibleCount < filtered.length;
@@ -861,7 +861,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length));
+          setVisibleCount((c) => Math.min(c + PAGE_STEP, filtered.length));
         }
       },
       { rootMargin: "400px 0px" },
@@ -1287,12 +1287,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length))}
+                  onClick={() => setVisibleCount((c) => Math.min(c + PAGE_STEP, filtered.length))}
                 >
                   Mostrar mais
                 </Button>
               </div>
-            ) : filtered.length > PAGE_SIZE ? (
+            ) : filtered.length > PAGE_STEP ? (
               <div className="text-center py-4 text-xs text-muted-foreground">
                 {filtered.length} registro(s) exibidos
               </div>
