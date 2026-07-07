@@ -673,6 +673,7 @@ Deno.serve(async (req) => {
     substitution_id: substitution?.id ?? null,
     substituted_for_email: substitution?.official_email ?? null,
     substituted_for_name: substitution?.official_name ?? null,
+    action_role: actionRole,
   } as any);
   await writeAuditLog("approved", currentLevel);
 
