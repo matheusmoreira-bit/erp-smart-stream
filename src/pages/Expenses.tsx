@@ -1461,37 +1461,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </button>
               ))}
             </div>
-            {showSourceToggle && (
-              <div
-                role="group"
-                aria-label="Origem dos pedidos"
-                className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs w-full sm:w-auto"
-              >
-                <button
-                  type="button"
-                  onClick={() => preserveScroll(() => setSourceMode("flow"))}
-                  aria-pressed={sourceMode === "flow"}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
-                    sourceMode === "flow"
-                      ? "bg-primary/15 text-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Apenas ERP Flow
-                </button>
-                <button
-                  type="button"
-                  onClick={() => preserveScroll(() => setSourceMode("both"))}
-                  aria-pressed={sourceMode === "both"}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
-                    sourceMode === "both"
-                      ? "bg-primary/15 text-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Ambos (ERP Flow + ERP)
-                  {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />}
-                </button>
+            {/* Toggle de origem removido: sempre carregamos ERP Flow + ERP. */}
+            {showSourceToggle && isLoadingSap && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                Carregando pedidos do ERP…
               </div>
             )}
             {isAdmin && (
@@ -1503,7 +1477,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <Switch id="show-all-expenses" checked={showAll} onCheckedChange={(v) => preserveScroll(() => setShowAll(v))} />
               </div>
             )}
-            {(search || statusFilter !== "all" || sourceMode !== "flow" || showAll !== isAdmin) && (
+            {(search || statusFilter !== "all" || showAll !== isAdmin) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1511,7 +1485,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 onClick={() => {
                   setSearch("");
                   setStatusFilter("all");
-                  setSourceMode("flow");
                   setShowAll(isAdmin);
                 }}
               >
