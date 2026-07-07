@@ -543,7 +543,7 @@ function ApprovalDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
@@ -623,7 +623,8 @@ function ApprovalDetailModal({
           </div>
 
 
-          <div className="space-y-4 mt-2">
+          <div className="space-y-4 mt-2 min-w-0 [&_p]:break-words">
+
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
@@ -669,7 +670,8 @@ function ApprovalDetailModal({
             {doc.remarks && (
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Observações</p>
-                <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{doc.remarks}</p>
+                <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3 whitespace-pre-wrap break-words">{doc.remarks}</p>
+
               </div>
             )}
 
@@ -839,8 +841,9 @@ function ApprovalDetailModal({
                     )}
                   </p>
                 </div>
-                <div className="border border-border rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
+                <div className="border border-border rounded-lg overflow-x-auto">
+                  <table className="w-full text-xs min-w-[560px]">
+
                     <thead>
                       <tr className="bg-muted/30 border-b border-border">
                         <th className="text-left py-2 px-3 text-muted-foreground">Código</th>
