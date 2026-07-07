@@ -474,6 +474,11 @@ function ExpenseDetailModal({
                     variant="outline"
                     onClick={() => onEdit(expense)}
                     className="gap-1.5"
+                    title={
+                      expense.status === "rascunho"
+                        ? "Editar rascunho"
+                        : "Ao salvar edições, o documento volta ao fluxo de aprovação (nível 1)."
+                    }
                   >
                     <Pencil className="w-4 h-4" />
                     Editar
