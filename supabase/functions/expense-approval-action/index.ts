@@ -476,23 +476,22 @@ Deno.serve(async (req) => {
   }
 
   if (!isOverride && !isMatch && !substitution) {
-    console.warn("[expense-approval-action] denied", {
-      expenseId,
-      caller: callerIdentity,
-      designatedName,
-      designatedEmail,
-      currentLevel,
+    stageLog("authorize", "warn", {
+      requestId, expenseId, caller: callerIdentity, designatedName, designatedEmail, currentLevel,
+      reason: "not_designated_approver",
     });
     return await respond(403, {
-      error: "Você não é o aprovador atribuído deste documento.",
+      error: `Você não é o aprovador atribuído deste documento (aprovador atual: ${designatedName || "não definido"}).`,
+      stage: "authorize",
       designatedApprover: designatedName,
     });
   }
+  stageLog("authorize", "info", {
+    requestId, expenseId, caller: callerIdentity, isMatch, isOverride,
+    viaSubstitution: !!substitution, substitutionId: substitution?.id ?? null,
+  });
 
   // ── Self-approval guard ───────────────────────────────────────────────
-  // Ninguém — nem admins/super-usuários — pode aprovar um documento que
-  // ele próprio criou. Rejeição continua permitida (útil para cancelar o
-  // próprio pedido). Só bloqueia a ação "approve".
   if (action === "approve") {
     const requesterEmail = normalize((exp as any).requester_email || "");
     const requesterName = normalize((exp as any).requester_name || "");
@@ -507,17 +506,16 @@ Deno.serve(async (req) => {
         (requesterName === callerNorm ||
           emailPrefix(requesterName) === emailPrefix(callerNorm)));
     if (isSelfApproval) {
-      console.warn("[expense-approval-action] self-approval blocked", {
-        expenseId,
-        caller: callerIdentity,
-        requesterEmail,
-        requesterName,
+      stageLog("self_approval_guard", "warn", {
+        requestId, expenseId, caller: callerIdentity, requesterEmail, requesterName,
       });
       return await respond(403, {
         error: "Você não pode aprovar um documento que você mesmo criou.",
+        stage: "self_approval_guard",
       });
     }
   }
+
 
   const actor = callerIdentity || callerEmail || "cloud-admin";
   const actorEmail = callerEmail || (actor.includes("@") ? actor : null);
