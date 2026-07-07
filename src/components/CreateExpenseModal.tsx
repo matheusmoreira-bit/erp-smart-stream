@@ -423,6 +423,9 @@ export function CreateExpenseModal({
       setShowQueueSummary(false);
       setJustCancelled(false);
       aiResponseCacheRef.current = new Map();
+      claimedHashesRef.current = new Set();
+      aiInFlightRef.current = false;
+      submitInFlightRef.current = false;
     }
   }, [open]);
 
