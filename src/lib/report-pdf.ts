@@ -312,18 +312,32 @@ export async function exportDetailReportPdf(opts: DetailReportOptions): Promise<
     cursorY = (doc as any).lastAutoTable.finalY + 6;
   }
 
-  // Histórico
+  // Histórico — quando houver muitos eventos, vira uma seção dedicada em nova
+  // página com título repetido, contagem e numeração de linhas, para facilitar
+  // auditoria. Menos eventos (<= LONG_HISTORY_THRESHOLD) mantêm o comportamento
+  // compacto no final da página.
   if (opts.events && opts.events.length > 0) {
-    if (cursorY > 240) { doc.addPage(); cursorY = 15; }
+    const LONG_HISTORY_THRESHOLD = 12;
+    const isLongHistory = opts.events.length > LONG_HISTORY_THRESHOLD;
+    if (isLongHistory || cursorY > 220) {
+      doc.addPage();
+      cursorY = 15;
+    }
+    const historyTitle = isLongHistory
+      ? `HISTÓRICO COMPLETO (${opts.events.length} eventos)`
+      : `HISTÓRICO (${opts.events.length})`;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(15, 23, 42);
-    doc.text("HISTÓRICO", 10, cursorY);
-    cursorY += 2;
+    doc.text(historyTitle, 10, cursorY);
+    doc.setDrawColor(203, 213, 225);
+    doc.line(10, cursorY + 1, pageW - 10, cursorY + 1);
+    cursorY += 3;
     autoTable(doc, {
       startY: cursorY,
-      head: [["Data / Hora", "Evento", "Responsável", "Detalhe"]],
-      body: opts.events.map((e) => [
+      head: [["#", "Data / Hora", "Evento", "Responsável", "Detalhe"]],
+      body: opts.events.map((e, idx) => [
+        String(idx + 1),
         formatDateTime(e.when),
         e.label,
         e.actor || "—",
@@ -332,8 +346,26 @@ export async function exportDetailReportPdf(opts: DetailReportOptions): Promise<
       styles: { fontSize: 8, cellPadding: 1.5, overflow: "linebreak" },
       headStyles: { fillColor: [30, 41, 59], textColor: 255 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 0: { cellWidth: 30 } },
-      margin: { left: 8, right: 8 },
+      columnStyles: {
+        0: { cellWidth: 10, halign: "right" },
+        1: { cellWidth: 30 },
+      },
+      margin: { left: 8, right: 8, top: 20 },
+      showHead: "everyPage",
+      // Em cada quebra de página, repete o título da seção para o leitor não
+      // perder o contexto ao folhear páginas longas de histórico.
+      didDrawPage: (data) => {
+        if (!isLongHistory) return;
+        // Só desenha o cabeçalho nas páginas após a primeira do bloco.
+        if (data.pageNumber === 1) return;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${historyTitle} — continuação`, 10, 12);
+        doc.setDrawColor(203, 213, 225);
+        doc.line(10, 13, pageW - 10, 13);
+        doc.setTextColor(0, 0, 0);
+      },
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     cursorY = (doc as any).lastAutoTable.finalY + 6;
