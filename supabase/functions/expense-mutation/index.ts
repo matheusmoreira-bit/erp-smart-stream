@@ -273,6 +273,11 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   const status = current.status as string;
   const hasSapError = !!current.sap_integration_error;
   const alreadyInSap = !!(current.sap_doc_entry || current.sap_doc_num);
+  if (alreadyInSap) {
+    return json(409, {
+      error: "Documento já integrado ao ERP — edição não permitida.",
+    });
+  }
   const editableForFix = status === "aprovado" && hasSapError && !alreadyInSap;
   if (status !== "rascunho" && status !== "pendente_aprovacao" && !editableForFix) {
     return json(409, {
@@ -292,6 +297,42 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     updates.total_amount = totalAmount;
   }
   if (editableForFix) updates.sap_integration_error = null;
+
+  // Regra de negócio: qualquer edição em documento que já saiu do rascunho
+  // (pendente_aprovacao ou aprovado com erro de SAP) deve retornar ao fluxo
+  // de aprovação a partir do nível 1, recomputando o aprovador designado.
+  const shouldResubmit = status === "pendente_aprovacao" || editableForFix;
+  let resubmittedApprover: string | null = null;
+  let resubmittedLevel = 1;
+  let resubmitFallbackUsed = false;
+  if (shouldResubmit) {
+    let resolvedLevel = 1;
+    let resolvedApprover: string | null = null;
+    let fallbackUsed = false;
+    if (current.approval_rule_id) {
+      const { data: lvls } = await admin
+        .from("approval_rule_levels")
+        .select("level_order, approver_name, approver_email")
+        .eq("rule_id", current.approval_rule_id)
+        .order("level_order", { ascending: true });
+      const picked = pickApproverSkippingRequester(
+        (lvls || []) as any,
+        current.requester_name,
+        current.requester_email,
+        1,
+      );
+      resolvedLevel = picked.level_order;
+      resolvedApprover = picked.approver_name || null;
+      fallbackUsed = picked.fallback_used;
+    }
+    updates.status = "pendente_aprovacao";
+    updates.current_level_order = resolvedLevel;
+    updates.current_approver = resolvedApprover;
+    updates.sap_integration_error = null;
+    resubmittedApprover = resolvedApprover;
+    resubmittedLevel = resolvedLevel;
+    resubmitFallbackUsed = fallbackUsed;
+  }
 
   if (Object.keys(updates).length > 0) {
     const { error: upErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
@@ -319,6 +360,19 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     }
   }
 
+  if (shouldResubmit) {
+    await admin.from("expense_approval_log").insert({
+      expense_id: expenseId,
+      decision: "submitted",
+      approver_name: caller.identity,
+      approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
+      level_order: resubmittedLevel,
+      remarks: resubmitFallbackUsed
+        ? `Reenviado após edição — solicitante coincide com aprovador(es); direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
+        : `Reenviado após edição — fluxo de aprovação reiniciado a partir do nível ${resubmittedLevel}.`,
+    } as any);
+  }
+
   await admin.rpc("insert_audit_log", {
     p_action: "update_expense",
     p_entity_type: "expense",
@@ -330,10 +384,12 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       new_total: updates.total_amount ?? current.total_amount,
       updated_fields: Object.keys(updates),
       items_count: items?.length,
+      resubmitted_to_approval: shouldResubmit,
+      new_approver: resubmittedApprover,
     } as any,
   });
 
-  return json(200, { ok: true });
+  return json(200, { ok: true, resubmitted: shouldResubmit, new_approver: resubmittedApprover });
 }
 
 async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {

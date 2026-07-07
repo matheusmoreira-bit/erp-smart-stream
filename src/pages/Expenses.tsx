@@ -167,8 +167,11 @@ function ExpenseDetailModal({
 
   const showSubmit = expense.status === "rascunho";
   const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
-  const hasSapError = !!expense.sap_integration_error && !expense.sap_doc_entry;
-  const showEdit = canEdit && (
+  const alreadyInSap = !!(expense.sap_doc_entry || expense.sap_doc_num);
+  const hasSapError = !!expense.sap_integration_error && !alreadyInSap;
+  // Edição só permitida enquanto o documento NÃO foi integrado ao ERP.
+  // Após editar, o documento retorna ao fluxo de aprovação (nível 1).
+  const showEdit = canEdit && !alreadyInSap && (
     expense.status === "rascunho" ||
     expense.status === "pendente_aprovacao" ||
     (expense.status === "aprovado" && hasSapError)
@@ -471,6 +474,11 @@ function ExpenseDetailModal({
                     variant="outline"
                     onClick={() => onEdit(expense)}
                     className="gap-1.5"
+                    title={
+                      expense.status === "rascunho"
+                        ? "Editar rascunho"
+                        : "Ao salvar edições, o documento volta ao fluxo de aprovação (nível 1)."
+                    }
                   >
                     <Pencil className="w-4 h-4" />
                     Editar
