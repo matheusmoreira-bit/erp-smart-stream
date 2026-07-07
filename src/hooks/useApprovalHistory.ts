@@ -140,6 +140,10 @@ export function useApprovalHistory(
         // Narrow para linhas com marca de substituto; a filtragem por chave
         // específica acontece após parseSubstitution (nomes podem ter espaços/vírgulas).
         q = q.ilike("remarks", "%SUBSTITUTO%");
+      } else if (mode === "search") {
+        // Partial match dentro do texto de `remarks` (que contém "em nome de <nome> <email>").
+        const esc = escapePgrstList(trimmedSubSearch);
+        q = q.ilike("remarks", `%SUBSTITUTO%${esc}%`);
       }
       const { data: sapRows, error: sapErr } = await q;
       if (sapErr) throw sapErr;
