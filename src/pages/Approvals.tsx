@@ -1596,6 +1596,8 @@ export default function ApprovalsPage() {
   }, [approvals, purchaseExpenses, salesExpenses]);
 
   // Deep-link: read `?doc=<key>` and open the matching approval once loaded.
+  // Se o documento já não é mais pendente (aprovado/rejeitado/pago), redireciona
+  // para a página de Compras/Vendas com o mesmo doc, para o usuário conseguir vê-lo.
   useEffect(() => {
     const id = readDocParam();
     if (!id || selectedDoc) return;
@@ -1604,9 +1606,25 @@ export default function ApprovalsPage() {
       return internalId ? `internal:${internalId}` : `sap:${d.approvalRequestId}`;
     };
     const found = allApprovals.find((d) => keyOf(d) === id);
-    if (found) setSelectedDoc(found);
+    if (found) { setSelectedDoc(found); return; }
+    // Aguarda o carregamento inicial terminar antes de decidir que não existe.
+    if (isLoading) return;
+    if (id.startsWith("internal:")) {
+      const rawId = id.slice("internal:".length);
+      const purchaseHit = purchaseExpenses.find((e) => e.id === rawId);
+      const salesHit = salesExpenses.find((e) => e.id === rawId);
+      const hit = purchaseHit || salesHit;
+      if (hit) {
+        toast.info("Este documento não está mais pendente.", {
+          description: `Abrindo em ${salesHit ? "Vendas" : "Compras"}…`,
+        });
+        setDocParam(null);
+        navigate(`${salesHit ? "/vendas" : "/compras"}?doc=${encodeURIComponent(rawId)}`);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approvals, purchaseExpenses, salesExpenses]);
+  }, [approvals, purchaseExpenses, salesExpenses, isLoading]);
+
 
   // Keep `?doc=<key>` in sync with the selected approval so it can be shared.
   useEffect(() => {
