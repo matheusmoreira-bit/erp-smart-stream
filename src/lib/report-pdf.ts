@@ -959,7 +959,20 @@ function auditStatusReason(e: QueueSummaryEntry): string {
   }
 }
 
-
+/**
+ * Legenda oficial de "Motivo do status". Fonte única usada tanto pela
+ * legenda no rodapé do PDF quanto pelas linhas `#` de metadados do CSV,
+ * garantindo que auditor veja exatamente as mesmas descrições.
+ */
+const STATUS_REASON_LEGEND: Array<{ status: string; label: string; description: string }> = [
+  { status: "success",   label: "Concluído com sucesso", description: "Documento processado pela IA, revisado e submetido sem erro." },
+  { status: "failed",    label: "Falha (com mensagem)",  description: "Ocorreu erro durante classificação, submissão ou integração; a coluna mostra a mensagem original retornada pelo sistema." },
+  { status: "failed",    label: "Falha não detalhada",   description: "Falhou sem mensagem específica — verificar logs de auditoria (audit_events) usando o ID do evento." },
+  { status: "cancelled", label: "Cancelado pelo usuário", description: "Usuário interrompeu manualmente o processamento antes da conclusão." },
+  { status: "pending",   label: "Em processamento",      description: "Item ainda estava sendo tratado pela IA ou aguardando ação do usuário no momento da exportação." },
+  { status: "queued",    label: "Aguardando na fila",    description: "Item ainda não iniciou processamento (posição na fila da IA)." },
+  { status: "*",         label: "Motivo customizado",    description: "Quando o evento traz statusReason próprio (ex.: reprocessado, override manual), esse texto prevalece sobre a descrição padrão." },
+];
 
 /**
  * Desenha uma seção "Evidências" com uma linha por fornecedor, contendo o ID
