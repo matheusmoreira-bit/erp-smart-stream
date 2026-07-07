@@ -220,6 +220,11 @@ export function CreateExpenseModal({
   // Marca que o usuário acabou de cancelar o processamento/fila. Habilita o
   // botão "Tentar novamente" enquanto os anexos permanecerem no modal.
   const [justCancelled, setJustCancelled] = useState(false);
+  // Rastreia o DocGroup em edição no formulário (o "pendente") para que, se
+  // a submissão falhar, saibamos qual grupo re-enfileirar em "Reenviar apenas
+  // erros". Cache separado guarda os DocGroup completos dos que falharam.
+  const currentGroupRef = useRef<DocGroup | null>(null);
+  const failedGroupsRef = useRef<Map<string, DocGroup>>(new Map());
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
