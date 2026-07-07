@@ -21,7 +21,7 @@ export interface MissingAttachmentItem {
 }
 
 export interface MissingAttachmentPayload {
-  docType: "expenses" | "sales";
+  docType: "expenses" | "sales" | "purchase";
   supplierName: string;
   supplierCode?: string;
   currency?: string;
