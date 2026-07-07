@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ShieldAlert } from "lucide-react";
 import {
   Dialog,
@@ -724,6 +725,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // Filtros persistidos por modo (purchase/sales) para manter seleção ao trocar de tela.
   const filterKey = (name: string) => `expenses:${mode}:${name}`;
   const [search, setSearch] = usePersistedState<string>(filterKey("search"), "");
+  const [isSearchPending, setIsSearchPending] = useState(false);
+  useEffect(() => {
+    if (!search) { setIsSearchPending(false); return; }
+    setIsSearchPending(true);
+    const t = setTimeout(() => setIsSearchPending(false), 250);
+    return () => clearTimeout(t);
+  }, [search]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<"erp_flow" | "erp" | undefined>(undefined);
@@ -754,6 +762,18 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
   const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), isAdmin);
   useEffect(() => { if (!isAdmin) setShowAll(false); }, [isAdmin, setShowAll]);
+
+  // Preserva a posição de rolagem ao aplicar mudanças de filtro/paginação que
+  // reordenam a lista mas não devem "puxar" o usuário de volta ao topo.
+  const preserveScroll = useCallback((cb: () => void) => {
+    const y = typeof window !== "undefined" ? window.scrollY : 0;
+    cb();
+    if (typeof window === "undefined") return;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: y });
+      requestAnimationFrame(() => window.scrollTo({ top: y }));
+    });
+  }, []);
 
   // Origem dos pedidos: padrão "Apenas ERP Flow"; "Ambos" também busca direto do ERP (SAP).
   const [sourceMode, setSourceMode] = usePersistedState<"flow" | "both">(filterKey("source"), "flow");
@@ -827,6 +847,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const loadMoreSap = useCallback(async () => {
     if (isLoadingMoreSap || !sapHasMore) return;
+    const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
     setIsLoadingMoreSap(true);
     try {
       const next = await fetchSapPage(sapOrders.length);
@@ -840,6 +861,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       toast.error(e instanceof Error ? e.message : "Falha ao carregar mais pedidos do ERP");
     } finally {
       setIsLoadingMoreSap(false);
+      if (typeof window !== "undefined") {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY });
+          requestAnimationFrame(() => window.scrollTo({ top: scrollY }));
+        });
+      }
     }
   }, [fetchSapPage, isLoadingMoreSap, sapHasMore, sapOrders.length]);
 
@@ -987,9 +1014,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [pageSize, setPageSize] = usePersistedState<number>(filterKey("pageSize"), 30);
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  // Reset apenas para mudanças que alteram fortemente a listagem (busca, ordenação, tamanho de página, modo compra/venda).
+  // Toggles de status / fonte ERP / "ver todos" preservam a página atual (e a rolagem — ver preserveScroll abaixo).
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, sourceMode, showAll, mode, sortKey, sortDir, pageSize]);
+  }, [search, mode, sortKey, sortDir, pageSize]);
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
@@ -1284,8 +1313,18 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label={searchPlaceholder}
-                className="pl-9 bg-muted/30 border-border"
+                aria-busy={isSearchPending}
+                className="pl-9 pr-9 bg-muted/30 border-border"
               />
+              {isSearchPending && (
+                <Loader2
+                  className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="sr-only" role="status" aria-live="polite">
+                {isSearchPending ? "Buscando…" : ""}
+              </span>
             </div>
             {(() => {
               const activeFilters =
@@ -1338,7 +1377,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setStatusFilter(opt.value)}
+                  onClick={() => preserveScroll(() => setStatusFilter(opt.value))}
                   aria-pressed={statusFilter === opt.value}
                   aria-label={`Status: ${opt.label}`}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
@@ -1359,7 +1398,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               >
                 <button
                   type="button"
-                  onClick={() => setSourceMode("flow")}
+                  onClick={() => preserveScroll(() => setSourceMode("flow"))}
                   aria-pressed={sourceMode === "flow"}
                   className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     sourceMode === "flow"
@@ -1371,7 +1410,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSourceMode("both")}
+                  onClick={() => preserveScroll(() => setSourceMode("both"))}
                   aria-pressed={sourceMode === "both"}
                   className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     sourceMode === "both"
@@ -1390,7 +1429,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <Label htmlFor="show-all-expenses" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
                   Ver todos os lançamentos
                 </Label>
-                <Switch id="show-all-expenses" checked={showAll} onCheckedChange={setShowAll} />
+                <Switch id="show-all-expenses" checked={showAll} onCheckedChange={(v) => preserveScroll(() => setShowAll(v))} />
               </div>
             )}
             {(search || statusFilter !== "all" || sourceMode !== "flow" || showAll !== isAdmin) && (
@@ -1415,8 +1454,41 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
         {/* Content */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div aria-busy="true" aria-live="polite">
+            <span className="sr-only">Carregando lançamentos…</span>
+            {/* Skeleton cards (mobile / tablet / laptop) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="glass-card p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <div className="flex items-center justify-between pt-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-5 w-24" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Skeleton table (widescreen) */}
+            <div className="hidden xl:block glass-card overflow-hidden">
+              <div className="p-3 space-y-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="grid grid-cols-8 gap-3 items-center py-2 border-b border-border/40 last:border-0">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-4 w-full col-span-2" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-20 ml-auto" />
+                    <Skeleton className="h-6 w-16 ml-auto" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : error ? (
           <div className="text-center py-20">
@@ -1574,15 +1646,46 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </div>
               </div>
             )}
-            {showSourceToggle && sourceMode === "both" && sapHasMore && (
-              <div className="flex justify-center mt-6">
-                <Button variant="outline" onClick={loadMoreSap} disabled={isLoadingMoreSap} className="gap-2">
-                  {isLoadingMoreSap ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</>
-                  ) : (
-                    <>Mostrar mais</>
-                  )}
-                </Button>
+            {showSourceToggle && sourceMode === "both" && (sapHasMore || isLoadingMoreSap) && (
+              <div className="mt-6 space-y-4">
+                {isLoadingMoreSap && (
+                  <div
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden"
+                    aria-busy="true"
+                    aria-live="polite"
+                  >
+                    <span className="sr-only">Carregando mais pedidos do ERP…</span>
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="glass-card p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <Skeleton className="h-5 w-20" />
+                          <Skeleton className="h-4 w-16" />
+                        </div>
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                        <div className="flex items-center justify-between pt-2">
+                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-5 w-24" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-center">
+                  <Button
+                    variant="outline"
+                    onClick={loadMoreSap}
+                    disabled={isLoadingMoreSap || !sapHasMore}
+                    aria-busy={isLoadingMoreSap}
+                    className="gap-2"
+                  >
+                    {isLoadingMoreSap ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Carregando mais…</>
+                    ) : (
+                      <>Mostrar mais</>
+                    )}
+                  </Button>
+                </div>
               </div>
             )}
           </>
