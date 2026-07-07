@@ -71,6 +71,7 @@ import { EditExpenseModal } from "@/components/EditExpenseModal";
 import { DraftsPopover } from "@/components/DraftsPopover";
 import { useDocumentDrafts } from "@/hooks/useDocumentDrafts";
 import { useCompanies } from "@/hooks/useCompanies";
+import { usePersistedState } from "@/hooks/usePersistedState";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -667,7 +668,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const navigate = useNavigate();
   const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
-  const [search, setSearch] = useState("");
+  // Filtros persistidos por modo (purchase/sales) para manter seleção ao trocar de tela.
+  const filterKey = (name: string) => `expenses:${mode}:${name}`;
+  const [search, setSearch] = usePersistedState<string>(filterKey("search"), "");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<"erp_flow" | "erp" | undefined>(undefined);
@@ -683,7 +686,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isActioning, setIsActioning] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = usePersistedState<string>(filterKey("status"), "all");
 
   const isSales = mode === "sales";
   const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Compras";
@@ -696,11 +699,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const isAdmin = isLovableAdmin || !!session?.isSuperUser;
   const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
-  const [showAll, setShowAll] = useState<boolean>(isAdmin);
-  useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
+  const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), isAdmin);
+  useEffect(() => { if (!isAdmin) setShowAll(false); }, [isAdmin, setShowAll]);
 
   // Origem dos pedidos: padrão "Apenas ERP Flow"; "Ambos" também busca direto do ERP (SAP).
-  const [sourceMode, setSourceMode] = useState<"flow" | "both">("flow");
+  const [sourceMode, setSourceMode] = usePersistedState<"flow" | "both">(filterKey("source"), "flow");
   const [sapOrders, setSapOrders] = useState<Expense[]>([]);
   const [isLoadingSap, setIsLoadingSap] = useState(false);
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
@@ -1142,18 +1145,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 className="pl-9 bg-muted/30 border-border"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="lg:hidden gap-1.5 shrink-0"
-              onClick={() => setFiltersOpen((v) => !v)}
-              aria-expanded={filtersOpen}
-              aria-controls="expenses-filters"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              Filtros
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
-            </Button>
+            {(() => {
+              const activeFilters =
+                (statusFilter !== "all" ? 1 : 0) +
+                (sourceMode !== "flow" ? 1 : 0) +
+                (showAll !== isAdmin ? 1 : 0);
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="lg:hidden gap-1.5 shrink-0"
+                  onClick={() => setFiltersOpen((v) => !v)}
+                  aria-expanded={filtersOpen}
+                  aria-controls="expenses-filters"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  Filtros
+                  {activeFilters > 0 && (
+                    <span className="ml-1 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold flex items-center justify-center">
+                      {activeFilters}
+                    </span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+                </Button>
+              );
+            })()}
           </div>
 
           {/* Filters (collapsed on mobile, inline on desktop) */}
@@ -1209,6 +1225,21 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </Label>
                 <Switch id="show-all-expenses" checked={showAll} onCheckedChange={setShowAll} />
               </div>
+            )}
+            {(search || statusFilter !== "all" || sourceMode !== "flow" || showAll !== isAdmin) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-foreground lg:ml-2"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("all");
+                  setSourceMode("flow");
+                  setShowAll(isAdmin);
+                }}
+              >
+                <XIcon className="w-3.5 h-3.5 mr-1" /> Limpar filtros
+              </Button>
             )}
           </div>
         </div>
