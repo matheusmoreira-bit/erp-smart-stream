@@ -904,16 +904,47 @@ export async function exportQueueSummaryJson(opts: QueueSummaryOptions): Promise
 //
 // Derivam-se a partir dos campos opcionais de `QueueSummaryEntry`. Ficam
 // centralizados aqui para PDF e CSV emitirem exatamente as mesmas colunas.
+//
+// Regra: `classifiedAt` e `completedAt` SEMPRE saem em ISO 8601 (UTC, sufixo
+// "Z"). Quando não houver data válida, a célula fica vazia e o gerador conta
+// as ausências para emitir um aviso agregado no cabeçalho do PDF/CSV — isso
+// evita que auditor confunda "vazio" com "erro de exportação".
 
-function auditTimestamp(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "—";
+/**
+ * Converte um timestamp (ms) para ISO 8601 estrito.
+ * Retorna `{ iso: "" , missing: true }` quando o valor é ausente/ inválido,
+ * permitindo ao caller contar ausências e emitir aviso.
+ */
+function toAuditIso(ms: number | null | undefined): { iso: string; missing: boolean } {
+  if (ms === null || ms === undefined) return { iso: "", missing: true };
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return { iso: "", missing: true };
   try {
-    return new Date(ms).toLocaleString("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      dateStyle: "short",
-      timeStyle: "medium",
-    });
-  } catch { return String(ms); }
+    const d = new Date(ms);
+    const iso = d.toISOString(); // sempre "YYYY-MM-DDTHH:mm:ss.sssZ"
+    if (!iso || Number.isNaN(d.getTime())) return { iso: "", missing: true };
+    return { iso, missing: false };
+  } catch {
+    return { iso: "", missing: true };
+  }
+}
+
+/**
+ * Percorre a lista contando quantos `classifiedAt` / `completedAt` estão
+ * ausentes ou inválidos. Usado pelas exportações para gerar o aviso agregado.
+ */
+function countMissingAuditTimestamps(entries: QueueSummaryEntry[]): {
+  missingClassified: number;
+  missingCompleted: number;
+} {
+  let missingClassified = 0;
+  let missingCompleted = 0;
+  for (const e of entries) {
+    if (toAuditIso(e.classifiedAt).missing) missingClassified++;
+    // `completedAt` só é obrigatório para status finais (success/failed/cancelled).
+    const isFinal = e.status === "success" || e.status === "failed" || e.status === "cancelled";
+    if (isFinal && toAuditIso(e.completedAt).missing) missingCompleted++;
+  }
+  return { missingClassified, missingCompleted };
 }
 
 function auditStatusReason(e: QueueSummaryEntry): string {
@@ -958,19 +989,34 @@ function drawEvidenceSection(
   y += 4;
   doc.setTextColor(0, 0, 0);
 
+  const missing = countMissingAuditTimestamps(entries);
+  if (missing.missingClassified > 0 || missing.missingCompleted > 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.setTextColor(180, 83, 9); // âmbar-700
+    doc.text(
+      `Aviso: ${missing.missingClassified} sem "Classificado em" · ${missing.missingCompleted} sem "Concluído em" (status final). Células vazias representam ausência de dado, não erro de exportação.`,
+      10, y,
+      { maxWidth: pageW - 20 },
+    );
+    y += 6;
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+  }
+
   autoTable(doc, {
     startY: y,
     head: [[
       "#", "ID do evento", "Fornecedor",
-      "Classificado em", "Concluído em", "Modelo IA", "Motivo do status",
+      "Classificado em (ISO 8601)", "Concluído em (ISO 8601)", "Modelo IA", "Motivo do status",
       "Anexos", "Nomes dos arquivos",
     ]],
     body: entries.map((e, i) => [
       String(i + 1),
       e.id || "—",
       e.supplierLabel,
-      auditTimestamp(e.classifiedAt),
-      auditTimestamp(e.completedAt),
+      toAuditIso(e.classifiedAt).iso, // vazio quando ausente/ inválido
+      toAuditIso(e.completedAt).iso,
       e.aiModel || "—",
       auditStatusReason(e),
       String(e.fileNames?.length ?? e.fileCount ?? 0),
@@ -982,12 +1028,12 @@ function drawEvidenceSection(
     columnStyles: {
       0: { cellWidth: 7, halign: "right" },
       1: { cellWidth: 26, font: "courier", fontSize: 6 },
-      2: { cellWidth: 32 },
-      3: { cellWidth: 22 },
-      4: { cellWidth: 22 },
-      5: { cellWidth: 20 },
-      6: { cellWidth: 28 },
-      7: { cellWidth: 12, halign: "right" },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 26, font: "courier", fontSize: 6 },
+      4: { cellWidth: 26, font: "courier", fontSize: 6 },
+      5: { cellWidth: 18 },
+      6: { cellWidth: 24 },
+      7: { cellWidth: 10, halign: "right" },
     },
     margin: { left: 8, right: 8 },
     showHead: "everyPage",
@@ -1342,6 +1388,14 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
   const generatedBy = await currentUserEmail();
   const generatedAt = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
+  // Aviso agregado de timestamps ausentes — mesma regra usada no PDF, para
+  // que auditor não confunda célula ISO vazia com falha de exportação.
+  const missingAudit = countMissingAuditTimestamps(entries);
+  const auditWarning =
+    (missingAudit.missingClassified > 0 || missingAudit.missingCompleted > 0)
+      ? [`# Aviso auditoria: ${missingAudit.missingClassified} sem "Classificado em (ISO)" · ${missingAudit.missingCompleted} sem "Concluído em (ISO)" (status final). Célula vazia = ausência de dado, não erro de exportação.`]
+      : [];
+
   const meta: string[] = [
     `# Resumo da fila de IA — ${kind}`,
     `# Gerado em: ${generatedAt}${generatedBy ? ` por ${generatedBy}` : ""}`,
@@ -1352,6 +1406,7 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     ...Array.from(perCurrency.entries()).map(
       ([cur, v]) => `# Total ${cur}: ${formatCurrency(v, cur)}`,
     ),
+    ...auditWarning,
     "",
   ];
 
@@ -1359,12 +1414,10 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     "ID do evento", "Fornecedor", "Status", "Arquivos", "Linhas", "Moeda",
     "Moedas detectadas", "Total estimado", "Confiança IA (%)", "Limite (%)",
     "Baixa confiança?", "Alertas IA", "Erro", "Nomes dos anexos",
-    // Trilha de auditoria — timestamps ISO 8601 (UTC) para facilitar parse
-    // em ferramentas de análise; a versão human-readable fica no PDF.
+    // Trilha de auditoria — timestamps SEMPRE em ISO 8601 UTC (sufixo "Z"),
+    // ou vazio quando ausente/inválido (ver aviso no cabeçalho meta).
     "Classificado em (ISO)", "Concluído em (ISO)", "Modelo IA", "Motivo do status",
   ];
-  const toIso = (ms?: number | null) =>
-    (ms && Number.isFinite(ms) && ms > 0) ? new Date(ms).toISOString() : "";
   const rows = entries.map((e) => [
     e.id || "",
     e.supplierLabel,
@@ -1380,8 +1433,8 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     (e.aiWarnings || []).join(" | "),
     e.errorMessage || "",
     (e.fileNames || []).join(" | "),
-    toIso(e.classifiedAt),
-    toIso(e.completedAt),
+    toAuditIso(e.classifiedAt).iso,
+    toAuditIso(e.completedAt).iso,
     e.aiModel || "",
     auditStatusReason(e),
   ]);
