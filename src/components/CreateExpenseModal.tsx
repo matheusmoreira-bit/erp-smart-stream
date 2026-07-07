@@ -16,7 +16,7 @@ import {
   AlertTriangle,
   ClipboardCopy,
 } from "lucide-react";
-import { exportQueueSummaryPdf, exportQueueSummaryJson, exportQueueSummaryCsv, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv, exportPurchaseFlowReportPdf } from "@/lib/report-pdf";
+import { exportQueueSummaryPdf, exportQueueSummaryJson, exportQueueSummaryCsv, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv, exportPurchaseFlowReportPdf, QUEUE_SUMMARY_JSON_SCHEMA_VERSION } from "@/lib/report-pdf";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
