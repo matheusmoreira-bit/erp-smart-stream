@@ -430,10 +430,10 @@ function ExpenseDetailModal({
             )}
 
             {hasIntegration && (
-              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-                <div className="flex items-center justify-between">
+              <div className="rounded-lg border border-border bg-muted/20 p-3 sm:p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <Link2 className="w-4 h-4 text-primary" />
+                    <Link2 className="w-4 h-4 text-primary" aria-hidden="true" />
                     <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
                       Integração com ERP
                     </span>
@@ -448,9 +448,9 @@ function ExpenseDetailModal({
                     Ver detalhes
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
                   {expense.sap_doc_num != null && (
-                    <div>
+                    <div className="space-y-0.5">
                       <p className="text-muted-foreground">Documento ERP</p>
                       <p className="text-foreground font-mono font-medium">
                         #{expense.sap_doc_num}
@@ -459,19 +459,19 @@ function ExpenseDetailModal({
                     </div>
                   )}
                   {expense.sap_purchase_order_status && (
-                    <div>
+                    <div className="space-y-0.5">
                       <p className="text-muted-foreground">Status PC</p>
                       <p className="text-foreground">{expense.sap_purchase_order_status}</p>
                     </div>
                   )}
                   {expense.sap_attachment_status && (
-                    <div>
+                    <div className="space-y-0.5">
                       <p className="text-muted-foreground">Anexo</p>
                       <p className="text-foreground">{expense.sap_attachment_status}</p>
                     </div>
                   )}
                   {expense.sap_integration_last_attempt_at && (
-                    <div>
+                    <div className="space-y-0.5">
                       <p className="text-muted-foreground">Última tentativa</p>
                       <p className="text-foreground">{formatDate(expense.sap_integration_last_attempt_at)}</p>
                     </div>
@@ -479,7 +479,7 @@ function ExpenseDetailModal({
                 </div>
                 {expense.sap_integration_error && (
                   <div className="flex items-start gap-2 rounded bg-destructive/10 border border-destructive/30 p-2">
-                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-destructive shrink-0" />
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-destructive shrink-0" aria-hidden="true" />
                     <p className="text-xs text-destructive flex-1 break-words">
                       {expense.sap_integration_error}
                     </p>
