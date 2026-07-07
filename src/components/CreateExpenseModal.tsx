@@ -739,6 +739,62 @@ export function CreateExpenseModal({
     }
   };
 
+  // Snapshot de um DocGroup para exibição na fila: contagem de arquivos,
+  // linhas, total estimado, moeda(s), confiança média e avisos coletados
+  // dos documentos extraídos pela IA.
+  const summarizeGroup = (g: DocGroup): Omit<QueueEntry, "status" | "errorMessage"> => {
+    const fileNames = g.docs.map((d) => d.file.name);
+    const lineCount = g.docs.reduce(
+      (acc, d) => acc + (Array.isArray(d.extracted?.items) ? d.extracted.items.length : 0),
+      0,
+    );
+    const estimatedTotal = g.docs.reduce((acc, d) => {
+      const items = Array.isArray(d.extracted?.items) ? d.extracted.items : [];
+      const sumItems = items.reduce((s: number, it: any) => {
+        const lt = Number(it?.line_total);
+        if (Number.isFinite(lt) && lt !== 0) return s + lt;
+        const qty = Number(it?.quantity) || 0;
+        const up = Number(it?.unit_price) || 0;
+        return s + qty * up;
+      }, 0);
+      if (sumItems > 0) return acc + sumItems;
+      return acc + (Number(d.extracted?.total_amount) || 0);
+    }, 0);
+    const currencies = Array.from(
+      new Set(
+        g.docs.map((d) => String(d.extracted?.currency || "").toUpperCase()).filter(Boolean),
+      ),
+    );
+    const confidences = g.docs
+      .map((d) => Number(d.extracted?.confidence))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const aiConfidence = confidences.length > 0
+      ? confidences.reduce((a, b) => a + b, 0) / confidences.length
+      : null;
+    const aiWarnings: string[] = [];
+    for (const d of g.docs) {
+      if (d.extracted?.client_warning) aiWarnings.push(String(d.extracted.client_warning));
+      if (d.extracted?.totals_warning) aiWarnings.push(String(d.extracted.totals_warning));
+    }
+    return {
+      supplierKey: g.supplierKey,
+      supplierLabel: g.supplierLabel,
+      fileCount: g.docs.length,
+      fileNames,
+      lineCount,
+      estimatedTotal,
+      currency: currencies[0] || "BRL",
+      currencies,
+      aiConfidence,
+      aiWarnings,
+    };
+  };
+
+  // Atualiza o status de uma entrada da fila pela chave do fornecedor.
+  const updateQueueEntry = (key: string, patch: Partial<QueueEntry>) => {
+    setQueueHistory((prev) => prev.map((e) => (e.supplierKey === key ? { ...e, ...patch } : e)));
+  };
+
   // Cancela o processamento IA em andamento e/ou limpa a fila de fornecedores
   // adiados (deferredGroups) + picker aberto, deixando o modal em estado
   // consistente para o usuário continuar preenchendo manualmente.
@@ -758,6 +814,15 @@ export function CreateExpenseModal({
     setAiConfidence(null);
     setIsProcessing(false);
     setCancelConfirm(false);
+    // Marca no histórico tudo que estava pendente/enfileirado como cancelado
+    // e abre o resumo final para o usuário conferir o que foi processado.
+    setQueueHistory((prev) => {
+      const next = prev.map((e) =>
+        e.status === "pending" || e.status === "queued" ? { ...e, status: "cancelled" as QueueStatus } : e,
+      );
+      if (next.length > 0) setShowQueueSummary(true);
+      return next;
+    });
     const parts: string[] = [];
     if (wasProcessing) parts.push("classificação IA");
     if (hadPicker) parts.push("seleção de fornecedor");
@@ -785,6 +850,13 @@ export function CreateExpenseModal({
     applyFiscalGroup(chosen.docs.map((d) => d.extracted));
     setDeferredGroups(rest);
     setSupplierPicker(null);
+    // Inicializa o histórico da fila com todos os fornecedores despachados,
+    // marcando o escolhido como "pendente" (em andamento) e os demais como
+    // "enfileirados". Preserva a ordem de execução.
+    setQueueHistory([
+      { ...summarizeGroup(chosen), status: "pending" },
+      ...rest.map((g) => ({ ...summarizeGroup(g), status: "queued" as QueueStatus })),
+    ]);
     toast.success(
       `Criando 1º: ${chosen.supplierLabel}. Ao terminar, abriremos ${rest.length} nova(s) despesa(s) para os demais fornecedores.`,
       { duration: 7000 },
