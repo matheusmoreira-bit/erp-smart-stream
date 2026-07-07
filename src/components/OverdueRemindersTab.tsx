@@ -6,7 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Save, Send, Clock, RefreshCw } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { AlertTriangle, Save, Send, Clock, RefreshCw, FlaskConical, ExternalLink, Copy, CheckCircle2, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -57,12 +60,57 @@ const TEMPLATE_VARS = [
   { key: "link", desc: "Link direto para a aprovação" },
 ];
 
+interface TestSample {
+  source: "real" | "sample";
+  expense_id: string;
+  supplier: string;
+  currency: string;
+  amount: number;
+  due_date: string;
+  requester: string;
+  approver: string;
+  doc_type: string;
+}
+
+const PUBLIC_APP_URL = "https://erp-flow.cactuscorporation.com";
+
+function formatDateBR(iso: string) {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function renderTemplate(tpl: string, sample: TestSample): { text: string; link: string } {
+  const days = Math.max(
+    1,
+    Math.floor((Date.now() - new Date(`${sample.due_date}T00:00:00`).getTime()) / 86400000),
+  );
+  const amount = new Intl.NumberFormat("pt-BR", { style: "currency", currency: sample.currency || "BRL" })
+    .format(sample.amount);
+  const link = `${PUBLIC_APP_URL}/aprovacoes?doc=${encodeURIComponent("internal:" + sample.expense_id)}`;
+  const vars: Record<string, string> = {
+    supplier: sample.supplier,
+    currency: sample.currency,
+    amount,
+    due_date: formatDateBR(sample.due_date),
+    days_overdue: String(days),
+    requester: sample.requester,
+    approver: sample.approver,
+    doc_type: sample.doc_type,
+    link,
+  };
+  const text = tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
+  return { text, link };
+}
+
 export function OverdueRemindersTab() {
   const [settings, setSettings] = useState<OverdueSettings | null>(null);
   const [logs, setLogs] = useState<OverdueLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testResult, setTestResult] = useState<{ sample: TestSample; text: string; link: string } | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -132,6 +180,61 @@ export function OverdueRemindersTab() {
       setTesting(false);
     }
   };
+
+  const runTest = async () => {
+    if (!settings) return;
+    setTestLoading(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: expRows } = await supabase
+        .from("expenses")
+        .select("id, doc_type, supplier_name, requester_name, current_approver, total_amount, currency, due_date")
+        .eq("status", "pendente_aprovacao")
+        .lt("due_date", today)
+        .not("due_date", "is", null)
+        .order("due_date", { ascending: true })
+        .limit(1);
+      const real = (expRows as Array<{
+        id: string; doc_type: string; supplier_name: string; requester_name: string;
+        current_approver: string | null; total_amount: number; currency: string; due_date: string;
+      }> | null)?.[0];
+
+      const yesterday = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+      const sample: TestSample = real
+        ? {
+            source: "real",
+            expense_id: real.id,
+            supplier: real.supplier_name || "—",
+            currency: real.currency || "BRL",
+            amount: Number(real.total_amount || 0),
+            due_date: real.due_date,
+            requester: real.requester_name || "—",
+            approver: real.current_approver || "—",
+            doc_type: real.doc_type || "documento",
+          }
+        : {
+            source: "sample",
+            expense_id: "00000000-0000-0000-0000-000000000000",
+            supplier: "Fornecedor Exemplo LTDA",
+            currency: "BRL",
+            amount: 1234.56,
+            due_date: yesterday,
+            requester: "Santiago Macedo",
+            approver: "Leonardo Rossini",
+            doc_type: "Nota Fiscal",
+          };
+
+      const { text, link } = renderTemplate(settings.template, sample);
+      setTestResult({ sample, text, link });
+      setTestOpen(true);
+    } catch (e) {
+      toast.error("Falha ao gerar teste", { description: (e as Error).message });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const hasLinkVar = settings?.template.includes("{{link}}") ?? false;
 
   if (loading || !settings) {
     return <div className="glass-card p-6 text-center text-muted-foreground">Carregando…</div>;
@@ -283,9 +386,12 @@ export function OverdueRemindersTab() {
           <pre className="mt-1 p-3 bg-muted/40 rounded-md text-xs whitespace-pre-wrap font-sans">{preview}</pre>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={save} disabled={saving} className="gap-2">
             <Save className="w-4 h-4" /> {saving ? "Salvando…" : "Salvar configurações"}
+          </Button>
+          <Button variant="secondary" onClick={runTest} disabled={testLoading} className="gap-2">
+            <FlaskConical className="w-4 h-4" /> {testLoading ? "Gerando…" : "Testar template"}
           </Button>
           <Button variant="outline" onClick={runNow} disabled={testing} className="gap-2">
             <Send className="w-4 h-4" /> {testing ? "Executando…" : "Rodar despacho agora"}
@@ -295,6 +401,77 @@ export function OverdueRemindersTab() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={testOpen} onOpenChange={setTestOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-primary" /> Teste do template
+            </DialogTitle>
+            <DialogDescription>
+              {testResult?.sample.source === "real"
+                ? `Simulação com um documento vencido real (${testResult?.sample.doc_type} · ${testResult?.sample.supplier}).`
+                : "Nenhum documento vencido encontrado — simulação com dados de exemplo."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              {hasLinkVar ? (
+                <span className="inline-flex items-center gap-1 text-emerald-500">
+                  <CheckCircle2 className="w-4 h-4" /> Template contém <code className="font-mono text-xs">{"{{link}}"}</code>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-destructive">
+                  <XCircle className="w-4 h-4" /> Template <strong>não</strong> contém <code className="font-mono text-xs">{"{{link}}"}</code>
+                </span>
+              )}
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground">Mensagem renderizada</Label>
+              <pre className="mt-1 p-3 bg-muted/40 rounded-md text-xs whitespace-pre-wrap font-sans max-h-72 overflow-auto">
+                {testResult?.text}
+              </pre>
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground">Link interno gerado</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <code className="flex-1 p-2 bg-muted/40 rounded-md text-[11px] font-mono break-all">
+                  {testResult?.link}
+                </code>
+              </div>
+              {testResult && !testResult.text.includes(testResult.link) && (
+                <p className="mt-1 text-xs text-amber-600">
+                  ⚠️ O link acima <strong>não</strong> aparece na mensagem — verifique se o template usa <code>{"{{link}}"}</code>.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!testResult) return;
+                navigator.clipboard.writeText(testResult.text);
+                toast.success("Mensagem copiada");
+              }}
+              className="gap-2"
+            >
+              <Copy className="w-4 h-4" /> Copiar mensagem
+            </Button>
+            <Button
+              onClick={() => testResult && window.open(testResult.link, "_blank", "noopener,noreferrer")}
+              disabled={!testResult}
+              className="gap-2"
+            >
+              <ExternalLink className="w-4 h-4" /> Abrir link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="glass-card p-6">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
