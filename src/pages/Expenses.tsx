@@ -1226,6 +1226,21 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <Switch id="show-all-expenses" checked={showAll} onCheckedChange={setShowAll} />
               </div>
             )}
+            {(search || statusFilter !== "all" || sourceMode !== "flow" || showAll !== isAdmin) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-foreground lg:ml-2"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("all");
+                  setSourceMode("flow");
+                  setShowAll(isAdmin);
+                }}
+              >
+                <XIcon className="w-3.5 h-3.5 mr-1" /> Limpar filtros
+              </Button>
+            )}
           </div>
         </div>
 
