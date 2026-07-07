@@ -1433,8 +1433,41 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
         {/* Content */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div aria-busy="true" aria-live="polite">
+            <span className="sr-only">Carregando lançamentos…</span>
+            {/* Skeleton cards (mobile / tablet / laptop) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="glass-card p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <div className="flex items-center justify-between pt-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-5 w-24" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Skeleton table (widescreen) */}
+            <div className="hidden xl:block glass-card overflow-hidden">
+              <div className="p-3 space-y-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="grid grid-cols-8 gap-3 items-center py-2 border-b border-border/40 last:border-0">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-4 w-full col-span-2" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-20 ml-auto" />
+                    <Skeleton className="h-6 w-16 ml-auto" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : error ? (
           <div className="text-center py-20">
