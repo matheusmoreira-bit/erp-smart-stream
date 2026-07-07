@@ -27,6 +27,11 @@ import {
   FileDown,
   SlidersHorizontal,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { supabase } from "@/integrations/supabase/client";
@@ -583,6 +588,41 @@ function ExpenseDetailModal({
   );
 }
 
+/* ─── Sortable Table Header ─── */
+function SortableTh<K extends string>({
+  label,
+  k,
+  sortKey,
+  sortDir,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  k: K;
+  sortKey: K;
+  sortDir: "asc" | "desc";
+  onSort: (k: K) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === k;
+  return (
+    <th className={`px-4 py-2.5 font-medium ${align === "right" ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${active ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        <span>{label}</span>
+        {active ? (
+          sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+        ) : (
+          <ChevronsUpDown className="w-3 h-3 opacity-50" />
+        )}
+      </button>
+    </th>
+  );
+}
+
 /* ─── Expense Card ─── */
 function ExpenseCard({
   expense,
@@ -887,31 +927,62 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
 
-  // ─── Lazy load: 30 iniciais + 10 por scroll ───────────────────
-  const INITIAL_PAGE_STEP = 30;
-  const PAGE_STEP = 10;
-  const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_STEP);
+  // ─── Ordenação por coluna ─────────────────────────────────────
+  type SortKey = "status" | "supplier" | "requester" | "created" | "doc" | "due" | "amount" | "origin";
+  const [sortKey, setSortKey] = usePersistedState<SortKey>(filterKey("sortKey"), "created");
+  const [sortDir, setSortDir] = usePersistedState<"asc" | "desc">(filterKey("sortDir"), "desc");
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "amount" || key === "created" ? "desc" : "asc"); }
+  };
+  const sorted = [...filtered].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const va = (() => {
+      switch (sortKey) {
+        case "status": return STATUS_LABELS[a.exp.status] || a.exp.status;
+        case "supplier": return (a.exp.supplier_name || "").toLowerCase();
+        case "requester": return (a.exp.requester_name || "").toLowerCase();
+        case "created": return new Date(a.exp.created_at).getTime();
+        case "doc": return a.exp.doc_date ? new Date(a.exp.doc_date).getTime() : 0;
+        case "due": return a.exp.due_date ? new Date(a.exp.due_date).getTime() : 0;
+        case "amount": return a.exp.total_amount;
+        case "origin": return a.origin;
+      }
+    })();
+    const vb = (() => {
+      switch (sortKey) {
+        case "status": return STATUS_LABELS[b.exp.status] || b.exp.status;
+        case "supplier": return (b.exp.supplier_name || "").toLowerCase();
+        case "requester": return (b.exp.requester_name || "").toLowerCase();
+        case "created": return new Date(b.exp.created_at).getTime();
+        case "doc": return b.exp.doc_date ? new Date(b.exp.doc_date).getTime() : 0;
+        case "due": return b.exp.due_date ? new Date(b.exp.due_date).getTime() : 0;
+        case "amount": return b.exp.total_amount;
+        case "origin": return b.origin;
+      }
+    })();
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+
+  // ─── Paginação (mesma página para cards mobile e tabela desktop) ───
+  const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
+  const [pageSize, setPageSize] = usePersistedState<number>(filterKey("pageSize"), 30);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   useEffect(() => {
-    setVisibleCount(INITIAL_PAGE_STEP);
-  }, [search, statusFilter, sourceMode, showAll, mode]);
-  const visibleItems = filtered.slice(0, visibleCount);
-  const hasMoreLocal = visibleCount < filtered.length;
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+    setPage(1);
+  }, [search, statusFilter, sourceMode, showAll, mode, sortKey, sortDir, pageSize]);
   useEffect(() => {
-    if (!hasMoreLocal) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setVisibleCount((c) => Math.min(c + PAGE_STEP, filtered.length));
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [hasMoreLocal, filtered.length]);
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pageStart = (page - 1) * pageSize;
+  const pageItems = sorted.slice(pageStart, pageStart + pageSize);
+  const visibleItems = pageItems; // compat com blocos existentes
 
   const handleSubmitForApproval = async (id: string) => {
     setIsSubmitting(true);
@@ -1285,13 +1356,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-muted-foreground">
                     <tr className="text-left">
-                      <th className="px-4 py-2.5 font-medium">Status</th>
-                      <th className="px-4 py-2.5 font-medium">Fornecedor</th>
-                      <th className="px-4 py-2.5 font-medium">Solicitante</th>
-                      <th className="px-4 py-2.5 font-medium">Criado</th>
-                      <th className="px-4 py-2.5 font-medium">Doc</th>
-                      <th className="px-4 py-2.5 font-medium">Vence</th>
-                      <th className="px-4 py-2.5 font-medium text-right">Valor</th>
+                      <SortableTh label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Fornecedor" k="supplier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Solicitante" k="requester" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Criado" k="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Doc" k="doc" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Vence" k="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Valor" k="amount" align="right" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <th className="px-4 py-2.5 font-medium text-right">Ações</th>
                     </tr>
                   </thead>
@@ -1350,24 +1421,50 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </div>
             </div>
 
-            {/* Infinite scroll sentinel + counter */}
-            {hasMoreLocal ? (
-              <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-6 text-xs text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <span>Carregando mais… ({visibleItems.length} de {filtered.length})</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setVisibleCount((c) => Math.min(c + PAGE_STEP, filtered.length))}
-                >
-                  Mostrar mais
-                </Button>
+            {/* Pagination controls (compartilhada entre cards e tabela) */}
+            {sorted.length > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span>
+                    Mostrando <span className="text-foreground font-medium">{pageStart + 1}</span>–
+                    <span className="text-foreground font-medium">{Math.min(pageStart + pageSize, sorted.length)}</span> de{" "}
+                    <span className="text-foreground font-medium">{sorted.length}</span>
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="hidden sm:inline">·</span>
+                    <label htmlFor="page-size" className="whitespace-nowrap">por página</label>
+                    <select
+                      id="page-size"
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="bg-background border border-border rounded-md px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      {PAGE_SIZE_OPTIONS.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 self-end sm:self-auto">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPage(1)} disabled={page <= 1} aria-label="Primeira página">
+                    <ChevronLeft className="w-3.5 h-3.5" /><ChevronLeft className="w-3.5 h-3.5 -ml-2.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} aria-label="Anterior">
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="px-2 whitespace-nowrap">
+                    Página <span className="text-foreground font-medium">{page}</span> de{" "}
+                    <span className="text-foreground font-medium">{totalPages}</span>
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} aria-label="Próxima">
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPage(totalPages)} disabled={page >= totalPages} aria-label="Última página">
+                    <ChevronRight className="w-3.5 h-3.5" /><ChevronRight className="w-3.5 h-3.5 -ml-2.5" />
+                  </Button>
+                </div>
               </div>
-            ) : filtered.length > INITIAL_PAGE_STEP ? (
-              <div className="text-center py-4 text-xs text-muted-foreground">
-                {filtered.length} registro(s) exibidos
-              </div>
-            ) : null}
+            )}
             {showSourceToggle && sourceMode === "both" && sapHasMore && (
               <div className="flex justify-center mt-6">
                 <Button variant="outline" onClick={loadMoreSap} disabled={isLoadingMoreSap} className="gap-2">
