@@ -844,6 +844,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
 
+  // ─── Infinite scroll (pagination) ─────────────────────────────
+  const PAGE_SIZE = 24;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, statusFilter, sourceMode, showAll, mode]);
+  const visibleItems = filtered.slice(0, visibleCount);
+  const hasMoreLocal = visibleCount < filtered.length;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!hasMoreLocal) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length));
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMoreLocal, filtered.length]);
+
   const handleSubmitForApproval = async (id: string) => {
     setIsSubmitting(true);
     try {
