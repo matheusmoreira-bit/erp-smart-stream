@@ -136,6 +136,7 @@ function ExpenseDetailModal({
   isCancelling,
   isRetrying,
   isActioning,
+  mode,
 }: {
   expense: Expense | null;
   open: boolean;
@@ -157,6 +158,7 @@ function ExpenseDetailModal({
   isCancelling: boolean;
   isRetrying: boolean;
   isActioning: boolean;
+  mode?: "purchase" | "sales";
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
