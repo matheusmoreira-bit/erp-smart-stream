@@ -2640,6 +2640,69 @@ export function CreateExpenseModal({
             <FileDown className="w-4 h-4" />
             Exportar PDF
           </Button>
+          {(() => {
+            const mapEntries = () => queueHistory.map((e) => ({
+              supplierLabel: e.supplierLabel,
+              status: e.status,
+              fileCount: e.fileCount,
+              lineCount: e.lineCount,
+              estimatedTotal: e.estimatedTotal,
+              currency: e.currency,
+              currencies: e.currencies,
+              aiConfidence: e.aiConfidence,
+              aiWarnings: e.aiWarnings,
+              errorMessage: e.errorMessage,
+              fileNames: e.fileNames,
+            }));
+            const lowCount = queueHistory.filter(
+              (e) => e.aiConfidence === null || (e.aiConfidence !== null && e.aiConfidence < aiConfidenceThreshold),
+            ).length;
+            if (lowCount === 0) return null;
+            const baseName = `revisao_baixa_confianca_${isSales ? "vendas" : "despesas"}`;
+            const kindLabel = isSales ? "Pedidos de venda" : "Despesas";
+            return (
+              <>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 border-amber-500/50 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
+                  onClick={() => {
+                    exportLowConfidenceReviewPdf({
+                      entries: mapEntries(),
+                      confidenceThreshold: aiConfidenceThreshold,
+                      kindLabel,
+                      fileName: baseName,
+                    }).catch((err) => {
+                      console.error("[low-conf-review-pdf] falha", err);
+                      toast.error("Não foi possível gerar o PDF de revisão.");
+                    });
+                  }}
+                >
+                  <FileDown className="w-4 h-4" />
+                  Revisão PDF ({lowCount})
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 border-amber-500/50 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
+                  onClick={() => {
+                    try {
+                      exportLowConfidenceReviewCsv({
+                        entries: mapEntries(),
+                        confidenceThreshold: aiConfidenceThreshold,
+                        kindLabel,
+                        fileName: baseName,
+                      });
+                    } catch (err) {
+                      console.error("[low-conf-review-csv] falha", err);
+                      toast.error("Não foi possível gerar o CSV de revisão.");
+                    }
+                  }}
+                >
+                  <FileDown className="w-4 h-4" />
+                  Revisão CSV ({lowCount})
+                </Button>
+              </>
+            );
+          })()}
           <AlertDialogAction
             onClick={() => {
               setShowQueueSummary(false);
