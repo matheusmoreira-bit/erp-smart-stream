@@ -762,6 +762,23 @@ export interface QueueSummaryEntry {
    * Opcional para compat: se ausente, o relatório mostra "—".
    */
   id?: string;
+  /**
+   * Timestamps (ms epoch) do ciclo de vida do evento — usados para as
+   * colunas de trilha de auditoria (Classificado em / Concluído em).
+   */
+  classifiedAt?: number;
+  completedAt?: number;
+  /** Versão do modelo de IA usado na extração (ex.: "n-2.5-flash"). */
+  aiModel?: string;
+  /**
+   * Motivo/detalhe do status atual. Se não informado, é derivado:
+   *  - failed    → errorMessage ou "Falha não detalhada"
+   *  - cancelled → "Cancelado pelo usuário"
+   *  - success   → "Concluído com sucesso"
+   *  - pending   → "Em processamento"
+   *  - queued    → "Aguardando na fila"
+   */
+  statusReason?: string;
 }
 
 export interface QueueSummaryOptions {
@@ -883,6 +900,36 @@ export async function exportQueueSummaryJson(opts: QueueSummaryOptions): Promise
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+// ---- Trilha de auditoria (timestamps, modelo, motivo) ---------------------
+//
+// Derivam-se a partir dos campos opcionais de `QueueSummaryEntry`. Ficam
+// centralizados aqui para PDF e CSV emitirem exatamente as mesmas colunas.
+
+function auditTimestamp(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "—";
+  try {
+    return new Date(ms).toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      dateStyle: "short",
+      timeStyle: "medium",
+    });
+  } catch { return String(ms); }
+}
+
+function auditStatusReason(e: QueueSummaryEntry): string {
+  if (e.statusReason && e.statusReason.trim()) return e.statusReason.trim();
+  switch (e.status) {
+    case "failed":    return e.errorMessage?.trim() || "Falha não detalhada";
+    case "cancelled": return "Cancelado pelo usuário";
+    case "success":   return "Concluído com sucesso";
+    case "pending":   return "Em processamento";
+    case "queued":    return "Aguardando na fila";
+    default:          return "—";
+  }
+}
+
+
+
 /**
  * Desenha uma seção "Evidências" com uma linha por fornecedor, contendo o ID
  * do evento (para rastreabilidade), a contagem de anexos e os nomes dos
@@ -913,22 +960,34 @@ function drawEvidenceSection(
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "ID do evento", "Fornecedor", "Anexos", "Nomes dos arquivos"]],
+    head: [[
+      "#", "ID do evento", "Fornecedor",
+      "Classificado em", "Concluído em", "Modelo IA", "Motivo do status",
+      "Anexos", "Nomes dos arquivos",
+    ]],
     body: entries.map((e, i) => [
       String(i + 1),
       e.id || "—",
       e.supplierLabel,
+      auditTimestamp(e.classifiedAt),
+      auditTimestamp(e.completedAt),
+      e.aiModel || "—",
+      auditStatusReason(e),
       String(e.fileNames?.length ?? e.fileCount ?? 0),
       (e.fileNames && e.fileNames.length > 0) ? e.fileNames.join("\n") : "—",
     ]),
-    styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak", valign: "top" },
+    styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak", valign: "top" },
     headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: 8, halign: "right" },
-      1: { cellWidth: 38, font: "courier", fontSize: 7 },
-      2: { cellWidth: 50 },
-      3: { cellWidth: 14, halign: "right" },
+      0: { cellWidth: 7, halign: "right" },
+      1: { cellWidth: 26, font: "courier", fontSize: 6 },
+      2: { cellWidth: 32 },
+      3: { cellWidth: 22 },
+      4: { cellWidth: 22 },
+      5: { cellWidth: 20 },
+      6: { cellWidth: 28 },
+      7: { cellWidth: 12, halign: "right" },
     },
     margin: { left: 8, right: 8 },
     showHead: "everyPage",
@@ -1300,7 +1359,12 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     "ID do evento", "Fornecedor", "Status", "Arquivos", "Linhas", "Moeda",
     "Moedas detectadas", "Total estimado", "Confiança IA (%)", "Limite (%)",
     "Baixa confiança?", "Alertas IA", "Erro", "Nomes dos anexos",
+    // Trilha de auditoria — timestamps ISO 8601 (UTC) para facilitar parse
+    // em ferramentas de análise; a versão human-readable fica no PDF.
+    "Classificado em (ISO)", "Concluído em (ISO)", "Modelo IA", "Motivo do status",
   ];
+  const toIso = (ms?: number | null) =>
+    (ms && Number.isFinite(ms) && ms > 0) ? new Date(ms).toISOString() : "";
   const rows = entries.map((e) => [
     e.id || "",
     e.supplierLabel,
@@ -1316,6 +1380,10 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     (e.aiWarnings || []).join(" | "),
     e.errorMessage || "",
     (e.fileNames || []).join(" | "),
+    toIso(e.classifiedAt),
+    toIso(e.completedAt),
+    e.aiModel || "",
+    auditStatusReason(e),
   ]);
 
   const body = [header, ...rows].map((r) => r.map(csvEscape).join(";")).join("\r\n");
