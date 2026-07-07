@@ -249,6 +249,16 @@ export function CreateExpenseModal({
   // Reaproveitado em "Tentar novamente" para pular chamadas ao endpoint.
   // Vive durante a instância do modal; é limpo no unmount/close.
   const aiResponseCacheRef = useRef<Map<string, any>>(new Map());
+  // Guards reentrantes fortes para evitar QUALQUER chamada duplicada de IA
+  // ou de criação de despesa quando o usuário cancela+retenta rápido, ou o
+  // React 18 (StrictMode) invoca o handler duas vezes. Estado (`isProcessing`,
+  // `isCreating`) já protege a UI, mas refs pegam a corrida entre o clique
+  // e o setState batch. Sempre resetados no `finally`.
+  const aiInFlightRef = useRef<boolean>(false);
+  const submitInFlightRef = useRef<boolean>(false);
+  // Registro dos hashes já reivindicados pelo usuário nesta sessão do modal
+  // — usado para não recontar duplicatas em retries do mesmo submit.
+  const claimedHashesRef = useRef<Set<string>>(new Set());
 
   const hashFile = async (file: File): Promise<string> => {
     try {
