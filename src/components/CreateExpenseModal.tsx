@@ -1661,6 +1661,17 @@ export function CreateExpenseModal({
       // fornecedores diferentes), abrimos automaticamente o próximo em vez
       // de fechar o modal, mantendo o encadeamento pedido pelo usuário.
       if (deferredGroups.length > 0) {
+        // Pausa — não auto-avança. Mostra o resumo para o usuário ver o
+        // estado e retomar quando quiser. `deferredGroups` intacto: o
+        // próximo permanece "queued", pronto para o botão "Retomar".
+        if (pausedRef.current) {
+          toast.info(
+            `Processamento pausado. Próximo pendente: ${deferredGroups[0].supplierLabel}. Clique em "Retomar" quando quiser continuar.`,
+            { duration: 8000 },
+          );
+          setShowQueueSummary(true);
+          return;
+        }
         const [next, ...rest] = deferredGroups;
         resetFormForNextDeferred(next);
         setDeferredGroups(rest);
