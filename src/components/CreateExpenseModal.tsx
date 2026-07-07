@@ -1820,7 +1820,7 @@ export function CreateExpenseModal({
       // e limpa a marca de falha (caso fosse um retry de erro).
       const currentEntry = queueHistory.find((e) => e.status === "pending");
       if (currentEntry) {
-        updateQueueEntry(currentEntry.supplierKey, { status: "success", errorMessage: undefined });
+        updateQueueEntry(currentEntry.supplierKey, { status: "success", errorMessage: undefined, completedAt: Date.now() });
         failedGroupsRef.current.delete(currentEntry.supplierKey);
         schedulePersist();
       }
