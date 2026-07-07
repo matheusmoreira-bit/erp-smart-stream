@@ -196,6 +196,28 @@ export function CreateExpenseModal({
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const aiAbortRef = useRef<AbortController | null>(null);
 
+  // Fila completa dos fornecedores despachados (regra 2 — anexos com
+  // fornecedores diferentes). Guardamos snapshot no momento da escolha para
+  // exibir o resumo do resultado de cada grupo ao final do encadeamento,
+  // incluindo alertas da IA e o nível de confiança extraído.
+  type QueueStatus = "pending" | "queued" | "success" | "failed" | "cancelled";
+  interface QueueEntry {
+    supplierKey: string;
+    supplierLabel: string;
+    fileCount: number;
+    fileNames: string[];
+    lineCount: number;
+    estimatedTotal: number;
+    currency: string;
+    currencies: string[];
+    aiConfidence: number | null;
+    aiWarnings: string[];
+    status: QueueStatus;
+    errorMessage?: string;
+  }
+  const [queueHistory, setQueueHistory] = useState<QueueEntry[]>([]);
+  const [showQueueSummary, setShowQueueSummary] = useState(false);
+
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
     origin === "pagcorp" ? sapSession?.companyDB : undefined,
@@ -333,6 +355,8 @@ export function CreateExpenseModal({
       setDraftHydrated(false);
       setDeferredGroups([]);
       setSupplierPicker(null);
+      setQueueHistory([]);
+      setShowQueueSummary(false);
     }
   }, [open]);
 
@@ -717,6 +741,62 @@ export function CreateExpenseModal({
     }
   };
 
+  // Snapshot de um DocGroup para exibição na fila: contagem de arquivos,
+  // linhas, total estimado, moeda(s), confiança média e avisos coletados
+  // dos documentos extraídos pela IA.
+  const summarizeGroup = (g: DocGroup): Omit<QueueEntry, "status" | "errorMessage"> => {
+    const fileNames = g.docs.map((d) => d.file.name);
+    const lineCount = g.docs.reduce(
+      (acc, d) => acc + (Array.isArray(d.extracted?.items) ? d.extracted.items.length : 0),
+      0,
+    );
+    const estimatedTotal = g.docs.reduce((acc, d) => {
+      const items = Array.isArray(d.extracted?.items) ? d.extracted.items : [];
+      const sumItems = items.reduce((s: number, it: any) => {
+        const lt = Number(it?.line_total);
+        if (Number.isFinite(lt) && lt !== 0) return s + lt;
+        const qty = Number(it?.quantity) || 0;
+        const up = Number(it?.unit_price) || 0;
+        return s + qty * up;
+      }, 0);
+      if (sumItems > 0) return acc + sumItems;
+      return acc + (Number(d.extracted?.total_amount) || 0);
+    }, 0);
+    const currencies = Array.from(
+      new Set(
+        g.docs.map((d) => String(d.extracted?.currency || "").toUpperCase()).filter(Boolean),
+      ),
+    );
+    const confidences = g.docs
+      .map((d) => Number(d.extracted?.confidence))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const aiConfidence = confidences.length > 0
+      ? confidences.reduce((a, b) => a + b, 0) / confidences.length
+      : null;
+    const aiWarnings: string[] = [];
+    for (const d of g.docs) {
+      if (d.extracted?.client_warning) aiWarnings.push(String(d.extracted.client_warning));
+      if (d.extracted?.totals_warning) aiWarnings.push(String(d.extracted.totals_warning));
+    }
+    return {
+      supplierKey: g.supplierKey,
+      supplierLabel: g.supplierLabel,
+      fileCount: g.docs.length,
+      fileNames,
+      lineCount,
+      estimatedTotal,
+      currency: currencies[0] || "BRL",
+      currencies,
+      aiConfidence,
+      aiWarnings,
+    };
+  };
+
+  // Atualiza o status de uma entrada da fila pela chave do fornecedor.
+  const updateQueueEntry = (key: string, patch: Partial<QueueEntry>) => {
+    setQueueHistory((prev) => prev.map((e) => (e.supplierKey === key ? { ...e, ...patch } : e)));
+  };
+
   // Cancela o processamento IA em andamento e/ou limpa a fila de fornecedores
   // adiados (deferredGroups) + picker aberto, deixando o modal em estado
   // consistente para o usuário continuar preenchendo manualmente.
@@ -736,6 +816,15 @@ export function CreateExpenseModal({
     setAiConfidence(null);
     setIsProcessing(false);
     setCancelConfirm(false);
+    // Marca no histórico tudo que estava pendente/enfileirado como cancelado
+    // e abre o resumo final para o usuário conferir o que foi processado.
+    setQueueHistory((prev) => {
+      const next = prev.map((e) =>
+        e.status === "pending" || e.status === "queued" ? { ...e, status: "cancelled" as QueueStatus } : e,
+      );
+      if (next.length > 0) setShowQueueSummary(true);
+      return next;
+    });
     const parts: string[] = [];
     if (wasProcessing) parts.push("classificação IA");
     if (hadPicker) parts.push("seleção de fornecedor");
@@ -763,6 +852,13 @@ export function CreateExpenseModal({
     applyFiscalGroup(chosen.docs.map((d) => d.extracted));
     setDeferredGroups(rest);
     setSupplierPicker(null);
+    // Inicializa o histórico da fila com todos os fornecedores despachados,
+    // marcando o escolhido como "pendente" (em andamento) e os demais como
+    // "enfileirados". Preserva a ordem de execução.
+    setQueueHistory([
+      { ...summarizeGroup(chosen), status: "pending" },
+      ...rest.map((g) => ({ ...summarizeGroup(g), status: "queued" as QueueStatus })),
+    ]);
     toast.success(
       `Criando 1º: ${chosen.supplierLabel}. Ao terminar, abriremos ${rest.length} nova(s) despesa(s) para os demais fornecedores.`,
       { duration: 7000 },
@@ -969,6 +1065,12 @@ export function CreateExpenseModal({
         setDraftId(null);
       }
 
+      // Marca no histórico da fila o grupo atual como concluído com sucesso.
+      const currentEntry = queueHistory.find((e) => e.status === "pending");
+      if (currentEntry) {
+        updateQueueEntry(currentEntry.supplierKey, { status: "success" });
+      }
+
       // Se houver grupos de fornecedores adiados (regra 2 — anexos com
       // fornecedores diferentes), abrimos automaticamente o próximo em vez
       // de fechar o modal, mantendo o encadeamento pedido pelo usuário.
@@ -976,6 +1078,8 @@ export function CreateExpenseModal({
         const [next, ...rest] = deferredGroups;
         resetFormForNextDeferred(next);
         setDeferredGroups(rest);
+        // Promove a próxima entrada do histórico para "pendente".
+        updateQueueEntry(next.supplierKey, { status: "pending" });
         toast.info(
           `Agora criando a despesa de ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} restante(s))` : ""}.`,
           { duration: 6000 },
@@ -983,6 +1087,12 @@ export function CreateExpenseModal({
         return;
       }
 
+      // Encerrou a fila. Se houve encadeamento (>1 entrada), abre o resumo
+      // final antes de fechar; caso contrário, fecha direto.
+      if (queueHistory.length > 1) {
+        setShowQueueSummary(true);
+        return;
+      }
       onClose();
     } catch (e: any) {
       console.error("Erro ao criar despesa:", e);
@@ -990,6 +1100,11 @@ export function CreateExpenseModal({
         (e && (e.message || e.error_description || e.details || e.hint)) ||
         (typeof e === "string" ? e : "") ||
         "Erro ao criar despesa";
+      // Registra a falha do grupo atual (o usuário pode tentar de novo).
+      const currentEntry = queueHistory.find((e) => e.status === "pending");
+      if (currentEntry) {
+        updateQueueEntry(currentEntry.supplierKey, { errorMessage: msg });
+      }
       toast.error(msg);
     } finally {
       setIsCreating(false);
@@ -1155,16 +1270,40 @@ export function CreateExpenseModal({
                     </span>
                   </div>
                 )}
-                {deferredGroups.length > 0 && !isCreating && !isProcessing && (
+                {queueHistory.length > 0 && !isCreating && !isProcessing && (
                   <div className="flex items-start gap-2 text-xs text-muted-foreground">
                     <span className="mt-0.5">📋</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-foreground font-medium">
-                        Fila: {deferredGroups.length} despesa(s) aguardando após esta
+                      <div className="text-foreground font-medium mb-1">
+                        Fila de fornecedores ({queueHistory.filter((e) => e.status === "success").length}/{queueHistory.length} concluídas)
                       </div>
-                      <div className="mt-0.5 truncate">
-                        Próximas: {deferredGroups.map((g) => g.supplierLabel).join(" → ")}
-                      </div>
+                      <ul className="space-y-0.5">
+                        {queueHistory.map((e, idx) => {
+                          const icon =
+                            e.status === "success" ? "✅" :
+                            e.status === "pending" ? "▶️" :
+                            e.status === "failed" ? "❌" :
+                            e.status === "cancelled" ? "🚫" : "⏳";
+                          return (
+                            <li key={e.supplierKey} className="flex items-center gap-1.5 truncate">
+                              <span className="shrink-0">{icon}</span>
+                              <span className={e.status === "pending" ? "text-foreground font-medium" : ""}>
+                                {idx + 1}. {e.supplierLabel}
+                              </span>
+                              {e.aiConfidence !== null && (
+                                <span className="text-[10px] opacity-70 shrink-0">
+                                  · IA {Math.round(e.aiConfidence * 100)}%
+                                </span>
+                              )}
+                              {e.aiWarnings.length > 0 && (
+                                <span className="text-[10px] text-amber-600 shrink-0">
+                                  · ⚠ {e.aiWarnings.length}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </div>
                   </div>
                 )}
@@ -1812,6 +1951,119 @@ export function CreateExpenseModal({
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             Sim, cancelar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Resumo final da fila de fornecedores despachados. Aparece quando o
+        encadeamento termina (por conclusão de todas as despesas ou por
+        cancelamento). Mostra status, confiança da IA, alertas e totais. */}
+    <AlertDialog
+      open={showQueueSummary}
+      onOpenChange={(v) => {
+        if (!v) {
+          setShowQueueSummary(false);
+          setQueueHistory([]);
+          onClose();
+        }
+      }}
+    >
+      <AlertDialogContent className="max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Resumo da fila de fornecedores</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              {(() => {
+                const total = queueHistory.length;
+                const ok = queueHistory.filter((e) => e.status === "success").length;
+                const failed = queueHistory.filter((e) => e.status === "failed" || !!e.errorMessage).length;
+                const cancelled = queueHistory.filter((e) => e.status === "cancelled").length;
+                const pending = queueHistory.filter((e) => e.status === "pending" || e.status === "queued").length;
+                return (
+                  <p className="text-muted-foreground">
+                    {ok}/{total} concluídas
+                    {failed > 0 && ` · ${failed} com erro`}
+                    {cancelled > 0 && ` · ${cancelled} cancelada(s)`}
+                    {pending > 0 && ` · ${pending} pendente(s)`}
+                  </p>
+                );
+              })()}
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                {queueHistory.map((e, idx) => {
+                  const badge =
+                    e.status === "success" ? { icon: "✅", label: "Criada", color: "text-emerald-600" } :
+                    e.status === "failed" ? { icon: "❌", label: "Falhou", color: "text-destructive" } :
+                    e.status === "cancelled" ? { icon: "🚫", label: "Cancelada", color: "text-muted-foreground" } :
+                    e.status === "pending" ? { icon: "▶️", label: "Em andamento", color: "text-primary" } :
+                    { icon: "⏳", label: "Na fila", color: "text-muted-foreground" };
+                  const totalStr = e.estimatedTotal > 0
+                    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: e.currency }).format(e.estimatedTotal)
+                    : "—";
+                  return (
+                    <div key={e.supplierKey} className="rounded-md border border-border bg-muted/20 p-3 space-y-1.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">
+                            {idx + 1}. {e.supplierLabel}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {e.fileCount} arquivo(s) · {e.lineCount} linha(s)
+                            {e.currencies.length > 1 && (
+                              <span className="ml-1 text-amber-600">
+                                (moedas: {e.currencies.join(", ")})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className={`text-xs font-medium ${badge.color}`}>
+                            {badge.icon} {badge.label}
+                          </div>
+                          <div className="text-xs tabular-nums text-muted-foreground mt-0.5">{totalStr}</div>
+                        </div>
+                      </div>
+                      {e.aiConfidence !== null && (
+                        <div className="text-[11px] text-muted-foreground">
+                          Confiança IA: <span className="font-medium">{Math.round(e.aiConfidence * 100)}%</span>
+                        </div>
+                      )}
+                      {e.aiWarnings.length > 0 && (
+                        <div className="text-[11px] text-amber-700 dark:text-amber-500 space-y-0.5">
+                          {e.aiWarnings.map((w, i) => (
+                            <div key={i} className="flex gap-1">
+                              <span>⚠</span>
+                              <span className="whitespace-pre-line">{w}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {e.errorMessage && (
+                        <div className="text-[11px] text-destructive">
+                          Erro: {e.errorMessage}
+                        </div>
+                      )}
+                      {e.fileNames.length > 0 && (
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          {e.fileNames.join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction
+            onClick={() => {
+              setShowQueueSummary(false);
+              setQueueHistory([]);
+              onClose();
+            }}
+          >
+            Fechar
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
