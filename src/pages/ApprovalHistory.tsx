@@ -93,6 +93,16 @@ export default function ApprovalHistory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decision, substituteFilter]);
 
+  // Reseta paginação quando filtros mudam.
+  useEffect(() => { setPage(1); }, [decision, substituteFilter, session?.companyDB]);
+
+  // Hook com filtros aplicados no banco + paginação incremental.
+  const { rows, hasMore, syncState, isLoading, isSyncing, sync } = useApprovalHistory(
+    session?.companyDB,
+    { decision, substituteFilter, page, pageSize: PAGE_SIZE },
+  );
+
+
 
   const myKeys = useMemo(() => {
     const list = [(session?.userName || "").toLowerCase()].filter(Boolean);
