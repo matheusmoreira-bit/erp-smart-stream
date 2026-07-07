@@ -54,7 +54,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             <MetricCard title="Tempo Médio Total" value={`${metrics.avgTotalDays}d`} subtitle="Requisição → Pagamento" icon={Clock} delay={0} />
             <MetricCard title="Pedidos em Aberto" value={String(metrics.openOrders)} subtitle="Aguardando fechamento" icon={Package} delay={0.1} />
             <MetricCard title="Validações com Erro" value={String(metrics.validationErrors)} subtitle="Requerem atenção" icon={AlertTriangle} delay={0.2} />
