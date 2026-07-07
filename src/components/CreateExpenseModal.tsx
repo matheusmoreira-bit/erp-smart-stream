@@ -828,6 +828,8 @@ export function CreateExpenseModal({
     setAiConfidence(null);
     setIsProcessing(false);
     setCancelConfirm(false);
+    // Habilita o botão "Tentar novamente" se ainda houver anexos no modal.
+    setJustCancelled(files.length > 0);
     // Marca no histórico tudo que estava pendente/enfileirado como cancelado
     // e abre o resumo final para o usuário conferir o que foi processado.
     setQueueHistory((prev) => {
