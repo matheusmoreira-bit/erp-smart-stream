@@ -931,14 +931,21 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           // tentamos por até ~1.5s antes de desistir — evita chamar
           // expense-to-sap com status ainda "pendente_aprovacao".
           let confirmedApproved = false;
+          let alreadyInErp = false;
+          let originFromErp = false;
           for (let attempt = 0; attempt < 5; attempt++) {
             const { data: fresh } = await supabase
               .from("expenses")
-              .select("status")
+              .select("status,sap_doc_entry,origin")
               .eq("id", expenseId)
               .maybeSingle();
-            if ((fresh as any)?.status === "aprovado") {
+            const freshAny = fresh as any;
+            if (freshAny?.status === "aprovado") {
               confirmedApproved = true;
+              alreadyInErp = !!freshAny?.sap_doc_entry;
+              originFromErp = ["sap", "erp", "sap_erp", "erp_flow"].includes(
+                String(freshAny?.origin || "").toLowerCase(),
+              );
               break;
             }
             await new Promise((r) => setTimeout(r, 300));
@@ -950,6 +957,22 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             await fetchExpenses();
             return { replayed };
           }
+
+          // Se o documento veio do ERP (origem ERP OU já existe no SAP com
+          // sap_doc_entry), NÃO tentamos criar um novo pedido de compra. A
+          // decisão de aprovação já foi registrada; qualquer criação no SAP
+          // duplicaria o pedido original. Apenas registramos e paramos aqui.
+          if (originFromErp || alreadyInErp) {
+            await logExpenseDecision(expenseId, "integrated", {
+              approverName: actor,
+              remarks: alreadyInErp
+                ? "Documento já existente no ERP — nenhum novo pedido de compra criado."
+                : "Documento originado no ERP — apenas a decisão de aprovação foi registrada.",
+            });
+            await fetchExpenses();
+            return { replayed };
+          }
+
 
           try {
             await invokeExpenseToSap({
