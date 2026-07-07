@@ -942,36 +942,40 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     <div className="min-h-screen bg-background">
       <Helmet><title>{`${isSales ? "Vendas" : "Compras"} — ERP Flow`}</title></Helmet>
       {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 glow-primary">
+      <header className="border-b border-border px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 lg:items-center">
+          {/* Col 1: identity */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-lg bg-primary/10 glow-primary shrink-0">
               <Activity className="w-5 h-5 text-primary" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">{isSales ? "Vendas" : "Compras"}</h1>
-              <p className="text-xs text-muted-foreground">{pageTitle}</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-foreground truncate">{isSales ? "Vendas" : "Compras"}</h1>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">{pageTitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-foreground">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground">{session?.userName}</p>
+
+          {/* Col 2: actions */}
+          <div className="flex items-center gap-2 sm:gap-3 lg:justify-end flex-wrap">
+            <div className="hidden sm:block text-right min-w-0 max-w-[220px]">
+              <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
+              <p className="text-xs text-muted-foreground truncate">{session?.userName}</p>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
               <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
               Conectado
             </div>
-            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading}>
+            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} aria-label="Atualizar">
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={logout}>
+            <Button variant="ghost" size="sm" onClick={logout} aria-label="Sair">
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
         </div>
       </header>
+
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Back + actions */}
