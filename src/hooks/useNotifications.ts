@@ -36,27 +36,93 @@ export const NOTIFICATION_CATEGORIES = [
 export function useNotifications() {
   const { session } = useSap();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<Notification[]>([]);
+  const [dismissedPendingIds, setDismissedPendingIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("notifications_dismissed_pending_v1");
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch { return new Set(); }
+  });
   const [loading, setLoading] = useState(true);
   const identifier = session?.userName?.toLowerCase() || "";
+  const companyDB = session?.companyDB || "";
+
+  const approverVariants = useCallback((): string[] => {
+    const id = identifier.trim();
+    if (!id) return [];
+    // "santiago.macedo" (login SAP) ↔ "Santiago Macedo" (approver_name nos ERPs)
+    // Cobrimos dot→space, underscore→space, dash→space e a versão original.
+    const variants = new Set<string>();
+    variants.add(id);
+    variants.add(id.replace(/[._-]+/g, " "));
+    variants.add(id.replace(/\s+/g, "."));
+    return Array.from(variants).filter(Boolean);
+  }, [identifier]);
+
+  const persistDismissed = useCallback((next: Set<string>) => {
+    try {
+      localStorage.setItem("notifications_dismissed_pending_v1", JSON.stringify(Array.from(next)));
+    } catch { /* quota — ignore */ }
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     if (!identifier) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_identifier", identifier)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    setNotifications((data as Notification[]) || []);
+    const [notifRes, expRes] = await Promise.all([
+      supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_identifier", identifier)
+        .order("created_at", { ascending: false })
+        .limit(50),
+      (async () => {
+        const variants = approverVariants();
+        if (variants.length === 0) return { data: [] as Array<Record<string, unknown>> };
+        // ilike sem wildcards = igualdade case-insensitive.
+        const orClauses = variants.map((v) => `current_approver.ilike.${v.replace(/,/g, "")}`).join(",");
+        let q = supabase
+          .from("expenses")
+          .select("id, doc_type, supplier_name, requester_name, total_amount, currency, created_at, current_approver, company_db, cost_center")
+          .eq("status", "pendente_aprovacao")
+          .or(orClauses)
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (companyDB) q = q.eq("company_db", companyDB);
+        const { data } = await q;
+        return { data: (data as Array<Record<string, unknown>>) || [] };
+      })(),
+    ]);
+
+    setNotifications((notifRes.data as Notification[]) || []);
+
+    // Constrói notificações virtuais para as aprovações pendentes que ainda
+    // não foram "dispensadas" pelo usuário. Assim o sininho reflete o estado
+    // real (inclui aprovações antigas cujo registro em `notifications` foi
+    // criado com um user_identifier que não bate com o login atual).
+    const virtual: Notification[] = (expRes.data || [])
+      .filter((e) => !dismissedPendingIds.has(String(e.id)))
+      .map((e) => ({
+        id: `pending:${e.id}`,
+        user_identifier: identifier,
+        company_db: (e.company_db as string) || null,
+        title: "Aprovação pendente",
+        body: `${(e.doc_type as string) || "Documento"} · ${(e.supplier_name as string) || (e.requester_name as string) || ""} — ${(e.currency as string) || "BRL"} ${Number(e.total_amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        category: "approval",
+        is_read: false,
+        link: "/aprovacoes",
+        metadata: { expense_id: e.id, virtual: true, cost_center: e.cost_center },
+        created_at: (e.created_at as string) || new Date().toISOString(),
+      }));
+    setPendingApprovals(virtual);
     setLoading(false);
-  }, [identifier]);
+  }, [identifier, companyDB, approverVariants, dismissedPendingIds]);
 
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // Realtime subscription
+  // Realtime — notificações reais + mudanças em expenses (para refletir novos
+  // pendentes ou aprovações resolvidas).
   useEffect(() => {
     if (!identifier) return;
     const channel = supabase
@@ -71,30 +137,77 @@ export function useNotifications() {
           }
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "expenses" },
+        () => { fetchNotifications(); }
+      )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [identifier]);
+  }, [identifier, fetchNotifications]);
 
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  // Merge: pendentes virtuais no topo, deduplicadas contra notificações reais
+  // que já referenciam o mesmo expense_id (evita duplo-badge).
+  const merged: Notification[] = (() => {
+    const realExpenseIds = new Set(
+      notifications
+        .filter((n) => n.category === "approval")
+        .map((n) => (n.metadata as { expense_id?: string } | null)?.expense_id)
+        .filter(Boolean) as string[]
+    );
+    const filteredVirtual = pendingApprovals.filter((v) => {
+      const eid = (v.metadata as { expense_id?: string } | null)?.expense_id;
+      return !eid || !realExpenseIds.has(eid);
+    });
+    return [...filteredVirtual, ...notifications].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  })();
+
+  const unreadCount = merged.filter((n) => !n.is_read).length;
 
   const markAsRead = useCallback(async (id: string) => {
+    if (id.startsWith("pending:")) {
+      const expenseId = id.slice("pending:".length);
+      setDismissedPendingIds((prev) => {
+        const next = new Set(prev);
+        next.add(expenseId);
+        persistDismissed(next);
+        return next;
+      });
+      setPendingApprovals((prev) => prev.filter((n) => n.id !== id));
+      return;
+    }
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
     );
-  }, []);
+  }, [persistDismissed]);
 
   const markAllAsRead = useCallback(async () => {
     if (!identifier) return;
+    // Dispensa todas as pendentes virtuais também.
+    if (pendingApprovals.length > 0) {
+      setDismissedPendingIds((prev) => {
+        const next = new Set(prev);
+        for (const p of pendingApprovals) {
+          const eid = (p.metadata as { expense_id?: string } | null)?.expense_id;
+          if (eid) next.add(eid);
+        }
+        persistDismissed(next);
+        return next;
+      });
+      setPendingApprovals([]);
+    }
     await supabase
       .from("notifications")
       .update({ is_read: true })
       .eq("user_identifier", identifier)
       .eq("is_read", false);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-  }, [identifier]);
+  }, [identifier, pendingApprovals, persistDismissed]);
 
-  return { notifications, loading, unreadCount, markAsRead, markAllAsRead, refresh: fetchNotifications };
+  return { notifications: merged, loading, unreadCount, markAsRead, markAllAsRead, refresh: fetchNotifications };
 }
 
 export function useNotificationPreferences() {
