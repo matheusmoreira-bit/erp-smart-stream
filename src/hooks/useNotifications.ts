@@ -81,7 +81,9 @@ export function useNotifications() {
   const fetchNotifications = useCallback(async () => {
     if (!identifier) return;
     setLoading(true);
-    const [notifRes, expRes] = await Promise.all([
+    const variants = approverVariants();
+    const emailLower = (session?.userName || "").toLowerCase();
+    const [notifRes, expRes, approvedRes] = await Promise.all([
       supabase
         .from("notifications")
         .select("*")
@@ -89,7 +91,6 @@ export function useNotifications() {
         .order("created_at", { ascending: false })
         .limit(50),
       (async () => {
-        const variants = approverVariants();
         if (variants.length === 0) return { data: [] as Array<Record<string, unknown>> };
         // ilike sem wildcards = igualdade case-insensitive.
         const orClauses = variants.map((v) => `current_approver.ilike.${v.replace(/,/g, "")}`).join(",");
@@ -100,6 +101,26 @@ export function useNotifications() {
           .or(orClauses)
           .order("created_at", { ascending: false })
           .limit(50);
+        if (companyDB) q = q.eq("company_db", companyDB);
+        const { data } = await q;
+        return { data: (data as Array<Record<string, unknown>>) || [] };
+      })(),
+      (async () => {
+        if (variants.length === 0 && !emailLower) return { data: [] as Array<Record<string, unknown>> };
+        // Casa por requester_name (variantes) OU por email do criador/solicitante.
+        const clauses: string[] = [];
+        for (const v of variants) clauses.push(`requester_name.ilike.${v.replace(/,/g, "")}`);
+        if (emailLower) {
+          clauses.push(`created_by_email.ilike.${emailLower.replace(/,/g, "")}`);
+          clauses.push(`requester_email.ilike.${emailLower.replace(/,/g, "")}`);
+        }
+        let q = supabase
+          .from("expenses")
+          .select("id, doc_type, supplier_name, requester_name, total_amount, currency, created_at, updated_at, company_db, cost_center")
+          .eq("status", "aprovado")
+          .or(clauses.join(","))
+          .order("updated_at", { ascending: false })
+          .limit(30);
         if (companyDB) q = q.eq("company_db", companyDB);
         const { data } = await q;
         return { data: (data as Array<Record<string, unknown>>) || [] };
@@ -127,8 +148,25 @@ export function useNotifications() {
         created_at: (e.created_at as string) || new Date().toISOString(),
       }));
     setPendingApprovals(virtual);
+
+    const approved: Notification[] = (approvedRes.data || [])
+      .filter((e) => !dismissedApprovedIds.has(String(e.id)))
+      .map((e) => ({
+        id: `approved:${e.id}`,
+        user_identifier: identifier,
+        company_db: (e.company_db as string) || null,
+        title: "Solicitação aprovada",
+        body: `${(e.doc_type as string) || "Documento"} · ${(e.supplier_name as string) || ""} — ${(e.currency as string) || "BRL"} ${Number(e.total_amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} foi aprovada.`,
+        category: "approval",
+        is_read: false,
+        link: "/despesas",
+        metadata: { expense_id: e.id, virtual: true, kind: "approved", cost_center: e.cost_center },
+        created_at: (e.updated_at as string) || (e.created_at as string) || new Date().toISOString(),
+      }));
+    setApprovedForRequester(approved);
     setLoading(false);
-  }, [identifier, companyDB, approverVariants, dismissedPendingIds]);
+  }, [identifier, companyDB, approverVariants, dismissedPendingIds, dismissedApprovedIds, session?.userName]);
+
 
   useEffect(() => {
     fetchNotifications();
