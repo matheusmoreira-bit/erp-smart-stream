@@ -358,20 +358,33 @@ export default function ApprovalHistory() {
             para trazer decisões feitas direto no SAP, clique em "Sincronizar agora".
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((r) => {
-              const linked =
-                (r.expense_id ? expensesById.get(r.expense_id) : undefined) ||
-                (typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined);
-              return (
-                <HistoryCard
-                  key={r.id}
-                  row={r}
-                  onRelationsMap={linked ? () => setRelationsMapExpense(linked) : undefined}
-                />
-              );
-            })}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map((r) => {
+                const linked =
+                  (r.expense_id ? expensesById.get(r.expense_id) : undefined) ||
+                  (typeof r.doc_entry === "number" ? expensesByDocEntry.get(r.doc_entry) : undefined);
+                return (
+                  <HistoryCard
+                    key={r.id}
+                    row={r}
+                    onRelationsMap={linked ? () => setRelationsMapExpense(linked) : undefined}
+                  />
+                );
+              })}
+            </div>
+            {hasMore && (
+              <div className="flex justify-center mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Carregando..." : "Carregar mais"}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </main>
 
