@@ -319,21 +319,38 @@ export default function ApprovalHistory() {
                     <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-72 p-2" align="start">
+                <PopoverContent className="w-80 p-2" align="start">
+                  <div className="px-1 pb-2 space-y-1">
+                    <Input
+                      value={substituteSearch}
+                      onChange={(e) => setSubstituteSearch(e.target.value)}
+                      placeholder="Buscar por nome ou e-mail do substituído..."
+                      className="h-8 text-sm"
+                    />
+                    {hasSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setSubstituteSearch("")}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                      >
+                        Limpar busca
+                      </button>
+                    )}
+                  </div>
                   <div className="max-h-80 overflow-y-auto space-y-0.5">
                     <button
                       type="button"
-                      onClick={() => setSubstituteFilter([])}
+                      onClick={() => { setSubstituteFilter([]); setSubstituteSearch(""); }}
                       className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent"
                     >
                       Substituto: todos
                     </button>
-                    <label className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer">
-                      <Checkbox checked={anySel} onCheckedChange={() => toggleExclusive("__any__")} />
+                    <label className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${hasSearch ? "opacity-50" : ""}`}>
+                      <Checkbox checked={anySel} disabled={hasSearch} onCheckedChange={() => toggleExclusive("__any__")} />
                       Somente por substituto
                     </label>
-                    <label className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer">
-                      <Checkbox checked={noneSel} onCheckedChange={() => toggleExclusive("__none__")} />
+                    <label className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${hasSearch ? "opacity-50" : ""}`}>
+                      <Checkbox checked={noneSel} disabled={hasSearch} onCheckedChange={() => toggleExclusive("__none__")} />
                       Somente pelo próprio aprovador
                     </label>
                     {substitutedOptions.length > 0 && (
@@ -344,11 +361,11 @@ export default function ApprovalHistory() {
                         {substitutedOptions.map((o) => (
                           <label
                             key={o.key}
-                            className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${anySel || noneSel ? "opacity-50" : ""}`}
+                            className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${disableSelection ? "opacity-50" : ""}`}
                           >
                             <Checkbox
                               checked={specificKeys.includes(o.key)}
-                              disabled={anySel || noneSel}
+                              disabled={disableSelection}
                               onCheckedChange={() => toggleKey(o.key)}
                             />
                             <span className="truncate">{o.label}</span>
