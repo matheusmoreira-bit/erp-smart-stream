@@ -18,7 +18,13 @@ export function ProfileCompletionGate() {
     if (loading || !profile) return;
     if (!isPending) { setOpen(false); return; }
     const dismissed = profile.dismissed_until && new Date(profile.dismissed_until).getTime() > Date.now();
-    setOpen(!dismissed);
+    if (dismissed) { setOpen(false); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    const shownKey = `profile-gate-shown:${profile.user_id || profile.email || "anon"}`;
+    const lastShown = typeof window !== "undefined" ? localStorage.getItem(shownKey) : null;
+    if (lastShown === today) { setOpen(false); return; }
+    setOpen(true);
+    try { localStorage.setItem(shownKey, today); } catch { /* ignore */ }
   }, [loading, profile, isPending]);
 
   const goToProfile = () => {
