@@ -1254,6 +1254,83 @@ export function exportLowConfidenceReviewCsv(opts: LowConfidenceReviewOptions): 
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Exporta o resumo final da fila em CSV para auditoria. Espelha a tabela por
+ * fornecedor do PDF (mesmas colunas + ID do evento e alertas/erros) e
+ * prepende linhas de metadados com os totais agregados e os totais por moeda
+ * — todos como comentários (`#`) para não atrapalhar `pandas.read_csv` /
+ * Excel com skiprows. Separador `;` + BOM UTF-8 para o Excel PT-BR.
+ */
+export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<void> {
+  const { entries, confidenceThreshold } = opts;
+  const kind = opts.kindLabel || "Despesas";
+  const totals = {
+    ok: entries.filter((e) => e.status === "success").length,
+    failed: entries.filter((e) => e.status === "failed" || !!e.errorMessage).length,
+    cancelled: entries.filter((e) => e.status === "cancelled").length,
+    pending: entries.filter((e) => e.status === "pending" || e.status === "queued").length,
+    lowConf: entries.filter(
+      (e) => e.aiConfidence !== null && e.aiConfidence < confidenceThreshold,
+    ).length,
+    files: entries.reduce((s, e) => s + (e.fileCount ?? 0), 0),
+    lines: entries.reduce((s, e) => s + (e.lineCount ?? 0), 0),
+  };
+  const perCurrency = new Map<string, number>();
+  for (const e of entries) {
+    const cur = e.currency || "BRL";
+    perCurrency.set(cur, (perCurrency.get(cur) ?? 0) + (e.estimatedTotal || 0));
+  }
+  const generatedBy = await currentUserEmail();
+  const generatedAt = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+  const meta: string[] = [
+    `# Resumo da fila de IA — ${kind}`,
+    `# Gerado em: ${generatedAt}${generatedBy ? ` por ${generatedBy}` : ""}`,
+    `# Fornecedores: ${entries.length}`,
+    `# Concluídas: ${totals.ok} · Falhas: ${totals.failed} · Canceladas: ${totals.cancelled} · Pendentes: ${totals.pending}`,
+    `# Baixa confiança (< ${Math.round(confidenceThreshold * 100)}%): ${totals.lowConf}`,
+    `# Arquivos: ${totals.files} · Linhas: ${totals.lines}`,
+    ...Array.from(perCurrency.entries()).map(
+      ([cur, v]) => `# Total ${cur}: ${formatCurrency(v, cur)}`,
+    ),
+    "",
+  ];
+
+  const header = [
+    "ID do evento", "Fornecedor", "Status", "Arquivos", "Linhas", "Moeda",
+    "Moedas detectadas", "Total estimado", "Confiança IA (%)", "Limite (%)",
+    "Baixa confiança?", "Alertas IA", "Erro", "Nomes dos anexos",
+  ];
+  const rows = entries.map((e) => [
+    e.id || "",
+    e.supplierLabel,
+    STATUS_LABEL[e.status],
+    e.fileCount,
+    e.lineCount,
+    e.currency,
+    (e.currencies || []).join(" | "),
+    e.estimatedTotal,
+    e.aiConfidence === null ? "" : Math.round(e.aiConfidence * 100),
+    Math.round(confidenceThreshold * 100),
+    e.aiConfidence !== null && e.aiConfidence < confidenceThreshold ? "sim" : "não",
+    (e.aiWarnings || []).join(" | "),
+    e.errorMessage || "",
+    (e.fileNames || []).join(" | "),
+  ]);
+
+  const body = [header, ...rows].map((r) => r.map(csvEscape).join(";")).join("\r\n");
+  const csv = "\uFEFF" + meta.join("\r\n") + "\r\n" + body + "\r\n";
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeFileName(opts.fileName || "resumo_fila_ia")}_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 // ─── Relatório do fluxo de compras (super-user) ─────────────────────────────
 // Consolida tempos por etapa (classificação IA → fila → formulário → submit),
 // identifica gargalos e lista os DocGroups "deferred" com suas classificações
