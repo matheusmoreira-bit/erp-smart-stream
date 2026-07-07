@@ -2593,6 +2593,7 @@ export function CreateExpenseModal({
 
 
           <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
           </div>
 
