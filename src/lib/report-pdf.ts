@@ -1022,7 +1022,11 @@ export async function exportLowConfidenceReviewPdf(opts: LowConfidenceReviewOpti
     y += 2;
   }
 
-  drawFooter(doc, await currentUserEmail());
+  await finalizePdf(doc, "Revisão de baixa confiança", {
+    kindLabel: opts.kindLabel,
+    confidenceThreshold: opts.confidenceThreshold,
+    entries: filtered,
+  });
   doc.save(`${safeFileName(opts.fileName || "revisao_baixa_confianca")}_${Date.now()}.pdf`);
 }
 
