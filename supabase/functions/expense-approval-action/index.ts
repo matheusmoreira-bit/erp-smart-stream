@@ -579,7 +579,13 @@ Deno.serve(async (req) => {
     const updates: Record<string, unknown> = { status: "rejeitado" };
     if (remarks) updates.remarks = remarks;
     const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-    if (updErr) return await respond(500, { error: `Falha ao rejeitar: ${updErr.message}` });
+    if (updErr) {
+      stageLog("update_reject", "error", { requestId, expenseId, error: updErr.message });
+      return await respond(500, {
+        error: `Falha ao rejeitar a despesa: ${updErr.message}`,
+        stage: "update_reject",
+      });
+    }
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "rejected",
@@ -592,6 +598,7 @@ Deno.serve(async (req) => {
       substituted_for_name: substitution?.official_name ?? null,
     } as any);
     await writeAuditLog("rejected", currentLevel);
+    stageLog("update_reject", "info", { requestId, expenseId, currentLevel });
     return await respond(200, {
       ok: true,
       action: "reject",
@@ -608,6 +615,7 @@ Deno.serve(async (req) => {
       },
     });
   }
+
 
   // action === "approve"
   await admin.from("expense_approval_log").insert({
