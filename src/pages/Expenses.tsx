@@ -637,7 +637,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<"erp_flow" | "erp" | undefined>(undefined);
   const openExpense = (exp: Expense, origin?: "erp_flow" | "erp") => {
-    setSelectedExpense(exp);
+    openExpense(exp, origin);
     setSelectedOrigin(origin);
   };
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -1207,7 +1207,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   key={exp.id}
                   expense={exp}
                   originBadge={origin}
-                  onOpen={() => setSelectedExpense(exp)}
+                  onOpen={() => openExpense(exp, origin)}
                   onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
                 />
               ))}
@@ -1234,7 +1234,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                       <tr
                         key={exp.id}
                         className="border-t border-border/60 hover:bg-muted/30 cursor-pointer transition-colors"
-                        onClick={() => setSelectedExpense(exp)}
+                        onClick={() => openExpense(exp, origin)}
                       >
                         <td className="px-4 py-2.5">
                           <div className="flex flex-wrap items-center gap-1.5">
