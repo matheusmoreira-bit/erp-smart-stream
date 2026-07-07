@@ -2568,7 +2568,12 @@ export default function ApprovalsPage() {
             matchesSubstitutedOfficial(selectedDoc.currentApprover) ||
             (!!selectedDoc.approverEmail &&
               officialIdentifiers.includes(selectedDoc.approverEmail.toLowerCase()));
-          return isAdmin || isDesignated;
+          // O botão Aprovar/Rejeitar aparece SOMENTE quando o usuário tem
+          // permissão real de decidir sobre o documento — via fluxo de
+          // aprovação (aprovador designado), atuação como substituto ativo,
+          // ou delegação (que altera currentApprover/approverCode no SAP).
+          // Admins que só têm visibilidade ampla NÃO devem ver os botões.
+          return isDesignated;
         })()}
       />
 
