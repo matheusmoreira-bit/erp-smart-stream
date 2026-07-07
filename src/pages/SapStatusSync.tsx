@@ -193,6 +193,8 @@ export default function SapStatusSync() {
                       <TableHead>DocEntry</TableHead>
                       <TableHead>Status PO</TableHead>
                       <TableHead>Novo status despesa</TableHead>
+                      <TableHead>Tentativas</TableHead>
+                      <TableHead>Próx. retry</TableHead>
                       <TableHead>Erro</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -203,6 +205,8 @@ export default function SapStatusSync() {
                         <TableCell>{r.docEntry ?? "—"}</TableCell>
                         <TableCell>{poBadge(r.poStatus)}</TableCell>
                         <TableCell>{r.expenseStatus ?? <span className="text-muted-foreground">sem mudança</span>}</TableCell>
+                        <TableCell>{r.attempts ?? "—"}</TableCell>
+                        <TableCell className="text-xs">{fmtDate(r.nextRetryAt)}</TableCell>
                         <TableCell className="text-destructive text-xs">{r.error ?? "—"}</TableCell>
                       </TableRow>
                     ))}
@@ -213,6 +217,69 @@ export default function SapStatusSync() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            Despesas em sync_error
+            <Badge variant="secondary">{failing.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={() => void loadFailing()} disabled={loading}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Recarregar
+            </Button>
+            <Button size="sm" onClick={() => run("retry-errors")} disabled={loading || !failing.length}>
+              <Play className="mr-2 h-4 w-4" />
+              Reprocessar todas ({failing.length})
+            </Button>
+          </div>
+
+          {failing.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma despesa com falha de sincronia.</p>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fornecedor</TableHead>
+                    <TableHead>DocEntry</TableHead>
+                    <TableHead>Base</TableHead>
+                    <TableHead>Tentativas</TableHead>
+                    <TableHead>Última tentativa</TableHead>
+                    <TableHead>Próx. retry</TableHead>
+                    <TableHead>Erro</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {failing.map((f) => (
+                    <TableRow key={f.id}>
+                      <TableCell className="text-xs">{f.supplier_name}</TableCell>
+                      <TableCell>{f.sap_doc_entry ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{f.company_db}</TableCell>
+                      <TableCell>
+                        <Badge variant={f.sap_sync_attempts >= 8 ? "destructive" : "secondary"}>
+                          {f.sap_sync_attempts}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">{fmtDate(f.sap_integration_last_attempt_at)}</TableCell>
+                      <TableCell className="text-xs">
+                        {f.sap_sync_next_retry_at ? fmtDate(f.sap_sync_next_retry_at) : <span className="text-destructive">desistiu</span>}
+                      </TableCell>
+                      <TableCell className="text-destructive text-xs max-w-[280px] truncate" title={f.sap_integration_error ?? ""}>
+                        {f.sap_integration_error ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
