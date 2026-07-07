@@ -1081,28 +1081,53 @@ export function CreateExpenseModal({
   // com sucesso intactos e não roda a IA de novo — reaproveita os DocGroup
   // em cache). Se algum grupo com falha estiver adiante, "Reenviar apenas
   // erros" continua sendo o caminho — este botão foca em resumir a fila.
-  const resumeCancelledQueue = async () => {
+  // Estrutura do plano de retomada calculado ANTES de disparar a fila. O
+  // preview vira uma prévia visual (dialog) para o usuário conferir o que
+  // vai acontecer com cada grupo (retomar / pular por já concluído / pular
+  // por duplicata / permanecer inalterado).
+  type ResumeAction =
+    | { kind: "resume-first"; group: DocGroup }
+    | { kind: "resume-queued"; group: DocGroup }
+    | { kind: "skip-done"; group: DocGroup }
+    | { kind: "skip-duplicate"; group: DocGroup; owner?: string }
+    | { kind: "not-in-cancelled" };
+  interface ResumePlan {
+    reasons: Map<string, ResumeAction>;
+    toResume: DocGroup[];
+    skippedDone: DocGroup[];
+    skippedDuplicate: Array<{ group: DocGroup; owner?: string }>;
+    preCheckFailed: boolean;
+  }
+  const [resumePlan, setResumePlan] = useState<ResumePlan | null>(null);
+  const [resumeChecking, setResumeChecking] = useState(false);
+
+  // Prepara o plano de retomada: aplica as duas verificações (já concluído
+  // e duplicidade de hash) SEM alterar o estado da fila. Abre o dialog com
+  // as ações por grupo para o usuário confirmar antes de disparar.
+  const openResumePreview = async () => {
     const groups = cancelledGroupsRef.current;
     if (!groups || groups.length === 0) {
       toast.error("Nenhum grupo cancelado disponível para retomar.");
       return;
     }
-    // Verificação 1 — remove grupos que já constam como concluídos no histórico
-    // da fila. Evita reprocessar uma despesa que foi criada com sucesso antes
-    // do cancelamento (o cache pode ter ficado desatualizado em corridas).
+    setResumeChecking(true);
+    const reasons = new Map<string, ResumeAction>();
     const successKeys = new Set(
       queueHistory.filter((e) => e.status === "success").map((e) => e.supplierKey),
     );
-    const notYetDone = groups.filter((g) => !successKeys.has(g.supplierKey));
-    const skippedAsDone = groups.length - notYetDone.length;
-
-    // Verificação 2 — hasheia todos os arquivos dos candidatos e consulta a
-    // tabela de reivindicações para pular grupos cujos anexos já foram lançados
-    // (por este ou por outro usuário). Isso garante que a retomada não crie
-    // despesa duplicada — o servidor também barra via UNIQUE, mas aqui damos
-    // feedback claro antes de gastar submit + storage.
-    const remaining: DocGroup[] = [];
-    const claimedGroups: Array<{ group: DocGroup; owner?: string }> = [];
+    const skippedDone: DocGroup[] = [];
+    const notYetDone: DocGroup[] = [];
+    for (const g of groups) {
+      if (successKeys.has(g.supplierKey)) {
+        skippedDone.push(g);
+        reasons.set(g.supplierKey, { kind: "skip-done", group: g });
+      } else {
+        notYetDone.push(g);
+      }
+    }
+    const toResume: DocGroup[] = [];
+    const skippedDuplicate: Array<{ group: DocGroup; owner?: string }> = [];
+    let preCheckFailed = false;
     try {
       const perGroupHashes = await Promise.all(
         notYetDone.map(async (g) => ({
@@ -1118,42 +1143,57 @@ export function CreateExpenseModal({
       for (const { group, hashes } of perGroupHashes) {
         const hit = hashes.find((h) => claimedSet.has(h));
         if (hit) {
-          claimedGroups.push({ group, owner: claimedSet.get(hit) });
+          const owner = claimedSet.get(hit);
+          skippedDuplicate.push({ group, owner });
+          reasons.set(group.supplierKey, { kind: "skip-duplicate", group, owner });
         } else {
-          remaining.push(group);
+          toResume.push(group);
         }
       }
     } catch (err) {
-      // Se a consulta falhar, seguimos com `notYetDone` — o servidor ainda
-      // barrará duplicatas via constraint UNIQUE — mas avisamos o usuário.
-      console.warn("[resume] pré-check de duplicidade falhou, prosseguindo:", err);
-      remaining.push(...notYetDone);
-      toast.warning("Não foi possível pré-verificar duplicatas. O servidor ainda vai bloquear se houver conflito.");
+      console.warn("[resume] pré-check de duplicidade falhou:", err);
+      preCheckFailed = true;
+      toResume.push(...notYetDone);
     }
+    toResume.forEach((g, idx) => {
+      reasons.set(
+        g.supplierKey,
+        idx === 0 ? { kind: "resume-first", group: g } : { kind: "resume-queued", group: g },
+      );
+    });
+    // Grupos do histórico que NÃO estavam na fila cancelada — permanecem
+    // como estão (rótulo neutro para deixar claro que não serão tocados).
+    for (const e of queueHistory) {
+      if (!reasons.has(e.supplierKey)) {
+        reasons.set(e.supplierKey, { kind: "not-in-cancelled" });
+      }
+    }
+    setResumePlan({ reasons, toResume, skippedDone, skippedDuplicate, preCheckFailed });
+    setResumeChecking(false);
+  };
 
+  // Aplica o plano confirmado: dispara efetivamente a retomada da fila.
+  const applyResumePlan = (plan: ResumePlan) => {
+    const remaining = plan.toResume;
+    setResumePlan(null);
     if (remaining.length === 0) {
       cancelledGroupsRef.current = [];
       setJustCancelled(false);
-      // Marca no histórico como já concluídos os que a verificação identificou.
-      if (claimedGroups.length > 0 || skippedAsDone > 0) {
+      if (plan.skippedDuplicate.length > 0) {
         setQueueHistory((prev) => prev.map((e) => {
-          if (claimedGroups.some((c) => c.group.supplierKey === e.supplierKey)) {
+          if (plan.skippedDuplicate.some((c) => c.group.supplierKey === e.supplierKey)) {
             return { ...e, status: "success" as QueueStatus, errorMessage: undefined };
           }
           return e;
         }));
       }
       toast.info(
-        `Nada para retomar: ${skippedAsDone} já concluído(s), ${claimedGroups.length} já lançado(s) por outro usuário/sessão.`,
+        `Nada para retomar: ${plan.skippedDone.length} já concluído(s), ${plan.skippedDuplicate.length} duplicata(s).`,
         { duration: 7000 },
       );
       return;
     }
-
     const [first, ...rest] = remaining;
-    // Atualiza status no histórico: 'pending' para o primeiro retomado,
-    // 'queued' para o restante. Grupos duplicados detectados viram 'success'
-    // (para refletir que já existem no sistema). Preserva demais entradas.
     setQueueHistory((prev) => prev.map((e) => {
       if (e.supplierKey === first.supplierKey) {
         return { ...e, status: "pending", errorMessage: undefined };
@@ -1161,7 +1201,7 @@ export function CreateExpenseModal({
       if (rest.some((g) => g.supplierKey === e.supplierKey)) {
         return { ...e, status: "queued", errorMessage: undefined };
       }
-      if (claimedGroups.some((c) => c.group.supplierKey === e.supplierKey)) {
+      if (plan.skippedDuplicate.some((c) => c.group.supplierKey === e.supplierKey)) {
         return { ...e, status: "success" as QueueStatus, errorMessage: undefined };
       }
       return e;
@@ -1171,13 +1211,17 @@ export function CreateExpenseModal({
     cancelledGroupsRef.current = [];
     setShowQueueSummary(false);
     setJustCancelled(false);
-
     const parts = [`Retomando fila a partir de ${first.supplierLabel}`];
     if (rest.length > 0) parts.push(`(+${rest.length} depois)`);
-    if (skippedAsDone > 0) parts.push(`· ${skippedAsDone} já concluído(s) pulado(s)`);
-    if (claimedGroups.length > 0) parts.push(`· ${claimedGroups.length} duplicata(s) pulada(s)`);
+    if (plan.skippedDone.length > 0) parts.push(`· ${plan.skippedDone.length} já concluído(s)`);
+    if (plan.skippedDuplicate.length > 0) parts.push(`· ${plan.skippedDuplicate.length} duplicata(s)`);
+    if (plan.preCheckFailed) parts.push("· pré-check falhou, servidor barrará duplicatas");
     toast.info(parts.join(" "), { duration: 7000 });
   };
+
+  // Alias mantido para compatibilidade com callers existentes — agora abre a
+  // prévia em vez de disparar direto.
+  const resumeCancelledQueue = () => { void openResumePreview(); };
 
   // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
   const chooseFirstSupplierGroup = (chosenKey: string) => {
