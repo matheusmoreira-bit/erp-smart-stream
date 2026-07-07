@@ -233,6 +233,27 @@ export function CreateExpenseModal({
   // cancelamento. Habilita "Retomar fila" para continuar do próximo
   // deferredGroup sem tocar nos grupos já concluídos com sucesso.
   const cancelledGroupsRef = useRef<DocGroup[]>([]);
+  // Cache de respostas da IA por hash de conteúdo do arquivo (SHA-256).
+  // Reaproveitado em "Tentar novamente" para pular chamadas ao endpoint.
+  // Vive durante a instância do modal; é limpo no unmount/close.
+  const aiResponseCacheRef = useRef<Map<string, any>>(new Map());
+
+  const hashFile = async (file: File): Promise<string> => {
+    try {
+      const buf = await file.arrayBuffer();
+      const digest = await crypto.subtle.digest("SHA-256", buf);
+      // Chave: hash|size|name — evita colisão improvável e diferencia
+      // arquivos idênticos com nomes distintos apenas por segurança.
+      const hex = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      return `${hex}|${file.size}|${file.name}`;
+    } catch {
+      // Fallback quando SubtleCrypto não estiver disponível (contexto não
+      // seguro): usa metadados; menos preciso, mas ainda evita duplicar.
+      return `nohash|${file.size}|${file.name}|${file.lastModified}`;
+    }
+  };
   // Limite de confiança IA ajustável em tempo real (a partir do prop).
   // Grupos com confiança média abaixo disso ganham destaque visual âmbar.
   const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState<number>(lowAiConfidenceThreshold);
