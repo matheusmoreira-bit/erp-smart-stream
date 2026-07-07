@@ -151,19 +151,42 @@ async function isSapSuperuser(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return json(405, { error: "Method not allowed" });
+  const t0 = Date.now();
+  const requestId =
+    req.headers.get("x-request-id") ||
+    req.headers.get("cf-ray") ||
+    crypto.randomUUID();
+
+  if (req.method === "OPTIONS") {
+    stageLog("cors", "info", { requestId, method: "OPTIONS" });
+    return new Response(null, { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    stageLog("cors", "warn", { requestId, method: req.method, reason: "method_not_allowed" });
+    return json(405, { error: "Method not allowed", stage: "cors", requestId });
+  }
 
   let body: { expense_id?: string; action?: string; remarks?: string } = {};
-  try { body = await req.json(); } catch { return json(400, { error: "Corpo inválido" }); }
+  try {
+    body = await req.json();
+  } catch (e) {
+    stageLog("parse_body", "error", { requestId, error: (e as Error).message });
+    return json(400, { error: "Corpo inválido (JSON malformado).", stage: "parse_body", requestId });
+  }
 
   const expenseId = String(body.expense_id || "").trim();
   const action = String(body.action || "").trim().toLowerCase();
   const remarks = body.remarks?.toString().trim() || null;
-  if (!expenseId) return json(400, { error: "expense_id é obrigatório" });
-  if (action !== "approve" && action !== "reject") {
-    return json(400, { error: "action deve ser 'approve' ou 'reject'" });
+  if (!expenseId) {
+    stageLog("parse_body", "warn", { requestId, reason: "missing_expense_id" });
+    return json(400, { error: "expense_id é obrigatório.", stage: "parse_body", requestId });
   }
+  if (action !== "approve" && action !== "reject") {
+    stageLog("parse_body", "warn", { requestId, reason: "invalid_action", received: action });
+    return json(400, { error: "action deve ser 'approve' ou 'reject'.", stage: "parse_body", requestId });
+  }
+
+  stageLog("parse_body", "info", { requestId, expenseId, action, hasRemarks: !!remarks });
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -179,46 +202,75 @@ Deno.serve(async (req) => {
     (req.headers.get("idempotency-key") || req.headers.get("x-idempotency-key") || "").trim();
 
   const respond = async (status: number, body: unknown): Promise<Response> => {
+    const payload = (typeof body === "object" && body)
+      ? { ...(body as Record<string, unknown>), requestId }
+      : body;
     if (idempotencyKey) {
       try {
         await admin
           .from("expense_action_idempotency")
           .update({
             status_code: status,
-            response: body as Record<string, unknown>,
+            response: payload as Record<string, unknown>,
             completed_at: new Date().toISOString(),
           })
           .eq("idempotency_key", idempotencyKey);
       } catch (e) {
-        console.warn("[expense-approval-action] falha ao gravar idempotência:", e);
+        stageLog("idempotency_reserve", "warn", {
+          requestId, phase: "persist_response", error: (e as Error).message,
+        });
       }
     }
-    return json(status, body);
+    stageLog("success", status >= 400 ? "warn" : "info", {
+      requestId, status, elapsedMs: Date.now() - t0,
+    });
+    return json(status, payload);
   };
 
   if (idempotencyKey) {
     // 1) Já existe? → devolve a resposta gravada (ou 409 se ainda em curso).
-    const { data: prior } = await admin
+    const { data: prior, error: priorErr } = await admin
       .from("expense_action_idempotency")
       .select("idempotency_key, expense_id, action, status_code, response, completed_at")
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
+    if (priorErr) {
+      stageLog("idempotency_reserve", "error", {
+        requestId, phase: "lookup", error: priorErr.message,
+      });
+      return json(500, {
+        error: `Falha ao consultar idempotência: ${priorErr.message}`,
+        stage: "idempotency_reserve",
+        requestId,
+      });
+    }
     if (prior) {
       if ((prior as any).expense_id !== expenseId || (prior as any).action !== action) {
+        stageLog("idempotency_conflict", "warn", {
+          requestId, idempotencyKey,
+          existing: { expenseId: (prior as any).expense_id, action: (prior as any).action },
+          received: { expenseId, action },
+        });
         return json(422, {
-          error: "Idempotency-Key já utilizada para outra requisição.",
+          error: "Idempotency-Key já utilizada para outra requisição (expense/action divergentes).",
+          stage: "idempotency_conflict",
+          requestId,
         });
       }
       if ((prior as any).completed_at && (prior as any).status_code) {
-        // Replay: reentrega a MESMA resposta gravada, marcada com
-        // `replayed: true` para que o cliente possa avisar o usuário que a
-        // ação já havia sido processada anteriormente (evita confusão sobre
-        // duplicidade em retries por perda de conexão).
+        stageLog("idempotency_replay", "info", {
+          requestId, idempotencyKey, replayedStatus: (prior as any).status_code,
+        });
         const cached = (prior as any).response ?? { ok: true };
-        return json((prior as any).status_code, { ...cached, replayed: true });
+        return json((prior as any).status_code, { ...cached, replayed: true, requestId });
       }
+      stageLog("idempotency_conflict", "warn", {
+        requestId, idempotencyKey, reason: "in_flight",
+      });
       return json(409, {
-        error: "Requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
+        error: "Já existe uma requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
+        stage: "idempotency_conflict",
+        requestId,
       });
     }
     // 2) Reserva a chave — falha por conflito indica corrida com outro request.
@@ -230,11 +282,23 @@ Deno.serve(async (req) => {
         action,
       });
     if (reserveErr) {
-      return json(409, {
-        error: "Requisição idêntica em processamento (conflito ao reservar a chave).",
+      stageLog("idempotency_reserve", "error", {
+        requestId, idempotencyKey, error: reserveErr.message, code: (reserveErr as any).code,
+      });
+      // Código 23505 = unique_violation → outra requisição chegou antes.
+      const isRace = (reserveErr as any).code === "23505";
+      return json(isRace ? 409 : 500, {
+        error: isRace
+          ? "Requisição idêntica em processamento (conflito ao reservar a chave de idempotência)."
+          : `Falha ao reservar chave de idempotência: ${reserveErr.message}`,
+        stage: "idempotency_reserve",
+        requestId,
       });
     }
+    stageLog("idempotency_reserve", "info", { requestId, idempotencyKey });
   }
+
+
 
 
   // ── Identify caller ────────────────────────────────────────────────────
