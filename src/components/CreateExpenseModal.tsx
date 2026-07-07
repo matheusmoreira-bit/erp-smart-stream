@@ -1888,8 +1888,13 @@ export function CreateExpenseModal({
                     size="sm"
                     className="h-7 gap-1.5 text-xs"
                     onClick={resumeCancelledQueue}
+                    disabled={resumeChecking}
                   >
-                    ▶ Retomar fila ({cancelledGroupsRef.current.length})
+                    {resumeChecking ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verificando…</>
+                    ) : (
+                      <>▶ Retomar fila ({cancelledGroupsRef.current.length})</>
+                    )}
                   </Button>
                 )}
                 {/* Reenviar apenas erros direto do banner — abre a mesma
