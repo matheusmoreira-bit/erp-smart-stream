@@ -102,7 +102,7 @@ export function useApprovalHistory(
     try {
       // Busca livre por substituído sobrepõe qualquer modo do multi-select.
       const searchActive = trimmedSubSearch.length > 0;
-      const mode: "all" | "any" | "none" | "specific" =
+      const mode: "all" | "any" | "none" | "specific" | "search" =
         searchActive
           ? "search"
           : substituteFilter.includes("__any__")
@@ -111,7 +111,7 @@ export function useApprovalHistory(
               ? "none"
               : substituteFilter.length > 0
                 ? "specific"
-                : "all" as any;
+                : "all";
       const specificKeys = substituteFilter.filter(
         (k) => k !== "__any__" && k !== "__none__",
       );
