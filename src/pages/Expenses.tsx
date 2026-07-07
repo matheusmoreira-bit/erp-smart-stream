@@ -139,6 +139,7 @@ function ExpenseDetailModal({
   isRetrying,
   isActioning,
   mode,
+  originBadge,
 }: {
   expense: Expense | null;
   open: boolean;
