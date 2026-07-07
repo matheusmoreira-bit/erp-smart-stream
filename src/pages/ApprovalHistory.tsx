@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network, FileDown, UserCog } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
@@ -55,18 +55,42 @@ export default function ApprovalHistory() {
   }, [purchaseExpenses, salesExpenses]);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialDecision = (() => {
+    const d = searchParams.get("decision");
+    return d === "Y" || d === "N" || d === "all" ? d : "all";
+  })();
+  const initialSubstitute = (() => {
+    const s = searchParams.get("sub");
+    if (!s) return [] as string[];
+    return s.split(",").map((v) => decodeURIComponent(v)).filter(Boolean);
+  })();
+
   const [query, setQuery] = useState("");
-  const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
+  const [decision, setDecision] = useState<"all" | "Y" | "N">(initialDecision);
   // Filtro de rastreabilidade de substituto (multi-seleção):
   //   [] (vazio) → não filtra
   //   ["__any__"]  → apenas decisões executadas por substituto
   //   ["__none__"] → apenas decisões executadas pelo próprio aprovador oficial
   //   ["<key1>","<key2>",...] → substituídos específicos (chave = email || nome)
   // "__any__"/"__none__" são mutuamente exclusivos entre si e com chaves específicas.
-  const [substituteFilter, setSubstituteFilter] = useState<string[]>([]);
+  const [substituteFilter, setSubstituteFilter] = useState<string[]>(initialSubstitute);
   // Admin/view-all veem tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
   const [scope, setScope] = useState<"mine" | "all">(canViewAll ? "all" : "mine");
   useEffect(() => { setScope(canViewAll ? "all" : "mine"); }, [canViewAll]);
+
+  // Sincroniza filtros na URL para permitir compartilhamento e navegação.
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    if (decision === "all") next.delete("decision"); else next.set("decision", decision);
+    if (substituteFilter.length === 0) next.delete("sub");
+    else next.set("sub", substituteFilter.map((v) => encodeURIComponent(v)).join(","));
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decision, substituteFilter]);
+
 
   const myKeys = useMemo(() => {
     const list = [(session?.userName || "").toLowerCase()].filter(Boolean);
