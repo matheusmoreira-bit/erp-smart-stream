@@ -2470,6 +2470,7 @@ export default function ApprovalsPage() {
         formatCostCenter={formatCostCenter}
         rules={rules}
         isAdmin={isAdmin}
+        onBehalfOf={selectedDoc ? getSubstitutedOfficial(selectedDoc) : null}
         canApprove={(() => {
           if (!selectedDoc) return false;
           // Bloqueia auto-aprovação: quem criou/solicitou o documento
