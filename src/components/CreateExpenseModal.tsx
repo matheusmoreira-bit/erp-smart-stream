@@ -910,6 +910,7 @@ export function CreateExpenseModal({
     setFiles(next.docs.map((d) => d.file));
     setDraftId(null);
     applyFiscalGroup(next.docs.map((d) => d.extracted));
+    currentGroupRef.current = next;
   };
 
   const handleDrop = (e: React.DragEvent) => {
