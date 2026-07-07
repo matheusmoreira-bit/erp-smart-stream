@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, X, CheckCircle2 } from "lucide-react";
+import { Loader2, Search, X, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 interface CachedSearchComboboxProps {
@@ -13,6 +13,8 @@ interface CachedSearchComboboxProps {
   label?: string;
   suggestedQuery?: string;
   portalContainer?: HTMLElement | null;
+  /** Quando true e o campo estiver vazio, exibe destaque âmbar (obrigatório). */
+  required?: boolean;
 }
 
 export function CachedSearchCombobox({
@@ -24,6 +26,7 @@ export function CachedSearchCombobox({
   label,
   suggestedQuery,
   portalContainer,
+  required = false,
 }: CachedSearchComboboxProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -152,6 +155,11 @@ export function CachedSearchCombobox({
         <div ref={inputWrapperRef} className="relative">
           {value ? (
             <CheckCircle2 className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-green-500" />
+          ) : required ? (
+            <AlertTriangle
+              className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-amber-600 dark:text-amber-400"
+              aria-label="Campo obrigatório"
+            />
           ) : (
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           )}
@@ -163,10 +171,17 @@ export function CachedSearchCombobox({
               if (!value) setIsOpen(true);
             }}
             placeholder={isLoading ? "Carregando..." : placeholder}
-            className={`h-9 pl-8 pr-8 text-sm ${value ? "border-green-500/50 bg-green-500/5" : ""}`}
+            className={`h-9 pl-8 pr-8 text-sm ${
+              value
+                ? "border-green-500/50 bg-green-500/5"
+                : required
+                  ? "border-amber-500/50 bg-amber-500/5"
+                  : ""
+            }`}
             readOnly={!!value}
             disabled={isLoading}
           />
+
 
           {(value || query) && (
             <button

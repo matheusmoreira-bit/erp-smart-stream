@@ -12,6 +12,8 @@ import {
   Pause,
   Play,
   FileDown,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { exportQueueSummaryPdf, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv, exportPurchaseFlowReportPdf } from "@/lib/report-pdf";
 import { Button } from "@/components/ui/button";
@@ -2403,6 +2405,7 @@ export function CreateExpenseModal({
               placeholder={`Digite nome, código ou CNPJ do ${bpLabel.toLowerCase()}...`}
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
+              required
             />
             {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
               <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
@@ -2496,16 +2499,27 @@ export function CreateExpenseModal({
             </div>
           )}
 
-          {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa */}
+          {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa.
+              Padrão visual: verde + check quando preenchido, âmbar + triângulo quando obrigatório vazio. */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                Moeda *{loadingCurrencies && <span className="ml-1 text-muted-foreground">(carregando…)</span>}
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                <span>Moeda *</span>
+                {currency ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                )}
+                {loadingCurrencies && <span className="ml-1 text-muted-foreground">(carregando…)</span>}
               </label>
               {currencyOptions ? (
                 <Select value={currency} onValueChange={setCurrency}>
                   <SelectTrigger
-                    className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+                    className={`text-sm h-9 ${
+                      currency
+                        ? "bg-green-500/5 border-green-500/50 font-medium"
+                        : "bg-amber-500/5 border-amber-500/50"
+                    }`}
                   >
                     <SelectValue placeholder="Selecione a moeda" />
                   </SelectTrigger>
@@ -2520,19 +2534,56 @@ export function CreateExpenseModal({
                   value={currency}
                   readOnly
                   placeholder="Definida pelo fornecedor"
-                  className={`text-sm h-9 ${currency ? "bg-green-500/5 border-green-500/50 font-medium" : "bg-muted/30"}`}
+                  className={`text-sm h-9 ${
+                    currency
+                      ? "bg-green-500/5 border-green-500/50 font-medium"
+                      : "bg-amber-500/5 border-amber-500/50"
+                  }`}
                 />
               )}
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Data do Documento *</label>
-              <Input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="text-sm h-9" />
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                <span>Data do Documento *</span>
+                {docDate ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                )}
+              </label>
+              <Input
+                type="date"
+                value={docDate}
+                onChange={(e) => setDocDate(e.target.value)}
+                className={`text-sm h-9 ${
+                  docDate
+                    ? "bg-green-500/5 border-green-500/50"
+                    : "bg-amber-500/5 border-amber-500/50"
+                }`}
+              />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Data de Vencimento *</label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="text-sm h-9" />
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                <span>Data de Vencimento *</span>
+                {dueDate ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                )}
+              </label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className={`text-sm h-9 ${
+                  dueDate
+                    ? "bg-green-500/5 border-green-500/50"
+                    : "bg-amber-500/5 border-amber-500/50"
+                }`}
+              />
             </div>
           </div>
+
 
           <div>
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
@@ -2571,6 +2622,7 @@ export function CreateExpenseModal({
               onChange={applyHeaderCostCenter}
               placeholder="Obrigatório — aplica a todos os itens…"
               portalContainer={dialogContainer}
+              required
             />
             <CachedSearchCombobox
               label="Projeto (padrão p/ itens)"
@@ -2634,8 +2686,24 @@ export function CreateExpenseModal({
                   />
                   <div className="grid grid-cols-12 gap-2">
                     <div className="col-span-6">
-                      <label className="text-[10px] text-muted-foreground">Descrição *</label>
-                      <Input value={item.description} onChange={(e) => updateItem(i, "description", e.target.value)} placeholder="Descrição do item" className="text-sm h-8" />
+                      <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <span>Descrição *</span>
+                        {(item.description || "").trim() ? (
+                          <CheckCircle2 className="w-3 h-3 text-green-500" aria-label="Preenchido" />
+                        ) : (
+                          <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                        )}
+                      </label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateItem(i, "description", e.target.value)}
+                        placeholder="Descrição do item"
+                        className={`text-sm h-8 ${
+                          (item.description || "").trim()
+                            ? "bg-green-500/5 border-green-500/50"
+                            : "bg-amber-500/5 border-amber-500/50"
+                        }`}
+                      />
                     </div>
                     <div className="col-span-2">
                       <label className="text-[10px] text-muted-foreground">Qtd</label>
