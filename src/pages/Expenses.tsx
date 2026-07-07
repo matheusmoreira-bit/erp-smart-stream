@@ -1292,8 +1292,18 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label={searchPlaceholder}
-                className="pl-9 bg-muted/30 border-border"
+                aria-busy={isSearchPending}
+                className="pl-9 pr-9 bg-muted/30 border-border"
               />
+              {isSearchPending && (
+                <Loader2
+                  className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="sr-only" role="status" aria-live="polite">
+                {isSearchPending ? "Buscando…" : ""}
+              </span>
             </div>
             {(() => {
               const activeFilters =
