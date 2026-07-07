@@ -1443,7 +1443,7 @@ export function CreateExpenseModal({
     const [next, ...rest] = deferredGroups;
     setDeferredGroups(rest);
     resetFormForNextDeferred(next);
-    updateQueueEntry(next.supplierKey, { status: "pending" });
+    updateQueueEntry(next.supplierKey, { status: "pending", promotedAt: Date.now() });
     setShowQueueSummary(false);
     toast.info(
       `Retomado: ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} depois)` : ""}.`,
