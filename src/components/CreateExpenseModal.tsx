@@ -233,6 +233,13 @@ export function CreateExpenseModal({
   }
   const [queueHistory, setQueueHistory] = useState<QueueEntry[]>([]);
   const [showQueueSummary, setShowQueueSummary] = useState(false);
+  // Detalhes de um grupo (deferredGroup / concluído / com erro / cancelado)
+  // abertos em modal para inspeção antes de fechar. Guarda o snapshot da
+  // entry (sempre disponível) + o DocGroup original (quando o cache ainda tem).
+  const [detailsView, setDetailsView] = useState<{
+    entry: QueueEntry;
+    group: DocGroup | null;
+  } | null>(null);
   // Marca que o usuário acabou de cancelar o processamento/fila. Habilita o
   // botão "Tentar novamente" enquanto os anexos permanecerem no modal.
   const [justCancelled, setJustCancelled] = useState(false);
