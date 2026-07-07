@@ -651,7 +651,16 @@ Deno.serve(async (req) => {
     };
     if (remarks) updates.remarks = remarks;
     const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-    if (updErr) return await respond(500, { error: `Falha ao avançar de nível: ${updErr.message}` });
+    if (updErr) {
+      stageLog("update_advance_level", "error", { requestId, expenseId, nextLevelOrder, error: updErr.message });
+      return await respond(500, {
+        error: `Falha ao avançar para o próximo nível de aprovação: ${updErr.message}`,
+        stage: "update_advance_level",
+      });
+    }
+    stageLog("update_advance_level", "info", {
+      requestId, expenseId, from: currentLevel, to: nextLevelOrder, jumped, nextApproverName,
+    });
 
     if (jumped) {
       await admin.from("expense_approval_log").insert({
