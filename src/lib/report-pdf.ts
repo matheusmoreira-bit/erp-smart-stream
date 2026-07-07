@@ -503,3 +503,172 @@ export async function exportExpenseDetailPdf(
     fileName: `${kindLabel}_${expense.supplier_name}_${expense.id.slice(0, 8)}`,
   });
 }
+
+// ---- Resumo da fila de IA (auditoria do processamento por fornecedor) ------
+
+export interface QueueSummaryEntry {
+  supplierLabel: string;
+  status: "pending" | "queued" | "success" | "failed" | "cancelled";
+  fileCount: number;
+  lineCount: number;
+  estimatedTotal: number;
+  currency: string;
+  currencies: string[];
+  aiConfidence: number | null;
+  aiWarnings: string[];
+  errorMessage?: string;
+  fileNames: string[];
+}
+
+export interface QueueSummaryOptions {
+  entries: QueueSummaryEntry[];
+  /** Limite (0-1) usado para marcar linhas com baixa confiança. */
+  confidenceThreshold: number;
+  /** "Despesa" | "Pedido de venda" — usado apenas no título. */
+  kindLabel?: string;
+  fileName?: string;
+}
+
+const STATUS_LABEL: Record<QueueSummaryEntry["status"], string> = {
+  success: "Criada",
+  failed: "Falhou",
+  cancelled: "Cancelada",
+  pending: "Em andamento",
+  queued: "Na fila",
+};
+
+export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<void> {
+  const { entries, confidenceThreshold } = opts;
+  const kind = opts.kindLabel || "Despesas";
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  drawHeader(
+    doc,
+    `Resumo da fila de IA — ${kind}`,
+    `${entries.length} fornecedor(es) processado(s)`,
+  );
+
+  const totals = {
+    ok: entries.filter((e) => e.status === "success").length,
+    failed: entries.filter((e) => e.status === "failed" || !!e.errorMessage).length,
+    cancelled: entries.filter((e) => e.status === "cancelled").length,
+    pending: entries.filter((e) => e.status === "pending" || e.status === "queued").length,
+    lowConf: entries.filter(
+      (e) => e.aiConfidence !== null && e.aiConfidence < confidenceThreshold,
+    ).length,
+    files: entries.reduce((s, e) => s + e.fileCount, 0),
+    lines: entries.reduce((s, e) => s + e.lineCount, 0),
+  };
+  // Total geral agrupado por moeda (evita somar valores em moedas diferentes).
+  const perCurrency = new Map<string, number>();
+  for (const e of entries) {
+    const cur = e.currency || "BRL";
+    perCurrency.set(cur, (perCurrency.get(cur) ?? 0) + (e.estimatedTotal || 0));
+  }
+  const totalsText = Array.from(perCurrency.entries())
+    .map(([cur, v]) => formatCurrency(v, cur))
+    .join(" · ") || "—";
+
+  let cursorY = 24;
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  const meta: Array<[string, string]> = [
+    ["Concluídas", `${totals.ok} / ${entries.length}`],
+    ["Falhas", String(totals.failed)],
+    ["Canceladas", String(totals.cancelled)],
+    ["Pendentes", String(totals.pending)],
+    ["Baixa confiança", `${totals.lowConf} (< ${Math.round(confidenceThreshold * 100)}%)`],
+    ["Arquivos / linhas", `${totals.files} / ${totals.lines}`],
+    ["Total estimado", totalsText],
+  ];
+  for (const [k, v] of meta) {
+    doc.text(`${k}: ${v}`, 10, cursorY);
+    cursorY += 4;
+  }
+  cursorY += 2;
+  doc.setTextColor(0, 0, 0);
+
+  // Tabela principal por fornecedor.
+  autoTable(doc, {
+    startY: cursorY,
+    head: [["#", "Fornecedor", "Status", "Arq.", "Linhas", "Total", "Confiança"]],
+    body: entries.map((e, i) => {
+      const conf =
+        e.aiConfidence === null ? "—" : `${Math.round(e.aiConfidence * 100)}%`;
+      const low =
+        e.aiConfidence !== null && e.aiConfidence < confidenceThreshold ? " ⚠" : "";
+      const total = e.estimatedTotal > 0 ? formatCurrency(e.estimatedTotal, e.currency) : "—";
+      return [
+        String(i + 1),
+        e.supplierLabel + (e.currencies.length > 1 ? ` (moedas: ${e.currencies.join(", ")})` : ""),
+        STATUS_LABEL[e.status],
+        String(e.fileCount),
+        String(e.lineCount),
+        total,
+        conf + low,
+      ];
+    }),
+    styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 8, halign: "right" },
+      2: { cellWidth: 22 },
+      3: { cellWidth: 12, halign: "right" },
+      4: { cellWidth: 14, halign: "right" },
+      5: { cellWidth: 28, halign: "right" },
+      6: { cellWidth: 22, halign: "right" },
+    },
+    margin: { left: 8, right: 8 },
+  });
+
+  // Bloco de alertas / erros / arquivos por fornecedor (só para os que têm algo relevante).
+  const relevant = entries.filter(
+    (e) => e.aiWarnings.length > 0 || e.errorMessage || e.fileNames.length > 0,
+  );
+  if (relevant.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : cursorY + 8;
+    const pageH = doc.internal.pageSize.getHeight();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("Alertas e detalhes por fornecedor", 10, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    for (const e of relevant) {
+      if (y > pageH - 20) { doc.addPage(); y = 15; }
+      doc.setFont("helvetica", "bold");
+      doc.text(e.supplierLabel, 10, y);
+      doc.setFont("helvetica", "normal");
+      y += 4;
+      if (e.errorMessage) {
+        doc.setTextColor(180, 30, 30);
+        for (const line of doc.splitTextToSize(`Erro: ${e.errorMessage}`, 190)) {
+          if (y > pageH - 15) { doc.addPage(); y = 15; }
+          doc.text(line, 12, y); y += 3.5;
+        }
+        doc.setTextColor(0, 0, 0);
+      }
+      for (const w of e.aiWarnings) {
+        doc.setTextColor(150, 100, 0);
+        for (const line of doc.splitTextToSize(`⚠ ${w}`, 190)) {
+          if (y > pageH - 15) { doc.addPage(); y = 15; }
+          doc.text(line, 12, y); y += 3.5;
+        }
+        doc.setTextColor(0, 0, 0);
+      }
+      if (e.fileNames.length > 0) {
+        doc.setTextColor(100, 100, 100);
+        for (const line of doc.splitTextToSize(`Arquivos: ${e.fileNames.join(", ")}`, 190)) {
+          if (y > pageH - 15) { doc.addPage(); y = 15; }
+          doc.text(line, 12, y); y += 3.5;
+        }
+        doc.setTextColor(0, 0, 0);
+      }
+      y += 2;
+    }
+  }
+
+  drawFooter(doc, await currentUserEmail());
+  doc.save(`${safeFileName(opts.fileName || "resumo_fila_ia")}_${Date.now()}.pdf`);
+}
