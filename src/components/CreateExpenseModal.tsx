@@ -1095,6 +1095,11 @@ export function CreateExpenseModal({
   };
 
   const openDetailsFor = (entry: QueueEntry) => {
+    // Zera filtros para a nova visualização — evita "resultado vazio"
+    // herdado da inspeção anterior quando o usuário abre outro grupo.
+    setDetailsSearch("");
+    setDetailsTypeFilter("all");
+    setDetailsConfidenceFilter("all");
     setDetailsView({ entry, group: findDocGroupByKey(entry.supplierKey) });
   };
 
