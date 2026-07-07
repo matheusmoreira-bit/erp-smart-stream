@@ -1789,6 +1789,34 @@ export function CreateExpenseModal({
       </AlertDialogContent>
     </AlertDialog>
 
+    {/* Confirmação de cancelamento do processamento IA e/ou fila de fornecedores */}
+    <AlertDialog open={cancelConfirm} onOpenChange={setCancelConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Cancelar processamento?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {isProcessing && "A classificação por IA em andamento será interrompida. "}
+            {deferredGroups.length > 0 && (
+              <>
+                As <strong>{deferredGroups.length}</strong> despesa(s) na fila
+                ({deferredGroups.map((g) => g.supplierLabel).join(", ")}) serão descartadas.{" "}
+              </>
+            )}
+            Os anexos permanecem no modal para você continuar manualmente. Deseja continuar?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Voltar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={cancelProcessingAndQueue}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Sim, cancelar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
   </>
   );
 }
