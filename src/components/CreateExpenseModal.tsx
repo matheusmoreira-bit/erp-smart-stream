@@ -2021,11 +2021,10 @@ export function CreateExpenseModal({
     <AlertDialog
       open={showQueueSummary}
       onOpenChange={(v) => {
-        if (!v) {
-          setShowQueueSummary(false);
-          setQueueHistory([]);
-          onClose();
-        }
+        // Só fecha o resumo; NÃO fecha o modal principal aqui (isso permite
+        // "Reenviar apenas erros" fechar o resumo mantendo o modal aberto).
+        // O fechamento definitivo do modal acontece só via botão "Fechar".
+        if (!v) setShowQueueSummary(false);
       }}
     >
       <AlertDialogContent className="max-w-2xl">
