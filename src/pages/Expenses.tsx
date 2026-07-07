@@ -977,7 +977,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       </header>
 
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
         {/* Back + actions */}
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
