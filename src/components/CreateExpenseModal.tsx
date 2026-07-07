@@ -1153,8 +1153,11 @@ export function CreateExpenseModal({
     // Marca no histórico tudo que estava pendente/enfileirado como cancelado
     // e abre o resumo final para o usuário conferir o que foi processado.
     setQueueHistory((prev) => {
+      const now = Date.now();
       const next = prev.map((e) =>
-        e.status === "pending" || e.status === "queued" ? { ...e, status: "cancelled" as QueueStatus } : e,
+        e.status === "pending" || e.status === "queued"
+          ? { ...e, status: "cancelled" as QueueStatus, completedAt: e.completedAt ?? now }
+          : e,
       );
       if (next.length > 0) setShowQueueSummary(true);
       return next;
