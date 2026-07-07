@@ -2352,6 +2352,7 @@ export default function ApprovalsPage() {
                   const overdue = isOverdue(doc.dueDate);
                   const internalId = (doc as any).__internalId as string | undefined;
                   const linkedExpense = internalId ? expenses.find((e) => e.id === internalId) : undefined;
+                  const onBehalfOf = getSubstitutedOfficial(doc);
                   return (
                     <motion.tr
                       key={doc.approvalRequestId}
@@ -2367,7 +2368,20 @@ export default function ApprovalsPage() {
                       <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">#{doc.docNum}</td>
                       <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
                       <td className="py-3 px-3 text-foreground">{doc.cardName}</td>
-                      <td className="py-3 px-3 text-foreground font-medium">{doc.currentApprover}</td>
+                      <td className="py-3 px-3 text-foreground font-medium">
+                        <div className="flex flex-col gap-1">
+                          <span>{doc.currentApprover}</span>
+                          {onBehalfOf && (
+                            <span
+                              className="inline-flex items-center gap-1 self-start text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5"
+                              title={`Você está aprovando como substituto de ${onBehalfOf.name}`}
+                            >
+                              <UserCog className="w-3 h-3" aria-hidden="true" />
+                              em nome de {onBehalfOf.name}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3 px-3 text-muted-foreground">{doc.requester}</td>
                       <td className={`py-3 px-3 font-mono text-xs ${overdue ? "text-destructive font-semibold" : "text-muted-foreground"}`}>
                         {formatDate(doc.dueDate)}
