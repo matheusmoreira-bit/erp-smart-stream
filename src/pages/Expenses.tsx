@@ -660,6 +660,9 @@ function SortableCell<K extends string>({
       </button>
     </div>
   );
+}
+
+
 
 /* ─── Expense Card ─── */
 function ExpenseCard({
