@@ -72,7 +72,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
                   {approverStats.reduce((s, a) => s + a.countApproved + a.countRejected, 0)} aprovações
                 </span>
               </div>
-              <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-3 sm:gap-4 mb-4 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--primary))" }} /> Aprovados</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--destructive))" }} /> Rejeitados</span>
                 <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: "hsl(var(--warning))" }} /> Meta ({companyTargets.aprovador}d)</span>
