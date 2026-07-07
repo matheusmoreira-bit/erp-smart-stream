@@ -72,18 +72,30 @@ Deno.serve(async (req) => {
   }
 
   const results: Array<{ id: string; docEntry?: number; poStatus?: string; expenseStatus?: string; error?: string }> = [];
+  const startedAt = Date.now();
+
+  // Permite forçar sincronia de IDs específicos via POST body { expenseIds: string[] }
+  let expenseIdsFilter: string[] | null = null;
+  let trigger = "cron";
+  if (req.method === "POST") {
+    try {
+      const body = await req.json();
+      if (Array.isArray(body?.expenseIds) && body.expenseIds.length) {
+        expenseIdsFilter = body.expenseIds.map((v: unknown) => String(v));
+        trigger = "manual";
+      }
+    } catch { /* body opcional */ }
+  }
+
+  // Registra a execução em curso
+  const { data: runRow } = await sb
+    .from("expense_sap_sync_runs")
+    .insert({ trigger, status: "running" })
+    .select("id")
+    .single();
+  const runId = (runRow as { id?: string } | null)?.id ?? null;
 
   try {
-    // Permite forçar sincronia de IDs específicos via POST body { expenseIds: string[] }
-    let expenseIdsFilter: string[] | null = null;
-    if (req.method === "POST") {
-      try {
-        const body = await req.json();
-        if (Array.isArray(body?.expenseIds) && body.expenseIds.length) {
-          expenseIdsFilter = body.expenseIds.map((v: unknown) => String(v));
-        }
-      } catch { /* body opcional */ }
-    }
 
     // Alvos: expenses com sap_doc_entry preenchido e status não-terminal
     // ('finalizado' e 'cancelado' são terminais e não precisam de polling contínuo).
