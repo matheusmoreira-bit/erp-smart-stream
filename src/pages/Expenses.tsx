@@ -1149,7 +1149,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         isCancelling={isCancelling}
         isRetrying={isRetrying}
         isActioning={isActioning}
+        mode={mode}
       />
+
 
       <EditExpenseModal
         expense={editingExpense}
