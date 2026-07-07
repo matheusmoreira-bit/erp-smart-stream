@@ -2686,8 +2686,24 @@ export function CreateExpenseModal({
                   />
                   <div className="grid grid-cols-12 gap-2">
                     <div className="col-span-6">
-                      <label className="text-[10px] text-muted-foreground">Descrição *</label>
-                      <Input value={item.description} onChange={(e) => updateItem(i, "description", e.target.value)} placeholder="Descrição do item" className="text-sm h-8" />
+                      <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <span>Descrição *</span>
+                        {(item.description || "").trim() ? (
+                          <CheckCircle2 className="w-3 h-3 text-green-500" aria-label="Preenchido" />
+                        ) : (
+                          <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                        )}
+                      </label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateItem(i, "description", e.target.value)}
+                        placeholder="Descrição do item"
+                        className={`text-sm h-8 ${
+                          (item.description || "").trim()
+                            ? "bg-green-500/5 border-green-500/50"
+                            : "bg-amber-500/5 border-amber-500/50"
+                        }`}
+                      />
                     </div>
                     <div className="col-span-2">
                       <label className="text-[10px] text-muted-foreground">Qtd</label>
