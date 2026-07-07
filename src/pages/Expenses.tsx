@@ -960,6 +960,37 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 setShowCreate(true);
               }}
             />
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              disabled={filtered.length === 0}
+              onClick={() => {
+                void exportListReportPdf({
+                  title: isSales ? "Relatório de Vendas" : "Relatório de Compras",
+                  subtitle: `${filtered.length} registro(s) · ${companyLabel}`,
+                  meta: [
+                    { label: "Empresa", value: companyLabel },
+                    { label: "Usuário", value: session?.userName || "—" },
+                    { label: "Total", value: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalValue) },
+                  ],
+                  columns: [
+                    { header: "Fornecedor/Cliente", cell: (r) => r.exp.supplier_name },
+                    { header: "Status", cell: (r) => STATUS_LABELS[r.exp.status] || r.exp.status },
+                    { header: "Solicitante", cell: (r) => r.exp.requester_name || "—" },
+                    { header: "Aprovador atual", cell: (r) => r.exp.current_approver || "—" },
+                    { header: "Data doc.", cell: (r) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
+                    { header: "Vencimento", cell: (r) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
+                    { header: "Total", align: "right", cell: (r) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
+                    { header: "ERP #", cell: (r) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
+                    { header: "Origem", cell: (r) => r.origin === "erp_flow" ? "ERP Flow" : "ERP" },
+                  ],
+                  rows: filtered,
+                  fileName: isSales ? "vendas" : "compras",
+                });
+              }}
+            >
+              <FileDown className="w-4 h-4" /> Exportar relatório
+            </Button>
             <Button onClick={() => setShowCreate(true)} className="gap-1.5">
               <Plus className="w-4 h-4" /> {newButtonLabel}
             </Button>
