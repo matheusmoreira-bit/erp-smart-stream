@@ -2074,6 +2074,7 @@ export default function ApprovalsPage() {
               substitutedForName: onBehalfOf?.name ?? null,
               substitutedForEmail: onBehalfOf?.email ?? null,
               actedAsSubstitute: !!onBehalfOf,
+              actingRole,
             },
           });
         }
