@@ -2394,6 +2394,13 @@ export function CreateExpenseModal({
             </div>
           )}
 
+          {/* ==================== CABEÇALHO ==================== */}
+          <section className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-4 shadow-sm">
+            <div className="flex items-center gap-2 -mb-1">
+              <div className="h-4 w-1 rounded-full bg-primary/70" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cabeçalho</h3>
+            </div>
+
           {/* Supplier */}
           <div>
             <CachedSearchCombobox
