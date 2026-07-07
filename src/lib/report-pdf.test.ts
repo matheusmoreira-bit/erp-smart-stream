@@ -363,23 +363,21 @@ describe("exportListReportCsv — aprovações/compras/vendas", () => {
   const blobs: Blob[] = [];
   const downloads: string[] = [];
   let originalCreateURL: typeof URL.createObjectURL;
-  let originalRevoke: typeof URL.revokeObjectURL;
   let originalClick: typeof HTMLAnchorElement.prototype.click;
 
   beforeEach(() => {
     blobs.length = 0;
     downloads.length = 0;
     originalCreateURL = URL.createObjectURL;
-    originalRevoke = URL.revokeObjectURL;
     originalClick = HTMLAnchorElement.prototype.click;
     URL.createObjectURL = ((b: Blob) => { blobs.push(b); return "blob:mock"; }) as typeof URL.createObjectURL;
+    // jsdom não expõe revokeObjectURL — stub permanente (não restaurar).
     URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
     HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
   });
 
   afterEach(() => {
     URL.createObjectURL = originalCreateURL;
-    URL.revokeObjectURL = originalRevoke;
     HTMLAnchorElement.prototype.click = originalClick;
   });
 
