@@ -1549,6 +1549,26 @@ export default function ApprovalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approvals, purchaseExpenses, salesExpenses]);
 
+  // Deep-link: read `?doc=<key>` and open the matching approval once loaded.
+  useEffect(() => {
+    const id = readDocParam();
+    if (!id || selectedDoc) return;
+    const keyOf = (d: ApprovalDoc) => {
+      const internalId = (d as unknown as { __internalId?: string }).__internalId;
+      return internalId ? `internal:${internalId}` : `sap:${d.approvalRequestId}`;
+    };
+    const found = allApprovals.find((d) => keyOf(d) === id);
+    if (found) setSelectedDoc(found);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approvals, purchaseExpenses, salesExpenses]);
+
+  // Keep `?doc=<key>` in sync with the selected approval so it can be shared.
+  useEffect(() => {
+    if (!selectedDoc) { setDocParam(null); return; }
+    const internalId = (selectedDoc as unknown as { __internalId?: string }).__internalId;
+    setDocParam(internalId ? `internal:${internalId}` : `sap:${selectedDoc.approvalRequestId}`);
+  }, [selectedDoc]);
+
   const allCostCenterCodes = useMemo(
     () => new Set(allApprovals.flatMap((doc) => {
       const rateio = shouldShowRateio(doc);
