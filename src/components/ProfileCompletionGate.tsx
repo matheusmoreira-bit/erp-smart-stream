@@ -16,11 +16,16 @@ export function ProfileCompletionGate() {
 
   useEffect(() => {
     if (loading || !profile) return;
-    if (!isPending) { setOpen(false); return; }
+    const shownKey = `profile-gate-shown:${profile.company_db}:${profile.user_code}`;
+    if (!isPending) {
+      // Cadastro completo: nunca mais mostrar hoje nem re-abrir se já estava aberto.
+      setOpen(false);
+      try { localStorage.removeItem(shownKey); } catch { /* ignore */ }
+      return;
+    }
     const dismissed = profile.dismissed_until && new Date(profile.dismissed_until).getTime() > Date.now();
     if (dismissed) { setOpen(false); return; }
     const today = new Date().toISOString().slice(0, 10);
-    const shownKey = `profile-gate-shown:${profile.email || "anon"}`;
     const lastShown = typeof window !== "undefined" ? localStorage.getItem(shownKey) : null;
     if (lastShown === today) { setOpen(false); return; }
     setOpen(true);
