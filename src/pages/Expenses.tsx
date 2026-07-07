@@ -847,6 +847,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const loadMoreSap = useCallback(async () => {
     if (isLoadingMoreSap || !sapHasMore) return;
+    const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
     setIsLoadingMoreSap(true);
     try {
       const next = await fetchSapPage(sapOrders.length);
@@ -860,6 +861,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       toast.error(e instanceof Error ? e.message : "Falha ao carregar mais pedidos do ERP");
     } finally {
       setIsLoadingMoreSap(false);
+      if (typeof window !== "undefined") {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY });
+          requestAnimationFrame(() => window.scrollTo({ top: scrollY }));
+        });
+      }
     }
   }, [fetchSapPage, isLoadingMoreSap, sapHasMore, sapOrders.length]);
 
