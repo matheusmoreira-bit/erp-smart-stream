@@ -456,6 +456,20 @@ export function CreateExpenseModal({
     }
   }, [open]);
 
+  // Ao reabrir o modal, avisa que ainda existe contexto de retentativa
+  // preservado (grupos com erro + anexos + cache da IA), incentivando o uso
+  // do botão "Reenviar erros" no banner sem refazer chamadas de IA.
+  useEffect(() => {
+    if (open && failedGroupsRef.current.size > 0 && queueHistory.some((e) => e.status === "failed")) {
+      const n = failedGroupsRef.current.size;
+      toast.info(
+        `${n} grupo(s) com erro preservado(s) da sessão anterior. Use "Reenviar erros" para retentar sem chamar a IA de novo.`,
+        { duration: 7000 },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   // Hydrate from an existing draft when the user chose "Retomar"
   useEffect(() => {
     if (!open || !initialDraft || draftHydrated) return;
