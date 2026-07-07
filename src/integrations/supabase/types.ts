@@ -1329,6 +1329,36 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_action_idempotency: {
+        Row: {
+          action: string
+          completed_at: string | null
+          created_at: string
+          expense_id: string
+          idempotency_key: string
+          response: Json | null
+          status_code: number | null
+        }
+        Insert: {
+          action: string
+          completed_at?: string | null
+          created_at?: string
+          expense_id: string
+          idempotency_key: string
+          response?: Json | null
+          status_code?: number | null
+        }
+        Update: {
+          action?: string
+          completed_at?: string | null
+          created_at?: string
+          expense_id?: string
+          idempotency_key?: string
+          response?: Json | null
+          status_code?: number | null
+        }
+        Relationships: []
+      }
       expense_approval_log: {
         Row: {
           approver_email: string | null
