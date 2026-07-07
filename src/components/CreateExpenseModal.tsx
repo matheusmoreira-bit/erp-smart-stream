@@ -2931,6 +2931,93 @@ export function CreateExpenseModal({
       </AlertDialogContent>
     </AlertDialog>
 
+    {/* Prévia visual do "Retomar fila": lista cada grupo do histórico com o
+        motivo/ação computada (retomar / pular por já concluído / pular por
+        duplicata / inalterado) para o usuário conferir antes de disparar. */}
+    <AlertDialog open={!!resumePlan} onOpenChange={(v) => { if (!v) setResumePlan(null); }}>
+      <AlertDialogContent className="max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Retomar fila — prévia</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              {resumePlan && (() => {
+                const plan = resumePlan;
+                const badgeFor = (a: ResumeAction | undefined) => {
+                  if (!a) return null;
+                  switch (a.kind) {
+                    case "resume-first":
+                      return { icon: "▶", label: "Vai retomar agora (1º)", cls: "bg-primary/15 text-primary border-primary/40" };
+                    case "resume-queued":
+                      return { icon: "⏳", label: "Vai voltar para a fila", cls: "bg-primary/5 text-primary border-primary/30" };
+                    case "skip-done":
+                      return { icon: "✅", label: "Já concluído — não será tocado", cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" };
+                    case "skip-duplicate":
+                      return { icon: "🔁", label: "Duplicata detectada — pulada", cls: "bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/40" };
+                    case "not-in-cancelled":
+                      return { icon: "—", label: "Inalterado (não estava na fila cancelada)", cls: "bg-muted text-muted-foreground border-border" };
+                  }
+                };
+                return (
+                  <>
+                    <div className="text-xs text-muted-foreground">
+                      <strong className="text-foreground">{plan.toResume.length}</strong> grupo(s) serão retomados,{" "}
+                      <strong className="text-foreground">{plan.skippedDone.length}</strong> pulado(s) por já estarem concluídos,{" "}
+                      <strong className="text-foreground">{plan.skippedDuplicate.length}</strong> pulado(s) por duplicidade de anexo.
+                    </div>
+                    {plan.preCheckFailed && (
+                      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                        ⚠ A pré-verificação de duplicatas falhou. O servidor ainda vai bloquear conflitos via UNIQUE, mas a lista abaixo pode não refletir todas as duplicatas.
+                      </div>
+                    )}
+                    <ul className="space-y-1.5 max-h-[45vh] overflow-y-auto pr-1">
+                      {queueHistory.map((e, idx) => {
+                        const action = plan.reasons.get(e.supplierKey);
+                        const b = badgeFor(action);
+                        const dup = action?.kind === "skip-duplicate" ? action : null;
+                        return (
+                          <li key={e.supplierKey} className="rounded-md border border-border bg-muted/20 px-2.5 py-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium truncate">
+                                  {idx + 1}. {e.supplierLabel}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  {e.fileCount} arquivo(s) · status atual: {e.status}
+                                </div>
+                              </div>
+                              {b && (
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 ${b.cls}`}>
+                                  {b.icon} {b.label}
+                                </span>
+                              )}
+                            </div>
+                            {dup?.owner && (
+                              <div className="text-[10px] text-amber-700 dark:text-amber-500 mt-1">
+                                Já lançado por: <code className="font-mono">{dup.owner.slice(0, 8)}…</code>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                );
+              })()}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!resumePlan || resumePlan.toResume.length === 0}
+            onClick={() => { if (resumePlan) applyResumePlan(resumePlan); }}
+          >
+            {resumePlan && resumePlan.toResume.length === 0 ? "Nada para retomar" : "Confirmar retomada"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     {/* Detalhes de um grupo: arquivos, linhas extraídas pela IA e alertas.
         Abre-se sobre o modal principal e sobre o resumo, permitindo inspeção
         antes do usuário fechar. Quando o DocGroup original ainda está em cache
