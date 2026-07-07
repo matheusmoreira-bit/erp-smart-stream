@@ -531,6 +531,7 @@ export async function retrySupplierToSap(
     .select("*")
     .single();
   if (error) throw error;
+  invalidateBusinessPartnerCaches(supplier.company_db || session?.companyDB);
   return data as Supplier;
 }
 
