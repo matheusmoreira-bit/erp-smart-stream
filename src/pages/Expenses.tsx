@@ -1250,15 +1250,22 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         </div>
 
         {/* Toolbar */}
-        <div className="space-y-3">
+        <section
+          aria-label="Busca e filtros"
+          className="space-y-3"
+        >
           {/* Search row + mobile filter toggle */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1 lg:max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <label htmlFor="expenses-search" className="sr-only">{searchPlaceholder}</label>
               <Input
+                id="expenses-search"
+                type="search"
                 placeholder={searchPlaceholder}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label={searchPlaceholder}
                 className="pl-9 bg-muted/30 border-border"
               />
             </div>
@@ -1269,21 +1276,30 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 (showAll !== isAdmin ? 1 : 0);
               return (
                 <Button
+                  ref={filtersToggleRef}
+                  type="button"
                   variant="outline"
                   size="sm"
                   className="lg:hidden gap-1.5 shrink-0"
-                  onClick={() => setFiltersOpen((v) => !v)}
+                  onClick={() => {
+                    filtersJustOpened.current = !filtersOpen;
+                    setFiltersOpen((v) => !v);
+                  }}
                   aria-expanded={filtersOpen}
                   aria-controls="expenses-filters"
+                  aria-label={`${filtersOpen ? "Ocultar" : "Mostrar"} filtros${activeFilters > 0 ? ` (${activeFilters} ativos)` : ""}`}
                 >
-                  <SlidersHorizontal className="w-4 h-4" />
+                  <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
                   Filtros
                   {activeFilters > 0 && (
-                    <span className="ml-1 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold flex items-center justify-center">
+                    <span
+                      className="ml-1 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold flex items-center justify-center"
+                      aria-hidden="true"
+                    >
                       {activeFilters}
                     </span>
                   )}
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} aria-hidden="true" />
                 </Button>
               );
             })()}
@@ -1292,14 +1308,21 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           {/* Filters (collapsed on mobile, inline on desktop) */}
           <div
             id="expenses-filters"
+            ref={filtersPanelRef}
+            role="region"
+            aria-label="Filtros de lançamentos"
+            aria-hidden={!filtersOpen ? undefined : false}
             className={`${filtersOpen ? "flex" : "hidden"} lg:flex flex-col lg:flex-row lg:items-center gap-3 lg:flex-wrap`}
           >
-            <div className="flex gap-1 flex-wrap">
+            <div role="group" aria-label="Filtrar por status" className="flex gap-1 flex-wrap">
               {statusOptions.map((opt) => (
                 <button
                   key={opt.value}
+                  type="button"
                   onClick={() => setStatusFilter(opt.value)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  aria-pressed={statusFilter === opt.value}
+                  aria-label={`Status: ${opt.label}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     statusFilter === opt.value
                       ? "bg-primary/15 text-primary"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -1310,10 +1333,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               ))}
             </div>
             {showSourceToggle && (
-              <div className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs w-full sm:w-auto">
+              <div
+                role="group"
+                aria-label="Origem dos pedidos"
+                className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs w-full sm:w-auto"
+              >
                 <button
+                  type="button"
                   onClick={() => setSourceMode("flow")}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors ${
+                  aria-pressed={sourceMode === "flow"}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     sourceMode === "flow"
                       ? "bg-primary/15 text-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -1322,15 +1351,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   Apenas ERP Flow
                 </button>
                 <button
+                  type="button"
                   onClick={() => setSourceMode("both")}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  aria-pressed={sourceMode === "both"}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     sourceMode === "both"
                       ? "bg-primary/15 text-primary"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   Ambos (ERP Flow + ERP)
-                  {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />}
                 </button>
               </div>
             )}
