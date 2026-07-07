@@ -488,7 +488,9 @@ function ApprovalDetailModal({
   if (!doc) return null;
 
   const overdue = isOverdue(doc.dueDate);
-  const isOtherApprover = isSuperUser && doc.currentApprover.toLowerCase() !== currentUserName.toLowerCase();
+  const isOtherApprover = isSuperUser &&
+    !approverMatches(doc.currentApprover, currentUserName) &&
+    !approverMatches(doc.currentApprover, currentUserEmail || "");
 
   const handleAction = (action: "approve" | "reject") => {
     // Sempre confirmar antes de aprovar/rejeitar — mostra resumo do que
