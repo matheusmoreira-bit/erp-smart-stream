@@ -596,7 +596,17 @@ export async function exportDetailReportPdf(opts: DetailReportOptions): Promise<
     doc.text("Os arquivos anexos devem ser baixados diretamente pelo aplicativo (links protegidos).", 10, y);
   }
 
-  drawFooter(doc, await currentUserEmail());
+  await finalizePdf(doc, "Detalhe", {
+    title: opts.title,
+    subtitle: opts.subtitle,
+    statusBadge: opts.statusBadge,
+    headline: opts.headline,
+    sections: opts.sections,
+    items: opts.items,
+    itemsCurrency: opts.itemsCurrency,
+    events: opts.events,
+    attachments: opts.attachments,
+  });
   doc.save(`${safeFileName(opts.fileName || opts.title)}_${Date.now()}.pdf`);
 }
 
