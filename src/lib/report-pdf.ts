@@ -967,6 +967,15 @@ export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<
     }
   }
 
+  // Seção de evidências: contagem e nomes dos anexos por fornecedor + IDs de
+  // evento. Sempre incluída (mesmo sem alertas), para servir de anexo de
+  // auditoria do resumo.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const evStart = ((doc as any).lastAutoTable?.finalY ?? 24) + 8;
+  drawEvidenceSection(doc, entries, evStart);
+
+
+
   await finalizePdf(doc, "Resumo da fila de IA", {
     kindLabel: opts.kindLabel,
     confidenceThreshold: opts.confidenceThreshold,
