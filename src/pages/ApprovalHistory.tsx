@@ -136,6 +136,7 @@ export default function ApprovalHistory() {
                   { header: "Parceiro", cell: (r: typeof filtered[number]) => r.card_name || "—" },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => r.requester_name || "—" },
                   { header: "Aprovador", cell: (r: typeof filtered[number]) => r.approver_name || "—" },
+                  { header: "Em nome de", cell: (r: typeof filtered[number]) => r.substituted_for_name || r.substituted_for_email || "—" },
                   { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => formatCurrency(r.doc_total, r.currency) },
                   { header: "Observações", cell: (r: typeof filtered[number]) => r.remarks || "—" },
                 ],
