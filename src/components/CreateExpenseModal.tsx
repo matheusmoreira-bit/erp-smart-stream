@@ -1063,6 +1063,12 @@ export function CreateExpenseModal({
         setDraftId(null);
       }
 
+      // Marca no histórico da fila o grupo atual como concluído com sucesso.
+      const currentEntry = queueHistory.find((e) => e.status === "pending");
+      if (currentEntry) {
+        updateQueueEntry(currentEntry.supplierKey, { status: "success" });
+      }
+
       // Se houver grupos de fornecedores adiados (regra 2 — anexos com
       // fornecedores diferentes), abrimos automaticamente o próximo em vez
       // de fechar o modal, mantendo o encadeamento pedido pelo usuário.
@@ -1070,6 +1076,8 @@ export function CreateExpenseModal({
         const [next, ...rest] = deferredGroups;
         resetFormForNextDeferred(next);
         setDeferredGroups(rest);
+        // Promove a próxima entrada do histórico para "pendente".
+        updateQueueEntry(next.supplierKey, { status: "pending" });
         toast.info(
           `Agora criando a despesa de ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} restante(s))` : ""}.`,
           { duration: 6000 },
@@ -1077,6 +1085,12 @@ export function CreateExpenseModal({
         return;
       }
 
+      // Encerrou a fila. Se houve encadeamento (>1 entrada), abre o resumo
+      // final antes de fechar; caso contrário, fecha direto.
+      if (queueHistory.length > 1) {
+        setShowQueueSummary(true);
+        return;
+      }
       onClose();
     } catch (e: any) {
       console.error("Erro ao criar despesa:", e);
@@ -1084,6 +1098,11 @@ export function CreateExpenseModal({
         (e && (e.message || e.error_description || e.details || e.hint)) ||
         (typeof e === "string" ? e : "") ||
         "Erro ao criar despesa";
+      // Registra a falha do grupo atual (o usuário pode tentar de novo).
+      const currentEntry = queueHistory.find((e) => e.status === "pending");
+      if (currentEntry) {
+        updateQueueEntry(currentEntry.supplierKey, { errorMessage: msg });
+      }
       toast.error(msg);
     } finally {
       setIsCreating(false);
