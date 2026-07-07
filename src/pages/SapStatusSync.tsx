@@ -128,7 +128,15 @@ export default function SapStatusSync() {
 
   return (
     <div className="container max-w-5xl py-8 space-y-6">
-      <PageTitle title="Sincronia de Status SAP" />
+      <div className="flex items-center justify-between">
+        <PageTitle title="Sincronia de Status SAP" />
+        <a
+          href="/backoffice/sap-sync/execucoes"
+          className="text-sm text-primary hover:underline"
+        >
+          Ver histórico de execuções →
+        </a>
+      </div>
 
       <Card>
         <CardHeader>
