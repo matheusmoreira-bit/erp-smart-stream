@@ -33,7 +33,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
   const companyLabel = getLabel(session?.companyDB || "");
 
   const content = (
-    <div className={embedded ? "space-y-8" : "max-w-7xl mx-auto px-6 py-8 space-y-8"}>
+    <div className={embedded ? "space-y-4 sm:space-y-8" : "max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-8"}>
       <div className="flex items-center justify-between">
         <PeriodFilter value={period} onChange={setPeriod} />
         <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground">
@@ -54,7 +54,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             <MetricCard title="Tempo Médio Total" value={`${metrics.avgTotalDays}d`} subtitle="Requisição → Pagamento" icon={Clock} delay={0} />
             <MetricCard title="Pedidos em Aberto" value={String(metrics.openOrders)} subtitle="Aguardando fechamento" icon={Package} delay={0.1} />
             <MetricCard title="Validações com Erro" value={String(metrics.validationErrors)} subtitle="Requerem atenção" icon={AlertTriangle} delay={0.2} />
@@ -64,7 +64,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
           {stages.length > 0 && <FlowTimeline stages={stages} />}
 
           {approverStats.length > 0 && (
-            <div className="glass-card p-6">
+            <div className="glass-card p-3 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <UserCheck className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-semibold text-foreground">Tempo Médio de Aprovação por Aprovador</h2>
@@ -72,7 +72,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
                   {approverStats.reduce((s, a) => s + a.countApproved + a.countRejected, 0)} aprovações
                 </span>
               </div>
-              <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-3 sm:gap-4 mb-4 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--primary))" }} /> Aprovados</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(var(--destructive))" }} /> Rejeitados</span>
                 <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: "hsl(var(--warning))" }} /> Meta ({companyTargets.aprovador}d)</span>
@@ -89,7 +89,8 @@ export function Dashboard({ embedded = false }: DashboardProps) {
                   </linearGradient>
                 </defs>
               </svg>
-              <ResponsiveContainer width="100%" height={350}>
+              <div className="h-[260px] sm:h-[350px] -mx-2 sm:mx-0">
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={approverStats} margin={{ left: 10, right: 10, top: 10, bottom: 40 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
                   <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0} height={60} />
@@ -107,10 +108,11 @@ export function Dashboard({ embedded = false }: DashboardProps) {
                   <Bar dataKey="avgDaysRejected" stackId="a" fill="url(#rejectedGrad)" radius={[4, 4, 0, 0]} barSize={28} />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             <div className="lg:col-span-2">
               {insights.length > 0 && <InsightsPanel insights={insights} />}
             </div>
