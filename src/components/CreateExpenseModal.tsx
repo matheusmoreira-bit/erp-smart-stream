@@ -1264,7 +1264,7 @@ export function CreateExpenseModal({
         {/* Barra de progresso do fluxo: classificação IA, salvamento e fila
             de despesas encadeadas (deferredGroups da regra de fornecedores
             diferentes). Fica sempre visível para o usuário saber o estado. */}
-        {(isProcessing || isCreating || deferredGroups.length > 0) && (
+        {(isProcessing || isCreating || deferredGroups.length > 0 || justCancelled) && (
           <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 space-y-2 min-w-0">
@@ -1283,6 +1283,19 @@ export function CreateExpenseModal({
                       Salvando {isSales ? "pedido de venda" : "despesa"}
                       {files.length > 0 ? ` e enviando ${files.length} anexo(s)` : ""}…
                     </span>
+                  </div>
+                )}
+                {justCancelled && !isProcessing && !isCreating && (
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <span className="mt-0.5">↺</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-foreground font-medium">
+                        Processamento cancelado
+                      </div>
+                      <div className="mt-0.5">
+                        {files.length} anexo(s) mantido(s) no modal. Clique em "Tentar novamente" para reclassificar com a IA sem reenviar os arquivos.
+                      </div>
+                    </div>
                   </div>
                 )}
                 {queueHistory.length > 0 && !isCreating && !isProcessing && (
@@ -1323,20 +1336,36 @@ export function CreateExpenseModal({
                   </div>
                 )}
               </div>
-              {/* Botão de cancelar: aparece quando há IA em andamento ou fila
-                  de fornecedores adiados. Não interfere no salvamento em curso
-                  (isCreating), pois cancelar uma gravação parcial seria pior. */}
-              {(isProcessing || deferredGroups.length > 0) && !isCreating && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                  onClick={() => setCancelConfirm(true)}
-                >
-                  <Ban className="w-3.5 h-3.5" />
-                  Cancelar
-                </Button>
-              )}
+              <div className="flex flex-col gap-1 shrink-0">
+                {/* Botão de cancelar: aparece quando há IA em andamento ou fila
+                    de fornecedores adiados. Não interfere no salvamento em curso
+                    (isCreating), pois cancelar uma gravação parcial seria pior. */}
+                {(isProcessing || deferredGroups.length > 0) && !isCreating && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setCancelConfirm(true)}
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    Cancelar
+                  </Button>
+                )}
+                {/* Retry — só aparece após cancelamento, quando há anexos e
+                    não há nenhum fluxo em andamento (guard anti-duplicação
+                    dobrado em `processWithAI` para chamadas paralelas). */}
+                {justCancelled && !isProcessing && !isCreating && files.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => processWithAI(files)}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Tentar novamente
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}
