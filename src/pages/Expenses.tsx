@@ -637,7 +637,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<"erp_flow" | "erp" | undefined>(undefined);
   const openExpense = (exp: Expense, origin?: "erp_flow" | "erp") => {
-    openExpense(exp, origin);
+    setSelectedExpense(exp);
     setSelectedOrigin(origin);
   };
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
