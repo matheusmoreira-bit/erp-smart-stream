@@ -74,32 +74,22 @@ export function useUserProfile() {
 
   const save = useCallback(async (patch: Partial<UserProfile>) => {
     if (!session?.companyDB || !session?.userName) throw new Error("Sem sessão SAP");
-    const payload = {
-      company_db: session.companyDB,
-      user_code: session.userName,
-      ...profile,
-      ...patch,
-    };
-    delete (payload as { id?: string }).id;
-    const { data, error } = await supabase
-      .from("user_profiles")
-      .upsert(payload, { onConflict: "company_db,user_code" })
-      .select()
-      .single();
-    if (error) throw error;
-    // Espelha telefone em user_phones para reutilizar notificações existentes.
-    if (patch.phone !== undefined) {
-      const cleaned = (patch.phone || "").trim();
-      if (cleaned) {
-        await supabase.from("user_phones").upsert(
-          { company_db: session.companyDB, user_code: session.userName, phone: cleaned, source: "manual" },
-          { onConflict: "company_db,user_code" },
-        );
-      }
-    }
-    setProfile(data as UserProfile);
-    return data as UserProfile;
-  }, [profile, session?.companyDB, session?.userName]);
+    const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+    const res = await sapFunctionFetch("user-profile-save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        company_db: session.companyDB,
+        user_code: session.userName,
+        ...patch,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error || `Falha ao salvar perfil (${res.status})`);
+    const data = json.profile as UserProfile;
+    setProfile(data);
+    return data;
+  }, [session?.companyDB, session?.userName]);
 
   const syncFromSap = useCallback(async () => {
     if (!session?.userName) throw new Error("Sem sessão SAP");
