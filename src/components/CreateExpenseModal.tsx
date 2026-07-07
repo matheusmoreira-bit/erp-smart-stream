@@ -3184,6 +3184,7 @@ export function CreateExpenseModal({
             onClick={() => {
               exportQueueSummaryPdf({
                 entries: queueHistory.map((e) => ({
+                  id: e.supplierKey,
                   supplierLabel: e.supplierLabel,
                   status: e.status,
                   fileCount: e.fileCount,
@@ -3210,6 +3211,7 @@ export function CreateExpenseModal({
           </Button>
           {(() => {
             const mapEntries = () => queueHistory.map((e) => ({
+              id: e.supplierKey,
               supplierLabel: e.supplierLabel,
               status: e.status,
               fileCount: e.fileCount,
@@ -3293,6 +3295,7 @@ export function CreateExpenseModal({
                 try {
                   await exportPurchaseFlowReportPdf({
                     entries: queueHistory.map((e) => ({
+                      id: e.supplierKey,
                       supplierLabel: e.supplierLabel,
                       status: e.status,
                       fileCount: e.fileCount,
