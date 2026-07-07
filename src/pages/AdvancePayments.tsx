@@ -32,6 +32,26 @@ export default function AdvancePayments() {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const deepLinkHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkHandledRef.current) return;
+    const id = readDocParam();
+    if (!id) { deepLinkHandledRef.current = true; return; }
+    if (!items || items.length === 0) return;
+    if (items.some((i) => i.id === id)) {
+      setHighlightId(id);
+      deepLinkHandledRef.current = true;
+      // scroll into view on next frame
+      requestAnimationFrame(() => {
+        rowRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      // auto-clear the visual highlight after a few seconds
+      setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 4000);
+    }
+  }, [items]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
