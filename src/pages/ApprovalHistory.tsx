@@ -242,6 +242,25 @@ export default function ApprovalHistory() {
               <SelectItem value="N">Rejeitados</SelectItem>
             </SelectContent>
           </Select>
+
+          <Select value={substituteFilter} onValueChange={setSubstituteFilter}>
+            <SelectTrigger className="w-64" title="Filtrar por aprovações executadas por substituto">
+              <SelectValue placeholder="Substituto" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Substituto: todos</SelectItem>
+              <SelectItem value="any">Somente por substituto</SelectItem>
+              <SelectItem value="none">Somente pelo próprio aprovador</SelectItem>
+              {substitutedOptions.length > 0 && (
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Em nome de
+                </div>
+              )}
+              {substitutedOptions.map((o) => (
+                <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {syncState?.last_status === "error" && (
