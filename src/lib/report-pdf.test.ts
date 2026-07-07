@@ -139,8 +139,8 @@ const baseExpense = {
   origin: "manual",
   created_by_email: "ana@example.com",
   company_db: "SBO_ANA",
-  doc_date: "2026-01-10",
-  due_date: "2026-02-10",
+  doc_date: "2026-01-10T12:00:00-03:00",
+  due_date: "2026-02-10T12:00:00-03:00",
   created_at: "2026-01-10T09:00:00-03:00",
   updated_at: "2026-01-15T11:00:00-03:00",
   items: [
