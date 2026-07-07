@@ -1550,6 +1550,7 @@ export default function ApprovalsPage() {
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
   const { officials: activeOfficials } = useActiveOfficialsForMe();
+  const { grants: substituteGrants } = useSubstituteGrantsForMe();
   const { rules } = useApprovalRules();
 
 
