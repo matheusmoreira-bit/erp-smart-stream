@@ -99,12 +99,14 @@ function ApprovalCard({
   approverCCs,
   formatCostCenter,
   onRelationsMap,
+  onBehalfOf,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
   approverCCs: Set<string>;
   formatCostCenter: (code?: string | null) => string;
   onRelationsMap?: () => void;
+  onBehalfOf?: { name: string; email: string } | null;
 }) {
   const overdue = isOverdue(doc.dueDate);
   const { show: showRateio, info } = shouldShowRateio(doc);
