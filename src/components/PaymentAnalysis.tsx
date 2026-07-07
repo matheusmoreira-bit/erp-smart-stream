@@ -219,8 +219,8 @@ function PieTooltip({ active, payload }: any) {
 /* ── Section card ── */
 function ChartCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`glass-card p-5 ${className}`}>
-      <h3 className="text-sm font-semibold text-foreground mb-4">{title}</h3>
+    <div className={`glass-card p-3 sm:p-5 ${className}`}>
+      <h3 className="text-sm font-semibold text-foreground mb-3 sm:mb-4">{title}</h3>
       {children}
     </div>
   );
