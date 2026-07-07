@@ -2783,7 +2783,7 @@ export function CreateExpenseModal({
                 Total: <span className="text-lg font-bold font-mono">{formatCurrency(total, currency || "BRL")}</span>
               </p>
             </div>
-          </div>
+          </section>
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
             <Button variant="outline" onClick={requestClose} disabled={isCreating}>Cancelar</Button>
