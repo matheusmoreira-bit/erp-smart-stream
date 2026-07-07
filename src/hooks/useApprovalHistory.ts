@@ -113,6 +113,9 @@ export function useApprovalHistory(companyDb?: string | null) {
             synced_at: l.decided_at || l.created_at,
             source: "erp_flow" as const,
             expense_id: l.expense_id,
+            substituted_for_email: l.substituted_for_email || null,
+            substituted_for_name: l.substituted_for_name || null,
+            substitution_id: l.substitution_id || null,
           } as ApprovalHistoryRow;
         })
         .filter(Boolean) as ApprovalHistoryRow[];
