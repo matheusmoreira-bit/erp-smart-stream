@@ -952,8 +952,9 @@ function ApprovalDetailModal({
               </div>
             )}
 
-            {/* Action area */}
-            <div className="border-t border-border pt-4 space-y-3">
+            {/* Action area — fica ancorada no rodapé do modal, sempre visível
+                mesmo em telas pequenas quando o conteúdo rolar */}
+            <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-2 bg-background border-t border-border space-y-3 z-10">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Comentário (opcional)</p>
                 <Textarea
@@ -964,11 +965,12 @@ function ApprovalDetailModal({
                   rows={2}
                 />
               </div>
-              <div className="flex gap-2 justify-end flex-wrap">
+              <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end gap-2">
                 <Button
                   variant="outline"
                   onClick={onClose}
                   disabled={isActioning}
+                  className="w-full sm:w-auto"
                 >
                   Cancelar
                 </Button>
@@ -977,7 +979,7 @@ function ApprovalDetailModal({
                     variant="outline"
                     onClick={() => onDelegate(doc)}
                     disabled={isActioning}
-                    className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                    className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10 w-full sm:w-auto"
                   >
                     <UserCog className="w-4 h-4" />
                     Delegar
@@ -989,7 +991,7 @@ function ApprovalDetailModal({
                       variant="destructive"
                       onClick={() => handleAction("reject")}
                       disabled={isActioning}
-                      className="gap-1.5"
+                      className="gap-1.5 w-full sm:w-auto"
                     >
                       {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                       Rejeitar
@@ -997,14 +999,14 @@ function ApprovalDetailModal({
                     <Button
                       onClick={() => handleAction("approve")}
                       disabled={isActioning}
-                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto"
                     >
                       {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                       Aprovar
                     </Button>
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground italic self-center">
+                  <span className="text-xs text-muted-foreground italic sm:self-center text-center sm:text-right">
                     Somente leitura — você não é o aprovador deste documento
                   </span>
                 )}
