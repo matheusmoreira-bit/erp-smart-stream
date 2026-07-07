@@ -1473,9 +1473,10 @@ export function CreateExpenseModal({
     // Inicializa o histórico da fila com todos os fornecedores despachados,
     // marcando o escolhido como "pendente" (em andamento) e os demais como
     // "enfileirados". Preserva a ordem de execução.
+    const now = Date.now();
     setQueueHistory([
-      { ...summarizeGroup(chosen), status: "pending" },
-      ...rest.map((g) => ({ ...summarizeGroup(g), status: "queued" as QueueStatus })),
+      { ...summarizeGroup(chosen), status: "pending", classifiedAt: now, promotedAt: now },
+      ...rest.map((g) => ({ ...summarizeGroup(g), status: "queued" as QueueStatus, classifiedAt: now })),
     ]);
     toast.success(
       `Criando 1º: ${chosen.supplierLabel}. Ao terminar, abriremos ${rest.length} nova(s) despesa(s) para os demais fornecedores.`,
