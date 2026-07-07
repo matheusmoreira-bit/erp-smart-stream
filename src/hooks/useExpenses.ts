@@ -981,7 +981,10 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       });
       const payload = await resp.json().catch(() => ({}));
       if (!resp.ok || !payload?.ok) {
-        throw new Error(payload?.error || `Falha ao rejeitar (HTTP ${resp.status})`);
+        const stage = payload?.stage ? ` [etapa: ${payload.stage}]` : "";
+        const rid = payload?.requestId ? ` (req ${String(payload.requestId).slice(0, 8)})` : "";
+        const base = payload?.error || `Falha ao rejeitar (HTTP ${resp.status})`;
+        throw new Error(`${base}${stage}${rid}`);
       }
       await fetchExpenses();
       return { replayed: !!payload.replayed };
