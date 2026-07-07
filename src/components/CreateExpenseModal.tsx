@@ -250,6 +250,12 @@ export function CreateExpenseModal({
     aiWarnings: string[];
     status: QueueStatus;
     errorMessage?: string;
+    // Timestamps (ms epoch) do fluxo — usados no relatório de fluxo de
+    // compras (super-user) para medir tempo por etapa e gargalos.
+    classifiedAt?: number;   // IA concluiu classificação → entrada criada
+    promotedAt?: number;     // status virou "pending" (grupo abre no form)
+    submittedAt?: number;    // usuário clicou "Salvar"
+    completedAt?: number;    // sucesso / falha / cancelamento final
   }
   const [queueHistory, setQueueHistory] = useState<QueueEntry[]>([]);
   const [showQueueSummary, setShowQueueSummary] = useState(false);
