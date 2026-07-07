@@ -169,7 +169,7 @@ export function CreateExpenseModal({
     currency: row.Currency || "",
     details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
   } as SapSearchOption & { currency: string }), []);
-  const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
+  const { options: supplierOptions, isLoading: suppliersLoading, reload: reloadSuppliers } = useSapCachedList({
     cacheKey: isSales ? "customers_active_v2" : "suppliers_active_v2",
     endpoint: "BusinessPartners",
     params: isSales
@@ -546,6 +546,18 @@ export function CreateExpenseModal({
         { duration: 7000 },
       );
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Sempre que o modal abrir, força um refetch da lista de fornecedores/
+  // clientes vindos do SAP. Isso garante que BPs criados agora (na tela de
+  // Fornecedores ou por outro usuário) apareçam imediatamente como opção,
+  // sem esperar o TTL do cache. A invalidação por eventos (invalidateSapCache)
+  // cobre o cenário "criei o fornecedor com o modal já aberto"; esta chamada
+  // cobre o cenário "criei o fornecedor e depois abri o modal".
+  useEffect(() => {
+    if (!open) return;
+    reloadSuppliers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 

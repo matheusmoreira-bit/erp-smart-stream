@@ -16,6 +16,64 @@ const CACHE_TTL_OVERRIDES: Record<string, number> = {
 };
 const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE_TTL_MS;
 
+// -----------------------------------------------------------------------------
+// Cache invalidation bus
+// -----------------------------------------------------------------------------
+// Different parts of the app query the same SAP entity through different cache
+// keys (ex.: a tela de Fornecedores usa `suppliers:<db>` enquanto o modal de
+// criação de pedidos usa `suppliers_active_v2` / `customers_active_v2`). Quando
+// um fornecedor é criado/atualizado, precisamos invalidar TODAS as chaves que
+// derivam de BusinessPartners naquele companyDB — senão o usuário vê o BP na
+// tela de fornecedores mas não no combobox do pedido.
+type Listener = () => void;
+const listeners = new Map<string, Set<Listener>>();
+const listenerKey = (cacheKey: string, companyDb?: string | null) =>
+  `${cacheKey}::${companyDb || ""}`;
+
+function subscribe(cacheKey: string, companyDb: string | null | undefined, cb: Listener) {
+  const key = listenerKey(cacheKey, companyDb);
+  let set = listeners.get(key);
+  if (!set) {
+    set = new Set();
+    listeners.set(key, set);
+  }
+  set.add(cb);
+  return () => {
+    set!.delete(cb);
+    if (set!.size === 0) listeners.delete(key);
+  };
+}
+
+/**
+ * Invalidate one or more SAP cached lists: deletes the persisted rows in
+ * `sap_cache` and forces every mounted `useSapCachedList` with a matching
+ * cacheKey/companyDb to refetch from SAP.
+ */
+export async function invalidateSapCache(
+  cacheKeys: string | string[],
+  companyDb?: string | null,
+) {
+  const keys = Array.isArray(cacheKeys) ? cacheKeys : [cacheKeys];
+  // Best-effort DB cleanup — errors here shouldn't block the UI signal.
+  try {
+    let q = supabase.from("sap_cache").delete().in("cache_key", keys);
+    if (companyDb) q = q.eq("company_db", companyDb);
+    await q;
+  } catch (e) {
+    console.warn("invalidateSapCache: failed to purge sap_cache rows", e);
+  }
+  // Fire in-memory listeners so mounted hooks reload immediately.
+  for (const k of keys) {
+    const set = listeners.get(listenerKey(k, companyDb));
+    if (set) for (const cb of set) cb();
+    // Also broadcast to listeners that didn't scope by companyDb (rare).
+    if (companyDb) {
+      const globalSet = listeners.get(listenerKey(k, null));
+      if (globalSet) for (const cb of globalSet) cb();
+    }
+  }
+}
+
 interface UseSapCachedListParams {
   cacheKey: string;
   endpoint: string;
@@ -131,6 +189,16 @@ export function useSapCachedList({
     loadedRef.current = false;
     load(true);
   }, [load]);
+
+  // Subscribe to invalidation events broadcast via invalidateSapCache().
+  useEffect(() => {
+    if (!enabled) return;
+    const unsub = subscribe(cacheKey, session?.companyDB, () => {
+      loadedRef.current = false;
+      load(true);
+    });
+    return unsub;
+  }, [cacheKey, session?.companyDB, enabled, load]);
 
   return { options, isLoading, reload };
 }

@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapAction, sapQuery, type SapSession } from "@/lib/sap-client";
-import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
+
+/**
+ * Chaves de cache derivadas de BusinessPartners que precisam ser invalidadas
+ * juntas sempre que um fornecedor/cliente é criado/atualizado, para que a
+ * mudança apareça imediatamente em qualquer tela (Fornecedores, modal de
+ * criação de pedidos de compra/venda, etc.).
+ */
+function invalidateBusinessPartnerCaches(companyDb?: string | null) {
+  const keys = ["suppliers_active_v2", "customers_active_v2"];
+  if (companyDb) keys.push(`suppliers:${companyDb}`);
+  // fire-and-forget — não bloqueia o fluxo do usuário
+  void invalidateSapCache(keys, companyDb || undefined);
+}
 
 export interface Supplier {
   id: string;
@@ -268,7 +281,9 @@ export async function createSupplier(
   });
   if (error) throw error;
   if ((resp as any)?.error) throw new Error((resp as any).error);
-  return (resp as any).supplier as Supplier;
+  const created = (resp as any).supplier as Supplier;
+  invalidateBusinessPartnerCaches(created?.company_db || session?.companyDB);
+  return created;
 }
 
 
@@ -310,6 +325,7 @@ export async function updateSupplier(
     .select("*")
     .single();
   if (error) throw error;
+  invalidateBusinessPartnerCaches((data as Supplier)?.company_db || session?.companyDB);
   return data as Supplier;
 }
 
@@ -368,6 +384,7 @@ export async function toggleSupplierActive(
       .select("*")
       .single();
     if (error) throw error;
+    invalidateBusinessPartnerCaches((data as Supplier)?.company_db || session?.companyDB);
     return data as Supplier;
   }
 
@@ -383,6 +400,7 @@ export async function toggleSupplierActive(
     .select("*")
     .single();
   if (error) throw error;
+  invalidateBusinessPartnerCaches((data as Supplier)?.company_db || session?.companyDB);
   return data as Supplier;
 }
 
@@ -513,6 +531,7 @@ export async function retrySupplierToSap(
     .select("*")
     .single();
   if (error) throw error;
+  invalidateBusinessPartnerCaches(supplier.company_db || session?.companyDB);
   return data as Supplier;
 }
 
