@@ -26,6 +26,7 @@ export function CachedSearchCombobox({
   label,
   suggestedQuery,
   portalContainer,
+  required = false,
 }: CachedSearchComboboxProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
