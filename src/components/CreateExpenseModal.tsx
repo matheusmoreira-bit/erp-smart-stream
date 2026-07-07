@@ -64,6 +64,11 @@ import {
   type PersistedDocGroup,
   type QueueScope,
 } from "@/lib/expense-queue-persist";
+import {
+  loadAiResponseCache,
+  saveAiResponseCacheEntries,
+  clearAiResponseCache,
+} from "@/lib/ai-response-cache-persist";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
@@ -281,6 +286,8 @@ export function CreateExpenseModal({
   // Reaproveitado em "Tentar novamente" para pular chamadas ao endpoint.
   // Vive durante a instância do modal; é limpo no unmount/close.
   const aiResponseCacheRef = useRef<Map<string, any>>(new Map());
+  // Escopo para o storage persistente do cache (separa expenses/sales).
+  const aiCacheScope = isSales ? "sales" : "expenses";
   // Guards reentrantes fortes para evitar QUALQUER chamada duplicada de IA
   // ou de criação de despesa quando o usuário cancela+retenta rápido, ou o
   // React 18 (StrictMode) invoca o handler duas vezes. Estado (`isProcessing`,
@@ -507,6 +514,32 @@ export function CreateExpenseModal({
         `${n} grupo(s) com erro preservado(s) da sessão anterior. Use "Reenviar erros" para retentar sem chamar a IA de novo.`,
         { duration: 7000 },
       );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Hidrata o cache em memória a partir do localStorage sempre que o modal
+  // abre. Faz merge (persistido + entradas já vivas na sessão) para não
+  // perder nada. Persistir sobrevive a fechar/reabrir o modal e a recarregar
+  // a página — reaproveita extrações da IA por hash de conteúdo do arquivo.
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const persisted = loadAiResponseCache(aiCacheScope);
+      if (persisted.size === 0) return;
+      const merged = aiResponseCacheRef.current;
+      let added = 0;
+      for (const [k, v] of persisted) {
+        if (!merged.has(k)) {
+          merged.set(k, v);
+          added++;
+        }
+      }
+      if (added > 0) {
+        console.info(`[ai-cache] Hidratados ${added} item(s) do cache persistente (${aiCacheScope}).`);
+      }
+    } catch (e) {
+      console.warn("[ai-cache] Falha ao hidratar cache persistente:", e);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -858,12 +891,19 @@ export function CreateExpenseModal({
         fetchedResults = Array.isArray(result) ? result : [result];
 
         // Preenche o cache pelos hashes dos arquivos que foram enviados.
+        const persistBatch: Array<{ hash: string; data: unknown }> = [];
         missIndexes.forEach((origIdx, sentIdx) => {
           const extracted = fetchedResults[sentIdx];
           if (extracted && typeof extracted === "object") {
             cache.set(hashes[origIdx], extracted);
+            persistBatch.push({ hash: hashes[origIdx], data: extracted });
           }
         });
+        // Persiste no localStorage para reaproveitar após fechar/reabrir
+        // o modal ou recarregar a página (best-effort, falhas silenciosas).
+        if (persistBatch.length > 0) {
+          saveAiResponseCacheEntries(aiCacheScope, persistBatch);
+        }
       }
 
       // Compõe a lista final na ordem original: cache primeiro, fetch depois.
