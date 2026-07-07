@@ -1595,7 +1595,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             </div>
 
             {/* Table view (widescreen) */}
-            <div className="hidden xl:block glass-card overflow-hidden">
+            <div className={`glass-card overflow-hidden ${viewMode === "table" ? "" : "hidden"}`}>
               {visibleItems.length >= 50 ? (
                 <VirtualExpensesTable
                   items={visibleItems}
