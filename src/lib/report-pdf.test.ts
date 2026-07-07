@@ -343,3 +343,90 @@ describe("exportListReportPdf — aprovações", () => {
     expect(hasText("0 registro(s)")).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// CSV
+// ---------------------------------------------------------------------------
+describe("exportListReportCsv — aprovações/compras/vendas", () => {
+  interface Row { supplier: string; total: number; note?: string }
+  const rows: Row[] = [
+    { supplier: "Fornecedor A", total: 100 },
+    // valores com separador (;), quebra de linha e aspas — devem ser escapados
+    { supplier: 'Nome; com "aspas"', total: 250.5, note: "linha1\nlinha2" },
+  ];
+  const columns = [
+    { header: "Fornecedor", cell: (r: Row) => r.supplier },
+    { header: "Total", cell: (r: Row) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(r.total) },
+    { header: "Obs", cell: (r: Row) => r.note || "—" },
+  ];
+
+  const blobs: Blob[] = [];
+  const downloads: string[] = [];
+  let originalCreateURL: typeof URL.createObjectURL;
+  let originalRevoke: typeof URL.revokeObjectURL;
+  let originalClick: typeof HTMLAnchorElement.prototype.click;
+
+  beforeEach(() => {
+    blobs.length = 0;
+    downloads.length = 0;
+    originalCreateURL = URL.createObjectURL;
+    originalRevoke = URL.revokeObjectURL;
+    originalClick = HTMLAnchorElement.prototype.click;
+    URL.createObjectURL = ((b: Blob) => { blobs.push(b); return "blob:mock"; }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateURL;
+    URL.revokeObjectURL = originalRevoke;
+    HTMLAnchorElement.prototype.click = originalClick;
+  });
+
+  it("gera CSV com BOM, header, linhas e metadados; escapa aspas/;/newline", async () => {
+    exportListReportCsv<Row>({
+      title: "Aprovações",
+      subtitle: "Pendentes",
+      meta: [
+        { label: "Empresa", value: "ANA GAMING" },
+        { label: "Filtro", value: "status = pending" },
+      ],
+      columns,
+      rows,
+      fileName: "aprovacoes",
+    });
+
+    expect(blobs).toHaveLength(1);
+    const csv = await blobs[0].text();
+
+    // BOM UTF-8
+    expect(csv.charCodeAt(0)).toBe(0xFEFF);
+
+    // Metadados
+    expect(csv).toContain("# Aprovações");
+    expect(csv).toContain("# Pendentes");
+    expect(csv).toContain("# Empresa: ANA GAMING");
+    expect(csv).toContain("# Filtro: status = pending");
+
+    // Header e primeira linha
+    expect(csv).toContain("Fornecedor;Total;Obs");
+    expect(csv).toMatch(/Fornecedor A;.*100,00.*;—/);
+
+    // Escape: aspas duplicadas + campo com `;`
+    expect(csv).toContain('"Nome; com ""aspas"""');
+    // Escape de quebra de linha (campo entre aspas)
+    expect(csv).toContain('"linha1\nlinha2"');
+
+    // Arquivo com nome + .csv
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0]).toMatch(/^aprovacoes_\d+\.csv$/);
+  });
+
+  it("só exporta as linhas passadas (respeita filtros aplicados)", async () => {
+    const filteredRows: Row[] = [rows[0]];
+    exportListReportCsv<Row>({ title: "Compras", columns, rows: filteredRows });
+    const csv = await blobs[blobs.length - 1].text();
+    expect(csv).not.toContain("Nome; com");
+    expect(csv).toContain("Fornecedor A");
+  });
+});
