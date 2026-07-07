@@ -360,6 +360,7 @@ export function CreateExpenseModal({
       setSupplierPicker(null);
       setQueueHistory([]);
       setShowQueueSummary(false);
+      setJustCancelled(false);
     }
   }, [open]);
 
