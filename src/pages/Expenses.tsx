@@ -1138,7 +1138,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Card grid (mobile / tablet / laptop) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 xl:hidden">
               {filtered.map(({ exp, origin }) => (
                 <ExpenseCard
                   key={exp.id}
@@ -1148,6 +1149,77 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
                 />
               ))}
+            </div>
+
+            {/* Table view (widescreen) */}
+            <div className="hidden xl:block glass-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-muted-foreground">
+                    <tr className="text-left">
+                      <th className="px-4 py-2.5 font-medium">Status</th>
+                      <th className="px-4 py-2.5 font-medium">Fornecedor</th>
+                      <th className="px-4 py-2.5 font-medium">Solicitante</th>
+                      <th className="px-4 py-2.5 font-medium">Criado</th>
+                      <th className="px-4 py-2.5 font-medium">Doc</th>
+                      <th className="px-4 py-2.5 font-medium">Vence</th>
+                      <th className="px-4 py-2.5 font-medium text-right">Valor</th>
+                      <th className="px-4 py-2.5 font-medium text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(({ exp, origin }) => (
+                      <tr
+                        key={exp.id}
+                        className="border-t border-border/60 hover:bg-muted/30 cursor-pointer transition-colors"
+                        onClick={() => setSelectedExpense(exp)}
+                      >
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge className={STATUS_COLORS[exp.status]}>{STATUS_LABELS[exp.status]}</Badge>
+                            {origin === "erp_flow" && (
+                              <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
+                            )}
+                            {origin === "erp" && (
+                              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">ERP</Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 max-w-[260px]">
+                          <div className="flex items-center gap-2 text-foreground">
+                            <Building2 className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+                            <span className="truncate">{exp.supplier_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-foreground">{exp.requester_name}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(exp.created_at)}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
+                          {exp.doc_date ? formatDate(exp.doc_date) : "—"}
+                        </td>
+                        <td className={`px-4 py-2.5 whitespace-nowrap ${exp.due_date ? "text-foreground" : "text-destructive font-medium"}`}>
+                          {exp.due_date ? formatDate(exp.due_date) : "sem data"}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-semibold text-foreground whitespace-nowrap">
+                          {formatCurrency(exp.total_amount, exp.currency)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          {origin === "erp_flow" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-primary"
+                              title="Mapa de relações"
+                              onClick={(ev) => { ev.stopPropagation(); setRelationsMapExpense(exp); }}
+                            >
+                              <Network className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             {showSourceToggle && sourceMode === "both" && sapHasMore && (
               <div className="flex justify-center mt-6">
