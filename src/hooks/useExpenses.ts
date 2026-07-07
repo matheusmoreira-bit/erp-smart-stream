@@ -977,10 +977,10 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           try {
             await invokeExpenseToSap({
               expense_id: expenseId,
-              sap_session_id: session.sessionId,
-              sap_route_id: session.routeId,
-              sap_company_db: session.companyDB,
-              sap_session_expires_at: session.expiresAt,
+              // Integração automática após o último nível de aprovação usa
+              // sempre o Apiuser configurado nas credenciais da empresa —
+              // não depende do aprovador estar logado no SAP.
+              use_service_account: true,
             });
             await logExpenseDecision(expenseId, "integrated", { approverName: actor });
           } catch (sapErr) {
