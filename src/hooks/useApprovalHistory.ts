@@ -100,14 +100,18 @@ export function useApprovalHistory(
     setIsLoading(true);
     setError(null);
     try {
+      // Busca livre por substituído sobrepõe qualquer modo do multi-select.
+      const searchActive = trimmedSubSearch.length > 0;
       const mode: "all" | "any" | "none" | "specific" =
-        substituteFilter.includes("__any__")
-          ? "any"
-          : substituteFilter.includes("__none__")
-            ? "none"
-            : substituteFilter.length > 0
-              ? "specific"
-              : "all";
+        searchActive
+          ? "search"
+          : substituteFilter.includes("__any__")
+            ? "any"
+            : substituteFilter.includes("__none__")
+              ? "none"
+              : substituteFilter.length > 0
+                ? "specific"
+                : "all" as any;
       const specificKeys = substituteFilter.filter(
         (k) => k !== "__any__" && k !== "__none__",
       );
