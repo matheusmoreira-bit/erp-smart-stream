@@ -29,6 +29,10 @@ export interface ApprovalHistoryRow {
   source?: "sap" | "erp_flow";
   /** Preenchido apenas para rows internos (permite abrir o mapa de relações) */
   expense_id?: string | null;
+  /** Rastreabilidade: quando a decisão foi tomada por um substituto autorizado */
+  substituted_for_email?: string | null;
+  substituted_for_name?: string | null;
+  substitution_id?: string | null;
 }
 
 export interface ApprovalHistorySyncState {
