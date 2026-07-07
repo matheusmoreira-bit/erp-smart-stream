@@ -1872,6 +1872,54 @@ export default function ApprovalsPage() {
     opts?: { idempotencyKey?: string },
   ) => {
     if (!session) return;
+
+    // ===== Pré-validação: a permissão de aprovar ainda vale AGORA? =====
+    // Entre a renderização do modal e o clique, a janela de substituição
+    // pode ter expirado, o grant pode ter sido revogado, ou o SAP pode ter
+    // alterado o aprovador designado (ex.: delegação retirada). Recarregamos
+    // os grants e recomputamos o canApprove imediatamente antes de disparar
+    // a ação — se falhar, abortamos e avisamos o usuário.
+    let liveGrants = substituteGrants;
+    try {
+      await refreshSubstituteGrants();
+      const { data: userData } = await supabase.auth.getUser();
+      const authEmail = (userData.user?.email || "").toLowerCase();
+      const sapUser = (session.userName || "").toLowerCase().trim();
+      const identifiers = Array.from(
+        new Set(
+          [authEmail, sapUser, authEmail.split("@")[0], sapUser.split("@")[0]].filter(Boolean),
+        ),
+      );
+      const results = await Promise.all(
+        identifiers.map((id) =>
+          supabase.rpc("substitute_grants_for_me" as never, { _substitute_identifier: id } as never),
+        ),
+      );
+      const seen = new Set<string>();
+      const merged: typeof substituteGrants = [];
+      for (const r of results) {
+        const rows = ((r.data as typeof substituteGrants) || []);
+        for (const row of rows) {
+          if (seen.has(row.id)) continue;
+          seen.add(row.id);
+          merged.push(row);
+        }
+      }
+      liveGrants = merged;
+    } catch (e) {
+      console.warn("Falha ao revalidar grants de substituição:", e);
+    }
+
+    const doc = selectedDoc;
+    if (!canApproveDocWith(doc, liveGrants)) {
+      toast.error(
+        "Sua permissão para aprovar/rejeitar este documento expirou (substituição encerrada, delegação retirada ou aprovador alterado). Atualize a página e tente novamente.",
+        { duration: 7000 },
+      );
+      setActionPhase("idle");
+      return;
+    }
+
     setActionPhase("sending");
     const internalDoc = (selectedDoc as any)?.__internalId;
     try {
