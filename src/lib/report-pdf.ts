@@ -283,7 +283,13 @@ export async function exportListReportPdf<Row>(opts: ListReportOptions<Row>): Pr
     margin: { left: 8, right: 8 },
   });
 
-  drawFooter(doc, await currentUserEmail());
+  await finalizePdf(doc, "Lista", {
+    title: opts.title,
+    subtitle: opts.subtitle,
+    meta: opts.meta,
+    headers: opts.columns.map((c) => c.header),
+    rows: opts.rows.map((r) => opts.columns.map((c) => c.cell(r))),
+  });
   doc.save(`${safeFileName(opts.fileName || opts.title)}_${Date.now()}.pdf`);
 }
 
