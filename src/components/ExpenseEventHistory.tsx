@@ -35,7 +35,18 @@ interface ApprovalLogRow {
   level_order: number | null;
   remarks: string | null;
   decided_at: string;
+  action_role?: string | null;
+  substituted_for_name?: string | null;
+  substituted_for_email?: string | null;
 }
+
+const ROLE_LABEL: Record<string, string> = {
+  approver: "Aprovador",
+  substitute: "Substituto",
+  delegation: "Delegação",
+  admin_override: "Override admin",
+  attempt_denied: "Tentativa negada",
+};
 
 const DECISION_META: Record<LogDecision, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
   created: { label: "Criado", icon: FileText, color: "text-muted-foreground" },
