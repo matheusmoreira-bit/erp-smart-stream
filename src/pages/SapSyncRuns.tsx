@@ -106,8 +106,9 @@ export default function SapSyncRuns() {
         </Button>
       </div>
 
+      <SapSyncHealthCard />
+
       <Card>
-        <CardHeader>
           <CardTitle className="text-base">Filtros</CardTitle>
         </CardHeader>
         <CardContent>
