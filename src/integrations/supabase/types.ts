@@ -1361,6 +1361,7 @@ export type Database = {
       }
       expense_approval_log: {
         Row: {
+          action_role: string | null
           approver_email: string | null
           approver_name: string | null
           created_at: string
@@ -1375,6 +1376,7 @@ export type Database = {
           substitution_id: string | null
         }
         Insert: {
+          action_role?: string | null
           approver_email?: string | null
           approver_name?: string | null
           created_at?: string
@@ -1389,6 +1391,7 @@ export type Database = {
           substitution_id?: string | null
         }
         Update: {
+          action_role?: string | null
           approver_email?: string | null
           approver_name?: string | null
           created_at?: string
@@ -1453,6 +1456,7 @@ export type Database = {
       expense_audit_log: {
         Row: {
           action: string
+          action_role: string | null
           actor_email: string | null
           actor_identity: string
           actor_source: string
@@ -1477,6 +1481,7 @@ export type Database = {
         }
         Insert: {
           action: string
+          action_role?: string | null
           actor_email?: string | null
           actor_identity: string
           actor_source: string
@@ -1501,6 +1506,7 @@ export type Database = {
         }
         Update: {
           action?: string
+          action_role?: string | null
           actor_email?: string | null
           actor_identity?: string
           actor_source?: string
