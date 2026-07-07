@@ -89,7 +89,8 @@ export function Dashboard({ embedded = false }: DashboardProps) {
                   </linearGradient>
                 </defs>
               </svg>
-              <ResponsiveContainer width="100%" height={350}>
+              <div className="h-[260px] sm:h-[350px] -mx-2 sm:mx-0">
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={approverStats} margin={{ left: 10, right: 10, top: 10, bottom: 40 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
                   <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0} height={60} />
