@@ -287,7 +287,6 @@ export default function ApprovalHistory() {
 
           {(() => {
             const anySel = substituteFilter.includes("__any__");
-            const anySel = substituteFilter.includes("__any__");
             const noneSel = substituteFilter.includes("__none__");
             const specificKeys = substituteFilter.filter((k) => k !== "__any__" && k !== "__none__");
             const hasSearch = substituteSearch.trim().length > 0;
