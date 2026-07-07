@@ -299,20 +299,36 @@ export function CreateExpenseModal({
   // — usado para não recontar duplicatas em retries do mesmo submit.
   const claimedHashesRef = useRef<Set<string>>(new Set());
 
+  // Prefixo de versão da chave do cache. Sempre que os campos que compõem
+  // a chave mudarem, bump aqui — entradas antigas viram misses automáticos
+  // e são reprocessadas, evitando reuso incorreto de layouts obsoletos.
+  const HASH_KEY_VERSION = "v2";
   const hashFile = async (file: File): Promise<string> => {
+    // Normaliza campos que podem variar por ambiente (nome sanitizado,
+    // MIME em minúsculas). Inclui `type` e `lastModified` para reduzir
+    // reuso incorreto quando o conteúdo é semanticamente diferente mesmo
+    // com hash coincidente (colisão altamente improvável, mas cinturão
+    // adicional é barato).
+    const name = (file.name || "").trim();
+    const mime = (file.type || "application/octet-stream").toLowerCase();
+    const lastMod = Number.isFinite(file.lastModified) ? file.lastModified : 0;
     try {
       const buf = await file.arrayBuffer();
       const digest = await crypto.subtle.digest("SHA-256", buf);
-      // Chave: hash|size|name — evita colisão improvável e diferencia
-      // arquivos idênticos com nomes distintos apenas por segurança.
+      // Chave: v2|hash|size|type|name|lastModified
+      // - hash: identifica o conteúdo (SHA-256)
+      // - size/type: descartam colisões cross-formato (mesmo hash truncado)
+      // - name: separa arquivos idênticos com nomes diferentes (provenance)
+      // - lastModified: invalida quando o usuário reeditou/re-salvou o arquivo
       const hex = Array.from(new Uint8Array(digest))
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
-      return `${hex}|${file.size}|${file.name}`;
+      return `${HASH_KEY_VERSION}|${hex}|${file.size}|${mime}|${name}|${lastMod}`;
     } catch {
       // Fallback quando SubtleCrypto não estiver disponível (contexto não
-      // seguro): usa metadados; menos preciso, mas ainda evita duplicar.
-      return `nohash|${file.size}|${file.name}|${file.lastModified}`;
+      // seguro): usa apenas metadados. Prefixo `nohash` garante disjunção
+      // do caminho com hash — nunca casam entre si.
+      return `${HASH_KEY_VERSION}|nohash|${file.size}|${mime}|${name}|${lastMod}`;
     }
   };
   // Limite de confiança IA ajustável em tempo real (a partir do prop).

@@ -10,7 +10,7 @@
 // - Cap: quando ultrapassa MAX_ENTRIES, remove os mais antigos por `ts`.
 // - Falhas silenciosas (quota exceeded, JSON inválido) — cache é opcional.
 
-const VERSION = 1;
+const VERSION = 2;
 const TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 dias
 const MAX_ENTRIES = 500;
 
@@ -18,7 +18,10 @@ type Scope = "expenses" | "sales";
 type CacheEntry = { data: unknown; ts: number };
 type CacheFile = { version: number; entries: Record<string, CacheEntry> };
 
-const storageKey = (scope: Scope) => `ai-response-cache-v1:${scope}`;
+// v2: chave inclui MIME e lastModified além de hash|size|name — invalida
+// automaticamente entradas gravadas no formato v1 (readFile as descarta
+// porque o `version` do arquivo não bate mais).
+const storageKey = (scope: Scope) => `ai-response-cache-v2:${scope}`;
 
 function readFile(scope: Scope): CacheFile {
   try {
