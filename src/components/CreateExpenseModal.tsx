@@ -82,6 +82,7 @@ export function CreateExpenseModal({
   initialDraft,
   onDraftSaved,
   onDraftConsumed,
+  lowAiConfidenceThreshold = 0.75,
 }: {
   open: boolean;
   onClose: () => void;
@@ -95,6 +96,9 @@ export function CreateExpenseModal({
   initialDraft?: ExpenseDraftHydration | null;
   onDraftSaved?: (id: string | null) => void;
   onDraftConsumed?: () => void;
+  /** Limite (0–1) abaixo do qual a confiança média da IA por grupo é
+   *  destacada visualmente como "provavelmente precisa de revisão". */
+  lowAiConfidenceThreshold?: number;
 }) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
@@ -225,6 +229,11 @@ export function CreateExpenseModal({
   // erros". Cache separado guarda os DocGroup completos dos que falharam.
   const currentGroupRef = useRef<DocGroup | null>(null);
   const failedGroupsRef = useRef<Map<string, DocGroup>>(new Map());
+  // Limite de confiança IA ajustável em tempo real (a partir do prop).
+  // Grupos com confiança média abaixo disso ganham destaque visual âmbar.
+  const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState<number>(lowAiConfidenceThreshold);
+  const isLowConfidence = (c: number | null | undefined) =>
+    typeof c === "number" && Number.isFinite(c) && c < aiConfidenceThreshold;
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
@@ -1334,8 +1343,20 @@ export function CreateExpenseModal({
                                 {idx + 1}. {e.supplierLabel}
                               </span>
                               {e.aiConfidence !== null && (
-                                <span className="text-[10px] opacity-70 shrink-0">
+                                <span
+                                  className={`text-[10px] shrink-0 ${
+                                    isLowConfidence(e.aiConfidence)
+                                      ? "text-amber-700 dark:text-amber-500 font-semibold"
+                                      : "opacity-70"
+                                  }`}
+                                  title={
+                                    isLowConfidence(e.aiConfidence)
+                                      ? `Confiança abaixo do limite (${Math.round(aiConfidenceThreshold * 100)}%) — revise os dados extraídos.`
+                                      : undefined
+                                  }
+                                >
                                   · IA {Math.round(e.aiConfidence * 100)}%
+                                  {isLowConfidence(e.aiConfidence) && " ⚠ revisar"}
                                 </span>
                               )}
                               {e.aiWarnings.length > 0 && (
@@ -2038,13 +2059,40 @@ export function CreateExpenseModal({
                 const failed = queueHistory.filter((e) => e.status === "failed" || !!e.errorMessage).length;
                 const cancelled = queueHistory.filter((e) => e.status === "cancelled").length;
                 const pending = queueHistory.filter((e) => e.status === "pending" || e.status === "queued").length;
+                const lowConf = queueHistory.filter((e) => isLowConfidence(e.aiConfidence)).length;
                 return (
-                  <p className="text-muted-foreground">
-                    {ok}/{total} concluídas
-                    {failed > 0 && ` · ${failed} com erro`}
-                    {cancelled > 0 && ` · ${cancelled} cancelada(s)`}
-                    {pending > 0 && ` · ${pending} pendente(s)`}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground">
+                      {ok}/{total} concluídas
+                      {failed > 0 && ` · ${failed} com erro`}
+                      {cancelled > 0 && ` · ${cancelled} cancelada(s)`}
+                      {pending > 0 && ` · ${pending} pendente(s)`}
+                    </p>
+                    {lowConf > 0 && (
+                      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                        <span>⚠</span>
+                        <span>
+                          <strong>{lowConf}</strong> grupo(s) com confiança IA abaixo de {Math.round(aiConfidenceThreshold * 100)}% — revise os dados extraídos antes de aprovar.
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <label htmlFor="ai-threshold" className="shrink-0">Limite de confiança:</label>
+                      <input
+                        id="ai-threshold"
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={Math.round(aiConfidenceThreshold * 100)}
+                        onChange={(ev) => setAiConfidenceThreshold(Number(ev.target.value) / 100)}
+                        className="flex-1 accent-primary"
+                      />
+                      <span className="tabular-nums font-medium text-foreground w-10 text-right">
+                        {Math.round(aiConfidenceThreshold * 100)}%
+                      </span>
+                    </div>
+                  </div>
                 );
               })()}
               <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
@@ -2058,12 +2106,25 @@ export function CreateExpenseModal({
                   const totalStr = e.estimatedTotal > 0
                     ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: e.currency }).format(e.estimatedTotal)
                     : "—";
+                  const lowConf = isLowConfidence(e.aiConfidence);
                   return (
-                    <div key={e.supplierKey} className="rounded-md border border-border bg-muted/20 p-3 space-y-1.5">
+                    <div
+                      key={e.supplierKey}
+                      className={`rounded-md border p-3 space-y-1.5 ${
+                        lowConf
+                          ? "border-amber-500/50 bg-amber-500/10"
+                          : "border-border bg-muted/20"
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="font-medium truncate">
+                          <div className="font-medium truncate flex items-center gap-1.5">
                             {idx + 1}. {e.supplierLabel}
+                            {lowConf && (
+                              <span className="text-[10px] uppercase tracking-wide font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/20 rounded px-1.5 py-0.5">
+                                Revisar
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             {e.fileCount} arquivo(s) · {e.lineCount} linha(s)
@@ -2082,8 +2143,10 @@ export function CreateExpenseModal({
                         </div>
                       </div>
                       {e.aiConfidence !== null && (
-                        <div className="text-[11px] text-muted-foreground">
-                          Confiança IA: <span className="font-medium">{Math.round(e.aiConfidence * 100)}%</span>
+                        <div className={`text-[11px] ${lowConf ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground"}`}>
+                          Confiança IA:{" "}
+                          <span className="font-medium">{Math.round(e.aiConfidence * 100)}%</span>
+                          {lowConf && ` (abaixo de ${Math.round(aiConfidenceThreshold * 100)}%)`}
                         </div>
                       )}
                       {e.aiWarnings.length > 0 && (
