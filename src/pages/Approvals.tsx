@@ -1361,16 +1361,15 @@ async function decideSapApprovalRequest(
     );
   }
 
-  const status = action === "approve" ? "ardApproved" : "ardNotApproved";
-  const updatedDecisions = decisions.map((decision, index) =>
-    index === targetIndex
-      ? { ...decision, Status: status, Remarks: remarks || decision.Remarks || "" }
-      : decision,
-  );
-
   try {
+    // SAP B1 applies this decision to the user of the current Service Layer
+    // session. Sending UserID/other decision rows can be interpreted as an
+    // attempt to edit another approver's decision and return -6006.
     await sapAction(session, `ApprovalRequests(${code})`, "PATCH", {
-      ApprovalRequestDecisions: updatedDecisions,
+      ApprovalRequestDecisions: [{
+        Status: action === "approve" ? "ardApproved" : "ardNotApproved",
+        Remarks: remarks || undefined,
+      }],
     });
     return { recoveredFromSapError: false };
   } catch (e) {
