@@ -1168,12 +1168,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       <main id="expenses-main" tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
 
-        {/* Back + actions */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
-          </Button>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
+        {/* Back + actions — no mobile: linha 1 = Dashboard, linha 2 = ações em grid */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/")}
+              className="text-muted-foreground hover:text-foreground -ml-2 sm:ml-0"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" aria-hidden="true" /> Dashboard
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:flex-wrap sm:justify-end">
             <DraftsPopover
               docType={mode}
               companyDb={session?.companyDB}
@@ -1209,27 +1216,33 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <>
                   <Button
                     variant="outline"
-                    className="gap-1.5"
+                    size="sm"
+                    className="gap-1.5 w-full sm:w-auto justify-center"
                     disabled={filtered.length === 0}
                     onClick={() => { void exportListReportPdf(reportOptions); }}
                     title="Exportar em PDF respeitando os filtros aplicados"
                   >
-                    <FileDown className="w-4 h-4" /> Exportar PDF
+                    <FileDown className="w-4 h-4" aria-hidden="true" /> <span className="truncate">Exportar PDF</span>
                   </Button>
                   <Button
                     variant="outline"
-                    className="gap-1.5"
+                    size="sm"
+                    className="gap-1.5 w-full sm:w-auto justify-center"
                     disabled={filtered.length === 0}
                     onClick={() => { exportListReportCsv(reportOptions); }}
                     title="Exportar em CSV respeitando os filtros aplicados"
                   >
-                    <FileDown className="w-4 h-4" /> Exportar CSV
+                    <FileDown className="w-4 h-4" aria-hidden="true" /> <span className="truncate">Exportar CSV</span>
                   </Button>
                 </>
               );
             })()}
-            <Button onClick={() => setShowCreate(true)} className="gap-1.5">
-              <Plus className="w-4 h-4" /> {newButtonLabel}
+            <Button
+              size="sm"
+              onClick={() => setShowCreate(true)}
+              className="gap-1.5 col-span-2 sm:col-span-1 w-full sm:w-auto justify-center"
+            >
+              <Plus className="w-4 h-4" aria-hidden="true" /> <span className="truncate">{newButtonLabel}</span>
             </Button>
           </div>
         </div>
