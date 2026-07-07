@@ -26,7 +26,7 @@ import {
   Paperclip,
   FileDown,
 } from "lucide-react";
-import { exportListReportPdf, exportExpenseDetailPdf } from "@/lib/report-pdf";
+import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -977,37 +977,52 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 setShowCreate(true);
               }}
             />
-            <Button
-              variant="outline"
-              className="gap-1.5"
-              disabled={filtered.length === 0}
-              onClick={() => {
-                void exportListReportPdf({
-                  title: isSales ? "Relatório de Vendas" : "Relatório de Compras",
-                  subtitle: `${filtered.length} registro(s) · ${companyLabel}`,
-                  meta: [
-                    { label: "Empresa", value: companyLabel },
-                    { label: "Usuário", value: session?.userName || "—" },
-                    { label: "Total", value: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalValue) },
-                  ],
-                  columns: [
-                    { header: "Fornecedor/Cliente", cell: (r) => r.exp.supplier_name },
-                    { header: "Status", cell: (r) => STATUS_LABELS[r.exp.status] || r.exp.status },
-                    { header: "Solicitante", cell: (r) => r.exp.requester_name || "—" },
-                    { header: "Aprovador atual", cell: (r) => r.exp.current_approver || "—" },
-                    { header: "Data doc.", cell: (r) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
-                    { header: "Vencimento", cell: (r) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
-                    { header: "Total", align: "right", cell: (r) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
-                    { header: "ERP #", cell: (r) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
-                    { header: "Origem", cell: (r) => r.origin === "erp_flow" ? "ERP Flow" : "ERP" },
-                  ],
-                  rows: filtered,
-                  fileName: isSales ? "vendas" : "compras",
-                });
-              }}
-            >
-              <FileDown className="w-4 h-4" /> Exportar relatório
-            </Button>
+            {(() => {
+              const reportOptions = {
+                title: isSales ? "Relatório de Vendas" : "Relatório de Compras",
+                subtitle: `${filtered.length} registro(s) · ${companyLabel}`,
+                meta: [
+                  { label: "Empresa", value: companyLabel },
+                  { label: "Usuário", value: session?.userName || "—" },
+                  { label: "Total", value: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalValue) },
+                ],
+                columns: [
+                  { header: "Fornecedor/Cliente", cell: (r: typeof filtered[number]) => r.exp.supplier_name },
+                  { header: "Status", cell: (r: typeof filtered[number]) => STATUS_LABELS[r.exp.status] || r.exp.status },
+                  { header: "Solicitante", cell: (r: typeof filtered[number]) => r.exp.requester_name || "—" },
+                  { header: "Aprovador atual", cell: (r: typeof filtered[number]) => r.exp.current_approver || "—" },
+                  { header: "Data doc.", cell: (r: typeof filtered[number]) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
+                  { header: "Vencimento", cell: (r: typeof filtered[number]) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
+                  { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
+                  { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
+                  { header: "Origem", cell: (r: typeof filtered[number]) => r.origin === "erp_flow" ? "ERP Flow" : "ERP" },
+                ],
+                rows: filtered,
+                fileName: isSales ? "vendas" : "compras",
+              };
+              return (
+                <>
+                  <Button
+                    variant="outline"
+                    className="gap-1.5"
+                    disabled={filtered.length === 0}
+                    onClick={() => { void exportListReportPdf(reportOptions); }}
+                    title="Exportar em PDF respeitando os filtros aplicados"
+                  >
+                    <FileDown className="w-4 h-4" /> Exportar PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-1.5"
+                    disabled={filtered.length === 0}
+                    onClick={() => { exportListReportCsv(reportOptions); }}
+                    title="Exportar em CSV respeitando os filtros aplicados"
+                  >
+                    <FileDown className="w-4 h-4" /> Exportar CSV
+                  </Button>
+                </>
+              );
+            })()}
             <Button onClick={() => setShowCreate(true)} className="gap-1.5">
               <Plus className="w-4 h-4" /> {newButtonLabel}
             </Button>

@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network, FileDown } from "lucide-react";
-import { exportListReportPdf } from "@/lib/report-pdf";
+import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -120,37 +120,53 @@ export default function ApprovalHistory() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={filtered.length === 0}
-              onClick={() => {
-                void exportListReportPdf({
-                  title: "Relatório — Histórico de Aprovações",
-                  subtitle: `${filtered.length} decisão(ões)`,
-                  meta: [
-                    { label: "Empresa", value: getLabel(session?.companyDB) || "—" },
-                    { label: "Escopo", value: effectiveScope === "all" ? "Todos" : "Minhas" },
-                  ],
-                  columns: [
-                    { header: "Data", cell: (r) => formatDate(r.decision_date) },
-                    { header: "Decisão", cell: (r) => r.decision === "Y" ? "Aprovado" : r.decision === "N" ? "Rejeitado" : String(r.decision ?? "—") },
-                    { header: "Doc #", cell: (r) => String(r.doc_num ?? "—") },
-                    { header: "Tipo", cell: (r) => r.doc_type_name || "—" },
-                    { header: "Parceiro", cell: (r) => r.card_name || "—" },
-                    { header: "Solicitante", cell: (r) => r.requester_name || "—" },
-                    { header: "Aprovador", cell: (r) => r.approver_name || "—" },
-                    { header: "Total", align: "right", cell: (r) => formatCurrency(r.doc_total, r.currency) },
-                    { header: "Observações", cell: (r) => r.remarks || "—" },
-                  ],
-                  rows: filtered,
-                  fileName: "historico_aprovacoes",
-                });
-              }}
-            >
-              <FileDown className="w-4 h-4" /> Exportar
-            </Button>
+            {(() => {
+              const reportOptions = {
+                title: "Relatório — Histórico de Aprovações",
+                subtitle: `${filtered.length} decisão(ões)`,
+                meta: [
+                  { label: "Empresa", value: getLabel(session?.companyDB) || "—" },
+                  { label: "Escopo", value: effectiveScope === "all" ? "Todos" : "Minhas" },
+                ],
+                columns: [
+                  { header: "Data", cell: (r: typeof filtered[number]) => formatDate(r.decision_date) },
+                  { header: "Decisão", cell: (r: typeof filtered[number]) => r.decision === "Y" ? "Aprovado" : r.decision === "N" ? "Rejeitado" : String(r.decision ?? "—") },
+                  { header: "Doc #", cell: (r: typeof filtered[number]) => String(r.doc_num ?? "—") },
+                  { header: "Tipo", cell: (r: typeof filtered[number]) => r.doc_type_name || "—" },
+                  { header: "Parceiro", cell: (r: typeof filtered[number]) => r.card_name || "—" },
+                  { header: "Solicitante", cell: (r: typeof filtered[number]) => r.requester_name || "—" },
+                  { header: "Aprovador", cell: (r: typeof filtered[number]) => r.approver_name || "—" },
+                  { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => formatCurrency(r.doc_total, r.currency) },
+                  { header: "Observações", cell: (r: typeof filtered[number]) => r.remarks || "—" },
+                ],
+                rows: filtered,
+                fileName: "historico_aprovacoes",
+              };
+              return (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={filtered.length === 0}
+                    onClick={() => { void exportListReportPdf(reportOptions); }}
+                    title="Exportar em PDF respeitando os filtros aplicados"
+                  >
+                    <FileDown className="w-4 h-4" /> PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={filtered.length === 0}
+                    onClick={() => { exportListReportCsv(reportOptions); }}
+                    title="Exportar em CSV respeitando os filtros aplicados"
+                  >
+                    <FileDown className="w-4 h-4" /> CSV
+                  </Button>
+                </>
+              );
+            })()}
             <Button onClick={handleSync} disabled={isSyncing} size="sm">
               <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
               {isSyncing ? "Sincronizando..." : "Sincronizar agora"}

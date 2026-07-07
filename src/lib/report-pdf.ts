@@ -142,6 +142,51 @@ export async function exportListReportPdf<Row>(opts: ListReportOptions<Row>): Pr
   doc.save(`${safeFileName(opts.fileName || opts.title)}_${Date.now()}.pdf`);
 }
 
+// ---- Relatório de LISTA em CSV (mesmas colunas/rows do PDF) ---------------
+//
+// Reaproveita `ListReportOptions` para garantir que Compras/Vendas/Aprovações
+// exportem exatamente os mesmos campos (e já filtrados) que o PDF. Formato:
+// UTF-8 com BOM (Excel PT-BR reconhece), separador `;`, aspas duplas nos
+// campos com separador/quebra-de-linha/aspas. Metadados vão como linhas de
+// comentário no topo, prefixadas por `#`.
+export function exportListReportCsv<Row>(opts: ListReportOptions<Row>): void {
+  const SEP = ";";
+  const EOL = "\r\n";
+  const escape = (raw: unknown): string => {
+    const s = raw === null || raw === undefined ? "" : String(raw);
+    // Sempre escapar se contém separador, aspas ou quebra de linha.
+    if (/[";\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const lines: string[] = [];
+  // Metadados como comentários (linhas iniciadas por `#`).
+  lines.push(`# ${opts.title}`);
+  if (opts.subtitle) lines.push(`# ${opts.subtitle}`);
+  else lines.push(`# ${opts.rows.length} registro(s)`);
+  if (opts.meta) for (const m of opts.meta) lines.push(`# ${m.label}: ${m.value}`);
+  lines.push("");
+
+  // Header
+  lines.push(opts.columns.map((c) => escape(c.header)).join(SEP));
+  // Body
+  for (const row of opts.rows) {
+    lines.push(opts.columns.map((c) => escape(c.cell(row))).join(SEP));
+  }
+
+  const csv = "\uFEFF" + lines.join(EOL) + EOL;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeFileName(opts.fileName || opts.title)}_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // libera o object URL no próximo tick — evita revogar antes do download começar
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 // ---- Relatório de DETALHE (pedido / despesa individual) --------------------
 
 export interface DetailAttachment {
