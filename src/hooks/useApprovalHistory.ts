@@ -310,7 +310,7 @@ export function useApprovalHistory(
       setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyDb, decision, substituteKey, page, pageSize]);
+  }, [companyDb, decision, substituteKey, trimmedSubSearch, page, pageSize]);
 
   const sync = useCallback(async () => {
     setIsSyncing(true);
