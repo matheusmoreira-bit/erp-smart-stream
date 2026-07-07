@@ -191,6 +191,10 @@ export function CreateExpenseModal({
   interface DocGroup { supplierKey: string; supplierLabel: string; docs: Array<{ file: File; extracted: any }>; }
   const [deferredGroups, setDeferredGroups] = useState<DocGroup[]>([]);
   const [supplierPicker, setSupplierPicker] = useState<{ groups: DocGroup[]; nonFiscal: File[] } | null>(null);
+  // Confirmação e controle de cancelamento do processamento IA / fila de
+  // fornecedores adiados. `aiAbortRef` permite abortar o fetch em andamento.
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const aiAbortRef = useRef<AbortController | null>(null);
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
