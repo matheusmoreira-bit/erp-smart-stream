@@ -196,6 +196,28 @@ export function CreateExpenseModal({
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const aiAbortRef = useRef<AbortController | null>(null);
 
+  // Fila completa dos fornecedores despachados (regra 2 — anexos com
+  // fornecedores diferentes). Guardamos snapshot no momento da escolha para
+  // exibir o resumo do resultado de cada grupo ao final do encadeamento,
+  // incluindo alertas da IA e o nível de confiança extraído.
+  type QueueStatus = "pending" | "queued" | "success" | "failed" | "cancelled";
+  interface QueueEntry {
+    supplierKey: string;
+    supplierLabel: string;
+    fileCount: number;
+    fileNames: string[];
+    lineCount: number;
+    estimatedTotal: number;
+    currency: string;
+    currencies: string[];
+    aiConfidence: number | null;
+    aiWarnings: string[];
+    status: QueueStatus;
+    errorMessage?: string;
+  }
+  const [queueHistory, setQueueHistory] = useState<QueueEntry[]>([]);
+  const [showQueueSummary, setShowQueueSummary] = useState(false);
+
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
     origin === "pagcorp" ? sapSession?.companyDB : undefined,
