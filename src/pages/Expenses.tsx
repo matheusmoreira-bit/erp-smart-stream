@@ -686,7 +686,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isActioning, setIsActioning] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = usePersistedState<string>(filterKey("status"), "all");
 
   const isSales = mode === "sales";
   const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Compras";
