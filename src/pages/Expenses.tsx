@@ -725,6 +725,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // Filtros persistidos por modo (purchase/sales) para manter seleção ao trocar de tela.
   const filterKey = (name: string) => `expenses:${mode}:${name}`;
   const [search, setSearch] = usePersistedState<string>(filterKey("search"), "");
+  const [isSearchPending, setIsSearchPending] = useState(false);
+  useEffect(() => {
+    if (!search) { setIsSearchPending(false); return; }
+    setIsSearchPending(true);
+    const t = setTimeout(() => setIsSearchPending(false), 250);
+    return () => clearTimeout(t);
+  }, [search]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<"erp_flow" | "erp" | undefined>(undefined);
