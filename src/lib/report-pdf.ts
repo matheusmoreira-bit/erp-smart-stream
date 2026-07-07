@@ -781,6 +781,60 @@ const STATUS_LABEL: Record<QueueSummaryEntry["status"], string> = {
   queued: "Na fila",
 };
 
+/**
+ * Desenha uma seção "Evidências" com uma linha por fornecedor, contendo o ID
+ * do evento (para rastreabilidade), a contagem de anexos e os nomes dos
+ * arquivos. Usada em auditoria para provar quais documentos alimentaram cada
+ * entrada do resumo. Retorna o novo `finalY` para o caller continuar.
+ */
+function drawEvidenceSection(
+  doc: jsPDF,
+  entries: QueueSummaryEntry[],
+  startY: number,
+): number {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  let y = startY;
+  if (y > pageH - 40) { doc.addPage(); y = 15; }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  const totalFiles = entries.reduce((s, e) => s + (e.fileNames?.length ?? e.fileCount ?? 0), 0);
+  doc.text(
+    `Evidências (${entries.length} evento(s) · ${totalFiles} anexo(s))`,
+    10, y,
+  );
+  doc.setDrawColor(203, 213, 225);
+  doc.line(10, y + 1, pageW - 10, y + 1);
+  y += 4;
+  doc.setTextColor(0, 0, 0);
+
+  autoTable(doc, {
+    startY: y,
+    head: [["#", "ID do evento", "Fornecedor", "Anexos", "Nomes dos arquivos"]],
+    body: entries.map((e, i) => [
+      String(i + 1),
+      e.id || "—",
+      e.supplierLabel,
+      String(e.fileNames?.length ?? e.fileCount ?? 0),
+      (e.fileNames && e.fileNames.length > 0) ? e.fileNames.join("\n") : "—",
+    ]),
+    styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak", valign: "top" },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 8, halign: "right" },
+      1: { cellWidth: 38, font: "courier", fontSize: 7 },
+      2: { cellWidth: 50 },
+      3: { cellWidth: 14, halign: "right" },
+    },
+    margin: { left: 8, right: 8 },
+    showHead: "everyPage",
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (doc as any).lastAutoTable?.finalY ?? y;
+}
+
 export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<void> {
   const { entries, confidenceThreshold } = opts;
   const kind = opts.kindLabel || "Despesas";
