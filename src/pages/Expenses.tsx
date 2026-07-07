@@ -786,6 +786,24 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     setSelectedExpense(exp);
     setSelectedOrigin(origin);
   };
+  // Sync `?doc=<id>` in the URL with the currently opened expense so links are shareable.
+  useEffect(() => {
+    setDocParam(selectedExpense?.id ?? null);
+  }, [selectedExpense]);
+  // Auto-open the deep-linked document once expenses are loaded.
+  const deepLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandledRef.current) return;
+    const id = readDocParam();
+    if (!id) { deepLinkHandledRef.current = true; return; }
+    if (!expenses || expenses.length === 0) return;
+    const found = expenses.find((e) => e.id === id);
+    if (found) {
+      openExpense(found);
+      deepLinkHandledRef.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenses]);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
