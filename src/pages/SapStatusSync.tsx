@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTitle } from "@/components/PageTitle";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, Play } from "lucide-react";
+import { RefreshCw, Play, AlertTriangle } from "lucide-react";
 
 const DEFAULT_IDS = [
   "fe1df950-9751-4c33-86c9-1789251007ce",
@@ -21,6 +21,19 @@ interface SyncResult {
   poStatus?: string;
   expenseStatus?: string;
   error?: string;
+  attempts?: number;
+  nextRetryAt?: string | null;
+}
+
+interface FailingExpense {
+  id: string;
+  supplier_name: string;
+  sap_doc_entry: number | null;
+  company_db: string;
+  sap_sync_attempts: number;
+  sap_sync_next_retry_at: string | null;
+  sap_integration_error: string | null;
+  sap_integration_last_attempt_at: string | null;
 }
 
 interface SyncResponse {
@@ -47,8 +60,25 @@ export default function SapStatusSync() {
   const [idsText, setIdsText] = useState(DEFAULT_IDS);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<SyncResponse | null>(null);
+  const [failing, setFailing] = useState<FailingExpense[]>([]);
 
-  const run = async (mode: "listed" | "all") => {
+  const loadFailing = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("id, supplier_name, sap_doc_entry, company_db, sap_sync_attempts, sap_sync_next_retry_at, sap_integration_error, sap_integration_last_attempt_at")
+      .eq("sap_sync_state", "sync_error")
+      .order("sap_sync_attempts", { ascending: false })
+      .limit(100);
+    if (error) {
+      toast.error(`Falha ao ler pendências: ${error.message}`);
+      return;
+    }
+    setFailing((data ?? []) as FailingExpense[]);
+  }, []);
+
+  useEffect(() => { void loadFailing(); }, [loadFailing]);
+
+  const run = async (mode: "listed" | "all" | "retry-errors") => {
     setLoading(true);
     setResponse(null);
     try {
@@ -61,6 +91,13 @@ export default function SapStatusSync() {
           return;
         }
         body.expenseIds = ids;
+      } else if (mode === "retry-errors") {
+        if (!failing.length) {
+          toast.info("Nenhuma despesa em sync_error");
+          setLoading(false);
+          return;
+        }
+        body.expenseIds = failing.map((f) => f.id);
       }
       const { data, error } = await supabase.functions.invoke("expense-sap-status-sync", { body });
       if (error) throw error;
@@ -71,6 +108,7 @@ export default function SapStatusSync() {
       } else {
         toast.error(d?.error || "Falha na sincronia");
       }
+      await loadFailing();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(msg);
@@ -83,6 +121,10 @@ export default function SapStatusSync() {
   const results = response?.results ?? [];
   const errors = results.filter((r) => r.error);
   const updated = results.filter((r) => r.expenseStatus);
+
+  const fmtDate = (v: string | null | undefined) =>
+    v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+
 
   return (
     <div className="container max-w-5xl py-8 space-y-6">
@@ -151,6 +193,8 @@ export default function SapStatusSync() {
                       <TableHead>DocEntry</TableHead>
                       <TableHead>Status PO</TableHead>
                       <TableHead>Novo status despesa</TableHead>
+                      <TableHead>Tentativas</TableHead>
+                      <TableHead>Próx. retry</TableHead>
                       <TableHead>Erro</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -161,6 +205,8 @@ export default function SapStatusSync() {
                         <TableCell>{r.docEntry ?? "—"}</TableCell>
                         <TableCell>{poBadge(r.poStatus)}</TableCell>
                         <TableCell>{r.expenseStatus ?? <span className="text-muted-foreground">sem mudança</span>}</TableCell>
+                        <TableCell>{r.attempts ?? "—"}</TableCell>
+                        <TableCell className="text-xs">{fmtDate(r.nextRetryAt)}</TableCell>
                         <TableCell className="text-destructive text-xs">{r.error ?? "—"}</TableCell>
                       </TableRow>
                     ))}
@@ -171,6 +217,69 @@ export default function SapStatusSync() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            Despesas em sync_error
+            <Badge variant="secondary">{failing.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={() => void loadFailing()} disabled={loading}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Recarregar
+            </Button>
+            <Button size="sm" onClick={() => run("retry-errors")} disabled={loading || !failing.length}>
+              <Play className="mr-2 h-4 w-4" />
+              Reprocessar todas ({failing.length})
+            </Button>
+          </div>
+
+          {failing.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma despesa com falha de sincronia.</p>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fornecedor</TableHead>
+                    <TableHead>DocEntry</TableHead>
+                    <TableHead>Base</TableHead>
+                    <TableHead>Tentativas</TableHead>
+                    <TableHead>Última tentativa</TableHead>
+                    <TableHead>Próx. retry</TableHead>
+                    <TableHead>Erro</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {failing.map((f) => (
+                    <TableRow key={f.id}>
+                      <TableCell className="text-xs">{f.supplier_name}</TableCell>
+                      <TableCell>{f.sap_doc_entry ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{f.company_db}</TableCell>
+                      <TableCell>
+                        <Badge variant={f.sap_sync_attempts >= 8 ? "destructive" : "secondary"}>
+                          {f.sap_sync_attempts}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">{fmtDate(f.sap_integration_last_attempt_at)}</TableCell>
+                      <TableCell className="text-xs">
+                        {f.sap_sync_next_retry_at ? fmtDate(f.sap_sync_next_retry_at) : <span className="text-destructive">desistiu</span>}
+                      </TableCell>
+                      <TableCell className="text-destructive text-xs max-w-[280px] truncate" title={f.sap_integration_error ?? ""}>
+                        {f.sap_integration_error ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

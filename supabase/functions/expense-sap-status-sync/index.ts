@@ -14,6 +14,14 @@ interface ExpenseRow {
   sap_doc_entry: number | null;
   status: string;
   supplier_name: string;
+  sap_sync_attempts?: number | null;
+}
+
+// Backoff exponencial: 1, 2, 4, 8, 16, 32, 60min (cap 60), depois desiste (deixa em sync_error).
+const MAX_RETRY_ATTEMPTS = 8;
+function nextRetryDelayMs(attempts: number): number {
+  const minutes = Math.min(60, Math.pow(2, Math.max(0, attempts - 1)));
+  return minutes * 60_000;
 }
 
 function buildBaseUrl(raw: string): string {
@@ -71,7 +79,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  const results: Array<{ id: string; docEntry?: number; poStatus?: string; expenseStatus?: string; error?: string }> = [];
+  const results: Array<{ id: string; docEntry?: number; poStatus?: string; expenseStatus?: string; error?: string; attempts?: number; nextRetryAt?: string | null }> = [];
   const startedAt = Date.now();
 
   // Permite forçar sincronia de IDs específicos via POST body { expenseIds: string[] }
@@ -101,13 +109,19 @@ Deno.serve(async (req) => {
     // ('finalizado' e 'cancelado' são terminais e não precisam de polling contínuo).
     let query = sb
       .from("expenses")
-      .select("id, company_db, sap_doc_entry, status, supplier_name")
+      .select("id, company_db, sap_doc_entry, status, supplier_name, sap_sync_attempts")
       .not("sap_doc_entry", "is", null)
       .not("status", "in", "(finalizado,cancelado,rascunho)")
       .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
       .limit(200);
 
-    if (expenseIdsFilter) query = query.in("id", expenseIdsFilter);
+    if (expenseIdsFilter) {
+      // Execução manual ignora janela de backoff — usuário decidiu forçar.
+      query = query.in("id", expenseIdsFilter);
+    } else {
+      // Execução automática respeita sap_sync_next_retry_at (backoff).
+      query = query.or("sap_sync_next_retry_at.is.null,sap_sync_next_retry_at.lte." + new Date().toISOString());
+    }
 
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
@@ -125,6 +139,23 @@ Deno.serve(async (req) => {
       byCompany.set(r.company_db, arr);
     }
 
+    // Helper: registra falha em uma despesa com backoff exponencial.
+    const recordFailure = async (row: ExpenseRow, msg: string, extra?: { nextRetryAt?: string }) => {
+      const attempts = (row.sap_sync_attempts ?? 0) + 1;
+      const delayMs = nextRetryDelayMs(attempts);
+      const nextRetryAt = extra?.nextRetryAt ?? (
+        attempts >= MAX_RETRY_ATTEMPTS ? null : new Date(Date.now() + delayMs).toISOString()
+      );
+      await sb.from("expenses").update({
+        sap_integration_last_attempt_at: new Date().toISOString(),
+        sap_integration_error: msg.slice(0, 500),
+        sap_sync_state: "sync_error",
+        sap_sync_attempts: attempts,
+        sap_sync_next_retry_at: nextRetryAt,
+      }).eq("id", row.id);
+      return { attempts, nextRetryAt };
+    };
+
     for (const [companyDb, list] of byCompany) {
       let cookie = "";
       let baseUrl = "";
@@ -133,7 +164,12 @@ Deno.serve(async (req) => {
         baseUrl = buildBaseUrl(creds.service_layer_url);
         cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
       } catch (e) {
-        for (const row of list) results.push({ id: row.id, error: (e as Error).message });
+        const msg = (e as Error).message;
+        // Falha ao logar afeta todas as linhas dessa base; grava sync_error com backoff.
+        for (const row of list) {
+          const info = await recordFailure(row, `SAP login: ${msg}`);
+          results.push({ id: row.id, error: msg, attempts: info.attempts, nextRetryAt: info.nextRetryAt });
+        }
         continue;
       }
 
@@ -149,9 +185,14 @@ Deno.serve(async (req) => {
             const now = new Date().toISOString();
 
             if (r.status === 404) {
+              // 404 é resposta válida do SAP — não é falha de sincronia; zera contadores.
               await sb.from("expenses").update({
                 sap_purchase_order_status: "not_found",
                 sap_integration_last_attempt_at: now,
+                sap_integration_error: null,
+                sap_sync_state: "ok",
+                sap_sync_attempts: 0,
+                sap_sync_next_retry_at: null,
               }).eq("id", row.id);
               results.push({ id: row.id, docEntry, poStatus: "not_found" });
               continue;
@@ -167,6 +208,10 @@ Deno.serve(async (req) => {
               sap_purchase_order_status: poStatus,
               sap_integration_last_attempt_at: now,
               sap_integration_error: null,
+              // Sucesso: limpa estado de erro e reseta backoff.
+              sap_sync_state: "ok",
+              sap_sync_attempts: 0,
+              sap_sync_next_retry_at: null,
             };
 
             let newExpenseStatus: string | undefined;
@@ -174,7 +219,6 @@ Deno.serve(async (req) => {
               patch.status = "cancelado";
               newExpenseStatus = "cancelado";
             } else if (closed && (row.status === "pc_lancado" || row.status === "aprovado")) {
-              // PO fechado no SAP normalmente indica que foi copiado para NF de entrada.
               patch.status = "nf_entrada";
               newExpenseStatus = "nf_entrada";
             }
@@ -183,11 +227,14 @@ Deno.serve(async (req) => {
             results.push({ id: row.id, docEntry, poStatus, expenseStatus: newExpenseStatus });
           } catch (e) {
             const msg = (e as Error).message;
-            await sb.from("expenses").update({
-              sap_integration_last_attempt_at: new Date().toISOString(),
-              sap_integration_error: msg.slice(0, 500),
-            }).eq("id", row.id);
-            results.push({ id: row.id, docEntry, error: msg });
+            const info = await recordFailure(row, msg);
+            results.push({
+              id: row.id,
+              docEntry,
+              error: msg,
+              attempts: info.attempts,
+              nextRetryAt: info.nextRetryAt,
+            });
           }
         }
       } finally {
