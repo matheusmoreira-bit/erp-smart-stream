@@ -980,11 +980,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
         {/* Back + actions */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <DraftsPopover
               docType={mode}
               companyDb={session?.companyDB}
