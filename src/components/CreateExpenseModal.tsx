@@ -220,6 +220,11 @@ export function CreateExpenseModal({
   // Marca que o usuário acabou de cancelar o processamento/fila. Habilita o
   // botão "Tentar novamente" enquanto os anexos permanecerem no modal.
   const [justCancelled, setJustCancelled] = useState(false);
+  // Rastreia o DocGroup em edição no formulário (o "pendente") para que, se
+  // a submissão falhar, saibamos qual grupo re-enfileirar em "Reenviar apenas
+  // erros". Cache separado guarda os DocGroup completos dos que falharam.
+  const currentGroupRef = useRef<DocGroup | null>(null);
+  const failedGroupsRef = useRef<Map<string, DocGroup>>(new Map());
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
@@ -867,6 +872,9 @@ export function CreateExpenseModal({
     applyFiscalGroup(chosen.docs.map((d) => d.extracted));
     setDeferredGroups(rest);
     setSupplierPicker(null);
+    currentGroupRef.current = chosen;
+    // Nova execução da fila: limpa cache de erros anteriores.
+    failedGroupsRef.current = new Map();
     // Inicializa o histórico da fila com todos os fornecedores despachados,
     // marcando o escolhido como "pendente" (em andamento) e os demais como
     // "enfileirados". Preserva a ordem de execução.
@@ -902,6 +910,7 @@ export function CreateExpenseModal({
     setFiles(next.docs.map((d) => d.file));
     setDraftId(null);
     applyFiscalGroup(next.docs.map((d) => d.extracted));
+    currentGroupRef.current = next;
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -1080,10 +1089,12 @@ export function CreateExpenseModal({
         setDraftId(null);
       }
 
-      // Marca no histórico da fila o grupo atual como concluído com sucesso.
+      // Marca no histórico da fila o grupo atual como concluído com sucesso
+      // e limpa a marca de falha (caso fosse um retry de erro).
       const currentEntry = queueHistory.find((e) => e.status === "pending");
       if (currentEntry) {
-        updateQueueEntry(currentEntry.supplierKey, { status: "success" });
+        updateQueueEntry(currentEntry.supplierKey, { status: "success", errorMessage: undefined });
+        failedGroupsRef.current.delete(currentEntry.supplierKey);
       }
 
       // Se houver grupos de fornecedores adiados (regra 2 — anexos com
@@ -1102,9 +1113,9 @@ export function CreateExpenseModal({
         return;
       }
 
-      // Encerrou a fila. Se houve encadeamento (>1 entrada), abre o resumo
-      // final antes de fechar; caso contrário, fecha direto.
-      if (queueHistory.length > 1) {
+      // Encerrou a fila. Se houve encadeamento (>1 entrada) OU sobrou algum
+      // erro no histórico, abre o resumo final antes de fechar.
+      if (queueHistory.length > 1 || failedGroupsRef.current.size > 0) {
         setShowQueueSummary(true);
         return;
       }
@@ -1115,10 +1126,14 @@ export function CreateExpenseModal({
         (e && (e.message || e.error_description || e.details || e.hint)) ||
         (typeof e === "string" ? e : "") ||
         "Erro ao criar despesa";
-      // Registra a falha do grupo atual (o usuário pode tentar de novo).
+      // Registra a falha do grupo atual (status=failed + guarda o DocGroup
+      // no cache para o botão "Reenviar apenas erros" no resumo).
       const currentEntry = queueHistory.find((e) => e.status === "pending");
       if (currentEntry) {
-        updateQueueEntry(currentEntry.supplierKey, { errorMessage: msg });
+        updateQueueEntry(currentEntry.supplierKey, { status: "failed", errorMessage: msg });
+        if (currentGroupRef.current && currentGroupRef.current.supplierKey === currentEntry.supplierKey) {
+          failedGroupsRef.current.set(currentEntry.supplierKey, currentGroupRef.current);
+        }
       }
       toast.error(msg);
     } finally {
@@ -2006,11 +2021,10 @@ export function CreateExpenseModal({
     <AlertDialog
       open={showQueueSummary}
       onOpenChange={(v) => {
-        if (!v) {
-          setShowQueueSummary(false);
-          setQueueHistory([]);
-          onClose();
-        }
+        // Só fecha o resumo; NÃO fecha o modal principal aqui (isso permite
+        // "Reenviar apenas erros" fechar o resumo mantendo o modal aberto).
+        // O fechamento definitivo do modal acontece só via botão "Fechar".
+        if (!v) setShowQueueSummary(false);
       }}
     >
       <AlertDialogContent className="max-w-2xl">
@@ -2099,11 +2113,57 @@ export function CreateExpenseModal({
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          {(() => {
+            const failedKeys = queueHistory
+              .filter((e) => e.status === "failed")
+              .map((e) => e.supplierKey)
+              .filter((k) => failedGroupsRef.current.has(k));
+            if (failedKeys.length === 0) return null;
+            return (
+              <Button
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => {
+                  // Retenta somente os grupos com falha, reaproveitando os
+                  // DocGroups em cache (File + extracted) — sem chamar a IA
+                  // de novo e sem tocar nas despesas já criadas com sucesso.
+                  const groups = failedKeys
+                    .map((k) => failedGroupsRef.current.get(k))
+                    .filter((g): g is DocGroup => !!g);
+                  if (groups.length === 0) return;
+                  const [first, ...rest] = groups;
+                  // Reajusta o histórico: pendente/enfileirado para os que
+                  // vão retentar; mantém 'success' e limpa errorMessage.
+                  setQueueHistory((prev) => prev.map((e) => {
+                    if (e.supplierKey === first.supplierKey) {
+                      return { ...e, status: "pending", errorMessage: undefined };
+                    }
+                    if (rest.some((g) => g.supplierKey === e.supplierKey)) {
+                      return { ...e, status: "queued", errorMessage: undefined };
+                    }
+                    return e;
+                  }));
+                  setDeferredGroups(rest);
+                  resetFormForNextDeferred(first);
+                  setShowQueueSummary(false);
+                  setJustCancelled(false);
+                  toast.info(
+                    `Retentando ${groups.length} despesa(s) com erro. Comece por ${first.supplierLabel}.`,
+                    { duration: 6000 },
+                  );
+                }}
+              >
+                <Sparkles className="w-4 h-4" />
+                Reenviar apenas erros ({failedKeys.length})
+              </Button>
+            );
+          })()}
           <AlertDialogAction
             onClick={() => {
               setShowQueueSummary(false);
               setQueueHistory([]);
+              failedGroupsRef.current = new Map();
               onClose();
             }}
           >
