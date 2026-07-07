@@ -1292,7 +1292,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   Mostrar mais
                 </Button>
               </div>
-            ) : filtered.length > PAGE_STEP ? (
+            ) : filtered.length > INITIAL_PAGE_STEP ? (
               <div className="text-center py-4 text-xs text-muted-foreground">
                 {filtered.length} registro(s) exibidos
               </div>
