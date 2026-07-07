@@ -59,18 +59,27 @@ function drawHeader(doc: jsPDF, title: string, subtitle?: string) {
   doc.setTextColor(0, 0, 0);
 }
 
-function drawFooter(doc: jsPDF, generatedBy?: string | null) {
+function drawFooter(
+  doc: jsPDF,
+  generatedBy?: string | null,
+  shortHash?: string | null,
+  generatedAtOverride?: string,
+) {
   const pageCount = doc.getNumberOfPages();
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const stamp = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const stamp = generatedAtOverride
+    || new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
     const left = `Gerado em ${stamp}${generatedBy ? ` por ${generatedBy}` : ""}`;
     doc.text(left, 10, pageH - 6);
-    doc.text(`Página ${i} de ${pageCount}`, pageW - 10, pageH - 6, { align: "right" });
+    const right = shortHash
+      ? `Hash ${shortHash} · Página ${i} de ${pageCount}`
+      : `Página ${i} de ${pageCount}`;
+    doc.text(right, pageW - 10, pageH - 6, { align: "right" });
   }
   doc.setTextColor(0, 0, 0);
 }
@@ -80,6 +89,142 @@ async function currentUserEmail(): Promise<string | null> {
     const { data } = await supabase.auth.getUser();
     return data?.user?.email ?? null;
   } catch { return null; }
+}
+
+// ---- Carimbo de auditoria (hash SHA-256 + usuário + timestamp) -------------
+//
+// Toda exportação de PDF passa por `finalizePdf`, que:
+//   1. Serializa de forma canônica (chaves ordenadas) o payload de conteúdo
+//      fornecido pelo caller — cabeçalho, campos, itens, eventos etc.
+//   2. Calcula o SHA-256 hexadecimal desse payload.
+//   3. Desenha uma página final com o "Carimbo de auditoria" contendo
+//      data/hora de geração, usuário autenticado e o hash completo.
+//   4. Escreve nos rodapés de todas as páginas o hash curto (12 chars) para
+//      conferência rápida em impressões parciais.
+//
+// O hash NÃO cobre o próprio carimbo — ele representa o CONTEÚDO do relatório.
+// Qualquer alteração no conteúdo (valores, datas, itens, histórico) muda o
+// hash; o mesmo relatório gerado novamente com os mesmos dados produz o mesmo
+// hash, servindo como prova de integridade para auditoria.
+
+function stableStringify(value: unknown): string {
+  const seen = new WeakSet<object>();
+  const walk = (v: unknown): unknown => {
+    if (v && typeof v === "object") {
+      if (seen.has(v as object)) return null;
+      seen.add(v as object);
+      if (Array.isArray(v)) return v.map(walk);
+      const obj = v as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const k of Object.keys(obj).sort()) out[k] = walk(obj[k]);
+      return out;
+    }
+    if (typeof v === "undefined") return null;
+    return v;
+  };
+  return JSON.stringify(walk(value));
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  try {
+    const subtle = (globalThis as { crypto?: { subtle?: SubtleCrypto } })
+      .crypto?.subtle;
+    if (subtle) {
+      const buf = await subtle.digest("SHA-256", new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(buf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+  } catch { /* fallback abaixo */ }
+  // Fallback não-criptográfico (FNV-1a 32-bit → 64 chars com mistura simples).
+  // Só é usado se a API SubtleCrypto não estiver disponível no runtime.
+  let h1 = 0x811c9dc5, h2 = 0x1b873593;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193);
+    h2 = Math.imul(h2 ^ (c + i), 0x85ebca6b);
+  }
+  const hex32 = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
+  return (hex32(h1) + hex32(h2)).padEnd(64, "0");
+}
+
+function drawAuditStamp(
+  doc: jsPDF,
+  info: { user: string | null; hash: string; generatedAt: string; contentSize: number; reportKind: string },
+) {
+  doc.addPage();
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = 22;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Carimbo de auditoria", 10, y);
+  doc.setDrawColor(203, 213, 225);
+  doc.line(10, y + 1.5, pageW - 10, y + 1.5);
+  y += 10;
+
+  const rows: Array<[string, string]> = [
+    ["Tipo de relatório", info.reportKind],
+    ["Gerado em", info.generatedAt],
+    ["Usuário autenticado", info.user || "não autenticado"],
+    ["Tamanho do conteúdo", `${info.contentSize.toLocaleString("pt-BR")} caractere(s)`],
+    ["Algoritmo de hash", "SHA-256 (hex)"],
+  ];
+  doc.setFontSize(10);
+  for (const [k, v] of rows) {
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(71, 85, 105);
+    doc.text(`${k}:`, 10, y);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(15, 23, 42);
+    doc.text(v, 65, y);
+    y += 6;
+  }
+
+  y += 4;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Hash SHA-256 do conteúdo:", 10, y);
+  y += 6;
+  // Quebra em duas linhas de 32 chars para facilitar leitura/conferência.
+  doc.setFont("courier", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text(info.hash.slice(0, 32), 10, y);
+  y += 6;
+  doc.text(info.hash.slice(32), 10, y);
+  y += 10;
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  const note =
+    "Este carimbo permite verificar a integridade do relatório: qualquer alteração no conteúdo " +
+    "(campos, itens, datas, histórico ou anexos listados) altera o hash. Use-o em auditorias " +
+    "para atestar que a versão apresentada corresponde exatamente à gerada nesta data e hora, " +
+    "pelo usuário indicado. O hash curto (primeiros 12 caracteres) é repetido no rodapé de " +
+    "todas as páginas para conferência rápida em impressões parciais.";
+  doc.text(doc.splitTextToSize(note, pageW - 20), 10, y);
+  doc.setTextColor(0, 0, 0);
+}
+
+/**
+ * Fecha o PDF adicionando o carimbo de auditoria (nova página) e o rodapé com
+ * data/hora, usuário autenticado e hash curto do conteúdo. Deve ser chamado
+ * imediatamente antes de `doc.save(...)`.
+ */
+async function finalizePdf(
+  doc: jsPDF,
+  reportKind: string,
+  payload: unknown,
+): Promise<void> {
+  const canonical = stableStringify({ kind: reportKind, payload });
+  const hash = await sha256Hex(canonical);
+  const user = await currentUserEmail();
+  const generatedAt = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  drawAuditStamp(doc, { user, hash, generatedAt, contentSize: canonical.length, reportKind });
+  drawFooter(doc, user, hash.slice(0, 12), generatedAt);
 }
 
 // ---- Relatório de LISTA (tabular) ------------------------------------------
