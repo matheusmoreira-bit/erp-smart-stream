@@ -37,9 +37,16 @@ export function useNotifications() {
   const { session } = useSap();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<Notification[]>([]);
+  const [approvedForRequester, setApprovedForRequester] = useState<Notification[]>([]);
   const [dismissedPendingIds, setDismissedPendingIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem("notifications_dismissed_pending_v1");
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch { return new Set(); }
+  });
+  const [dismissedApprovedIds, setDismissedApprovedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("notifications_dismissed_approved_v1");
       return new Set(raw ? (JSON.parse(raw) as string[]) : []);
     } catch { return new Set(); }
   });
@@ -65,10 +72,18 @@ export function useNotifications() {
     } catch { /* quota — ignore */ }
   }, []);
 
+  const persistDismissedApproved = useCallback((next: Set<string>) => {
+    try {
+      localStorage.setItem("notifications_dismissed_approved_v1", JSON.stringify(Array.from(next)));
+    } catch { /* quota — ignore */ }
+  }, []);
+
   const fetchNotifications = useCallback(async () => {
     if (!identifier) return;
     setLoading(true);
-    const [notifRes, expRes] = await Promise.all([
+    const variants = approverVariants();
+    const emailLower = (session?.userName || "").toLowerCase();
+    const [notifRes, expRes, approvedRes] = await Promise.all([
       supabase
         .from("notifications")
         .select("*")
@@ -76,7 +91,6 @@ export function useNotifications() {
         .order("created_at", { ascending: false })
         .limit(50),
       (async () => {
-        const variants = approverVariants();
         if (variants.length === 0) return { data: [] as Array<Record<string, unknown>> };
         // ilike sem wildcards = igualdade case-insensitive.
         const orClauses = variants.map((v) => `current_approver.ilike.${v.replace(/,/g, "")}`).join(",");
@@ -87,6 +101,26 @@ export function useNotifications() {
           .or(orClauses)
           .order("created_at", { ascending: false })
           .limit(50);
+        if (companyDB) q = q.eq("company_db", companyDB);
+        const { data } = await q;
+        return { data: (data as Array<Record<string, unknown>>) || [] };
+      })(),
+      (async () => {
+        if (variants.length === 0 && !emailLower) return { data: [] as Array<Record<string, unknown>> };
+        // Casa por requester_name (variantes) OU por email do criador/solicitante.
+        const clauses: string[] = [];
+        for (const v of variants) clauses.push(`requester_name.ilike.${v.replace(/,/g, "")}`);
+        if (emailLower) {
+          clauses.push(`created_by_email.ilike.${emailLower.replace(/,/g, "")}`);
+          clauses.push(`requester_email.ilike.${emailLower.replace(/,/g, "")}`);
+        }
+        let q = supabase
+          .from("expenses")
+          .select("id, doc_type, supplier_name, requester_name, total_amount, currency, created_at, updated_at, company_db, cost_center")
+          .eq("status", "aprovado")
+          .or(clauses.join(","))
+          .order("updated_at", { ascending: false })
+          .limit(30);
         if (companyDB) q = q.eq("company_db", companyDB);
         const { data } = await q;
         return { data: (data as Array<Record<string, unknown>>) || [] };
@@ -114,8 +148,25 @@ export function useNotifications() {
         created_at: (e.created_at as string) || new Date().toISOString(),
       }));
     setPendingApprovals(virtual);
+
+    const approved: Notification[] = (approvedRes.data || [])
+      .filter((e) => !dismissedApprovedIds.has(String(e.id)))
+      .map((e) => ({
+        id: `approved:${e.id}`,
+        user_identifier: identifier,
+        company_db: (e.company_db as string) || null,
+        title: "Solicitação aprovada",
+        body: `${(e.doc_type as string) || "Documento"} · ${(e.supplier_name as string) || ""} — ${(e.currency as string) || "BRL"} ${Number(e.total_amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} foi aprovada.`,
+        category: "approval",
+        is_read: false,
+        link: "/despesas",
+        metadata: { expense_id: e.id, virtual: true, kind: "approved", cost_center: e.cost_center },
+        created_at: (e.updated_at as string) || (e.created_at as string) || new Date().toISOString(),
+      }));
+    setApprovedForRequester(approved);
     setLoading(false);
-  }, [identifier, companyDB, approverVariants, dismissedPendingIds]);
+  }, [identifier, companyDB, approverVariants, dismissedPendingIds, dismissedApprovedIds, session?.userName]);
+
 
   useEffect(() => {
     fetchNotifications();
@@ -155,11 +206,15 @@ export function useNotifications() {
         .map((n) => (n.metadata as { expense_id?: string } | null)?.expense_id)
         .filter(Boolean) as string[]
     );
-    const filteredVirtual = pendingApprovals.filter((v) => {
+    const filteredPending = pendingApprovals.filter((v) => {
       const eid = (v.metadata as { expense_id?: string } | null)?.expense_id;
       return !eid || !realExpenseIds.has(eid);
     });
-    return [...filteredVirtual, ...notifications].sort(
+    const filteredApproved = approvedForRequester.filter((v) => {
+      const eid = (v.metadata as { expense_id?: string } | null)?.expense_id;
+      return !eid || !realExpenseIds.has(eid);
+    });
+    return [...filteredPending, ...filteredApproved, ...notifications].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
   })();
@@ -178,11 +233,22 @@ export function useNotifications() {
       setPendingApprovals((prev) => prev.filter((n) => n.id !== id));
       return;
     }
+    if (id.startsWith("approved:")) {
+      const expenseId = id.slice("approved:".length);
+      setDismissedApprovedIds((prev) => {
+        const next = new Set(prev);
+        next.add(expenseId);
+        persistDismissedApproved(next);
+        return next;
+      });
+      setApprovedForRequester((prev) => prev.filter((n) => n.id !== id));
+      return;
+    }
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
     );
-  }, [persistDismissed]);
+  }, [persistDismissed, persistDismissedApproved]);
 
   const markAllAsRead = useCallback(async () => {
     if (!identifier) return;
@@ -199,13 +265,27 @@ export function useNotifications() {
       });
       setPendingApprovals([]);
     }
+    if (approvedForRequester.length > 0) {
+      setDismissedApprovedIds((prev) => {
+        const next = new Set(prev);
+        for (const p of approvedForRequester) {
+          const eid = (p.metadata as { expense_id?: string } | null)?.expense_id;
+          if (eid) next.add(eid);
+        }
+        persistDismissedApproved(next);
+        return next;
+      });
+      setApprovedForRequester([]);
+    }
     await supabase
       .from("notifications")
       .update({ is_read: true })
       .eq("user_identifier", identifier)
       .eq("is_read", false);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-  }, [identifier, pendingApprovals, persistDismissed]);
+  }, [identifier, pendingApprovals, approvedForRequester, persistDismissed, persistDismissedApproved]);
+
+
 
   return { notifications: merged, loading, unreadCount, markAsRead, markAllAsRead, refresh: fetchNotifications };
 }

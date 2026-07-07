@@ -67,7 +67,11 @@ export function NotificationBell() {
                 }}
               >
                 <div className="flex gap-3">
-                  <span className="text-base mt-0.5">{categoryIcon[notif.category] || "🔔"}</span>
+                  <span className="text-base mt-0.5">
+                    {(notif.metadata as { kind?: string } | null)?.kind === "approved"
+                      ? "✅"
+                      : categoryIcon[notif.category] || "🔔"}
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className={`text-sm truncate ${!notif.is_read ? "font-semibold text-foreground" : "text-foreground/80"}`}>
