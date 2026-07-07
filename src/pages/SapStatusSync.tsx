@@ -21,6 +21,19 @@ interface SyncResult {
   poStatus?: string;
   expenseStatus?: string;
   error?: string;
+  attempts?: number;
+  nextRetryAt?: string | null;
+}
+
+interface FailingExpense {
+  id: string;
+  supplier_name: string;
+  sap_doc_entry: number | null;
+  company_db: string;
+  sap_sync_attempts: number;
+  sap_sync_next_retry_at: string | null;
+  sap_integration_error: string | null;
+  sap_integration_last_attempt_at: string | null;
 }
 
 interface SyncResponse {
