@@ -1582,7 +1582,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         ) : (
           <>
             {/* Card grid (mobile / tablet / laptop) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "cards" ? "" : "hidden"}`}>
               {visibleItems.map(({ exp, origin }) => (
                 <ExpenseCard
                   key={exp.id}
