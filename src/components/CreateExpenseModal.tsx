@@ -355,6 +355,8 @@ export function CreateExpenseModal({
       setDraftHydrated(false);
       setDeferredGroups([]);
       setSupplierPicker(null);
+      setQueueHistory([]);
+      setShowQueueSummary(false);
     }
   }, [open]);
 
