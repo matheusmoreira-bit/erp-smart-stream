@@ -839,8 +839,9 @@ function ApprovalDetailModal({
                     )}
                   </p>
                 </div>
-                <div className="border border-border rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
+                <div className="border border-border rounded-lg overflow-x-auto">
+                  <table className="w-full text-xs min-w-[560px]">
+
                     <thead>
                       <tr className="bg-muted/30 border-b border-border">
                         <th className="text-left py-2 px-3 text-muted-foreground">Código</th>
