@@ -1422,7 +1422,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <Label htmlFor="show-all-expenses" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
                   Ver todos os lançamentos
                 </Label>
-                <Switch id="show-all-expenses" checked={showAll} onCheckedChange={setShowAll} />
+                <Switch id="show-all-expenses" checked={showAll} onCheckedChange={(v) => preserveScroll(() => setShowAll(v))} />
               </div>
             )}
             {(search || statusFilter !== "all" || sourceMode !== "flow" || showAll !== isAdmin) && (
