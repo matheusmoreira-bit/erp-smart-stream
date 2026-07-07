@@ -1022,20 +1022,66 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       })
     : [];
 
-  const applyFilters = (e: Expense, scoped: boolean) => {
+  const applyFilters = (e: Expense, scoped: boolean, origin: "erp_flow" | "erp") => {
     if (scoped && !effectiveShowAll && !isMine(e)) return false;
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
+
+    // Filtros avançados (modal)
+    const f = advFilters;
+    const includes = (val: string | number | null | undefined, needle: string) =>
+      (val ?? "").toString().toLowerCase().includes(needle.toLowerCase());
+    if (f.origin !== "all" && f.origin !== origin) return false;
+    if (f.supplier && !includes(e.supplier_name, f.supplier)) return false;
+    if (f.supplier_code && !includes(e.supplier_code, f.supplier_code)) return false;
+    if (f.requester && !includes(e.requester_name, f.requester)) return false;
+    if (f.requester_email && !includes(e.requester_email, f.requester_email)) return false;
+    if (f.approver && !includes(e.current_approver, f.approver)) return false;
+    if (f.cost_center && !includes(e.cost_center, f.cost_center)) return false;
+    if (f.project && !includes(e.project, f.project)) return false;
+    if (f.currency && (e.currency || "").toLowerCase() !== f.currency.toLowerCase()) return false;
+    if (f.remarks && !includes(e.remarks, f.remarks)) return false;
+    if (f.sap_doc_num) {
+      const q = f.sap_doc_num.trim();
+      const num = e.sap_doc_num?.toString() || "";
+      const entry = e.sap_doc_entry?.toString() || "";
+      if (!num.includes(q) && !entry.includes(q)) return false;
+    }
+    if (f.branch_id && String(e.branch_id ?? "") !== f.branch_id.trim()) return false;
+    const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
+    const maxV = f.max_amount ? Number(f.max_amount.replace(",", ".")) : null;
+    if (minV != null && Number.isFinite(minV) && e.total_amount < minV) return false;
+    if (maxV != null && Number.isFinite(maxV) && e.total_amount > maxV) return false;
+    const inRange = (val: string | undefined | null, from: string, to: string) => {
+      if (!from && !to) return true;
+      if (!val) return false;
+      const d = val.slice(0, 10);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    };
+    if (!inRange(e.doc_date, f.doc_date_from, f.doc_date_to)) return false;
+    if (!inRange(e.due_date, f.due_date_from, f.due_date_to)) return false;
+    if (!inRange(e.created_at, f.created_from, f.created_to)) return false;
+    if (f.only_missing_due && e.due_date) return false;
+    if (f.only_overdue) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (!e.due_date || e.due_date.slice(0, 10) >= today) return false;
+    }
+    if (f.only_sap_error && !e.sap_integration_error) return false;
+
     if (!search) return true;
     const q = search.toLowerCase();
     return (
       e.supplier_name.toLowerCase().includes(q) ||
       e.requester_name.toLowerCase().includes(q) ||
-      (e.remarks || "").toLowerCase().includes(q)
+      (e.remarks || "").toLowerCase().includes(q) ||
+      (e.supplier_code || "").toLowerCase().includes(q) ||
+      (e.sap_doc_num?.toString() || "").includes(q)
     );
   };
 
-  const flowFiltered = expenses.filter((e) => applyFilters(e, true));
-  const sapFiltered = sapOnly.filter((e) => applyFilters(e, false));
+  const flowFiltered = expenses.filter((e) => applyFilters(e, true, "erp_flow"));
+  const sapFiltered = sapOnly.filter((e) => applyFilters(e, false, "erp"));
   const filtered: Array<{ exp: Expense; origin: "erp_flow" | "erp" }> = [
     ...flowFiltered.map((exp) => ({ exp, origin: "erp_flow" as const })),
     ...sapFiltered.map((exp) => ({ exp, origin: "erp" as const })),
