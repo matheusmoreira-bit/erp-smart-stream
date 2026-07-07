@@ -1837,7 +1837,7 @@ export function CreateExpenseModal({
         resetFormForNextDeferred(next);
         setDeferredGroups(rest);
         // Promove a próxima entrada do histórico para "pendente".
-        updateQueueEntry(next.supplierKey, { status: "pending" });
+        updateQueueEntry(next.supplierKey, { status: "pending", promotedAt: Date.now() });
         toast.info(
           `Agora criando a despesa de ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} restante(s))` : ""}.`,
           { duration: 6000 },
