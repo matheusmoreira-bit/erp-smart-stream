@@ -1,6 +1,7 @@
 import { useSap } from "@/contexts/SapContext";
 import { SapLoginForm } from "@/components/SapLoginForm";
 import { MainMenu } from "@/components/MainMenu";
+import { ProfileCompletionGate } from "@/components/ProfileCompletionGate";
 
 const Index = () => {
   const { session } = useSap();
@@ -9,7 +10,12 @@ const Index = () => {
     return <SapLoginForm />;
   }
 
-  return <MainMenu />;
+  return (
+    <>
+      <MainMenu />
+      <ProfileCompletionGate />
+    </>
+  );
 };
 
 export default Index;
