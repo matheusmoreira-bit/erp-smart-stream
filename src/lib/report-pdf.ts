@@ -959,7 +959,20 @@ function auditStatusReason(e: QueueSummaryEntry): string {
   }
 }
 
-
+/**
+ * Legenda oficial de "Motivo do status". Fonte única usada tanto pela
+ * legenda no rodapé do PDF quanto pelas linhas `#` de metadados do CSV,
+ * garantindo que auditor veja exatamente as mesmas descrições.
+ */
+const STATUS_REASON_LEGEND: Array<{ status: string; label: string; description: string }> = [
+  { status: "success",   label: "Concluído com sucesso", description: "Documento processado pela IA, revisado e submetido sem erro." },
+  { status: "failed",    label: "Falha (com mensagem)",  description: "Ocorreu erro durante classificação, submissão ou integração; a coluna mostra a mensagem original retornada pelo sistema." },
+  { status: "failed",    label: "Falha não detalhada",   description: "Falhou sem mensagem específica — verificar logs de auditoria (audit_events) usando o ID do evento." },
+  { status: "cancelled", label: "Cancelado pelo usuário", description: "Usuário interrompeu manualmente o processamento antes da conclusão." },
+  { status: "pending",   label: "Em processamento",      description: "Item ainda estava sendo tratado pela IA ou aguardando ação do usuário no momento da exportação." },
+  { status: "queued",    label: "Aguardando na fila",    description: "Item ainda não iniciou processamento (posição na fila da IA)." },
+  { status: "*",         label: "Motivo customizado",    description: "Quando o evento traz statusReason próprio (ex.: reprocessado, override manual), esse texto prevalece sobre a descrição padrão." },
+];
 
 /**
  * Desenha uma seção "Evidências" com uma linha por fornecedor, contendo o ID
@@ -1039,7 +1052,37 @@ function drawEvidenceSection(
     showHead: "everyPage",
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (doc as any).lastAutoTable?.finalY ?? y;
+  let finalY: number = (doc as any).lastAutoTable?.finalY ?? y;
+
+  // Legenda de "Motivo do status" logo abaixo da tabela de evidências, para
+  // auditor conseguir interpretar cada rótulo sem precisar consultar docs
+  // externos. Quebra de página se não couber.
+  if (finalY > pageH - 40) { doc.addPage(); finalY = 15; }
+  finalY += 6;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Legenda — Motivo do status", 10, finalY);
+  doc.setDrawColor(203, 213, 225);
+  doc.line(10, finalY + 1, pageW - 10, finalY + 1);
+  finalY += 3;
+
+  autoTable(doc, {
+    startY: finalY,
+    head: [["Rótulo", "Quando aparece"]],
+    body: STATUS_REASON_LEGEND.map((r) => [r.label, r.description]),
+    styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak", valign: "top" },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 45, fontStyle: "bold" },
+      1: { cellWidth: "auto" },
+    },
+    margin: { left: 8, right: 8 },
+    showHead: "everyPage",
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (doc as any).lastAutoTable?.finalY ?? finalY;
 }
 
 export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<void> {
@@ -1407,6 +1450,8 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
       ([cur, v]) => `# Total ${cur}: ${formatCurrency(v, cur)}`,
     ),
     ...auditWarning,
+    `# --- Legenda "Motivo do status" ---`,
+    ...STATUS_REASON_LEGEND.map((r) => `# ${r.label}: ${r.description}`),
     "",
   ];
 
