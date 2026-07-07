@@ -2572,6 +2572,7 @@ export function CreateExpenseModal({
               onChange={applyHeaderCostCenter}
               placeholder="Obrigatório — aplica a todos os itens…"
               portalContainer={dialogContainer}
+              required
             />
             <CachedSearchCombobox
               label="Projeto (padrão p/ itens)"
