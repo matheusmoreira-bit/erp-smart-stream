@@ -360,18 +360,29 @@ describe("exportListReportCsv — aprovações/compras/vendas", () => {
     { header: "Obs", cell: (r: Row) => r.note || "—" },
   ];
 
-  const blobs: Blob[] = [];
+  // Captura a string bruta passada ao construtor do Blob (jsdom não implementa
+  // Blob.text() nem Response(blob).text() de forma confiável).
+  const csvStrings: string[] = [];
   const downloads: string[] = [];
   let originalCreateURL: typeof URL.createObjectURL;
   let originalClick: typeof HTMLAnchorElement.prototype.click;
+  let originalBlob: typeof Blob;
 
   beforeEach(() => {
-    blobs.length = 0;
+    csvStrings.length = 0;
     downloads.length = 0;
     originalCreateURL = URL.createObjectURL;
     originalClick = HTMLAnchorElement.prototype.click;
-    URL.createObjectURL = ((b: Blob) => { blobs.push(b); return "blob:mock"; }) as typeof URL.createObjectURL;
-    // jsdom não expõe revokeObjectURL — stub permanente (não restaurar).
+    originalBlob = globalThis.Blob;
+    // Blob mock: guarda o conteúdo e continua "válido" para o restante do fluxo.
+    class RecordingBlob {
+      constructor(parts: BlobPart[]) {
+        csvStrings.push(parts.map((p) => (typeof p === "string" ? p : "")).join(""));
+      }
+    }
+    // @ts-expect-error — mock parcial suficiente para o exercício.
+    globalThis.Blob = RecordingBlob;
+    URL.createObjectURL = (() => "blob:mock") as typeof URL.createObjectURL;
     URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
     HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
   });
@@ -379,6 +390,7 @@ describe("exportListReportCsv — aprovações/compras/vendas", () => {
   afterEach(() => {
     URL.createObjectURL = originalCreateURL;
     HTMLAnchorElement.prototype.click = originalClick;
+    globalThis.Blob = originalBlob;
   });
 
   it("gera CSV com BOM, header, linhas e metadados; escapa aspas/;/newline", async () => {
