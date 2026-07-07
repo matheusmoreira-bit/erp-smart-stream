@@ -1388,6 +1388,14 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
   const generatedBy = await currentUserEmail();
   const generatedAt = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
+  // Aviso agregado de timestamps ausentes — mesma regra usada no PDF, para
+  // que auditor não confunda célula ISO vazia com falha de exportação.
+  const missingAudit = countMissingAuditTimestamps(entries);
+  const auditWarning =
+    (missingAudit.missingClassified > 0 || missingAudit.missingCompleted > 0)
+      ? [`# Aviso auditoria: ${missingAudit.missingClassified} sem "Classificado em (ISO)" · ${missingAudit.missingCompleted} sem "Concluído em (ISO)" (status final). Célula vazia = ausência de dado, não erro de exportação.`]
+      : [];
+
   const meta: string[] = [
     `# Resumo da fila de IA — ${kind}`,
     `# Gerado em: ${generatedAt}${generatedBy ? ` por ${generatedBy}` : ""}`,
@@ -1398,6 +1406,7 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     ...Array.from(perCurrency.entries()).map(
       ([cur, v]) => `# Total ${cur}: ${formatCurrency(v, cur)}`,
     ),
+    ...auditWarning,
     "",
   ];
 
@@ -1405,12 +1414,10 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     "ID do evento", "Fornecedor", "Status", "Arquivos", "Linhas", "Moeda",
     "Moedas detectadas", "Total estimado", "Confiança IA (%)", "Limite (%)",
     "Baixa confiança?", "Alertas IA", "Erro", "Nomes dos anexos",
-    // Trilha de auditoria — timestamps ISO 8601 (UTC) para facilitar parse
-    // em ferramentas de análise; a versão human-readable fica no PDF.
+    // Trilha de auditoria — timestamps SEMPRE em ISO 8601 UTC (sufixo "Z"),
+    // ou vazio quando ausente/inválido (ver aviso no cabeçalho meta).
     "Classificado em (ISO)", "Concluído em (ISO)", "Modelo IA", "Motivo do status",
   ];
-  const toIso = (ms?: number | null) =>
-    (ms && Number.isFinite(ms) && ms > 0) ? new Date(ms).toISOString() : "";
   const rows = entries.map((e) => [
     e.id || "",
     e.supplierLabel,
@@ -1426,8 +1433,8 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
     (e.aiWarnings || []).join(" | "),
     e.errorMessage || "",
     (e.fileNames || []).join(" | "),
-    toIso(e.classifiedAt),
-    toIso(e.completedAt),
+    toAuditIso(e.classifiedAt).iso,
+    toAuditIso(e.completedAt).iso,
     e.aiModel || "",
     auditStatusReason(e),
   ]);
