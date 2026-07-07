@@ -2,9 +2,21 @@ import { List, type RowComponentProps } from "react-window";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Building2, Eye, Network } from "lucide-react";
-import type { Expense } from "@/hooks/useExpenses";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { STATUS_COLORS, STATUS_LABELS } from "@/lib/expense-status";
+import { type Expense, STATUS_COLORS, STATUS_LABELS } from "@/hooks/useExpenses";
+
+function formatCurrency(value: number, currency: string = "BRL") {
+  const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: validCode }).format(value);
+}
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return "—";
+  try {
+    return new Intl.DateTimeFormat("pt-BR").format(new Date(dateStr));
+  } catch {
+    return dateStr;
+  }
+}
 
 export type VirtualRow = { exp: Expense; origin?: "erp_flow" | "erp" };
 
