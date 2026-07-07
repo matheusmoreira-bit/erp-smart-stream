@@ -206,11 +206,15 @@ export function useNotifications() {
         .map((n) => (n.metadata as { expense_id?: string } | null)?.expense_id)
         .filter(Boolean) as string[]
     );
-    const filteredVirtual = pendingApprovals.filter((v) => {
+    const filteredPending = pendingApprovals.filter((v) => {
       const eid = (v.metadata as { expense_id?: string } | null)?.expense_id;
       return !eid || !realExpenseIds.has(eid);
     });
-    return [...filteredVirtual, ...notifications].sort(
+    const filteredApproved = approvedForRequester.filter((v) => {
+      const eid = (v.metadata as { expense_id?: string } | null)?.expense_id;
+      return !eid || !realExpenseIds.has(eid);
+    });
+    return [...filteredPending, ...filteredApproved, ...notifications].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
   })();
@@ -229,11 +233,22 @@ export function useNotifications() {
       setPendingApprovals((prev) => prev.filter((n) => n.id !== id));
       return;
     }
+    if (id.startsWith("approved:")) {
+      const expenseId = id.slice("approved:".length);
+      setDismissedApprovedIds((prev) => {
+        const next = new Set(prev);
+        next.add(expenseId);
+        persistDismissedApproved(next);
+        return next;
+      });
+      setApprovedForRequester((prev) => prev.filter((n) => n.id !== id));
+      return;
+    }
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
     );
-  }, [persistDismissed]);
+  }, [persistDismissed, persistDismissedApproved]);
 
   const markAllAsRead = useCallback(async () => {
     if (!identifier) return;
@@ -250,13 +265,27 @@ export function useNotifications() {
       });
       setPendingApprovals([]);
     }
+    if (approvedForRequester.length > 0) {
+      setDismissedApprovedIds((prev) => {
+        const next = new Set(prev);
+        for (const p of approvedForRequester) {
+          const eid = (p.metadata as { expense_id?: string } | null)?.expense_id;
+          if (eid) next.add(eid);
+        }
+        persistDismissedApproved(next);
+        return next;
+      });
+      setApprovedForRequester([]);
+    }
     await supabase
       .from("notifications")
       .update({ is_read: true })
       .eq("user_identifier", identifier)
       .eq("is_read", false);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-  }, [identifier, pendingApprovals, persistDismissed]);
+  }, [identifier, pendingApprovals, approvedForRequester, persistDismissed, persistDismissedApproved]);
+
+
 
   return { notifications: merged, loading, unreadCount, markAsRead, markAllAsRead, refresh: fetchNotifications };
 }
