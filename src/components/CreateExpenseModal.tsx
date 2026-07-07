@@ -271,6 +271,12 @@ export function CreateExpenseModal({
     entry: QueueEntry;
     group: DocGroup | null;
   } | null>(null);
+  // Filtros locais do modal "Ver detalhes" — resetados sempre que abrimos
+  // um novo grupo. Permitem localizar rapidamente uma linha, um alerta ou
+  // um arquivo específico dentro do resumo por fornecedor.
+  const [detailsSearch, setDetailsSearch] = useState("");
+  const [detailsTypeFilter, setDetailsTypeFilter] = useState<"all" | "line" | "warning">("all");
+  const [detailsConfidenceFilter, setDetailsConfidenceFilter] = useState<"all" | "low" | "normal">("all");
   // Marca que o usuário acabou de cancelar o processamento/fila. Habilita o
   // botão "Tentar novamente" enquanto os anexos permanecerem no modal.
   const [justCancelled, setJustCancelled] = useState(false);
