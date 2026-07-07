@@ -321,40 +321,52 @@ Deno.serve(async (req) => {
       _user_id: cloudUser.id, _role: "admin",
     });
     if (hasAdmin === true) isCloudAdmin = true;
+    stageLog("auth_cloud", "info", { requestId, callerEmail, isCloudAdmin });
   } catch (e) {
-    if (!(e instanceof AuthError)) throw e;
+    if (!(e instanceof AuthError)) {
+      stageLog("auth_cloud", "error", { requestId, error: (e as Error).message });
+      throw e;
+    }
     // No Cloud JWT — fall back to SAP session.
+    stageLog("auth_cloud", "info", { requestId, note: "no_cloud_jwt_fallback_sap" });
   }
 
   let sapValidated: Awaited<ReturnType<typeof validateSapSession>> = null;
   if (sapSessionHeader && sapUserHeader && sapCompanyHeader) {
     sapValidated = await validateSapSession(req);
-    if (!sapValidated) return await respond(401, { error: "Sessão SAP inválida ou expirada" });
-    // Use SAP user as caller identity when available (matches how the app stores approvers).
+    if (!sapValidated) {
+      stageLog("auth_sap", "warn", { requestId, reason: "invalid_or_expired_session", sapUser: sapUserHeader });
+      return await respond(401, {
+        error: "Sessão SAP inválida ou expirada. Faça login novamente.",
+        stage: "auth_sap",
+      });
+    }
     if (!callerIdentity) callerIdentity = sapValidated.userName;
-    // Cheap superuser check + mapping check
     try {
       const { data: mappedAdmin } = await admin.rpc("is_sap_user_admin", {
         _sap_username: sapValidated.userName.toLowerCase(),
       });
       if (mappedAdmin === true) isSuperUser = true;
-    } catch { /* ignore */ }
-    if (!isSuperUser && sapValidated.userName.toLowerCase() === "manager") {
-      isSuperUser = true;
+    } catch (e) {
+      stageLog("auth_sap", "warn", { requestId, phase: "is_sap_user_admin", error: (e as Error).message });
     }
+    if (!isSuperUser && sapValidated.userName.toLowerCase() === "manager") isSuperUser = true;
     if (!isSuperUser) {
       isSuperUser = await isSapSuperuser(
-        admin,
-        sapValidated.companyDB,
-        sapSessionHeader,
-        sapRouteHeader,
-        sapValidated.userName,
+        admin, sapValidated.companyDB, sapSessionHeader, sapRouteHeader, sapValidated.userName,
       );
     }
+    stageLog("auth_sap", "info", {
+      requestId, sapUser: sapValidated.userName, companyDB: sapValidated.companyDB, isSuperUser,
+    });
   }
 
   if (!callerIdentity && !isCloudAdmin) {
-    return await respond(401, { error: "Não autenticado" });
+    stageLog("auth_none", "warn", { requestId });
+    return await respond(401, {
+      error: "Não autenticado — envie um JWT válido do Lovable Cloud ou os headers x-sap-* de uma sessão SAP ativa.",
+      stage: "auth_none",
+    });
   }
 
   // ── Load expense ───────────────────────────────────────────────────────
@@ -363,11 +375,25 @@ Deno.serve(async (req) => {
     .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db")
     .eq("id", expenseId)
     .maybeSingle();
-  if (expErr) return await respond(500, { error: `Falha ao carregar despesa: ${expErr.message}` });
-  if (!exp) return await respond(404, { error: "Despesa não encontrada" });
-  if ((exp as any).status !== "pendente_aprovacao") {
-    return await respond(409, { error: `Despesa não está pendente de aprovação (status atual: ${(exp as any).status}).` });
+  if (expErr) {
+    stageLog("load_expense", "error", { requestId, expenseId, error: expErr.message });
+    return await respond(500, { error: `Falha ao carregar despesa: ${expErr.message}`, stage: "load_expense" });
   }
+  if (!exp) {
+    stageLog("load_expense", "warn", { requestId, expenseId, reason: "not_found" });
+    return await respond(404, { error: "Despesa não encontrada.", stage: "load_expense" });
+  }
+  if ((exp as any).status !== "pendente_aprovacao") {
+    stageLog("load_expense", "warn", {
+      requestId, expenseId, reason: "invalid_status", currentStatus: (exp as any).status,
+    });
+    return await respond(409, {
+      error: `Despesa não está pendente de aprovação (status atual: ${(exp as any).status}).`,
+      stage: "load_expense",
+      currentStatus: (exp as any).status,
+    });
+  }
+
 
   const currentLevel = Number((exp as any).current_level_order || 1);
   let levels: Array<{ level_order: number; approver_name: string; approver_email: string | null }> = [];
