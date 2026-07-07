@@ -2288,6 +2288,11 @@ export function CreateExpenseModal({
               </Button>
             );
           })()}
+          {cancelledGroupsRef.current.length > 0 && (
+            <Button variant="outline" className="gap-1.5" onClick={resumeCancelledQueue}>
+              ▶ Retomar fila ({cancelledGroupsRef.current.length})
+            </Button>
+          )}
           <AlertDialogAction
             onClick={() => {
               setShowQueueSummary(false);
