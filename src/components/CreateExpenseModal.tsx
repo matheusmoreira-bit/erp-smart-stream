@@ -2539,6 +2539,77 @@ export function CreateExpenseModal({
       </AlertDialogContent>
     </AlertDialog>
 
+    {/* Confirmação antes de reenviar apenas os grupos com erro (❌).
+        Evita reprocessar sem querer ao clicar no botão do resumo. */}
+    <AlertDialog open={confirmRetryFailed} onOpenChange={setConfirmRetryFailed}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Reenviar apenas os erros?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              {(() => {
+                const failed = queueHistory.filter(
+                  (e) => e.status === "failed" && failedGroupsRef.current.has(e.supplierKey),
+                );
+                return (
+                  <>
+                    <p>
+                      Vamos retentar <strong>{failed.length}</strong> grupo(s) com erro,
+                      reaproveitando a extração já feita pela IA — nenhuma nova chamada de IA
+                      será feita e as despesas já criadas não serão duplicadas.
+                    </p>
+                    {failed.length > 0 && (
+                      <ul className="list-disc pl-5 text-xs text-muted-foreground max-h-40 overflow-y-auto">
+                        {failed.map((e) => (
+                          <li key={e.supplierKey}>{e.supplierLabel}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              const failedKeys = queueHistory
+                .filter((e) => e.status === "failed")
+                .map((e) => e.supplierKey)
+                .filter((k) => failedGroupsRef.current.has(k));
+              const groups = failedKeys
+                .map((k) => failedGroupsRef.current.get(k))
+                .filter((g): g is DocGroup => !!g);
+              setConfirmRetryFailed(false);
+              if (groups.length === 0) return;
+              const [first, ...rest] = groups;
+              setQueueHistory((prev) => prev.map((e) => {
+                if (e.supplierKey === first.supplierKey) {
+                  return { ...e, status: "pending", errorMessage: undefined };
+                }
+                if (rest.some((g) => g.supplierKey === e.supplierKey)) {
+                  return { ...e, status: "queued", errorMessage: undefined };
+                }
+                return e;
+              }));
+              setDeferredGroups(rest);
+              resetFormForNextDeferred(first);
+              setShowQueueSummary(false);
+              setJustCancelled(false);
+              toast.info(
+                `Retentando ${groups.length} despesa(s) com erro. Comece por ${first.supplierLabel}.`,
+                { duration: 6000 },
+              );
+            }}
+          >
+            Reenviar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     {/* Detalhes de um grupo: arquivos, linhas extraídas pela IA e alertas.
         Abre-se sobre o modal principal e sobre o resumo, permitindo inspeção
         antes do usuário fechar. Quando o DocGroup original ainda está em cache
