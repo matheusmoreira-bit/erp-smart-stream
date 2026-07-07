@@ -258,38 +258,38 @@ function ExpenseDetailModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
 
 
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Fornecedor</p>
                 <p className="text-foreground font-medium">{expense.supplier_name}</p>
                 {expense.supplier_code && <p className="text-xs text-muted-foreground font-mono">{expense.supplier_code}</p>}
               </div>
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Solicitante</p>
                 <p className="text-foreground font-medium">{expense.requester_name}</p>
               </div>
               {expense.cost_center && (
-                <div>
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Centro de Custo</p>
                   <p className="text-foreground">{expense.cost_center}</p>
                 </div>
               )}
               {expense.project && (
-                <div>
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Projeto</p>
                   <p className="text-foreground">{expense.project}</p>
                 </div>
               )}
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Data de Criação</p>
                 <p className="text-foreground">{formatDate(expense.created_at)}</p>
               </div>
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Data do Documento</p>
                 <p className="text-foreground">{expense.doc_date ? formatDate(expense.doc_date) : "—"}</p>
               </div>
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Data de Vencimento</p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className={expense.due_date ? "text-foreground" : "text-muted-foreground"}>
                     {expense.due_date ? formatDate(expense.due_date) : "—"}
                   </p>
@@ -299,11 +299,12 @@ function ExpenseDetailModal({
                 </div>
               </div>
               {expense.current_approver && (
-                <div>
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Aprovador Atual</p>
                   <p className="text-foreground font-medium">{expense.current_approver}</p>
                 </div>
               )}
+
 
             </div>
 
