@@ -1975,6 +1975,176 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         expense={relationsMapExpense as any}
         title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
       />
+
+      {/* Modal de filtros avançados */}
+      <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SlidersHorizontal className="w-4 h-4 text-primary" /> Filtros avançados
+            </DialogTitle>
+            <DialogDescription>
+              Refine a busca combinando qualquer campo do documento. Os filtros ativos são preservados enquanto você navega.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Origem</p>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ["all", "Todas"],
+                  ["erp_flow", "ERP Flow"],
+                  ["erp", "ERP"],
+                ] as const).map(([val, lbl]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setAdvDraft((d) => ({ ...d, origin: val }))}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      advDraft.origin === val
+                        ? "bg-primary/10 text-primary border-primary/30"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Fornecedor</Label>
+                <Input value={advDraft.supplier} onChange={(e) => setAdvDraft({ ...advDraft, supplier: e.target.value })} placeholder="Nome do fornecedor" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Código do fornecedor</Label>
+                <Input value={advDraft.supplier_code} onChange={(e) => setAdvDraft({ ...advDraft, supplier_code: e.target.value })} placeholder="Ex.: F0000123" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Solicitante</Label>
+                <Input value={advDraft.requester} onChange={(e) => setAdvDraft({ ...advDraft, requester: e.target.value })} placeholder="Nome do solicitante" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">E-mail do solicitante</Label>
+                <Input value={advDraft.requester_email} onChange={(e) => setAdvDraft({ ...advDraft, requester_email: e.target.value })} placeholder="exemplo@empresa.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Aprovador</Label>
+                <Input value={advDraft.approver} onChange={(e) => setAdvDraft({ ...advDraft, approver: e.target.value })} placeholder="Nome ou usuário" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Centro de custo</Label>
+                <Input value={advDraft.cost_center} onChange={(e) => setAdvDraft({ ...advDraft, cost_center: e.target.value })} placeholder="Código do CC" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Projeto</Label>
+                <Input value={advDraft.project} onChange={(e) => setAdvDraft({ ...advDraft, project: e.target.value })} placeholder="Código do projeto" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Moeda</Label>
+                <Input value={advDraft.currency} onChange={(e) => setAdvDraft({ ...advDraft, currency: e.target.value })} placeholder="BRL, USD…" />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Observação (remarks)</Label>
+                <Input value={advDraft.remarks} onChange={(e) => setAdvDraft({ ...advDraft, remarks: e.target.value })} placeholder="Contém…" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Nº do documento (SAP)</Label>
+                <Input value={advDraft.sap_doc_num} onChange={(e) => setAdvDraft({ ...advDraft, sap_doc_num: e.target.value })} placeholder="DocNum ou DocEntry" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Filial (branch)</Label>
+                <Input value={advDraft.branch_id} onChange={(e) => setAdvDraft({ ...advDraft, branch_id: e.target.value })} placeholder="ID da filial" />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Valor</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Mínimo</Label>
+                  <Input type="number" inputMode="decimal" value={advDraft.min_amount} onChange={(e) => setAdvDraft({ ...advDraft, min_amount: e.target.value })} placeholder="0,00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Máximo</Label>
+                  <Input type="number" inputMode="decimal" value={advDraft.max_amount} onChange={(e) => setAdvDraft({ ...advDraft, max_amount: e.target.value })} placeholder="0,00" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Datas</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Documento de</Label>
+                  <Input type="date" value={advDraft.doc_date_from} onChange={(e) => setAdvDraft({ ...advDraft, doc_date_from: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Documento até</Label>
+                  <Input type="date" value={advDraft.doc_date_to} onChange={(e) => setAdvDraft({ ...advDraft, doc_date_to: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Vence de</Label>
+                  <Input type="date" value={advDraft.due_date_from} onChange={(e) => setAdvDraft({ ...advDraft, due_date_from: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Vence até</Label>
+                  <Input type="date" value={advDraft.due_date_to} onChange={(e) => setAdvDraft({ ...advDraft, due_date_to: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Criado de</Label>
+                  <Input type="date" value={advDraft.created_from} onChange={(e) => setAdvDraft({ ...advDraft, created_from: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Criado até</Label>
+                  <Input type="date" value={advDraft.created_to} onChange={(e) => setAdvDraft({ ...advDraft, created_to: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Marcadores rápidos</p>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={advDraft.only_overdue} onCheckedChange={(v) => setAdvDraft({ ...advDraft, only_overdue: v })} />
+                  Apenas vencidos
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={advDraft.only_missing_due} onCheckedChange={(v) => setAdvDraft({ ...advDraft, only_missing_due: v })} />
+                  Apenas sem data de vencimento
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={advDraft.only_sap_error} onCheckedChange={(v) => setAdvDraft({ ...advDraft, only_sap_error: v })} />
+                  Apenas com erro de integração SAP
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="ghost"
+              onClick={() => setAdvDraft(emptyAdvanced)}
+              className="mr-auto text-muted-foreground hover:text-foreground"
+            >
+              <XIcon className="w-3.5 h-3.5 mr-1" /> Limpar tudo
+            </Button>
+            <Button variant="outline" onClick={() => setAdvancedOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                setAdvanced(advDraft);
+                setPage(1);
+                setAdvancedOpen(false);
+              }}
+            >
+              Aplicar filtros
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
