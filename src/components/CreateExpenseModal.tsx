@@ -237,6 +237,10 @@ export function CreateExpenseModal({
   const [showQueueSummary, setShowQueueSummary] = useState(false);
   // Confirmação antes de reenviar apenas os erros do resumo da fila.
   const [confirmRetryFailed, setConfirmRetryFailed] = useState(false);
+  // Rastreia uma sessão ativa de "Reenviar apenas erros" — chaves dos grupos
+  // que estamos reprocessando — para renderizar barra/contador dedicado.
+  // null = nenhuma sessão de retentativa em andamento.
+  const [retryingKeys, setRetryingKeys] = useState<Set<string> | null>(null);
   // Detalhes de um grupo (deferredGroup / concluído / com erro / cancelado)
   // abertos em modal para inspeção antes de fechar. Guarda o snapshot da
   // entry (sempre disponível) + o DocGroup original (quando o cache ainda tem).
