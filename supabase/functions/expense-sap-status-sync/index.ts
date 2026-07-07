@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  const results: Array<{ id: string; docEntry?: number; poStatus?: string; expenseStatus?: string; error?: string }> = [];
+  const results: Array<{ id: string; docEntry?: number; poStatus?: string; expenseStatus?: string; error?: string; attempts?: number; nextRetryAt?: string | null }> = [];
   const startedAt = Date.now();
 
   // Permite forçar sincronia de IDs específicos via POST body { expenseIds: string[] }
