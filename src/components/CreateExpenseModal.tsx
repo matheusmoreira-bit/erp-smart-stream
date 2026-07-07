@@ -1684,6 +1684,27 @@ export function CreateExpenseModal({
                     ▶ Retomar fila ({cancelledGroupsRef.current.length})
                   </Button>
                 )}
+                {/* Reenviar apenas erros direto do banner — abre a mesma
+                    confirmação usada no resumo, reaproveitando os DocGroups
+                    em cache (sem nova chamada de IA). */}
+                {!isProcessing && !isCreating && (() => {
+                  const failedKeys = queueHistory
+                    .filter((e) => e.status === "failed")
+                    .map((e) => e.supplierKey)
+                    .filter((k) => failedGroupsRef.current.has(k));
+                  if (failedKeys.length === 0) return null;
+                  return (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() => setConfirmRetryFailed(true)}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Reenviar erros ({failedKeys.length})
+                    </Button>
+                  );
+                })()}
               </div>
             </div>
           </div>
