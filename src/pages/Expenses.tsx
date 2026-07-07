@@ -1533,7 +1533,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <div aria-busy="true" aria-live="polite">
             <span className="sr-only">Carregando lançamentos…</span>
             {/* Skeleton cards (mobile / tablet / laptop) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "cards" ? "" : "hidden"}`}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="glass-card p-4 space-y-3">
                   <div className="flex items-center justify-between gap-2">
