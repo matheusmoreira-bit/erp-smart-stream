@@ -3244,6 +3244,39 @@ export function CreateExpenseModal({
             <FileDown className="w-4 h-4" />
             Exportar JSON
           </Button>
+          <Button
+            variant="outline"
+            className="gap-1.5"
+            disabled={queueHistory.length === 0}
+            onClick={() => {
+              exportQueueSummaryCsv({
+                entries: queueHistory.map((e) => ({
+                  id: e.supplierKey,
+                  supplierLabel: e.supplierLabel,
+                  status: e.status,
+                  fileCount: e.fileCount,
+                  lineCount: e.lineCount,
+                  estimatedTotal: e.estimatedTotal,
+                  currency: e.currency,
+                  currencies: e.currencies,
+                  aiConfidence: e.aiConfidence,
+                  aiWarnings: e.aiWarnings,
+                  errorMessage: e.errorMessage,
+                  fileNames: e.fileNames,
+                })),
+                confidenceThreshold: aiConfidenceThreshold,
+                kindLabel: isSales ? "Pedidos de venda" : "Despesas",
+                fileName: `resumo_fila_ia_${isSales ? "vendas" : "despesas"}`,
+              }).catch((err) => {
+                console.error("[queue-summary-csv] falha", err);
+                toast.error("Não foi possível gerar o CSV do resumo.");
+              });
+            }}
+            title="Exporta a tabela por fornecedor com totais e alertas em CSV (auditoria)"
+          >
+            <FileDown className="w-4 h-4" />
+            Exportar CSV
+          </Button>
           {(() => {
             const mapEntries = () => queueHistory.map((e) => ({
               id: e.supplierKey,
