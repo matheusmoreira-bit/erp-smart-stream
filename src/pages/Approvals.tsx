@@ -957,14 +957,14 @@ function ApprovalDetailModal({
 
             {/* Action area — fica ancorada no rodapé do modal, sempre visível
                 mesmo em telas pequenas quando o conteúdo rolar */}
-            <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-2 bg-background border-t border-border space-y-3 z-10">
+            <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-2 bg-background border-t border-border space-y-3 z-30 shadow-[0_-8px_16px_-8px_hsl(var(--background))]">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Comentário (opcional)</p>
                 <Textarea
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
                   placeholder="Adicione um comentário à sua decisão..."
-                  className="bg-muted/30 border-border text-sm"
+                  className="bg-background border-border text-sm"
                   rows={2}
                 />
               </div>
