@@ -400,6 +400,7 @@ export function CreateExpenseModal({
       setQueueHistory([]);
       setShowQueueSummary(false);
       setJustCancelled(false);
+      aiResponseCacheRef.current = new Map();
     }
   }, [open]);
 
