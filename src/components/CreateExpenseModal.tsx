@@ -2917,6 +2917,12 @@ export function CreateExpenseModal({
               ▶ Retomar fila ({cancelledGroupsRef.current.length})
             </Button>
           )}
+          {isPaused && deferredGroups.length > 0 && (
+            <Button variant="outline" className="gap-1.5 text-primary border-primary/40" onClick={resumeFromPause}>
+              <Play className="w-4 h-4" />
+              Retomar da pausa ({deferredGroups.length})
+            </Button>
+          )}
           <Button
             variant="outline"
             className="gap-1.5"
