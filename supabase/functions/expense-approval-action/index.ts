@@ -700,7 +700,14 @@ Deno.serve(async (req) => {
   const updates: Record<string, unknown> = { status: "aprovado" };
   if (remarks) updates.remarks = remarks;
   const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-  if (updErr) return await respond(500, { error: `Falha ao aprovar: ${updErr.message}` });
+  if (updErr) {
+    stageLog("update_final_approve", "error", { requestId, expenseId, error: updErr.message });
+    return await respond(500, {
+      error: `Falha ao registrar aprovação final: ${updErr.message}`,
+      stage: "update_final_approve",
+    });
+  }
+  stageLog("update_final_approve", "info", { requestId, expenseId, currentLevel });
 
   return await respond(200, {
     ok: true,
