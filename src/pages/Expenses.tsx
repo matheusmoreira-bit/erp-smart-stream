@@ -1277,6 +1277,25 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </table>
               </div>
             </div>
+
+            {/* Infinite scroll sentinel + counter */}
+            {hasMoreLocal ? (
+              <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-6 text-xs text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span>Carregando mais… ({visibleItems.length} de {filtered.length})</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length))}
+                >
+                  Mostrar mais
+                </Button>
+              </div>
+            ) : filtered.length > PAGE_SIZE ? (
+              <div className="text-center py-4 text-xs text-muted-foreground">
+                {filtered.length} registro(s) exibidos
+              </div>
+            ) : null}
             {showSourceToggle && sourceMode === "both" && sapHasMore && (
               <div className="flex justify-center mt-6">
                 <Button variant="outline" onClick={loadMoreSap} disabled={isLoadingMoreSap} className="gap-2">
