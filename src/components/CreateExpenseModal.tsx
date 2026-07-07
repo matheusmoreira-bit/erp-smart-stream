@@ -841,6 +841,21 @@ export function CreateExpenseModal({
       /* ignore */
     }
     aiAbortRef.current = null;
+    // Guarda cache do que estava pendente/enfileirado ANTES de limpar, para
+    // permitir "Retomar fila" depois. Inclui o grupo atual em edição, se ele
+    // ainda estivesse pendente (não tinha errorMessage).
+    const currentPending = queueHistory.find((e) => e.status === "pending");
+    const cached: DocGroup[] = [];
+    if (
+      currentPending &&
+      !currentPending.errorMessage &&
+      currentGroupRef.current &&
+      currentGroupRef.current.supplierKey === currentPending.supplierKey
+    ) {
+      cached.push(currentGroupRef.current);
+    }
+    cached.push(...deferredGroups);
+    cancelledGroupsRef.current = cached;
     setDeferredGroups([]);
     setSupplierPicker(null);
     setAiWarning(null);
