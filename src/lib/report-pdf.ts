@@ -672,3 +672,161 @@ export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<
   drawFooter(doc, await currentUserEmail());
   doc.save(`${safeFileName(opts.fileName || "resumo_fila_ia")}_${Date.now()}.pdf`);
 }
+
+// ---- Revisão de baixa confiança (subset com filtro) ------------------------
+
+export interface LowConfidenceReviewOptions {
+  entries: QueueSummaryEntry[];
+  confidenceThreshold: number;
+  kindLabel?: string;
+  fileName?: string;
+}
+
+/**
+ * Gera PDF de revisão com apenas os grupos cuja confiança IA está abaixo do
+ * limite (ou sem confiança extraída — considerados suspeitos). Reaproveita o
+ * layout do resumo, apenas trocando título e subtítulo.
+ */
+export async function exportLowConfidenceReviewPdf(opts: LowConfidenceReviewOptions): Promise<void> {
+  const filtered = opts.entries.filter(
+    (e) => e.aiConfidence === null || e.aiConfidence < opts.confidenceThreshold,
+  );
+  if (filtered.length === 0) return;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const kind = opts.kindLabel || "Despesas";
+  drawHeader(
+    doc,
+    `Revisão de baixa confiança — ${kind}`,
+    `${filtered.length} grupo(s) abaixo de ${Math.round(opts.confidenceThreshold * 100)}%`,
+  );
+  let cursorY = 24;
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Limite: ${Math.round(opts.confidenceThreshold * 100)}%`, 10, cursorY); cursorY += 4;
+  doc.text(`Grupos para revisar: ${filtered.length}`, 10, cursorY); cursorY += 4;
+  const withWarnings = filtered.filter((e) => e.aiWarnings.length > 0).length;
+  doc.text(`Grupos com alertas IA: ${withWarnings}`, 10, cursorY); cursorY += 6;
+  doc.setTextColor(0, 0, 0);
+
+  autoTable(doc, {
+    startY: cursorY,
+    head: [["#", "Fornecedor", "Status", "Arq.", "Linhas", "Total", "Confiança", "Alertas"]],
+    body: filtered.map((e, i) => [
+      String(i + 1),
+      e.supplierLabel,
+      STATUS_LABEL[e.status],
+      String(e.fileCount),
+      String(e.lineCount),
+      e.estimatedTotal > 0 ? formatCurrency(e.estimatedTotal, e.currency) : "—",
+      e.aiConfidence === null ? "s/ conf." : `${Math.round(e.aiConfidence * 100)}%`,
+      String(e.aiWarnings.length),
+    ]),
+    styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
+    headStyles: { fillColor: [180, 100, 20], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [253, 246, 227] },
+    columnStyles: {
+      0: { cellWidth: 8, halign: "right" },
+      2: { cellWidth: 22 },
+      3: { cellWidth: 12, halign: "right" },
+      4: { cellWidth: 14, halign: "right" },
+      5: { cellWidth: 26, halign: "right" },
+      6: { cellWidth: 20, halign: "right" },
+      7: { cellWidth: 16, halign: "right" },
+    },
+    margin: { left: 8, right: 8 },
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : cursorY + 8;
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  if (y > pageH - 20) { doc.addPage(); y = 15; }
+  doc.text("Detalhes por fornecedor (anexos, alertas e erros)", 10, y);
+  y += 5;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  for (const e of filtered) {
+    if (y > pageH - 20) { doc.addPage(); y = 15; }
+    doc.setFont("helvetica", "bold");
+    const conf = e.aiConfidence === null ? "s/ confiança" : `${Math.round(e.aiConfidence * 100)}%`;
+    doc.text(`${e.supplierLabel} — ${STATUS_LABEL[e.status]} · ${conf}`, 10, y);
+    doc.setFont("helvetica", "normal");
+    y += 4;
+    if (e.fileNames.length > 0) {
+      doc.setTextColor(100, 100, 100);
+      for (const line of doc.splitTextToSize(`Anexos: ${e.fileNames.join(", ")}`, 190)) {
+        if (y > pageH - 15) { doc.addPage(); y = 15; }
+        doc.text(line, 12, y); y += 3.5;
+      }
+      doc.setTextColor(0, 0, 0);
+    }
+    for (const w of e.aiWarnings) {
+      doc.setTextColor(150, 100, 0);
+      for (const line of doc.splitTextToSize(`⚠ ${w}`, 190)) {
+        if (y > pageH - 15) { doc.addPage(); y = 15; }
+        doc.text(line, 12, y); y += 3.5;
+      }
+      doc.setTextColor(0, 0, 0);
+    }
+    if (e.errorMessage) {
+      doc.setTextColor(180, 30, 30);
+      for (const line of doc.splitTextToSize(`Erro: ${e.errorMessage}`, 190)) {
+        if (y > pageH - 15) { doc.addPage(); y = 15; }
+        doc.text(line, 12, y); y += 3.5;
+      }
+      doc.setTextColor(0, 0, 0);
+    }
+    y += 2;
+  }
+
+  drawFooter(doc, await currentUserEmail());
+  doc.save(`${safeFileName(opts.fileName || "revisao_baixa_confianca")}_${Date.now()}.pdf`);
+}
+
+/** Escapa um campo para CSV RFC 4180 (aspas duplas, quebra de linha, ';'). */
+function csvEscape(v: string | number | null | undefined): string {
+  const s = v === null || v === undefined ? "" : String(v);
+  if (/[";\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+/**
+ * Gera e baixa CSV (`;` separador, aceito pelo Excel-BR) com os grupos abaixo
+ * do limite de confiança. Uma linha por grupo — anexos concatenados em uma
+ * coluna para facilitar compartilhamento em planilha.
+ */
+export function exportLowConfidenceReviewCsv(opts: LowConfidenceReviewOptions): void {
+  const filtered = opts.entries.filter(
+    (e) => e.aiConfidence === null || e.aiConfidence < opts.confidenceThreshold,
+  );
+  if (filtered.length === 0) return;
+  const header = [
+    "Fornecedor", "Status", "Arquivos", "Linhas", "Moeda", "Total estimado",
+    "Confiança IA (%)", "Limite (%)", "Alertas IA", "Erro", "Nomes dos anexos",
+  ];
+  const rows = filtered.map((e) => [
+    e.supplierLabel,
+    STATUS_LABEL[e.status],
+    e.fileCount,
+    e.lineCount,
+    e.currency,
+    e.estimatedTotal,
+    e.aiConfidence === null ? "" : Math.round(e.aiConfidence * 100),
+    Math.round(opts.confidenceThreshold * 100),
+    e.aiWarnings.join(" | "),
+    e.errorMessage || "",
+    e.fileNames.join(" | "),
+  ]);
+  const csv = [header, ...rows].map((r) => r.map(csvEscape).join(";")).join("\r\n");
+  // BOM UTF-8 para Excel renderizar acentos corretamente.
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeFileName(opts.fileName || "revisao_baixa_confianca")}_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
