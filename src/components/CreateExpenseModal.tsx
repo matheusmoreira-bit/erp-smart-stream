@@ -1715,6 +1715,13 @@ export function CreateExpenseModal({
       hashes: fileHashes.map((h) => h.slice(0, 12)),
     });
 
+    // Marca o início do submit no histórico da fila (usado no relatório
+    // de fluxo de compras — mede tempo do form até o clique em Salvar).
+    {
+      const pending = queueHistory.find((e) => e.status === "pending");
+      if (pending) updateQueueEntry(pending.supplierKey, { submittedAt: Date.now() });
+    }
+
     try {
       await onCreate({
         supplier_name: supplier.name,
