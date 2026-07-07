@@ -176,6 +176,11 @@ export function useApprovalHistory(
           orParts.push(`substituted_for_name.ilike.${k}`);
         }
         logQ = logQ.or(orParts.join(","));
+      } else if (mode === "search") {
+        const k = escapePgrstList(trimmedSubSearch);
+        logQ = logQ.or(
+          `substituted_for_email.ilike.%${k}%,substituted_for_name.ilike.%${k}%`,
+        );
       }
       const { data: logRows } = await logQ;
 
