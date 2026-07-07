@@ -1265,7 +1265,9 @@ export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<
     confidenceThreshold: opts.confidenceThreshold,
     entries: opts.entries,
   });
-  doc.save(`${safeFileName(opts.fileName || "resumo_fila_ia")}_${Date.now()}.pdf`);
+  // Nome inclui data/hora (America/Sao_Paulo) e Modelo IA dominante para
+  // rastreabilidade — ex.: resumo_fila_ia_google_gemini-2.5-flash_20260707-143012.pdf
+  doc.save(`${safeFileName(opts.fileName || "resumo_fila_ia")}_${dominantAiModelTag(opts.entries)}_${exportTimestampTag()}.pdf`);
 }
 
 // ---- Revisão de baixa confiança (subset com filtro) ------------------------
