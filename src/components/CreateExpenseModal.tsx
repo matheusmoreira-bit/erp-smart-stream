@@ -9,6 +9,8 @@ import {
   Sparkles,
   Brain,
   Ban,
+  Pause,
+  Play,
   FileDown,
 } from "lucide-react";
 import { exportQueueSummaryPdf, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv } from "@/lib/report-pdf";
