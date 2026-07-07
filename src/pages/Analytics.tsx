@@ -34,31 +34,31 @@ export default function AnalyticsPage() {
   return (
     <div className="min-h-screen bg-background">
       <PageTitle title="Analytics" />
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 glow-primary">
+      <header className="border-b border-border px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3 lg:items-center">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-lg bg-primary/10 glow-primary shrink-0">
               <Activity className="w-5 h-5 text-primary" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
-              <p className="text-xs text-muted-foreground">{companyLabel}</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-foreground truncate">SAP B1 <span className="text-gradient">Analytics</span></h1>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">{companyLabel}</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
-              {session.userName}
+          <div className="flex items-center gap-2 sm:gap-4 lg:justify-end">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow shrink-0" />
+              <span className="truncate">{session.userName}</span>
             </div>
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground" aria-label="Sair">
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Menu
