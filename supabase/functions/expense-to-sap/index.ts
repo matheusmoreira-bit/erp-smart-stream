@@ -639,6 +639,16 @@ Deno.serve(async (req) => {
     const docDate = normalizeDate((expense as any).doc_date);
     const dueDate = normalizeDate((expense as any).due_date ?? (expense as any).doc_date);
 
+    // Solicitante: usuário que criou a solicitação (login SAP, ex.: matheus.moreira).
+    // Preferimos o prefixo do e-mail (created_by_email → requester_email); caímos
+    // para requester_name quando não há e-mail.
+    const requesterCode = (() => {
+      const email = String((expense as any).created_by_email || (expense as any).requester_email || "").trim();
+      if (email && email.includes("@")) return email.split("@")[0].toLowerCase();
+      const name = String((expense as any).requester_name || "").trim();
+      return name.toLowerCase();
+    })();
+
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
       // DocDate = data de lançamento no SAP: sempre HOJE.
@@ -648,6 +658,8 @@ Deno.serve(async (req) => {
       DocDueDate: dueDate,
       TaxDate: docDate,
       BPL_IDAssignedToInvoice: branchId,
+      // Fallback: quando o SAP não tiver o UDF U_FGR_SOLICITANTE configurado,
+      // o nome do solicitante fica preservado nas Observações (Comments).
       Comments: truncateSapText(
         (() => {
           const pcTx: any = (pagcorpLog as any)?.transaction || null;
@@ -657,10 +669,14 @@ Deno.serve(async (req) => {
           const prefix = (expense as any).origin === "pagcorp" || pcTx
             ? `PagCorp${holder ? ` ${holder}` : ""}`
             : `${isSales ? "Pedido de venda" : "Despesa interna"} #${expense.id.slice(0, 8)}`;
-          return `${prefix} — ${expense.requester_name}${expense.remarks ? ` — ${expense.remarks}` : ""}`;
+          const solicitanteTag = requesterCode ? ` [Solicitante: ${requesterCode}]` : "";
+          return `${prefix} — ${expense.requester_name}${solicitanteTag}${expense.remarks ? ` — ${expense.remarks}` : ""}`;
         })(),
-        190,
+        253,
       ),
+      // Campo dedicado no SAP (UDF) — quando existir na base, permite filtrar
+      // pelos pedidos criados por um usuário específico sem depender do texto.
+      ...(requesterCode ? { U_FGR_SOLICITANTE: truncateSapText(requesterCode, 50) } : {}),
       ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
       ...headerCustom,
       DocumentLines: items.map((it: any) => {
