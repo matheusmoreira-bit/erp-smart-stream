@@ -525,6 +525,47 @@ function ApprovalDetailModal({
             </DialogTitle>
           </DialogHeader>
 
+          <div className="flex justify-end -mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => {
+                void exportListReportPdf({
+                  title: `Pedido de Aprovação — ${doc.cardName}`,
+                  subtitle: `#${doc.docNum} · ${doc.docTypeName}`,
+                  meta: [
+                    { label: "Parceiro", value: `${doc.cardName} (${doc.cardCode})` },
+                    { label: "Solicitante", value: doc.requester || "—" },
+                    { label: "Aprovador atual", value: doc.currentApprover || "—" },
+                    { label: "Etapa", value: doc.currentStage || "—" },
+                    { label: "Modelo", value: doc.approvalModel || "—" },
+                    { label: "Data do documento", value: doc.docDate ? new Date(doc.docDate).toLocaleDateString("pt-BR") : "—" },
+                    { label: "Vencimento", value: doc.dueDate ? new Date(doc.dueDate).toLocaleDateString("pt-BR") : "—" },
+                    { label: "Dias em aberto", value: String(doc.daysOpen ?? "—") },
+                    { label: "Total", value: new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(doc.currency) ? doc.currency : "BRL" }).format(doc.docTotal) },
+                    ...(doc.remarks ? [{ label: "Observações", value: doc.remarks }] : []),
+                    ...(doc.attachmentNames ? [{ label: "Anexos ERP", value: doc.attachmentNames }] : []),
+                  ],
+                  columns: [
+                    { header: "Item", cell: (l) => l.ItemCode || "—" },
+                    { header: "Descrição", cell: (l) => l.Description || "—" },
+                    { header: "Qtd", align: "right", cell: (l) => String(l.Quantity ?? 0) },
+                    { header: "Unit.", align: "right", cell: (l) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(doc.currency) ? doc.currency : "BRL" }).format(Number(l.UnitPrice) || 0) },
+                    { header: "Total", align: "right", cell: (l) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(doc.currency) ? doc.currency : "BRL" }).format(Number(l.LineTotal) || 0) },
+                    { header: "C. Custo", cell: (l) => l.CostingCode || "—" },
+                    { header: "Projeto", cell: (l) => l.Project || "—" },
+                  ],
+                  rows: doc.documentLines || [],
+                  fileName: `aprovacao_${doc.docNum}`,
+                });
+              }}
+            >
+              <FileDown className="w-3.5 h-3.5" /> Exportar relatório
+            </Button>
+          </div>
+
+
           <div className="space-y-4 mt-2">
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-3 text-sm">
