@@ -2354,6 +2354,98 @@ export type Database = {
         }
         Relationships: []
       }
+      overdue_reminder_log: {
+        Row: {
+          company_db: string
+          expense_id: string
+          id: string
+          recipient_name: string | null
+          recipient_phone: string | null
+          recipient_role: string
+          response: string | null
+          sent_at: string
+          status: string
+        }
+        Insert: {
+          company_db: string
+          expense_id: string
+          id?: string
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          recipient_role: string
+          response?: string | null
+          sent_at?: string
+          status?: string
+        }
+        Update: {
+          company_db?: string
+          expense_id?: string
+          id?: string
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          recipient_role?: string
+          response?: string | null
+          sent_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overdue_reminder_log_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      overdue_reminder_settings: {
+        Row: {
+          company_db: string | null
+          enabled: boolean
+          frequency_minutes: number
+          id: string
+          max_reminders_per_doc: number
+          notify_approver: boolean
+          notify_requester: boolean
+          template: string
+          updated_at: string
+          updated_by: string | null
+          weekdays_only: boolean
+          window_end_hour: number
+          window_start_hour: number
+        }
+        Insert: {
+          company_db?: string | null
+          enabled?: boolean
+          frequency_minutes?: number
+          id?: string
+          max_reminders_per_doc?: number
+          notify_approver?: boolean
+          notify_requester?: boolean
+          template?: string
+          updated_at?: string
+          updated_by?: string | null
+          weekdays_only?: boolean
+          window_end_hour?: number
+          window_start_hour?: number
+        }
+        Update: {
+          company_db?: string | null
+          enabled?: boolean
+          frequency_minutes?: number
+          id?: string
+          max_reminders_per_doc?: number
+          notify_approver?: boolean
+          notify_requester?: boolean
+          template?: string
+          updated_at?: string
+          updated_by?: string | null
+          weekdays_only?: boolean
+          window_end_hour?: number
+          window_start_hour?: number
+        }
+        Relationships: []
+      }
       pagcorp_account_mapping: {
         Row: {
           account_code: string

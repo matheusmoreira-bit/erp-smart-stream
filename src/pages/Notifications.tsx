@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, Settings, Check, CheckCheck, History, Send } from "lucide-react";
+import { ArrowLeft, Bell, Settings, Check, CheckCheck, History, Send, AlertTriangle } from "lucide-react";
 import { useNotifications, useNotificationPreferences, NOTIFICATION_CATEGORIES } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NotificationAuditTab } from "@/components/NotificationAuditTab";
 import { NotificationSendHistoryTab } from "@/components/NotificationSendHistoryTab";
+import { OverdueRemindersTab } from "@/components/OverdueRemindersTab";
 import { PageTitle } from "@/components/PageTitle";
 
 const categoryIcon: Record<string, string> = {
@@ -59,6 +60,9 @@ export default function NotificationsPage() {
             </TabsTrigger>
             <TabsTrigger value="history" className="gap-2">
               <Send className="w-4 h-4" /> Histórico de envios
+            </TabsTrigger>
+            <TabsTrigger value="overdue" className="gap-2">
+              <AlertTriangle className="w-4 h-4" /> Vencidos
             </TabsTrigger>
             <TabsTrigger value="preferences" className="gap-2">
               <Settings className="w-4 h-4" /> Preferências
@@ -145,6 +149,10 @@ export default function NotificationsPage() {
 
           <TabsContent value="history">
             <NotificationSendHistoryTab />
+          </TabsContent>
+
+          <TabsContent value="overdue">
+            <OverdueRemindersTab />
           </TabsContent>
 
           <TabsContent value="preferences">
