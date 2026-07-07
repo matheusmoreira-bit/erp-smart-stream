@@ -13,7 +13,7 @@
  *    telas de Approvals/Histórico).
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Instrumentação global — armazena chamadas feitas pelos exports.
