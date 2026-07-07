@@ -9,6 +9,8 @@ import {
   Sparkles,
   Brain,
   Ban,
+  Pause,
+  Play,
   FileDown,
 } from "lucide-react";
 import { exportQueueSummaryPdf, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv } from "@/lib/report-pdf";
@@ -247,6 +249,11 @@ export function CreateExpenseModal({
   const [showQueueSummary, setShowQueueSummary] = useState(false);
   // Confirmação antes de reenviar apenas os erros do resumo da fila.
   const [confirmRetryFailed, setConfirmRetryFailed] = useState(false);
+  // Pausa "leve" da fila: após concluir o grupo atual, NÃO auto-avança
+  // para o próximo deferredGroup. Diferente de "Cancelar", preserva o
+  // status "queued" e os DocGroups em cache — retomar reaproveita tudo.
+  const [isPaused, setIsPaused] = useState(false);
+  const pausedRef = useRef(false);
   // Rastreia uma sessão ativa de "Reenviar apenas erros" — chaves dos grupos
   // que estamos reprocessando — para renderizar barra/contador dedicado.
   // null = nenhuma sessão de retentativa em andamento.
@@ -466,6 +473,9 @@ export function CreateExpenseModal({
       setDeferredGroups([]);
       setSupplierPicker(null);
       setJustCancelled(false);
+      // A pausa também não deve sobreviver ao fechar do modal sem contexto.
+      pausedRef.current = false;
+      setIsPaused(false);
       aiInFlightRef.current = false;
       submitInFlightRef.current = false;
       if (hasFailedContext) {
@@ -1330,6 +1340,43 @@ export function CreateExpenseModal({
   // prévia em vez de disparar direto.
   const resumeCancelledQueue = () => { void openResumePreview(); };
 
+  // Pausa "leve": só marca a flag; a interrupção acontece no próximo ponto
+  // seguro (após o grupo em edição ser salvo). NÃO aborta IA em andamento
+  // — para isso o usuário deve usar "Cancelar" (que preserva a fila
+  // cancelada para retomada posterior via "Retomar fila").
+  const pauseProcessing = () => {
+    pausedRef.current = true;
+    setIsPaused(true);
+    const nextLabel = deferredGroups[0]?.supplierLabel;
+    toast.info(
+      nextLabel
+        ? `Pausa solicitada. Após concluir o grupo atual, a fila para em "${nextLabel}".`
+        : "Pausa solicitada. A fila para após o grupo atual.",
+      { duration: 6000 },
+    );
+  };
+
+  // Retoma da pausa: pega o próximo deferredGroup e abre o formulário nele,
+  // exatamente como o auto-avanço faria — sem tocar em concluídos, erros
+  // ou cancelados.
+  const resumeFromPause = () => {
+    pausedRef.current = false;
+    setIsPaused(false);
+    if (deferredGroups.length === 0) {
+      toast.info("Nenhum grupo pendente na fila para retomar.");
+      return;
+    }
+    const [next, ...rest] = deferredGroups;
+    setDeferredGroups(rest);
+    resetFormForNextDeferred(next);
+    updateQueueEntry(next.supplierKey, { status: "pending" });
+    setShowQueueSummary(false);
+    toast.info(
+      `Retomado: ${next.supplierLabel}${rest.length > 0 ? ` (+${rest.length} depois)` : ""}.`,
+      { duration: 6000 },
+    );
+  };
+
   // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
   const chooseFirstSupplierGroup = (chosenKey: string) => {
     if (!supplierPicker) return;
@@ -1656,6 +1703,17 @@ export function CreateExpenseModal({
       // fornecedores diferentes), abrimos automaticamente o próximo em vez
       // de fechar o modal, mantendo o encadeamento pedido pelo usuário.
       if (deferredGroups.length > 0) {
+        // Pausa — não auto-avança. Mostra o resumo para o usuário ver o
+        // estado e retomar quando quiser. `deferredGroups` intacto: o
+        // próximo permanece "queued", pronto para o botão "Retomar".
+        if (pausedRef.current) {
+          toast.info(
+            `Processamento pausado. Próximo pendente: ${deferredGroups[0].supplierLabel}. Clique em "Retomar" quando quiser continuar.`,
+            { duration: 8000 },
+          );
+          setShowQueueSummary(true);
+          return;
+        }
         const [next, ...rest] = deferredGroups;
         resetFormForNextDeferred(next);
         setDeferredGroups(rest);
@@ -1972,6 +2030,32 @@ export function CreateExpenseModal({
                   >
                     <Ban className="w-3.5 h-3.5" />
                     Cancelar
+                  </Button>
+                )}
+                {/* Pausar — só pra fila encadeada (>=1 deferred). Não aborta
+                    IA em andamento (para isso use Cancelar); apenas impede o
+                    auto-avanço para o próximo grupo quando o atual terminar. */}
+                {deferredGroups.length > 0 && !isPaused && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={pauseProcessing}
+                    title="Interrompe a fila com segurança após concluir o grupo atual"
+                  >
+                    <Pause className="w-3.5 h-3.5" />
+                    Pausar
+                  </Button>
+                )}
+                {isPaused && deferredGroups.length > 0 && !isCreating && !isProcessing && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-primary border-primary/40"
+                    onClick={resumeFromPause}
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    Retomar ({deferredGroups.length})
                   </Button>
                 )}
                 {/* Retry — só aparece após cancelamento, quando há anexos e
@@ -2834,6 +2918,12 @@ export function CreateExpenseModal({
           {cancelledGroupsRef.current.length > 0 && (
             <Button variant="outline" className="gap-1.5" onClick={resumeCancelledQueue}>
               ▶ Retomar fila ({cancelledGroupsRef.current.length})
+            </Button>
+          )}
+          {isPaused && deferredGroups.length > 0 && (
+            <Button variant="outline" className="gap-1.5 text-primary border-primary/40" onClick={resumeFromPause}>
+              <Play className="w-4 h-4" />
+              Retomar da pausa ({deferredGroups.length})
             </Button>
           )}
           <Button
