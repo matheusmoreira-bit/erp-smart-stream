@@ -24,7 +24,9 @@ import {
   AlertTriangle,
   Network,
   Paperclip,
+  FileDown,
 } from "lucide-react";
+import { exportListReportPdf, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -134,6 +136,7 @@ function ExpenseDetailModal({
   isCancelling,
   isRetrying,
   isActioning,
+  mode,
 }: {
   expense: Expense | null;
   open: boolean;
@@ -155,6 +158,7 @@ function ExpenseDetailModal({
   isCancelling: boolean;
   isRetrying: boolean;
   isActioning: boolean;
+  mode?: "purchase" | "sales";
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -187,6 +191,21 @@ function ExpenseDetailModal({
               <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(expense.total_amount, expense.currency)}</span>
             </DialogTitle>
           </DialogHeader>
+
+          <div className="flex justify-end -mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => void exportExpenseDetailPdf(expense, {
+                statusLabel: STATUS_LABELS[expense.status] || expense.status,
+                mode,
+              })}
+            >
+              <FileDown className="w-3.5 h-3.5" /> Exportar relatório
+            </Button>
+          </div>
+
 
           <div className="space-y-4 mt-2">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -958,6 +977,37 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 setShowCreate(true);
               }}
             />
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              disabled={filtered.length === 0}
+              onClick={() => {
+                void exportListReportPdf({
+                  title: isSales ? "Relatório de Vendas" : "Relatório de Compras",
+                  subtitle: `${filtered.length} registro(s) · ${companyLabel}`,
+                  meta: [
+                    { label: "Empresa", value: companyLabel },
+                    { label: "Usuário", value: session?.userName || "—" },
+                    { label: "Total", value: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalValue) },
+                  ],
+                  columns: [
+                    { header: "Fornecedor/Cliente", cell: (r) => r.exp.supplier_name },
+                    { header: "Status", cell: (r) => STATUS_LABELS[r.exp.status] || r.exp.status },
+                    { header: "Solicitante", cell: (r) => r.exp.requester_name || "—" },
+                    { header: "Aprovador atual", cell: (r) => r.exp.current_approver || "—" },
+                    { header: "Data doc.", cell: (r) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
+                    { header: "Vencimento", cell: (r) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
+                    { header: "Total", align: "right", cell: (r) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
+                    { header: "ERP #", cell: (r) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
+                    { header: "Origem", cell: (r) => r.origin === "erp_flow" ? "ERP Flow" : "ERP" },
+                  ],
+                  rows: filtered,
+                  fileName: isSales ? "vendas" : "compras",
+                });
+              }}
+            >
+              <FileDown className="w-4 h-4" /> Exportar relatório
+            </Button>
             <Button onClick={() => setShowCreate(true)} className="gap-1.5">
               <Plus className="w-4 h-4" /> {newButtonLabel}
             </Button>
@@ -1116,7 +1166,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         isCancelling={isCancelling}
         isRetrying={isRetrying}
         isActioning={isActioning}
+        mode={mode}
       />
+
 
       <EditExpenseModal
         expense={editingExpense}

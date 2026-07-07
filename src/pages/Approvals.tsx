@@ -27,7 +27,8 @@ import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useAp
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useNavigate } from "react-router-dom";
-import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network } from "lucide-react";
+import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown } from "lucide-react";
+import { exportListReportPdf } from "@/lib/report-pdf";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
@@ -523,6 +524,47 @@ function ApprovalDetailModal({
               <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
             </DialogTitle>
           </DialogHeader>
+
+          <div className="flex justify-end -mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => {
+                void exportListReportPdf({
+                  title: `Pedido de Aprovação — ${doc.cardName}`,
+                  subtitle: `#${doc.docNum} · ${doc.docTypeName}`,
+                  meta: [
+                    { label: "Parceiro", value: `${doc.cardName} (${doc.cardCode})` },
+                    { label: "Solicitante", value: doc.requester || "—" },
+                    { label: "Aprovador atual", value: doc.currentApprover || "—" },
+                    { label: "Etapa", value: doc.currentStage || "—" },
+                    { label: "Modelo", value: doc.approvalModel || "—" },
+                    { label: "Data do documento", value: doc.docDate ? new Date(doc.docDate).toLocaleDateString("pt-BR") : "—" },
+                    { label: "Vencimento", value: doc.dueDate ? new Date(doc.dueDate).toLocaleDateString("pt-BR") : "—" },
+                    { label: "Dias em aberto", value: String(doc.daysOpen ?? "—") },
+                    { label: "Total", value: new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(doc.currency) ? doc.currency : "BRL" }).format(doc.docTotal) },
+                    ...(doc.remarks ? [{ label: "Observações", value: doc.remarks }] : []),
+                    ...(doc.attachmentNames ? [{ label: "Anexos ERP", value: doc.attachmentNames }] : []),
+                  ],
+                  columns: [
+                    { header: "Item", cell: (l) => l.ItemCode || "—" },
+                    { header: "Descrição", cell: (l) => l.Description || "—" },
+                    { header: "Qtd", align: "right", cell: (l) => String(l.Quantity ?? 0) },
+                    { header: "Unit.", align: "right", cell: (l) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(doc.currency) ? doc.currency : "BRL" }).format(Number(l.UnitPrice) || 0) },
+                    { header: "Total", align: "right", cell: (l) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(doc.currency) ? doc.currency : "BRL" }).format(Number(l.LineTotal) || 0) },
+                    { header: "C. Custo", cell: (l) => l.CostingCode || "—" },
+                    { header: "Projeto", cell: (l) => l.Project || "—" },
+                  ],
+                  rows: doc.documentLines || [],
+                  fileName: `aprovacao_${doc.docNum}`,
+                });
+              }}
+            >
+              <FileDown className="w-3.5 h-3.5" /> Exportar relatório
+            </Button>
+          </div>
+
 
           <div className="space-y-4 mt-2">
             {/* Basic Info */}
@@ -1831,6 +1873,40 @@ export default function ApprovalsPage() {
             >
               <History className="w-4 h-4" />
               Histórico
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={filtered.length === 0}
+              onClick={() => {
+                void exportListReportPdf({
+                  title: "Relatório de Aprovações Pendentes",
+                  subtitle: `${filtered.length} pedido(s) · ${companyLabel}`,
+                  meta: [
+                    { label: "Empresa", value: companyLabel },
+                    { label: "Usuário", value: session?.userName || "—" },
+                  ],
+                  columns: [
+                    { header: "Tipo", cell: (a) => a.docTypeName || "—" },
+                    { header: "Doc #", cell: (a) => String(a.docNum ?? "—") },
+                    { header: "Parceiro", cell: (a) => a.cardName },
+                    { header: "Solicitante", cell: (a) => a.requester || "—" },
+                    { header: "Aprovador atual", cell: (a) => a.currentApprover || "—" },
+                    { header: "Etapa", cell: (a) => a.currentStage || "—" },
+                    { header: "Data doc.", cell: (a) => a.docDate ? new Date(a.docDate).toLocaleDateString("pt-BR") : "—" },
+                    { header: "Vencimento", cell: (a) => a.dueDate ? new Date(a.dueDate).toLocaleDateString("pt-BR") : "—" },
+                    { header: "Dias em aberto", align: "right", cell: (a) => String(a.daysOpen ?? "—") },
+                    { header: "Total", align: "right", cell: (a) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(a.currency) ? a.currency : "BRL" }).format(a.docTotal) },
+                  ],
+                  rows: filtered,
+                  fileName: "aprovacoes",
+                });
+              }}
+              title="Exportar a lista atual em PDF"
+            >
+              <FileDown className="w-4 h-4" />
+              Exportar
             </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">

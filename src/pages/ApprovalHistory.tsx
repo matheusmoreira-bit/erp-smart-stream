@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network } from "lucide-react";
+import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network, FileDown } from "lucide-react";
+import { exportListReportPdf } from "@/lib/report-pdf";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -118,10 +119,43 @@ export default function ApprovalHistory() {
               </p>
             </div>
           </div>
-          <Button onClick={handleSync} disabled={isSyncing} size="sm">
-            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "Sincronizando..." : "Sincronizar agora"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={filtered.length === 0}
+              onClick={() => {
+                void exportListReportPdf({
+                  title: "Relatório — Histórico de Aprovações",
+                  subtitle: `${filtered.length} decisão(ões)`,
+                  meta: [
+                    { label: "Empresa", value: getLabel(session?.companyDB) || "—" },
+                    { label: "Escopo", value: effectiveScope === "all" ? "Todos" : "Minhas" },
+                  ],
+                  columns: [
+                    { header: "Data", cell: (r) => formatDate(r.decision_date) },
+                    { header: "Decisão", cell: (r) => r.decision === "Y" ? "Aprovado" : r.decision === "N" ? "Rejeitado" : String(r.decision ?? "—") },
+                    { header: "Doc #", cell: (r) => String(r.doc_num ?? "—") },
+                    { header: "Tipo", cell: (r) => r.doc_type_name || "—" },
+                    { header: "Parceiro", cell: (r) => r.card_name || "—" },
+                    { header: "Solicitante", cell: (r) => r.requester_name || "—" },
+                    { header: "Aprovador", cell: (r) => r.approver_name || "—" },
+                    { header: "Total", align: "right", cell: (r) => formatCurrency(r.doc_total, r.currency) },
+                    { header: "Observações", cell: (r) => r.remarks || "—" },
+                  ],
+                  rows: filtered,
+                  fileName: "historico_aprovacoes",
+                });
+              }}
+            >
+              <FileDown className="w-4 h-4" /> Exportar
+            </Button>
+            <Button onClick={handleSync} disabled={isSyncing} size="sm">
+              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? "Sincronizando..." : "Sincronizar agora"}
+            </Button>
+          </div>
         </div>
       </header>
 
