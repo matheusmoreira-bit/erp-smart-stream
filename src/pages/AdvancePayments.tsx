@@ -167,7 +167,11 @@ export default function AdvancePayments() {
 
         <div className="space-y-3">
           {filtered.map((a) => (
-            <div key={a.id} className="glass-card p-4">
+            <div
+              key={a.id}
+              ref={(el) => { rowRefs.current[a.id] = el; }}
+              className={`glass-card p-4 transition-shadow ${highlightId === a.id ? "ring-2 ring-primary shadow-lg" : ""}`}
+            >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -199,6 +203,14 @@ export default function AdvancePayments() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void copyDocLink(window.location.pathname, a.id)}
+                    title="Copiar link direto"
+                  >
+                    <Link2 className="w-4 h-4" />
+                  </Button>
                   {a.status === "pending" && (
                     <>
                       <Button size="sm" variant="outline" onClick={() => handleApprove(a)} disabled={busyId === a.id}>
