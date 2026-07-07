@@ -1390,7 +1390,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </Button>
             )}
           </div>
-        </div>
+        </section>
 
 
 
