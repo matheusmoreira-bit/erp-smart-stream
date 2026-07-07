@@ -247,6 +247,11 @@ export function CreateExpenseModal({
   const [showQueueSummary, setShowQueueSummary] = useState(false);
   // Confirmação antes de reenviar apenas os erros do resumo da fila.
   const [confirmRetryFailed, setConfirmRetryFailed] = useState(false);
+  // Pausa "leve" da fila: após concluir o grupo atual, NÃO auto-avança
+  // para o próximo deferredGroup. Diferente de "Cancelar", preserva o
+  // status "queued" e os DocGroups em cache — retomar reaproveita tudo.
+  const [isPaused, setIsPaused] = useState(false);
+  const pausedRef = useRef(false);
   // Rastreia uma sessão ativa de "Reenviar apenas erros" — chaves dos grupos
   // que estamos reprocessando — para renderizar barra/contador dedicado.
   // null = nenhuma sessão de retentativa em andamento.
