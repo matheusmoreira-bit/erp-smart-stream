@@ -286,6 +286,8 @@ export function CreateExpenseModal({
   // Reaproveitado em "Tentar novamente" para pular chamadas ao endpoint.
   // Vive durante a instância do modal; é limpo no unmount/close.
   const aiResponseCacheRef = useRef<Map<string, any>>(new Map());
+  // Escopo para o storage persistente do cache (separa expenses/sales).
+  const aiCacheScope = isSales ? "sales" : "expenses";
   // Guards reentrantes fortes para evitar QUALQUER chamada duplicada de IA
   // ou de criação de despesa quando o usuário cancela+retenta rápido, ou o
   // React 18 (StrictMode) invoca o handler duas vezes. Estado (`isProcessing`,
