@@ -703,7 +703,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   useEffect(() => { if (!isAdmin) setShowAll(false); }, [isAdmin, setShowAll]);
 
   // Origem dos pedidos: padrão "Apenas ERP Flow"; "Ambos" também busca direto do ERP (SAP).
-  const [sourceMode, setSourceMode] = useState<"flow" | "both">("flow");
+  const [sourceMode, setSourceMode] = usePersistedState<"flow" | "both">(filterKey("source"), "flow");
   const [sapOrders, setSapOrders] = useState<Expense[]>([]);
   const [isLoadingSap, setIsLoadingSap] = useState(false);
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
