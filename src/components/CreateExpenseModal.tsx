@@ -9,7 +9,9 @@ import {
   Sparkles,
   Brain,
   Ban,
+  FileDown,
 } from "lucide-react";
+import { exportQueueSummaryPdf } from "@/lib/report-pdf";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -2517,6 +2519,37 @@ export function CreateExpenseModal({
               ▶ Retomar fila ({cancelledGroupsRef.current.length})
             </Button>
           )}
+          <Button
+            variant="outline"
+            className="gap-1.5"
+            disabled={queueHistory.length === 0}
+            onClick={() => {
+              exportQueueSummaryPdf({
+                entries: queueHistory.map((e) => ({
+                  supplierLabel: e.supplierLabel,
+                  status: e.status,
+                  fileCount: e.fileCount,
+                  lineCount: e.lineCount,
+                  estimatedTotal: e.estimatedTotal,
+                  currency: e.currency,
+                  currencies: e.currencies,
+                  aiConfidence: e.aiConfidence,
+                  aiWarnings: e.aiWarnings,
+                  errorMessage: e.errorMessage,
+                  fileNames: e.fileNames,
+                })),
+                confidenceThreshold: aiConfidenceThreshold,
+                kindLabel: isSales ? "Pedidos de venda" : "Despesas",
+                fileName: `resumo_fila_ia_${isSales ? "vendas" : "despesas"}`,
+              }).catch((err) => {
+                console.error("[queue-summary-pdf] falha", err);
+                toast.error("Não foi possível gerar o PDF do resumo.");
+              });
+            }}
+          >
+            <FileDown className="w-4 h-4" />
+            Exportar PDF
+          </Button>
           <AlertDialogAction
             onClick={() => {
               setShowQueueSummary(false);
