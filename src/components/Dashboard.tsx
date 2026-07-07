@@ -33,7 +33,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
   const companyLabel = getLabel(session?.companyDB || "");
 
   const content = (
-    <div className={embedded ? "space-y-8" : "max-w-7xl mx-auto px-6 py-8 space-y-8"}>
+    <div className={embedded ? "space-y-4 sm:space-y-8" : "max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-8"}>
       <div className="flex items-center justify-between">
         <PeriodFilter value={period} onChange={setPeriod} />
         <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground">
