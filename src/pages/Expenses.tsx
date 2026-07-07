@@ -1089,6 +1089,65 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
   const [pageSize, setPageSize] = usePersistedState<number>(filterKey("pageSize"), 30);
   const [viewMode, setViewMode] = usePersistedState<"cards" | "table">(filterKey("viewMode"), "cards");
+
+  // ─── Filtros avançados (modal) ────────────────────────────────
+  interface AdvancedFilters {
+    supplier: string;
+    supplier_code: string;
+    requester: string;
+    requester_email: string;
+    approver: string;
+    cost_center: string;
+    project: string;
+    currency: string;
+    remarks: string;
+    sap_doc_num: string;
+    branch_id: string;
+    origin: "all" | "erp_flow" | "erp";
+    min_amount: string;
+    max_amount: string;
+    doc_date_from: string;
+    doc_date_to: string;
+    due_date_from: string;
+    due_date_to: string;
+    created_from: string;
+    created_to: string;
+    only_overdue: boolean;
+    only_missing_due: boolean;
+    only_sap_error: boolean;
+  }
+  const emptyAdvanced: AdvancedFilters = {
+    supplier: "", supplier_code: "", requester: "", requester_email: "", approver: "",
+    cost_center: "", project: "", currency: "", remarks: "", sap_doc_num: "", branch_id: "",
+    origin: "all", min_amount: "", max_amount: "",
+    doc_date_from: "", doc_date_to: "", due_date_from: "", due_date_to: "",
+    created_from: "", created_to: "",
+    only_overdue: false, only_missing_due: false, only_sap_error: false,
+  };
+  const [advanced, setAdvanced] = usePersistedState<AdvancedFilters>(filterKey("advanced"), emptyAdvanced);
+  // Compat com preferências antigas sem os campos novos.
+  const advFilters: AdvancedFilters = { ...emptyAdvanced, ...(advanced || {}) };
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advDraft, setAdvDraft] = useState<AdvancedFilters>(advFilters);
+  useEffect(() => { if (advancedOpen) setAdvDraft(advFilters); }, [advancedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeAdvancedCount = (() => {
+    const f = advFilters;
+    let n = 0;
+    (
+      [
+        "supplier","supplier_code","requester","requester_email","approver","cost_center","project",
+        "currency","remarks","sap_doc_num","branch_id","min_amount","max_amount",
+        "doc_date_from","doc_date_to","due_date_from","due_date_to","created_from","created_to",
+      ] as const
+    ).forEach((k) => { if ((f[k] || "").toString().trim()) n++; });
+    if (f.origin !== "all") n++;
+    if (f.only_overdue) n++;
+    if (f.only_missing_due) n++;
+    if (f.only_sap_error) n++;
+    return n;
+  })();
+
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   // Reset apenas para mudanças que alteram fortemente a listagem (busca, ordenação, tamanho de página, modo compra/venda).
