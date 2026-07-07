@@ -1401,7 +1401,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             {(() => {
               const activeFilters =
                 (statusFilter !== "all" ? 1 : 0) +
-                (sourceMode !== "flow" ? 1 : 0) +
                 (showAll !== isAdmin ? 1 : 0);
               return (
                 <Button
