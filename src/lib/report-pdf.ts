@@ -762,6 +762,23 @@ export interface QueueSummaryEntry {
    * Opcional para compat: se ausente, o relatório mostra "—".
    */
   id?: string;
+  /**
+   * Timestamps (ms epoch) do ciclo de vida do evento — usados para as
+   * colunas de trilha de auditoria (Classificado em / Concluído em).
+   */
+  classifiedAt?: number;
+  completedAt?: number;
+  /** Versão do modelo de IA usado na extração (ex.: "n-2.5-flash"). */
+  aiModel?: string;
+  /**
+   * Motivo/detalhe do status atual. Se não informado, é derivado:
+   *  - failed    → errorMessage ou "Falha não detalhada"
+   *  - cancelled → "Cancelado pelo usuário"
+   *  - success   → "Concluído com sucesso"
+   *  - pending   → "Em processamento"
+   *  - queued    → "Aguardando na fila"
+   */
+  statusReason?: string;
 }
 
 export interface QueueSummaryOptions {
