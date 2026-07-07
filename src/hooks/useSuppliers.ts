@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapAction, sapQuery, type SapSession } from "@/lib/sap-client";
-import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
+
+/**
+ * Chaves de cache derivadas de BusinessPartners que precisam ser invalidadas
+ * juntas sempre que um fornecedor/cliente é criado/atualizado, para que a
+ * mudança apareça imediatamente em qualquer tela (Fornecedores, modal de
+ * criação de pedidos de compra/venda, etc.).
+ */
+function invalidateBusinessPartnerCaches(companyDb?: string | null) {
+  const keys = ["suppliers_active_v2", "customers_active_v2"];
+  if (companyDb) keys.push(`suppliers:${companyDb}`);
+  // fire-and-forget — não bloqueia o fluxo do usuário
+  void invalidateSapCache(keys, companyDb || undefined);
+}
 
 export interface Supplier {
   id: string;
