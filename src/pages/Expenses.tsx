@@ -194,8 +194,8 @@ function ExpenseDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="space-y-2">
             <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-6">
               <span className="text-foreground font-semibold">Despesa</span>
               <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
@@ -212,25 +212,25 @@ function ExpenseDetailModal({
             </DialogTitle>
           </DialogHeader>
 
-          {/* Summary strip — mesmos campos da linha da tabela (visível em qualquer viewport) */}
-          <div className="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs sm:hidden">
+          {/* Summary strip mobile — mesmos campos da linha da tabela */}
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs sm:hidden">
             <div className="col-span-2 flex items-center gap-2 min-w-0">
               <Building2 className="w-3.5 h-3.5 text-primary/70 shrink-0" />
               <span className="text-foreground font-medium truncate">{expense.supplier_name}</span>
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 space-y-0.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Solicitante</p>
               <p className="text-foreground truncate">{expense.requester_name}</p>
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Criado</p>
               <p className="text-foreground">{formatDate(expense.created_at)}</p>
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Doc</p>
               <p className="text-foreground">{expense.doc_date ? formatDate(expense.doc_date) : "—"}</p>
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Vence</p>
               <p className={expense.due_date ? "text-foreground" : "text-destructive font-medium"}>
                 {expense.due_date ? formatDate(expense.due_date) : "sem data"}
@@ -239,7 +239,7 @@ function ExpenseDetailModal({
           </div>
 
 
-          <div className="flex justify-end -mt-2">
+          <div className="flex justify-end mt-3 sm:mt-2">
             <Button
               variant="ghost"
               size="sm"
@@ -249,46 +249,47 @@ function ExpenseDetailModal({
                 mode,
               })}
             >
-              <FileDown className="w-3.5 h-3.5" /> Exportar relatório
+              <FileDown className="w-3.5 h-3.5" aria-hidden="true" /> Exportar relatório
             </Button>
           </div>
 
 
-          <div className="space-y-4 mt-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div className="space-y-5 sm:space-y-6 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
 
-              <div>
+
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Fornecedor</p>
                 <p className="text-foreground font-medium">{expense.supplier_name}</p>
                 {expense.supplier_code && <p className="text-xs text-muted-foreground font-mono">{expense.supplier_code}</p>}
               </div>
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Solicitante</p>
                 <p className="text-foreground font-medium">{expense.requester_name}</p>
               </div>
               {expense.cost_center && (
-                <div>
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Centro de Custo</p>
                   <p className="text-foreground">{expense.cost_center}</p>
                 </div>
               )}
               {expense.project && (
-                <div>
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Projeto</p>
                   <p className="text-foreground">{expense.project}</p>
                 </div>
               )}
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Data de Criação</p>
                 <p className="text-foreground">{formatDate(expense.created_at)}</p>
               </div>
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Data do Documento</p>
                 <p className="text-foreground">{expense.doc_date ? formatDate(expense.doc_date) : "—"}</p>
               </div>
-              <div>
+              <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Data de Vencimento</p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className={expense.due_date ? "text-foreground" : "text-muted-foreground"}>
                     {expense.due_date ? formatDate(expense.due_date) : "—"}
                   </p>
@@ -298,11 +299,12 @@ function ExpenseDetailModal({
                 </div>
               </div>
               {expense.current_approver && (
-                <div>
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Aprovador Atual</p>
                   <p className="text-foreground font-medium">{expense.current_approver}</p>
                 </div>
               )}
+
 
             </div>
 
@@ -428,10 +430,10 @@ function ExpenseDetailModal({
             )}
 
             {hasIntegration && (
-              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-                <div className="flex items-center justify-between">
+              <div className="rounded-lg border border-border bg-muted/20 p-3 sm:p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <Link2 className="w-4 h-4 text-primary" />
+                    <Link2 className="w-4 h-4 text-primary" aria-hidden="true" />
                     <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
                       Integração com ERP
                     </span>
@@ -446,9 +448,9 @@ function ExpenseDetailModal({
                     Ver detalhes
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
                   {expense.sap_doc_num != null && (
-                    <div>
+                    <div className="space-y-0.5">
                       <p className="text-muted-foreground">Documento ERP</p>
                       <p className="text-foreground font-mono font-medium">
                         #{expense.sap_doc_num}
@@ -457,19 +459,19 @@ function ExpenseDetailModal({
                     </div>
                   )}
                   {expense.sap_purchase_order_status && (
-                    <div>
+                    <div className="space-y-0.5">
                       <p className="text-muted-foreground">Status PC</p>
                       <p className="text-foreground">{expense.sap_purchase_order_status}</p>
                     </div>
                   )}
                   {expense.sap_attachment_status && (
-                    <div>
+                    <div className="space-y-0.5">
                       <p className="text-muted-foreground">Anexo</p>
                       <p className="text-foreground">{expense.sap_attachment_status}</p>
                     </div>
                   )}
                   {expense.sap_integration_last_attempt_at && (
-                    <div>
+                    <div className="space-y-0.5">
                       <p className="text-muted-foreground">Última tentativa</p>
                       <p className="text-foreground">{formatDate(expense.sap_integration_last_attempt_at)}</p>
                     </div>
@@ -477,7 +479,7 @@ function ExpenseDetailModal({
                 </div>
                 {expense.sap_integration_error && (
                   <div className="flex items-start gap-2 rounded bg-destructive/10 border border-destructive/30 p-2">
-                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-destructive shrink-0" />
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-destructive shrink-0" aria-hidden="true" />
                     <p className="text-xs text-destructive flex-1 break-words">
                       {expense.sap_integration_error}
                     </p>
@@ -491,25 +493,25 @@ function ExpenseDetailModal({
 
 
             {(showSubmit || showCancel || showRetrySap || showEdit || showApproval) && (
-              <div className="border-t border-border pt-4 flex justify-end gap-3 flex-wrap">
-                <Button variant="outline" onClick={onClose}>Fechar</Button>
+              <div className="border-t border-border pt-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:flex-wrap gap-2 sm:gap-3">
+                <Button variant="outline" onClick={onClose} className="w-full sm:w-auto justify-center">Fechar</Button>
                 {showApproval && (
                   <>
                     <Button
                       variant="outline"
                       onClick={() => onReject(expense)}
                       disabled={isActioning}
-                      className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      className="w-full sm:w-auto justify-center gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
                     >
-                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <XCircle className="w-4 h-4" aria-hidden="true" />}
                       Rejeitar
                     </Button>
                     <Button
                       onClick={() => onApprove(expense)}
                       disabled={isActioning}
-                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="w-full sm:w-auto justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
-                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="w-4 h-4" aria-hidden="true" />}
                       Aprovar
                     </Button>
                   </>
@@ -518,14 +520,14 @@ function ExpenseDetailModal({
                   <Button
                     variant="outline"
                     onClick={() => onEdit(expense)}
-                    className="gap-1.5"
+                    className="w-full sm:w-auto justify-center gap-1.5"
                     title={
                       expense.status === "rascunho"
                         ? "Editar rascunho"
                         : "Ao salvar edições, o documento volta ao fluxo de aprovação (nível 1)."
                     }
                   >
-                    <Pencil className="w-4 h-4" />
+                    <Pencil className="w-4 h-4" aria-hidden="true" />
                     Editar
                   </Button>
                 )}
@@ -534,9 +536,9 @@ function ExpenseDetailModal({
                     variant="destructive"
                     onClick={() => setConfirmCancel(true)}
                     disabled={isCancelling}
-                    className="gap-1.5"
+                    className="w-full sm:w-auto justify-center gap-1.5"
                   >
-                    {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XIcon className="w-4 h-4" />}
+                    {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <XIcon className="w-4 h-4" aria-hidden="true" />}
                     Cancelar Despesa
                   </Button>
                 )}
@@ -544,9 +546,9 @@ function ExpenseDetailModal({
                   <Button
                     onClick={() => onRetrySap(expense.id)}
                     disabled={isRetrying}
-                    className="gap-1.5"
+                    className="w-full sm:w-auto justify-center gap-1.5"
                   >
-                    {isRetrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+                    {isRetrying ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <RotateCw className="w-4 h-4" aria-hidden="true" />}
                     Reintegrar no SAP
                   </Button>
                 )}
@@ -554,9 +556,9 @@ function ExpenseDetailModal({
                   <Button
                     onClick={() => onSubmit(expense.id)}
                     disabled={isSubmitting}
-                    className="gap-1.5"
+                    className="w-full sm:w-auto justify-center gap-1.5"
                   >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Send className="w-4 h-4" aria-hidden="true" />}
                     Enviar para Aprovação
                   </Button>
                 )}
@@ -1248,17 +1250,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         </div>
 
         {/* Summary */}
-        <div className="flex flex-wrap gap-4">
-          <div className="glass-card px-4 py-3 flex items-center gap-3">
-            <DollarSign className="w-4 h-4 text-primary" />
-            <div>
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-4">
+          <div className="glass-card px-4 py-3 flex items-center gap-3 min-w-0">
+            <DollarSign className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Total</p>
-              <p className="text-lg font-bold font-mono text-foreground">{formatCurrency(totalValue)}</p>
+              <p className="text-lg font-bold font-mono text-foreground truncate">{formatCurrency(totalValue)}</p>
             </div>
           </div>
-          <div className="glass-card px-4 py-3 flex items-center gap-3">
-            <Calendar className="w-4 h-4 text-primary" />
-            <div>
+          <div className="glass-card px-4 py-3 flex items-center gap-3 min-w-0">
+            <Calendar className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Registros</p>
               <p className="text-lg font-bold font-mono text-foreground">{filtered.length}</p>
             </div>
@@ -1432,7 +1434,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         ) : (
           <>
             {/* Card grid (mobile / tablet / laptop) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 xl:hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden">
               {visibleItems.map(({ exp, origin }) => (
                 <ExpenseCard
                   key={exp.id}
