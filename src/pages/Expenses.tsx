@@ -1746,7 +1746,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               <div className="mt-6 space-y-4">
                 {isLoadingMoreSap && (
                   <div
-                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden"
+                    className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "cards" ? "" : "hidden"}`}
                     aria-busy="true"
                     aria-live="polite"
                   >
