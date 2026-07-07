@@ -41,7 +41,8 @@ export default function ApprovalHistory() {
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
   const canViewAll = isAdmin || canViewAllApprovals;
   const { getLabel } = useCompanies(true);
-  const { rows, syncState, isLoading, isSyncing, sync } = useApprovalHistory(session?.companyDB);
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
   const { expenses: purchaseExpenses } = useExpenses("purchase");
   const { expenses: salesExpenses } = useExpenses("sales");
   const { expensesByDocEntry, expensesById } = useMemo(() => {
