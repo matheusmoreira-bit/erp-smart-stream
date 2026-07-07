@@ -57,12 +57,13 @@ export default function ApprovalHistory() {
 
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">("all");
-  // Filtro de rastreabilidade de substituto:
-  //   "all"  → não filtra
-  //   "any"  → apenas decisões executadas por substituto
-  //   "none" → apenas decisões executadas pelo próprio aprovador oficial
-  //   "<key>" → substituição específica (chave = email || nome)
-  const [substituteFilter, setSubstituteFilter] = useState<string>("all");
+  // Filtro de rastreabilidade de substituto (multi-seleção):
+  //   [] (vazio) → não filtra
+  //   ["__any__"]  → apenas decisões executadas por substituto
+  //   ["__none__"] → apenas decisões executadas pelo próprio aprovador oficial
+  //   ["<key1>","<key2>",...] → substituídos específicos (chave = email || nome)
+  // "__any__"/"__none__" são mutuamente exclusivos entre si e com chaves específicas.
+  const [substituteFilter, setSubstituteFilter] = useState<string[]>([]);
   // Admin/view-all veem tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
   const [scope, setScope] = useState<"mine" | "all">(canViewAll ? "all" : "mine");
   useEffect(() => { setScope(canViewAll ? "all" : "mine"); }, [canViewAll]);
