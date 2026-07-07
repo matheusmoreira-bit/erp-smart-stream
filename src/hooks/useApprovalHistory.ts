@@ -53,6 +53,12 @@ export interface ApprovalHistoryFilters {
    * - keys         → substituídos específicos (email lowercased ou nome lowercased)
    */
   substituteFilter?: string[];
+  /**
+   * Busca livre por partial match em `substituted_for_name`/`substituted_for_email`.
+   * Se preenchida, sobrepõe `substituteFilter` (implica "há substituição" com
+   * match parcial case-insensitive em nome ou email).
+   */
+  substituteSearch?: string;
   /** Página atual (1-based). */
   page?: number;
   /** Tamanho da página. Default 50. */
