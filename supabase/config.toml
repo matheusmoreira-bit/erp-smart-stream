@@ -46,3 +46,7 @@ verify_jwt = false
 
 [functions.expense-sap-status-sync]
 verify_jwt = false
+
+[functions.backup-to-gdrive]
+verify_jwt = false
+
