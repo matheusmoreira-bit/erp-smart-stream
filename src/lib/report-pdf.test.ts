@@ -107,6 +107,7 @@ vi.mock("@/integrations/supabase/client", () => {
 import {
   exportExpenseDetailPdf,
   exportListReportPdf,
+  exportListReportCsv,
 } from "./report-pdf";
 
 // Helpers ------------------------------------------------------------------
