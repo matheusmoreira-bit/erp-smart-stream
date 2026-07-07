@@ -249,24 +249,78 @@ export default function ApprovalHistory() {
             </SelectContent>
           </Select>
 
-          <Select value={substituteFilter} onValueChange={setSubstituteFilter}>
-            <SelectTrigger className="w-64" title="Filtrar por aprovações executadas por substituto">
-              <SelectValue placeholder="Substituto" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Substituto: todos</SelectItem>
-              <SelectItem value="any">Somente por substituto</SelectItem>
-              <SelectItem value="none">Somente pelo próprio aprovador</SelectItem>
-              {substitutedOptions.length > 0 && (
-                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Em nome de
-                </div>
-              )}
-              {substitutedOptions.map((o) => (
-                <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {(() => {
+            const anySel = substituteFilter.includes("__any__");
+            const noneSel = substituteFilter.includes("__none__");
+            const specificKeys = substituteFilter.filter((k) => k !== "__any__" && k !== "__none__");
+            const summary = substituteFilter.length === 0
+              ? "Substituto: todos"
+              : anySel
+                ? "Somente por substituto"
+                : noneSel
+                  ? "Somente pelo próprio aprovador"
+                  : specificKeys.length === 1
+                    ? (substitutedOptions.find((o) => o.key === specificKeys[0])?.label || specificKeys[0])
+                    : `${specificKeys.length} substituídos`;
+            const toggleExclusive = (key: "__any__" | "__none__") => {
+              setSubstituteFilter((prev) => prev.includes(key) ? [] : [key]);
+            };
+            const toggleKey = (key: string) => {
+              setSubstituteFilter((prev) => {
+                const cleaned = prev.filter((k) => k !== "__any__" && k !== "__none__");
+                return cleaned.includes(key) ? cleaned.filter((k) => k !== key) : [...cleaned, key];
+              });
+            };
+            return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-64 justify-between font-normal" title="Filtrar por aprovações executadas por substituto">
+                    <span className="truncate">{summary}</span>
+                    <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-2" align="start">
+                  <div className="max-h-80 overflow-y-auto space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setSubstituteFilter([])}
+                      className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent"
+                    >
+                      Substituto: todos
+                    </button>
+                    <label className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer">
+                      <Checkbox checked={anySel} onCheckedChange={() => toggleExclusive("__any__")} />
+                      Somente por substituto
+                    </label>
+                    <label className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer">
+                      <Checkbox checked={noneSel} onCheckedChange={() => toggleExclusive("__none__")} />
+                      Somente pelo próprio aprovador
+                    </label>
+                    {substitutedOptions.length > 0 && (
+                      <>
+                        <div className="px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Em nome de
+                        </div>
+                        {substitutedOptions.map((o) => (
+                          <label
+                            key={o.key}
+                            className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-accent cursor-pointer ${anySel || noneSel ? "opacity-50" : ""}`}
+                          >
+                            <Checkbox
+                              checked={specificKeys.includes(o.key)}
+                              disabled={anySel || noneSel}
+                              onCheckedChange={() => toggleKey(o.key)}
+                            />
+                            <span className="truncate">{o.label}</span>
+                          </label>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            );
+          })()}
         </div>
 
         {syncState?.last_status === "error" && (
