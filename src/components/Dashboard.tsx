@@ -108,8 +108,12 @@ export function Dashboard({ embedded = false }: DashboardProps) {
                   <Bar dataKey="avgDaysRejected" stackId="a" fill="url(#rejectedGrad)" radius={[4, 4, 0, 0]} barSize={28} />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             </div>
           )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+_REMOVE_ME_
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
