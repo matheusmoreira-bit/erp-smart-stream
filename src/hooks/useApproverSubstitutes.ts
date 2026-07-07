@@ -115,29 +115,25 @@ export function useActiveOfficialsForMe() {
     const sapUser = (session?.userName || "").toLowerCase().trim();
     if (!authEmail && !sapUser) { setOfficials([]); return; }
 
-    const nowIso = new Date().toISOString();
-    const { data } = await supabase
-      .from("approver_substitutes" as never)
-      .select("id, official_email, official_name, ends_at, starts_at, revoked_at, substitute_email")
-      .is("revoked_at", null)
-      .lte("starts_at", nowIso)
-      .gte("ends_at", nowIso);
-
-    const authPrefix = authEmail.split("@")[0];
-    const sapPrefix = sapUser.split("@")[0];
-    const mine = ((data as ApproverSubstitute[]) || []).filter((r) => {
-      const s = (r.substitute_email || "").toLowerCase();
-      const sPrefix = s.split("@")[0];
-      if (authEmail && (s === authEmail || sPrefix === authPrefix)) return true;
-      if (sapUser && (s === sapUser || sPrefix === sapPrefix)) return true;
-      return false;
-    });
-    setOfficials(mine.map((r) => ({
-      official_email: r.official_email,
-      official_name: r.official_name,
-      id: r.id,
-      ends_at: r.ends_at,
-    })));
+    // Usa RPC SECURITY DEFINER para contornar RLS — necessário quando o usuário
+    // só tem sessão SAP (sem auth.users no Lovable Cloud), caso do Leonardo.
+    const identifiers = Array.from(new Set([authEmail, sapUser, authEmail.split("@")[0], sapUser.split("@")[0]].filter(Boolean)));
+    const results = await Promise.all(
+      identifiers.map((id) =>
+        supabase.rpc("active_officials_for_substitute" as never, { _substitute_identifier: id } as never),
+      ),
+    );
+    const seen = new Set<string>();
+    const merged: Array<{ official_email: string; official_name: string | null; id: string; ends_at: string }> = [];
+    for (const r of results) {
+      const rows = ((r.data as Array<{ id: string; official_email: string; official_name: string | null; ends_at: string }>) || []);
+      for (const row of rows) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        merged.push({ id: row.id, official_email: row.official_email, official_name: row.official_name, ends_at: row.ends_at });
+      }
+    }
+    setOfficials(merged);
   }, [session?.userName]);
 
   useEffect(() => { load(); }, [load]);
