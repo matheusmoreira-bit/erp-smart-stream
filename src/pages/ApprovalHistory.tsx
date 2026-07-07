@@ -307,6 +307,15 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
       <div className="text-sm text-muted-foreground space-y-1">
         <div className="flex items-center gap-2 truncate"><Building2 className="w-3.5 h-3.5 text-primary/70" />{row.card_name || row.card_code || "—"}</div>
         <div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-primary/70" />Aprovador: <span className="text-foreground font-medium">{row.approver_name || row.approver_code || "—"}</span></div>
+        {(row.substituted_for_name || row.substituted_for_email) && (
+          <div
+            className="flex items-center gap-2 text-amber-700 dark:text-amber-400"
+            title={`Aprovação executada por ${row.approver_name || row.approver_code || "—"} atuando como substituto autorizado de ${row.substituted_for_name || row.substituted_for_email}`}
+          >
+            <UserCog className="w-3.5 h-3.5" />
+            Em nome de: <span className="font-medium">{row.substituted_for_name || row.substituted_for_email}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-primary/70" />Solicitante: <span className="text-foreground font-medium">{row.requester_name || row.requester_code || "—"}</span></div>
         <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-primary/70" />{formatDate(row.decision_date)}</div>
       </div>
