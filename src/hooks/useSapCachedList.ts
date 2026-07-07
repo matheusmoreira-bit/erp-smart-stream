@@ -190,5 +190,15 @@ export function useSapCachedList({
     load(true);
   }, [load]);
 
+  // Subscribe to invalidation events broadcast via invalidateSapCache().
+  useEffect(() => {
+    if (!enabled) return;
+    const unsub = subscribe(cacheKey, session?.companyDB, () => {
+      loadedRef.current = false;
+      load(true);
+    });
+    return unsub;
+  }, [cacheKey, session?.companyDB, enabled, load]);
+
   return { options, isLoading, reload };
 }
