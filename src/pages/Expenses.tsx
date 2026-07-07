@@ -844,11 +844,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
 
-  // ─── Infinite scroll (pagination) ─────────────────────────────
-  const PAGE_SIZE = 24;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // ─── Lazy load: 30 iniciais + 10 por scroll ───────────────────
+  const INITIAL_PAGE_SIZE = 30;
+  const PAGE_STEP = 10;
+  const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_SIZE);
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    setVisibleCount(INITIAL_PAGE_SIZE);
   }, [search, statusFilter, sourceMode, showAll, mode]);
   const visibleItems = filtered.slice(0, visibleCount);
   const hasMoreLocal = visibleCount < filtered.length;
