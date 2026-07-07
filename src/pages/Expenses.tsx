@@ -23,6 +23,7 @@ import {
   Link2,
   AlertTriangle,
   Network,
+  Eye,
   Paperclip,
   FileDown,
   SlidersHorizontal,
