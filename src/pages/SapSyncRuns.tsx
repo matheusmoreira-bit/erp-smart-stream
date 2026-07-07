@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { RefreshCw, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
+import { SapSyncHealthCard } from "@/components/SapSyncHealthCard";
 
 interface SyncRun {
   id: string;
