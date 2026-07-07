@@ -26,6 +26,7 @@ import NfEntrada from "./pages/NfEntrada.tsx";
 import AuditHub from "./pages/AuditHub.tsx";
 import IntegrationsHub from "./pages/IntegrationsHub.tsx";
 import Notifications from "./pages/Notifications.tsx";
+import Profile from "./pages/Profile.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
@@ -113,6 +114,9 @@ const App = () => (
 
               {/* Notificações */}
               <Route path="/notificacoes" element={<Notifications />} />
+
+              {/* Perfil intercompany */}
+              <Route path="/perfil" element={<Profile />} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

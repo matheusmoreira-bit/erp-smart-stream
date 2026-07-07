@@ -19,6 +19,7 @@ import {
   Bell,
   FileInput,
   Radar,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -267,6 +268,7 @@ function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: num
 }
 
 export function MainMenu() {
+  const navigate = useNavigate();
   const { session, logout } = useSap();
   const { userModules, loading: permLoading } = useModuleAccess();
 
@@ -298,6 +300,13 @@ export function MainMenu() {
               Conectado
             </div>
             <NotificationBell />
+            <button
+              onClick={() => navigate("/perfil")}
+              title="Meu perfil"
+              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <UserCog className="w-4 h-4" />
+            </button>
             <ChangePasswordDialog />
             <ThemeToggle />
             <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
