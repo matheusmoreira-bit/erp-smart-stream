@@ -229,6 +229,10 @@ export function CreateExpenseModal({
   // erros". Cache separado guarda os DocGroup completos dos que falharam.
   const currentGroupRef = useRef<DocGroup | null>(null);
   const failedGroupsRef = useRef<Map<string, DocGroup>>(new Map());
+  // Cache dos grupos que estavam pendentes/enfileirados no momento do
+  // cancelamento. Habilita "Retomar fila" para continuar do próximo
+  // deferredGroup sem tocar nos grupos já concluídos com sucesso.
+  const cancelledGroupsRef = useRef<DocGroup[]>([]);
   // Limite de confiança IA ajustável em tempo real (a partir do prop).
   // Grupos com confiança média abaixo disso ganham destaque visual âmbar.
   const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState<number>(lowAiConfidenceThreshold);
@@ -837,6 +841,21 @@ export function CreateExpenseModal({
       /* ignore */
     }
     aiAbortRef.current = null;
+    // Guarda cache do que estava pendente/enfileirado ANTES de limpar, para
+    // permitir "Retomar fila" depois. Inclui o grupo atual em edição, se ele
+    // ainda estivesse pendente (não tinha errorMessage).
+    const currentPending = queueHistory.find((e) => e.status === "pending");
+    const cached: DocGroup[] = [];
+    if (
+      currentPending &&
+      !currentPending.errorMessage &&
+      currentGroupRef.current &&
+      currentGroupRef.current.supplierKey === currentPending.supplierKey
+    ) {
+      cached.push(currentGroupRef.current);
+    }
+    cached.push(...deferredGroups);
+    cancelledGroupsRef.current = cached;
     setDeferredGroups([]);
     setSupplierPicker(null);
     setAiWarning(null);
@@ -866,6 +885,39 @@ export function CreateExpenseModal({
     );
   };
 
+  // Retoma a fila a partir do próximo grupo cancelado (mantém os concluídos
+  // com sucesso intactos e não roda a IA de novo — reaproveita os DocGroup
+  // em cache). Se algum grupo com falha estiver adiante, "Reenviar apenas
+  // erros" continua sendo o caminho — este botão foca em resumir a fila.
+  const resumeCancelledQueue = () => {
+    const groups = cancelledGroupsRef.current;
+    if (!groups || groups.length === 0) {
+      toast.error("Nenhum grupo cancelado disponível para retomar.");
+      return;
+    }
+    const [first, ...rest] = groups;
+    // Atualiza status no histórico: 'pending' para o primeiro retomado,
+    // 'queued' para o restante. Mantém 'success' e 'failed' inalterados.
+    setQueueHistory((prev) => prev.map((e) => {
+      if (e.supplierKey === first.supplierKey) {
+        return { ...e, status: "pending", errorMessage: undefined };
+      }
+      if (rest.some((g) => g.supplierKey === e.supplierKey)) {
+        return { ...e, status: "queued", errorMessage: undefined };
+      }
+      return e;
+    }));
+    setDeferredGroups(rest);
+    resetFormForNextDeferred(first);
+    cancelledGroupsRef.current = [];
+    setShowQueueSummary(false);
+    setJustCancelled(false);
+    toast.info(
+      `Retomando fila a partir de ${first.supplierLabel}${rest.length > 0 ? ` (+${rest.length} depois)` : ""}.`,
+      { duration: 6000 },
+    );
+  };
+
   // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
   const chooseFirstSupplierGroup = (chosenKey: string) => {
     if (!supplierPicker) return;
@@ -882,8 +934,9 @@ export function CreateExpenseModal({
     setDeferredGroups(rest);
     setSupplierPicker(null);
     currentGroupRef.current = chosen;
-    // Nova execução da fila: limpa cache de erros anteriores.
+    // Nova execução da fila: limpa cache de erros e cancelamentos anteriores.
     failedGroupsRef.current = new Map();
+    cancelledGroupsRef.current = [];
     // Inicializa o histórico da fila com todos os fornecedores despachados,
     // marcando o escolhido como "pendente" (em andamento) e os demais como
     // "enfileirados". Preserva a ordem de execução.
@@ -1399,6 +1452,19 @@ export function CreateExpenseModal({
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     Tentar novamente
+                  </Button>
+                )}
+                {/* Retomar fila — reaproveita os DocGroups em cache dos
+                    grupos que estavam pendentes/enfileirados no cancelamento,
+                    sem chamar a IA de novo. Mantém os grupos concluídos. */}
+                {justCancelled && !isProcessing && !isCreating && cancelledGroupsRef.current.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={resumeCancelledQueue}
+                  >
+                    ▶ Retomar fila ({cancelledGroupsRef.current.length})
                   </Button>
                 )}
               </div>
@@ -2222,11 +2288,17 @@ export function CreateExpenseModal({
               </Button>
             );
           })()}
+          {cancelledGroupsRef.current.length > 0 && (
+            <Button variant="outline" className="gap-1.5" onClick={resumeCancelledQueue}>
+              ▶ Retomar fila ({cancelledGroupsRef.current.length})
+            </Button>
+          )}
           <AlertDialogAction
             onClick={() => {
               setShowQueueSummary(false);
               setQueueHistory([]);
               failedGroupsRef.current = new Map();
+              cancelledGroupsRef.current = [];
               onClose();
             }}
           >
