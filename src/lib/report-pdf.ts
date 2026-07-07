@@ -1526,7 +1526,7 @@ export async function exportQueueSummaryCsv(opts: QueueSummaryOptions): Promise<
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${safeFileName(opts.fileName || "resumo_fila_ia")}_${Date.now()}.csv`;
+  a.download = `${safeFileName(opts.fileName || "resumo_fila_ia")}_${dominantAiModelTag(entries)}_${exportTimestampTag()}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
