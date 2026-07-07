@@ -699,8 +699,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const isAdmin = isLovableAdmin || !!session?.isSuperUser;
   const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
-  const [showAll, setShowAll] = useState<boolean>(isAdmin);
-  useEffect(() => { setShowAll(isAdmin); }, [isAdmin]);
+  const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), isAdmin);
+  useEffect(() => { if (!isAdmin) setShowAll(false); }, [isAdmin, setShowAll]);
 
   // Origem dos pedidos: padrão "Apenas ERP Flow"; "Ambos" também busca direto do ERP (SAP).
   const [sourceMode, setSourceMode] = useState<"flow" | "both">("flow");
