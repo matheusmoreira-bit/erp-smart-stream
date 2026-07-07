@@ -68,18 +68,22 @@ export default function ApprovalHistory() {
     return s.split(",").map((v) => decodeURIComponent(v)).filter(Boolean);
   })();
 
+  const initialSubSearch = searchParams.get("subq") || "";
+
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<"all" | "Y" | "N">(initialDecision);
-  // Filtro de rastreabilidade de substituto (multi-seleção):
-  //   [] (vazio) → não filtra
-  //   ["__any__"]  → apenas decisões executadas por substituto
-  //   ["__none__"] → apenas decisões executadas pelo próprio aprovador oficial
-  //   ["<key1>","<key2>",...] → substituídos específicos (chave = email || nome)
-  // "__any__"/"__none__" são mutuamente exclusivos entre si e com chaves específicas.
   const [substituteFilter, setSubstituteFilter] = useState<string[]>(initialSubstitute);
-  // Admin/view-all veem tudo por padrão; demais usuários ficam restritos às próprias decisões/solicitações.
+  // Busca livre por substituído (partial match em nome/email).
+  const [substituteSearch, setSubstituteSearch] = useState<string>(initialSubSearch);
   const [scope, setScope] = useState<"mine" | "all">(canViewAll ? "all" : "mine");
   useEffect(() => { setScope(canViewAll ? "all" : "mine"); }, [canViewAll]);
+
+  // Debounce da busca livre p/ não bombardear o banco a cada tecla.
+  const [debouncedSubSearch, setDebouncedSubSearch] = useState(substituteSearch);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSubSearch(substituteSearch), 300);
+    return () => clearTimeout(t);
+  }, [substituteSearch]);
 
   // Sincroniza filtros na URL para permitir compartilhamento e navegação.
   useEffect(() => {
@@ -87,20 +91,31 @@ export default function ApprovalHistory() {
     if (decision === "all") next.delete("decision"); else next.set("decision", decision);
     if (substituteFilter.length === 0) next.delete("sub");
     else next.set("sub", substituteFilter.map((v) => encodeURIComponent(v)).join(","));
+    if (!debouncedSubSearch.trim()) next.delete("subq");
+    else next.set("subq", debouncedSubSearch.trim());
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decision, substituteFilter]);
+  }, [decision, substituteFilter, debouncedSubSearch]);
 
   // Reseta paginação quando filtros mudam.
-  useEffect(() => { setPage(1); }, [decision, substituteFilter, session?.companyDB]);
+  useEffect(() => {
+    setPage(1);
+  }, [decision, substituteFilter, debouncedSubSearch, session?.companyDB]);
 
   // Hook com filtros aplicados no banco + paginação incremental.
   const { rows, hasMore, syncState, isLoading, isSyncing, sync } = useApprovalHistory(
     session?.companyDB,
-    { decision, substituteFilter, page, pageSize: PAGE_SIZE },
+    {
+      decision,
+      substituteFilter,
+      substituteSearch: debouncedSubSearch,
+      page,
+      pageSize: PAGE_SIZE,
+    },
   );
+
 
 
 
