@@ -229,6 +229,11 @@ export function CreateExpenseModal({
   // erros". Cache separado guarda os DocGroup completos dos que falharam.
   const currentGroupRef = useRef<DocGroup | null>(null);
   const failedGroupsRef = useRef<Map<string, DocGroup>>(new Map());
+  // Limite de confiança IA ajustável em tempo real (a partir do prop).
+  // Grupos com confiança média abaixo disso ganham destaque visual âmbar.
+  const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState<number>(lowAiConfidenceThreshold);
+  const isLowConfidence = (c: number | null | undefined) =>
+    typeof c === "number" && Number.isFinite(c) && c < aiConfidenceThreshold;
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
