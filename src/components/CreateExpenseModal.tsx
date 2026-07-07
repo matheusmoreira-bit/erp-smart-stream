@@ -696,6 +696,13 @@ export function CreateExpenseModal({
         nonFiscal: nonFiscal.map((p) => p.file),
       });
     } catch (e) {
+      // Cancelamento explícito pelo usuário: silencioso, sem toast de erro.
+      if ((e as any)?.name === "AbortError" || controller.signal.aborted) {
+        setSupplierPicker(null);
+        setAiConfidence(null);
+        setAiWarning(null);
+        return;
+      }
       console.error("AI processing error:", e);
       // Garante estado limpo para um novo retry (sem picker/warning presos).
       setSupplierPicker(null);
@@ -705,8 +712,40 @@ export function CreateExpenseModal({
         duration: 9000,
       });
     } finally {
+      if (aiAbortRef.current === controller) aiAbortRef.current = null;
       setIsProcessing(false);
     }
+  };
+
+  // Cancela o processamento IA em andamento e/ou limpa a fila de fornecedores
+  // adiados (deferredGroups) + picker aberto, deixando o modal em estado
+  // consistente para o usuário continuar preenchendo manualmente.
+  const cancelProcessingAndQueue = () => {
+    const hadQueue = deferredGroups.length > 0;
+    const hadPicker = !!supplierPicker;
+    const wasProcessing = isProcessing;
+    try {
+      aiAbortRef.current?.abort();
+    } catch {
+      /* ignore */
+    }
+    aiAbortRef.current = null;
+    setDeferredGroups([]);
+    setSupplierPicker(null);
+    setAiWarning(null);
+    setAiConfidence(null);
+    setIsProcessing(false);
+    setCancelConfirm(false);
+    const parts: string[] = [];
+    if (wasProcessing) parts.push("classificação IA");
+    if (hadPicker) parts.push("seleção de fornecedor");
+    if (hadQueue) parts.push("fila de despesas encadeadas");
+    toast.info(
+      parts.length > 0
+        ? `Cancelado: ${parts.join(", ")}. Os anexos permanecem no modal para você continuar manualmente.`
+        : "Processamento cancelado.",
+      { duration: 6000 },
+    );
   };
 
   // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
