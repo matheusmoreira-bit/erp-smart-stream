@@ -43,6 +43,18 @@ import { UserPlus } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
 import { saveDraft, deleteDraft } from "@/hooks/useDocumentDrafts";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  hashFileContent,
+  findExistingClaims,
+  claimDocumentHashes,
+  hasInFlightGuardTripped,
+} from "@/lib/expense-dedupe";
+
+// Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
+// (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
+// pelo DevTools ao investigar duplicações reportadas por usuários.
+const DEDUP_LOG = "[expense-dedupe]";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -237,6 +249,16 @@ export function CreateExpenseModal({
   // Reaproveitado em "Tentar novamente" para pular chamadas ao endpoint.
   // Vive durante a instância do modal; é limpo no unmount/close.
   const aiResponseCacheRef = useRef<Map<string, any>>(new Map());
+  // Guards reentrantes fortes para evitar QUALQUER chamada duplicada de IA
+  // ou de criação de despesa quando o usuário cancela+retenta rápido, ou o
+  // React 18 (StrictMode) invoca o handler duas vezes. Estado (`isProcessing`,
+  // `isCreating`) já protege a UI, mas refs pegam a corrida entre o clique
+  // e o setState batch. Sempre resetados no `finally`.
+  const aiInFlightRef = useRef<boolean>(false);
+  const submitInFlightRef = useRef<boolean>(false);
+  // Registro dos hashes já reivindicados pelo usuário nesta sessão do modal
+  // — usado para não recontar duplicatas em retries do mesmo submit.
+  const claimedHashesRef = useRef<Set<string>>(new Set());
 
   const hashFile = async (file: File): Promise<string> => {
     try {
@@ -401,6 +423,9 @@ export function CreateExpenseModal({
       setShowQueueSummary(false);
       setJustCancelled(false);
       aiResponseCacheRef.current = new Map();
+      claimedHashesRef.current = new Set();
+      aiInFlightRef.current = false;
+      submitInFlightRef.current = false;
     }
   }, [open]);
 
@@ -667,11 +692,24 @@ export function CreateExpenseModal({
   };
 
   const processWithAI = async (filesToProcess: File[]) => {
-    // Guard anti-duplicação: se já há classificação IA em andamento, ignora
-    // a nova solicitação (evita chamadas paralelas ao endpoint e estado
-    // inconsistente ao clicar em "Tentar novamente" repetidas vezes).
-    if (isProcessing) return;
+    // Guard anti-duplicação: `isProcessing` (estado) + `aiInFlightRef` (síncrono).
+    // O ref pega o intervalo entre o clique e o setState — evita 2ª chamada
+    // após "cancelar → tentar novamente" quando o usuário clica duas vezes
+    // rápido, ou quando o React 18 dispara o handler duas vezes no StrictMode.
+    if (isProcessing || hasInFlightGuardTripped(aiInFlightRef)) {
+      console.info(DEDUP_LOG, "processWithAI ignorado: já há chamada em vôo", {
+        isProcessing,
+        refFlag: aiInFlightRef.current,
+        fileCount: filesToProcess?.length ?? 0,
+      });
+      return;
+    }
     if (!filesToProcess || filesToProcess.length === 0) return;
+    aiInFlightRef.current = true;
+    console.info(DEDUP_LOG, "processWithAI START", {
+      fileCount: filesToProcess.length,
+      names: filesToProcess.map((f) => f.name),
+    });
     setIsProcessing(true);
     // Reseta estado herdado de tentativas anteriores para que um retry
     // não mostre picker/warning/confidence obsoletos ao usuário.
@@ -827,6 +865,8 @@ export function CreateExpenseModal({
     } finally {
       if (aiAbortRef.current === controller) aiAbortRef.current = null;
       setIsProcessing(false);
+      aiInFlightRef.current = false;
+      console.info(DEDUP_LOG, "processWithAI END");
     }
   };
 
@@ -1185,7 +1225,60 @@ export function CreateExpenseModal({
       toast.error("Centro de custo (padrão) é obrigatório");
       return;
     }
+    // Guard duro anti-double-submit: `isCreating` (estado) protege a UI, mas
+    // um duplo clique rápido cabe na janela entre o clique e o setState —
+    // o ref pega isso. Rejeita silenciosamente com log auditável.
+    if (hasInFlightGuardTripped(submitInFlightRef) || isCreating) {
+      console.info(DEDUP_LOG, "handleSubmit ignorado: já há criação em vôo", {
+        isCreating,
+        refFlag: submitInFlightRef.current,
+      });
+      return;
+    }
+    submitInFlightRef.current = true;
     setIsCreating(true);
+
+    // ---- Dedup cross-user: hash dos anexos e checagem antes do onCreate ----
+    // Objetivo: se outro usuário (ou este mesmo) já lançou uma despesa com
+    // qualquer um destes arquivos, o backend bloqueia antes de gastar a
+    // chamada de criação. `fail-closed`: se a consulta falhar, aborta.
+    let fileHashes: string[] = [];
+    if (files.length > 0) {
+      try {
+        fileHashes = await Promise.all(files.map((f) => hashFileContent(f)));
+        const novel = fileHashes.filter((h) => !claimedHashesRef.current.has(h));
+        if (novel.length > 0) {
+          const existing = await findExistingClaims(supabase, novel);
+          if (existing.length > 0) {
+            const names = existing
+              .map((e) => e.file_name || e.file_hash.slice(0, 8))
+              .join(", ");
+            console.warn(DEDUP_LOG, "duplicata cross-user detectada", { existing });
+            toast.error(
+              `Este documento já foi lançado por outro usuário: ${names}. ` +
+                `Remova o anexo duplicado ou verifique com o responsável antes de continuar.`,
+              { duration: 10000 },
+            );
+            submitInFlightRef.current = false;
+            setIsCreating(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error(DEDUP_LOG, "verificação de duplicata falhou (abortando submit):", e);
+        toast.error("Não foi possível verificar duplicidade dos anexos. Tente novamente.");
+        submitInFlightRef.current = false;
+        setIsCreating(false);
+        return;
+      }
+    }
+
+    console.info(DEDUP_LOG, "handleSubmit START", {
+      supplier: supplier.name,
+      fileCount: files.length,
+      hashes: fileHashes.map((h) => h.slice(0, 12)),
+    });
+
     try {
       await onCreate({
         supplier_name: supplier.name,
@@ -1203,6 +1296,33 @@ export function CreateExpenseModal({
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });
+
+      // Reivindica os hashes APÓS sucesso — se o insert falhar por corrida,
+      // apenas logamos (a despesa foi criada; a colisão vira aviso no próximo
+      // submit que tocar o mesmo arquivo).
+      if (fileHashes.length > 0) {
+        const { data: userRes } = await supabase.auth.getUser();
+        const uid = userRes?.user?.id;
+        if (uid) {
+          const res = await claimDocumentHashes(
+            supabase,
+            uid,
+            fileHashes.map((h, i) => ({
+              fileHash: h,
+              fileName: files[i]?.name,
+              fileSize: files[i]?.size,
+              companyDb: sapSession?.companyDB ?? null,
+              docType: mode,
+              supplierLabel: supplier.name,
+            })),
+          );
+          if (res.conflict) {
+            console.warn(DEDUP_LOG, "claim colidiu após create (corrida com outro usuário)");
+          } else {
+            fileHashes.forEach((h) => claimedHashesRef.current.add(h));
+          }
+        }
+      }
       toast.success(isSales ? "Pedido de venda criado com sucesso!" : "Despesa criada com sucesso!");
       if (draftId) {
         void deleteDraft(draftId);
@@ -1258,6 +1378,8 @@ export function CreateExpenseModal({
       toast.error(msg);
     } finally {
       setIsCreating(false);
+      submitInFlightRef.current = false;
+      console.info(DEDUP_LOG, "handleSubmit END");
     }
   };
 
