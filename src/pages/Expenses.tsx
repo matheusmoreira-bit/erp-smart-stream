@@ -850,6 +850,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
   const SAP_PAGE_STEP = 100;
 
+  // Migração: usuários com preferência antiga "flow" salva no localStorage
+  // são movidos para "both" para que sempre vejam todos os pedidos pendentes.
+  useEffect(() => {
+    if (sourceMode === "flow") setSourceMode("both");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchSapPage = useCallback(
     async (skip: number): Promise<Expense[]> => {
       if (!session) return [];
