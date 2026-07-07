@@ -1136,36 +1136,54 @@ export function CreateExpenseModal({
             diferentes). Fica sempre visível para o usuário saber o estado. */}
         {(isProcessing || isCreating || deferredGroups.length > 0) && (
           <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-            {isProcessing && (
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                <span>
-                  Classificando {files.length} anexo(s) com IA — identificando fornecedor, itens e tipo do documento…
-                </span>
-              </div>
-            )}
-            {isCreating && (
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                <span>
-                  Salvando {isSales ? "pedido de venda" : "despesa"}
-                  {files.length > 0 ? ` e enviando ${files.length} anexo(s)` : ""}…
-                </span>
-              </div>
-            )}
-            {deferredGroups.length > 0 && !isCreating && !isProcessing && (
-              <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                <span className="mt-0.5">📋</span>
-                <div className="flex-1">
-                  <div className="text-foreground font-medium">
-                    Fila: {deferredGroups.length} despesa(s) aguardando após esta
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 space-y-2 min-w-0">
+                {isProcessing && (
+                  <div className="flex items-center gap-2 text-sm text-primary">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>
+                      Classificando {files.length} anexo(s) com IA — identificando fornecedor, itens e tipo do documento…
+                    </span>
                   </div>
-                  <div className="mt-0.5 truncate">
-                    Próximas: {deferredGroups.map((g) => g.supplierLabel).join(" → ")}
+                )}
+                {isCreating && (
+                  <div className="flex items-center gap-2 text-sm text-primary">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>
+                      Salvando {isSales ? "pedido de venda" : "despesa"}
+                      {files.length > 0 ? ` e enviando ${files.length} anexo(s)` : ""}…
+                    </span>
                   </div>
-                </div>
+                )}
+                {deferredGroups.length > 0 && !isCreating && !isProcessing && (
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <span className="mt-0.5">📋</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-foreground font-medium">
+                        Fila: {deferredGroups.length} despesa(s) aguardando após esta
+                      </div>
+                      <div className="mt-0.5 truncate">
+                        Próximas: {deferredGroups.map((g) => g.supplierLabel).join(" → ")}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+              {/* Botão de cancelar: aparece quando há IA em andamento ou fila
+                  de fornecedores adiados. Não interfere no salvamento em curso
+                  (isCreating), pois cancelar uma gravação parcial seria pior. */}
+              {(isProcessing || deferredGroups.length > 0) && !isCreating && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                  onClick={() => setCancelConfirm(true)}
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  Cancelar
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
