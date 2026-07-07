@@ -2448,6 +2448,17 @@ export function CreateExpenseModal({
                           {e.fileNames.join(", ")}
                         </div>
                       )}
+                      <div className="pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[11px] text-primary"
+                          onClick={() => openDetailsFor(e)}
+                        >
+                          Ver detalhes
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
