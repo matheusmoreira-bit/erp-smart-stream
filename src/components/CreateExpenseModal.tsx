@@ -473,6 +473,9 @@ export function CreateExpenseModal({
       setDeferredGroups([]);
       setSupplierPicker(null);
       setJustCancelled(false);
+      // A pausa também não deve sobreviver ao fechar do modal sem contexto.
+      pausedRef.current = false;
+      setIsPaused(false);
       aiInFlightRef.current = false;
       submitInFlightRef.current = false;
       if (hasFailedContext) {
