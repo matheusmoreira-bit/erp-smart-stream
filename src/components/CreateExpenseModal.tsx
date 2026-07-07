@@ -862,6 +862,8 @@ export function CreateExpenseModal({
     } finally {
       if (aiAbortRef.current === controller) aiAbortRef.current = null;
       setIsProcessing(false);
+      aiInFlightRef.current = false;
+      console.info(DEDUP_LOG, "processWithAI END");
     }
   };
 
