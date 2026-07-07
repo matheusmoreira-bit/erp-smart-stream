@@ -1081,21 +1081,88 @@ export function CreateExpenseModal({
   // com sucesso intactos e não roda a IA de novo — reaproveita os DocGroup
   // em cache). Se algum grupo com falha estiver adiante, "Reenviar apenas
   // erros" continua sendo o caminho — este botão foca em resumir a fila.
-  const resumeCancelledQueue = () => {
+  const resumeCancelledQueue = async () => {
     const groups = cancelledGroupsRef.current;
     if (!groups || groups.length === 0) {
       toast.error("Nenhum grupo cancelado disponível para retomar.");
       return;
     }
-    const [first, ...rest] = groups;
+    // Verificação 1 — remove grupos que já constam como concluídos no histórico
+    // da fila. Evita reprocessar uma despesa que foi criada com sucesso antes
+    // do cancelamento (o cache pode ter ficado desatualizado em corridas).
+    const successKeys = new Set(
+      queueHistory.filter((e) => e.status === "success").map((e) => e.supplierKey),
+    );
+    const notYetDone = groups.filter((g) => !successKeys.has(g.supplierKey));
+    const skippedAsDone = groups.length - notYetDone.length;
+
+    // Verificação 2 — hasheia todos os arquivos dos candidatos e consulta a
+    // tabela de reivindicações para pular grupos cujos anexos já foram lançados
+    // (por este ou por outro usuário). Isso garante que a retomada não crie
+    // despesa duplicada — o servidor também barra via UNIQUE, mas aqui damos
+    // feedback claro antes de gastar submit + storage.
+    const remaining: DocGroup[] = [];
+    const claimedGroups: Array<{ group: DocGroup; owner?: string }> = [];
+    try {
+      const perGroupHashes = await Promise.all(
+        notYetDone.map(async (g) => ({
+          group: g,
+          hashes: await Promise.all(g.docs.map((d) => hashFileContent(d.file))),
+        })),
+      );
+      const allHashes = perGroupHashes.flatMap((x) => x.hashes);
+      const existing = allHashes.length > 0
+        ? await findExistingClaims(supabase, Array.from(new Set(allHashes)))
+        : [];
+      const claimedSet = new Map(existing.map((e) => [e.file_hash, e.submitted_by] as const));
+      for (const { group, hashes } of perGroupHashes) {
+        const hit = hashes.find((h) => claimedSet.has(h));
+        if (hit) {
+          claimedGroups.push({ group, owner: claimedSet.get(hit) });
+        } else {
+          remaining.push(group);
+        }
+      }
+    } catch (err) {
+      // Se a consulta falhar, seguimos com `notYetDone` — o servidor ainda
+      // barrará duplicatas via constraint UNIQUE — mas avisamos o usuário.
+      console.warn("[resume] pré-check de duplicidade falhou, prosseguindo:", err);
+      remaining.push(...notYetDone);
+      toast.warning("Não foi possível pré-verificar duplicatas. O servidor ainda vai bloquear se houver conflito.");
+    }
+
+    if (remaining.length === 0) {
+      cancelledGroupsRef.current = [];
+      setJustCancelled(false);
+      // Marca no histórico como já concluídos os que a verificação identificou.
+      if (claimedGroups.length > 0 || skippedAsDone > 0) {
+        setQueueHistory((prev) => prev.map((e) => {
+          if (claimedGroups.some((c) => c.group.supplierKey === e.supplierKey)) {
+            return { ...e, status: "success" as QueueStatus, errorMessage: undefined };
+          }
+          return e;
+        }));
+      }
+      toast.info(
+        `Nada para retomar: ${skippedAsDone} já concluído(s), ${claimedGroups.length} já lançado(s) por outro usuário/sessão.`,
+        { duration: 7000 },
+      );
+      return;
+    }
+
+    const [first, ...rest] = remaining;
     // Atualiza status no histórico: 'pending' para o primeiro retomado,
-    // 'queued' para o restante. Mantém 'success' e 'failed' inalterados.
+    // 'queued' para o restante. Grupos duplicados detectados viram 'success'
+    // (para refletir que já existem no sistema). Preserva demais entradas.
     setQueueHistory((prev) => prev.map((e) => {
       if (e.supplierKey === first.supplierKey) {
         return { ...e, status: "pending", errorMessage: undefined };
       }
       if (rest.some((g) => g.supplierKey === e.supplierKey)) {
         return { ...e, status: "queued", errorMessage: undefined };
+      }
+      if (claimedGroups.some((c) => c.group.supplierKey === e.supplierKey)) {
+        return { ...e, status: "success" as QueueStatus, errorMessage: undefined };
       }
       return e;
     }));
@@ -1104,10 +1171,12 @@ export function CreateExpenseModal({
     cancelledGroupsRef.current = [];
     setShowQueueSummary(false);
     setJustCancelled(false);
-    toast.info(
-      `Retomando fila a partir de ${first.supplierLabel}${rest.length > 0 ? ` (+${rest.length} depois)` : ""}.`,
-      { duration: 6000 },
-    );
+
+    const parts = [`Retomando fila a partir de ${first.supplierLabel}`];
+    if (rest.length > 0) parts.push(`(+${rest.length} depois)`);
+    if (skippedAsDone > 0) parts.push(`· ${skippedAsDone} já concluído(s) pulado(s)`);
+    if (claimedGroups.length > 0) parts.push(`· ${claimedGroups.length} duplicata(s) pulada(s)`);
+    toast.info(parts.join(" "), { duration: 7000 });
   };
 
   // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
