@@ -2580,10 +2580,38 @@ export function CreateExpenseModal({
                       será feita e as despesas já criadas não serão duplicadas.
                     </p>
                     {failed.length > 0 && (
-                      <ul className="list-disc pl-5 text-xs text-muted-foreground max-h-40 overflow-y-auto">
-                        {failed.map((e) => (
-                          <li key={e.supplierKey}>{e.supplierLabel}</li>
-                        ))}
+                      <ul className="space-y-2 text-xs max-h-64 overflow-y-auto pr-1">
+                        {failed.map((e, idx) => {
+                          const group = failedGroupsRef.current.get(e.supplierKey);
+                          const fileNames = group
+                            ? group.docs.map((d) => d.file.name)
+                            : e.fileNames;
+                          return (
+                            <li
+                              key={e.supplierKey}
+                              className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5"
+                            >
+                              <div className="font-medium text-foreground">
+                                {idx + 1}. {e.supplierLabel}{" "}
+                                <span className="text-muted-foreground font-normal">
+                                  ({fileNames.length} arquivo{fileNames.length === 1 ? "" : "s"})
+                                </span>
+                              </div>
+                              {fileNames.length > 0 && (
+                                <ul className="list-disc pl-5 mt-0.5 text-muted-foreground">
+                                  {fileNames.map((n, i) => (
+                                    <li key={i} className="truncate">{n}</li>
+                                  ))}
+                                </ul>
+                              )}
+                              {e.errorMessage && (
+                                <div className="text-[11px] text-destructive mt-1">
+                                  Último erro: {e.errorMessage}
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </>
