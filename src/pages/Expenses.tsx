@@ -25,6 +25,8 @@ import {
   Network,
   Paperclip,
   FileDown,
+  SlidersHorizontal,
+  ChevronDown,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { supabase } from "@/integrations/supabase/client";
