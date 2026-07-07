@@ -2184,16 +2184,21 @@ export default function ApprovalsPage() {
             .filter(Boolean)
             .join(" — ") || remarks;
 
-          const endpoint = `ApprovalRequests(${code})`;
-          const body: Record<string, unknown> = {
-            ApprovalRequestDecisions: [{
-              Status: action === "approve" ? "ardApproved" : "ardNotApproved",
-              Remarks: remarksForSap || undefined,
-            }],
-          };
-          await sapAction(session, endpoint, "PATCH", body);
+          const result = await decideSapApprovalRequest(
+            session as SapSession,
+            code,
+            action,
+            remarksForSap,
+            doc,
+          );
           clearClientCache();
-          toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
+          toast.success(
+            result.recoveredFromSapError
+              ? (action === "approve"
+                ? "Aprovação já havia sido registrada no SAP; lista atualizada."
+                : "Rejeição já havia sido registrada no SAP; lista atualizada.")
+              : (action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado."),
+          );
 
           const { logAuditAction } = await import("@/hooks/useAuditLog");
           await logAuditAction({
