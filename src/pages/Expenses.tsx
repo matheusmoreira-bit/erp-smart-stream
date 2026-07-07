@@ -1520,6 +1520,25 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
             {/* Table view (widescreen) */}
             <div className="hidden xl:block glass-card overflow-hidden">
+              {visibleItems.length >= 50 ? (
+                <VirtualExpensesTable
+                  items={visibleItems}
+                  onOpen={openExpense}
+                  onRelations={(exp) => setRelationsMapExpense(exp)}
+                  header={
+                    <>
+                      <SortableCell label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableCell label="Fornecedor" k="supplier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableCell label="Solicitante" k="requester" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableCell label="Criado" k="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableCell label="Doc" k="doc" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableCell label="Vence" k="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableCell label="Valor" k="amount" align="right" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <div role="columnheader" className="py-2.5 font-medium text-right text-xs">Ações</div>
+                    </>
+                  }
+                />
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-muted-foreground">
@@ -1600,6 +1619,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
 
             {/* Pagination controls (compartilhada entre cards e tabela) */}
