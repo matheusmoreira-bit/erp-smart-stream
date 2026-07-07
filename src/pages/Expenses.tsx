@@ -1022,6 +1022,21 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       })
     : [];
 
+  const emptyAdvanced: AdvancedFilters = {
+    supplier: "", supplier_code: "", requester: "", requester_email: "", approver: "",
+    cost_center: "", project: "", currency: "", remarks: "", sap_doc_num: "", branch_id: "",
+    origin: "all", min_amount: "", max_amount: "",
+    doc_date_from: "", doc_date_to: "", due_date_from: "", due_date_to: "",
+    created_from: "", created_to: "",
+    only_overdue: false, only_missing_due: false, only_sap_error: false,
+  };
+  const [advanced, setAdvanced] = usePersistedState<AdvancedFilters>(filterKey("advanced"), emptyAdvanced);
+  // Compat com preferências antigas sem os campos novos.
+  const advFilters: AdvancedFilters = { ...emptyAdvanced, ...(advanced || {}) };
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advDraft, setAdvDraft] = useState<AdvancedFilters>(advFilters);
+  useEffect(() => { if (advancedOpen) setAdvDraft(advFilters); }, [advancedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const applyFilters = (e: Expense, scoped: boolean, origin: "erp_flow" | "erp") => {
     if (scoped && !effectiveShowAll && !isMine(e)) return false;
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
@@ -1162,20 +1177,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     only_missing_due: boolean;
     only_sap_error: boolean;
   }
-  const emptyAdvanced: AdvancedFilters = {
-    supplier: "", supplier_code: "", requester: "", requester_email: "", approver: "",
-    cost_center: "", project: "", currency: "", remarks: "", sap_doc_num: "", branch_id: "",
-    origin: "all", min_amount: "", max_amount: "",
-    doc_date_from: "", doc_date_to: "", due_date_from: "", due_date_to: "",
-    created_from: "", created_to: "",
-    only_overdue: false, only_missing_due: false, only_sap_error: false,
-  };
-  const [advanced, setAdvanced] = usePersistedState<AdvancedFilters>(filterKey("advanced"), emptyAdvanced);
-  // Compat com preferências antigas sem os campos novos.
-  const advFilters: AdvancedFilters = { ...emptyAdvanced, ...(advanced || {}) };
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [advDraft, setAdvDraft] = useState<AdvancedFilters>(advFilters);
-  useEffect(() => { if (advancedOpen) setAdvDraft(advFilters); }, [advancedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeAdvancedCount = (() => {
     const f = advFilters;
