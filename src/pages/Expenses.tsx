@@ -1391,7 +1391,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               >
                 <button
                   type="button"
-                  onClick={() => setSourceMode("flow")}
+                  onClick={() => preserveScroll(() => setSourceMode("flow"))}
                   aria-pressed={sourceMode === "flow"}
                   className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     sourceMode === "flow"
