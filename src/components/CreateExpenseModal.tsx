@@ -518,6 +518,32 @@ export function CreateExpenseModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Hidrata o cache em memória a partir do localStorage sempre que o modal
+  // abre. Faz merge (persistido + entradas já vivas na sessão) para não
+  // perder nada. Persistir sobrevive a fechar/reabrir o modal e a recarregar
+  // a página — reaproveita extrações da IA por hash de conteúdo do arquivo.
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const persisted = loadAiResponseCache(aiCacheScope);
+      if (persisted.size === 0) return;
+      const merged = aiResponseCacheRef.current;
+      let added = 0;
+      for (const [k, v] of persisted) {
+        if (!merged.has(k)) {
+          merged.set(k, v);
+          added++;
+        }
+      }
+      if (added > 0) {
+        console.info(`[ai-cache] Hidratados ${added} item(s) do cache persistente (${aiCacheScope}).`);
+      }
+    } catch (e) {
+      console.warn("[ai-cache] Falha ao hidratar cache persistente:", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   // Encerra a sessão de retentativa quando todos os grupos reprocessados
   // saíram de "pending"/"queued" (mantém a barra visível por 4s para o usuário
   // ver o status final antes de desaparecer).
