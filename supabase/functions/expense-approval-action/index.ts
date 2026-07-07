@@ -37,6 +37,35 @@ function json(status: number, body: unknown) {
   });
 }
 
+// Stages ajudam a rastrear em qual passo a requisição foi rejeitada ou falhou.
+// O nome do stage vai tanto nos logs (JSON estruturado) quanto no corpo da
+// resposta de erro, permitindo que o front-end mostre mensagens específicas.
+type Stage =
+  | "cors"
+  | "parse_body"
+  | "idempotency_reserve"
+  | "idempotency_replay"
+  | "idempotency_conflict"
+  | "auth_cloud"
+  | "auth_sap"
+  | "auth_none"
+  | "load_expense"
+  | "load_levels"
+  | "authorize"
+  | "self_approval_guard"
+  | "update_reject"
+  | "update_advance_level"
+  | "update_final_approve"
+  | "success";
+
+function stageLog(stage: Stage, level: "info" | "warn" | "error", data: Record<string, unknown>) {
+  const line = JSON.stringify({ fn: "expense-approval-action", stage, level, ts: new Date().toISOString(), ...data });
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.log(line);
+}
+
+
 function normalize(s: unknown): string {
   return String(s ?? "").toLowerCase().trim();
 }
