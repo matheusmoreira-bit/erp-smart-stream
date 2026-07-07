@@ -71,6 +71,7 @@ import { EditExpenseModal } from "@/components/EditExpenseModal";
 import { DraftsPopover } from "@/components/DraftsPopover";
 import { useDocumentDrafts } from "@/hooks/useDocumentDrafts";
 import { useCompanies } from "@/hooks/useCompanies";
+import { usePersistedState } from "@/hooks/usePersistedState";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
