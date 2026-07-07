@@ -1091,6 +1091,12 @@ export async function exportLowConfidenceReviewPdf(opts: LowConfidenceReviewOpti
     y += 2;
   }
 
+  // Evidências (mesmo formato do resumo): IDs, contagem e nomes dos anexos
+  // apenas dos grupos filtrados por baixa confiança.
+  drawEvidenceSection(doc, filtered, y + 4);
+
+
+
   await finalizePdf(doc, "Revisão de baixa confiança", {
     kindLabel: opts.kindLabel,
     confidenceThreshold: opts.confidenceThreshold,
