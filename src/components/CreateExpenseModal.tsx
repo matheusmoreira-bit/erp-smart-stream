@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Sparkles,
   Brain,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
