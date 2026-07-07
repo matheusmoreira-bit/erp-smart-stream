@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, X, CheckCircle2 } from "lucide-react";
+import { Loader2, Search, X, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
 interface CachedSearchComboboxProps {
@@ -13,6 +13,8 @@ interface CachedSearchComboboxProps {
   label?: string;
   suggestedQuery?: string;
   portalContainer?: HTMLElement | null;
+  /** Quando true e o campo estiver vazio, exibe destaque âmbar (obrigatório). */
+  required?: boolean;
 }
 
 export function CachedSearchCombobox({
