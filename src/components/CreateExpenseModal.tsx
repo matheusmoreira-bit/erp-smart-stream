@@ -53,6 +53,15 @@ import {
   claimDocumentHashes,
   hasInFlightGuardTripped,
 } from "@/lib/expense-dedupe";
+import {
+  saveQueueState,
+  loadQueueState,
+  clearQueueState,
+  toPersistedFile,
+  fromPersistedFile,
+  type PersistedDocGroup,
+  type QueueScope,
+} from "@/lib/expense-queue-persist";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
