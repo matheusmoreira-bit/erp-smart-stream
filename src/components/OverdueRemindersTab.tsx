@@ -386,9 +386,12 @@ export function OverdueRemindersTab() {
           <pre className="mt-1 p-3 bg-muted/40 rounded-md text-xs whitespace-pre-wrap font-sans">{preview}</pre>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={save} disabled={saving} className="gap-2">
             <Save className="w-4 h-4" /> {saving ? "Salvando…" : "Salvar configurações"}
+          </Button>
+          <Button variant="secondary" onClick={runTest} disabled={testLoading} className="gap-2">
+            <FlaskConical className="w-4 h-4" /> {testLoading ? "Gerando…" : "Testar template"}
           </Button>
           <Button variant="outline" onClick={runNow} disabled={testing} className="gap-2">
             <Send className="w-4 h-4" /> {testing ? "Executando…" : "Rodar despacho agora"}
@@ -398,6 +401,77 @@ export function OverdueRemindersTab() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={testOpen} onOpenChange={setTestOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-primary" /> Teste do template
+            </DialogTitle>
+            <DialogDescription>
+              {testResult?.sample.source === "real"
+                ? `Simulação com um documento vencido real (${testResult?.sample.doc_type} · ${testResult?.sample.supplier}).`
+                : "Nenhum documento vencido encontrado — simulação com dados de exemplo."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              {hasLinkVar ? (
+                <span className="inline-flex items-center gap-1 text-emerald-500">
+                  <CheckCircle2 className="w-4 h-4" /> Template contém <code className="font-mono text-xs">{"{{link}}"}</code>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-destructive">
+                  <XCircle className="w-4 h-4" /> Template <strong>não</strong> contém <code className="font-mono text-xs">{"{{link}}"}</code>
+                </span>
+              )}
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground">Mensagem renderizada</Label>
+              <pre className="mt-1 p-3 bg-muted/40 rounded-md text-xs whitespace-pre-wrap font-sans max-h-72 overflow-auto">
+                {testResult?.text}
+              </pre>
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground">Link interno gerado</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <code className="flex-1 p-2 bg-muted/40 rounded-md text-[11px] font-mono break-all">
+                  {testResult?.link}
+                </code>
+              </div>
+              {testResult && !testResult.text.includes(testResult.link) && (
+                <p className="mt-1 text-xs text-amber-600">
+                  ⚠️ O link acima <strong>não</strong> aparece na mensagem — verifique se o template usa <code>{"{{link}}"}</code>.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!testResult) return;
+                navigator.clipboard.writeText(testResult.text);
+                toast.success("Mensagem copiada");
+              }}
+              className="gap-2"
+            >
+              <Copy className="w-4 h-4" /> Copiar mensagem
+            </Button>
+            <Button
+              onClick={() => testResult && window.open(testResult.link, "_blank", "noopener,noreferrer")}
+              disabled={!testResult}
+              className="gap-2"
+            >
+              <ExternalLink className="w-4 h-4" /> Abrir link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="glass-card p-6">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
