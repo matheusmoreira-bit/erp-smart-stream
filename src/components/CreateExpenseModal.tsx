@@ -891,12 +891,19 @@ export function CreateExpenseModal({
         fetchedResults = Array.isArray(result) ? result : [result];
 
         // Preenche o cache pelos hashes dos arquivos que foram enviados.
+        const persistBatch: Array<{ hash: string; data: unknown }> = [];
         missIndexes.forEach((origIdx, sentIdx) => {
           const extracted = fetchedResults[sentIdx];
           if (extracted && typeof extracted === "object") {
             cache.set(hashes[origIdx], extracted);
+            persistBatch.push({ hash: hashes[origIdx], data: extracted });
           }
         });
+        // Persiste no localStorage para reaproveitar após fechar/reabrir
+        // o modal ou recarregar a página (best-effort, falhas silenciosas).
+        if (persistBatch.length > 0) {
+          saveAiResponseCacheEntries(aiCacheScope, persistBatch);
+        }
       }
 
       // Compõe a lista final na ordem original: cache primeiro, fetch depois.
