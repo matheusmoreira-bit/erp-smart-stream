@@ -840,8 +840,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     });
   }, []);
 
-  // Origem dos pedidos: padrão "Apenas ERP Flow"; "Ambos" também busca direto do ERP (SAP).
-  const [sourceMode, setSourceMode] = usePersistedState<"flow" | "both">(filterKey("source"), "flow");
+  // Origem dos pedidos: sempre "Ambos" — traz ERP Flow + ERP juntos, sem toggle.
+  const [sourceMode, setSourceMode] = usePersistedState<"flow" | "both">(filterKey("source"), "both");
   const [sapOrders, setSapOrders] = useState<Expense[]>([]);
   const [isLoadingSap, setIsLoadingSap] = useState(false);
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
