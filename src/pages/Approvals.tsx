@@ -1651,11 +1651,19 @@ export default function ApprovalsPage() {
 
 
   // Keep `?doc=<key>` in sync with the selected approval so it can be shared.
+  // Só limpa o param depois que o modal foi realmente aberto uma vez — evita
+  // apagar o deep-link no mount antes das listas terminarem de carregar.
+  const hadSelectedDocRef = useRef(false);
   useEffect(() => {
-    if (!selectedDoc) { setDocParam(null); return; }
-    const internalId = (selectedDoc as unknown as { __internalId?: string }).__internalId;
-    setDocParam(internalId ? `internal:${internalId}` : `sap:${selectedDoc.approvalRequestId}`);
+    if (selectedDoc) {
+      hadSelectedDocRef.current = true;
+      const internalId = (selectedDoc as unknown as { __internalId?: string }).__internalId;
+      setDocParam(internalId ? `internal:${internalId}` : `sap:${selectedDoc.approvalRequestId}`);
+    } else if (hadSelectedDocRef.current) {
+      setDocParam(null);
+    }
   }, [selectedDoc]);
+
 
   const allCostCenterCodes = useMemo(
     () => new Set(allApprovals.flatMap((doc) => {
