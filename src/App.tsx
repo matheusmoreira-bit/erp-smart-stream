@@ -32,6 +32,7 @@ import Backoffice from "./pages/Admin.tsx";
 import SapUsersAdmin from "./pages/SapUsersAdmin.tsx";
 import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
 import AuditTrail from "./pages/AuditTrail.tsx";
+import TransferApprovalsHistory from "./pages/TransferApprovalsHistory.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
@@ -57,6 +58,8 @@ const App = () => (
               <Route path="/backoffice/sap-users" element={<AdminRoute><SapUsersAdmin /></AdminRoute>} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
               <Route path="/backoffice/audit-trail" element={<AdminRoute><AuditTrail /></AdminRoute>} />
+              <Route path="/backoffice/transfer-history" element={<AdminRoute><TransferApprovalsHistory /></AdminRoute>} />
+
 
               {/* Analytics */}
               <Route path="/analytics" element={<AnalyticsPage />} />
