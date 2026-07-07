@@ -137,7 +137,7 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
       setIsLoading(true);
       const { data } = await supabase
         .from("expense_approval_log")
-        .select("id,decision,approver_name,approver_email,level_order,remarks,decided_at")
+        .select("id,decision,approver_name,approver_email,level_order,remarks,decided_at,action_role,substituted_for_name,substituted_for_email")
         .eq("expense_id", expenseId)
         .order("decided_at", { ascending: true });
       if (cancelled) return;
@@ -160,13 +160,20 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
       icon: FileText,
       color: "text-muted-foreground",
     };
+    const roleLabel = row.action_role ? ROLE_LABEL[row.action_role] || row.action_role : null;
+    const onBehalf = row.substituted_for_name || row.substituted_for_email;
+    const roleSuffix = roleLabel
+      ? ` [${roleLabel}${onBehalf ? ` — em nome de ${onBehalf}` : ""}]`
+      : "";
     const actor = row.approver_name
-      ? `${row.approver_name}${row.approver_email ? ` · ${row.approver_email}` : ""}${row.level_order ? ` · nível ${row.level_order}` : ""}`
-      : undefined;
+      ? `${row.approver_name}${row.approver_email ? ` · ${row.approver_email}` : ""}${row.level_order ? ` · nível ${row.level_order}` : ""}${roleSuffix}`
+      : roleSuffix
+        ? roleSuffix.replace(/^ /, "")
+        : undefined;
     items.push({
       key: `log:${row.id}`,
       when: row.decided_at,
-      label: meta.label,
+      label: roleLabel ? `${meta.label} (${roleLabel})` : meta.label,
       detail: row.remarks || undefined,
       actor,
       icon: meta.icon,
