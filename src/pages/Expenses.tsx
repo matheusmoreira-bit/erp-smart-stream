@@ -1086,6 +1086,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // ─── Paginação (mesma página para cards mobile e tabela desktop) ───
   const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
   const [pageSize, setPageSize] = usePersistedState<number>(filterKey("pageSize"), 30);
+  const [viewMode, setViewMode] = usePersistedState<"cards" | "table">(filterKey("viewMode"), "cards");
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   // Reset apenas para mudanças que alteram fortemente a listagem (busca, ordenação, tamanho de página, modo compra/venda).
