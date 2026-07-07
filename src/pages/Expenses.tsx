@@ -1321,13 +1321,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-muted-foreground">
                     <tr className="text-left">
-                      <th className="px-4 py-2.5 font-medium">Status</th>
-                      <th className="px-4 py-2.5 font-medium">Fornecedor</th>
-                      <th className="px-4 py-2.5 font-medium">Solicitante</th>
-                      <th className="px-4 py-2.5 font-medium">Criado</th>
-                      <th className="px-4 py-2.5 font-medium">Doc</th>
-                      <th className="px-4 py-2.5 font-medium">Vence</th>
-                      <th className="px-4 py-2.5 font-medium text-right">Valor</th>
+                      <SortableTh label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Fornecedor" k="supplier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Solicitante" k="requester" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Criado" k="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Doc" k="doc" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Vence" k="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Valor" k="amount" align="right" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <th className="px-4 py-2.5 font-medium text-right">Ações</th>
                     </tr>
                   </thead>
