@@ -2029,6 +2029,32 @@ export function CreateExpenseModal({
                     Cancelar
                   </Button>
                 )}
+                {/* Pausar — só pra fila encadeada (>=1 deferred). Não aborta
+                    IA em andamento (para isso use Cancelar); apenas impede o
+                    auto-avanço para o próximo grupo quando o atual terminar. */}
+                {deferredGroups.length > 0 && !isPaused && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={pauseProcessing}
+                    title="Interrompe a fila com segurança após concluir o grupo atual"
+                  >
+                    <Pause className="w-3.5 h-3.5" />
+                    Pausar
+                  </Button>
+                )}
+                {isPaused && deferredGroups.length > 0 && !isCreating && !isProcessing && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-primary border-primary/40"
+                    onClick={resumeFromPause}
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    Retomar ({deferredGroups.length})
+                  </Button>
+                )}
                 {/* Retry — só aparece após cancelamento, quando há anexos e
                     não há nenhum fluxo em andamento (guard anti-duplicação
                     dobrado em `processWithAI` para chamadas paralelas). */}
