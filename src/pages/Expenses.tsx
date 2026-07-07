@@ -844,6 +844,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
 
+  // ─── Infinite scroll (pagination) ─────────────────────────────
+  const PAGE_SIZE = 24;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, statusFilter, sourceMode, showAll, mode]);
+  const visibleItems = filtered.slice(0, visibleCount);
+  const hasMoreLocal = visibleCount < filtered.length;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!hasMoreLocal) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length));
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMoreLocal, filtered.length]);
+
   const handleSubmitForApproval = async (id: string) => {
     setIsSubmitting(true);
     try {
@@ -1171,7 +1196,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <>
             {/* Card grid (mobile / tablet / laptop) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 xl:hidden">
-              {filtered.map(({ exp, origin }) => (
+              {visibleItems.map(({ exp, origin }) => (
                 <ExpenseCard
                   key={exp.id}
                   expense={exp}
@@ -1199,7 +1224,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map(({ exp, origin }) => (
+                    {visibleItems.map(({ exp, origin }) => (
                       <tr
                         key={exp.id}
                         className="border-t border-border/60 hover:bg-muted/30 cursor-pointer transition-colors"
@@ -1252,6 +1277,25 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </table>
               </div>
             </div>
+
+            {/* Infinite scroll sentinel + counter */}
+            {hasMoreLocal ? (
+              <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-6 text-xs text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span>Carregando mais… ({visibleItems.length} de {filtered.length})</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length))}
+                >
+                  Mostrar mais
+                </Button>
+              </div>
+            ) : filtered.length > PAGE_SIZE ? (
+              <div className="text-center py-4 text-xs text-muted-foreground">
+                {filtered.length} registro(s) exibidos
+              </div>
+            ) : null}
             {showSourceToggle && sourceMode === "both" && sapHasMore && (
               <div className="flex justify-center mt-6">
                 <Button variant="outline" onClick={loadMoreSap} disabled={isLoadingMoreSap} className="gap-2">
