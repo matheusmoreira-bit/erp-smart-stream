@@ -317,7 +317,7 @@ export function PaymentAnalysis() {
           </defs>
         </svg>
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           <MetricCard
             title="Total Pago"
             value={fmtCurrency(analytics.totalPago)}
@@ -350,7 +350,7 @@ export function PaymentAnalysis() {
 
         {/* Volume diário + média comparativa */}
         <ChartCard title="Volume de Pagamentos — Últimos 30 Dias vs. Média Histórica">
-          <div className="h-[320px]">
+          <div className="h-[240px] sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={analytics.dailyVolume} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                 <defs>
@@ -380,10 +380,10 @@ export function PaymentAnalysis() {
           </div>
         </ChartCard>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Top fornecedores */}
           <ChartCard title="Top Fornecedores por Valor">
-            <div className="h-[300px]">
+            <div className="h-[240px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analytics.topSuppliers} layout="vertical" margin={{ left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.15} horizontal={false} />
@@ -398,7 +398,7 @@ export function PaymentAnalysis() {
 
           {/* Distribuição de atraso */}
           <ChartCard title="Distribuição de Atrasos">
-            <div className="h-[300px]">
+            <div className="h-[240px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -427,10 +427,10 @@ export function PaymentAnalysis() {
           </ChartCard>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Pagamentos por solicitante */}
           <ChartCard title="Volume por Solicitante">
-            <div className="h-[300px]">
+            <div className="h-[240px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analytics.topRequesters} layout="vertical" margin={{ left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.15} horizontal={false} />
@@ -449,7 +449,7 @@ export function PaymentAnalysis() {
 
           {/* Status dos pagamentos */}
           <ChartCard title="Status dos Pagamentos">
-            <div className="h-[300px]">
+            <div className="h-[240px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -481,7 +481,7 @@ export function PaymentAnalysis() {
         {/* Filiais */}
         {analytics.branchDistribution.length > 1 && (
           <ChartCard title="Volume por Filial">
-            <div className="h-[250px]">
+            <div className="h-[220px] sm:h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analytics.branchDistribution}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.15} vertical={false} />
