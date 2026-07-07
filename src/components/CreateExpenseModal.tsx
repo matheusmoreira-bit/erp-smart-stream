@@ -43,6 +43,18 @@ import { UserPlus } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
 import { saveDraft, deleteDraft } from "@/hooks/useDocumentDrafts";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  hashFileContent,
+  findExistingClaims,
+  claimDocumentHashes,
+  hasInFlightGuardTripped,
+} from "@/lib/expense-dedupe";
+
+// Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
+// (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
+// pelo DevTools ao investigar duplicações reportadas por usuários.
+const DEDUP_LOG = "[expense-dedupe]";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
