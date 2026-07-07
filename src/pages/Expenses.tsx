@@ -1090,15 +1090,43 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     { value: "finalizado", label: "Finalizado" },
   ];
 
+  // Refs para gerenciamento de foco no toggle de filtros mobile.
+  const filtersToggleRef = useRef<HTMLButtonElement | null>(null);
+  const filtersPanelRef = useRef<HTMLDivElement | null>(null);
+  const filtersJustOpened = useRef(false);
+  const filtersJustClosed = useRef(false);
+  useEffect(() => {
+    if (filtersOpen && filtersJustOpened.current) {
+      const first = filtersPanelRef.current?.querySelector<HTMLElement>(
+        "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
+      );
+      first?.focus();
+      filtersJustOpened.current = false;
+    } else if (!filtersOpen && filtersJustClosed.current) {
+      filtersToggleRef.current?.focus();
+      filtersJustClosed.current = false;
+    }
+  }, [filtersOpen]);
+
   return (
     <div className="min-h-screen bg-background">
       <Helmet><title>{`${isSales ? "Vendas" : "Compras"} — ERP Flow`}</title></Helmet>
+      {/* Skip link para navegação por teclado */}
+      <a
+        href="#expenses-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:shadow-lg"
+      >
+        Pular para o conteúdo
+      </a>
       {/* Header */}
-      <header className="border-b border-border px-4 sm:px-6 py-3 sm:py-4">
+      <header
+        aria-label={isSales ? "Cabeçalho de Vendas" : "Cabeçalho de Compras"}
+        className="border-b border-border px-4 sm:px-6 py-3 sm:py-4"
+      >
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 lg:items-center">
           {/* Col 1: identity */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 rounded-lg bg-primary/10 glow-primary shrink-0">
+            <div className="p-2 rounded-lg bg-primary/10 glow-primary shrink-0" aria-hidden="true">
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div className="min-w-0">
@@ -1108,28 +1136,38 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           </div>
 
           {/* Col 2: actions */}
-          <div className="flex items-center gap-2 sm:gap-3 lg:justify-end flex-wrap">
+          <div
+            role="toolbar"
+            aria-label="Ações do cabeçalho"
+            className="flex items-center gap-2 sm:gap-3 lg:justify-end flex-wrap"
+          >
             <div className="hidden sm:block text-right min-w-0 max-w-[220px]">
-              <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground truncate">{session?.userName}</p>
+              <p className="text-sm font-medium text-foreground truncate" aria-label={`Empresa: ${companyLabel}`}>{companyLabel}</p>
+              <p className="text-xs text-muted-foreground truncate" aria-label={`Usuário: ${session?.userName || ""}`}>{session?.userName}</p>
             </div>
-            <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
-              Conectado
+            <div
+              className="hidden md:flex items-center gap-2 text-xs text-muted-foreground"
+              role="status"
+              aria-live="polite"
+              aria-label="Status da conexão: Conectado"
+            >
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" aria-hidden="true" />
+              <span>Conectado</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} aria-label="Atualizar">
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} aria-label={isLoading ? "Atualizando…" : "Atualizar lista"}>
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={logout} aria-label="Sair">
-              <LogOut className="w-4 h-4" />
+            <Button variant="ghost" size="sm" onClick={logout} aria-label="Sair da conta">
+              <LogOut className="w-4 h-4" aria-hidden="true" />
             </Button>
           </div>
         </div>
       </header>
 
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
+      <main id="expenses-main" tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
+
         {/* Back + actions */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
@@ -1215,15 +1253,22 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         </div>
 
         {/* Toolbar */}
-        <div className="space-y-3">
+        <section
+          aria-label="Busca e filtros"
+          className="space-y-3"
+        >
           {/* Search row + mobile filter toggle */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1 lg:max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <label htmlFor="expenses-search" className="sr-only">{searchPlaceholder}</label>
               <Input
+                id="expenses-search"
+                type="search"
                 placeholder={searchPlaceholder}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label={searchPlaceholder}
                 className="pl-9 bg-muted/30 border-border"
               />
             </div>
@@ -1234,21 +1279,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 (showAll !== isAdmin ? 1 : 0);
               return (
                 <Button
+                  ref={filtersToggleRef}
+                  type="button"
                   variant="outline"
                   size="sm"
                   className="lg:hidden gap-1.5 shrink-0"
-                  onClick={() => setFiltersOpen((v) => !v)}
+                  onClick={() => {
+                    filtersJustOpened.current = !filtersOpen;
+                    filtersJustClosed.current = filtersOpen;
+                    setFiltersOpen((v) => !v);
+                  }}
                   aria-expanded={filtersOpen}
                   aria-controls="expenses-filters"
+                  aria-label={`${filtersOpen ? "Ocultar" : "Mostrar"} filtros${activeFilters > 0 ? ` (${activeFilters} ativos)` : ""}`}
                 >
-                  <SlidersHorizontal className="w-4 h-4" />
+                  <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
                   Filtros
                   {activeFilters > 0 && (
-                    <span className="ml-1 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold flex items-center justify-center">
+                    <span
+                      className="ml-1 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold flex items-center justify-center"
+                      aria-hidden="true"
+                    >
                       {activeFilters}
                     </span>
                   )}
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} aria-hidden="true" />
                 </Button>
               );
             })()}
@@ -1257,14 +1312,21 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           {/* Filters (collapsed on mobile, inline on desktop) */}
           <div
             id="expenses-filters"
+            ref={filtersPanelRef}
+            role="region"
+            aria-label="Filtros de lançamentos"
+            aria-hidden={!filtersOpen ? undefined : false}
             className={`${filtersOpen ? "flex" : "hidden"} lg:flex flex-col lg:flex-row lg:items-center gap-3 lg:flex-wrap`}
           >
-            <div className="flex gap-1 flex-wrap">
+            <div role="group" aria-label="Filtrar por status" className="flex gap-1 flex-wrap">
               {statusOptions.map((opt) => (
                 <button
                   key={opt.value}
+                  type="button"
                   onClick={() => setStatusFilter(opt.value)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  aria-pressed={statusFilter === opt.value}
+                  aria-label={`Status: ${opt.label}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     statusFilter === opt.value
                       ? "bg-primary/15 text-primary"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -1275,10 +1337,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               ))}
             </div>
             {showSourceToggle && (
-              <div className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs w-full sm:w-auto">
+              <div
+                role="group"
+                aria-label="Origem dos pedidos"
+                className="flex items-center rounded-lg border border-border bg-muted/30 p-0.5 text-xs w-full sm:w-auto"
+              >
                 <button
+                  type="button"
                   onClick={() => setSourceMode("flow")}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors ${
+                  aria-pressed={sourceMode === "flow"}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     sourceMode === "flow"
                       ? "bg-primary/15 text-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -1287,15 +1355,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   Apenas ERP Flow
                 </button>
                 <button
+                  type="button"
                   onClick={() => setSourceMode("both")}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  aria-pressed={sourceMode === "both"}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                     sourceMode === "both"
                       ? "bg-primary/15 text-primary"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   Ambos (ERP Flow + ERP)
-                  {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {isLoadingSap && <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />}
                 </button>
               </div>
             )}
@@ -1324,7 +1394,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </Button>
             )}
           </div>
-        </div>
+        </section>
 
 
 
