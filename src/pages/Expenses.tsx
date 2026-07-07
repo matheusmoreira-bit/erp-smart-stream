@@ -1625,15 +1625,46 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </div>
               </div>
             )}
-            {showSourceToggle && sourceMode === "both" && sapHasMore && (
-              <div className="flex justify-center mt-6">
-                <Button variant="outline" onClick={loadMoreSap} disabled={isLoadingMoreSap} className="gap-2">
-                  {isLoadingMoreSap ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</>
-                  ) : (
-                    <>Mostrar mais</>
-                  )}
-                </Button>
+            {showSourceToggle && sourceMode === "both" && (sapHasMore || isLoadingMoreSap) && (
+              <div className="mt-6 space-y-4">
+                {isLoadingMoreSap && (
+                  <div
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 xl:hidden"
+                    aria-busy="true"
+                    aria-live="polite"
+                  >
+                    <span className="sr-only">Carregando mais pedidos do ERP…</span>
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="glass-card p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <Skeleton className="h-5 w-20" />
+                          <Skeleton className="h-4 w-16" />
+                        </div>
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                        <div className="flex items-center justify-between pt-2">
+                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-5 w-24" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-center">
+                  <Button
+                    variant="outline"
+                    onClick={loadMoreSap}
+                    disabled={isLoadingMoreSap || !sapHasMore}
+                    aria-busy={isLoadingMoreSap}
+                    className="gap-2"
+                  >
+                    {isLoadingMoreSap ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Carregando mais…</>
+                    ) : (
+                      <>Mostrar mais</>
+                    )}
+                  </Button>
+                </div>
               </div>
             )}
           </>
