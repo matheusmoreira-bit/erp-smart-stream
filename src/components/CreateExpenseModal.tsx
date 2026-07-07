@@ -872,6 +872,9 @@ export function CreateExpenseModal({
     applyFiscalGroup(chosen.docs.map((d) => d.extracted));
     setDeferredGroups(rest);
     setSupplierPicker(null);
+    currentGroupRef.current = chosen;
+    // Nova execução da fila: limpa cache de erros anteriores.
+    failedGroupsRef.current = new Map();
     // Inicializa o histórico da fila com todos os fornecedores despachados,
     // marcando o escolhido como "pendente" (em andamento) e os demais como
     // "enfileirados". Preserva a ordem de execução.
