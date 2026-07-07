@@ -43,3 +43,6 @@ verify_jwt = false
 
 [functions.overdue-reminders-dispatch]
 verify_jwt = false
+
+[functions.expense-sap-status-sync]
+verify_jwt = false
