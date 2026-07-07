@@ -901,8 +901,9 @@ export function CreateExpenseModal({
     setDeferredGroups(rest);
     setSupplierPicker(null);
     currentGroupRef.current = chosen;
-    // Nova execução da fila: limpa cache de erros anteriores.
+    // Nova execução da fila: limpa cache de erros e cancelamentos anteriores.
     failedGroupsRef.current = new Map();
+    cancelledGroupsRef.current = [];
     // Inicializa o histórico da fila com todos os fornecedores despachados,
     // marcando o escolhido como "pendente" (em andamento) e os demais como
     // "enfileirados". Preserva a ordem de execução.
