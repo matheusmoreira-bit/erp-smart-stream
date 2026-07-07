@@ -549,6 +549,18 @@ export function CreateExpenseModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Sempre que o modal abrir, força um refetch da lista de fornecedores/
+  // clientes vindos do SAP. Isso garante que BPs criados agora (na tela de
+  // Fornecedores ou por outro usuário) apareçam imediatamente como opção,
+  // sem esperar o TTL do cache. A invalidação por eventos (invalidateSapCache)
+  // cobre o cenário "criei o fornecedor com o modal já aberto"; esta chamada
+  // cobre o cenário "criei o fornecedor e depois abri o modal".
+  useEffect(() => {
+    if (!open) return;
+    reloadSuppliers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   // Hidrata o cache em memória a partir do localStorage sempre que o modal
   // abre. Faz merge (persistido + entradas já vivas na sessão) para não
   // perder nada. Persistir sobrevive a fechar/reabrir o modal e a recarregar
