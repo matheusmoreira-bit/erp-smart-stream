@@ -3378,6 +3378,71 @@ export function CreateExpenseModal({
           const { entry, group } = detailsView;
           const currencyFmt = (v: number) =>
             new Intl.NumberFormat("pt-BR", { style: "currency", currency: entry.currency || "BRL" }).format(v);
+
+          // Normalização do termo de busca para comparação case-insensitive
+          // e sem sensibilidade a espaços nas bordas.
+          const q = detailsSearch.trim().toLowerCase();
+          const matches = (s: unknown) =>
+            !q || String(s ?? "").toLowerCase().includes(q);
+
+          const showLines = detailsTypeFilter === "all" || detailsTypeFilter === "line";
+          const showWarnings = detailsTypeFilter === "all" || detailsTypeFilter === "warning";
+
+          // Pré-computa, por arquivo, as linhas/alertas visíveis e se o arquivo
+          // como um todo passa nos filtros — usado para esconder cards vazios
+          // e para renderizar contadores de "N resultado(s)".
+          type FileView = {
+            docIdx: number;
+            d: any;
+            visibleItems: Array<{ idx: number; it: any }>;
+            visibleWarns: string[];
+            conf: number;
+            confPass: boolean;
+            fileNameMatch: boolean;
+          };
+          const filteredFiles: FileView[] = group
+            ? group.docs.map((d, docIdx) => {
+                const conf = Number(d.extracted?.confidence);
+                const confIsLow = isLowConfidence(Number.isFinite(conf) && conf > 0 ? conf : null);
+                const confPass =
+                  detailsConfidenceFilter === "all" ||
+                  (detailsConfidenceFilter === "low" && confIsLow) ||
+                  (detailsConfidenceFilter === "normal" && !confIsLow);
+                const rawItems: any[] = Array.isArray(d.extracted?.items) ? d.extracted.items : [];
+                const rawWarns = [d.extracted?.client_warning, d.extracted?.totals_warning]
+                  .filter(Boolean)
+                  .map((w) => String(w));
+                const fileNameMatch = matches(d.file?.name);
+                // Se o nome do arquivo casa com a busca, mostramos TUDO
+                // do arquivo (sem filtrar por termo dentro dele) — comportamento
+                // esperado de "encontrar um arquivo específico".
+                const visibleItems = showLines
+                  ? rawItems
+                      .map((it, idx) => ({ idx, it }))
+                      .filter(({ it }) => fileNameMatch || matches(it?.description))
+                  : [];
+                const visibleWarns = showWarnings
+                  ? rawWarns.filter((w) => fileNameMatch || matches(w))
+                  : [];
+                return { docIdx, d, visibleItems, visibleWarns, conf, confPass, fileNameMatch };
+              })
+            : [];
+          const shownFiles = filteredFiles.filter(
+            (fv) =>
+              fv.confPass &&
+              (fv.fileNameMatch || fv.visibleItems.length > 0 || fv.visibleWarns.length > 0 || !q),
+          );
+
+          const totalItems = filteredFiles.reduce((a, fv) => a + fv.visibleItems.length, 0);
+          const totalWarns = filteredFiles.reduce((a, fv) => a + fv.visibleWarns.length, 0);
+
+          const filtersActive =
+            !!q || detailsTypeFilter !== "all" || detailsConfidenceFilter !== "all";
+
+          const filteredAggWarnings = showWarnings
+            ? entry.aiWarnings.filter((w) => matches(w))
+            : [];
+
           return (
             <div className="space-y-4 text-sm">
               {/* Metadados agregados */}
@@ -3402,11 +3467,76 @@ export function CreateExpenseModal({
                 )}
               </div>
 
-              {/* Alertas agregados da entry */}
-              {entry.aiWarnings.length > 0 && (
+              {/* Barra de busca + filtros. Sempre visível para o usuário
+                  entender que os resultados abaixo estão filtrados. */}
+              <div className="rounded-md border bg-muted/20 p-2 space-y-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    value={detailsSearch}
+                    onChange={(e) => setDetailsSearch(e.target.value)}
+                    placeholder="Buscar por arquivo, item ou alerta…"
+                    className="h-8 text-xs"
+                  />
+                  <Select
+                    value={detailsTypeFilter}
+                    onValueChange={(v) => setDetailsTypeFilter(v as typeof detailsTypeFilter)}
+                  >
+                    <SelectTrigger className="h-8 text-xs w-full sm:w-[150px]">
+                      <SelectValue placeholder="Tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os tipos</SelectItem>
+                      <SelectItem value="line">Somente linhas</SelectItem>
+                      <SelectItem value="warning">Somente alertas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={detailsConfidenceFilter}
+                    onValueChange={(v) => setDetailsConfidenceFilter(v as typeof detailsConfidenceFilter)}
+                  >
+                    <SelectTrigger className="h-8 text-xs w-full sm:w-[170px]">
+                      <SelectValue placeholder="Confiança" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Qualquer confiança</SelectItem>
+                      <SelectItem value="low">Baixa (⚠ revisar)</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <div>
+                    {group ? (
+                      <>
+                        {shownFiles.length} arquivo(s) · {totalItems} linha(s) · {totalWarns} alerta(s)
+                      </>
+                    ) : (
+                      <>Detalhes por arquivo indisponíveis</>
+                    )}
+                  </div>
+                  {filtersActive && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => {
+                        setDetailsSearch("");
+                        setDetailsTypeFilter("all");
+                        setDetailsConfidenceFilter("all");
+                      }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Alertas agregados da entry (respeitam filtros de tipo/busca) */}
+              {entry.aiWarnings.length > 0 && filteredAggWarnings.length > 0 && (
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
                   <div className="font-medium">Alertas da IA:</div>
-                  {entry.aiWarnings.map((w, i) => (
+                  {filteredAggWarnings.map((w, i) => (
                     <div key={i} className="flex gap-1.5">
                       <span>⚠</span>
                       <span className="whitespace-pre-line">{w}</span>
@@ -3414,7 +3544,7 @@ export function CreateExpenseModal({
                   ))}
                 </div>
               )}
-              {entry.errorMessage && (
+              {entry.errorMessage && !q && (
                 <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
                   <div className="font-medium mb-0.5">Erro:</div>
                   {entry.errorMessage}
@@ -3424,76 +3554,80 @@ export function CreateExpenseModal({
               {/* Detalhe por arquivo. Quando temos o DocGroup, exibimos a
                   extração completa (itens, totais, avisos por documento). */}
               {group ? (
-                <div className="space-y-3">
-                  {group.docs.map((d, docIdx) => {
-                    const items: any[] = Array.isArray(d.extracted?.items) ? d.extracted.items : [];
-                    const conf = Number(d.extracted?.confidence);
-                    const total = Number(d.extracted?.total_amount);
-                    const warns = [d.extracted?.client_warning, d.extracted?.totals_warning].filter(Boolean);
-                    return (
-                      <div key={docIdx} className="rounded-md border p-3 space-y-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">📎 {d.file.name}</div>
-                            <div className="text-[11px] text-muted-foreground">
-                              {(d.file.size / 1024).toFixed(1)} KB
-                              {d.extracted?.doc_type && ` · ${d.extracted.doc_type}`}
-                              {d.extracted?.currency && ` · ${d.extracted.currency}`}
+                shownFiles.length > 0 ? (
+                  <div className="space-y-3">
+                    {shownFiles.map((fv) => {
+                      const { d, docIdx, visibleItems, visibleWarns, conf } = fv;
+                      const total = Number(d.extracted?.total_amount);
+                      return (
+                        <div key={docIdx} className="rounded-md border p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-medium truncate">📎 {d.file.name}</div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {(d.file.size / 1024).toFixed(1)} KB
+                                {d.extracted?.doc_type && ` · ${d.extracted.doc_type}`}
+                                {d.extracted?.currency && ` · ${d.extracted.currency}`}
+                              </div>
                             </div>
+                            {Number.isFinite(conf) && conf > 0 && (
+                              <div className={`text-[11px] shrink-0 ${isLowConfidence(conf) ? "text-amber-700 dark:text-amber-400 font-semibold" : "text-muted-foreground"}`}>
+                                IA {Math.round(conf * 100)}%
+                              </div>
+                            )}
                           </div>
-                          {Number.isFinite(conf) && conf > 0 && (
-                            <div className={`text-[11px] shrink-0 ${isLowConfidence(conf) ? "text-amber-700 dark:text-amber-400 font-semibold" : "text-muted-foreground"}`}>
-                              IA {Math.round(conf * 100)}%
+                          {visibleWarns.length > 0 && (
+                            <div className="text-[11px] text-amber-700 dark:text-amber-400 space-y-0.5">
+                              {visibleWarns.map((w, i) => (
+                                <div key={i}>⚠ {String(w)}</div>
+                              ))}
+                            </div>
+                          )}
+                          {showLines && visibleItems.length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-[11px]">
+                                <thead className="text-muted-foreground">
+                                  <tr className="border-b">
+                                    <th className="text-left py-1 pr-2">Descrição</th>
+                                    <th className="text-right py-1 px-2">Qtd</th>
+                                    <th className="text-right py-1 px-2">Unit.</th>
+                                    <th className="text-right py-1 pl-2">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {visibleItems.map(({ it, idx }) => {
+                                    const qty = Number(it?.quantity) || 0;
+                                    const up = Number(it?.unit_price) || 0;
+                                    const lt = Number(it?.line_total) || qty * up;
+                                    return (
+                                      <tr key={idx} className="border-b border-border/50">
+                                        <td className="py-1 pr-2">{it?.description || "—"}</td>
+                                        <td className="py-1 px-2 text-right tabular-nums">{qty}</td>
+                                        <td className="py-1 px-2 text-right tabular-nums">{currencyFmt(up)}</td>
+                                        <td className="py-1 pl-2 text-right tabular-nums">{currencyFmt(lt)}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : showLines && !filtersActive ? (
+                            <div className="text-[11px] text-muted-foreground italic">Nenhuma linha extraída.</div>
+                          ) : null}
+                          {Number.isFinite(total) && total > 0 && !filtersActive && (
+                            <div className="text-[11px] text-right text-muted-foreground">
+                              Total do documento: <span className="text-foreground font-medium">{currencyFmt(total)}</span>
                             </div>
                           )}
                         </div>
-                        {warns.length > 0 && (
-                          <div className="text-[11px] text-amber-700 dark:text-amber-400 space-y-0.5">
-                            {warns.map((w, i) => (
-                              <div key={i}>⚠ {String(w)}</div>
-                            ))}
-                          </div>
-                        )}
-                        {items.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-[11px]">
-                              <thead className="text-muted-foreground">
-                                <tr className="border-b">
-                                  <th className="text-left py-1 pr-2">Descrição</th>
-                                  <th className="text-right py-1 px-2">Qtd</th>
-                                  <th className="text-right py-1 px-2">Unit.</th>
-                                  <th className="text-right py-1 pl-2">Total</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {items.map((it, i) => {
-                                  const qty = Number(it?.quantity) || 0;
-                                  const up = Number(it?.unit_price) || 0;
-                                  const lt = Number(it?.line_total) || qty * up;
-                                  return (
-                                    <tr key={i} className="border-b border-border/50">
-                                      <td className="py-1 pr-2">{it?.description || "—"}</td>
-                                      <td className="py-1 px-2 text-right tabular-nums">{qty}</td>
-                                      <td className="py-1 px-2 text-right tabular-nums">{currencyFmt(up)}</td>
-                                      <td className="py-1 pl-2 text-right tabular-nums">{currencyFmt(lt)}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <div className="text-[11px] text-muted-foreground italic">Nenhuma linha extraída.</div>
-                        )}
-                        {Number.isFinite(total) && total > 0 && (
-                          <div className="text-[11px] text-right text-muted-foreground">
-                            Total do documento: <span className="text-foreground font-medium">{currencyFmt(total)}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+                    Nenhum resultado para os filtros atuais.
+                  </div>
+                )
               ) : (
                 <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground space-y-1">
                   <div className="font-medium text-foreground">Detalhes por arquivo indisponíveis</div>
@@ -3502,7 +3636,9 @@ export function CreateExpenseModal({
                     já concluiu ou descartou os dados). Arquivos processados:
                   </div>
                   <ul className="list-disc list-inside">
-                    {entry.fileNames.map((n, i) => <li key={i}>{n}</li>)}
+                    {entry.fileNames
+                      .filter((n) => matches(n))
+                      .map((n, i) => <li key={i}>{n}</li>)}
                   </ul>
                 </div>
               )}
