@@ -1224,7 +1224,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map(({ exp, origin }) => (
+                    {visibleItems.map(({ exp, origin }) => (
                       <tr
                         key={exp.id}
                         className="border-t border-border/60 hover:bg-muted/30 cursor-pointer transition-colors"
