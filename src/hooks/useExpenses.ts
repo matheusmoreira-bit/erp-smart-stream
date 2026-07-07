@@ -925,6 +925,32 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         } catch { /* silent */ }
 
         if (session?.erpType === "sap") {
+          // Defesa contra race: mesmo que o servidor tenha respondido
+          // finalized=true, revalidamos o status ANTES de invocar o SAP.
+          // Se ainda não estiver "aprovado" (propagação/leitura em réplica),
+          // tentamos por até ~1.5s antes de desistir — evita chamar
+          // expense-to-sap com status ainda "pendente_aprovacao".
+          let confirmedApproved = false;
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const { data: fresh } = await supabase
+              .from("expenses")
+              .select("status")
+              .eq("id", expenseId)
+              .maybeSingle();
+            if ((fresh as any)?.status === "aprovado") {
+              confirmedApproved = true;
+              break;
+            }
+            await new Promise((r) => setTimeout(r, 300));
+          }
+          if (!confirmedApproved) {
+            await logExpenseDecision(expenseId, "integration_failed", {
+              remarks: "Aprovação registrada, mas status não propagou para 'aprovado' a tempo — integração SAP não disparada automaticamente.",
+            });
+            await fetchExpenses();
+            return { replayed };
+          }
+
           try {
             await invokeExpenseToSap({
               expense_id: expenseId,
@@ -952,6 +978,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   const retrySapIntegration = useCallback(
     async (expenseId: string) => {
       if (!session || session.erpType !== "sap") throw new Error("Faça login no SAP pela tela antes de integrar.");
+      if (!session.isSuperUser) {
+        throw new Error("Apenas super-usuários podem reintegrar manualmente ao SAP.");
+      }
       try {
         const data = await invokeExpenseToSap({
           expense_id: expenseId,

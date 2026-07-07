@@ -1932,7 +1932,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onAddAttachments={async (id, files) => { await addAttachments(id, files); }}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         canEdit={selectedExpense ? canCancel(selectedExpense) : false}
-        canRetrySap={session.erpType === "sap" && (isAdmin || (selectedExpense ? canCancel(selectedExpense) : false))}
+        canRetrySap={session.erpType === "sap" && !!session?.isSuperUser}
         canApprove={selectedExpense ? canApprove(selectedExpense) : false}
         canAddAttachments={
           !!selectedExpense &&
