@@ -670,7 +670,8 @@ function ApprovalDetailModal({
             {doc.remarks && (
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Observações</p>
-                <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3">{doc.remarks}</p>
+                <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3 whitespace-pre-wrap break-words">{doc.remarks}</p>
+
               </div>
             )}
 
