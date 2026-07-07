@@ -192,21 +192,7 @@ async function cleanupOldSnapshots(dataFolderId: string): Promise<number> {
   return removed;
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  const supabase = svc();
-  const locked = await tryWatcherLock(supabase, WATCHER_NAME, 60);
-  if (!locked) {
-    return new Response(
-      JSON.stringify({ skipped: true, reason: "another run in progress" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
-
-  const logs: string[] = [];
-  const log = (m: string) => { console.log(m); logs.push(m); };
-
+async function runBackup(supabase: Sup, log: (m: string) => void) {
   try {
     if (!LOVABLE_API_KEY || !GD_KEY) throw new Error("Credenciais do Google Drive ausentes");
 
@@ -218,7 +204,6 @@ Deno.serve(async (req) => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const snapshotId = await findOrCreateFolder(stamp, dataRootId);
 
-    // 1) Tabelas
     const tables = [
       "expenses",
       "expense_items",
@@ -242,17 +227,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2) Anexos (incremental — só arquivos ainda não presentes no Drive)
     const expenseAttach = await mirrorBucket(supabase, "expense-attachments", attachId, log);
     log(`expense-attachments: ${expenseAttach.copied} copiados, ${expenseAttach.skipped} já existentes, ${expenseAttach.errors} erros`);
     const nfAttach = await mirrorBucket(supabase, "nf-entrada-files", nfId, log);
     log(`nf-entrada-files: ${nfAttach.copied} copiados, ${nfAttach.skipped} já existentes, ${nfAttach.errors} erros`);
 
-    // 3) Retenção — apaga snapshots > 90 dias
     const removed = await cleanupOldSnapshots(dataRootId);
     log(`retenção: ${removed} snapshots antigos removidos`);
 
-    // Manifesto
     const manifest = {
       generated_at: new Date().toISOString(),
       snapshot: stamp,
@@ -263,18 +245,39 @@ Deno.serve(async (req) => {
       snapshots_pruned: removed,
     };
     await uploadFile("manifest.json", snapshotId, "application/json", JSON.stringify(manifest, null, 2));
-
     await releaseWatcherLock(supabase, WATCHER_NAME, "ok", `snapshot ${stamp}`);
-    return new Response(JSON.stringify({ ok: true, manifest, logs }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    log(`FIM snapshot ${stamp}`);
   } catch (e) {
     const msg = (e as Error).message;
     log(`ERRO: ${msg}`);
     await releaseWatcherLock(supabase, WATCHER_NAME, "error", msg);
-    return new Response(JSON.stringify({ ok: false, error: msg, logs }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   }
+}
+
+// @ts-ignore - EdgeRuntime é disponível no runtime Deno da Supabase
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const supabase = svc();
+  const locked = await tryWatcherLock(supabase, WATCHER_NAME, 60);
+  if (!locked) {
+    return new Response(
+      JSON.stringify({ skipped: true, reason: "another run in progress" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const log = (m: string) => console.log(m);
+  const task = runBackup(supabase, log);
+
+  // roda em background para não estourar o timeout de 150s da resposta HTTP
+  if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(task);
+
+  return new Response(
+    JSON.stringify({ ok: true, started: true, message: "Backup em execução em segundo plano. Acompanhe pelos logs." }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
 });
+
