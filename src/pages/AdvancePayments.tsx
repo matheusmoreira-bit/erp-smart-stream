@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { useAdvancePayments, ADVANCE_STATUS_LABELS, ADVANCE_STATUS_COLORS, type AdvancePayment } from "@/hooks/useAdvancePayments";
@@ -6,10 +6,11 @@ import { CreateAdvanceModal } from "@/components/CreateAdvanceModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, RefreshCw, Search, Loader2, CheckCircle2, XCircle, RotateCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Search, Loader2, CheckCircle2, XCircle, RotateCw, Trash2, Link2 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
+import { copyDocLink, readDocParam } from "@/lib/doc-deep-link";
 
 function fmtCurrency(v: number, ccy: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(ccy) ? ccy : "BRL";
@@ -31,6 +32,26 @@ export default function AdvancePayments() {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const deepLinkHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkHandledRef.current) return;
+    const id = readDocParam();
+    if (!id) { deepLinkHandledRef.current = true; return; }
+    if (!items || items.length === 0) return;
+    if (items.some((i) => i.id === id)) {
+      setHighlightId(id);
+      deepLinkHandledRef.current = true;
+      // scroll into view on next frame
+      requestAnimationFrame(() => {
+        rowRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      // auto-clear the visual highlight after a few seconds
+      setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 4000);
+    }
+  }, [items]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -146,7 +167,11 @@ export default function AdvancePayments() {
 
         <div className="space-y-3">
           {filtered.map((a) => (
-            <div key={a.id} className="glass-card p-4">
+            <div
+              key={a.id}
+              ref={(el) => { rowRefs.current[a.id] = el; }}
+              className={`glass-card p-4 transition-shadow ${highlightId === a.id ? "ring-2 ring-primary shadow-lg" : ""}`}
+            >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -178,6 +203,14 @@ export default function AdvancePayments() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void copyDocLink(window.location.pathname, a.id)}
+                    title="Copiar link direto"
+                  >
+                    <Link2 className="w-4 h-4" />
+                  </Button>
                   {a.status === "pending" && (
                     <>
                       <Button size="sm" variant="outline" onClick={() => handleApprove(a)} disabled={busyId === a.id}>

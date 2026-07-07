@@ -78,6 +78,7 @@ import { CreateExpenseModal, type ExpenseDraftHydration } from "@/components/Cre
 import { EditExpenseModal } from "@/components/EditExpenseModal";
 import { DraftsPopover } from "@/components/DraftsPopover";
 import { useDocumentDrafts } from "@/hooks/useDocumentDrafts";
+import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { useCompanies } from "@/hooks/useCompanies";
 import { usePersistedState } from "@/hooks/usePersistedState";
 
@@ -241,7 +242,16 @@ function ExpenseDetailModal({
           </div>
 
 
-          <div className="flex justify-end mt-3 sm:mt-2">
+          <div className="flex flex-wrap justify-end gap-2 mt-3 sm:mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => void copyDocLink(window.location.pathname, expense.id)}
+              title="Copiar link direto deste documento"
+            >
+              <Link2 className="w-3.5 h-3.5" aria-hidden="true" /> Copiar link
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -776,6 +786,24 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     setSelectedExpense(exp);
     setSelectedOrigin(origin);
   };
+  // Sync `?doc=<id>` in the URL with the currently opened expense so links are shareable.
+  useEffect(() => {
+    setDocParam(selectedExpense?.id ?? null);
+  }, [selectedExpense]);
+  // Auto-open the deep-linked document once expenses are loaded.
+  const deepLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandledRef.current) return;
+    const id = readDocParam();
+    if (!id) { deepLinkHandledRef.current = true; return; }
+    if (!expenses || expenses.length === 0) return;
+    const found = expenses.find((e) => e.id === id);
+    if (found) {
+      openExpense(found);
+      deepLinkHandledRef.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenses]);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
