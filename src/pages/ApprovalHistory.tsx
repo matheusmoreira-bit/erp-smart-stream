@@ -127,10 +127,11 @@ export default function ApprovalHistory() {
       .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   }, [rows]);
 
+  // Filtros de decisão e substituto agora são aplicados no banco.
+  // Aqui só resta o filtro de escopo ("minhas") e a busca textual livre.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
-      // Apenas decisões finalizadas (aprovado/rejeitado). Pendentes (W) ficam fora do histórico.
       if (r.decision !== "Y" && r.decision !== "N") return false;
       if (effectiveScope === "mine") {
         const candidates = [
@@ -142,23 +143,6 @@ export default function ApprovalHistory() {
           .some((v) => myKeys.has(String(v).toLowerCase()));
         if (!hit) return false;
       }
-      if (decision !== "all" && r.decision !== decision) return false;
-
-      // Filtro por substituto (multi-seleção)
-      if (substituteFilter.length > 0) {
-        const email = (r.substituted_for_email || "").toLowerCase();
-        const name = (r.substituted_for_name || "").toLowerCase();
-        const hasSubstitution = !!(email || name);
-        if (substituteFilter.includes("__any__")) {
-          if (!hasSubstitution) return false;
-        } else if (substituteFilter.includes("__none__")) {
-          if (hasSubstitution) return false;
-        } else {
-          const key = email || name;
-          if (!substituteFilter.includes(key)) return false;
-        }
-      }
-
       if (!q) return true;
       return [
         r.card_name, r.card_code, r.requester_name, r.approver_name,
@@ -166,7 +150,8 @@ export default function ApprovalHistory() {
         r.doc_type_name, String(r.doc_num || ""), r.remarks, r.stage_name,
       ].some((v) => (v || "").toString().toLowerCase().includes(q));
     });
-  }, [rows, query, decision, effectiveScope, myKeys, substituteFilter]);
+  }, [rows, query, effectiveScope, myKeys]);
+
 
 
 
