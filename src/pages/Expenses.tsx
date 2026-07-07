@@ -635,12 +635,22 @@ function ExpenseCard({
   originBadge?: "erp_flow" | "erp";
   onRelationsMap?: () => void;
 }) {
+  const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? " · ERP" : "";
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all"
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir lançamento ${expense.supplier_name}, solicitante ${expense.requester_name}, valor ${formatCurrency(expense.total_amount, expense.currency)}, status ${STATUS_LABELS[expense.status] || expense.status}${originLabel}`}
+      className="glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all"
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div className="flex items-start justify-between">
         <div className="flex flex-wrap items-center gap-1.5">
