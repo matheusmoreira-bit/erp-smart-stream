@@ -2263,7 +2263,18 @@ export default function ApprovalsPage() {
             </table>
           </div>
         )}
+
+        {apprHasMore ? (
+          <div ref={apprSentinelRef} className="flex flex-col items-center gap-2 py-6 text-xs text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            <span>Carregando mais… ({visibleApprovals.length} de {apprTotal})</span>
+            <Button variant="ghost" size="sm" onClick={apprLoadMore}>Mostrar mais</Button>
+          </div>
+        ) : apprTotal > apprInitial ? (
+          <div className="text-center py-4 text-xs text-muted-foreground">{apprTotal} pedido(s) exibidos</div>
+        ) : null}
           </TabsContent>
+
 
           <TabsContent value="my-requests" className="mt-0">
             <MyRequestsTab />
