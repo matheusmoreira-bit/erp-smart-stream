@@ -1741,6 +1741,59 @@ export default function ApprovalsPage() {
     }
     return null;
   }, [activeOfficials, sessionUser, session.userName]);
+
+  /**
+   * Recomputa se o usuário logado pode aprovar/rejeitar o documento dado —
+   * usado tanto para exibir o botão quanto para revalidar imediatamente antes
+   * de disparar a ação (defesa contra permissão que expirou entre a
+   * renderização e o clique — ex.: substituição revogada/expirada, grant
+   * fora da janela, delegação retirada no SAP, etc.).
+   * Recebe o snapshot atual de `substituteGrants` para permitir revalidação
+   * com dados recém-carregados.
+   */
+  const canApproveDocWith = useCallback(
+    (doc: ApprovalDoc | null | undefined, grantsSnapshot: typeof substituteGrants): boolean => {
+      if (!doc) return false;
+      const isRequester =
+        codeEq(doc.requesterCode) ||
+        approverMatches(doc.requester, session.userName);
+      if (isRequester) return false;
+
+      const sessionCodeLower = (session.userName || "").toLowerCase().trim();
+      const isDirectApprover =
+        (!!doc.approverCode &&
+          doc.approverCode.toLowerCase().trim() === sessionCodeLower) ||
+        approverMatches(doc.currentApprover, session.userName);
+      if (isDirectApprover) return true;
+
+      const docRefTs = (() => {
+        const d = doc.docDate;
+        const t = d ? new Date(d).getTime() : NaN;
+        return Number.isFinite(t) ? t : Date.now();
+      })();
+      const approverEmailLower = (doc.approverEmail || "").toLowerCase().trim();
+      const approverNameLower = (doc.currentApprover || "").toLowerCase().trim();
+      return grantsSnapshot.some((g) => {
+        const startsTs = new Date(g.starts_at).getTime();
+        const endsTs = new Date(g.ends_at).getTime();
+        if (!(startsTs <= docRefTs && docRefTs < endsTs)) return false;
+        const ge = (g.official_email || "").toLowerCase();
+        const gPrefix = ge.split("@")[0];
+        const gn = (g.official_name || "").toLowerCase();
+        if (approverEmailLower) {
+          if (approverEmailLower === ge) return true;
+          if (gPrefix && approverEmailLower.startsWith(`${gPrefix}@`)) return true;
+        }
+        if (approverNameLower) {
+          if (gPrefix && (approverNameLower === gPrefix || approverNameLower.includes(gPrefix))) return true;
+          if (gn && (approverNameLower === gn || approverNameLower.includes(gn) || gn.includes(approverNameLower))) return true;
+        }
+        return false;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session.userName, sessionUser, officialIdentifiers],
+  );
   const userApprovals = effectiveShowAll
     ? allApprovals
     : allApprovals.filter(
