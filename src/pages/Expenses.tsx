@@ -194,8 +194,8 @@ function ExpenseDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="space-y-2">
             <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-6">
               <span className="text-foreground font-semibold">Despesa</span>
               <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
@@ -212,25 +212,25 @@ function ExpenseDetailModal({
             </DialogTitle>
           </DialogHeader>
 
-          {/* Summary strip — mesmos campos da linha da tabela (visível em qualquer viewport) */}
-          <div className="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs sm:hidden">
+          {/* Summary strip mobile — mesmos campos da linha da tabela */}
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs sm:hidden">
             <div className="col-span-2 flex items-center gap-2 min-w-0">
               <Building2 className="w-3.5 h-3.5 text-primary/70 shrink-0" />
               <span className="text-foreground font-medium truncate">{expense.supplier_name}</span>
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 space-y-0.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Solicitante</p>
               <p className="text-foreground truncate">{expense.requester_name}</p>
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Criado</p>
               <p className="text-foreground">{formatDate(expense.created_at)}</p>
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Doc</p>
               <p className="text-foreground">{expense.doc_date ? formatDate(expense.doc_date) : "—"}</p>
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Vence</p>
               <p className={expense.due_date ? "text-foreground" : "text-destructive font-medium"}>
                 {expense.due_date ? formatDate(expense.due_date) : "sem data"}
@@ -239,7 +239,7 @@ function ExpenseDetailModal({
           </div>
 
 
-          <div className="flex justify-end -mt-2">
+          <div className="flex justify-end mt-3 sm:mt-2">
             <Button
               variant="ghost"
               size="sm"
@@ -249,13 +249,14 @@ function ExpenseDetailModal({
                 mode,
               })}
             >
-              <FileDown className="w-3.5 h-3.5" /> Exportar relatório
+              <FileDown className="w-3.5 h-3.5" aria-hidden="true" /> Exportar relatório
             </Button>
           </div>
 
 
-          <div className="space-y-4 mt-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div className="space-y-5 sm:space-y-6 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+
 
               <div>
                 <p className="text-xs text-muted-foreground">Fornecedor</p>
