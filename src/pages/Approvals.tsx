@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
+import { useLazyList } from "@/hooks/useLazyList";
 import { useNavigate } from "react-router-dom";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
@@ -1340,6 +1341,9 @@ function MyRequestsTab() {
     );
   });
 
+  const { visibleItems: visibleRequests, hasMore: reqHasMore, loadMore: reqLoadMore, sentinelRef: reqSentinelRef, total: reqTotal, initial: reqInitial } =
+    useLazyList(filtered, { initial: 30, step: 10, resetDeps: [search, statusFilter] });
+
   const counts = {
     all: requests.length,
     pending: requests.filter((r) => r.status === "pending").length,
@@ -1417,7 +1421,7 @@ function MyRequestsTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((doc) => (
+              {visibleRequests.map((doc) => (
                 <tr key={doc.approvalRequestId} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-3">
                     <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
@@ -1440,6 +1444,16 @@ function MyRequestsTab() {
           </table>
         </div>
       )}
+
+      {reqHasMore ? (
+        <div ref={reqSentinelRef} className="flex flex-col items-center gap-2 py-4 text-xs text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <span>Carregando mais… ({visibleRequests.length} de {reqTotal})</span>
+          <Button variant="ghost" size="sm" onClick={reqLoadMore}>Mostrar mais</Button>
+        </div>
+      ) : reqTotal > reqInitial ? (
+        <div className="text-center py-3 text-xs text-muted-foreground">{reqTotal} pedido(s) exibidos</div>
+      ) : null}
 
       <MyRequestDetailModal doc={selected} open={!!selected} onClose={() => setSelected(null)} />
     </div>
@@ -1618,6 +1632,13 @@ export default function ApprovalsPage() {
 
   const totalValue = filtered.reduce((sum, a) => sum + a.docTotal, 0);
   const overdueCount = filtered.filter((a) => isOverdue(a.dueDate)).length;
+
+  const { visibleItems: visibleApprovals, hasMore: apprHasMore, loadMore: apprLoadMore, sentinelRef: apprSentinelRef, total: apprTotal, initial: apprInitial } =
+    useLazyList(filtered, {
+      initial: 30,
+      step: 10,
+      resetDeps: [search, typeFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode],
+    });
 
   const handleApprovalAction = async (
     code: number,
@@ -2174,7 +2195,7 @@ export default function ApprovalsPage() {
           </div>
         ) : viewMode === "cards" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((doc, i) => (
+            {visibleApprovals.map((doc, i) => (
               <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
                 <ApprovalCard
                   doc={doc}
@@ -2208,7 +2229,7 @@ export default function ApprovalsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((doc, i) => {
+                {visibleApprovals.map((doc, i) => {
                   const overdue = isOverdue(doc.dueDate);
                   return (
                     <motion.tr
@@ -2242,7 +2263,18 @@ export default function ApprovalsPage() {
             </table>
           </div>
         )}
+
+        {apprHasMore ? (
+          <div ref={apprSentinelRef} className="flex flex-col items-center gap-2 py-6 text-xs text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            <span>Carregando mais… ({visibleApprovals.length} de {apprTotal})</span>
+            <Button variant="ghost" size="sm" onClick={apprLoadMore}>Mostrar mais</Button>
+          </div>
+        ) : apprTotal > apprInitial ? (
+          <div className="text-center py-4 text-xs text-muted-foreground">{apprTotal} pedido(s) exibidos</div>
+        ) : null}
           </TabsContent>
+
 
           <TabsContent value="my-requests" className="mt-0">
             <MyRequestsTab />
