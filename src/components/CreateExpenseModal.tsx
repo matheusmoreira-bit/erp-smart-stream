@@ -1688,6 +1688,7 @@ export function CreateExpenseModal({
         updateQueueEntry(currentEntry.supplierKey, { status: "failed", errorMessage: msg });
         if (currentGroupRef.current && currentGroupRef.current.supplierKey === currentEntry.supplierKey) {
           failedGroupsRef.current.set(currentEntry.supplierKey, currentGroupRef.current);
+          schedulePersist();
         }
       }
       toast.error(msg);
