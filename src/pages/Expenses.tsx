@@ -33,6 +33,8 @@ import {
   ChevronsUpDown,
   ArrowUp,
   ArrowDown,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { supabase } from "@/integrations/supabase/client";
