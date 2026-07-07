@@ -390,6 +390,7 @@ function ApprovalDetailModal({
   rules,
   isAdmin,
   canApprove,
+  onBehalfOf,
 }: {
   doc: ApprovalDoc | null;
   open: boolean;
@@ -407,6 +408,7 @@ function ApprovalDetailModal({
   rules: ApprovalRule[];
   isAdmin: boolean;
   canApprove: boolean;
+  onBehalfOf?: { name: string; email: string } | null;
 }) {
   const [remarks, setRemarks] = useState("");
   const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject"; idempotencyKey: string } | null>(null);
