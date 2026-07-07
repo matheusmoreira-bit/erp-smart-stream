@@ -1089,10 +1089,12 @@ export function CreateExpenseModal({
         setDraftId(null);
       }
 
-      // Marca no histórico da fila o grupo atual como concluído com sucesso.
+      // Marca no histórico da fila o grupo atual como concluído com sucesso
+      // e limpa a marca de falha (caso fosse um retry de erro).
       const currentEntry = queueHistory.find((e) => e.status === "pending");
       if (currentEntry) {
-        updateQueueEntry(currentEntry.supplierKey, { status: "success" });
+        updateQueueEntry(currentEntry.supplierKey, { status: "success", errorMessage: undefined });
+        failedGroupsRef.current.delete(currentEntry.supplierKey);
       }
 
       // Se houver grupos de fornecedores adiados (regra 2 — anexos com
@@ -1111,9 +1113,9 @@ export function CreateExpenseModal({
         return;
       }
 
-      // Encerrou a fila. Se houve encadeamento (>1 entrada), abre o resumo
-      // final antes de fechar; caso contrário, fecha direto.
-      if (queueHistory.length > 1) {
+      // Encerrou a fila. Se houve encadeamento (>1 entrada) OU sobrou algum
+      // erro no histórico, abre o resumo final antes de fechar.
+      if (queueHistory.length > 1 || failedGroupsRef.current.size > 0) {
         setShowQueueSummary(true);
         return;
       }
@@ -1124,10 +1126,14 @@ export function CreateExpenseModal({
         (e && (e.message || e.error_description || e.details || e.hint)) ||
         (typeof e === "string" ? e : "") ||
         "Erro ao criar despesa";
-      // Registra a falha do grupo atual (o usuário pode tentar de novo).
+      // Registra a falha do grupo atual (status=failed + guarda o DocGroup
+      // no cache para o botão "Reenviar apenas erros" no resumo).
       const currentEntry = queueHistory.find((e) => e.status === "pending");
       if (currentEntry) {
-        updateQueueEntry(currentEntry.supplierKey, { errorMessage: msg });
+        updateQueueEntry(currentEntry.supplierKey, { status: "failed", errorMessage: msg });
+        if (currentGroupRef.current && currentGroupRef.current.supplierKey === currentEntry.supplierKey) {
+          failedGroupsRef.current.set(currentEntry.supplierKey, currentGroupRef.current);
+        }
       }
       toast.error(msg);
     } finally {
