@@ -35,7 +35,7 @@ import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
-import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache } from "@/lib/sap-client";
+import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache, type SapSession } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -488,7 +488,9 @@ function ApprovalDetailModal({
   if (!doc) return null;
 
   const overdue = isOverdue(doc.dueDate);
-  const isOtherApprover = isSuperUser && doc.currentApprover.toLowerCase() !== currentUserName.toLowerCase();
+  const isOtherApprover = isSuperUser &&
+    !approverMatches(doc.currentApprover, currentUserName) &&
+    !approverMatches(doc.currentApprover, currentUserEmail || "");
 
   const handleAction = (action: "approve" | "reject") => {
     // Sempre confirmar antes de aprovar/rejeitar — mostra resumo do que
@@ -1237,19 +1239,152 @@ function tokensMatch(aTok: string, uTok: string): boolean {
 }
 
 
+function normalizeIdentity(value?: string | null): string {
+  return (value || "").toLowerCase().trim();
+}
+
+function identityPrefix(value?: string | null): string {
+  const normalized = normalizeIdentity(value);
+  const at = normalized.indexOf("@");
+  return at > 0 ? normalized.slice(0, at) : normalized;
+}
+
+function escapeSapString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
 function approverMatches(approver: string, userName: string): boolean {
   if (!approver || !userName) return false;
-  const a = approver.toLowerCase().trim();
-  const u = userName.toLowerCase().trim();
+  const a = normalizeIdentity(approver);
+  const u = normalizeIdentity(userName);
   if (a === u) return true;
+  if (a.includes("@") || u.includes("@")) {
+    const ap = identityPrefix(a);
+    const up = identityPrefix(u);
+    if (ap && up && ap === up) return true;
+  }
   // try matching by first name / partial: "matheus.moreira" vs "Matheus Moreira"
-  const aTokens = a.replace(/[._-]/g, " ").split(/\s+/).filter(Boolean);
-  const uTokens = u.replace(/[._-]/g, " ").split(/\s+/).filter(Boolean);
+  const aTokens = a.replace(/[._@-]/g, " ").split(/\s+/).filter(Boolean);
+  const uTokens = u.replace(/[._@-]/g, " ").split(/\s+/).filter(Boolean);
   if (aTokens.length === 0 || uTokens.length === 0) return false;
   // match if all user tokens have a fuzzy-matching counterpart in approver tokens (or vice-versa)
   const allIn = (src: string[], tgt: string[]) =>
     src.every((t) => tgt.some((x) => tokensMatch(t, x)));
   return allIn(uTokens, aTokens) || allIn(aTokens, uTokens);
+}
+
+interface SapApprovalDecisionRow {
+  Status?: string;
+  UserID?: number;
+  ApprovalRequestStep?: number;
+  Remarks?: string;
+  [key: string]: unknown;
+}
+
+interface SapApprovalRequestPayload {
+  Code?: number;
+  Status?: string;
+  ApprovalRequestDecisions?: SapApprovalDecisionRow[];
+}
+
+function isPendingSapDecision(status?: string): boolean {
+  return !status || status === "ardPending" || status === "asWithoutDecision" || status === "asPending";
+}
+
+function isCompletedSapDecision(status: string | undefined, action: "approve" | "reject"): boolean {
+  return action === "approve" ? status === "ardApproved" : status === "ardNotApproved";
+}
+
+async function getCurrentSapUserKey(session: SapSession): Promise<number> {
+  const filter = encodeURIComponent(`UserCode eq '${escapeSapString(session.userName)}'`);
+  const res = await sapQuery(
+    session,
+    `Users?$filter=${filter}&$select=InternalKey,UserCode,UserName,eMail`,
+    undefined,
+    false,
+  );
+  const payload = res.data as { value?: Array<{ InternalKey?: number }> } | Array<{ InternalKey?: number }> | null;
+  const users = Array.isArray(payload) ? payload : (payload?.value || []);
+  const key = Number(users[0]?.InternalKey);
+  if (!Number.isFinite(key) || key <= 0) {
+    throw new Error(`Usuário SAP '${session.userName}' não encontrado para registrar a decisão.`);
+  }
+  return key;
+}
+
+async function getSapApprovalRequest(session: SapSession, code: number): Promise<SapApprovalRequestPayload> {
+  const res = await sapQuery(
+    session,
+    `ApprovalRequests(${code})?$select=Code,Status&$expand=ApprovalRequestDecisions`,
+    undefined,
+    false,
+  );
+  return (res.data || {}) as SapApprovalRequestPayload;
+}
+
+function findPendingDecisionIndex(decisions: SapApprovalDecisionRow[], userKey: number): number {
+  return decisions.findIndex((d) => Number(d.UserID) === userKey && isPendingSapDecision(d.Status));
+}
+
+function findCompletedDecisionForAction(decisions: SapApprovalDecisionRow[], userKey: number, action: "approve" | "reject") {
+  return decisions.find((d) => Number(d.UserID) === userKey && isCompletedSapDecision(d.Status, action));
+}
+
+function formatSapApprovalError(message: string, doc?: ApprovalDoc | null): string {
+  if (/not permitted|não.*permit|permiss/i.test(message)) {
+    return [
+      "O SAP recusou a decisão para a sessão atual.",
+      "Isso normalmente acontece quando o UserCode logado não é a decisão pendente real no SAP ou quando falta autorização geral para aprovar no SAP Business One.",
+      doc?.currentApprover ? `Aprovador exibido na lista: ${doc.currentApprover}.` : null,
+      `Detalhe SAP: ${message}`,
+    ].filter(Boolean).join(" ");
+  }
+  return message;
+}
+
+async function decideSapApprovalRequest(
+  session: SapSession,
+  code: number,
+  action: "approve" | "reject",
+  remarks: string,
+  doc?: ApprovalDoc | null,
+): Promise<{ recoveredFromSapError: boolean }> {
+  const userKey = await getCurrentSapUserKey(session);
+  const request = await getSapApprovalRequest(session, code);
+  const decisions = request.ApprovalRequestDecisions || [];
+  const targetIndex = findPendingDecisionIndex(decisions, userKey);
+
+  if (targetIndex < 0) {
+    if (findCompletedDecisionForAction(decisions, userKey, action)) {
+      return { recoveredFromSapError: true };
+    }
+    throw new Error(
+      `Nenhuma decisão pendente foi encontrada no SAP para o usuário ${session.userName} nesta solicitação. Atualize a lista; se o documento continuar aparecendo, o aprovador exibido pode estar desatualizado no SAP.`,
+    );
+  }
+
+  try {
+    // SAP B1 applies this decision to the user of the current Service Layer
+    // session. Sending UserID/other decision rows can be interpreted as an
+    // attempt to edit another approver's decision and return -6006.
+    await sapAction(session, `ApprovalRequests(${code})`, "PATCH", {
+      ApprovalRequestDecisions: [{
+        Status: action === "approve" ? "ardApproved" : "ardNotApproved",
+        Remarks: remarks || undefined,
+      }],
+    });
+    return { recoveredFromSapError: false };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    try {
+      const fresh = await getSapApprovalRequest(session, code);
+      const freshDecisions = fresh.ApprovalRequestDecisions || [];
+      if (findCompletedDecisionForAction(freshDecisions, userKey, action)) {
+        return { recoveredFromSapError: true };
+      }
+    } catch { /* keep original SAP error */ }
+    throw new Error(formatSapApprovalError(message, doc));
+  }
 }
 
 function StatusBadge({ status, label }: { status: MyRequestDoc["status"] | ApprovalHistoryEntry["status"]; label: string }) {
@@ -1764,6 +1899,9 @@ export default function ApprovalsPage() {
       const isDirectApprover =
         (!!doc.approverCode &&
           doc.approverCode.toLowerCase().trim() === sessionCodeLower) ||
+        (!!doc.approverEmail &&
+          (normalizeIdentity(doc.approverEmail) === sessionCodeLower ||
+            identityPrefix(doc.approverEmail) === identityPrefix(session.userName))) ||
         approverMatches(doc.currentApprover, session.userName);
       if (isDirectApprover) return true;
 
@@ -2050,16 +2188,21 @@ export default function ApprovalsPage() {
             .filter(Boolean)
             .join(" — ") || remarks;
 
-          const endpoint = `ApprovalRequests(${code})`;
-          const body: Record<string, unknown> = {
-            ApprovalRequestDecisions: [{
-              Status: action === "approve" ? "ardApproved" : "ardNotApproved",
-              Remarks: remarksForSap || undefined,
-            }],
-          };
-          await sapAction(session, endpoint, "PATCH", body);
+          const result = await decideSapApprovalRequest(
+            session as SapSession,
+            code,
+            action,
+            remarksForSap,
+            doc,
+          );
           clearClientCache();
-          toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
+          toast.success(
+            result.recoveredFromSapError
+              ? (action === "approve"
+                ? "Aprovação já havia sido registrada no SAP; lista atualizada."
+                : "Rejeição já havia sido registrada no SAP; lista atualizada.")
+              : (action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado."),
+          );
 
           const { logAuditAction } = await import("@/hooks/useAuditLog");
           await logAuditAction({
