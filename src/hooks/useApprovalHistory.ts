@@ -29,6 +29,10 @@ export interface ApprovalHistoryRow {
   source?: "sap" | "erp_flow";
   /** Preenchido apenas para rows internos (permite abrir o mapa de relações) */
   expense_id?: string | null;
+  /** Rastreabilidade: quando a decisão foi tomada por um substituto autorizado */
+  substituted_for_email?: string | null;
+  substituted_for_name?: string | null;
+  substitution_id?: string | null;
 }
 
 export interface ApprovalHistorySyncState {
@@ -109,6 +113,9 @@ export function useApprovalHistory(companyDb?: string | null) {
             synced_at: l.decided_at || l.created_at,
             source: "erp_flow" as const,
             expense_id: l.expense_id,
+            substituted_for_email: l.substituted_for_email || null,
+            substituted_for_name: l.substituted_for_name || null,
+            substitution_id: l.substitution_id || null,
           } as ApprovalHistoryRow;
         })
         .filter(Boolean) as ApprovalHistoryRow[];
@@ -126,9 +133,24 @@ export function useApprovalHistory(companyDb?: string | null) {
         return !sapKey.has(`${r.company_db}|${r.doc_entry}|${r.decision}|${r.step ?? 0}`);
       });
 
+      // Parse "Ação executada por SUBSTITUTO (X) em nome de Y" a partir do
+      // campo `remarks` para linhas vindas do SAP (que ainda não têm colunas
+      // dedicadas de substituição no `approval_history`).
+      const SUBSTITUTE_RE = /SUBSTITUTO\s*\(([^)]+)\)\s*em nome de\s+([^—<]+?)(?:\s*<([^>]+)>)?\s*(?:—|\.|$)/i;
+      const parseSubstitution = (r: ApprovalHistoryRow): ApprovalHistoryRow => {
+        if (r.substituted_for_email || r.substituted_for_name) return r;
+        const m = r.remarks?.match(SUBSTITUTE_RE);
+        if (!m) return r;
+        return {
+          ...r,
+          substituted_for_name: (m[2] || "").trim() || null,
+          substituted_for_email: (m[3] || "").trim() || null,
+        };
+      };
+
       const merged = [
-        ...((sapRows || []) as ApprovalHistoryRow[]).map((r) => ({ ...r, source: "sap" as const })),
-        ...filteredInternal,
+        ...((sapRows || []) as ApprovalHistoryRow[]).map((r) => parseSubstitution({ ...r, source: "sap" as const })),
+        ...filteredInternal.map(parseSubstitution),
       ].sort((a, b) => {
         const da = a.decision_date ? new Date(a.decision_date).getTime() : 0;
         const db = b.decision_date ? new Date(b.decision_date).getTime() : 0;

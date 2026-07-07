@@ -1793,18 +1793,31 @@ export default function ApprovalsPage() {
             );
           }
         } else {
+          const doc = approvals.find((a) => a.approvalRequestId === code);
+          // Rastreabilidade de substituto no SAP: quando o usuário está aprovando
+          // em nome de outro, anexamos uma nota estruturada às Remarks enviadas
+          // ao SAP e também replicamos no audit log local. Assim conseguimos
+          // rastrear "quem aprovou" (session.userName) e "em nome de quem"
+          // mesmo após a decisão sincronizar via `approval_history`.
+          const onBehalfOf = doc ? getSubstitutedOfficial(doc) : null;
+          const substitutionNote = onBehalfOf
+            ? `Ação executada por SUBSTITUTO (${session.userName}) em nome de ${onBehalfOf.name}${onBehalfOf.email ? ` <${onBehalfOf.email}>` : ""}.`
+            : null;
+          const remarksForSap = substitutionNote
+            ? [remarks, substitutionNote].filter(Boolean).join(" — ")
+            : remarks;
+
           const endpoint = `ApprovalRequests(${code})`;
           const body: Record<string, unknown> = {
             ApprovalRequestDecisions: [{
               Status: action === "approve" ? "ardApproved" : "ardNotApproved",
-              Remarks: remarks || undefined,
+              Remarks: remarksForSap || undefined,
             }],
           };
           await sapAction(session, endpoint, "PATCH", body);
           clearClientCache();
           toast.success(action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado.");
 
-          const doc = approvals.find((a) => a.approvalRequestId === code);
           const { logAuditAction } = await import("@/hooks/useAuditLog");
           await logAuditAction({
             action: action === "approve" ? "approve" : "reject",
@@ -1821,6 +1834,9 @@ export default function ApprovalsPage() {
               approver: doc?.currentApprover,
               isSuperUser,
               remarks,
+              substitutedForName: onBehalfOf?.name ?? null,
+              substitutedForEmail: onBehalfOf?.email ?? null,
+              actedAsSubstitute: !!onBehalfOf,
             },
           });
         }

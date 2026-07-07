@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network, FileDown } from "lucide-react";
+import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network, FileDown, UserCog } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
@@ -84,6 +84,7 @@ export default function ApprovalHistory() {
       if (!q) return true;
       return [
         r.card_name, r.card_code, r.requester_name, r.approver_name,
+        r.substituted_for_name, r.substituted_for_email,
         r.doc_type_name, String(r.doc_num || ""), r.remarks, r.stage_name,
       ].some((v) => (v || "").toString().toLowerCase().includes(q));
     });
@@ -136,6 +137,7 @@ export default function ApprovalHistory() {
                   { header: "Parceiro", cell: (r: typeof filtered[number]) => r.card_name || "—" },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => r.requester_name || "—" },
                   { header: "Aprovador", cell: (r: typeof filtered[number]) => r.approver_name || "—" },
+                  { header: "Em nome de", cell: (r: typeof filtered[number]) => r.substituted_for_name || r.substituted_for_email || "—" },
                   { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => formatCurrency(r.doc_total, r.currency) },
                   { header: "Observações", cell: (r: typeof filtered[number]) => r.remarks || "—" },
                 ],
@@ -306,6 +308,15 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
       <div className="text-sm text-muted-foreground space-y-1">
         <div className="flex items-center gap-2 truncate"><Building2 className="w-3.5 h-3.5 text-primary/70" />{row.card_name || row.card_code || "—"}</div>
         <div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-primary/70" />Aprovador: <span className="text-foreground font-medium">{row.approver_name || row.approver_code || "—"}</span></div>
+        {(row.substituted_for_name || row.substituted_for_email) && (
+          <div
+            className="flex items-center gap-2 text-amber-700 dark:text-amber-400"
+            title={`Aprovação executada por ${row.approver_name || row.approver_code || "—"} atuando como substituto autorizado de ${row.substituted_for_name || row.substituted_for_email}`}
+          >
+            <UserCog className="w-3.5 h-3.5" />
+            Em nome de: <span className="font-medium">{row.substituted_for_name || row.substituted_for_email}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-primary/70" />Solicitante: <span className="text-foreground font-medium">{row.requester_name || row.requester_code || "—"}</span></div>
         <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-primary/70" />{formatDate(row.decision_date)}</div>
       </div>
