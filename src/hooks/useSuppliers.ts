@@ -325,6 +325,7 @@ export async function updateSupplier(
     .select("*")
     .single();
   if (error) throw error;
+  invalidateBusinessPartnerCaches((data as Supplier)?.company_db || session?.companyDB);
   return data as Supplier;
 }
 
