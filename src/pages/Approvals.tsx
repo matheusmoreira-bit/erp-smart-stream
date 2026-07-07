@@ -1899,6 +1899,9 @@ export default function ApprovalsPage() {
       const isDirectApprover =
         (!!doc.approverCode &&
           doc.approverCode.toLowerCase().trim() === sessionCodeLower) ||
+        (!!doc.approverEmail &&
+          (normalizeIdentity(doc.approverEmail) === sessionCodeLower ||
+            identityPrefix(doc.approverEmail) === identityPrefix(session.userName))) ||
         approverMatches(doc.currentApprover, session.userName);
       if (isDirectApprover) return true;
 
