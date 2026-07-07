@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Sparkles,
   Brain,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -190,6 +191,10 @@ export function CreateExpenseModal({
   interface DocGroup { supplierKey: string; supplierLabel: string; docs: Array<{ file: File; extracted: any }>; }
   const [deferredGroups, setDeferredGroups] = useState<DocGroup[]>([]);
   const [supplierPicker, setSupplierPicker] = useState<{ groups: DocGroup[]; nonFiscal: File[] } | null>(null);
+  // Confirmação e controle de cancelamento do processamento IA / fila de
+  // fornecedores adiados. `aiAbortRef` permite abortar o fetch em andamento.
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const aiAbortRef = useRef<AbortController | null>(null);
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
@@ -600,6 +605,8 @@ export function CreateExpenseModal({
     setAiConfidence(null);
     setAiWarning(null);
     setSupplierPicker(null);
+    const controller = new AbortController();
+    aiAbortRef.current = controller;
     try {
       const formData = new FormData();
       filesToProcess.forEach((f) => formData.append("files", f));
@@ -613,6 +620,7 @@ export function CreateExpenseModal({
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: formData,
+          signal: controller.signal,
         },
       );
 
@@ -688,6 +696,13 @@ export function CreateExpenseModal({
         nonFiscal: nonFiscal.map((p) => p.file),
       });
     } catch (e) {
+      // Cancelamento explícito pelo usuário: silencioso, sem toast de erro.
+      if ((e as any)?.name === "AbortError" || controller.signal.aborted) {
+        setSupplierPicker(null);
+        setAiConfidence(null);
+        setAiWarning(null);
+        return;
+      }
       console.error("AI processing error:", e);
       // Garante estado limpo para um novo retry (sem picker/warning presos).
       setSupplierPicker(null);
@@ -697,8 +712,40 @@ export function CreateExpenseModal({
         duration: 9000,
       });
     } finally {
+      if (aiAbortRef.current === controller) aiAbortRef.current = null;
       setIsProcessing(false);
     }
+  };
+
+  // Cancela o processamento IA em andamento e/ou limpa a fila de fornecedores
+  // adiados (deferredGroups) + picker aberto, deixando o modal em estado
+  // consistente para o usuário continuar preenchendo manualmente.
+  const cancelProcessingAndQueue = () => {
+    const hadQueue = deferredGroups.length > 0;
+    const hadPicker = !!supplierPicker;
+    const wasProcessing = isProcessing;
+    try {
+      aiAbortRef.current?.abort();
+    } catch {
+      /* ignore */
+    }
+    aiAbortRef.current = null;
+    setDeferredGroups([]);
+    setSupplierPicker(null);
+    setAiWarning(null);
+    setAiConfidence(null);
+    setIsProcessing(false);
+    setCancelConfirm(false);
+    const parts: string[] = [];
+    if (wasProcessing) parts.push("classificação IA");
+    if (hadPicker) parts.push("seleção de fornecedor");
+    if (hadQueue) parts.push("fila de despesas encadeadas");
+    toast.info(
+      parts.length > 0
+        ? `Cancelado: ${parts.join(", ")}. Os anexos permanecem no modal para você continuar manualmente.`
+        : "Processamento cancelado.",
+      { duration: 6000 },
+    );
   };
 
   // Chamado quando o usuário escolhe, no picker, qual grupo cria primeiro.
@@ -1089,36 +1136,54 @@ export function CreateExpenseModal({
             diferentes). Fica sempre visível para o usuário saber o estado. */}
         {(isProcessing || isCreating || deferredGroups.length > 0) && (
           <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-            {isProcessing && (
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                <span>
-                  Classificando {files.length} anexo(s) com IA — identificando fornecedor, itens e tipo do documento…
-                </span>
-              </div>
-            )}
-            {isCreating && (
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                <span>
-                  Salvando {isSales ? "pedido de venda" : "despesa"}
-                  {files.length > 0 ? ` e enviando ${files.length} anexo(s)` : ""}…
-                </span>
-              </div>
-            )}
-            {deferredGroups.length > 0 && !isCreating && !isProcessing && (
-              <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                <span className="mt-0.5">📋</span>
-                <div className="flex-1">
-                  <div className="text-foreground font-medium">
-                    Fila: {deferredGroups.length} despesa(s) aguardando após esta
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 space-y-2 min-w-0">
+                {isProcessing && (
+                  <div className="flex items-center gap-2 text-sm text-primary">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>
+                      Classificando {files.length} anexo(s) com IA — identificando fornecedor, itens e tipo do documento…
+                    </span>
                   </div>
-                  <div className="mt-0.5 truncate">
-                    Próximas: {deferredGroups.map((g) => g.supplierLabel).join(" → ")}
+                )}
+                {isCreating && (
+                  <div className="flex items-center gap-2 text-sm text-primary">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>
+                      Salvando {isSales ? "pedido de venda" : "despesa"}
+                      {files.length > 0 ? ` e enviando ${files.length} anexo(s)` : ""}…
+                    </span>
                   </div>
-                </div>
+                )}
+                {deferredGroups.length > 0 && !isCreating && !isProcessing && (
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <span className="mt-0.5">📋</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-foreground font-medium">
+                        Fila: {deferredGroups.length} despesa(s) aguardando após esta
+                      </div>
+                      <div className="mt-0.5 truncate">
+                        Próximas: {deferredGroups.map((g) => g.supplierLabel).join(" → ")}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+              {/* Botão de cancelar: aparece quando há IA em andamento ou fila
+                  de fornecedores adiados. Não interfere no salvamento em curso
+                  (isCreating), pois cancelar uma gravação parcial seria pior. */}
+              {(isProcessing || deferredGroups.length > 0) && !isCreating && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                  onClick={() => setCancelConfirm(true)}
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  Cancelar
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -1720,6 +1785,34 @@ export function CreateExpenseModal({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Confirmação de cancelamento do processamento IA e/ou fila de fornecedores */}
+    <AlertDialog open={cancelConfirm} onOpenChange={setCancelConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Cancelar processamento?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {isProcessing && "A classificação por IA em andamento será interrompida. "}
+            {deferredGroups.length > 0 && (
+              <>
+                As <strong>{deferredGroups.length}</strong> despesa(s) na fila
+                ({deferredGroups.map((g) => g.supplierLabel).join(", ")}) serão descartadas.{" "}
+              </>
+            )}
+            Os anexos permanecem no modal para você continuar manualmente. Deseja continuar?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Voltar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={cancelProcessingAndQueue}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Sim, cancelar
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
