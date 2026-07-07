@@ -1628,6 +1628,38 @@ export default function ApprovalsPage() {
     const a = approver.toLowerCase().trim();
     return officialIdentifiers.some((id) => id === a || a.includes(id) || id.includes(a));
   };
+  // Retorna o aprovador oficial substituído por este documento — ou null se o
+  // usuário é o aprovador/solicitante direto (não está atuando como substituto).
+  const getSubstitutedOfficial = useCallback((d: ApprovalDoc): { name: string; email: string } | null => {
+    if (activeOfficials.length === 0) return null;
+    // Match direto (não é substituição)
+    const directCode = (code?: string) => !!code && code.toLowerCase().trim() === sessionUser;
+    if (
+      directCode(d.approverCode) ||
+      directCode(d.requesterCode) ||
+      approverMatches(d.currentApprover, session.userName) ||
+      approverMatches(d.requester, session.userName)
+    ) return null;
+    const approver = (d.currentApprover || "").toLowerCase().trim();
+    const email = (d.approverEmail || "").toLowerCase().trim();
+    for (const o of activeOfficials) {
+      const e = (o.official_email || "").toLowerCase();
+      const prefix = e.split("@")[0];
+      const name = (o.official_name || "").toLowerCase();
+      if (email && (email === e || (prefix && email.startsWith(prefix + "@")))) {
+        return { name: o.official_name || o.official_email, email: o.official_email };
+      }
+      if (approver) {
+        if (prefix && (approver === prefix || approver.includes(prefix) || prefix.includes(approver))) {
+          return { name: o.official_name || o.official_email, email: o.official_email };
+        }
+        if (name && (approver === name || approver.includes(name) || name.includes(approver))) {
+          return { name: o.official_name || o.official_email, email: o.official_email };
+        }
+      }
+    }
+    return null;
+  }, [activeOfficials, sessionUser, session.userName]);
   const userApprovals = effectiveShowAll
     ? allApprovals
     : allApprovals.filter(
