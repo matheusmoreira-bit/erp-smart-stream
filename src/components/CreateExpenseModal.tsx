@@ -605,6 +605,8 @@ export function CreateExpenseModal({
     setAiConfidence(null);
     setAiWarning(null);
     setSupplierPicker(null);
+    const controller = new AbortController();
+    aiAbortRef.current = controller;
     try {
       const formData = new FormData();
       filesToProcess.forEach((f) => formData.append("files", f));
@@ -618,6 +620,7 @@ export function CreateExpenseModal({
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: formData,
+          signal: controller.signal,
         },
       );
 
