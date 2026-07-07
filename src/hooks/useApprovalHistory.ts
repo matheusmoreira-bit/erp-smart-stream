@@ -284,6 +284,16 @@ export function useApprovalHistory(
         });
       }
 
+      // Busca livre por substituído (partial match em nome/email pós-parse).
+      if (mode === "search") {
+        const needle = trimmedSubSearch.toLowerCase();
+        merged = merged.filter((r) => {
+          const email = (r.substituted_for_email || "").toLowerCase();
+          const name = (r.substituted_for_name || "").toLowerCase();
+          return email.includes(needle) || name.includes(needle);
+        });
+      }
+
       const pageRows = merged.slice(0, window);
       setRows(pageRows);
       setHasMore(merged.length > window);
