@@ -1270,16 +1270,40 @@ export function CreateExpenseModal({
                     </span>
                   </div>
                 )}
-                {deferredGroups.length > 0 && !isCreating && !isProcessing && (
+                {queueHistory.length > 0 && !isCreating && !isProcessing && (
                   <div className="flex items-start gap-2 text-xs text-muted-foreground">
                     <span className="mt-0.5">📋</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-foreground font-medium">
-                        Fila: {deferredGroups.length} despesa(s) aguardando após esta
+                      <div className="text-foreground font-medium mb-1">
+                        Fila de fornecedores ({queueHistory.filter((e) => e.status === "success").length}/{queueHistory.length} concluídas)
                       </div>
-                      <div className="mt-0.5 truncate">
-                        Próximas: {deferredGroups.map((g) => g.supplierLabel).join(" → ")}
-                      </div>
+                      <ul className="space-y-0.5">
+                        {queueHistory.map((e, idx) => {
+                          const icon =
+                            e.status === "success" ? "✅" :
+                            e.status === "pending" ? "▶️" :
+                            e.status === "failed" ? "❌" :
+                            e.status === "cancelled" ? "🚫" : "⏳";
+                          return (
+                            <li key={e.supplierKey} className="flex items-center gap-1.5 truncate">
+                              <span className="shrink-0">{icon}</span>
+                              <span className={e.status === "pending" ? "text-foreground font-medium" : ""}>
+                                {idx + 1}. {e.supplierLabel}
+                              </span>
+                              {e.aiConfidence !== null && (
+                                <span className="text-[10px] opacity-70 shrink-0">
+                                  · IA {Math.round(e.aiConfidence * 100)}%
+                                </span>
+                              )}
+                              {e.aiWarnings.length > 0 && (
+                                <span className="text-[10px] text-amber-600 shrink-0">
+                                  · ⚠ {e.aiWarnings.length}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </div>
                   </div>
                 )}
