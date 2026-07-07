@@ -398,17 +398,28 @@ Deno.serve(async (req) => {
   const currentLevel = Number((exp as any).current_level_order || 1);
   let levels: Array<{ level_order: number; approver_name: string; approver_email: string | null }> = [];
   if ((exp as any).approval_rule_id) {
-    const { data: lvls } = await admin
+    const { data: lvls, error: lvlErr } = await admin
       .from("approval_rule_levels")
       .select("level_order, approver_name, approver_email")
       .eq("rule_id", (exp as any).approval_rule_id)
       .order("level_order", { ascending: true });
+    if (lvlErr) {
+      stageLog("load_levels", "error", { requestId, expenseId, error: lvlErr.message });
+      return await respond(500, {
+        error: `Falha ao carregar níveis de aprovação: ${lvlErr.message}`,
+        stage: "load_levels",
+      });
+    }
     levels = (lvls || []) as any;
   }
 
   const totalLevels = levels.length || 1;
   const isFinalLevel = currentLevel >= totalLevels;
   const currentLevelRow = levels.find((l) => l.level_order === currentLevel) || null;
+  stageLog("load_levels", "info", {
+    requestId, expenseId, currentLevel, totalLevels, isFinalLevel,
+  });
+
 
   // ── Authorization ──────────────────────────────────────────────────────
   // The designated approver comes from the rule level. When there's no rule
