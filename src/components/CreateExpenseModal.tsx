@@ -1110,6 +1110,103 @@ export function CreateExpenseModal({
   const [resumePlan, setResumePlan] = useState<ResumePlan | null>(null);
   const [resumeChecking, setResumeChecking] = useState(false);
 
+  // ─── Persistência do estado da fila (IndexedDB) ─────────────────────
+  // Sobrevive a F5 / fechar aba / trocar de página. Escopo separado para
+  // despesas vs. pedidos de venda para não misturarem entre si.
+  const queueScope: QueueScope = isSales ? "sales" : "expenses";
+  const queueHydratedRef = useRef(false);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const serializeGroups = useCallback((groups: DocGroup[]): PersistedDocGroup[] =>
+    groups.map((g) => ({
+      supplierKey: g.supplierKey,
+      supplierLabel: g.supplierLabel,
+      docs: g.docs.map((d) => ({ file: toPersistedFile(d.file), extracted: d.extracted })),
+    })), []);
+
+  const deserializeGroups = useCallback((groups: PersistedDocGroup[]): DocGroup[] =>
+    groups.map((g) => ({
+      supplierKey: g.supplierKey,
+      supplierLabel: g.supplierLabel,
+      docs: g.docs.map((d) => ({ file: fromPersistedFile(d.file), extracted: d.extracted })),
+    })), []);
+
+  // Grava snapshot (debounced 400ms) do estado inteiro da fila.
+  const schedulePersist = useCallback(() => {
+    if (!queueHydratedRef.current) return;
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      const failedGroups = Array.from(failedGroupsRef.current.values());
+      const cancelledGroups = cancelledGroupsRef.current;
+      const hasAny =
+        queueHistory.length > 0 ||
+        deferredGroups.length > 0 ||
+        failedGroups.length > 0 ||
+        cancelledGroups.length > 0;
+      if (!hasAny) {
+        void clearQueueState(queueScope);
+        return;
+      }
+      void saveQueueState(queueScope, {
+        queueHistory,
+        deferredGroups: serializeGroups(deferredGroups),
+        failedGroups: serializeGroups(failedGroups),
+        cancelledGroups: serializeGroups(cancelledGroups),
+        savedAt: Date.now(),
+      });
+    }, 400);
+  }, [queueHistory, deferredGroups, queueScope, serializeGroups]);
+
+  // Dispara a gravação sempre que queueHistory/deferredGroups mudam
+  // (mutações em refs failed/cancelled chamam schedulePersist manualmente).
+  useEffect(() => { schedulePersist(); }, [schedulePersist]);
+
+  // Hidratação: ao abrir o modal, se houver estado persistido e a fila
+  // atual estiver vazia, restaura tudo. Só roda uma vez por sessão do modal.
+  useEffect(() => {
+    if (!open) { queueHydratedRef.current = false; return; }
+    if (queueHydratedRef.current) return;
+    let cancelledFlag = false;
+    (async () => {
+      const saved = await loadQueueState<QueueEntry>(queueScope);
+      if (cancelledFlag) return;
+      queueHydratedRef.current = true;
+      if (!saved) return;
+      const hasInMemory =
+        queueHistory.length > 0 ||
+        deferredGroups.length > 0 ||
+        failedGroupsRef.current.size > 0 ||
+        cancelledGroupsRef.current.length > 0;
+      if (hasInMemory) return;
+      const deferred = deserializeGroups(saved.deferredGroups);
+      const failed = deserializeGroups(saved.failedGroups);
+      const cancelledG = deserializeGroups(saved.cancelledGroups);
+      setQueueHistory(saved.queueHistory);
+      setDeferredGroups(deferred);
+      failedGroupsRef.current = new Map(failed.map((g) => [g.supplierKey, g]));
+      cancelledGroupsRef.current = cancelledG;
+      const seen = new Set<string>();
+      const restoredFiles: File[] = [];
+      for (const g of [...failed, ...deferred, ...cancelledG]) {
+        for (const d of g.docs) {
+          const k = `${d.file.name}::${d.file.size}::${d.file.lastModified}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          restoredFiles.push(d.file);
+        }
+      }
+      if (restoredFiles.length > 0) setFiles((prev) => (prev.length > 0 ? prev : restoredFiles));
+      if (saved.queueHistory.length > 0 || restoredFiles.length > 0) {
+        toast.info(
+          `Fila anterior restaurada (${saved.queueHistory.length} registro(s), ${restoredFiles.length} anexo(s)). Use "Reenviar erros" ou "Retomar fila" para continuar.`,
+          { duration: 8000 },
+        );
+      }
+    })();
+    return () => { cancelledFlag = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, queueScope]);
+
   // Prepara o plano de retomada: aplica as duas verificações (já concluído
   // e duplicidade de hash) SEM alterar o estado da fila. Abre o dialog com
   // as ações por grupo para o usuário confirmar antes de disparar.
