@@ -405,9 +405,14 @@ export function CreateExpenseModal({
     }
   }, [open, prefill, initialized]);
 
-  // Reset when modal closes (sempre, mesmo sem prefill)
+  // Reset when modal closes (sempre, mesmo sem prefill). Se ainda houver
+  // grupos com erro em cache (failedGroupsRef), preservamos o contexto de
+  // retentativa — queueHistory, arquivos dos grupos com erro e o cache de
+  // respostas da IA — para que o usuário possa reabrir o modal e clicar em
+  // "Reenviar erros" sem perder os anexos nem refazer chamadas de IA.
   useEffect(() => {
     if (!open) {
+      const hasFailedContext = failedGroupsRef.current.size > 0;
       setInitialized(false);
       setSupplier(null);
       setCurrency("");
@@ -421,7 +426,6 @@ export function CreateExpenseModal({
       setAiSupplierData(null);
       setShowSupplierForm(false);
       setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
-      setFiles([]);
       setAiConfidence(null);
       setPendingPrefill(null);
       setHeaderCostCenter(null);
@@ -430,13 +434,25 @@ export function CreateExpenseModal({
       setDraftHydrated(false);
       setDeferredGroups([]);
       setSupplierPicker(null);
-      setQueueHistory([]);
-      setShowQueueSummary(false);
       setJustCancelled(false);
-      aiResponseCacheRef.current = new Map();
-      claimedHashesRef.current = new Set();
       aiInFlightRef.current = false;
       submitInFlightRef.current = false;
+      if (hasFailedContext) {
+        // Mantém: queueHistory, files (apenas dos grupos com erro),
+        // failedGroupsRef, aiResponseCacheRef, claimedHashesRef, showQueueSummary=false.
+        setShowQueueSummary(false);
+        const failedFileNames = new Set<string>();
+        for (const g of failedGroupsRef.current.values()) {
+          for (const d of g.docs) failedFileNames.add(d.file.name);
+        }
+        setFiles((prev) => prev.filter((f) => failedFileNames.has(f.name)));
+      } else {
+        setFiles([]);
+        setQueueHistory([]);
+        setShowQueueSummary(false);
+        aiResponseCacheRef.current = new Map();
+        claimedHashesRef.current = new Set();
+      }
     }
   }, [open]);
 
