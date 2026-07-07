@@ -37,9 +37,16 @@ export function useNotifications() {
   const { session } = useSap();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<Notification[]>([]);
+  const [approvedForRequester, setApprovedForRequester] = useState<Notification[]>([]);
   const [dismissedPendingIds, setDismissedPendingIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem("notifications_dismissed_pending_v1");
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch { return new Set(); }
+  });
+  const [dismissedApprovedIds, setDismissedApprovedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("notifications_dismissed_approved_v1");
       return new Set(raw ? (JSON.parse(raw) as string[]) : []);
     } catch { return new Set(); }
   });
@@ -62,6 +69,12 @@ export function useNotifications() {
   const persistDismissed = useCallback((next: Set<string>) => {
     try {
       localStorage.setItem("notifications_dismissed_pending_v1", JSON.stringify(Array.from(next)));
+    } catch { /* quota — ignore */ }
+  }, []);
+
+  const persistDismissedApproved = useCallback((next: Set<string>) => {
+    try {
+      localStorage.setItem("notifications_dismissed_approved_v1", JSON.stringify(Array.from(next)));
     } catch { /* quota — ignore */ }
   }, []);
 
