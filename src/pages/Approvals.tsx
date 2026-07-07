@@ -42,7 +42,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { Split } from "lucide-react";
 import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
-import { useActiveOfficialsForMe } from "@/hooks/useApproverSubstitutes";
+import { useActiveOfficialsForMe, useSubstituteGrantsForMe } from "@/hooks/useApproverSubstitutes";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
 import { segmentDocByRules, segmentsForApprover, isTrulySegmented, type ApprovalSegment } from "@/lib/approvalSegments";
@@ -1550,6 +1550,7 @@ export default function ApprovalsPage() {
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
   const { officials: activeOfficials } = useActiveOfficialsForMe();
+  const { grants: substituteGrants } = useSubstituteGrantsForMe();
   const { rules } = useApprovalRules();
 
 
@@ -2562,18 +2563,51 @@ export default function ApprovalsPage() {
             codeEq(selectedDoc.requesterCode) ||
             approverMatches(selectedDoc.requester, session.userName);
           if (isRequester) return false;
-          const isDesignated =
-            codeEq(selectedDoc.approverCode) ||
-            approverMatches(selectedDoc.currentApprover, session.userName) ||
-            matchesSubstitutedOfficial(selectedDoc.currentApprover) ||
-            (!!selectedDoc.approverEmail &&
-              officialIdentifiers.includes(selectedDoc.approverEmail.toLowerCase()));
+
+          // === 1) Aprovador designado no fluxo (inclui delegações vigentes,
+          //        pois a delegação altera currentApprover/approverCode no SAP).
+          const sessionCodeLower = (session.userName || "").toLowerCase().trim();
+          const isDirectApprover =
+            (!!selectedDoc.approverCode &&
+              selectedDoc.approverCode.toLowerCase().trim() === sessionCodeLower) ||
+            approverMatches(selectedDoc.currentApprover, session.userName);
+
+          // === 2) Substituto ativo cuja janela cobre a data do documento.
+          //        Se docDate não está disponível, cai para "hoje".
+          const docRefTs = (() => {
+            const d = selectedDoc.docDate;
+            const t = d ? new Date(d).getTime() : NaN;
+            return Number.isFinite(t) ? t : Date.now();
+          })();
+          const approverEmailLower = (selectedDoc.approverEmail || "").toLowerCase().trim();
+          const approverNameLower = (selectedDoc.currentApprover || "").toLowerCase().trim();
+          const isValidSubstitute = substituteGrants.some((g) => {
+            const startsTs = new Date(g.starts_at).getTime();
+            const endsTs = new Date(g.ends_at).getTime();
+            if (!(startsTs <= docRefTs && docRefTs < endsTs)) return false;
+            const ge = (g.official_email || "").toLowerCase();
+            const gPrefix = ge.split("@")[0];
+            const gn = (g.official_name || "").toLowerCase();
+            // A substituição precisa apontar para o mesmo aprovador oficial do
+            // documento (por e-mail, prefixo do e-mail ou nome).
+            if (approverEmailLower) {
+              if (approverEmailLower === ge) return true;
+              if (gPrefix && approverEmailLower.startsWith(`${gPrefix}@`)) return true;
+            }
+            if (approverNameLower) {
+              if (gPrefix && (approverNameLower === gPrefix || approverNameLower.includes(gPrefix))) return true;
+              if (gn && (approverNameLower === gn || approverNameLower.includes(gn) || gn.includes(approverNameLower))) return true;
+            }
+            return false;
+          });
+
           // O botão Aprovar/Rejeitar aparece SOMENTE quando o usuário tem
           // permissão real de decidir sobre o documento — via fluxo de
-          // aprovação (aprovador designado), atuação como substituto ativo,
-          // ou delegação (que altera currentApprover/approverCode no SAP).
-          // Admins que só têm visibilidade ampla NÃO devem ver os botões.
-          return isDesignated;
+          // aprovação (aprovador designado), delegação vigente (refletida em
+          // currentApprover/approverCode no SAP), ou substituição ativa cuja
+          // janela cobre a data do documento. Admins com apenas visibilidade
+          // ampla NÃO devem ver os botões.
+          return isDirectApprover || isValidSubstitute;
         })()}
       />
 

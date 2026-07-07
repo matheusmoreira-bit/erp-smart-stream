@@ -140,3 +140,52 @@ export function useActiveOfficialsForMe() {
 
   return { officials, refresh: load };
 }
+
+/** Grants (não revogados) em que sou o substituto — inclui starts_at/ends_at,
+ *  para permitir validar se a substituição estava vigente na data do documento. */
+export interface SubstituteGrantForMe {
+  id: string;
+  official_email: string;
+  official_name: string | null;
+  starts_at: string;
+  ends_at: string;
+  company_db: string | null;
+}
+
+export function useSubstituteGrantsForMe() {
+  const { session } = useSap();
+  const [grants, setGrants] = useState<SubstituteGrantForMe[]>([]);
+
+  const load = useCallback(async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    const authEmail = (userData.user?.email || "").toLowerCase();
+    const sapUser = (session?.userName || "").toLowerCase().trim();
+    if (!authEmail && !sapUser) { setGrants([]); return; }
+
+    const identifiers = Array.from(
+      new Set(
+        [authEmail, sapUser, authEmail.split("@")[0], sapUser.split("@")[0]].filter(Boolean),
+      ),
+    );
+    const results = await Promise.all(
+      identifiers.map((id) =>
+        supabase.rpc("substitute_grants_for_me" as never, { _substitute_identifier: id } as never),
+      ),
+    );
+    const seen = new Set<string>();
+    const merged: SubstituteGrantForMe[] = [];
+    for (const r of results) {
+      const rows = ((r.data as SubstituteGrantForMe[]) || []);
+      for (const row of rows) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        merged.push(row);
+      }
+    }
+    setGrants(merged);
+  }, [session?.userName]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { grants, refresh: load };
+}

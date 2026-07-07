@@ -3657,6 +3657,17 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      substitute_grants_for_me: {
+        Args: { _substitute_identifier: string }
+        Returns: {
+          company_db: string
+          ends_at: string
+          id: string
+          official_email: string
+          official_name: string
+          starts_at: string
+        }[]
+      }
       try_watcher_lock: {
         Args: { _name: string; _ttl_minutes?: number }
         Returns: boolean
