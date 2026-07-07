@@ -1494,8 +1494,37 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <XIcon className="w-3.5 h-3.5 mr-1" /> Limpar filtros
               </Button>
             )}
+            <div
+              role="group"
+              aria-label="Alternar entre visualização em cards e tabela"
+              className="flex items-center border border-border rounded-lg overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setViewMode("cards")}
+                aria-pressed={viewMode === "cards"}
+                aria-label="Visualizar como cards"
+                title="Cards"
+                className={`p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${viewMode === "cards" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <LayoutGrid className="w-4 h-4" aria-hidden="true" />
+                <span className="sr-only">Cards</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                aria-pressed={viewMode === "table"}
+                aria-label="Visualizar como lista"
+                title="Lista"
+                className={`p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${viewMode === "table" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <List className="w-4 h-4" aria-hidden="true" />
+                <span className="sr-only">Lista</span>
+              </button>
+            </div>
           </div>
         </section>
+
 
 
 
