@@ -1370,7 +1370,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setStatusFilter(opt.value)}
+                  onClick={() => preserveScroll(() => setStatusFilter(opt.value))}
                   aria-pressed={statusFilter === opt.value}
                   aria-label={`Status: ${opt.label}`}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
