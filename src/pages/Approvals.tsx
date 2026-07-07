@@ -1833,6 +1833,40 @@ export default function ApprovalsPage() {
               <History className="w-4 h-4" />
               Histórico
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={filtered.length === 0}
+              onClick={() => {
+                void exportListReportPdf({
+                  title: "Relatório de Aprovações Pendentes",
+                  subtitle: `${filtered.length} pedido(s) · ${companyLabel}`,
+                  meta: [
+                    { label: "Empresa", value: companyLabel },
+                    { label: "Usuário", value: session?.userName || "—" },
+                  ],
+                  columns: [
+                    { header: "Tipo", cell: (a) => a.docTypeName || "—" },
+                    { header: "Doc #", cell: (a) => String(a.docNum ?? "—") },
+                    { header: "Parceiro", cell: (a) => a.cardName },
+                    { header: "Solicitante", cell: (a) => a.requester || "—" },
+                    { header: "Aprovador atual", cell: (a) => a.currentApprover || "—" },
+                    { header: "Etapa", cell: (a) => a.currentStage || "—" },
+                    { header: "Data doc.", cell: (a) => a.docDate ? new Date(a.docDate).toLocaleDateString("pt-BR") : "—" },
+                    { header: "Vencimento", cell: (a) => a.dueDate ? new Date(a.dueDate).toLocaleDateString("pt-BR") : "—" },
+                    { header: "Dias em aberto", align: "right", cell: (a) => String(a.daysOpen ?? "—") },
+                    { header: "Total", align: "right", cell: (a) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(a.currency) ? a.currency : "BRL" }).format(a.docTotal) },
+                  ],
+                  rows: filtered,
+                  fileName: "aprovacoes",
+                });
+              }}
+              title="Exportar a lista atual em PDF"
+            >
+              <FileDown className="w-4 h-4" />
+              Exportar
+            </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
               <LogOut className="w-4 h-4" />
