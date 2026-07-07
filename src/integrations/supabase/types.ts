@@ -1664,6 +1664,9 @@ export type Database = {
           sap_integration_last_attempt_at: string | null
           sap_integration_locked_at: string | null
           sap_purchase_order_status: string | null
+          sap_sync_attempts: number
+          sap_sync_next_retry_at: string | null
+          sap_sync_state: string | null
           status: Database["public"]["Enums"]["expense_status"]
           supplier_code: string | null
           supplier_name: string
@@ -1699,6 +1702,9 @@ export type Database = {
           sap_integration_last_attempt_at?: string | null
           sap_integration_locked_at?: string | null
           sap_purchase_order_status?: string | null
+          sap_sync_attempts?: number
+          sap_sync_next_retry_at?: string | null
+          sap_sync_state?: string | null
           status?: Database["public"]["Enums"]["expense_status"]
           supplier_code?: string | null
           supplier_name: string
@@ -1734,6 +1740,9 @@ export type Database = {
           sap_integration_last_attempt_at?: string | null
           sap_integration_locked_at?: string | null
           sap_purchase_order_status?: string | null
+          sap_sync_attempts?: number
+          sap_sync_next_retry_at?: string | null
+          sap_sync_state?: string | null
           status?: Database["public"]["Enums"]["expense_status"]
           supplier_code?: string | null
           supplier_name?: string
