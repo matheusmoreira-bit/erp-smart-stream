@@ -229,6 +229,10 @@ export function CreateExpenseModal({
   // erros". Cache separado guarda os DocGroup completos dos que falharam.
   const currentGroupRef = useRef<DocGroup | null>(null);
   const failedGroupsRef = useRef<Map<string, DocGroup>>(new Map());
+  // Cache dos grupos que estavam pendentes/enfileirados no momento do
+  // cancelamento. Habilita "Retomar fila" para continuar do próximo
+  // deferredGroup sem tocar nos grupos já concluídos com sucesso.
+  const cancelledGroupsRef = useRef<DocGroup[]>([]);
   // Limite de confiança IA ajustável em tempo real (a partir do prop).
   // Grupos com confiança média abaixo disso ganham destaque visual âmbar.
   const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState<number>(lowAiConfidenceThreshold);
