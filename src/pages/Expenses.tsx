@@ -892,31 +892,62 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
 
-  // ─── Lazy load: 30 iniciais + 10 por scroll ───────────────────
-  const INITIAL_PAGE_STEP = 30;
-  const PAGE_STEP = 10;
-  const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_STEP);
+  // ─── Ordenação por coluna ─────────────────────────────────────
+  type SortKey = "status" | "supplier" | "requester" | "created" | "doc" | "due" | "amount" | "origin";
+  const [sortKey, setSortKey] = usePersistedState<SortKey>(filterKey("sortKey"), "created");
+  const [sortDir, setSortDir] = usePersistedState<"asc" | "desc">(filterKey("sortDir"), "desc");
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "amount" || key === "created" ? "desc" : "asc"); }
+  };
+  const sorted = [...filtered].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const va = (() => {
+      switch (sortKey) {
+        case "status": return STATUS_LABELS[a.exp.status] || a.exp.status;
+        case "supplier": return (a.exp.supplier_name || "").toLowerCase();
+        case "requester": return (a.exp.requester_name || "").toLowerCase();
+        case "created": return new Date(a.exp.created_at).getTime();
+        case "doc": return a.exp.doc_date ? new Date(a.exp.doc_date).getTime() : 0;
+        case "due": return a.exp.due_date ? new Date(a.exp.due_date).getTime() : 0;
+        case "amount": return a.exp.total_amount;
+        case "origin": return a.origin;
+      }
+    })();
+    const vb = (() => {
+      switch (sortKey) {
+        case "status": return STATUS_LABELS[b.exp.status] || b.exp.status;
+        case "supplier": return (b.exp.supplier_name || "").toLowerCase();
+        case "requester": return (b.exp.requester_name || "").toLowerCase();
+        case "created": return new Date(b.exp.created_at).getTime();
+        case "doc": return b.exp.doc_date ? new Date(b.exp.doc_date).getTime() : 0;
+        case "due": return b.exp.due_date ? new Date(b.exp.due_date).getTime() : 0;
+        case "amount": return b.exp.total_amount;
+        case "origin": return b.origin;
+      }
+    })();
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+
+  // ─── Paginação (mesma página para cards mobile e tabela desktop) ───
+  const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
+  const [pageSize, setPageSize] = usePersistedState<number>(filterKey("pageSize"), 30);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   useEffect(() => {
-    setVisibleCount(INITIAL_PAGE_STEP);
-  }, [search, statusFilter, sourceMode, showAll, mode]);
-  const visibleItems = filtered.slice(0, visibleCount);
-  const hasMoreLocal = visibleCount < filtered.length;
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+    setPage(1);
+  }, [search, statusFilter, sourceMode, showAll, mode, sortKey, sortDir, pageSize]);
   useEffect(() => {
-    if (!hasMoreLocal) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setVisibleCount((c) => Math.min(c + PAGE_STEP, filtered.length));
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [hasMoreLocal, filtered.length]);
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pageStart = (page - 1) * pageSize;
+  const pageItems = sorted.slice(pageStart, pageStart + pageSize);
+  const visibleItems = pageItems; // compat com blocos existentes
 
   const handleSubmitForApproval = async (id: string) => {
     setIsSubmitting(true);
