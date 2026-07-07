@@ -138,6 +138,7 @@ export function CreateExpenseModal({
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isGeneratingFlowReport, setIsGeneratingFlowReport] = useState(false);
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [currency, setCurrency] = useState("");
   const [currencyWarning, setCurrencyWarning] = useState<string | null>(null);
@@ -3276,53 +3277,85 @@ export function CreateExpenseModal({
           {sapSession?.isSuperUser && queueHistory.length > 0 && (
             <Button
               variant="outline"
+              disabled={isGeneratingFlowReport}
               className="gap-1.5 border-primary/50 text-primary hover:bg-primary/10"
-              onClick={() => {
-                exportPurchaseFlowReportPdf({
-                  entries: queueHistory.map((e) => ({
-                    supplierLabel: e.supplierLabel,
-                    status: e.status,
-                    fileCount: e.fileCount,
-                    lineCount: e.lineCount,
-                    estimatedTotal: e.estimatedTotal,
-                    currency: e.currency,
-                    currencies: e.currencies,
-                    aiConfidence: e.aiConfidence,
-                    aiWarnings: e.aiWarnings,
-                    errorMessage: e.errorMessage,
-                    fileNames: e.fileNames,
-                    classifiedAt: e.classifiedAt,
-                    promotedAt: e.promotedAt,
-                    submittedAt: e.submittedAt,
-                    completedAt: e.completedAt,
-                  })),
-                  deferredGroups: deferredGroups.map((g) => ({
-                    supplierLabel: g.supplierLabel,
-                    docs: g.docs.map((d) => {
-                      const conf = Number(d.extracted?.confidence);
-                      const warns = [d.extracted?.client_warning, d.extracted?.totals_warning]
-                        .filter(Boolean)
-                        .map((w) => String(w));
-                      return {
-                        fileName: d.file.name,
-                        docType: (d.extracted?.doc_type as string | undefined) ?? null,
-                        currency: (d.extracted?.currency as string | undefined) ?? null,
-                        confidence: Number.isFinite(conf) && conf > 0 ? conf : null,
-                        warnings: warns,
-                      };
-                    }),
-                  })),
-                  confidenceThreshold: aiConfidenceThreshold,
-                  kindLabel: isSales ? "Pedidos de venda" : "Despesas",
-                  fileName: `fluxo_${isSales ? "vendas" : "compras"}`,
-                }).catch((err) => {
+              onClick={async () => {
+                // Guardas de UX: sem entradas processadas não faz sentido gerar
+                // o PDF (o super-user provavelmente esqueceu de rodar algo).
+                if (queueHistory.length === 0) {
+                  toast.info("Nenhum grupo processado ainda — não há dados para o relatório.");
+                  return;
+                }
+                const groupsWithDocs = deferredGroups.filter((g) => (g.docs?.length ?? 0) > 0).length;
+                const totalGroups = deferredGroups.length;
+                setIsGeneratingFlowReport(true);
+                const loadingId = toast.loading("Gerando PDF do fluxo…");
+                try {
+                  await exportPurchaseFlowReportPdf({
+                    entries: queueHistory.map((e) => ({
+                      supplierLabel: e.supplierLabel,
+                      status: e.status,
+                      fileCount: e.fileCount,
+                      lineCount: e.lineCount,
+                      estimatedTotal: e.estimatedTotal,
+                      currency: e.currency,
+                      currencies: e.currencies,
+                      aiConfidence: e.aiConfidence,
+                      aiWarnings: e.aiWarnings,
+                      errorMessage: e.errorMessage,
+                      fileNames: e.fileNames,
+                      classifiedAt: e.classifiedAt,
+                      promotedAt: e.promotedAt,
+                      submittedAt: e.submittedAt,
+                      completedAt: e.completedAt,
+                    })),
+                    deferredGroups: deferredGroups.map((g) => ({
+                      supplierLabel: g.supplierLabel,
+                      docs: g.docs.map((d) => {
+                        const conf = Number(d.extracted?.confidence);
+                        const warns = [d.extracted?.client_warning, d.extracted?.totals_warning]
+                          .filter(Boolean)
+                          .map((w) => String(w));
+                        return {
+                          fileName: d.file.name,
+                          docType: (d.extracted?.doc_type as string | undefined) ?? null,
+                          currency: (d.extracted?.currency as string | undefined) ?? null,
+                          confidence: Number.isFinite(conf) && conf > 0 ? conf : null,
+                          warnings: warns,
+                        };
+                      }),
+                    })),
+                    confidenceThreshold: aiConfidenceThreshold,
+                    kindLabel: isSales ? "Pedidos de venda" : "Despesas",
+                    fileName: `fluxo_${isSales ? "vendas" : "compras"}`,
+                  });
+                  toast.dismiss(loadingId);
+                  if (totalGroups > 0 && groupsWithDocs === 0) {
+                    toast.success("PDF gerado. Nenhum grupo adiado possui anexos — o relatório traz apenas os tempos por etapa.");
+                  } else if (totalGroups > 0 && groupsWithDocs < totalGroups) {
+                    toast.success(`PDF gerado. ${totalGroups - groupsWithDocs} grupo(s) adiado(s) sem anexos foram listados sem classificação.`);
+                  } else {
+                    toast.success("Relatório do fluxo baixado.");
+                  }
+                } catch (err) {
                   console.error("[purchase-flow-pdf] falha", err);
-                  toast.error("Não foi possível gerar o PDF do fluxo.");
-                });
+                  toast.dismiss(loadingId);
+                  toast.error(
+                    err instanceof Error
+                      ? `Não foi possível gerar o PDF: ${err.message}`
+                      : "Não foi possível gerar o PDF do fluxo."
+                  );
+                } finally {
+                  setIsGeneratingFlowReport(false);
+                }
               }}
             >
-              <FileDown className="w-4 h-4" />
-              Fluxo de compras (super-user)
+              {isGeneratingFlowReport ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileDown className="w-4 h-4" />
+              )}
+              {isGeneratingFlowReport ? "Gerando PDF…" : "Fluxo de compras (super-user)"}
             </Button>
           )}
           <AlertDialogAction
