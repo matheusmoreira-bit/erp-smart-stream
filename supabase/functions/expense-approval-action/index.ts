@@ -37,6 +37,35 @@ function json(status: number, body: unknown) {
   });
 }
 
+// Stages ajudam a rastrear em qual passo a requisição foi rejeitada ou falhou.
+// O nome do stage vai tanto nos logs (JSON estruturado) quanto no corpo da
+// resposta de erro, permitindo que o front-end mostre mensagens específicas.
+type Stage =
+  | "cors"
+  | "parse_body"
+  | "idempotency_reserve"
+  | "idempotency_replay"
+  | "idempotency_conflict"
+  | "auth_cloud"
+  | "auth_sap"
+  | "auth_none"
+  | "load_expense"
+  | "load_levels"
+  | "authorize"
+  | "self_approval_guard"
+  | "update_reject"
+  | "update_advance_level"
+  | "update_final_approve"
+  | "success";
+
+function stageLog(stage: Stage, level: "info" | "warn" | "error", data: Record<string, unknown>) {
+  const line = JSON.stringify({ fn: "expense-approval-action", stage, level, ts: new Date().toISOString(), ...data });
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.log(line);
+}
+
+
 function normalize(s: unknown): string {
   return String(s ?? "").toLowerCase().trim();
 }
@@ -122,19 +151,42 @@ async function isSapSuperuser(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return json(405, { error: "Method not allowed" });
+  const t0 = Date.now();
+  const requestId =
+    req.headers.get("x-request-id") ||
+    req.headers.get("cf-ray") ||
+    crypto.randomUUID();
+
+  if (req.method === "OPTIONS") {
+    stageLog("cors", "info", { requestId, method: "OPTIONS" });
+    return new Response(null, { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    stageLog("cors", "warn", { requestId, method: req.method, reason: "method_not_allowed" });
+    return json(405, { error: "Method not allowed", stage: "cors", requestId });
+  }
 
   let body: { expense_id?: string; action?: string; remarks?: string } = {};
-  try { body = await req.json(); } catch { return json(400, { error: "Corpo inválido" }); }
+  try {
+    body = await req.json();
+  } catch (e) {
+    stageLog("parse_body", "error", { requestId, error: (e as Error).message });
+    return json(400, { error: "Corpo inválido (JSON malformado).", stage: "parse_body", requestId });
+  }
 
   const expenseId = String(body.expense_id || "").trim();
   const action = String(body.action || "").trim().toLowerCase();
   const remarks = body.remarks?.toString().trim() || null;
-  if (!expenseId) return json(400, { error: "expense_id é obrigatório" });
-  if (action !== "approve" && action !== "reject") {
-    return json(400, { error: "action deve ser 'approve' ou 'reject'" });
+  if (!expenseId) {
+    stageLog("parse_body", "warn", { requestId, reason: "missing_expense_id" });
+    return json(400, { error: "expense_id é obrigatório.", stage: "parse_body", requestId });
   }
+  if (action !== "approve" && action !== "reject") {
+    stageLog("parse_body", "warn", { requestId, reason: "invalid_action", received: action });
+    return json(400, { error: "action deve ser 'approve' ou 'reject'.", stage: "parse_body", requestId });
+  }
+
+  stageLog("parse_body", "info", { requestId, expenseId, action, hasRemarks: !!remarks });
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -150,46 +202,75 @@ Deno.serve(async (req) => {
     (req.headers.get("idempotency-key") || req.headers.get("x-idempotency-key") || "").trim();
 
   const respond = async (status: number, body: unknown): Promise<Response> => {
+    const payload = (typeof body === "object" && body)
+      ? { ...(body as Record<string, unknown>), requestId }
+      : body;
     if (idempotencyKey) {
       try {
         await admin
           .from("expense_action_idempotency")
           .update({
             status_code: status,
-            response: body as Record<string, unknown>,
+            response: payload as Record<string, unknown>,
             completed_at: new Date().toISOString(),
           })
           .eq("idempotency_key", idempotencyKey);
       } catch (e) {
-        console.warn("[expense-approval-action] falha ao gravar idempotência:", e);
+        stageLog("idempotency_reserve", "warn", {
+          requestId, phase: "persist_response", error: (e as Error).message,
+        });
       }
     }
-    return json(status, body);
+    stageLog("success", status >= 400 ? "warn" : "info", {
+      requestId, status, elapsedMs: Date.now() - t0,
+    });
+    return json(status, payload);
   };
 
   if (idempotencyKey) {
     // 1) Já existe? → devolve a resposta gravada (ou 409 se ainda em curso).
-    const { data: prior } = await admin
+    const { data: prior, error: priorErr } = await admin
       .from("expense_action_idempotency")
       .select("idempotency_key, expense_id, action, status_code, response, completed_at")
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
+    if (priorErr) {
+      stageLog("idempotency_reserve", "error", {
+        requestId, phase: "lookup", error: priorErr.message,
+      });
+      return json(500, {
+        error: `Falha ao consultar idempotência: ${priorErr.message}`,
+        stage: "idempotency_reserve",
+        requestId,
+      });
+    }
     if (prior) {
       if ((prior as any).expense_id !== expenseId || (prior as any).action !== action) {
+        stageLog("idempotency_conflict", "warn", {
+          requestId, idempotencyKey,
+          existing: { expenseId: (prior as any).expense_id, action: (prior as any).action },
+          received: { expenseId, action },
+        });
         return json(422, {
-          error: "Idempotency-Key já utilizada para outra requisição.",
+          error: "Idempotency-Key já utilizada para outra requisição (expense/action divergentes).",
+          stage: "idempotency_conflict",
+          requestId,
         });
       }
       if ((prior as any).completed_at && (prior as any).status_code) {
-        // Replay: reentrega a MESMA resposta gravada, marcada com
-        // `replayed: true` para que o cliente possa avisar o usuário que a
-        // ação já havia sido processada anteriormente (evita confusão sobre
-        // duplicidade em retries por perda de conexão).
+        stageLog("idempotency_replay", "info", {
+          requestId, idempotencyKey, replayedStatus: (prior as any).status_code,
+        });
         const cached = (prior as any).response ?? { ok: true };
-        return json((prior as any).status_code, { ...cached, replayed: true });
+        return json((prior as any).status_code, { ...cached, replayed: true, requestId });
       }
+      stageLog("idempotency_conflict", "warn", {
+        requestId, idempotencyKey, reason: "in_flight",
+      });
       return json(409, {
-        error: "Requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
+        error: "Já existe uma requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
+        stage: "idempotency_conflict",
+        requestId,
       });
     }
     // 2) Reserva a chave — falha por conflito indica corrida com outro request.
@@ -201,11 +282,23 @@ Deno.serve(async (req) => {
         action,
       });
     if (reserveErr) {
-      return json(409, {
-        error: "Requisição idêntica em processamento (conflito ao reservar a chave).",
+      stageLog("idempotency_reserve", "error", {
+        requestId, idempotencyKey, error: reserveErr.message, code: (reserveErr as any).code,
+      });
+      // Código 23505 = unique_violation → outra requisição chegou antes.
+      const isRace = (reserveErr as any).code === "23505";
+      return json(isRace ? 409 : 500, {
+        error: isRace
+          ? "Requisição idêntica em processamento (conflito ao reservar a chave de idempotência)."
+          : `Falha ao reservar chave de idempotência: ${reserveErr.message}`,
+        stage: "idempotency_reserve",
+        requestId,
       });
     }
+    stageLog("idempotency_reserve", "info", { requestId, idempotencyKey });
   }
+
+
 
 
   // ── Identify caller ────────────────────────────────────────────────────
@@ -228,40 +321,52 @@ Deno.serve(async (req) => {
       _user_id: cloudUser.id, _role: "admin",
     });
     if (hasAdmin === true) isCloudAdmin = true;
+    stageLog("auth_cloud", "info", { requestId, callerEmail, isCloudAdmin });
   } catch (e) {
-    if (!(e instanceof AuthError)) throw e;
+    if (!(e instanceof AuthError)) {
+      stageLog("auth_cloud", "error", { requestId, error: (e as Error).message });
+      throw e;
+    }
     // No Cloud JWT — fall back to SAP session.
+    stageLog("auth_cloud", "info", { requestId, note: "no_cloud_jwt_fallback_sap" });
   }
 
   let sapValidated: Awaited<ReturnType<typeof validateSapSession>> = null;
   if (sapSessionHeader && sapUserHeader && sapCompanyHeader) {
     sapValidated = await validateSapSession(req);
-    if (!sapValidated) return await respond(401, { error: "Sessão SAP inválida ou expirada" });
-    // Use SAP user as caller identity when available (matches how the app stores approvers).
+    if (!sapValidated) {
+      stageLog("auth_sap", "warn", { requestId, reason: "invalid_or_expired_session", sapUser: sapUserHeader });
+      return await respond(401, {
+        error: "Sessão SAP inválida ou expirada. Faça login novamente.",
+        stage: "auth_sap",
+      });
+    }
     if (!callerIdentity) callerIdentity = sapValidated.userName;
-    // Cheap superuser check + mapping check
     try {
       const { data: mappedAdmin } = await admin.rpc("is_sap_user_admin", {
         _sap_username: sapValidated.userName.toLowerCase(),
       });
       if (mappedAdmin === true) isSuperUser = true;
-    } catch { /* ignore */ }
-    if (!isSuperUser && sapValidated.userName.toLowerCase() === "manager") {
-      isSuperUser = true;
+    } catch (e) {
+      stageLog("auth_sap", "warn", { requestId, phase: "is_sap_user_admin", error: (e as Error).message });
     }
+    if (!isSuperUser && sapValidated.userName.toLowerCase() === "manager") isSuperUser = true;
     if (!isSuperUser) {
       isSuperUser = await isSapSuperuser(
-        admin,
-        sapValidated.companyDB,
-        sapSessionHeader,
-        sapRouteHeader,
-        sapValidated.userName,
+        admin, sapValidated.companyDB, sapSessionHeader, sapRouteHeader, sapValidated.userName,
       );
     }
+    stageLog("auth_sap", "info", {
+      requestId, sapUser: sapValidated.userName, companyDB: sapValidated.companyDB, isSuperUser,
+    });
   }
 
   if (!callerIdentity && !isCloudAdmin) {
-    return await respond(401, { error: "Não autenticado" });
+    stageLog("auth_none", "warn", { requestId });
+    return await respond(401, {
+      error: "Não autenticado — envie um JWT válido do Lovable Cloud ou os headers x-sap-* de uma sessão SAP ativa.",
+      stage: "auth_none",
+    });
   }
 
   // ── Load expense ───────────────────────────────────────────────────────
@@ -270,26 +375,51 @@ Deno.serve(async (req) => {
     .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db")
     .eq("id", expenseId)
     .maybeSingle();
-  if (expErr) return await respond(500, { error: `Falha ao carregar despesa: ${expErr.message}` });
-  if (!exp) return await respond(404, { error: "Despesa não encontrada" });
-  if ((exp as any).status !== "pendente_aprovacao") {
-    return await respond(409, { error: `Despesa não está pendente de aprovação (status atual: ${(exp as any).status}).` });
+  if (expErr) {
+    stageLog("load_expense", "error", { requestId, expenseId, error: expErr.message });
+    return await respond(500, { error: `Falha ao carregar despesa: ${expErr.message}`, stage: "load_expense" });
   }
+  if (!exp) {
+    stageLog("load_expense", "warn", { requestId, expenseId, reason: "not_found" });
+    return await respond(404, { error: "Despesa não encontrada.", stage: "load_expense" });
+  }
+  if ((exp as any).status !== "pendente_aprovacao") {
+    stageLog("load_expense", "warn", {
+      requestId, expenseId, reason: "invalid_status", currentStatus: (exp as any).status,
+    });
+    return await respond(409, {
+      error: `Despesa não está pendente de aprovação (status atual: ${(exp as any).status}).`,
+      stage: "load_expense",
+      currentStatus: (exp as any).status,
+    });
+  }
+
 
   const currentLevel = Number((exp as any).current_level_order || 1);
   let levels: Array<{ level_order: number; approver_name: string; approver_email: string | null }> = [];
   if ((exp as any).approval_rule_id) {
-    const { data: lvls } = await admin
+    const { data: lvls, error: lvlErr } = await admin
       .from("approval_rule_levels")
       .select("level_order, approver_name, approver_email")
       .eq("rule_id", (exp as any).approval_rule_id)
       .order("level_order", { ascending: true });
+    if (lvlErr) {
+      stageLog("load_levels", "error", { requestId, expenseId, error: lvlErr.message });
+      return await respond(500, {
+        error: `Falha ao carregar níveis de aprovação: ${lvlErr.message}`,
+        stage: "load_levels",
+      });
+    }
     levels = (lvls || []) as any;
   }
 
   const totalLevels = levels.length || 1;
   const isFinalLevel = currentLevel >= totalLevels;
   const currentLevelRow = levels.find((l) => l.level_order === currentLevel) || null;
+  stageLog("load_levels", "info", {
+    requestId, expenseId, currentLevel, totalLevels, isFinalLevel,
+  });
+
 
   // ── Authorization ──────────────────────────────────────────────────────
   // The designated approver comes from the rule level. When there's no rule
@@ -346,23 +476,22 @@ Deno.serve(async (req) => {
   }
 
   if (!isOverride && !isMatch && !substitution) {
-    console.warn("[expense-approval-action] denied", {
-      expenseId,
-      caller: callerIdentity,
-      designatedName,
-      designatedEmail,
-      currentLevel,
+    stageLog("authorize", "warn", {
+      requestId, expenseId, caller: callerIdentity, designatedName, designatedEmail, currentLevel,
+      reason: "not_designated_approver",
     });
     return await respond(403, {
-      error: "Você não é o aprovador atribuído deste documento.",
+      error: `Você não é o aprovador atribuído deste documento (aprovador atual: ${designatedName || "não definido"}).`,
+      stage: "authorize",
       designatedApprover: designatedName,
     });
   }
+  stageLog("authorize", "info", {
+    requestId, expenseId, caller: callerIdentity, isMatch, isOverride,
+    viaSubstitution: !!substitution, substitutionId: substitution?.id ?? null,
+  });
 
   // ── Self-approval guard ───────────────────────────────────────────────
-  // Ninguém — nem admins/super-usuários — pode aprovar um documento que
-  // ele próprio criou. Rejeição continua permitida (útil para cancelar o
-  // próprio pedido). Só bloqueia a ação "approve".
   if (action === "approve") {
     const requesterEmail = normalize((exp as any).requester_email || "");
     const requesterName = normalize((exp as any).requester_name || "");
@@ -377,17 +506,16 @@ Deno.serve(async (req) => {
         (requesterName === callerNorm ||
           emailPrefix(requesterName) === emailPrefix(callerNorm)));
     if (isSelfApproval) {
-      console.warn("[expense-approval-action] self-approval blocked", {
-        expenseId,
-        caller: callerIdentity,
-        requesterEmail,
-        requesterName,
+      stageLog("self_approval_guard", "warn", {
+        requestId, expenseId, caller: callerIdentity, requesterEmail, requesterName,
       });
       return await respond(403, {
         error: "Você não pode aprovar um documento que você mesmo criou.",
+        stage: "self_approval_guard",
       });
     }
   }
+
 
   const actor = callerIdentity || callerEmail || "cloud-admin";
   const actorEmail = callerEmail || (actor.includes("@") ? actor : null);
@@ -451,7 +579,13 @@ Deno.serve(async (req) => {
     const updates: Record<string, unknown> = { status: "rejeitado" };
     if (remarks) updates.remarks = remarks;
     const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-    if (updErr) return await respond(500, { error: `Falha ao rejeitar: ${updErr.message}` });
+    if (updErr) {
+      stageLog("update_reject", "error", { requestId, expenseId, error: updErr.message });
+      return await respond(500, {
+        error: `Falha ao rejeitar a despesa: ${updErr.message}`,
+        stage: "update_reject",
+      });
+    }
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "rejected",
@@ -464,6 +598,7 @@ Deno.serve(async (req) => {
       substituted_for_name: substitution?.official_name ?? null,
     } as any);
     await writeAuditLog("rejected", currentLevel);
+    stageLog("update_reject", "info", { requestId, expenseId, currentLevel });
     return await respond(200, {
       ok: true,
       action: "reject",
@@ -480,6 +615,7 @@ Deno.serve(async (req) => {
       },
     });
   }
+
 
   // action === "approve"
   await admin.from("expense_approval_log").insert({
@@ -515,7 +651,16 @@ Deno.serve(async (req) => {
     };
     if (remarks) updates.remarks = remarks;
     const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-    if (updErr) return await respond(500, { error: `Falha ao avançar de nível: ${updErr.message}` });
+    if (updErr) {
+      stageLog("update_advance_level", "error", { requestId, expenseId, nextLevelOrder, error: updErr.message });
+      return await respond(500, {
+        error: `Falha ao avançar para o próximo nível de aprovação: ${updErr.message}`,
+        stage: "update_advance_level",
+      });
+    }
+    stageLog("update_advance_level", "info", {
+      requestId, expenseId, from: currentLevel, to: nextLevelOrder, jumped, nextApproverName,
+    });
 
     if (jumped) {
       await admin.from("expense_approval_log").insert({
@@ -555,7 +700,14 @@ Deno.serve(async (req) => {
   const updates: Record<string, unknown> = { status: "aprovado" };
   if (remarks) updates.remarks = remarks;
   const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
-  if (updErr) return await respond(500, { error: `Falha ao aprovar: ${updErr.message}` });
+  if (updErr) {
+    stageLog("update_final_approve", "error", { requestId, expenseId, error: updErr.message });
+    return await respond(500, {
+      error: `Falha ao registrar aprovação final: ${updErr.message}`,
+      stage: "update_final_approve",
+    });
+  }
+  stageLog("update_final_approve", "info", { requestId, expenseId, currentLevel });
 
   return await respond(200, {
     ok: true,
