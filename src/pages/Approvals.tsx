@@ -1421,7 +1421,7 @@ function MyRequestsTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((doc) => (
+              {visibleRequests.map((doc) => (
                 <tr key={doc.approvalRequestId} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-3">
                     <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
