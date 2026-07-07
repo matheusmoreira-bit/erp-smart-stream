@@ -1595,9 +1595,11 @@ export default function ApprovalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approvals, purchaseExpenses, salesExpenses]);
 
-  // Deep-link: read `?doc=<key>` and open the matching approval once loaded.
-  // Se o documento já não é mais pendente (aprovado/rejeitado/pago), redireciona
-  // para a página de Compras/Vendas com o mesmo doc, para o usuário conseguir vê-lo.
+  // Deep-link: read `?doc=<key>` e abre o modal correspondente assim que o
+  // documento aparecer em `allApprovals`. Para chaves `internal:<uuid>` (docs
+  // internos criados no ERP Flow), esperamos o carregamento das despesas antes
+  // de decidir que o doc não existe mais. Se ele já não estiver pendente,
+  // redireciona para Compras/Vendas mantendo o mesmo `doc`.
   useEffect(() => {
     const id = readDocParam();
     if (!id || selectedDoc) return;
@@ -1607,9 +1609,16 @@ export default function ApprovalsPage() {
     };
     const found = allApprovals.find((d) => keyOf(d) === id);
     if (found) { setSelectedDoc(found); return; }
-    // Aguarda o carregamento inicial terminar antes de decidir que não existe.
-    if (isLoading) return;
-    if (id.startsWith("internal:")) {
+
+    // Só decide "não é mais pendente" depois de tudo carregado — evita redirect
+    // prematuro quando as listas ainda estão sendo buscadas.
+    const isInternal = id.startsWith("internal:");
+    const stillLoading = isInternal
+      ? (isLoadingPurchase || isLoadingSales)
+      : isLoading;
+    if (stillLoading) return;
+
+    if (isInternal) {
       const rawId = id.slice("internal:".length);
       const purchaseHit = purchaseExpenses.find((e) => e.id === rawId);
       const salesHit = salesExpenses.find((e) => e.id === rawId);
@@ -1623,7 +1632,8 @@ export default function ApprovalsPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approvals, purchaseExpenses, salesExpenses, isLoading]);
+  }, [approvals, purchaseExpenses, salesExpenses, isLoading, isLoadingPurchase, isLoadingSales]);
+
 
 
   // Keep `?doc=<key>` in sync with the selected approval so it can be shared.
