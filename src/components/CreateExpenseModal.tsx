@@ -69,6 +69,7 @@ import {
   saveAiResponseCacheEntries,
   clearAiResponseCache,
 } from "@/lib/ai-response-cache-persist";
+import { notifyFiscalMissingAttachment } from "@/lib/notify-fiscal-missing-attachment";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
