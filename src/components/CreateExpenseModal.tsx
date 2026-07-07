@@ -684,35 +684,71 @@ export function CreateExpenseModal({
     const controller = new AbortController();
     aiAbortRef.current = controller;
     try {
-      const formData = new FormData();
-      filesToProcess.forEach((f) => formData.append("files", f));
-      formData.append("company_db", sapSession?.companyDB || "");
+      // Hash de cada arquivo em paralelo para checar o cache.
+      const hashes = await Promise.all(filesToProcess.map((f) => hashFile(f)));
+      const cache = aiResponseCacheRef.current;
+      const cachedResults: (any | null)[] = hashes.map((h) => cache.get(h) ?? null);
+      const missIndexes: number[] = [];
+      cachedResults.forEach((r, i) => { if (r === null) missIndexes.push(i); });
 
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-expense-doc`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      let fetchedResults: any[] = [];
+      if (missIndexes.length > 0) {
+        const formData = new FormData();
+        missIndexes.forEach((i) => formData.append("files", filesToProcess[i]));
+        formData.append("company_db", sapSession?.companyDB || "");
+
+        const resp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-expense-doc`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: formData,
+            signal: controller.signal,
           },
-          body: formData,
-          signal: controller.signal,
-        },
-      );
-
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({} as any));
-        const detail = err?.error || `HTTP ${resp.status}`;
-        const names = filesToProcess.map((f) => f.name).join(", ");
-        throw new Error(
-          filesToProcess.length > 1
-            ? `Falha ao processar ${filesToProcess.length} anexo(s) (${names}): ${detail}`
-            : `Falha ao processar "${names}": ${detail}`,
         );
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({} as any));
+          const detail = err?.error || `HTTP ${resp.status}`;
+          const names = missIndexes.map((i) => filesToProcess[i].name).join(", ");
+          throw new Error(
+            missIndexes.length > 1
+              ? `Falha ao processar ${missIndexes.length} anexo(s) (${names}): ${detail}`
+              : `Falha ao processar "${names}": ${detail}`,
+          );
+        }
+
+        const { result } = await resp.json();
+        fetchedResults = Array.isArray(result) ? result : [result];
+
+        // Preenche o cache pelos hashes dos arquivos que foram enviados.
+        missIndexes.forEach((origIdx, sentIdx) => {
+          const extracted = fetchedResults[sentIdx];
+          if (extracted && typeof extracted === "object") {
+            cache.set(hashes[origIdx], extracted);
+          }
+        });
       }
 
-      const { result } = await resp.json();
-      const docs: any[] = Array.isArray(result) ? result : [result];
+      // Compõe a lista final na ordem original: cache primeiro, fetch depois.
+      const docs: any[] = filesToProcess.map((_, i) => {
+        if (cachedResults[i] !== null) return cachedResults[i];
+        const pos = missIndexes.indexOf(i);
+        return pos >= 0 ? fetchedResults[pos] : null;
+      });
+
+      // Informa o usuário quando foi reaproveitado cache (sem chamada de IA).
+      const cachedHits = filesToProcess.length - missIndexes.length;
+      if (cachedHits > 0) {
+        toast.info(
+          missIndexes.length === 0
+            ? `Todos os ${cachedHits} anexo(s) reaproveitados do cache da IA — nenhuma chamada nova foi feita.`
+            : `${cachedHits} anexo(s) reaproveitados do cache; ${missIndexes.length} enviado(s) à IA.`,
+          { duration: 5000 },
+        );
+      }
 
       // Casa cada `doc` extraído com o `File` correspondente (mesma ordem).
       // Se o servidor devolveu menos entradas do que arquivos, avisamos por
