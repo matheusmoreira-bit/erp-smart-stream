@@ -294,7 +294,24 @@ export function CreateExpenseModal({
   };
   // Limite de confiança IA ajustável em tempo real (a partir do prop).
   // Grupos com confiança média abaixo disso ganham destaque visual âmbar.
-  const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState<number>(lowAiConfidenceThreshold);
+  // Persistido em localStorage para manter a preferência entre sessões do
+  // modal (fallback para o prop `lowAiConfidenceThreshold` se não houver
+  // valor salvo ou o valor for inválido).
+  const AI_CONF_STORAGE_KEY = "createExpenseModal:aiConfidenceThreshold";
+  const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState<number>(() => {
+    if (typeof window === "undefined") return lowAiConfidenceThreshold;
+    try {
+      const raw = window.localStorage.getItem(AI_CONF_STORAGE_KEY);
+      if (raw === null) return lowAiConfidenceThreshold;
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+    } catch { /* ignore */ }
+    return lowAiConfidenceThreshold;
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(AI_CONF_STORAGE_KEY, String(aiConfidenceThreshold)); }
+    catch { /* ignore quota / privacy mode */ }
+  }, [aiConfidenceThreshold]);
   const isLowConfidence = (c: number | null | undefined) =>
     typeof c === "number" && Number.isFinite(c) && c < aiConfidenceThreshold;
 
