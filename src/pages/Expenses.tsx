@@ -1354,6 +1354,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       <ExpenseDetailModal
         expense={selectedExpense}
+        originBadge={selectedOrigin}
         open={!!selectedExpense}
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
