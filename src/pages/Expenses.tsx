@@ -1286,6 +1286,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   className="lg:hidden gap-1.5 shrink-0"
                   onClick={() => {
                     filtersJustOpened.current = !filtersOpen;
+                    filtersJustClosed.current = filtersOpen;
                     setFiltersOpen((v) => !v);
                   }}
                   aria-expanded={filtersOpen}
