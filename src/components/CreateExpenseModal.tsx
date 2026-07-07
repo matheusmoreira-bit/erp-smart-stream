@@ -1649,6 +1649,7 @@ export function CreateExpenseModal({
       if (currentEntry) {
         updateQueueEntry(currentEntry.supplierKey, { status: "success", errorMessage: undefined });
         failedGroupsRef.current.delete(currentEntry.supplierKey);
+        schedulePersist();
       }
 
       // Se houver grupos de fornecedores adiados (regra 2 — anexos com
