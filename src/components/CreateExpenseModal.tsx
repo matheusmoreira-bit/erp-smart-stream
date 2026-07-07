@@ -3211,6 +3211,7 @@ export function CreateExpenseModal({
           </Button>
           {(() => {
             const mapEntries = () => queueHistory.map((e) => ({
+              id: e.supplierKey,
               supplierLabel: e.supplierLabel,
               status: e.status,
               fileCount: e.fileCount,
