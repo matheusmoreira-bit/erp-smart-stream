@@ -3154,14 +3154,14 @@ export function CreateExpenseModal({
               const AI_MODEL = "n-2.5-flash"; // TODO: expor por evento quando houver múltiplos
               const models = Array.from(new Set(queueHistory.map(() => AI_MODEL)));
               // Categorização idêntica à STATUS_REASON_LEGEND em report-pdf.ts
-              const reasonCounts: Array<[string, number]> = [
-                ["Concluído com sucesso", queueHistory.filter((e) => e.status === "success").length],
-                ["Falha (com mensagem)", queueHistory.filter((e) => e.status === "failed" && !!e.errorMessage?.trim()).length],
-                ["Falha não detalhada", queueHistory.filter((e) => e.status === "failed" && !e.errorMessage?.trim()).length],
-                ["Cancelado pelo usuário", queueHistory.filter((e) => e.status === "cancelled").length],
-                ["Em processamento", queueHistory.filter((e) => e.status === "pending").length],
-                ["Aguardando na fila", queueHistory.filter((e) => e.status === "queued").length],
-              ].filter(([, n]) => n > 0);
+              const reasonCounts: Array<[string, number]> = ([
+                ["Concluído com sucesso", queueHistory.filter((e) => e.status === "success").length] as [string, number],
+                ["Falha (com mensagem)", queueHistory.filter((e) => e.status === "failed" && !!e.errorMessage?.trim()).length] as [string, number],
+                ["Falha não detalhada", queueHistory.filter((e) => e.status === "failed" && !e.errorMessage?.trim()).length] as [string, number],
+                ["Cancelado pelo usuário", queueHistory.filter((e) => e.status === "cancelled").length] as [string, number],
+                ["Em processamento", queueHistory.filter((e) => e.status === "pending").length] as [string, number],
+                ["Aguardando na fila", queueHistory.filter((e) => e.status === "queued").length] as [string, number],
+              ]).filter(([, n]) => n > 0);
               const missingClassified = queueHistory.filter((e) => !e.classifiedAt).length;
               const missingCompleted = queueHistory.filter(
                 (e) => (e.status === "success" || e.status === "failed" || e.status === "cancelled") && !e.completedAt,
