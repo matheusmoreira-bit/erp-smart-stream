@@ -395,7 +395,7 @@ describe("exportListReportCsv — aprovações/compras/vendas", () => {
     });
 
     expect(blobs).toHaveLength(1);
-    const csv = await blobs[0].text();
+    const csv = await new Response(blobs[0]).text();
 
     // BOM UTF-8
     expect(csv.charCodeAt(0)).toBe(0xFEFF);
@@ -423,7 +423,7 @@ describe("exportListReportCsv — aprovações/compras/vendas", () => {
   it("só exporta as linhas passadas (respeita filtros aplicados)", async () => {
     const filteredRows: Row[] = [rows[0]];
     exportListReportCsv<Row>({ title: "Compras", columns, rows: filteredRows });
-    const csv = await blobs[blobs.length - 1].text();
+    const csv = await new Response(blobs[blobs.length - 1]).text();
     expect(csv).not.toContain("Nome; com");
     expect(csv).toContain("Fornecedor A");
   });
