@@ -989,19 +989,34 @@ function drawEvidenceSection(
   y += 4;
   doc.setTextColor(0, 0, 0);
 
+  const missing = countMissingAuditTimestamps(entries);
+  if (missing.missingClassified > 0 || missing.missingCompleted > 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.setTextColor(180, 83, 9); // âmbar-700
+    doc.text(
+      `Aviso: ${missing.missingClassified} sem "Classificado em" · ${missing.missingCompleted} sem "Concluído em" (status final). Células vazias representam ausência de dado, não erro de exportação.`,
+      10, y,
+      { maxWidth: pageW - 20 },
+    );
+    y += 6;
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+  }
+
   autoTable(doc, {
     startY: y,
     head: [[
       "#", "ID do evento", "Fornecedor",
-      "Classificado em", "Concluído em", "Modelo IA", "Motivo do status",
+      "Classificado em (ISO 8601)", "Concluído em (ISO 8601)", "Modelo IA", "Motivo do status",
       "Anexos", "Nomes dos arquivos",
     ]],
     body: entries.map((e, i) => [
       String(i + 1),
       e.id || "—",
       e.supplierLabel,
-      auditTimestamp(e.classifiedAt),
-      auditTimestamp(e.completedAt),
+      toAuditIso(e.classifiedAt).iso, // vazio quando ausente/ inválido
+      toAuditIso(e.completedAt).iso,
       e.aiModel || "—",
       auditStatusReason(e),
       String(e.fileNames?.length ?? e.fileCount ?? 0),
@@ -1013,12 +1028,12 @@ function drawEvidenceSection(
     columnStyles: {
       0: { cellWidth: 7, halign: "right" },
       1: { cellWidth: 26, font: "courier", fontSize: 6 },
-      2: { cellWidth: 32 },
-      3: { cellWidth: 22 },
-      4: { cellWidth: 22 },
-      5: { cellWidth: 20 },
-      6: { cellWidth: 28 },
-      7: { cellWidth: 12, halign: "right" },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 26, font: "courier", fontSize: 6 },
+      4: { cellWidth: 26, font: "courier", fontSize: 6 },
+      5: { cellWidth: 18 },
+      6: { cellWidth: 24 },
+      7: { cellWidth: 10, halign: "right" },
     },
     margin: { left: 8, right: 8 },
     showHead: "everyPage",
