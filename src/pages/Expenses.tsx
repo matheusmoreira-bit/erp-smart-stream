@@ -493,25 +493,25 @@ function ExpenseDetailModal({
 
 
             {(showSubmit || showCancel || showRetrySap || showEdit || showApproval) && (
-              <div className="border-t border-border pt-4 flex justify-end gap-3 flex-wrap">
-                <Button variant="outline" onClick={onClose}>Fechar</Button>
+              <div className="border-t border-border pt-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:flex-wrap gap-2 sm:gap-3">
+                <Button variant="outline" onClick={onClose} className="w-full sm:w-auto justify-center">Fechar</Button>
                 {showApproval && (
                   <>
                     <Button
                       variant="outline"
                       onClick={() => onReject(expense)}
                       disabled={isActioning}
-                      className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      className="w-full sm:w-auto justify-center gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
                     >
-                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <XCircle className="w-4 h-4" aria-hidden="true" />}
                       Rejeitar
                     </Button>
                     <Button
                       onClick={() => onApprove(expense)}
                       disabled={isActioning}
-                      className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="w-full sm:w-auto justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
-                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      {isActioning ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="w-4 h-4" aria-hidden="true" />}
                       Aprovar
                     </Button>
                   </>
@@ -520,14 +520,14 @@ function ExpenseDetailModal({
                   <Button
                     variant="outline"
                     onClick={() => onEdit(expense)}
-                    className="gap-1.5"
+                    className="w-full sm:w-auto justify-center gap-1.5"
                     title={
                       expense.status === "rascunho"
                         ? "Editar rascunho"
                         : "Ao salvar edições, o documento volta ao fluxo de aprovação (nível 1)."
                     }
                   >
-                    <Pencil className="w-4 h-4" />
+                    <Pencil className="w-4 h-4" aria-hidden="true" />
                     Editar
                   </Button>
                 )}
@@ -536,9 +536,9 @@ function ExpenseDetailModal({
                     variant="destructive"
                     onClick={() => setConfirmCancel(true)}
                     disabled={isCancelling}
-                    className="gap-1.5"
+                    className="w-full sm:w-auto justify-center gap-1.5"
                   >
-                    {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XIcon className="w-4 h-4" />}
+                    {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <XIcon className="w-4 h-4" aria-hidden="true" />}
                     Cancelar Despesa
                   </Button>
                 )}
@@ -546,9 +546,9 @@ function ExpenseDetailModal({
                   <Button
                     onClick={() => onRetrySap(expense.id)}
                     disabled={isRetrying}
-                    className="gap-1.5"
+                    className="w-full sm:w-auto justify-center gap-1.5"
                   >
-                    {isRetrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+                    {isRetrying ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <RotateCw className="w-4 h-4" aria-hidden="true" />}
                     Reintegrar no SAP
                   </Button>
                 )}
@@ -556,9 +556,9 @@ function ExpenseDetailModal({
                   <Button
                     onClick={() => onSubmit(expense.id)}
                     disabled={isSubmitting}
-                    className="gap-1.5"
+                    className="w-full sm:w-auto justify-center gap-1.5"
                   >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Send className="w-4 h-4" aria-hidden="true" />}
                     Enviar para Aprovação
                   </Button>
                 )}
