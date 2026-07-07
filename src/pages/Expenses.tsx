@@ -1250,17 +1250,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         </div>
 
         {/* Summary */}
-        <div className="flex flex-wrap gap-4">
-          <div className="glass-card px-4 py-3 flex items-center gap-3">
-            <DollarSign className="w-4 h-4 text-primary" />
-            <div>
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-4">
+          <div className="glass-card px-4 py-3 flex items-center gap-3 min-w-0">
+            <DollarSign className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Total</p>
-              <p className="text-lg font-bold font-mono text-foreground">{formatCurrency(totalValue)}</p>
+              <p className="text-lg font-bold font-mono text-foreground truncate">{formatCurrency(totalValue)}</p>
             </div>
           </div>
-          <div className="glass-card px-4 py-3 flex items-center gap-3">
-            <Calendar className="w-4 h-4 text-primary" />
-            <div>
+          <div className="glass-card px-4 py-3 flex items-center gap-3 min-w-0">
+            <Calendar className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Registros</p>
               <p className="text-lg font-bold font-mono text-foreground">{filtered.length}</p>
             </div>
