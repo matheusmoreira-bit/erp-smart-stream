@@ -2394,6 +2394,13 @@ export function CreateExpenseModal({
             </div>
           )}
 
+          {/* ==================== CABEÇALHO ==================== */}
+          <section className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-4 shadow-sm">
+            <div className="flex items-center gap-2 -mb-1">
+              <div className="h-4 w-1 rounded-full bg-primary/70" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cabeçalho</h3>
+            </div>
+
           {/* Supplier */}
           <div>
             <CachedSearchCombobox
@@ -2586,6 +2593,7 @@ export function CreateExpenseModal({
 
 
           <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Descrição da despesa..." rows={2} />
           </div>
 
@@ -2613,36 +2621,43 @@ export function CreateExpenseModal({
           )}
 
           {/* Header-level defaults: cascade to all items, user can override per line */}
-          <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
-            <CachedSearchCombobox
-              label="Centro de Custo (padrão p/ itens) *"
-              options={costCenterOptions}
-              isLoading={costCentersLoading}
-              value={headerCostCenter}
-              onChange={applyHeaderCostCenter}
-              placeholder="Obrigatório — aplica a todos os itens…"
-              portalContainer={dialogContainer}
-              required
-            />
-            <CachedSearchCombobox
-              label="Projeto (padrão p/ itens)"
-              options={projectOptions}
-              isLoading={projectsLoading}
-              value={headerProject}
-              onChange={applyHeaderProject}
-              placeholder="Aplica a todos os itens…"
-              portalContainer={dialogContainer}
-            />
-            <p className="col-span-2 text-[11px] text-muted-foreground">
-              Definir aqui preenche todas as linhas. Você pode ajustar item a item abaixo — a
-              integração usa sempre o valor de cada linha.
-            </p>
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Padrões para itens</p>
+            <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+              <CachedSearchCombobox
+                label="Centro de Custo (padrão p/ itens) *"
+                options={costCenterOptions}
+                isLoading={costCentersLoading}
+                value={headerCostCenter}
+                onChange={applyHeaderCostCenter}
+                placeholder="Obrigatório — aplica a todos os itens…"
+                portalContainer={dialogContainer}
+                required
+              />
+              <CachedSearchCombobox
+                label="Projeto (padrão p/ itens)"
+                options={projectOptions}
+                isLoading={projectsLoading}
+                value={headerProject}
+                onChange={applyHeaderProject}
+                placeholder="Aplica a todos os itens…"
+                portalContainer={dialogContainer}
+              />
+              <p className="col-span-2 text-[11px] text-muted-foreground">
+                Definir aqui preenche todas as linhas. Você pode ajustar item a item abaixo — a
+                integração usa sempre o valor de cada linha.
+              </p>
+            </div>
           </div>
+          </section>
 
-          {/* Items */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Itens</p>
+          {/* ==================== CORPO / ITENS ==================== */}
+          <section className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-1 rounded-full bg-primary/70" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens / Linhas</h3>
+              </div>
               <Button variant="ghost" size="sm" onClick={addItem} className="gap-1 text-xs h-7">
                 <Plus className="w-3 h-3" /> Adicionar Item
               </Button>
@@ -2768,7 +2783,7 @@ export function CreateExpenseModal({
                 Total: <span className="text-lg font-bold font-mono">{formatCurrency(total, currency || "BRL")}</span>
               </p>
             </div>
-          </div>
+          </section>
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
             <Button variant="outline" onClick={requestClose} disabled={isCreating}>Cancelar</Button>
