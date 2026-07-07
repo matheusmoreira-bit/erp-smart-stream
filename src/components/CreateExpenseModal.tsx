@@ -475,6 +475,19 @@ export function CreateExpenseModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Encerra a sessão de retentativa quando todos os grupos reprocessados
+  // saíram de "pending"/"queued" (mantém a barra visível por 4s para o usuário
+  // ver o status final antes de desaparecer).
+  useEffect(() => {
+    if (!retryingKeys || retryingKeys.size === 0) return;
+    const entries = queueHistory.filter((e) => retryingKeys.has(e.supplierKey));
+    if (entries.length === 0) return;
+    const stillRunning = entries.some((e) => e.status === "pending" || e.status === "queued");
+    if (stillRunning) return;
+    const t = setTimeout(() => setRetryingKeys(null), 4000);
+    return () => clearTimeout(t);
+  }, [queueHistory, retryingKeys]);
+
   // Hydrate from an existing draft when the user chose "Retomar"
   useEffect(() => {
     if (!open || !initialDraft || draftHydrated) return;
