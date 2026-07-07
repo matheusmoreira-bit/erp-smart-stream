@@ -61,6 +61,9 @@ export default function NotificationsPage() {
             <TabsTrigger value="history" className="gap-2">
               <Send className="w-4 h-4" /> Histórico de envios
             </TabsTrigger>
+            <TabsTrigger value="overdue" className="gap-2">
+              <AlertTriangle className="w-4 h-4" /> Vencidos
+            </TabsTrigger>
             <TabsTrigger value="preferences" className="gap-2">
               <Settings className="w-4 h-4" /> Preferências
             </TabsTrigger>
