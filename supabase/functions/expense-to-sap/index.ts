@@ -84,6 +84,68 @@ ${rows.map(([k, v]) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;bac
   }
 }
 
+// Fire-and-forget contingência: avisa via WhatsApp quando um pedido é
+// integrado no SAP sem nenhum anexo, para lançamento manual do arquivo.
+const CONTINGENCY_WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
+const CONTINGENCY_WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const CONTINGENCY_WHATSAPP_TO = "5531972665309";
+
+async function notifyMissingAttachmentWhatsApp(params: {
+  companyDb?: string | null;
+  entityId: string | number;
+  docEntry?: number | null;
+  docNum?: number | null;
+  requester?: string | null;
+  supplier?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  reason: "no_attachment_uploaded" | "integration_attachments_disabled";
+}): Promise<void> {
+  try {
+    const cur = (params.currency || "BRL").trim();
+    let amountStr = "-";
+    if (params.amount != null) {
+      try {
+        amountStr = new Intl.NumberFormat("pt-BR", { style: "currency", currency: cur })
+          .format(Number(params.amount));
+      } catch {
+        amountStr = `${cur} ${Number(params.amount).toFixed(2)}`;
+      }
+    }
+    const reasonLabel = params.reason === "integration_attachments_disabled"
+      ? "Integração de anexos desligada para a empresa"
+      : "Pedido aprovado sem nenhum anexo";
+    const lines = [
+      "🚨 *Contingência — Anexo pendente no SAP*",
+      "",
+      `*Empresa:* ${params.companyDb || "-"}`,
+      `*SAP DocNum:* ${params.docNum ?? "-"}`,
+      `*SAP DocEntry:* ${params.docEntry ?? "-"}`,
+      `*Solicitante:* ${params.requester || "-"}`,
+      `*Fornecedor:* ${params.supplier || "-"}`,
+      `*Valor:* ${amountStr}`,
+      `*ID interno:* ${params.entityId}`,
+      `*Motivo:* ${reasonLabel}`,
+      "",
+      "Favor lançar o anexo manualmente no pedido.",
+    ];
+    const body = new URLSearchParams({
+      to: CONTINGENCY_WHATSAPP_TO,
+      message: lines.join("\n"),
+    });
+    fetch(CONTINGENCY_WHATSAPP_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${CONTINGENCY_WHATSAPP_TOKEN}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    }).catch((e) => console.warn("notifyMissingAttachmentWhatsApp send failed:", e));
+  } catch (e) {
+    console.warn("notifyMissingAttachmentWhatsApp error:", e);
+  }
+}
+
 async function getSapCredentials(
   supabase: ReturnType<typeof createClient>,
   companyDb?: string,
