@@ -2311,9 +2311,26 @@ export default function ApprovalsPage() {
 
 
 
+        {activeOfficials.length > 0 && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+            <UserCog className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">Modo substituto ativo</p>
+              <p className="text-xs mt-0.5 text-amber-700/80 dark:text-amber-300/80">
+                Você pode aprovar em nome de{" "}
+                <span className="font-semibold">
+                  {activeOfficials.map((o) => o.official_name || o.official_email).join(", ")}
+                </span>
+                . Os documentos correspondentes aparecem marcados na lista.
+              </p>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="glass-card p-4 border-destructive/30 bg-destructive/10 text-sm text-destructive">{error}</div>
         )}
+
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
