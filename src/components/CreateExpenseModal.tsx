@@ -82,6 +82,7 @@ export function CreateExpenseModal({
   initialDraft,
   onDraftSaved,
   onDraftConsumed,
+  lowAiConfidenceThreshold = 0.75,
 }: {
   open: boolean;
   onClose: () => void;
@@ -95,6 +96,9 @@ export function CreateExpenseModal({
   initialDraft?: ExpenseDraftHydration | null;
   onDraftSaved?: (id: string | null) => void;
   onDraftConsumed?: () => void;
+  /** Limite (0–1) abaixo do qual a confiança média da IA por grupo é
+   *  destacada visualmente como "provavelmente precisa de revisão". */
+  lowAiConfidenceThreshold?: number;
 }) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
