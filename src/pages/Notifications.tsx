@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, Settings, Check, CheckCheck, History, Send } from "lucide-react";
+import { ArrowLeft, Bell, Settings, Check, CheckCheck, History, Send, AlertTriangle } from "lucide-react";
 import { useNotifications, useNotificationPreferences, NOTIFICATION_CATEGORIES } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NotificationAuditTab } from "@/components/NotificationAuditTab";
 import { NotificationSendHistoryTab } from "@/components/NotificationSendHistoryTab";
+import { OverdueRemindersTab } from "@/components/OverdueRemindersTab";
 import { PageTitle } from "@/components/PageTitle";
 
 const categoryIcon: Record<string, string> = {
