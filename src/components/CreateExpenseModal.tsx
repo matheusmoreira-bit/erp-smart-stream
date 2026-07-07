@@ -2247,6 +2247,7 @@ export function CreateExpenseModal({
               setShowQueueSummary(false);
               setQueueHistory([]);
               failedGroupsRef.current = new Map();
+              cancelledGroupsRef.current = [];
               onClose();
             }}
           >
