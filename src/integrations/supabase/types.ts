@@ -2763,6 +2763,42 @@ export type Database = {
         }
         Relationships: []
       }
+      submitted_document_hashes: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          doc_type: string | null
+          expense_id: string | null
+          file_hash: string
+          file_name: string | null
+          file_size: number | null
+          submitted_by: string
+          supplier_label: string | null
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          doc_type?: string | null
+          expense_id?: string | null
+          file_hash: string
+          file_name?: string | null
+          file_size?: number | null
+          submitted_by: string
+          supplier_label?: string | null
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          doc_type?: string | null
+          expense_id?: string | null
+          file_hash?: string
+          file_name?: string | null
+          file_size?: number | null
+          submitted_by?: string
+          supplier_label?: string | null
+        }
+        Relationships: []
+      }
       suppliers: {
         Row: {
           bill_to_block: string | null
