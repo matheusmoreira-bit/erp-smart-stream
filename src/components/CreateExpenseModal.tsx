@@ -217,6 +217,9 @@ export function CreateExpenseModal({
   }
   const [queueHistory, setQueueHistory] = useState<QueueEntry[]>([]);
   const [showQueueSummary, setShowQueueSummary] = useState(false);
+  // Marca que o usuário acabou de cancelar o processamento/fila. Habilita o
+  // botão "Tentar novamente" enquanto os anexos permanecerem no modal.
+  const [justCancelled, setJustCancelled] = useState(false);
 
   // Card mapping defaults (fallback do cartão) — vindos da tela de Mapeamento
   const { describe: describeCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(
@@ -357,6 +360,7 @@ export function CreateExpenseModal({
       setSupplierPicker(null);
       setQueueHistory([]);
       setShowQueueSummary(false);
+      setJustCancelled(false);
     }
   }, [open]);
 
@@ -623,12 +627,21 @@ export function CreateExpenseModal({
   };
 
   const processWithAI = async (filesToProcess: File[]) => {
+    // Guard anti-duplicação: se já há classificação IA em andamento, ignora
+    // a nova solicitação (evita chamadas paralelas ao endpoint e estado
+    // inconsistente ao clicar em "Tentar novamente" repetidas vezes).
+    if (isProcessing) return;
+    if (!filesToProcess || filesToProcess.length === 0) return;
     setIsProcessing(true);
     // Reseta estado herdado de tentativas anteriores para que um retry
     // não mostre picker/warning/confidence obsoletos ao usuário.
     setAiConfidence(null);
     setAiWarning(null);
     setSupplierPicker(null);
+    // Limpa o histórico da fila anterior — o retry começa "do zero" e vai
+    // reconstruir o queueHistory quando a IA voltar com novos grupos.
+    setQueueHistory([]);
+    setJustCancelled(false);
     const controller = new AbortController();
     aiAbortRef.current = controller;
     try {
@@ -816,6 +829,8 @@ export function CreateExpenseModal({
     setAiConfidence(null);
     setIsProcessing(false);
     setCancelConfirm(false);
+    // Habilita o botão "Tentar novamente" se ainda houver anexos no modal.
+    setJustCancelled(files.length > 0);
     // Marca no histórico tudo que estava pendente/enfileirado como cancelado
     // e abre o resumo final para o usuário conferir o que foi processado.
     setQueueHistory((prev) => {
@@ -1249,7 +1264,7 @@ export function CreateExpenseModal({
         {/* Barra de progresso do fluxo: classificação IA, salvamento e fila
             de despesas encadeadas (deferredGroups da regra de fornecedores
             diferentes). Fica sempre visível para o usuário saber o estado. */}
-        {(isProcessing || isCreating || deferredGroups.length > 0) && (
+        {(isProcessing || isCreating || deferredGroups.length > 0 || justCancelled) && (
           <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 space-y-2 min-w-0">
@@ -1268,6 +1283,19 @@ export function CreateExpenseModal({
                       Salvando {isSales ? "pedido de venda" : "despesa"}
                       {files.length > 0 ? ` e enviando ${files.length} anexo(s)` : ""}…
                     </span>
+                  </div>
+                )}
+                {justCancelled && !isProcessing && !isCreating && (
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <span className="mt-0.5">↺</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-foreground font-medium">
+                        Processamento cancelado
+                      </div>
+                      <div className="mt-0.5">
+                        {files.length} anexo(s) mantido(s) no modal. Clique em "Tentar novamente" para reclassificar com a IA sem reenviar os arquivos.
+                      </div>
+                    </div>
                   </div>
                 )}
                 {queueHistory.length > 0 && !isCreating && !isProcessing && (
@@ -1308,20 +1336,36 @@ export function CreateExpenseModal({
                   </div>
                 )}
               </div>
-              {/* Botão de cancelar: aparece quando há IA em andamento ou fila
-                  de fornecedores adiados. Não interfere no salvamento em curso
-                  (isCreating), pois cancelar uma gravação parcial seria pior. */}
-              {(isProcessing || deferredGroups.length > 0) && !isCreating && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                  onClick={() => setCancelConfirm(true)}
-                >
-                  <Ban className="w-3.5 h-3.5" />
-                  Cancelar
-                </Button>
-              )}
+              <div className="flex flex-col gap-1 shrink-0">
+                {/* Botão de cancelar: aparece quando há IA em andamento ou fila
+                    de fornecedores adiados. Não interfere no salvamento em curso
+                    (isCreating), pois cancelar uma gravação parcial seria pior. */}
+                {(isProcessing || deferredGroups.length > 0) && !isCreating && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setCancelConfirm(true)}
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    Cancelar
+                  </Button>
+                )}
+                {/* Retry — só aparece após cancelamento, quando há anexos e
+                    não há nenhum fluxo em andamento (guard anti-duplicação
+                    dobrado em `processWithAI` para chamadas paralelas). */}
+                {justCancelled && !isProcessing && !isCreating && files.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => processWithAI(files)}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Tentar novamente
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}
