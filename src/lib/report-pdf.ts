@@ -1352,6 +1352,11 @@ export async function exportPurchaseFlowReportPdf(opts: PurchaseFlowReportOption
     }
   }
 
+  // Evidências: IDs e anexos de cada grupo processado no fluxo.
+  drawEvidenceSection(doc, opts.entries, y + 4);
+
+
+
   await finalizePdf(doc, "Fluxo de compras", {
     kindLabel: opts.kindLabel,
     confidenceThreshold: opts.confidenceThreshold,
