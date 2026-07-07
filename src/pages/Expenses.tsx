@@ -52,6 +52,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -1020,20 +1022,66 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       })
     : [];
 
-  const applyFilters = (e: Expense, scoped: boolean) => {
+  const applyFilters = (e: Expense, scoped: boolean, origin: "erp_flow" | "erp") => {
     if (scoped && !effectiveShowAll && !isMine(e)) return false;
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
+
+    // Filtros avançados (modal)
+    const f = advFilters;
+    const includes = (val: string | number | null | undefined, needle: string) =>
+      (val ?? "").toString().toLowerCase().includes(needle.toLowerCase());
+    if (f.origin !== "all" && f.origin !== origin) return false;
+    if (f.supplier && !includes(e.supplier_name, f.supplier)) return false;
+    if (f.supplier_code && !includes(e.supplier_code, f.supplier_code)) return false;
+    if (f.requester && !includes(e.requester_name, f.requester)) return false;
+    if (f.requester_email && !includes(e.requester_email, f.requester_email)) return false;
+    if (f.approver && !includes(e.current_approver, f.approver)) return false;
+    if (f.cost_center && !includes(e.cost_center, f.cost_center)) return false;
+    if (f.project && !includes(e.project, f.project)) return false;
+    if (f.currency && (e.currency || "").toLowerCase() !== f.currency.toLowerCase()) return false;
+    if (f.remarks && !includes(e.remarks, f.remarks)) return false;
+    if (f.sap_doc_num) {
+      const q = f.sap_doc_num.trim();
+      const num = e.sap_doc_num?.toString() || "";
+      const entry = e.sap_doc_entry?.toString() || "";
+      if (!num.includes(q) && !entry.includes(q)) return false;
+    }
+    if (f.branch_id && String(e.branch_id ?? "") !== f.branch_id.trim()) return false;
+    const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
+    const maxV = f.max_amount ? Number(f.max_amount.replace(",", ".")) : null;
+    if (minV != null && Number.isFinite(minV) && e.total_amount < minV) return false;
+    if (maxV != null && Number.isFinite(maxV) && e.total_amount > maxV) return false;
+    const inRange = (val: string | undefined | null, from: string, to: string) => {
+      if (!from && !to) return true;
+      if (!val) return false;
+      const d = val.slice(0, 10);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    };
+    if (!inRange(e.doc_date, f.doc_date_from, f.doc_date_to)) return false;
+    if (!inRange(e.due_date, f.due_date_from, f.due_date_to)) return false;
+    if (!inRange(e.created_at, f.created_from, f.created_to)) return false;
+    if (f.only_missing_due && e.due_date) return false;
+    if (f.only_overdue) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (!e.due_date || e.due_date.slice(0, 10) >= today) return false;
+    }
+    if (f.only_sap_error && !e.sap_integration_error) return false;
+
     if (!search) return true;
     const q = search.toLowerCase();
     return (
       e.supplier_name.toLowerCase().includes(q) ||
       e.requester_name.toLowerCase().includes(q) ||
-      (e.remarks || "").toLowerCase().includes(q)
+      (e.remarks || "").toLowerCase().includes(q) ||
+      (e.supplier_code || "").toLowerCase().includes(q) ||
+      (e.sap_doc_num?.toString() || "").includes(q)
     );
   };
 
-  const flowFiltered = expenses.filter((e) => applyFilters(e, true));
-  const sapFiltered = sapOnly.filter((e) => applyFilters(e, false));
+  const flowFiltered = expenses.filter((e) => applyFilters(e, true, "erp_flow"));
+  const sapFiltered = sapOnly.filter((e) => applyFilters(e, false, "erp"));
   const filtered: Array<{ exp: Expense; origin: "erp_flow" | "erp" }> = [
     ...flowFiltered.map((exp) => ({ exp, origin: "erp_flow" as const })),
     ...sapFiltered.map((exp) => ({ exp, origin: "erp" as const })),
@@ -1087,6 +1135,65 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
   const [pageSize, setPageSize] = usePersistedState<number>(filterKey("pageSize"), 30);
   const [viewMode, setViewMode] = usePersistedState<"cards" | "table">(filterKey("viewMode"), "cards");
+
+  // ─── Filtros avançados (modal) ────────────────────────────────
+  interface AdvancedFilters {
+    supplier: string;
+    supplier_code: string;
+    requester: string;
+    requester_email: string;
+    approver: string;
+    cost_center: string;
+    project: string;
+    currency: string;
+    remarks: string;
+    sap_doc_num: string;
+    branch_id: string;
+    origin: "all" | "erp_flow" | "erp";
+    min_amount: string;
+    max_amount: string;
+    doc_date_from: string;
+    doc_date_to: string;
+    due_date_from: string;
+    due_date_to: string;
+    created_from: string;
+    created_to: string;
+    only_overdue: boolean;
+    only_missing_due: boolean;
+    only_sap_error: boolean;
+  }
+  const emptyAdvanced: AdvancedFilters = {
+    supplier: "", supplier_code: "", requester: "", requester_email: "", approver: "",
+    cost_center: "", project: "", currency: "", remarks: "", sap_doc_num: "", branch_id: "",
+    origin: "all", min_amount: "", max_amount: "",
+    doc_date_from: "", doc_date_to: "", due_date_from: "", due_date_to: "",
+    created_from: "", created_to: "",
+    only_overdue: false, only_missing_due: false, only_sap_error: false,
+  };
+  const [advanced, setAdvanced] = usePersistedState<AdvancedFilters>(filterKey("advanced"), emptyAdvanced);
+  // Compat com preferências antigas sem os campos novos.
+  const advFilters: AdvancedFilters = { ...emptyAdvanced, ...(advanced || {}) };
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advDraft, setAdvDraft] = useState<AdvancedFilters>(advFilters);
+  useEffect(() => { if (advancedOpen) setAdvDraft(advFilters); }, [advancedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeAdvancedCount = (() => {
+    const f = advFilters;
+    let n = 0;
+    (
+      [
+        "supplier","supplier_code","requester","requester_email","approver","cost_center","project",
+        "currency","remarks","sap_doc_num","branch_id","min_amount","max_amount",
+        "doc_date_from","doc_date_to","due_date_from","due_date_to","created_from","created_to",
+      ] as const
+    ).forEach((k) => { if ((f[k] || "").toString().trim()) n++; });
+    if (f.origin !== "all") n++;
+    if (f.only_overdue) n++;
+    if (f.only_missing_due) n++;
+    if (f.only_sap_error) n++;
+    return n;
+  })();
+
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   // Reset apenas para mudanças que alteram fortemente a listagem (busca, ordenação, tamanho de página, modo compra/venda).
@@ -1435,7 +1542,28 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </Button>
               );
             })()}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={() => setAdvancedOpen(true)}
+              aria-label={`Filtros avançados${activeAdvancedCount > 0 ? ` (${activeAdvancedCount} ativos)` : ""}`}
+            >
+              <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Filtros avançados</span>
+              <span className="sm:hidden">Refinar</span>
+              {activeAdvancedCount > 0 && (
+                <span
+                  className="ml-1 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold flex items-center justify-center"
+                  aria-hidden="true"
+                >
+                  {activeAdvancedCount}
+                </span>
+              )}
+            </Button>
           </div>
+
 
           {/* Filters (collapsed on mobile, inline on desktop) */}
           <div
@@ -1847,6 +1975,176 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         expense={relationsMapExpense as any}
         title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
       />
+
+      {/* Modal de filtros avançados */}
+      <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SlidersHorizontal className="w-4 h-4 text-primary" /> Filtros avançados
+            </DialogTitle>
+            <DialogDescription>
+              Refine a busca combinando qualquer campo do documento. Os filtros ativos são preservados enquanto você navega.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Origem</p>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ["all", "Todas"],
+                  ["erp_flow", "ERP Flow"],
+                  ["erp", "ERP"],
+                ] as const).map(([val, lbl]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setAdvDraft((d) => ({ ...d, origin: val }))}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      advDraft.origin === val
+                        ? "bg-primary/10 text-primary border-primary/30"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Fornecedor</Label>
+                <Input value={advDraft.supplier} onChange={(e) => setAdvDraft({ ...advDraft, supplier: e.target.value })} placeholder="Nome do fornecedor" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Código do fornecedor</Label>
+                <Input value={advDraft.supplier_code} onChange={(e) => setAdvDraft({ ...advDraft, supplier_code: e.target.value })} placeholder="Ex.: F0000123" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Solicitante</Label>
+                <Input value={advDraft.requester} onChange={(e) => setAdvDraft({ ...advDraft, requester: e.target.value })} placeholder="Nome do solicitante" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">E-mail do solicitante</Label>
+                <Input value={advDraft.requester_email} onChange={(e) => setAdvDraft({ ...advDraft, requester_email: e.target.value })} placeholder="exemplo@empresa.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Aprovador</Label>
+                <Input value={advDraft.approver} onChange={(e) => setAdvDraft({ ...advDraft, approver: e.target.value })} placeholder="Nome ou usuário" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Centro de custo</Label>
+                <Input value={advDraft.cost_center} onChange={(e) => setAdvDraft({ ...advDraft, cost_center: e.target.value })} placeholder="Código do CC" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Projeto</Label>
+                <Input value={advDraft.project} onChange={(e) => setAdvDraft({ ...advDraft, project: e.target.value })} placeholder="Código do projeto" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Moeda</Label>
+                <Input value={advDraft.currency} onChange={(e) => setAdvDraft({ ...advDraft, currency: e.target.value })} placeholder="BRL, USD…" />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Observação (remarks)</Label>
+                <Input value={advDraft.remarks} onChange={(e) => setAdvDraft({ ...advDraft, remarks: e.target.value })} placeholder="Contém…" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Nº do documento (SAP)</Label>
+                <Input value={advDraft.sap_doc_num} onChange={(e) => setAdvDraft({ ...advDraft, sap_doc_num: e.target.value })} placeholder="DocNum ou DocEntry" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Filial (branch)</Label>
+                <Input value={advDraft.branch_id} onChange={(e) => setAdvDraft({ ...advDraft, branch_id: e.target.value })} placeholder="ID da filial" />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Valor</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Mínimo</Label>
+                  <Input type="number" inputMode="decimal" value={advDraft.min_amount} onChange={(e) => setAdvDraft({ ...advDraft, min_amount: e.target.value })} placeholder="0,00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Máximo</Label>
+                  <Input type="number" inputMode="decimal" value={advDraft.max_amount} onChange={(e) => setAdvDraft({ ...advDraft, max_amount: e.target.value })} placeholder="0,00" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Datas</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Documento de</Label>
+                  <Input type="date" value={advDraft.doc_date_from} onChange={(e) => setAdvDraft({ ...advDraft, doc_date_from: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Documento até</Label>
+                  <Input type="date" value={advDraft.doc_date_to} onChange={(e) => setAdvDraft({ ...advDraft, doc_date_to: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Vence de</Label>
+                  <Input type="date" value={advDraft.due_date_from} onChange={(e) => setAdvDraft({ ...advDraft, due_date_from: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Vence até</Label>
+                  <Input type="date" value={advDraft.due_date_to} onChange={(e) => setAdvDraft({ ...advDraft, due_date_to: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Criado de</Label>
+                  <Input type="date" value={advDraft.created_from} onChange={(e) => setAdvDraft({ ...advDraft, created_from: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Criado até</Label>
+                  <Input type="date" value={advDraft.created_to} onChange={(e) => setAdvDraft({ ...advDraft, created_to: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Marcadores rápidos</p>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={advDraft.only_overdue} onCheckedChange={(v) => setAdvDraft({ ...advDraft, only_overdue: v })} />
+                  Apenas vencidos
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={advDraft.only_missing_due} onCheckedChange={(v) => setAdvDraft({ ...advDraft, only_missing_due: v })} />
+                  Apenas sem data de vencimento
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={advDraft.only_sap_error} onCheckedChange={(v) => setAdvDraft({ ...advDraft, only_sap_error: v })} />
+                  Apenas com erro de integração SAP
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="ghost"
+              onClick={() => setAdvDraft(emptyAdvanced)}
+              className="mr-auto text-muted-foreground hover:text-foreground"
+            >
+              <XIcon className="w-3.5 h-3.5 mr-1" /> Limpar tudo
+            </Button>
+            <Button variant="outline" onClick={() => setAdvancedOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                setAdvanced(advDraft);
+                setPage(1);
+                setAdvancedOpen(false);
+              }}
+            >
+              Aplicar filtros
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
