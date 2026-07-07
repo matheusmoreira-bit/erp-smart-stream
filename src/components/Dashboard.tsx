@@ -64,7 +64,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
           {stages.length > 0 && <FlowTimeline stages={stages} />}
 
           {approverStats.length > 0 && (
-            <div className="glass-card p-6">
+            <div className="glass-card p-3 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <UserCheck className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-semibold text-foreground">Tempo Médio de Aprovação por Aprovador</h2>
