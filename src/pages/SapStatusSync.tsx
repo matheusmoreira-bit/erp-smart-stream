@@ -60,8 +60,25 @@ export default function SapStatusSync() {
   const [idsText, setIdsText] = useState(DEFAULT_IDS);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<SyncResponse | null>(null);
+  const [failing, setFailing] = useState<FailingExpense[]>([]);
 
-  const run = async (mode: "listed" | "all") => {
+  const loadFailing = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("id, supplier_name, sap_doc_entry, company_db, sap_sync_attempts, sap_sync_next_retry_at, sap_integration_error, sap_integration_last_attempt_at")
+      .eq("sap_sync_state", "sync_error")
+      .order("sap_sync_attempts", { ascending: false })
+      .limit(100);
+    if (error) {
+      toast.error(`Falha ao ler pendências: ${error.message}`);
+      return;
+    }
+    setFailing((data ?? []) as FailingExpense[]);
+  }, []);
+
+  useEffect(() => { void loadFailing(); }, [loadFailing]);
+
+  const run = async (mode: "listed" | "all" | "retry-errors") => {
     setLoading(true);
     setResponse(null);
     try {
@@ -74,6 +91,13 @@ export default function SapStatusSync() {
           return;
         }
         body.expenseIds = ids;
+      } else if (mode === "retry-errors") {
+        if (!failing.length) {
+          toast.info("Nenhuma despesa em sync_error");
+          setLoading(false);
+          return;
+        }
+        body.expenseIds = failing.map((f) => f.id);
       }
       const { data, error } = await supabase.functions.invoke("expense-sap-status-sync", { body });
       if (error) throw error;
@@ -84,6 +108,7 @@ export default function SapStatusSync() {
       } else {
         toast.error(d?.error || "Falha na sincronia");
       }
+      await loadFailing();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(msg);
@@ -96,6 +121,10 @@ export default function SapStatusSync() {
   const results = response?.results ?? [];
   const errors = results.filter((r) => r.error);
   const updated = results.filter((r) => r.expenseStatus);
+
+  const fmtDate = (v: string | null | undefined) =>
+    v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+
 
   return (
     <div className="container max-w-5xl py-8 space-y-6">
