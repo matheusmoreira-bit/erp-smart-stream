@@ -536,7 +536,20 @@ function ApprovalDetailModal({
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex justify-end -mt-2">
+          <div className="flex flex-wrap justify-end gap-2 -mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => {
+                const internalId = (doc as unknown as { __internalId?: string }).__internalId;
+                const key = internalId ? `internal:${internalId}` : `sap:${doc.approvalRequestId}`;
+                void copyDocLink(window.location.pathname, key);
+              }}
+              title="Copiar link direto desta aprovação"
+            >
+              <Link2 className="w-3.5 h-3.5" /> Copiar link
+            </Button>
             <Button
               variant="ghost"
               size="sm"
