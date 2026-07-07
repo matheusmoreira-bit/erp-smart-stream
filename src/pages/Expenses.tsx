@@ -139,6 +139,7 @@ function ExpenseDetailModal({
   isRetrying,
   isActioning,
   mode,
+  originBadge,
 }: {
   expense: Expense | null;
   open: boolean;
@@ -161,6 +162,7 @@ function ExpenseDetailModal({
   isRetrying: boolean;
   isActioning: boolean;
   mode?: "purchase" | "sales";
+  originBadge?: "erp_flow" | "erp";
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -190,12 +192,45 @@ function ExpenseDetailModal({
             <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-6">
               <span className="text-foreground font-semibold">Despesa</span>
               <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
+              {originBadge === "erp_flow" && (
+                <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
+              )}
+              {originBadge === "erp" && (
+                <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">ERP</Badge>
+              )}
               {expense.origin === "pagcorp" && (
                 <Badge variant="outline" className="text-xs">PagCorp</Badge>
               )}
               <span className="text-xl sm:text-2xl font-bold font-mono w-full sm:w-auto sm:ml-auto text-right">{formatCurrency(expense.total_amount, expense.currency)}</span>
             </DialogTitle>
           </DialogHeader>
+
+          {/* Summary strip — mesmos campos da linha da tabela (visível em qualquer viewport) */}
+          <div className="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs sm:hidden">
+            <div className="col-span-2 flex items-center gap-2 min-w-0">
+              <Building2 className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+              <span className="text-foreground font-medium truncate">{expense.supplier_name}</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Solicitante</p>
+              <p className="text-foreground truncate">{expense.requester_name}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Criado</p>
+              <p className="text-foreground">{formatDate(expense.created_at)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Doc</p>
+              <p className="text-foreground">{expense.doc_date ? formatDate(expense.doc_date) : "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Vence</p>
+              <p className={expense.due_date ? "text-foreground" : "text-destructive font-medium"}>
+                {expense.due_date ? formatDate(expense.due_date) : "sem data"}
+              </p>
+            </div>
+          </div>
+
 
           <div className="flex justify-end -mt-2">
             <Button
@@ -635,6 +670,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [selectedOrigin, setSelectedOrigin] = useState<"erp_flow" | "erp" | undefined>(undefined);
+  const openExpense = (exp: Expense, origin?: "erp_flow" | "erp") => {
+    setSelectedExpense(exp);
+    setSelectedOrigin(origin);
+  };
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
@@ -1202,7 +1242,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   key={exp.id}
                   expense={exp}
                   originBadge={origin}
-                  onOpen={() => setSelectedExpense(exp)}
+                  onOpen={() => openExpense(exp, origin)}
                   onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
                 />
               ))}
@@ -1229,7 +1269,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                       <tr
                         key={exp.id}
                         className="border-t border-border/60 hover:bg-muted/30 cursor-pointer transition-colors"
-                        onClick={() => setSelectedExpense(exp)}
+                        onClick={() => openExpense(exp, origin)}
                       >
                         <td className="px-4 py-2.5">
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -1314,6 +1354,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       <ExpenseDetailModal
         expense={selectedExpense}
+        originBadge={selectedOrigin}
         open={!!selectedExpense}
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
