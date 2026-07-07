@@ -40,3 +40,6 @@ verify_jwt = false
 
 [functions.expense-backfill-due-date]
 verify_jwt = false
+
+[functions.overdue-reminders-dispatch]
+verify_jwt = false
