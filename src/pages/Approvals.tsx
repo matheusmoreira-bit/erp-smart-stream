@@ -623,7 +623,8 @@ function ApprovalDetailModal({
           </div>
 
 
-          <div className="space-y-4 mt-2">
+          <div className="space-y-4 mt-2 min-w-0 [&_p]:break-words">
+
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
