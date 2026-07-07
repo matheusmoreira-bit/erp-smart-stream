@@ -26,7 +26,7 @@ import {
   Paperclip,
   FileDown,
 } from "lucide-react";
-import { exportListReportPdf, exportExpenseDetailPdf } from "@/lib/report-pdf";
+import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
