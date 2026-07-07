@@ -1956,6 +1956,119 @@ export function CreateExpenseModal({
       </AlertDialogContent>
     </AlertDialog>
 
+    {/* Resumo final da fila de fornecedores despachados. Aparece quando o
+        encadeamento termina (por conclusão de todas as despesas ou por
+        cancelamento). Mostra status, confiança da IA, alertas e totais. */}
+    <AlertDialog
+      open={showQueueSummary}
+      onOpenChange={(v) => {
+        if (!v) {
+          setShowQueueSummary(false);
+          setQueueHistory([]);
+          onClose();
+        }
+      }}
+    >
+      <AlertDialogContent className="max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Resumo da fila de fornecedores</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              {(() => {
+                const total = queueHistory.length;
+                const ok = queueHistory.filter((e) => e.status === "success").length;
+                const failed = queueHistory.filter((e) => e.status === "failed" || !!e.errorMessage).length;
+                const cancelled = queueHistory.filter((e) => e.status === "cancelled").length;
+                const pending = queueHistory.filter((e) => e.status === "pending" || e.status === "queued").length;
+                return (
+                  <p className="text-muted-foreground">
+                    {ok}/{total} concluídas
+                    {failed > 0 && ` · ${failed} com erro`}
+                    {cancelled > 0 && ` · ${cancelled} cancelada(s)`}
+                    {pending > 0 && ` · ${pending} pendente(s)`}
+                  </p>
+                );
+              })()}
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                {queueHistory.map((e, idx) => {
+                  const badge =
+                    e.status === "success" ? { icon: "✅", label: "Criada", color: "text-emerald-600" } :
+                    e.status === "failed" ? { icon: "❌", label: "Falhou", color: "text-destructive" } :
+                    e.status === "cancelled" ? { icon: "🚫", label: "Cancelada", color: "text-muted-foreground" } :
+                    e.status === "pending" ? { icon: "▶️", label: "Em andamento", color: "text-primary" } :
+                    { icon: "⏳", label: "Na fila", color: "text-muted-foreground" };
+                  const totalStr = e.estimatedTotal > 0
+                    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: e.currency }).format(e.estimatedTotal)
+                    : "—";
+                  return (
+                    <div key={e.supplierKey} className="rounded-md border border-border bg-muted/20 p-3 space-y-1.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">
+                            {idx + 1}. {e.supplierLabel}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {e.fileCount} arquivo(s) · {e.lineCount} linha(s)
+                            {e.currencies.length > 1 && (
+                              <span className="ml-1 text-amber-600">
+                                (moedas: {e.currencies.join(", ")})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className={`text-xs font-medium ${badge.color}`}>
+                            {badge.icon} {badge.label}
+                          </div>
+                          <div className="text-xs tabular-nums text-muted-foreground mt-0.5">{totalStr}</div>
+                        </div>
+                      </div>
+                      {e.aiConfidence !== null && (
+                        <div className="text-[11px] text-muted-foreground">
+                          Confiança IA: <span className="font-medium">{Math.round(e.aiConfidence * 100)}%</span>
+                        </div>
+                      )}
+                      {e.aiWarnings.length > 0 && (
+                        <div className="text-[11px] text-amber-700 dark:text-amber-500 space-y-0.5">
+                          {e.aiWarnings.map((w, i) => (
+                            <div key={i} className="flex gap-1">
+                              <span>⚠</span>
+                              <span className="whitespace-pre-line">{w}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {e.errorMessage && (
+                        <div className="text-[11px] text-destructive">
+                          Erro: {e.errorMessage}
+                        </div>
+                      )}
+                      {e.fileNames.length > 0 && (
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          {e.fileNames.join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction
+            onClick={() => {
+              setShowQueueSummary(false);
+              setQueueHistory([]);
+              onClose();
+            }}
+          >
+            Fechar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
   </>
   );
 }
