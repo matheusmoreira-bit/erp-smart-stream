@@ -1445,6 +1445,16 @@ function MyRequestsTab() {
         </div>
       )}
 
+      {reqHasMore ? (
+        <div ref={reqSentinelRef} className="flex flex-col items-center gap-2 py-4 text-xs text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <span>Carregando mais… ({visibleRequests.length} de {reqTotal})</span>
+          <Button variant="ghost" size="sm" onClick={reqLoadMore}>Mostrar mais</Button>
+        </div>
+      ) : reqTotal > reqInitial ? (
+        <div className="text-center py-3 text-xs text-muted-foreground">{reqTotal} pedido(s) exibidos</div>
+      ) : null}
+
       <MyRequestDetailModal doc={selected} open={!!selected} onClose={() => setSelected(null)} />
     </div>
   );
