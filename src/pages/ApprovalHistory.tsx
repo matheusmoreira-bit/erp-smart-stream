@@ -43,6 +43,7 @@ export default function ApprovalHistory() {
   const { getLabel } = useCompanies(true);
   const PAGE_SIZE = 50;
   const [page, setPage] = useState(1);
+  // Placeholder — o hook real é chamado abaixo após declararmos os filtros.
   const { expenses: purchaseExpenses } = useExpenses("purchase");
   const { expenses: salesExpenses } = useExpenses("sales");
   const { expensesByDocEntry, expensesById } = useMemo(() => {
