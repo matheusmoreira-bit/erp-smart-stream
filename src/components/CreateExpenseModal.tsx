@@ -9,7 +9,9 @@ import {
   Sparkles,
   Brain,
   Ban,
+  FileDown,
 } from "lucide-react";
+import { exportQueueSummaryPdf } from "@/lib/report-pdf";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
