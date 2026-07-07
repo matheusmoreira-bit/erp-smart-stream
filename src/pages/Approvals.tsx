@@ -551,6 +551,21 @@ function ApprovalDetailModal({
             </DialogTitle>
           </DialogHeader>
 
+          {onBehalfOf && (
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              <UserCog className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>
+                Você está aprovando em nome de{" "}
+                <strong className="font-semibold">{onBehalfOf.name}</strong>
+                {onBehalfOf.email && (
+                  <span className="text-amber-600/80 dark:text-amber-400/80"> · {onBehalfOf.email}</span>
+                )}
+                . A ação será registrada como sua, na condição de substituto ativo.
+              </span>
+            </div>
+          )}
+
+
           <div className="flex flex-wrap justify-end gap-2 -mt-2">
             <Button
               variant="ghost"
