@@ -151,6 +151,10 @@ export default function NotificationsPage() {
             <NotificationSendHistoryTab />
           </TabsContent>
 
+          <TabsContent value="overdue">
+            <OverdueRemindersTab />
+          </TabsContent>
+
           <TabsContent value="preferences">
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-1">Preferências de Notificação</h3>
