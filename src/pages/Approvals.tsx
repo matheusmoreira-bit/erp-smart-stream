@@ -543,14 +543,14 @@ function ApprovalDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
+            <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                 {doc.docTypeName}
               </span>
-              <span className="font-mono">#{doc.docNum}</span>
-              <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
+              <span className="font-mono text-sm sm:text-base">#{doc.docNum}</span>
+              <span className="text-lg sm:text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
             </DialogTitle>
           </DialogHeader>
 
