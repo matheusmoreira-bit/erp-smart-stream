@@ -4,7 +4,7 @@
 - Root-cause first: antes de editar uma função, `rg -n` os callers e corrigir no ponto compartilhado, não no sintoma local da UI.
 - Reuse first: antes de criar helper/componente/hook, procurar similar existente em `src/hooks/`, `src/components/ui/`, `src/lib/`, `supabase/functions/`.
 - Trace-before-fix: em bug de "valor não chega em X", mapear origem→sink (página → hook → edge function → modal) antes de editar qualquer arquivo.
-- Documentos de compra/venda: usuário vê só o que criou/aprova; admin tem toggle "Ver todos" default ON.
+- Documentos de compra/venda: usuário vê só o que criou/aprova. Toggle "Ver todos"/"Ver todas as aprovações" começa DESMARCADO por padrão para todos, inclusive admins/super-usuários — quem tem permissão liga manualmente.
 
 ## Memories
 - [Debug discipline](skill://lovable-debug-discipline) — Checklist root-cause / reuse / trace-before-fix para evitar loops de fix em sintoma.
