@@ -1633,6 +1633,13 @@ export default function ApprovalsPage() {
   const totalValue = filtered.reduce((sum, a) => sum + a.docTotal, 0);
   const overdueCount = filtered.filter((a) => isOverdue(a.dueDate)).length;
 
+  const { visibleItems: visibleApprovals, hasMore: apprHasMore, loadMore: apprLoadMore, sentinelRef: apprSentinelRef, total: apprTotal, initial: apprInitial } =
+    useLazyList(filtered, {
+      initial: 30,
+      step: 10,
+      resetDeps: [search, statusFilter, typeFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode],
+    });
+
   const handleApprovalAction = async (
     code: number,
     action: "approve" | "reject",
