@@ -169,7 +169,7 @@ export function CreateExpenseModal({
     currency: row.Currency || "",
     details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
   } as SapSearchOption & { currency: string }), []);
-  const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
+  const { options: supplierOptions, isLoading: suppliersLoading, reload: reloadSuppliers } = useSapCachedList({
     cacheKey: isSales ? "customers_active_v2" : "suppliers_active_v2",
     endpoint: "BusinessPartners",
     params: isSales
