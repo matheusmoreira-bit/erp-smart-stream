@@ -2234,10 +2234,15 @@ export default function ApprovalsPage() {
         throw mutationErr instanceof Error ? mutationErr : new Error(message);
       }
 
+      // Fecha o modal imediatamente após o registro da decisão — o refresh
+      // acontece em segundo plano. Assim o usuário não fica olhando para o
+      // modal enquanto a lista é atualizada (SAP pode demorar alguns segundos
+      // para replicar a decisão).
+      setSelectedDoc(null);
+
       // ===== Fase 2: refresh da lista =====
-      // A ação já foi registrada com sucesso. Se o refresh falhar, mantemos o
-      // modal aberto e sinalizamos com um erro específico para o usuário poder
-      // apenas retentar a atualização (sem reexecutar a decisão).
+      // A ação já foi registrada com sucesso. Se o refresh falhar, apenas
+      // avisamos com um toast — o modal já foi fechado.
       setActionPhase("refreshing");
       try {
         if (internalDoc) {
@@ -2245,18 +2250,12 @@ export default function ApprovalsPage() {
         } else {
           await refresh();
         }
-        setSelectedDoc(null);
       } catch (refreshErr) {
         console.error("Refresh após ação falhou:", refreshErr);
         const detail = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
         toast.error(
           `A ação foi registrada, mas não conseguimos atualizar a lista: ${detail}`,
         );
-        const err = new Error(
-          "A decisão foi registrada, mas falhou ao atualizar a lista. Tente atualizar novamente.",
-        );
-        (err as Error & { name: string }).name = "RefreshError";
-        throw err;
       }
     } finally {
       setActionPhase("idle");
