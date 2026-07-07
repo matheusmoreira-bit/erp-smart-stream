@@ -929,6 +929,24 @@ export function CreateExpenseModal({
   };
 
   // Atualiza o status de uma entrada da fila pela chave do fornecedor.
+  // Procura o DocGroup original (com arquivos + extração da IA) para uma
+  // dada entry da fila. Verifica todos os caches onde ele pode estar vivo:
+  // grupo atual em edição, deferidos, cancelados e com falha.
+  const findDocGroupByKey = (supplierKey: string): DocGroup | null => {
+    if (currentGroupRef.current?.supplierKey === supplierKey) return currentGroupRef.current;
+    const inDeferred = deferredGroups.find((g) => g.supplierKey === supplierKey);
+    if (inDeferred) return inDeferred;
+    const inCancelled = cancelledGroupsRef.current.find((g) => g.supplierKey === supplierKey);
+    if (inCancelled) return inCancelled;
+    const inFailed = failedGroupsRef.current.get(supplierKey);
+    if (inFailed) return inFailed;
+    return null;
+  };
+
+  const openDetailsFor = (entry: QueueEntry) => {
+    setDetailsView({ entry, group: findDocGroupByKey(entry.supplierKey) });
+  };
+
   const updateQueueEntry = (key: string, patch: Partial<QueueEntry>) => {
     setQueueHistory((prev) => prev.map((e) => (e.supplierKey === key ? { ...e, ...patch } : e)));
   };
