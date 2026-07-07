@@ -13,8 +13,11 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
 import { PageTitle } from "@/components/PageTitle";
+import { ChevronDown } from "lucide-react";
 
 
 function formatCurrency(value?: number | null, currency = "BRL") {
