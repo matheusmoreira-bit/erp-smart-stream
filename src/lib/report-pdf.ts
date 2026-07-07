@@ -900,6 +900,36 @@ export async function exportQueueSummaryJson(opts: QueueSummaryOptions): Promise
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+// ---- Trilha de auditoria (timestamps, modelo, motivo) ---------------------
+//
+// Derivam-se a partir dos campos opcionais de `QueueSummaryEntry`. Ficam
+// centralizados aqui para PDF e CSV emitirem exatamente as mesmas colunas.
+
+function auditTimestamp(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "—";
+  try {
+    return new Date(ms).toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      dateStyle: "short",
+      timeStyle: "medium",
+    });
+  } catch { return String(ms); }
+}
+
+function auditStatusReason(e: QueueSummaryEntry): string {
+  if (e.statusReason && e.statusReason.trim()) return e.statusReason.trim();
+  switch (e.status) {
+    case "failed":    return e.errorMessage?.trim() || "Falha não detalhada";
+    case "cancelled": return "Cancelado pelo usuário";
+    case "success":   return "Concluído com sucesso";
+    case "pending":   return "Em processamento";
+    case "queued":    return "Aguardando na fila";
+    default:          return "—";
+  }
+}
+
+
+
 /**
  * Desenha uma seção "Evidências" com uma linha por fornecedor, contendo o ID
  * do evento (para rastreabilidade), a contagem de anexos e os nomes dos
