@@ -242,7 +242,16 @@ function ExpenseDetailModal({
           </div>
 
 
-          <div className="flex justify-end mt-3 sm:mt-2">
+          <div className="flex flex-wrap justify-end gap-2 mt-3 sm:mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => void copyDocLink(window.location.pathname, expense.id)}
+              title="Copiar link direto deste documento"
+            >
+              <Link2 className="w-3.5 h-3.5" aria-hidden="true" /> Copiar link
+            </Button>
             <Button
               variant="ghost"
               size="sm"
