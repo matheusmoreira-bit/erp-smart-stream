@@ -28,6 +28,7 @@ import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2 } from "lucide-react";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
@@ -1550,7 +1551,7 @@ export default function ApprovalsPage() {
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
   const { officials: activeOfficials } = useActiveOfficialsForMe();
-  const { grants: substituteGrants } = useSubstituteGrantsForMe();
+  const { grants: substituteGrants, refresh: refreshSubstituteGrants } = useSubstituteGrantsForMe();
   const { rules } = useApprovalRules();
 
 
@@ -1741,6 +1742,59 @@ export default function ApprovalsPage() {
     }
     return null;
   }, [activeOfficials, sessionUser, session.userName]);
+
+  /**
+   * Recomputa se o usuário logado pode aprovar/rejeitar o documento dado —
+   * usado tanto para exibir o botão quanto para revalidar imediatamente antes
+   * de disparar a ação (defesa contra permissão que expirou entre a
+   * renderização e o clique — ex.: substituição revogada/expirada, grant
+   * fora da janela, delegação retirada no SAP, etc.).
+   * Recebe o snapshot atual de `substituteGrants` para permitir revalidação
+   * com dados recém-carregados.
+   */
+  const canApproveDocWith = useCallback(
+    (doc: ApprovalDoc | null | undefined, grantsSnapshot: typeof substituteGrants): boolean => {
+      if (!doc) return false;
+      const isRequester =
+        codeEq(doc.requesterCode) ||
+        approverMatches(doc.requester, session.userName);
+      if (isRequester) return false;
+
+      const sessionCodeLower = (session.userName || "").toLowerCase().trim();
+      const isDirectApprover =
+        (!!doc.approverCode &&
+          doc.approverCode.toLowerCase().trim() === sessionCodeLower) ||
+        approverMatches(doc.currentApprover, session.userName);
+      if (isDirectApprover) return true;
+
+      const docRefTs = (() => {
+        const d = doc.docDate;
+        const t = d ? new Date(d).getTime() : NaN;
+        return Number.isFinite(t) ? t : Date.now();
+      })();
+      const approverEmailLower = (doc.approverEmail || "").toLowerCase().trim();
+      const approverNameLower = (doc.currentApprover || "").toLowerCase().trim();
+      return grantsSnapshot.some((g) => {
+        const startsTs = new Date(g.starts_at).getTime();
+        const endsTs = new Date(g.ends_at).getTime();
+        if (!(startsTs <= docRefTs && docRefTs < endsTs)) return false;
+        const ge = (g.official_email || "").toLowerCase();
+        const gPrefix = ge.split("@")[0];
+        const gn = (g.official_name || "").toLowerCase();
+        if (approverEmailLower) {
+          if (approverEmailLower === ge) return true;
+          if (gPrefix && approverEmailLower.startsWith(`${gPrefix}@`)) return true;
+        }
+        if (approverNameLower) {
+          if (gPrefix && (approverNameLower === gPrefix || approverNameLower.includes(gPrefix))) return true;
+          if (gn && (approverNameLower === gn || approverNameLower.includes(gn) || gn.includes(approverNameLower))) return true;
+        }
+        return false;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session.userName, sessionUser, officialIdentifiers],
+  );
   const userApprovals = effectiveShowAll
     ? allApprovals
     : allApprovals.filter(
@@ -1819,6 +1873,54 @@ export default function ApprovalsPage() {
     opts?: { idempotencyKey?: string },
   ) => {
     if (!session) return;
+
+    // ===== Pré-validação: a permissão de aprovar ainda vale AGORA? =====
+    // Entre a renderização do modal e o clique, a janela de substituição
+    // pode ter expirado, o grant pode ter sido revogado, ou o SAP pode ter
+    // alterado o aprovador designado (ex.: delegação retirada). Recarregamos
+    // os grants e recomputamos o canApprove imediatamente antes de disparar
+    // a ação — se falhar, abortamos e avisamos o usuário.
+    let liveGrants = substituteGrants;
+    try {
+      await refreshSubstituteGrants();
+      const { data: userData } = await supabase.auth.getUser();
+      const authEmail = (userData.user?.email || "").toLowerCase();
+      const sapUser = (session.userName || "").toLowerCase().trim();
+      const identifiers = Array.from(
+        new Set(
+          [authEmail, sapUser, authEmail.split("@")[0], sapUser.split("@")[0]].filter(Boolean),
+        ),
+      );
+      const results = await Promise.all(
+        identifiers.map((id) =>
+          supabase.rpc("substitute_grants_for_me" as never, { _substitute_identifier: id } as never),
+        ),
+      );
+      const seen = new Set<string>();
+      const merged: typeof substituteGrants = [];
+      for (const r of results) {
+        const rows = ((r.data as typeof substituteGrants) || []);
+        for (const row of rows) {
+          if (seen.has(row.id)) continue;
+          seen.add(row.id);
+          merged.push(row);
+        }
+      }
+      liveGrants = merged;
+    } catch (e) {
+      console.warn("Falha ao revalidar grants de substituição:", e);
+    }
+
+    const doc = selectedDoc;
+    if (!canApproveDocWith(doc, liveGrants)) {
+      toast.error(
+        "Sua permissão para aprovar/rejeitar este documento expirou (substituição encerrada, delegação retirada ou aprovador alterado). Atualize a página e tente novamente.",
+        { duration: 7000 },
+      );
+      setActionPhase("idle");
+      return;
+    }
+
     setActionPhase("sending");
     const internalDoc = (selectedDoc as any)?.__internalId;
     try {
@@ -2555,60 +2657,7 @@ export default function ApprovalsPage() {
         rules={rules}
         isAdmin={isAdmin}
         onBehalfOf={selectedDoc ? getSubstitutedOfficial(selectedDoc) : null}
-        canApprove={(() => {
-          if (!selectedDoc) return false;
-          // Bloqueia auto-aprovação: quem criou/solicitou o documento
-          // nunca pode aprovar, mesmo sendo admin ou SAP Superuser.
-          const isRequester =
-            codeEq(selectedDoc.requesterCode) ||
-            approverMatches(selectedDoc.requester, session.userName);
-          if (isRequester) return false;
-
-          // === 1) Aprovador designado no fluxo (inclui delegações vigentes,
-          //        pois a delegação altera currentApprover/approverCode no SAP).
-          const sessionCodeLower = (session.userName || "").toLowerCase().trim();
-          const isDirectApprover =
-            (!!selectedDoc.approverCode &&
-              selectedDoc.approverCode.toLowerCase().trim() === sessionCodeLower) ||
-            approverMatches(selectedDoc.currentApprover, session.userName);
-
-          // === 2) Substituto ativo cuja janela cobre a data do documento.
-          //        Se docDate não está disponível, cai para "hoje".
-          const docRefTs = (() => {
-            const d = selectedDoc.docDate;
-            const t = d ? new Date(d).getTime() : NaN;
-            return Number.isFinite(t) ? t : Date.now();
-          })();
-          const approverEmailLower = (selectedDoc.approverEmail || "").toLowerCase().trim();
-          const approverNameLower = (selectedDoc.currentApprover || "").toLowerCase().trim();
-          const isValidSubstitute = substituteGrants.some((g) => {
-            const startsTs = new Date(g.starts_at).getTime();
-            const endsTs = new Date(g.ends_at).getTime();
-            if (!(startsTs <= docRefTs && docRefTs < endsTs)) return false;
-            const ge = (g.official_email || "").toLowerCase();
-            const gPrefix = ge.split("@")[0];
-            const gn = (g.official_name || "").toLowerCase();
-            // A substituição precisa apontar para o mesmo aprovador oficial do
-            // documento (por e-mail, prefixo do e-mail ou nome).
-            if (approverEmailLower) {
-              if (approverEmailLower === ge) return true;
-              if (gPrefix && approverEmailLower.startsWith(`${gPrefix}@`)) return true;
-            }
-            if (approverNameLower) {
-              if (gPrefix && (approverNameLower === gPrefix || approverNameLower.includes(gPrefix))) return true;
-              if (gn && (approverNameLower === gn || approverNameLower.includes(gn) || gn.includes(approverNameLower))) return true;
-            }
-            return false;
-          });
-
-          // O botão Aprovar/Rejeitar aparece SOMENTE quando o usuário tem
-          // permissão real de decidir sobre o documento — via fluxo de
-          // aprovação (aprovador designado), delegação vigente (refletida em
-          // currentApprover/approverCode no SAP), ou substituição ativa cuja
-          // janela cobre a data do documento. Admins com apenas visibilidade
-          // ampla NÃO devem ver os botões.
-          return isDirectApprover || isValidSubstitute;
-        })()}
+        canApprove={canApproveDocWith(selectedDoc, substituteGrants)}
       />
 
 
