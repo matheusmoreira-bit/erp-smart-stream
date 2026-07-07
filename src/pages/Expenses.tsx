@@ -187,13 +187,13 @@ function ExpenseDetailModal({
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
+            <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-6">
               <span className="text-foreground font-semibold">Despesa</span>
               <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
               {expense.origin === "pagcorp" && (
                 <Badge variant="outline" className="text-xs">PagCorp</Badge>
               )}
-              <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(expense.total_amount, expense.currency)}</span>
+              <span className="text-xl sm:text-2xl font-bold font-mono w-full sm:w-auto sm:ml-auto text-right">{formatCurrency(expense.total_amount, expense.currency)}</span>
             </DialogTitle>
           </DialogHeader>
 
@@ -213,7 +213,8 @@ function ExpenseDetailModal({
 
 
           <div className="space-y-4 mt-2">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+
               <div>
                 <p className="text-xs text-muted-foreground">Fornecedor</p>
                 <p className="text-foreground font-medium">{expense.supplier_name}</p>
