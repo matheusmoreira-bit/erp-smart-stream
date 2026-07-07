@@ -907,7 +907,11 @@ export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<
     }
   }
 
-  drawFooter(doc, await currentUserEmail());
+  await finalizePdf(doc, "Resumo da fila de IA", {
+    kindLabel: opts.kindLabel,
+    confidenceThreshold: opts.confidenceThreshold,
+    entries: opts.entries,
+  });
   doc.save(`${safeFileName(opts.fileName || "resumo_fila_ia")}_${Date.now()}.pdf`);
 }
 
