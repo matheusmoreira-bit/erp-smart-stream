@@ -192,6 +192,21 @@ function ExpenseDetailModal({
             </DialogTitle>
           </DialogHeader>
 
+          <div className="flex justify-end -mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => void exportExpenseDetailPdf(expense, {
+                statusLabel: STATUS_LABELS[expense.status] || expense.status,
+                mode,
+              })}
+            >
+              <FileDown className="w-3.5 h-3.5" /> Exportar relatório
+            </Button>
+          </div>
+
+
           <div className="space-y-4 mt-2">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
