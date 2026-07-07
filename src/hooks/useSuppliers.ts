@@ -281,7 +281,9 @@ export async function createSupplier(
   });
   if (error) throw error;
   if ((resp as any)?.error) throw new Error((resp as any).error);
-  return (resp as any).supplier as Supplier;
+  const created = (resp as any).supplier as Supplier;
+  invalidateBusinessPartnerCaches(created?.company_db || session?.companyDB);
+  return created;
 }
 
 
