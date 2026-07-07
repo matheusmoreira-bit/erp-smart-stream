@@ -1413,17 +1413,30 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                           {formatCurrency(exp.total_amount, exp.currency)}
                         </td>
                         <td className="px-4 py-2.5 text-right">
-                          {origin === "erp_flow" && (
+                          <div className="inline-flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-primary"
-                              title="Mapa de relações"
-                              onClick={(ev) => { ev.stopPropagation(); setRelationsMapExpense(exp); }}
+                              aria-label={`Abrir lançamento de ${exp.supplier_name}`}
+                              title="Ver detalhes"
+                              onClick={(ev) => { ev.stopPropagation(); openExpense(exp, origin); }}
                             >
-                              <Network className="w-4 h-4" />
+                              <Eye className="w-4 h-4" aria-hidden="true" />
                             </Button>
-                          )}
+                            {origin === "erp_flow" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                aria-label={`Mapa de relações de ${exp.supplier_name}`}
+                                title="Mapa de relações"
+                                onClick={(ev) => { ev.stopPropagation(); setRelationsMapExpense(exp); }}
+                              >
+                                <Network className="w-4 h-4" aria-hidden="true" />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
