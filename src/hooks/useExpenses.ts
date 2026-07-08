@@ -975,6 +975,11 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           }
 
 
+          // Integração ao SAP é DESACOPLADA da aprovação: a aprovação já
+          // foi persistida com sucesso pelo servidor. Se a integração
+          // falhar, apenas registramos no audit log — o aprovador NÃO
+          // deve ver essa falha como erro dele. Um super-usuário pode
+          // reintegrar manualmente depois via "Reintegrar ao SAP".
           try {
             await invokeExpenseToSap({
               expense_id: expenseId,
@@ -986,9 +991,10 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             await logExpenseDecision(expenseId, "integrated", { approverName: actor });
           } catch (sapErr) {
             const msg = sapErr instanceof Error ? sapErr.message : "Erro desconhecido";
+            console.warn("[approval] Integração SAP falhou (aprovação preservada):", msg);
             await logExpenseDecision(expenseId, "integration_failed", { remarks: msg });
-            await fetchExpenses();
-            throw new Error(`Despesa aprovada, mas falhou ao integrar no SAP: ${msg}`);
+            // NÃO relançamos: aprovação está registrada e o documento
+            // seguirá para reintegração assíncrona / manual.
           }
         }
       }
