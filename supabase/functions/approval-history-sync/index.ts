@@ -247,8 +247,9 @@ Deno.serve(async (req) => {
 
   let lockAcquired = false;
   try {
+    let caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>;
     try {
-      await requireAdminOrSapSession(req);
+      caller = await requireAdminOrSapSession(req);
     } catch (err) {
       const r = authErrorResponse(err, corsHeaders);
       if (r) return r;
@@ -260,6 +261,9 @@ Deno.serve(async (req) => {
     const companyDb = (body.companyDb || req.headers.get("x-company-db") || "").trim();
     if (!companyDb) {
       return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
+    }
+    if (caller.source === "sap_session" && caller.companyDB !== companyDb) {
+      return jsonResponse({ success: false, error: "Empresa inválida para a sessão atual" }, 403);
     }
     if (body.action === "list") {
       return await listApprovalHistory(supabase, { ...body, companyDb });
