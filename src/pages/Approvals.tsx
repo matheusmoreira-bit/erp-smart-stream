@@ -989,8 +989,8 @@ function ApprovalDetailModal({
 
             {/* Super-user warning */}
             {isOtherApprover && (
-              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 text-sm text-amber-200">
-                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+              <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/40 rounded-lg px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+                <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-300 shrink-0" />
                 <span>Você está atuando como super-usuário. O aprovador designado é <strong>{doc.currentApprover}</strong>.</span>
               </div>
             )}
