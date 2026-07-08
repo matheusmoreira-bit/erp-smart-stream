@@ -86,6 +86,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   const { session: sapSession } = useSap();
+  const isOpenGaming = sapSession?.companyDB === "open_gaming_sa";
 
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [supplierName, setSupplierName] = useState("");
@@ -290,7 +291,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         toast.error(`Item ${n}: centro de custo é obrigatório`);
         return;
       }
-      if (sapSession?.companyDB === "open_gaming_sa" && (!it.project || !String(it.project).trim())) {
+      if (isOpenGaming && (!it.project || !String(it.project).trim())) {
         toast.error(`Item ${n}: projeto é obrigatório para Open Gaming`);
         return;
       }
@@ -521,7 +522,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                         required
                       />
                       <CachedSearchCombobox
-                        label="Projeto"
+                        label={isOpenGaming ? "Projeto *" : "Projeto"}
                         options={projectOptions}
                         isLoading={projectsLoading}
                         value={item.sapProject || null}
@@ -539,6 +540,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                         placeholder="Buscar projeto..."
                         suggestedQuery={!item.sapProject && item.project ? item.project : undefined}
                         portalContainer={dialogContainer}
+                        required={isOpenGaming}
                       />
                     </div>
                   </div>
