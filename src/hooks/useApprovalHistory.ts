@@ -326,7 +326,7 @@ export function useApprovalHistory(
 
       let merged = [
         ...((sapRows || []) as ApprovalHistoryRow[]).map((r) =>
-          parseSubstitution({ ...r, source: "sap" as const }),
+          parseSubstitution({ ...r, source: (r as any).raw?.source === "audit_log" ? "audit_log" as const : "sap" as const }),
         ),
         ...filteredInternal.map(parseSubstitution),
         ...filteredAuditRows.map(parseSubstitution),
