@@ -994,7 +994,7 @@ function ApprovalDetailModal({
 
             {/* Action area — fica ancorada no rodapé do modal, sempre visível
                 mesmo em telas pequenas quando o conteúdo rolar */}
-            <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 pt-4 pb-4 sm:pb-6 bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur-md border-t border-border space-y-3 z-30 shadow-[0_-12px_24px_-8px_hsl(var(--background))]">
+            <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 pt-4 pb-4 sm:pb-6 bg-background backdrop-blur-md border-t border-border space-y-3 z-30 shadow-[0_-12px_24px_-8px_hsl(var(--background))]">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Comentário (opcional)</p>
                 <Textarea
