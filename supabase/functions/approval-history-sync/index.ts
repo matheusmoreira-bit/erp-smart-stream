@@ -484,6 +484,7 @@ Deno.serve(async (req) => {
       success: true,
       received: rows.length,
       upserted,
+      audit: { merged: auditMerged, upserted: auditInserted },
       skipped: { test: skippedTest, unknown_company: skippedUnknownCompany, regression: skippedRegression },
       companyDb,
     });
