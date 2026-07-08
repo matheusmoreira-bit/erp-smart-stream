@@ -393,6 +393,8 @@ function ApprovalDetailModal({
   onAction,
   onRetryRefresh,
   onDelegate,
+  onRevokeDelegation,
+  isRevokingDelegation,
   isActioning,
   actionPhase,
   isSuperUser,
