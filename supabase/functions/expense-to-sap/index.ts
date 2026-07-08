@@ -276,13 +276,23 @@ async function uploadAttachmentsToSap(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  try {
-    await requireUserOrSapSession(req);
-  } catch (err) {
-    return new Response(
-      JSON.stringify({ success: false, error: "Faça login no SAP pela tela antes de integrar." }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+  // Bypass user auth when called internally (background retry job) with
+  // the service role key. Cron / retry workers don't have a Cloud JWT or
+  // SAP session — they always integrate via the Apiuser (service account).
+  const authHeader = req.headers.get("authorization") || "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const internalHeader = req.headers.get("x-internal-retry") === "1";
+  const isServiceRoleCall = !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}` && internalHeader;
+
+  if (!isServiceRoleCall) {
+    try {
+      await requireUserOrSapSession(req);
+    } catch (err) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Faça login no SAP pela tela antes de integrar." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
   }
 
 

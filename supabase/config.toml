@@ -50,3 +50,6 @@ verify_jwt = false
 [functions.backup-to-gdrive]
 verify_jwt = false
 
+
+[functions.expense-integration-retry]
+verify_jwt = false
