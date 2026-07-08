@@ -1,0 +1,2 @@
+UPDATE public.expense_items SET project='BET.BET' WHERE id='9ca38813-134c-4a1d-b827-55da20e04733';
+UPDATE public.expenses SET project='BET.BET', updated_at=now() WHERE id='d4d60c52-eb1a-4fa6-b0f1-ae1e3fbf9ed9';
