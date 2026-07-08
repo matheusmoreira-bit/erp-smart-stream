@@ -2257,6 +2257,12 @@ export default function ApprovalsPage() {
           await refreshExpenses();
         } else {
           await refreshCache();
+          // Dispara sync do histórico em background para trazer a decisão
+          // recém-registrada no SAP para a aba "Histórico".
+          try {
+            const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+            void sapFunctionFetch("approval-history-sync", { method: "POST" }).catch(() => {});
+          } catch { /* best-effort */ }
         }
       } catch (refreshErr) {
         console.error("Refresh após ação falhou:", refreshErr);
