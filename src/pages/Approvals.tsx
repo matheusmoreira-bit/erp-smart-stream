@@ -2379,51 +2379,32 @@ export default function ApprovalsPage() {
         throw new Error("Documento interno sem identificador — recarregue a lista e tente novamente.");
       }
 
-      // Reatribui o aprovador atual da despesa interna. O backend de
-      // aprovação (`expense-approval-action`) prioriza `expenses.current_approver`
-      // sobre o nível da regra, então o delegado passa a poder aprovar.
-      // Preserva o aprovador original apenas na PRIMEIRA delegação, para que
-      // delegações em cadeia continuem mostrando o aprovador raiz.
-      const newApprover = params.userEmail?.trim() || params.userName;
-      const { data: expRow, error: expReadErr } = await supabase
-        .from("expenses")
-        .select("original_approver, current_approver")
-        .eq("id", internalId)
-        .maybeSingle();
-      if (expReadErr) throw new Error(expReadErr.message);
-      const originalToKeep =
-        (expRow?.original_approver && expRow.original_approver.trim())
-          ? expRow.original_approver
-          : (expRow?.current_approver || null);
-      const { error: updErr } = await supabase
-        .from("expenses")
-        .update({ current_approver: newApprover, original_approver: originalToKeep })
-        .eq("id", internalId);
-      if (updErr) throw new Error(updErr.message);
-
-      const { logAuditAction } = await import("@/hooks/useAuditLog");
-      await logAuditAction({
-        action: "delegate_approval",
-        entity_type: "expense",
-        entity_id: internalId,
-        actor_email: session.userName,
-        company_db: session.companyDB,
-        details: {
-          docNum: delegationDoc.docNum,
-          docType: delegationDoc.docTypeName,
-          cardName: delegationDoc.cardName,
-          docTotal: delegationDoc.docTotal,
-          currency: delegationDoc.currency,
-          previousApprover: delegationDoc.currentApprover,
-          previousApproverEmail: delegationDoc.approverEmail,
-          newApproverName: params.userName,
-          newApproverEmail: params.userEmail,
+      // A atualização de `expenses.current_approver` precisa passar pela
+      // edge function `expense-delegate` porque o RLS da tabela bloqueia
+      // UPDATE via anon key (usuários deste app se autenticam por SAP, não
+      // por auth.uid()). O servidor também grava o audit_log — sem isso a
+      // delegação ficava apenas no log, sem alterar o aprovador real.
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const resp = await sapFunctionFetch("expense-delegate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delegate",
+          expense_id: internalId,
+          new_approver_email: params.userEmail,
+          new_approver_name: params.userName,
           reason: params.reason,
-          delegatedBy: session.userName,
-          isSuperUser: true,
-          scope: "internal",
-        },
+          doc_num: delegationDoc.docNum,
+          doc_type: delegationDoc.docTypeName,
+          card_name: delegationDoc.cardName,
+          doc_total: delegationDoc.docTotal,
+          currency: delegationDoc.currency,
+        }),
       });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok || !payload?.ok) {
+        throw new Error(payload?.error || `Falha ao delegar (HTTP ${resp.status})`);
+      }
 
       toast.success(`Aprovação delegada para ${params.userName}.`);
       setDelegationDoc(null);
@@ -2458,44 +2439,29 @@ export default function ApprovalsPage() {
     if (!confirmed) return;
     setIsRevokingDelegation(true);
     try {
-      const { data: expRow, error: expReadErr } = await supabase
-        .from("expenses")
-        .select("original_approver, current_approver")
-        .eq("id", internalId)
-        .maybeSingle();
-      if (expReadErr) throw new Error(expReadErr.message);
-      const restored = (expRow?.original_approver || "").trim();
-      if (!restored) {
-        throw new Error("Aprovador original não encontrado — impossível revogar.");
-      }
-      const previousDelegate = expRow?.current_approver || doc.currentApprover;
-      const { error: updErr } = await supabase
-        .from("expenses")
-        .update({ current_approver: restored, original_approver: null })
-        .eq("id", internalId);
-      if (updErr) throw new Error(updErr.message);
-
-      const { logAuditAction } = await import("@/hooks/useAuditLog");
-      await logAuditAction({
-        action: "revoke_delegation",
-        entity_type: "expense",
-        entity_id: internalId,
-        actor_email: session.userName,
-        company_db: session.companyDB,
-        details: {
-          docNum: doc.docNum,
-          docType: doc.docTypeName,
-          cardName: doc.cardName,
-          docTotal: doc.docTotal,
+      // Igual à delegação, a revogação passa pela edge function
+      // `expense-delegate` para contornar o RLS de `expenses` e gravar o
+      // audit_log `revoke_delegation` no mesmo passo.
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const resp = await sapFunctionFetch("expense-delegate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "revoke",
+          expense_id: internalId,
+          doc_num: doc.docNum,
+          doc_type: doc.docTypeName,
+          card_name: doc.cardName,
+          doc_total: doc.docTotal,
           currency: doc.currency,
-          revokedFrom: previousDelegate,
-          restoredApprover: restored,
-          revokedBy: session.userName,
-          isSuperUser: true,
-          scope: "internal",
-        },
+        }),
       });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok || !payload?.ok) {
+        throw new Error(payload?.error || `Falha ao revogar delegação (HTTP ${resp.status})`);
+      }
 
+      const restored = payload.current_approver || doc.delegatedFrom || "aprovador original";
       toast.success(`Delegação revogada. Aprovação devolvida para ${restored}.`);
       setSelectedDoc(null);
       refresh();
