@@ -1,18 +1,30 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, XCircle, UserCog, Clock, Loader2, History } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  UserCog,
+  Clock,
+  Loader2,
+  History,
+  FileText,
+  RotateCcw,
+  Pencil,
+  Send,
+} from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface HistoryEvent {
   id: string;
   at: string;
-  kind: "delegate" | "approve" | "reject" | "other";
+  kind: "delegate" | "approve" | "reject" | "created" | "updated" | "cancelled" | "reverted" | "transfer" | "other";
   actorLabel: string;
   actorEmail?: string;
   title: string;
   detail?: string;
   reason?: string;
+  source: "audit_log" | "expense_approval_log";
 }
 
 interface Props {
@@ -20,10 +32,11 @@ interface Props {
 }
 
 /**
- * Detailed timeline for INTERNAL approval documents:
- * - Delegations (from audit_log where action=delegate_approval)
- * - Decisions (approve / reject) from expense_approval_log
- * Sorted chronologically ascending.
+ * Detailed timeline for INTERNAL approval documents. Merges:
+ * - All `audit_log` rows for entity_type=expense (delegations, cancellations,
+ *   reverts, updates, transfers, SAP document creation, etc.).
+ * - Decisions (approve / reject) from `expense_approval_log`.
+ * Every event shows timestamp + responsible user.
  */
 export function InternalApprovalHistory({ expenseId }: Props) {
   const [events, setEvents] = useState<HistoryEvent[]>([]);
@@ -34,13 +47,12 @@ export function InternalApprovalHistory({ expenseId }: Props) {
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const [delegRes, decRes] = await Promise.all([
+      const [auditRes, decRes] = await Promise.all([
         supabase
           .from("audit_log")
           .select("id, action, actor_email, details, created_at")
           .eq("entity_type", "expense")
           .eq("entity_id", expenseId)
-          .in("action", ["delegate_approval"])
           .order("created_at", { ascending: true }),
         supabase
           .from("expense_approval_log")
@@ -55,21 +67,93 @@ export function InternalApprovalHistory({ expenseId }: Props) {
 
       const list: HistoryEvent[] = [];
 
-      for (const r of delegRes.data || []) {
+      for (const r of auditRes.data || []) {
         const d = (r.details || {}) as Record<string, unknown>;
-        const from = (d.previousApprover as string) || "";
-        const to = (d.newApproverName as string) || (d.newApproverEmail as string) || "";
-        const reason = (d.reason as string) || "";
-        list.push({
-          id: `del-${r.id}`,
-          at: r.created_at,
-          kind: "delegate",
-          actorLabel: (d.delegatedBy as string) || r.actor_email || "—",
-          actorEmail: r.actor_email || undefined,
-          title: `Delegou aprovação${from ? ` de ${from}` : ""}${to ? ` para ${to}` : ""}`,
-          reason: reason || undefined,
-        });
+        const action = r.action || "";
+        const actor = (d.delegatedBy as string) || r.actor_email || "—";
+
+        if (action === "delegate_approval") {
+          const from = (d.previousApprover as string) || "";
+          const to = (d.newApproverName as string) || (d.newApproverEmail as string) || "";
+          list.push({
+            id: `au-${r.id}`,
+            at: r.created_at,
+            kind: "delegate",
+            actorLabel: actor,
+            actorEmail: r.actor_email || undefined,
+            title: `Delegou aprovação${from ? ` de ${from}` : ""}${to ? ` para ${to}` : ""}`,
+            reason: (d.reason as string) || undefined,
+            source: "audit_log",
+          });
+        } else if (action === "transfer_approval") {
+          const from = (d.fromApprover as string) || (d.previousApprover as string) || "";
+          const to = (d.toApprover as string) || (d.newApproverName as string) || "";
+          list.push({
+            id: `au-${r.id}`,
+            at: r.created_at,
+            kind: "transfer",
+            actorLabel: actor,
+            actorEmail: r.actor_email || undefined,
+            title: `Transferiu aprovação${from ? ` de ${from}` : ""}${to ? ` para ${to}` : ""}`,
+            reason: (d.reason as string) || undefined,
+            source: "audit_log",
+          });
+        } else if (action === "sap_document_created") {
+          list.push({
+            id: `au-${r.id}`,
+            at: r.created_at,
+            kind: "created",
+            actorLabel: actor,
+            actorEmail: r.actor_email || undefined,
+            title: `Documento criado no SAP${d.sap_doc_num ? ` (Nº ${d.sap_doc_num})` : ""}`,
+            source: "audit_log",
+          });
+        } else if (action === "expense_cancelled_manual_sap") {
+          list.push({
+            id: `au-${r.id}`,
+            at: r.created_at,
+            kind: "cancelled",
+            actorLabel: actor,
+            actorEmail: r.actor_email || undefined,
+            title: "Despesa cancelada manualmente (SAP)",
+            reason: (d.reason as string) || undefined,
+            source: "audit_log",
+          });
+        } else if (action === "expense_reverted_audit") {
+          list.push({
+            id: `au-${r.id}`,
+            at: r.created_at,
+            kind: "reverted",
+            actorLabel: actor,
+            actorEmail: r.actor_email || undefined,
+            title: "Decisão revertida por auditoria",
+            reason: (d.reason as string) || undefined,
+            source: "audit_log",
+          });
+        } else if (action === "update_expense") {
+          const fields = Array.isArray(d.changedFields) ? (d.changedFields as string[]).join(", ") : "";
+          list.push({
+            id: `au-${r.id}`,
+            at: r.created_at,
+            kind: "updated",
+            actorLabel: actor,
+            actorEmail: r.actor_email || undefined,
+            title: `Despesa atualizada${fields ? ` (${fields})` : ""}`,
+            source: "audit_log",
+          });
+        } else {
+          list.push({
+            id: `au-${r.id}`,
+            at: r.created_at,
+            kind: "other",
+            actorLabel: actor,
+            actorEmail: r.actor_email || undefined,
+            title: action.replace(/_/g, " "),
+            source: "audit_log",
+          });
+        }
       }
+
 
       for (const r of decRes.data || []) {
         const isApprove = r.decision === "approve" || r.decision === "aprovado";
@@ -93,6 +177,7 @@ export function InternalApprovalHistory({ expenseId }: Props) {
           actorEmail: r.approver_email || undefined,
           title: title + substLabel,
           reason: r.remarks || undefined,
+          source: "expense_approval_log",
         });
       }
 
@@ -131,22 +216,30 @@ export function InternalApprovalHistory({ expenseId }: Props) {
       </div>
       <ol className="relative border-l border-border/60 pl-4 space-y-3">
         {events.map((ev) => {
-          const Icon =
-            ev.kind === "approve"
-              ? CheckCircle2
-              : ev.kind === "reject"
-                ? XCircle
-                : ev.kind === "delegate"
-                  ? UserCog
-                  : Clock;
-          const iconColor =
-            ev.kind === "approve"
-              ? "text-emerald-500"
-              : ev.kind === "reject"
-                ? "text-destructive"
-                : ev.kind === "delegate"
-                  ? "text-primary"
-                  : "text-muted-foreground";
+          const iconMap: Record<HistoryEvent["kind"], typeof CheckCircle2> = {
+            approve: CheckCircle2,
+            reject: XCircle,
+            delegate: UserCog,
+            transfer: Send,
+            created: FileText,
+            updated: Pencil,
+            cancelled: XCircle,
+            reverted: RotateCcw,
+            other: Clock,
+          };
+          const colorMap: Record<HistoryEvent["kind"], string> = {
+            approve: "text-emerald-500",
+            reject: "text-destructive",
+            delegate: "text-primary",
+            transfer: "text-primary",
+            created: "text-emerald-500",
+            updated: "text-amber-500",
+            cancelled: "text-destructive",
+            reverted: "text-amber-500",
+            other: "text-muted-foreground",
+          };
+          const Icon = iconMap[ev.kind];
+          const iconColor = colorMap[ev.kind];
           return (
             <li key={ev.id} className="relative">
               <span
