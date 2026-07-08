@@ -10,6 +10,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 const FISCAL_EMAIL = "fiscal@anagaming.com.br";
+const EXTRA_MISSING_ATTACHMENT_RECIPIENTS = ["leonardo.oliveira@anagaming.com.br"];
 
 export interface MissingAttachmentItem {
   description: string;
@@ -149,15 +150,16 @@ export async function notifyFiscalMissingAttachment(payload: MissingAttachmentPa
     </div>
   `;
 
-  const cc =
-    payload.requesterEmail && payload.requesterEmail.toLowerCase() !== FISCAL_EMAIL
+  const toList = [FISCAL_EMAIL, ...EXTRA_MISSING_ATTACHMENT_RECIPIENTS];
+  const ccList =
+    payload.requesterEmail && !toList.map((x) => x.toLowerCase()).includes(payload.requesterEmail.toLowerCase())
       ? [payload.requesterEmail]
       : undefined;
 
   const { error } = await supabase.functions.invoke("send-smtp-email", {
     body: {
-      to: [FISCAL_EMAIL],
-      cc,
+      to: toList,
+      cc: ccList,
       replyTo: payload.requesterEmail || undefined,
       subject,
       html,

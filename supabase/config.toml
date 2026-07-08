@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.expense-integration-retry]
 verify_jwt = false
+
+[functions.resend-missing-attachment-notifications]
+verify_jwt = false

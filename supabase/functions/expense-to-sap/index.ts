@@ -159,6 +159,107 @@ async function notifyMissingAttachmentWhatsApp(params: {
   }
 }
 
+// Fire-and-forget: envia email da contingência (sem anexo) para o time
+// fiscal e responsáveis (Leonardo). Inclui os links assinados dos anexos
+// internos, quando existirem, para lançamento manual no ERP.
+const MISSING_ATTACHMENT_EMAIL_TO = [
+  "fiscal@anagaming.com.br",
+  "leonardo.oliveira@anagaming.com.br",
+];
+
+async function notifyMissingAttachmentEmail(params: {
+  supabase: ReturnType<typeof createClient>;
+  companyDb?: string | null;
+  entityId: string | number;
+  docEntry?: number | null;
+  docNum?: number | null;
+  requester?: string | null;
+  requesterEmail?: string | null;
+  supplier?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  reason: "no_attachment_uploaded" | "integration_attachments_disabled";
+  attachments?: Array<{ file_name: string; url: string }>;
+}): Promise<void> {
+  try {
+    const cur = (params.currency || "BRL").trim();
+    let amountStr = "-";
+    if (params.amount != null) {
+      try {
+        amountStr = new Intl.NumberFormat("pt-BR", { style: "currency", currency: cur })
+          .format(Number(params.amount));
+      } catch {
+        amountStr = `${cur} ${Number(params.amount).toFixed(2)}`;
+      }
+    }
+    const reasonLabel = params.reason === "integration_attachments_disabled"
+      ? "Integração de anexos desligada para a empresa"
+      : "Pedido aprovado sem nenhum anexo vinculado no SAP";
+
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+    const atts = params.attachments || [];
+    const attsHtml = atts.length > 0
+      ? `<h4 style="margin:12px 0 6px">Anexos internos (${atts.length}) — links válidos por 7 dias</h4>
+         <ul style="padding-left:18px;margin:0">${atts
+           .map((a) => `<li><a href="${esc(a.url)}">${esc(a.file_name)}</a></li>`).join("")}</ul>`
+      : `<p style="color:#a00;margin:8px 0">Nenhum anexo interno foi enviado no ERP Flow.</p>`;
+
+    const subject = `[SEM ANEXO] Despesa integrada ao SAP — ${params.supplier || "-"} (DocNum ${params.docNum ?? "-"})`;
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
+        <p style="background:#fff3cd;border:1px solid #ffe69c;padding:10px 12px;border-radius:6px;margin:0 0 12px">
+          <strong>⚠️ Contingência — Despesa integrada ao SAP sem anexo do documento original.</strong><br>
+          ${esc(reasonLabel)}. Providencie o lançamento manual do anexo no pedido.
+        </p>
+        <table style="border-collapse:collapse">
+          <tr><td style="padding:4px 10px;color:#666">Empresa</td><td style="padding:4px 10px">${esc(params.companyDb || "-")}</td></tr>
+          <tr><td style="padding:4px 10px;color:#666">SAP DocNum</td><td style="padding:4px 10px">${params.docNum ?? "-"}</td></tr>
+          <tr><td style="padding:4px 10px;color:#666">SAP DocEntry</td><td style="padding:4px 10px">${params.docEntry ?? "-"}</td></tr>
+          <tr><td style="padding:4px 10px;color:#666">Fornecedor</td><td style="padding:4px 10px"><strong>${esc(params.supplier || "-")}</strong></td></tr>
+          <tr><td style="padding:4px 10px;color:#666">Valor</td><td style="padding:4px 10px"><strong>${esc(amountStr)}</strong></td></tr>
+          <tr><td style="padding:4px 10px;color:#666">Solicitante</td><td style="padding:4px 10px">${esc(params.requester || "-")}${params.requesterEmail ? ` &middot; ${esc(params.requesterEmail)}` : ""}</td></tr>
+          <tr><td style="padding:4px 10px;color:#666">ID interno</td><td style="padding:4px 10px">${esc(String(params.entityId))}</td></tr>
+        </table>
+        ${attsHtml}
+      </div>
+    `;
+
+    const textLines = [
+      "Contingência — Despesa integrada ao SAP sem anexo do documento original.",
+      reasonLabel,
+      "",
+      `Empresa: ${params.companyDb || "-"}`,
+      `SAP DocNum: ${params.docNum ?? "-"} / DocEntry: ${params.docEntry ?? "-"}`,
+      `Fornecedor: ${params.supplier || "-"}`,
+      `Valor: ${amountStr}`,
+      `Solicitante: ${params.requester || "-"}${params.requesterEmail ? ` (${params.requesterEmail})` : ""}`,
+      `ID interno: ${params.entityId}`,
+      "",
+      atts.length > 0 ? `Anexos internos (links por 7 dias):` : "Nenhum anexo interno enviado no ERP Flow.",
+      ...atts.map((a) => `- ${a.file_name}: ${a.url}`),
+    ];
+
+    const { error } = await params.supabase.functions.invoke("send-smtp-email", {
+      body: {
+        to: MISSING_ATTACHMENT_EMAIL_TO,
+        replyTo: params.requesterEmail || undefined,
+        subject,
+        html,
+        text: textLines.join("\n"),
+      },
+    });
+    if (error) console.warn("notifyMissingAttachmentEmail send failed:", error);
+  } catch (e) {
+    console.warn("notifyMissingAttachmentEmail error:", e);
+  }
+}
+
+
+
 // Gera URLs assinadas (7 dias) para os anexos internos da despesa, para
 // que o admin possa baixar e lançar manualmente no SAP em caso de
 // contingência.
@@ -852,6 +953,20 @@ Deno.serve(async (req) => {
         docEntry: sapResult.docEntry,
         docNum: sapResult.docNum,
         requester: expenseSnapshot?.requester_name,
+        supplier: expenseSnapshot?.supplier_name,
+        amount: expenseSnapshot?.total_amount,
+        currency: expenseSnapshot?.currency,
+        reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+        attachments: attachmentLinks,
+      });
+      await notifyMissingAttachmentEmail({
+        supabase,
+        companyDb: expenseSnapshot?.company_db,
+        entityId: expenseId || "",
+        docEntry: sapResult.docEntry,
+        docNum: sapResult.docNum,
+        requester: expenseSnapshot?.requester_name,
+        requesterEmail: expenseSnapshot?.requester_email,
         supplier: expenseSnapshot?.supplier_name,
         amount: expenseSnapshot?.total_amount,
         currency: expenseSnapshot?.currency,
