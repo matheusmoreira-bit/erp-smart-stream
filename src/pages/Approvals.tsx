@@ -70,6 +70,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageTitle } from "@/components/PageTitle";
+import { InternalApprovalHistory } from "@/components/InternalApprovalHistory";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const code = /^[A-Z]{3}$/.test((currency || "").toUpperCase()) ? currency.toUpperCase() : "BRL";
@@ -687,6 +688,16 @@ function ApprovalDetailModal({
                 </div>
               )}
             </div>
+
+            {/* Histórico detalhado — apenas para aprovações internas */}
+            {(doc as unknown as { __internalId?: string }).__internalId && (
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                <InternalApprovalHistory
+                  expenseId={(doc as unknown as { __internalId: string }).__internalId}
+                />
+              </div>
+            )}
+
 
             {/* Remarks */}
             {doc.remarks && (
