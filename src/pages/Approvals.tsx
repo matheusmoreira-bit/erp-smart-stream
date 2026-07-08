@@ -2007,7 +2007,9 @@ export default function ApprovalsPage() {
           approverMatches(a.currentApprover, session.userName) ||
           approverMatches(a.requester, session.userName) ||
           matchesSubstitutedOfficial(a.currentApprover) ||
-          (a.approverEmail && officialIdentifiers.includes(a.approverEmail.toLowerCase())),
+          (a.approverEmail && officialIdentifiers.includes(a.approverEmail.toLowerCase())) ||
+          // Aprovador original ainda vê o documento que delegou (mesmo sem "Ver todas").
+          (a.delegatedFrom && approverMatches(a.delegatedFrom, session.userName)),
       );
 
 

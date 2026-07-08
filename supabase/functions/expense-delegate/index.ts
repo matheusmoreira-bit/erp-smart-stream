@@ -97,7 +97,9 @@ Deno.serve(async (req) => {
   if (action === "delegate") {
     const newApproverEmail = String(body.new_approver_email || "").trim();
     const newApproverName = String(body.new_approver_name || "").trim();
-    const newApprover = newApproverEmail || newApproverName;
+    // Preferimos armazenar o NOME do delegado (ex.: "Douglas Vinicius") em
+    // vez do e-mail, para exibir de forma legível no card e no histórico.
+    const newApprover = newApproverName || newApproverEmail;
     if (!newApprover) return json(400, { error: "new_approver_email ou new_approver_name é obrigatório." });
 
     // Preserva o aprovador raiz apenas na primeira delegação.
