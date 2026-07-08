@@ -530,8 +530,9 @@ Deno.serve(async (req) => {
       // Priority: per-line override > card mapping > account mapping
       const finalCostCenter =
         override.costCenter ?? cardMapping?.cost_center ?? acctMapping?.cost_center ?? null;
+      const projectFallback = companyDb === "open_gaming_sa" ? "OPEN GAMING" : null;
       const finalProject =
-        override.project ?? cardMapping?.project ?? acctMapping?.project ?? null;
+        override.project ?? cardMapping?.project ?? acctMapping?.project ?? projectFallback;
       const finalItem = override.item || itemCode!;
       const lineCurrency = String(tx.currency || "").toUpperCase();
       const line: Record<string, unknown> = {
