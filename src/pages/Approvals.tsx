@@ -689,6 +689,16 @@ function ApprovalDetailModal({
               )}
             </div>
 
+            {/* Histórico detalhado — apenas para aprovações internas */}
+            {(doc as unknown as { __internalId?: string }).__internalId && (
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                <InternalApprovalHistory
+                  expenseId={(doc as unknown as { __internalId: string }).__internalId}
+                />
+              </div>
+            )}
+
+
             {/* Remarks */}
             {doc.remarks && (
               <div>
