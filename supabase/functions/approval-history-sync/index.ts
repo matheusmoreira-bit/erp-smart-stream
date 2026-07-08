@@ -342,7 +342,141 @@ Deno.serve(async (req) => {
       upserted += slice.length;
     }
 
-    const summary = `Sincronizados ${upserted} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression})`;
+    // ================================================================
+    // Fase extra: mesclar decisões do audit_log (histórico de ações)
+    // ----------------------------------------------------------------
+    // O webhook n8n só retorna aprovações em aberto (decision = "P"),
+    // portanto as decisões tomadas pelos usuários dentro do ERP Flow
+    // ficam apenas em `audit_log`. Aqui refletimos essas decisões em
+    // `approval_history` para que a aba "Histórico" mostre a decisão
+    // logo após a ação, sem depender do webhook trazer o histórico.
+    //
+    // Estratégia:
+    //  1) Buscar audit_log de approve/reject em approval_request para
+    //     este company_db (últimos 180 dias).
+    //  2) Deduplicar por (entity_id, actor_email) — mais recente vence.
+    //  3) Para cada decisão:
+    //     a) UPDATE em approval_history: qualquer linha pending do
+    //        mesmo code (external_id LIKE '<code>::%') vira Y/N.
+    //     b) UPSERT de uma linha "canônica" chaveada pelo ator, para
+    //        que a decisão apareça mesmo se o webhook nunca retornou
+    //        uma pending row para esse aprovador.
+    // ================================================================
+    let auditMerged = 0;
+    let auditInserted = 0;
+    try {
+      const cutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: auditRows } = await supabase
+        .from("audit_log")
+        .select("action, entity_id, actor_email, created_at, details, company_db")
+        .eq("entity_type", "approval_request")
+        .in("action", ["approve", "reject"])
+        .eq("company_db", companyDb)
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: false })
+        .limit(5000);
+
+      type AuditRow = {
+        action: string;
+        entity_id: string | null;
+        actor_email: string | null;
+        created_at: string;
+        details: Record<string, unknown> | null;
+        company_db: string | null;
+      };
+
+      // Dedupe: (entity_id, actor_email) — como está ordenado desc, primeiro vence.
+      const seen = new Set<string>();
+      const decisions: AuditRow[] = [];
+      for (const r of ((auditRows || []) as AuditRow[])) {
+        if (!r.entity_id || !r.actor_email) continue;
+        const key = `${r.entity_id}::${r.actor_email.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        decisions.push(r);
+      }
+
+      for (const a of decisions) {
+        const code = String(a.entity_id);
+        const actorEmail = String(a.actor_email).toLowerCase();
+        const decision = a.action === "approve" ? "Y" : "N";
+        const details = (a.details || {}) as Record<string, unknown>;
+
+        // (a) Atualiza pending rows do mesmo code (aprovador original).
+        try {
+          const { data: pendingRows } = await supabase
+            .from("approval_history")
+            .select("id, external_id, decision")
+            .eq("company_db", companyDb)
+            .eq("decision", "P")
+            .like("external_id", `${code}::%`);
+          if (pendingRows && pendingRows.length > 0) {
+            const ids = pendingRows.map((p: { id: string }) => p.id);
+            const { error: updErr } = await supabase
+              .from("approval_history")
+              .update({
+                decision,
+                decision_date: a.created_at,
+                synced_at: new Date().toISOString(),
+              })
+              .in("id", ids);
+            if (!updErr) auditMerged += ids.length;
+          }
+        } catch (e) {
+          console.warn(`[approval-history-sync] audit merge update falhou ${code}: ${String(e)}`);
+        }
+
+        // (b) Upsert linha canônica chaveada pelo ator.
+        const docNum = toInt(details.docNum);
+        const docType = (details.docType as string) || null;
+        const objectType = docType ? DOC_TYPE_TO_OBJECT[docType] || null : null;
+        const remarksParts = [
+          (details.remarks as string) || null,
+          details.actedAsSubstitute
+            ? `Ação executada por SUBSTITUTO (${actorEmail}) em nome de ${details.substitutedForName || ""}${details.substitutedForEmail ? ` <${details.substitutedForEmail}>` : ""}.`
+            : null,
+          details.actingRole === "delegation"
+            ? `Ação executada por DELEGAÇÃO (${actorEmail}).`
+            : null,
+        ].filter(Boolean);
+        const row = {
+          external_id: `${code}::${actorEmail}`,
+          company_db: companyDb,
+          decision,
+          decision_date: a.created_at,
+          approver_code: null,
+          approver_name: (details.approver as string) || null,
+          approver_email: actorEmail,
+          requester_code: null,
+          requester_name: null,
+          doc_object_type: objectType,
+          doc_type_name: docType,
+          doc_entry: null,
+          doc_num: docNum,
+          doc_total: toNumber(details.docTotal),
+          currency: normalizeCurrency(details.currency),
+          card_code: null,
+          card_name: (details.cardName as string) || null,
+          remarks: remarksParts.join("\n\n") || null,
+          stage_name: null,
+          step: null,
+          raw: { source: "audit_log", ...details } as unknown as Record<string, unknown>,
+          synced_at: new Date().toISOString(),
+        };
+        try {
+          const { error: insErr } = await supabase
+            .from("approval_history")
+            .upsert(row, { onConflict: "company_db,external_id" });
+          if (!insErr) auditInserted += 1;
+        } catch (e) {
+          console.warn(`[approval-history-sync] audit upsert falhou ${code}: ${String(e)}`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[approval-history-sync] merge audit_log falhou: ${String(e)}`);
+    }
+
+    const summary = `Sincronizados ${upserted} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression}, audit-merge:${auditMerged}, audit-upsert:${auditInserted})`;
     await updateSyncState(supabase, "success", summary, upserted);
     await releaseWatcherLock(supabase, "approval-history-sync", "ok", summary);
 
