@@ -1722,6 +1722,7 @@ export default function ApprovalsPage() {
   const [showAll, setShowAll] = useState<boolean>(false);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [isDelegating, setIsDelegating] = useState(false);
+  const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
   const [minValue, setMinValue] = useState<string>("");
   const [maxValue, setMaxValue] = useState<string>("");
