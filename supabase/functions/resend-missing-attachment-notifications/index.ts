@@ -146,10 +146,13 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      const validReplyTo = typeof e.requester_email === "string" && e.requester_email.includes("@")
+        ? e.requester_email
+        : undefined;
       const { error: sendErr } = await supabase.functions.invoke("send-smtp-email", {
         body: {
           to: recipients,
-          replyTo: e.requester_email || undefined,
+          replyTo: validReplyTo,
           subject,
           html,
           text: textLines.join("\n"),
