@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type CSSProperties } from "react";
+import { useState, useRef, useEffect, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -136,13 +136,13 @@ export function CachedSearchCombobox({
     setIsOpen(false);
   };
 
-  const handleOptionPointerDown = (e: React.PointerEvent<HTMLButtonElement>, opt: SapSearchOption) => {
+  const handleOptionPointerDown = (e: PointerEvent<HTMLButtonElement>, opt: SapSearchOption) => {
     e.preventDefault();
     e.stopPropagation();
     handleSelect(opt);
   };
 
-  const handleOptionMouseDown = (e: React.MouseEvent<HTMLButtonElement>, opt: SapSearchOption) => {
+  const handleOptionMouseDown = (e: MouseEvent<HTMLButtonElement>, opt: SapSearchOption) => {
     e.preventDefault();
     e.stopPropagation();
     handleSelect(opt);
