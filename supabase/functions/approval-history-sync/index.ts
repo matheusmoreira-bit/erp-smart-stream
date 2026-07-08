@@ -205,6 +205,36 @@ async function updateSyncState(
   );
 }
 
+async function listApprovalHistory(
+  supabase: ReturnType<typeof createClient>,
+  body: { companyDb?: string; decision?: string; limit?: number },
+) {
+  const companyDb = (body.companyDb || "").trim();
+  if (!companyDb) return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
+
+  const decision = body.decision === "Y" || body.decision === "N" ? body.decision : "all";
+  const limit = Math.min(Math.max(Number(body.limit) || 51, 1), 500);
+
+  let q = supabase
+    .from("approval_history")
+    .select("*")
+    .eq("company_db", companyDb)
+    .order("decision_date", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (decision !== "all") q = q.eq("decision", decision);
+
+  const { data: rows, error } = await q;
+  if (error) throw new Error(error.message);
+
+  const { data: syncState } = await supabase
+    .from("approval_history_sync_state")
+    .select("last_sync_at,last_status,last_message,last_count")
+    .eq("id", 1)
+    .maybeSingle();
+
+  return jsonResponse({ success: true, rows: rows || [], syncState: syncState || null });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -225,18 +255,20 @@ Deno.serve(async (req) => {
       throw err;
     }
 
+    let body: { companyDb?: string; action?: string; decision?: string; limit?: number } = {};
+    try { body = await req.json(); } catch { /* no body */ }
+    const companyDb = (body.companyDb || req.headers.get("x-company-db") || "").trim();
+    if (!companyDb) {
+      return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
+    }
+    if (body.action === "list") {
+      return await listApprovalHistory(supabase, { ...body, companyDb });
+    }
+
     // Lock anti-execução-paralela
     lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 20);
     if (!lockAcquired) {
       return jsonResponse({ success: true, skipped: "another_run_in_progress" });
-    }
-
-    let body: { companyDb?: string } = {};
-    try { body = await req.json(); } catch { /* no body */ }
-    const companyDb = (body.companyDb || req.headers.get("x-company-db") || "").trim();
-    if (!companyDb) {
-      await releaseWatcherLock(supabase, "approval-history-sync", "error", "companyDb missing");
-      return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
     }
 
     const res = await fetch(WEBHOOK_URL, {
