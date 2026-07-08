@@ -951,9 +951,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (!session) navigate("/");
   }, [session, navigate]);
 
-  if (!session) {
-    return null;
-  }
+  // NOTE: no early return here — hooks below must always run. When session is
+  // null, the useEffect above redirects; render is short-circuited at the JSX.
 
   const isMine = (e: Expense) => {
     const owner = (e.created_by_email || e.requester_email || e.requester_name || "").toLowerCase();
@@ -1321,6 +1320,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       filtersJustClosed.current = false;
     }
   }, [filtersOpen]);
+
+  if (!session) return null;
 
   return (
     <div className="min-h-screen bg-background">
