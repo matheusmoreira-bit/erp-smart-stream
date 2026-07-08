@@ -1,6 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
 import { sapAction, sapQuery, type SapSession } from "@/lib/sap-client";
-import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
+
+// Invalidate every cached list that derives from SAP Items so the purchase/sales
+// comboboxes (CreateExpenseModal, EditExpenseModal, EditNfEntradaDialog, RuleSimulator)
+// refetch immediately after a create/update/toggle in the Items page.
+export async function invalidateItemsCaches(companyDb?: string | null) {
+  const keys = ["items_purchase_active_v3", "items_sales_active_v3"];
+  if (companyDb) keys.push(`items_all:${companyDb}`);
+  await invalidateSapCache(keys, companyDb || undefined);
+}
 
 export interface SapItem {
   id: string;
