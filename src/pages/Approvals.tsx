@@ -649,7 +649,18 @@ function ApprovalDetailModal({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Aprovador</p>
-                <p className="text-foreground font-medium">{doc.currentApprover}</p>
+                {doc.delegatedFrom ? (
+                  <p className="text-foreground font-medium">
+                    <span className="line-through text-muted-foreground/80 font-normal">{doc.delegatedFrom}</span>
+                    <span className="mx-1 text-primary" aria-hidden="true">→</span>
+                    {doc.currentApprover}
+                  </p>
+                ) : (
+                  <p className="text-foreground font-medium">{doc.currentApprover}</p>
+                )}
+                {doc.delegatedFrom && (
+                  <p className="text-[11px] text-muted-foreground">Delegado de {doc.delegatedFrom}</p>
+                )}
                 {doc.approverEmail && (
                   <p className="text-xs text-muted-foreground">{doc.approverEmail}</p>
                 )}
