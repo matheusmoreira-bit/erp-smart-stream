@@ -1028,6 +1028,18 @@ function ApprovalDetailModal({
                     Delegar
                   </Button>
                 )}
+                {isSuperUser && doc.approvalRequestId <= 0 && doc.delegatedFrom && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onRevokeDelegation(doc)}
+                    disabled={isActioning || isRevokingDelegation}
+                    className="gap-1.5 border-amber-500/40 text-amber-300 hover:bg-amber-500/10 w-full sm:w-auto"
+                    title={`Revogar delegação e devolver aprovação para ${doc.delegatedFrom}`}
+                  >
+                    {isRevokingDelegation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                    Revogar delegação
+                  </Button>
+                )}
                 {canApprove ? (
                   <>
                     <Button
