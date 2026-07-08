@@ -10,6 +10,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 const FISCAL_EMAIL = "fiscal@anagaming.com.br";
+const EXTRA_MISSING_ATTACHMENT_RECIPIENTS = ["leonardo.oliveira@anagaming.com.br"];
 
 export interface MissingAttachmentItem {
   description: string;
