@@ -40,6 +40,10 @@ function findSapOption(options: SapSearchOption[], value: string | null | undefi
   );
 }
 
+function normalizeSapTextValue(value: string) {
+  return value.trim().replace(/\s+—\s+.*$/, "");
+}
+
 function ValidLabel({
   children,
   filled,
@@ -516,6 +520,17 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                             return updated;
                           });
                         }}
+                        onRawValueChange={(val) => {
+                          setItems((prev) => {
+                            const updated = [...prev];
+                            updated[i] = {
+                              ...updated[i],
+                              sapCostCenter: null,
+                              cost_center: normalizeSapTextValue(val),
+                            };
+                            return updated;
+                          });
+                        }}
                         placeholder="Buscar centro de custo..."
                         suggestedQuery={!item.sapCostCenter && item.cost_center ? item.cost_center : undefined}
                         portalContainer={dialogContainer}
@@ -533,6 +548,17 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                               ...updated[i],
                               sapProject: val,
                               project: val?.code || "",
+                            };
+                            return updated;
+                          });
+                        }}
+                        onRawValueChange={(val) => {
+                          setItems((prev) => {
+                            const updated = [...prev];
+                            updated[i] = {
+                              ...updated[i],
+                              sapProject: null,
+                              project: normalizeSapTextValue(val),
                             };
                             return updated;
                           });
