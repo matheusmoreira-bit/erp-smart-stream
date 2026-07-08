@@ -262,7 +262,7 @@ export function useApprovalHistory(
           const actor = (a.actor_email || "").toString().toLowerCase();
           return {
             id: `audit-${a.id}`,
-            external_id: `audit:${a.entity_id || "unknown"}:${actor}`,
+            external_id: `${a.entity_id || "unknown"}::${actor}`,
             company_db: a.company_db,
             decision: a.action === "approve" ? "Y" : "N",
             decision_date: a.created_at,
@@ -303,9 +303,13 @@ export function useApprovalHistory(
       const sapExternalKeys = new Set(
         ((sapRows || []) as ApprovalHistoryRow[]).map((r) => `${r.company_db}|${r.external_id}`),
       );
-      const filteredAuditRows = auditHistoryRows.filter(
-        (r) => !sapExternalKeys.has(`${r.company_db}|${r.external_id.replace(/^audit:/, "")}`),
-      );
+      const filteredAuditRows = auditHistoryRows.filter((r) => {
+        if (sapExternalKeys.has(`${r.company_db}|${r.external_id}`)) return false;
+        const hasSubstitution = !!(r.substituted_for_email || r.substituted_for_name);
+        if (mode === "any") return hasSubstitution;
+        if (mode === "none") return !hasSubstitution;
+        return true;
+      });
 
       // Extrai substituição do texto para rows SAP (não têm colunas dedicadas).
       const parseSubstitution = (r: ApprovalHistoryRow): ApprovalHistoryRow => {
