@@ -2421,6 +2421,76 @@ export default function ApprovalsPage() {
     }
   };
 
+  const handleRevokeDelegation = async (doc: ApprovalDoc) => {
+    if (!session) return;
+    if (!isSuperUser) {
+      toast.error("Apenas super-usuários podem revogar delegações.");
+      return;
+    }
+    const internalId = (doc as unknown as { __internalId?: string }).__internalId;
+    if (!internalId) {
+      toast.error("Somente aprovações internas permitem revogar delegação.");
+      return;
+    }
+    if (!doc.delegatedFrom) {
+      toast.error("Este documento não possui delegação ativa.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Revogar delegação e devolver a aprovação para ${doc.delegatedFrom}?`,
+    );
+    if (!confirmed) return;
+    setIsRevokingDelegation(true);
+    try {
+      const { data: expRow, error: expReadErr } = await supabase
+        .from("expenses")
+        .select("original_approver, current_approver")
+        .eq("id", internalId)
+        .maybeSingle();
+      if (expReadErr) throw new Error(expReadErr.message);
+      const restored = (expRow?.original_approver || "").trim();
+      if (!restored) {
+        throw new Error("Aprovador original não encontrado — impossível revogar.");
+      }
+      const previousDelegate = expRow?.current_approver || doc.currentApprover;
+      const { error: updErr } = await supabase
+        .from("expenses")
+        .update({ current_approver: restored, original_approver: null })
+        .eq("id", internalId);
+      if (updErr) throw new Error(updErr.message);
+
+      const { logAuditAction } = await import("@/hooks/useAuditLog");
+      await logAuditAction({
+        action: "revoke_delegation",
+        entity_type: "expense",
+        entity_id: internalId,
+        actor_email: session.userName,
+        company_db: session.companyDB,
+        details: {
+          docNum: doc.docNum,
+          docType: doc.docTypeName,
+          cardName: doc.cardName,
+          docTotal: doc.docTotal,
+          currency: doc.currency,
+          revokedFrom: previousDelegate,
+          restoredApprover: restored,
+          revokedBy: session.userName,
+          isSuperUser: true,
+          scope: "internal",
+        },
+      });
+
+      toast.success(`Delegação revogada. Aprovação devolvida para ${restored}.`);
+      setSelectedDoc(null);
+      refresh();
+    } catch (e) {
+      console.error("Revoke delegation error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao revogar delegação");
+    } finally {
+      setIsRevokingDelegation(false);
+    }
+  };
+
 
 
   return (
