@@ -956,6 +956,20 @@ Deno.serve(async (req) => {
         reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
         attachments: attachmentLinks,
       });
+      await notifyMissingAttachmentEmail({
+        supabase,
+        companyDb: expenseSnapshot?.company_db,
+        entityId: expenseId || "",
+        docEntry: sapResult.docEntry,
+        docNum: sapResult.docNum,
+        requester: expenseSnapshot?.requester_name,
+        requesterEmail: expenseSnapshot?.requester_email,
+        supplier: expenseSnapshot?.supplier_name,
+        amount: expenseSnapshot?.total_amount,
+        currency: expenseSnapshot?.currency,
+        reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+        attachments: attachmentLinks,
+      });
     }
 
     return new Response(
