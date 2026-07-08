@@ -263,12 +263,6 @@ Deno.serve(async (req) => {
       if (Array.isArray(g?.data)) rows.push(...g.data);
     }
 
-    if (rows.length === 0) {
-      await updateSyncState(supabase, "success", "Nenhum registro recebido", 0);
-      await releaseWatcherLock(supabase, "approval-history-sync", "ok", "no rows");
-      return jsonResponse({ success: true, received: 0, upserted: 0 });
-    }
-
     // Mapa empresa (display_name normalizado) -> company_db
     const { data: companiesData } = await supabase
       .from("companies")

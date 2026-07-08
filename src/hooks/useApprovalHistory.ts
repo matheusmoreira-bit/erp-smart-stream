@@ -25,8 +25,8 @@ export interface ApprovalHistoryRow {
   stage_name: string | null;
   step: number | null;
   synced_at: string;
-  /** Fonte da decisão: 'sap' = SAP Approval Hub, 'erp_flow' = fluxo interno */
-  source?: "sap" | "erp_flow";
+  /** Fonte da decisão: 'sap' = SAP Approval Hub, 'erp_flow' = fluxo interno, 'audit_log' = ação já registrada no histórico */
+  source?: "sap" | "erp_flow" | "audit_log";
   /** Preenchido apenas para rows internos (permite abrir o mapa de relações) */
   expense_id?: string | null;
   /** Rastreabilidade: quando a decisão foi tomada por um substituto autorizado */
@@ -240,6 +240,55 @@ export function useApprovalHistory(
         })
         .filter(Boolean) as ApprovalHistoryRow[];
 
+      // ============================================================
+      // 3) Histórico de ações (audit_log) — decisões SAP feitas no app.
+      // ============================================================
+      let auditQ = supabase
+        .from("audit_log")
+        .select("id, action, entity_id, actor_email, created_at, details, company_db")
+        .eq("entity_type", "approval_request")
+        .in("action", decision === "Y" ? ["approve"] : decision === "N" ? ["reject"] : ["approve", "reject"])
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .limit(fetchCap);
+      if (companyDb) auditQ = auditQ.eq("company_db", companyDb);
+      const { data: auditRows } = await auditQ;
+
+      const auditHistoryRows: ApprovalHistoryRow[] = ((auditRows || []) as any[])
+        .map((a) => {
+          const details = (a.details || {}) as Record<string, any>;
+          const actedAsSubstitute = !!details.actedAsSubstitute || details.actingRole === "substitute";
+          const substitutedForEmail = details.substitutedForEmail || null;
+          const substitutedForName = details.substitutedForName || null;
+          const actor = (a.actor_email || "").toString().toLowerCase();
+          return {
+            id: `audit-${a.id}`,
+            external_id: `audit:${a.entity_id || "unknown"}:${actor}`,
+            company_db: a.company_db,
+            decision: a.action === "approve" ? "Y" : "N",
+            decision_date: a.created_at,
+            approver_code: actor || details.approver || null,
+            approver_name: details.approver || actor || null,
+            approver_email: actor || null,
+            requester_code: null,
+            requester_name: null,
+            doc_object_type: null,
+            doc_type_name: details.docType || "Pedido de Compra",
+            doc_entry: null,
+            doc_num: typeof details.docNum === "number" ? details.docNum : Number(details.docNum) || null,
+            doc_total: typeof details.docTotal === "number" ? details.docTotal : Number(details.docTotal) || null,
+            currency: details.currency || "BRL",
+            card_code: null,
+            card_name: details.cardName || null,
+            remarks: details.remarks || null,
+            stage_name: details.actingRole === "delegation" ? "Delegação" : actedAsSubstitute ? "Substituição" : null,
+            step: null,
+            synced_at: a.created_at,
+            source: "audit_log" as const,
+            substituted_for_email: substitutedForEmail,
+            substituted_for_name: substitutedForName,
+          } as ApprovalHistoryRow;
+        });
+
       // Dedupe SAP × interno pelo par (company_db, doc_entry, decision, step).
       const sapKey = new Set(
         ((sapRows || []) as ApprovalHistoryRow[])
@@ -250,6 +299,13 @@ export function useApprovalHistory(
         if (r.doc_entry == null) return true;
         return !sapKey.has(`${r.company_db}|${r.doc_entry}|${r.decision}|${r.step ?? 0}`);
       });
+
+      const sapExternalKeys = new Set(
+        ((sapRows || []) as ApprovalHistoryRow[]).map((r) => `${r.company_db}|${r.external_id}`),
+      );
+      const filteredAuditRows = auditHistoryRows.filter(
+        (r) => !sapExternalKeys.has(`${r.company_db}|${r.external_id.replace(/^audit:/, "")}`),
+      );
 
       // Extrai substituição do texto para rows SAP (não têm colunas dedicadas).
       const parseSubstitution = (r: ApprovalHistoryRow): ApprovalHistoryRow => {
@@ -268,6 +324,7 @@ export function useApprovalHistory(
           parseSubstitution({ ...r, source: "sap" as const }),
         ),
         ...filteredInternal.map(parseSubstitution),
+        ...filteredAuditRows.map(parseSubstitution),
       ].sort((a, b) => {
         const da = a.decision_date ? new Date(a.decision_date).getTime() : 0;
         const db = b.decision_date ? new Date(b.decision_date).getTime() : 0;
