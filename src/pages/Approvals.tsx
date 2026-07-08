@@ -1206,6 +1206,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     remarks: e.remarks || "",
     approvalModel: "Regra Interna",
     daysOpen: Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000),
+    attachmentEntry: 0,
     attachmentNames: "",
     internalAttachments: (e.attachments || []).map((a) => ({
       id: a.id,
