@@ -1974,6 +1974,21 @@ export default function ApprovalsPage() {
         approverMatches(doc.currentApprover, session.userName);
       if (isDirectApprover) return true;
 
+      // Substituto ativo: se o usuário é atualmente substituto oficial do aprovador
+      // do documento (activeOfficials cobre a janela "agora"), permite a ação —
+      // independente da docDate cair fora do grant, pois a aprovação acontece agora.
+      const approverEmailNow = (doc.approverEmail || "").toLowerCase().trim();
+      const approverNameNow = (doc.currentApprover || "").toLowerCase().trim();
+      const isActiveSubstitute = officialIdentifiers.some((id) => {
+        if (!id) return false;
+        if (approverEmailNow && (approverEmailNow === id || approverEmailNow.startsWith(`${id}@`))) return true;
+        if (approverNameNow && (approverNameNow === id || approverNameNow.includes(id) || id.includes(approverNameNow))) return true;
+        return false;
+      });
+      if (isActiveSubstitute) return true;
+
+
+
       const docRefTs = (() => {
         const d = doc.docDate;
         const t = d ? new Date(d).getTime() : NaN;
