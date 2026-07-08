@@ -542,6 +542,21 @@ Deno.serve(async (req) => {
     expenseSnapshot = expense;
 
     // Guard: somente despesas totalmente aprovadas podem ser integradas ao SAP.
+    // Se uma tela/aba antiga tentar integrar enquanto ainda há nível pendente,
+    // tratamos como no-op seguro. Isso evita mostrar erro ao aprovador e, mais
+    // importante, impede qualquer criação de PO antes do fim da alçada.
+    if (String((expense as any).status || "") === "pendente_aprovacao") {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: "pending_approval",
+          message: "Documento ainda possui nível de aprovação pendente; integração SAP não executada.",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Status válidos: "aprovado" (primeira integração) ou estados pós-PC (re-link de anexos).
     const allowedStatuses = new Set([
       "aprovado",
