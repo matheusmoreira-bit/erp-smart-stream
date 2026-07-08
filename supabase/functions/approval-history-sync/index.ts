@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { requireAdminOrSapAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
@@ -205,6 +205,52 @@ async function updateSyncState(
   );
 }
 
+async function listApprovalHistory(
+  supabase: ReturnType<typeof createClient>,
+  req: Request,
+  caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>,
+  body: { companyDb?: string; decision?: string; limit?: number },
+) {
+  const companyDb = (body.companyDb || "").trim();
+  if (!companyDb) return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
+
+  const decision = body.decision === "Y" || body.decision === "N" ? body.decision : "all";
+  const limit = Math.min(Math.max(Number(body.limit) || 51, 1), 500);
+
+  let q = supabase
+    .from("approval_history")
+    .select("*")
+    .eq("company_db", companyDb)
+    .order("decision_date", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (decision !== "all") q = q.eq("decision", decision);
+
+  if (caller.source === "sap_session") {
+    let canReadAll = false;
+    try {
+      await requireAdminOrSapAdmin(req);
+      canReadAll = true;
+    } catch { /* usuário ERP comum: restringe ao próprio histórico */ }
+    if (!canReadAll) {
+      const user = caller.userName.toLowerCase();
+      q = q.or(
+        `approver_email.ilike.${user},approver_code.ilike.${user},approver_name.ilike.${user},requester_code.ilike.${user},requester_name.ilike.${user}`,
+      );
+    }
+  }
+
+  const { data: rows, error } = await q;
+  if (error) throw new Error(error.message);
+
+  const { data: syncState } = await supabase
+    .from("approval_history_sync_state")
+    .select("last_sync_at,last_status,last_message,last_count")
+    .eq("id", 1)
+    .maybeSingle();
+
+  return jsonResponse({ success: true, rows: rows || [], syncState: syncState || null });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -217,26 +263,32 @@ Deno.serve(async (req) => {
 
   let lockAcquired = false;
   try {
+    let caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>;
     try {
-      await requireAdminOrSapSession(req);
+      caller = await requireAdminOrSapSession(req);
     } catch (err) {
       const r = authErrorResponse(err, corsHeaders);
       if (r) return r;
       throw err;
     }
 
+    let body: { companyDb?: string; action?: string; decision?: string; limit?: number } = {};
+    try { body = await req.json(); } catch { /* no body */ }
+    const companyDb = (body.companyDb || req.headers.get("x-company-db") || "").trim();
+    if (!companyDb) {
+      return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
+    }
+    if (caller.source === "sap_session" && caller.companyDB !== companyDb) {
+      return jsonResponse({ success: false, error: "Empresa inválida para a sessão atual" }, 403);
+    }
+    if (body.action === "list") {
+      return await listApprovalHistory(supabase, req, caller, { ...body, companyDb });
+    }
+
     // Lock anti-execução-paralela
     lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 20);
     if (!lockAcquired) {
       return jsonResponse({ success: true, skipped: "another_run_in_progress" });
-    }
-
-    let body: { companyDb?: string } = {};
-    try { body = await req.json(); } catch { /* no body */ }
-    const companyDb = (body.companyDb || req.headers.get("x-company-db") || "").trim();
-    if (!companyDb) {
-      await releaseWatcherLock(supabase, "approval-history-sync", "error", "companyDb missing");
-      return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
     }
 
     const res = await fetch(WEBHOOK_URL, {
@@ -261,12 +313,6 @@ Deno.serve(async (req) => {
     const rows: WebhookRow[] = [];
     for (const g of groups) {
       if (Array.isArray(g?.data)) rows.push(...g.data);
-    }
-
-    if (rows.length === 0) {
-      await updateSyncState(supabase, "success", "Nenhum registro recebido", 0);
-      await releaseWatcherLock(supabase, "approval-history-sync", "ok", "no rows");
-      return jsonResponse({ success: true, received: 0, upserted: 0 });
     }
 
     // Mapa empresa (display_name normalizado) -> company_db

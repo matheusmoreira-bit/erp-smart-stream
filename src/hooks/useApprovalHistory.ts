@@ -25,8 +25,8 @@ export interface ApprovalHistoryRow {
   stage_name: string | null;
   step: number | null;
   synced_at: string;
-  /** Fonte da decisão: 'sap' = SAP Approval Hub, 'erp_flow' = fluxo interno */
-  source?: "sap" | "erp_flow";
+  /** Fonte da decisão: 'sap' = SAP Approval Hub, 'erp_flow' = fluxo interno, 'audit_log' = ação já registrada no histórico */
+  source?: "sap" | "erp_flow" | "audit_log";
   /** Preenchido apenas para rows internos (permite abrir o mapa de relações) */
   expense_id?: string | null;
   /** Rastreabilidade: quando a decisão foi tomada por um substituto autorizado */
@@ -124,29 +124,30 @@ export function useApprovalHistory(
       // ============================================================
       // 1) SAP (approval_history) — substituição fica em `remarks`.
       // ============================================================
-      let q = supabase
-        .from("approval_history")
-        .select("*")
-        .order("decision_date", { ascending: false, nullsFirst: false })
-        .limit(fetchCap);
-      if (companyDb) q = q.eq("company_db", companyDb);
-      if (decision !== "all") q = q.eq("decision", decision);
-      if (mode === "any") {
-        q = q.ilike("remarks", "%SUBSTITUTO%");
-      } else if (mode === "none") {
-        // Aceita remarks null OU remarks que não contêm SUBSTITUTO.
-        q = q.or("remarks.is.null,remarks.not.ilike.%SUBSTITUTO%");
-      } else if (mode === "specific") {
-        // Narrow para linhas com marca de substituto; a filtragem por chave
-        // específica acontece após parseSubstitution (nomes podem ter espaços/vírgulas).
-        q = q.ilike("remarks", "%SUBSTITUTO%");
-      } else if (mode === "search") {
-        // Partial match dentro do texto de `remarks` (que contém "em nome de <nome> <email>").
-        const esc = escapePgrstList(trimmedSubSearch);
-        q = q.ilike("remarks", `%SUBSTITUTO%${esc}%`);
+      let sapRows: ApprovalHistoryRow[] = [];
+      let backendSyncState: ApprovalHistorySyncState | null = null;
+      if (companyDb) {
+        const res = await sapFunctionFetch("approval-history-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list", companyDb, decision, limit: fetchCap }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || body?.success === false) {
+          throw new Error(body?.error || `HTTP ${res.status}`);
+        }
+        sapRows = (body?.rows || []) as ApprovalHistoryRow[];
+        backendSyncState = (body?.syncState || null) as ApprovalHistorySyncState | null;
       }
-      const { data: sapRows, error: sapErr } = await q;
-      if (sapErr) throw sapErr;
+
+      if (mode === "any" || mode === "specific") {
+        sapRows = sapRows.filter((r) => (r.remarks || "").toUpperCase().includes("SUBSTITUTO"));
+      } else if (mode === "none") {
+        sapRows = sapRows.filter((r) => !(r.remarks || "").toUpperCase().includes("SUBSTITUTO"));
+      } else if (mode === "search") {
+        const needle = trimmedSubSearch.toLowerCase();
+        sapRows = sapRows.filter((r) => (r.remarks || "").toLowerCase().includes("substituto") && (r.remarks || "").toLowerCase().includes(needle));
+      }
 
       // ============================================================
       // 2) Interno (expense_approval_log) — colunas dedicadas.
@@ -240,6 +241,55 @@ export function useApprovalHistory(
         })
         .filter(Boolean) as ApprovalHistoryRow[];
 
+      // ============================================================
+      // 3) Histórico de ações (audit_log) — decisões SAP feitas no app.
+      // ============================================================
+      let auditQ = supabase
+        .from("audit_log")
+        .select("id, action, entity_id, actor_email, created_at, details, company_db")
+        .eq("entity_type", "approval_request")
+        .in("action", decision === "Y" ? ["approve"] : decision === "N" ? ["reject"] : ["approve", "reject"])
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .limit(fetchCap);
+      if (companyDb) auditQ = auditQ.eq("company_db", companyDb);
+      const { data: auditRows } = await auditQ;
+
+      const auditHistoryRows: ApprovalHistoryRow[] = ((auditRows || []) as any[])
+        .map((a) => {
+          const details = (a.details || {}) as Record<string, any>;
+          const actedAsSubstitute = !!details.actedAsSubstitute || details.actingRole === "substitute";
+          const substitutedForEmail = details.substitutedForEmail || null;
+          const substitutedForName = details.substitutedForName || null;
+          const actor = (a.actor_email || "").toString().toLowerCase();
+          return {
+            id: `audit-${a.id}`,
+            external_id: `${a.entity_id || "unknown"}::${actor}`,
+            company_db: a.company_db,
+            decision: a.action === "approve" ? "Y" : "N",
+            decision_date: a.created_at,
+            approver_code: actor || details.approver || null,
+            approver_name: details.approver || actor || null,
+            approver_email: actor || null,
+            requester_code: null,
+            requester_name: null,
+            doc_object_type: null,
+            doc_type_name: details.docType || "Pedido de Compra",
+            doc_entry: null,
+            doc_num: typeof details.docNum === "number" ? details.docNum : Number(details.docNum) || null,
+            doc_total: typeof details.docTotal === "number" ? details.docTotal : Number(details.docTotal) || null,
+            currency: details.currency || "BRL",
+            card_code: null,
+            card_name: details.cardName || null,
+            remarks: details.remarks || null,
+            stage_name: details.actingRole === "delegation" ? "Delegação" : actedAsSubstitute ? "Substituição" : null,
+            step: null,
+            synced_at: a.created_at,
+            source: "audit_log" as const,
+            substituted_for_email: substitutedForEmail,
+            substituted_for_name: substitutedForName,
+          } as ApprovalHistoryRow;
+        });
+
       // Dedupe SAP × interno pelo par (company_db, doc_entry, decision, step).
       const sapKey = new Set(
         ((sapRows || []) as ApprovalHistoryRow[])
@@ -249,6 +299,17 @@ export function useApprovalHistory(
       const filteredInternal = internalRows.filter((r) => {
         if (r.doc_entry == null) return true;
         return !sapKey.has(`${r.company_db}|${r.doc_entry}|${r.decision}|${r.step ?? 0}`);
+      });
+
+      const sapExternalKeys = new Set(
+        ((sapRows || []) as ApprovalHistoryRow[]).map((r) => `${r.company_db}|${r.external_id}`),
+      );
+      const filteredAuditRows = auditHistoryRows.filter((r) => {
+        if (sapExternalKeys.has(`${r.company_db}|${r.external_id}`)) return false;
+        const hasSubstitution = !!(r.substituted_for_email || r.substituted_for_name);
+        if (mode === "any") return hasSubstitution;
+        if (mode === "none") return !hasSubstitution;
+        return true;
       });
 
       // Extrai substituição do texto para rows SAP (não têm colunas dedicadas).
@@ -265,9 +326,10 @@ export function useApprovalHistory(
 
       let merged = [
         ...((sapRows || []) as ApprovalHistoryRow[]).map((r) =>
-          parseSubstitution({ ...r, source: "sap" as const }),
+          parseSubstitution({ ...r, source: (r as any).raw?.source === "audit_log" ? "audit_log" as const : "sap" as const }),
         ),
         ...filteredInternal.map(parseSubstitution),
+        ...filteredAuditRows.map(parseSubstitution),
       ].sort((a, b) => {
         const da = a.decision_date ? new Date(a.decision_date).getTime() : 0;
         const db = b.decision_date ? new Date(b.decision_date).getTime() : 0;
@@ -298,12 +360,7 @@ export function useApprovalHistory(
       setRows(pageRows);
       setHasMore(merged.length > window);
 
-      const { data: state } = await supabase
-        .from("approval_history_sync_state")
-        .select("last_sync_at,last_status,last_message,last_count")
-        .eq("id", 1)
-        .maybeSingle();
-      setSyncState((state || null) as ApprovalHistorySyncState | null);
+      setSyncState(backendSyncState);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar histórico");
     } finally {
