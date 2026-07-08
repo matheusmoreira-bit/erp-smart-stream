@@ -3011,6 +3011,8 @@ export default function ApprovalsPage() {
         onAction={handleApprovalAction}
         onRetryRefresh={handleRetryRefresh}
         onDelegate={(d) => setDelegationDoc(d)}
+        onRevokeDelegation={handleRevokeDelegation}
+        isRevokingDelegation={isRevokingDelegation}
         isActioning={isActioning}
         actionPhase={actionPhase}
         isSuperUser={isSuperUser}
