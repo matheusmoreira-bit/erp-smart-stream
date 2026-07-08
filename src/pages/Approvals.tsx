@@ -2439,44 +2439,29 @@ export default function ApprovalsPage() {
     if (!confirmed) return;
     setIsRevokingDelegation(true);
     try {
-      const { data: expRow, error: expReadErr } = await supabase
-        .from("expenses")
-        .select("original_approver, current_approver")
-        .eq("id", internalId)
-        .maybeSingle();
-      if (expReadErr) throw new Error(expReadErr.message);
-      const restored = (expRow?.original_approver || "").trim();
-      if (!restored) {
-        throw new Error("Aprovador original não encontrado — impossível revogar.");
-      }
-      const previousDelegate = expRow?.current_approver || doc.currentApprover;
-      const { error: updErr } = await supabase
-        .from("expenses")
-        .update({ current_approver: restored, original_approver: null })
-        .eq("id", internalId);
-      if (updErr) throw new Error(updErr.message);
-
-      const { logAuditAction } = await import("@/hooks/useAuditLog");
-      await logAuditAction({
-        action: "revoke_delegation",
-        entity_type: "expense",
-        entity_id: internalId,
-        actor_email: session.userName,
-        company_db: session.companyDB,
-        details: {
-          docNum: doc.docNum,
-          docType: doc.docTypeName,
-          cardName: doc.cardName,
-          docTotal: doc.docTotal,
+      // Igual à delegação, a revogação passa pela edge function
+      // `expense-delegate` para contornar o RLS de `expenses` e gravar o
+      // audit_log `revoke_delegation` no mesmo passo.
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const resp = await sapFunctionFetch("expense-delegate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "revoke",
+          expense_id: internalId,
+          doc_num: doc.docNum,
+          doc_type: doc.docTypeName,
+          card_name: doc.cardName,
+          doc_total: doc.docTotal,
           currency: doc.currency,
-          revokedFrom: previousDelegate,
-          restoredApprover: restored,
-          revokedBy: session.userName,
-          isSuperUser: true,
-          scope: "internal",
-        },
+        }),
       });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok || !payload?.ok) {
+        throw new Error(payload?.error || `Falha ao revogar delegação (HTTP ${resp.status})`);
+      }
 
+      const restored = payload.current_approver || doc.delegatedFrom || "aprovador original";
       toast.success(`Delegação revogada. Aprovação devolvida para ${restored}.`);
       setSelectedDoc(null);
       refresh();
