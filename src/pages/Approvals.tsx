@@ -1936,7 +1936,7 @@ export default function ApprovalsPage() {
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session.userName, sessionUser, officialIdentifiers],
+    [session.userName, sessionUser, officialIdentifiers, isSuperUser],
   );
   const userApprovals = effectiveShowAll
     ? allApprovals
