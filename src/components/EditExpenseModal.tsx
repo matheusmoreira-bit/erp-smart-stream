@@ -74,6 +74,7 @@ interface Props {
 export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purchase" }: Props) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
+  const { session: sapSession } = useSap();
 
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [supplierName, setSupplierName] = useState("");
