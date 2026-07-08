@@ -460,7 +460,7 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
                 row.source === "erp_flow"
                   ? "text-sky-600 bg-sky-500/10 border-sky-500/30"
                   : row.source === "audit_log"
-                    ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/30"
+                    ? "text-primary bg-primary/10 border-primary/30"
                   : "text-violet-600 bg-violet-500/10 border-violet-500/30"
               }`}
               title={sourceTitle}
