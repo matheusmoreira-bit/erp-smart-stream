@@ -3653,6 +3653,14 @@ export type Database = {
           read_ct: number
         }[]
       }
+      reassign_approval_rule_safe: {
+        Args: { _actor?: string; _expense_id: string; _new_rule_id: string }
+        Returns: {
+          finalized: boolean
+          new_approver: string
+          new_level_order: number
+        }[]
+      }
       register_external_api_failure: {
         Args: { _company_db: string; _reason: string; _user_code: string }
         Returns: undefined
