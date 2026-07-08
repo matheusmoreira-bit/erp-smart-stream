@@ -2354,10 +2354,22 @@ export default function ApprovalsPage() {
       // Reatribui o aprovador atual da despesa interna. O backend de
       // aprovação (`expense-approval-action`) prioriza `expenses.current_approver`
       // sobre o nível da regra, então o delegado passa a poder aprovar.
+      // Preserva o aprovador original apenas na PRIMEIRA delegação, para que
+      // delegações em cadeia continuem mostrando o aprovador raiz.
       const newApprover = params.userEmail?.trim() || params.userName;
+      const { data: expRow, error: expReadErr } = await supabase
+        .from("expenses")
+        .select("original_approver, current_approver")
+        .eq("id", internalId)
+        .maybeSingle();
+      if (expReadErr) throw new Error(expReadErr.message);
+      const originalToKeep =
+        (expRow?.original_approver && expRow.original_approver.trim())
+          ? expRow.original_approver
+          : (expRow?.current_approver || null);
       const { error: updErr } = await supabase
         .from("expenses")
-        .update({ current_approver: newApprover })
+        .update({ current_approver: newApprover, original_approver: originalToKeep })
         .eq("id", internalId);
       if (updErr) throw new Error(updErr.message);
 
