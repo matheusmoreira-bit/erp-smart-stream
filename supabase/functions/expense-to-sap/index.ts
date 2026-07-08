@@ -256,6 +256,9 @@ async function notifyMissingAttachmentEmail(params: {
   } catch (e) {
     console.warn("notifyMissingAttachmentEmail error:", e);
   }
+}
+
+
 
 // Gera URLs assinadas (7 dias) para os anexos internos da despesa, para
 // que o admin possa baixar e lançar manualmente no SAP em caso de
