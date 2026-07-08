@@ -1354,24 +1354,25 @@ async function decideSapApprovalRequest(
   remarks: string,
   doc?: ApprovalDoc | null,
 ): Promise<{ recoveredFromSapError: boolean }> {
-  const userKey = await getCurrentSapUserKey(session);
-  const request = await getSapApprovalRequest(session, code);
-  const decisions = request.ApprovalRequestDecisions || [];
-  const targetIndex = findPendingDecisionIndex(decisions, userKey);
-
-  if (targetIndex < 0) {
+  // Idempotência: se já existe decisão finalizada para este usuário com a
+  // mesma ação, tratamos como sucesso silencioso. Se a leitura falhar, seguimos
+  // para o PATCH — o SAP aplica a decisão ao usuário da sessão atual.
+  let userKey: number | null = null;
+  try {
+    userKey = await getCurrentSapUserKey(session);
+    const request = await getSapApprovalRequest(session, code);
+    const decisions = request.ApprovalRequestDecisions || [];
     if (findCompletedDecisionForAction(decisions, userKey, action)) {
       return { recoveredFromSapError: true };
     }
-    throw new Error(
-      `Nenhuma decisão pendente foi encontrada no SAP para o usuário ${session.userName} nesta solicitação. Atualize a lista; se o documento continuar aparecendo, o aprovador exibido pode estar desatualizado no SAP.`,
-    );
+  } catch {
+    // Ignora — deixamos o SAP validar no PATCH abaixo.
   }
 
   try {
-    // SAP B1 applies this decision to the user of the current Service Layer
-    // session. Sending UserID/other decision rows can be interpreted as an
-    // attempt to edit another approver's decision and return -6006.
+    // SAP B1 aplica esta decisão ao usuário da sessão atual do Service Layer.
+    // Enviar UserID/outras linhas pode ser interpretado como tentativa de
+    // editar decisão de outro aprovador (erro -6006).
     await sapAction(session, `ApprovalRequests(${code})`, "PATCH", {
       ApprovalRequestDecisions: [{
         Status: action === "approve" ? "ardApproved" : "ardNotApproved",
@@ -1381,13 +1382,15 @@ async function decideSapApprovalRequest(
     return { recoveredFromSapError: false };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    try {
-      const fresh = await getSapApprovalRequest(session, code);
-      const freshDecisions = fresh.ApprovalRequestDecisions || [];
-      if (findCompletedDecisionForAction(freshDecisions, userKey, action)) {
-        return { recoveredFromSapError: true };
-      }
-    } catch { /* keep original SAP error */ }
+    if (userKey !== null) {
+      try {
+        const fresh = await getSapApprovalRequest(session, code);
+        const freshDecisions = fresh.ApprovalRequestDecisions || [];
+        if (findCompletedDecisionForAction(freshDecisions, userKey, action)) {
+          return { recoveredFromSapError: true };
+        }
+      } catch { /* keep original SAP error */ }
+    }
     throw new Error(formatSapApprovalError(message, doc));
   }
 }
