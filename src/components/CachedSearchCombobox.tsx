@@ -99,18 +99,28 @@ export function CachedSearchCombobox({
     };
   }, [isOpen, query, value, options.length, portalContainer]);
 
-  const filtered = query.length > 0
+  const filtered = query.trim().length > 0
     ? options.filter((o) => {
-        const q = query.toLowerCase();
+        const q = query.trim().toLowerCase();
         const qDigits = query.replace(/\D/g, "");
-        const extraDigits = (o.extra ?? "").replace(/\D/g, "");
-        const taxDigits = (o.details?.taxId ?? "").replace(/\D/g, "");
-        const fantasy = (o.details?.fantasyName ?? "").toLowerCase();
-        return (o.code ?? "").toLowerCase().includes(q)
-          || (o.name ?? "").toLowerCase().includes(q)
-          || (o.extra ?? "").toLowerCase().includes(q)
+        const code = o.code ?? "";
+        const name = o.name ?? "";
+        const extra = o.extra ?? "";
+        const fantasyName = o.details?.fantasyName ?? "";
+        const taxId = o.details?.taxId ?? "";
+        const codeDigits = code.replace(/\D/g, "");
+        const nameDigits = name.replace(/\D/g, "");
+        const extraDigits = extra.replace(/\D/g, "");
+        const taxDigits = taxId.replace(/\D/g, "");
+        const fantasy = fantasyName.toLowerCase();
+        return code.toLowerCase().includes(q)
+          || name.toLowerCase().includes(q)
+          || extra.toLowerCase().includes(q)
           || fantasy.includes(q)
-          || (qDigits.length >= 3 && (extraDigits.includes(qDigits) || taxDigits.includes(qDigits)));
+          || (
+            qDigits.length >= 2
+            && [codeDigits, nameDigits, extraDigits, taxDigits].some((digits) => digits.includes(qDigits))
+          );
       }).slice(0, 50)
     : options.slice(0, 50);
 
