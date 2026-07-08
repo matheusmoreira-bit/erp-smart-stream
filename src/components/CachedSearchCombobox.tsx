@@ -9,6 +9,7 @@ interface CachedSearchComboboxProps {
   isLoading: boolean;
   value: SapSearchOption | null;
   onChange: (val: SapSearchOption | null) => void;
+  onRawValueChange?: (val: string) => void;
   placeholder?: string;
   label?: string;
   suggestedQuery?: string;
@@ -22,6 +23,7 @@ export function CachedSearchCombobox({
   isLoading,
   value,
   onChange,
+  onRawValueChange,
   placeholder = "Buscar...",
   label,
   suggestedQuery,
@@ -127,6 +129,7 @@ export function CachedSearchCombobox({
   const handleInputChange = (val: string) => {
     setQuery(val);
     if (value) onChange(null);
+    onRawValueChange?.(val);
     setIsOpen(true);
   };
 
