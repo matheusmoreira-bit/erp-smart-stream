@@ -559,33 +559,35 @@ function ApprovalDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                {doc.docTypeName}
-              </span>
-              <span className="font-mono text-sm sm:text-base">#{doc.docNum}</span>
-              <span className="text-lg sm:text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-[95vw] max-w-2xl !max-h-[90vh] !overflow-hidden !p-0 !flex !flex-col !gap-0">
+          <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  {doc.docTypeName}
+                </span>
+                <span className="font-mono text-sm sm:text-base">#{doc.docNum}</span>
+                <span className="text-lg sm:text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
+              </DialogTitle>
+            </DialogHeader>
 
-          {onBehalfOf && (
-            <div className="mt-2 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-              <UserCog className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>
-                Você está aprovando em nome de{" "}
-                <strong className="font-semibold">{onBehalfOf.name}</strong>
-                {onBehalfOf.email && (
-                  <span className="text-amber-600/80 dark:text-amber-400/80"> · {onBehalfOf.email}</span>
-                )}
-                . A ação será registrada como sua, na condição de substituto ativo.
-              </span>
-            </div>
-          )}
+            {onBehalfOf && (
+              <div className="mt-2 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                <UserCog className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span>
+                  Você está aprovando em nome de{" "}
+                  <strong className="font-semibold">{onBehalfOf.name}</strong>
+                  {onBehalfOf.email && (
+                    <span className="text-amber-600/80 dark:text-amber-400/80"> · {onBehalfOf.email}</span>
+                  )}
+                  . A ação será registrada como sua, na condição de substituto ativo.
+                </span>
+              </div>
+            )}
+          </div>
 
 
-          <div className="flex flex-wrap justify-end gap-2 -mt-2">
+          <div className="shrink-0 flex flex-wrap justify-end gap-2 px-4 sm:px-6 mt-2">
             <Button
               variant="ghost"
               size="sm"
@@ -639,6 +641,7 @@ function ApprovalDetailModal({
           </div>
 
 
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pb-4">
           <div className="space-y-4 mt-2 min-w-0 [&_p]:break-words">
 
             {/* Basic Info */}
@@ -992,9 +995,11 @@ function ApprovalDetailModal({
               </div>
             )}
 
-            {/* Action area — fica ancorada no rodapé do modal, sempre visível
-                mesmo em telas pequenas quando o conteúdo rolar */}
-            <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 pt-4 pb-4 sm:pb-6 bg-background backdrop-blur-md border-t border-border space-y-3 z-30 shadow-[0_-12px_24px_-8px_hsl(var(--background))]">
+          </div>
+          </div>
+
+            {/* Action area — fica fora da área rolável para não sobrepor o conteúdo */}
+            <div className="shrink-0 px-4 sm:px-6 pt-4 pb-4 sm:pb-6 bg-background border-t border-border space-y-3 shadow-[0_-12px_24px_-8px_hsl(var(--background))]">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Comentário (opcional)</p>
                 <Textarea
@@ -1067,7 +1072,6 @@ function ApprovalDetailModal({
                 )}
               </div>
             </div>
-          </div>
         </DialogContent>
       </Dialog>
 
