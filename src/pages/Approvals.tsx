@@ -1147,8 +1147,8 @@ function ApprovalDetailModal({
                   </div>
                 )}
                 {isOtherApprover && (
-                  <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400">
-                    <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div className="flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 p-2 text-amber-900 dark:text-amber-100">
+                    <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-amber-700 dark:text-amber-300" />
                     <p className="text-xs">
                       Você está agindo como <strong>super-usuário</strong> em um documento
                       atribuído a outro aprovador. A ação ficará registrada com essa marcação.
