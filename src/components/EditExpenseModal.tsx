@@ -29,6 +29,17 @@ function fieldClass(filled: boolean) {
   return filled ? validClass : requiredClass;
 }
 
+function findSapOption(options: SapSearchOption[], value: string | null | undefined) {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  const normalized = raw.toLowerCase();
+  return (
+    options.find((o) => (o.code || "").trim().toLowerCase() === normalized) ||
+    options.find((o) => (o.name || "").trim().toLowerCase() === normalized) ||
+    null
+  );
+}
+
 function ValidLabel({
   children,
   filled,
@@ -160,9 +171,9 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           line_total: Number(it.line_total) || 0,
           cost_center: it.cost_center,
           project: it.project,
-          sapItem: null,
-          sapCostCenter: null,
-          sapProject: null,
+          sapItem: findSapOption(itemOptions, it.item_code),
+          sapCostCenter: findSapOption(costCenterOptions, it.cost_center),
+          sapProject: findSapOption(projectOptions, it.project),
         })),
       );
       setSupplier(null);
@@ -187,25 +198,29 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
   // Resolve item/centro/projeto por linha quando as opções carregarem
   useEffect(() => {
-    setItems((prev) =>
-      prev.map((it) => {
-        const next = { ...it };
-        if (!next.sapItem && it.item_code) {
-          const found = itemOptions.find((o) => o.code === it.item_code);
-          if (found) next.sapItem = found;
-        }
-        if (!next.sapCostCenter && it.cost_center) {
-          const found = costCenterOptions.find((o) => o.code === it.cost_center);
-          if (found) next.sapCostCenter = found;
-        }
-        if (!next.sapProject && it.project) {
-          const found = projectOptions.find((o) => o.code === it.project);
-          if (found) next.sapProject = found;
+    if (!open) return;
+    setItems((prev) => {
+      let changed = false;
+      const resolved = prev.map((it) => {
+        let next = it;
+        const sapItem = !it.sapItem ? findSapOption(itemOptions, it.item_code) : null;
+        const sapCostCenter = !it.sapCostCenter ? findSapOption(costCenterOptions, it.cost_center) : null;
+        const sapProject = !it.sapProject ? findSapOption(projectOptions, it.project) : null;
+
+        if (sapItem || sapCostCenter || sapProject) {
+          next = {
+            ...it,
+            ...(sapItem ? { sapItem } : {}),
+            ...(sapCostCenter ? { sapCostCenter } : {}),
+            ...(sapProject ? { sapProject } : {}),
+          };
+          changed = true;
         }
         return next;
-      }),
-    );
-  }, [itemOptions, costCenterOptions, projectOptions]);
+      });
+      return changed ? resolved : prev;
+    });
+  }, [open, expense?.id, itemOptions, costCenterOptions, projectOptions]);
 
   if (!expense) return null;
 
