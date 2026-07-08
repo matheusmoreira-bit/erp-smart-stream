@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, XCircle, UserCog, Clock, Loader2, History } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  UserCog,
+  Clock,
+  Loader2,
+  History,
+  FileText,
+  RotateCcw,
+  Pencil,
+  Send,
+} from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
