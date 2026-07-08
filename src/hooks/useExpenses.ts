@@ -142,6 +142,7 @@ export interface Expense {
   requester_name: string;
   requester_email?: string;
   current_approver?: string;
+  original_approver?: string | null;
   sap_doc_entry?: number;
   sap_doc_num?: number;
   sap_integration_error?: string | null;

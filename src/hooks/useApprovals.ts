@@ -30,6 +30,8 @@ export interface ApprovalDoc {
   attachmentNames: string;
   documentLines: DocumentLine[];
   internalAttachments?: Array<{ id: string; file_name: string; file_path: string; file_size?: number }>;
+  /** Nome/e-mail do aprovador original antes de uma delegação. */
+  delegatedFrom?: string;
 }
 
 export interface DocumentLine {

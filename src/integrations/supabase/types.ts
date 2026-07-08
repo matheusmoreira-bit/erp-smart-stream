@@ -1656,6 +1656,7 @@ export type Database = {
           due_date: string | null
           id: string
           origin: string
+          original_approver: string | null
           project: string | null
           rateio_type: string | null
           remarks: string | null
@@ -1694,6 +1695,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           origin?: string
+          original_approver?: string | null
           project?: string | null
           rateio_type?: string | null
           remarks?: string | null
@@ -1732,6 +1734,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           origin?: string
+          original_approver?: string | null
           project?: string | null
           rateio_type?: string | null
           remarks?: string | null

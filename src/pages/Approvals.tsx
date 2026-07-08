@@ -196,7 +196,18 @@ function ApprovalCard({
         )}
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="w-3.5 h-3.5 text-primary/70" />
-          <span>Aprovador: <span className="text-foreground font-medium">{doc.currentApprover}</span></span>
+          <span>
+            Aprovador:{" "}
+            {doc.delegatedFrom ? (
+              <span className="text-foreground font-medium">
+                <span className="line-through text-muted-foreground/80 font-normal">{doc.delegatedFrom}</span>
+                <span className="mx-1 text-primary" aria-hidden="true">→</span>
+                {doc.currentApprover}
+              </span>
+            ) : (
+              <span className="text-foreground font-medium">{doc.currentApprover}</span>
+            )}
+          </span>
         </div>
         {onBehalfOf && (
           <div
@@ -638,7 +649,18 @@ function ApprovalDetailModal({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Aprovador</p>
-                <p className="text-foreground font-medium">{doc.currentApprover}</p>
+                {doc.delegatedFrom ? (
+                  <p className="text-foreground font-medium">
+                    <span className="line-through text-muted-foreground/80 font-normal">{doc.delegatedFrom}</span>
+                    <span className="mx-1 text-primary" aria-hidden="true">→</span>
+                    {doc.currentApprover}
+                  </p>
+                ) : (
+                  <p className="text-foreground font-medium">{doc.currentApprover}</p>
+                )}
+                {doc.delegatedFrom && (
+                  <p className="text-[11px] text-muted-foreground">Delegado de {doc.delegatedFrom}</p>
+                )}
                 {doc.approverEmail && (
                   <p className="text-xs text-muted-foreground">{doc.approverEmail}</p>
                 )}
@@ -1195,6 +1217,9 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     cardName: e.supplier_name || "—",
     requester: e.requester_name || "—",
     currentApprover: e.current_approver && e.current_approver.trim() ? e.current_approver : "Administrador",
+    delegatedFrom: (e.original_approver || "").trim() && (e.original_approver || "").trim().toLowerCase() !== (e.current_approver || "").trim().toLowerCase()
+      ? (e.original_approver || "").trim()
+      : undefined,
     approverEmail: "",
     currentStage: "Aprovação Interna",
     status: "pending",
@@ -1203,6 +1228,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     remarks: e.remarks || "",
     approvalModel: "Regra Interna",
     daysOpen: Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000),
+    attachmentEntry: 0,
     attachmentNames: "",
     internalAttachments: (e.attachments || []).map((a) => ({
       id: a.id,
@@ -2328,10 +2354,22 @@ export default function ApprovalsPage() {
       // Reatribui o aprovador atual da despesa interna. O backend de
       // aprovação (`expense-approval-action`) prioriza `expenses.current_approver`
       // sobre o nível da regra, então o delegado passa a poder aprovar.
+      // Preserva o aprovador original apenas na PRIMEIRA delegação, para que
+      // delegações em cadeia continuem mostrando o aprovador raiz.
       const newApprover = params.userEmail?.trim() || params.userName;
+      const { data: expRow, error: expReadErr } = await supabase
+        .from("expenses")
+        .select("original_approver, current_approver")
+        .eq("id", internalId)
+        .maybeSingle();
+      if (expReadErr) throw new Error(expReadErr.message);
+      const originalToKeep =
+        (expRow?.original_approver && expRow.original_approver.trim())
+          ? expRow.original_approver
+          : (expRow?.current_approver || null);
       const { error: updErr } = await supabase
         .from("expenses")
-        .update({ current_approver: newApprover })
+        .update({ current_approver: newApprover, original_approver: originalToKeep })
         .eq("id", internalId);
       if (updErr) throw new Error(updErr.message);
 
