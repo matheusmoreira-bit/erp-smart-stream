@@ -15,6 +15,7 @@ import { RelationsMap } from "@/components/RelationsMap";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { useSap } from "@/contexts/SapContext";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -73,6 +74,7 @@ interface Props {
 export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purchase" }: Props) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
+  const { session: sapSession } = useSap();
 
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [supplierName, setSupplierName] = useState("");
@@ -271,6 +273,10 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
       }
       if (!it.cost_center || !String(it.cost_center).trim()) {
         toast.error(`Item ${n}: centro de custo é obrigatório`);
+        return;
+      }
+      if (sapSession?.companyDB === "open_gaming_sa" && (!it.project || !String(it.project).trim())) {
+        toast.error(`Item ${n}: projeto é obrigatório para Open Gaming`);
         return;
       }
     }

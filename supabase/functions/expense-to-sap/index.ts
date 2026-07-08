@@ -876,7 +876,11 @@ Deno.serve(async (req) => {
           line.LineType = "dDocument_Service";
         }
         if (it.cost_center || expense.cost_center) line.CostingCode = it.cost_center || expense.cost_center;
-        if (it.project || expense.project) line.ProjectCode = it.project || expense.project;
+        // Open Gaming: se o projeto não vier preenchido na linha nem no cabeçalho,
+        // aplica fallback fixo "OPEN GAMING" (política interna da empresa).
+        const projectFallback = expense.company_db === "open_gaming_sa" ? "OPEN GAMING" : "";
+        const resolvedProject = it.project || expense.project || projectFallback;
+        if (resolvedProject) line.ProjectCode = resolvedProject;
         for (const k of Object.keys(line)) if (line[k] === undefined) delete line[k];
         return line;
       }),

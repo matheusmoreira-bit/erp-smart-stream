@@ -1673,6 +1673,11 @@ export function CreateExpenseModal({
         toast.error(`Item ${n}: centro de custo é obrigatório`);
         return;
       }
+      // Open Gaming: projeto por linha é obrigatório (política interna).
+      if (sapSession?.companyDB === "open_gaming_sa" && (!it.project || !String(it.project).trim())) {
+        toast.error(`Item ${n}: projeto é obrigatório para Open Gaming`);
+        return;
+      }
     }
     // Em pedidos de venda, o centro de custo é propriedade da linha no SAP —
     // não exigimos CC padrão no cabeçalho (as linhas já foram validadas acima).
