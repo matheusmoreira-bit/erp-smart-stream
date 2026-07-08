@@ -29,7 +29,7 @@ import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/h
 import { useLazyList } from "@/hooks/useLazyList";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2 } from "lucide-react";
+import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2, Undo2 } from "lucide-react";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
 import { useSap } from "@/contexts/SapContext";
@@ -393,6 +393,8 @@ function ApprovalDetailModal({
   onAction,
   onRetryRefresh,
   onDelegate,
+  onRevokeDelegation,
+  isRevokingDelegation,
   isActioning,
   actionPhase,
   isSuperUser,
@@ -411,6 +413,8 @@ function ApprovalDetailModal({
   onAction: (code: number, action: "approve" | "reject", remarks: string, opts?: { idempotencyKey?: string }) => Promise<void>;
   onRetryRefresh: () => Promise<void>;
   onDelegate: (doc: ApprovalDoc) => void;
+  onRevokeDelegation: (doc: ApprovalDoc) => void;
+  isRevokingDelegation: boolean;
   isActioning: boolean;
   actionPhase: "idle" | "sending" | "refreshing";
   isSuperUser: boolean;
@@ -1022,6 +1026,18 @@ function ApprovalDetailModal({
                   >
                     <UserCog className="w-4 h-4" />
                     Delegar
+                  </Button>
+                )}
+                {isSuperUser && doc.approvalRequestId <= 0 && doc.delegatedFrom && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onRevokeDelegation(doc)}
+                    disabled={isActioning || isRevokingDelegation}
+                    className="gap-1.5 border-amber-500/40 text-amber-300 hover:bg-amber-500/10 w-full sm:w-auto"
+                    title={`Revogar delegação e devolver aprovação para ${doc.delegatedFrom}`}
+                  >
+                    {isRevokingDelegation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                    Revogar delegação
                   </Button>
                 )}
                 {canApprove ? (
@@ -1722,6 +1738,7 @@ export default function ApprovalsPage() {
   const [showAll, setShowAll] = useState<boolean>(false);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [isDelegating, setIsDelegating] = useState(false);
+  const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
   const [minValue, setMinValue] = useState<string>("");
   const [maxValue, setMaxValue] = useState<string>("");
@@ -2420,6 +2437,76 @@ export default function ApprovalsPage() {
     }
   };
 
+  const handleRevokeDelegation = async (doc: ApprovalDoc) => {
+    if (!session) return;
+    if (!isSuperUser) {
+      toast.error("Apenas super-usuários podem revogar delegações.");
+      return;
+    }
+    const internalId = (doc as unknown as { __internalId?: string }).__internalId;
+    if (!internalId) {
+      toast.error("Somente aprovações internas permitem revogar delegação.");
+      return;
+    }
+    if (!doc.delegatedFrom) {
+      toast.error("Este documento não possui delegação ativa.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Revogar delegação e devolver a aprovação para ${doc.delegatedFrom}?`,
+    );
+    if (!confirmed) return;
+    setIsRevokingDelegation(true);
+    try {
+      const { data: expRow, error: expReadErr } = await supabase
+        .from("expenses")
+        .select("original_approver, current_approver")
+        .eq("id", internalId)
+        .maybeSingle();
+      if (expReadErr) throw new Error(expReadErr.message);
+      const restored = (expRow?.original_approver || "").trim();
+      if (!restored) {
+        throw new Error("Aprovador original não encontrado — impossível revogar.");
+      }
+      const previousDelegate = expRow?.current_approver || doc.currentApprover;
+      const { error: updErr } = await supabase
+        .from("expenses")
+        .update({ current_approver: restored, original_approver: null })
+        .eq("id", internalId);
+      if (updErr) throw new Error(updErr.message);
+
+      const { logAuditAction } = await import("@/hooks/useAuditLog");
+      await logAuditAction({
+        action: "revoke_delegation",
+        entity_type: "expense",
+        entity_id: internalId,
+        actor_email: session.userName,
+        company_db: session.companyDB,
+        details: {
+          docNum: doc.docNum,
+          docType: doc.docTypeName,
+          cardName: doc.cardName,
+          docTotal: doc.docTotal,
+          currency: doc.currency,
+          revokedFrom: previousDelegate,
+          restoredApprover: restored,
+          revokedBy: session.userName,
+          isSuperUser: true,
+          scope: "internal",
+        },
+      });
+
+      toast.success(`Delegação revogada. Aprovação devolvida para ${restored}.`);
+      setSelectedDoc(null);
+      refresh();
+    } catch (e) {
+      console.error("Revoke delegation error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao revogar delegação");
+    } finally {
+      setIsRevokingDelegation(false);
+    }
+  };
+
 
 
   return (
@@ -2936,6 +3023,8 @@ export default function ApprovalsPage() {
         onAction={handleApprovalAction}
         onRetryRefresh={handleRetryRefresh}
         onDelegate={(d) => setDelegationDoc(d)}
+        onRevokeDelegation={handleRevokeDelegation}
+        isRevokingDelegation={isRevokingDelegation}
         isActioning={isActioning}
         actionPhase={actionPhase}
         isSuperUser={isSuperUser}

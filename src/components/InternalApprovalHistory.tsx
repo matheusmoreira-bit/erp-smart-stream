@@ -85,6 +85,19 @@ export function InternalApprovalHistory({ expenseId }: Props) {
             reason: (d.reason as string) || undefined,
             source: "audit_log",
           });
+        } else if (action === "revoke_delegation") {
+          const from = (d.revokedFrom as string) || "";
+          const to = (d.restoredApprover as string) || "";
+          list.push({
+            id: `au-${r.id}`,
+            at: r.created_at,
+            kind: "transfer",
+            actorLabel: (d.revokedBy as string) || r.actor_email || "—",
+            actorEmail: r.actor_email || undefined,
+            title: `Revogou delegação${from ? ` de ${from}` : ""}${to ? ` — aprovação devolvida para ${to}` : ""}`,
+            reason: (d.reason as string) || undefined,
+            source: "audit_log",
+          });
         } else if (action === "transfer_approval") {
           const from = (d.fromApprover as string) || (d.previousApprover as string) || "";
           const to = (d.toApprover as string) || (d.newApproverName as string) || "";
