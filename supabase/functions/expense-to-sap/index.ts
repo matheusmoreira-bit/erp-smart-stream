@@ -843,6 +843,9 @@ Deno.serve(async (req) => {
     // (integração de anexos desligada ou nenhum arquivo enviado), avisa via
     // WhatsApp para lançamento manual.
     if (attachmentEntry === null) {
+      const attachmentLinks = expenseId
+        ? await getExpenseAttachmentLinks(supabase, expenseId)
+        : [];
       await notifyMissingAttachmentWhatsApp({
         companyDb: expenseSnapshot?.company_db,
         entityId: expenseId || "",
@@ -853,6 +856,7 @@ Deno.serve(async (req) => {
         amount: expenseSnapshot?.total_amount,
         currency: expenseSnapshot?.currency,
         reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+        attachments: attachmentLinks,
       });
     }
 
