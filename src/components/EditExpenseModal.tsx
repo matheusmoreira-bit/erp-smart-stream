@@ -15,6 +15,7 @@ import { RelationsMap } from "@/components/RelationsMap";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { useSap } from "@/contexts/SapContext";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
