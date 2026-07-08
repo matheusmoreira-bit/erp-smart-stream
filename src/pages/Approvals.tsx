@@ -196,7 +196,18 @@ function ApprovalCard({
         )}
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="w-3.5 h-3.5 text-primary/70" />
-          <span>Aprovador: <span className="text-foreground font-medium">{doc.currentApprover}</span></span>
+          <span>
+            Aprovador:{" "}
+            {doc.delegatedFrom ? (
+              <span className="text-foreground font-medium">
+                <span className="line-through text-muted-foreground/80 font-normal">{doc.delegatedFrom}</span>
+                <span className="mx-1 text-primary" aria-hidden="true">→</span>
+                {doc.currentApprover}
+              </span>
+            ) : (
+              <span className="text-foreground font-medium">{doc.currentApprover}</span>
+            )}
+          </span>
         </div>
         {onBehalfOf && (
           <div
