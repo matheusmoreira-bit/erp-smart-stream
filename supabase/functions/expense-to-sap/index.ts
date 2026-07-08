@@ -100,6 +100,7 @@ async function notifyMissingAttachmentWhatsApp(params: {
   amount?: number | null;
   currency?: string | null;
   reason: "no_attachment_uploaded" | "integration_attachments_disabled";
+  attachments?: Array<{ file_name: string; url: string }>;
 }): Promise<void> {
   try {
     const cur = (params.currency || "BRL").trim();
@@ -114,7 +115,7 @@ async function notifyMissingAttachmentWhatsApp(params: {
     }
     const reasonLabel = params.reason === "integration_attachments_disabled"
       ? "Integração de anexos desligada para a empresa"
-      : "Pedido aprovado sem nenhum anexo";
+      : "Pedido aprovado sem nenhum anexo vinculado no SAP";
     const lines = [
       "🚨 *Contingência — Anexo pendente no SAP*",
       "",
@@ -126,9 +127,21 @@ async function notifyMissingAttachmentWhatsApp(params: {
       `*Valor:* ${amountStr}`,
       `*ID interno:* ${params.entityId}`,
       `*Motivo:* ${reasonLabel}`,
-      "",
-      "Favor lançar o anexo manualmente no pedido.",
     ];
+    const atts = params.attachments || [];
+    if (atts.length > 0) {
+      lines.push("");
+      lines.push(`*Anexo(s) para lançamento manual (${atts.length}):*`);
+      for (const a of atts) {
+        lines.push(`• ${a.file_name}`);
+        lines.push(a.url);
+      }
+      lines.push("");
+      lines.push("_Links válidos por 7 dias._ Favor lançar o anexo manualmente no pedido do SAP.");
+    } else {
+      lines.push("");
+      lines.push("Nenhum anexo foi enviado no ERP Flow — o lançamento seguiu sem arquivo.");
+    }
     const body = new URLSearchParams({
       to: CONTINGENCY_WHATSAPP_TO,
       message: lines.join("\n"),
@@ -143,6 +156,42 @@ async function notifyMissingAttachmentWhatsApp(params: {
     }).catch((e) => console.warn("notifyMissingAttachmentWhatsApp send failed:", e));
   } catch (e) {
     console.warn("notifyMissingAttachmentWhatsApp error:", e);
+  }
+}
+
+// Gera URLs assinadas (7 dias) para os anexos internos da despesa, para
+// que o admin possa baixar e lançar manualmente no SAP em caso de
+// contingência.
+async function getExpenseAttachmentLinks(
+  supabase: ReturnType<typeof createClient>,
+  expenseId: string,
+): Promise<Array<{ file_name: string; url: string }>> {
+  try {
+    const { data: rows, error } = await supabase
+      .from("expense_attachments")
+      .select("file_name, file_path")
+      .eq("expense_id", expenseId);
+    if (error || !Array.isArray(rows) || rows.length === 0) return [];
+    const bucket = "expense-attachments";
+    const ttl = 60 * 60 * 24 * 7; // 7 dias
+    const results: Array<{ file_name: string; url: string }> = [];
+    for (const r of rows as Array<{ file_name: string; file_path: string }>) {
+      if (!r?.file_path) continue;
+      try {
+        const { data, error: sErr } = await supabase
+          .storage.from(bucket)
+          .createSignedUrl(r.file_path, ttl);
+        if (!sErr && data?.signedUrl) {
+          results.push({ file_name: r.file_name || r.file_path.split("/").pop() || "anexo", url: data.signedUrl });
+        }
+      } catch (e) {
+        console.warn("[contingency] signed URL failed for", r.file_path, e);
+      }
+    }
+    return results;
+  } catch (e) {
+    console.warn("[contingency] getExpenseAttachmentLinks failed:", e);
+    return [];
   }
 }
 
@@ -794,6 +843,9 @@ Deno.serve(async (req) => {
     // (integração de anexos desligada ou nenhum arquivo enviado), avisa via
     // WhatsApp para lançamento manual.
     if (attachmentEntry === null) {
+      const attachmentLinks = expenseId
+        ? await getExpenseAttachmentLinks(supabase, expenseId)
+        : [];
       await notifyMissingAttachmentWhatsApp({
         companyDb: expenseSnapshot?.company_db,
         entityId: expenseId || "",
@@ -804,6 +856,7 @@ Deno.serve(async (req) => {
         amount: expenseSnapshot?.total_amount,
         currency: expenseSnapshot?.currency,
         reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+        attachments: attachmentLinks,
       });
     }
 
