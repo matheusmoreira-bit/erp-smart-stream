@@ -124,29 +124,30 @@ export function useApprovalHistory(
       // ============================================================
       // 1) SAP (approval_history) — substituição fica em `remarks`.
       // ============================================================
-      let q = supabase
-        .from("approval_history")
-        .select("*")
-        .order("decision_date", { ascending: false, nullsFirst: false })
-        .limit(fetchCap);
-      if (companyDb) q = q.eq("company_db", companyDb);
-      if (decision !== "all") q = q.eq("decision", decision);
-      if (mode === "any") {
-        q = q.ilike("remarks", "%SUBSTITUTO%");
-      } else if (mode === "none") {
-        // Aceita remarks null OU remarks que não contêm SUBSTITUTO.
-        q = q.or("remarks.is.null,remarks.not.ilike.%SUBSTITUTO%");
-      } else if (mode === "specific") {
-        // Narrow para linhas com marca de substituto; a filtragem por chave
-        // específica acontece após parseSubstitution (nomes podem ter espaços/vírgulas).
-        q = q.ilike("remarks", "%SUBSTITUTO%");
-      } else if (mode === "search") {
-        // Partial match dentro do texto de `remarks` (que contém "em nome de <nome> <email>").
-        const esc = escapePgrstList(trimmedSubSearch);
-        q = q.ilike("remarks", `%SUBSTITUTO%${esc}%`);
+      let sapRows: ApprovalHistoryRow[] = [];
+      let backendSyncState: ApprovalHistorySyncState | null = null;
+      if (companyDb) {
+        const res = await sapFunctionFetch("approval-history-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list", companyDb, decision, limit: fetchCap }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || body?.success === false) {
+          throw new Error(body?.error || `HTTP ${res.status}`);
+        }
+        sapRows = (body?.rows || []) as ApprovalHistoryRow[];
+        backendSyncState = (body?.syncState || null) as ApprovalHistorySyncState | null;
       }
-      const { data: sapRows, error: sapErr } = await q;
-      if (sapErr) throw sapErr;
+
+      if (mode === "any" || mode === "specific") {
+        sapRows = sapRows.filter((r) => (r.remarks || "").toUpperCase().includes("SUBSTITUTO"));
+      } else if (mode === "none") {
+        sapRows = sapRows.filter((r) => !(r.remarks || "").toUpperCase().includes("SUBSTITUTO"));
+      } else if (mode === "search") {
+        const needle = trimmedSubSearch.toLowerCase();
+        sapRows = sapRows.filter((r) => (r.remarks || "").toLowerCase().includes("substituto") && (r.remarks || "").toLowerCase().includes(needle));
+      }
 
       // ============================================================
       // 2) Interno (expense_approval_log) — colunas dedicadas.
@@ -359,12 +360,7 @@ export function useApprovalHistory(
       setRows(pageRows);
       setHasMore(merged.length > window);
 
-      const { data: state } = await supabase
-        .from("approval_history_sync_state")
-        .select("last_sync_at,last_status,last_message,last_count")
-        .eq("id", 1)
-        .maybeSingle();
-      setSyncState((state || null) as ApprovalHistorySyncState | null);
+      setSyncState(backendSyncState);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar histórico");
     } finally {
