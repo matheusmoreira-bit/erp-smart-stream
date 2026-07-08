@@ -2256,7 +2256,7 @@ export default function ApprovalsPage() {
         if (internalDoc) {
           await refreshExpenses();
         } else {
-          await refresh();
+          await refreshCache();
         }
       } catch (refreshErr) {
         console.error("Refresh após ação falhou:", refreshErr);
