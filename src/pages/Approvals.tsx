@@ -977,7 +977,10 @@ function ApprovalDetailModal({
                 >
                   Cancelar
                 </Button>
-                {isSuperUser && doc.approvalRequestId > 0 && (
+                {/* Delegação disponível apenas para aprovações internas (Regra Interna).
+                    Aprovações nativas do SAP não podem ser delegadas daqui porque a
+                    decisão precisa ser enviada pelo próprio usuário SAP. */}
+                {isSuperUser && doc.approvalRequestId <= 0 && (
                   <Button
                     variant="outline"
                     onClick={() => onDelegate(doc)}
@@ -2309,44 +2312,34 @@ export default function ApprovalsPage() {
     }
     setIsDelegating(true);
     try {
-      const code = delegationDoc.approvalRequestId;
+      const internalId = (delegationDoc as unknown as { __internalId?: string }).__internalId;
+      const isInternal = !!internalId || delegationDoc.approvalRequestId <= 0;
 
-      // Fetch current pending decision to know which step to reassign
-      const reqRes = await sapQuery(
-        session,
-        `ApprovalRequests(${code})?$select=Code,Status&$expand=ApprovalRequestDecisions`,
-        undefined,
-        false,
-      );
-      const reqData = (reqRes.data ?? {}) as {
-        ApprovalRequestDecisions?: Array<{ Status?: string; UserID?: number; ApprovalRequestStep?: number }>;
-      };
-      const decisions = reqData.ApprovalRequestDecisions || [];
-      const pending = decisions.find(
-        (d) => d.Status === "asWithoutDecision" || d.Status === "asPending",
-      );
-
-      if (!pending) {
-        throw new Error("Nenhuma decisão pendente encontrada para esta aprovação.");
+      if (!isInternal) {
+        throw new Error(
+          "Aprovações do SAP não podem ser delegadas daqui — a decisão precisa ser enviada pelo próprio usuário SAP.",
+        );
       }
 
-      // Reassign approver via PATCH (update UserID for the pending decision step)
-      await sapAction(session, `ApprovalRequests(${code})`, "PATCH", {
-        ApprovalRequestDecisions: [
-          {
-            ApprovalRequestStep: pending.ApprovalRequestStep,
-            UserID: params.userInternalKey,
-          },
-        ],
-      });
+      if (!internalId) {
+        throw new Error("Documento interno sem identificador — recarregue a lista e tente novamente.");
+      }
 
-      clearClientCache();
+      // Reatribui o aprovador atual da despesa interna. O backend de
+      // aprovação (`expense-approval-action`) prioriza `expenses.current_approver`
+      // sobre o nível da regra, então o delegado passa a poder aprovar.
+      const newApprover = params.userEmail?.trim() || params.userName;
+      const { error: updErr } = await supabase
+        .from("expenses")
+        .update({ current_approver: newApprover })
+        .eq("id", internalId);
+      if (updErr) throw new Error(updErr.message);
 
       const { logAuditAction } = await import("@/hooks/useAuditLog");
       await logAuditAction({
         action: "delegate_approval",
-        entity_type: "approval_request",
-        entity_id: String(code),
+        entity_type: "expense",
+        entity_id: internalId,
         actor_email: session.userName,
         company_db: session.companyDB,
         details: {
@@ -2359,10 +2352,10 @@ export default function ApprovalsPage() {
           previousApproverEmail: delegationDoc.approverEmail,
           newApproverName: params.userName,
           newApproverEmail: params.userEmail,
-          newApproverInternalKey: params.userInternalKey,
           reason: params.reason,
           delegatedBy: session.userName,
           isSuperUser: true,
+          scope: "internal",
         },
       });
 

@@ -454,11 +454,17 @@ Deno.serve(async (req) => {
 
 
   // ── Authorization ──────────────────────────────────────────────────────
-  // The designated approver comes from the rule level. When there's no rule
-  // (approver defaults to "Administrador"), only Cloud admins / SAP super
-  // users may act.
-  const designatedName = currentLevelRow?.approver_name || (exp as any).current_approver || null;
-  const designatedEmail = currentLevelRow?.approver_email || null;
+  // Regra: `expenses.current_approver` é fonte de verdade quando presente —
+  // isso permite delegação (reatribuição do aprovador atual) sem alterar a
+  // regra global. Só cai para o nível da regra quando não houver override.
+  const overrideApprover = ((exp as any).current_approver as string | null) || null;
+  const designatedName = overrideApprover || currentLevelRow?.approver_name || null;
+  // Se o override é um e-mail, aproveita para email match; caso contrário
+  // usa o e-mail do nível da regra (quando o override é apenas o nome).
+  const overrideIsEmail = !!overrideApprover && overrideApprover.includes("@");
+  const designatedEmail = overrideIsEmail
+    ? overrideApprover
+    : (currentLevelRow?.approver_email || null);
 
   const isOverride = isCloudAdmin || isSuperUser;
   const isMatch = !!callerIdentity && isDesignatedApprover(callerIdentity, designatedName, designatedEmail);
