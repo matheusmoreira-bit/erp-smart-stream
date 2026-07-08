@@ -1897,7 +1897,8 @@ export default function ApprovalsPage() {
       const isRequester =
         codeEq(doc.requesterCode) ||
         approverMatches(doc.requester, session.userName);
-      if (isRequester) return false;
+      // Bloqueio de auto-aprovação — super-usuário pode ignorar (uso admin/teste).
+      if (isRequester && !isSuperUser) return false;
 
       const sessionCodeLower = (session.userName || "").toLowerCase().trim();
       const isDirectApprover =
@@ -1935,7 +1936,7 @@ export default function ApprovalsPage() {
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session.userName, sessionUser, officialIdentifiers],
+    [session.userName, sessionUser, officialIdentifiers, isSuperUser],
   );
   const userApprovals = effectiveShowAll
     ? allApprovals
