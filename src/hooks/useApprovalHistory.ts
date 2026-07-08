@@ -315,7 +315,11 @@ export function useApprovalHistory(
   const sync = useCallback(async () => {
     setIsSyncing(true);
     try {
-      const res = await sapFunctionFetch("approval-history-sync", { method: "POST" });
+      const res = await sapFunctionFetch("approval-history-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyDb }),
+      });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || body?.success === false) {
         throw new Error(body?.error || `HTTP ${res.status}`);
@@ -325,7 +329,7 @@ export function useApprovalHistory(
     } finally {
       setIsSyncing(false);
     }
-  }, [load]);
+  }, [companyDb, load]);
 
   useEffect(() => {
     load();

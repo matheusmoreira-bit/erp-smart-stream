@@ -1,7 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db",
+};
 
 /**
  * approval-history-sync
@@ -228,7 +233,7 @@ Deno.serve(async (req) => {
 
     let body: { companyDb?: string } = {};
     try { body = await req.json(); } catch { /* no body */ }
-    const companyDb = (body.companyDb || "").trim();
+    const companyDb = (body.companyDb || req.headers.get("x-company-db") || "").trim();
     if (!companyDb) {
       await releaseWatcherLock(supabase, "approval-history-sync", "error", "companyDb missing");
       return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
