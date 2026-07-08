@@ -177,6 +177,7 @@ export function InternalApprovalHistory({ expenseId }: Props) {
           actorEmail: r.approver_email || undefined,
           title: title + substLabel,
           reason: r.remarks || undefined,
+          source: "expense_approval_log",
         });
       }
 
