@@ -12,7 +12,7 @@ const GATEWAY = "https://connector-gateway.lovable.dev/google_drive";
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const GD_KEY = Deno.env.get("GOOGLE_DRIVE_API_KEY")!;
 
-const ROOT_FOLDER_NAME = "ErpFlow Backups";
+const ROOT_FOLDER_ID = "1zFQ5jphDXUsYCNYn4tT1sqVSs5TS_AvZ";
 const DATA_FOLDER_NAME = "data";
 const ATTACH_FOLDER_NAME = "attachments-expenses";
 const NF_FOLDER_NAME = "attachments-nf-entrada";
