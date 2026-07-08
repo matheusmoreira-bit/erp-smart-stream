@@ -216,22 +216,30 @@ export function InternalApprovalHistory({ expenseId }: Props) {
       </div>
       <ol className="relative border-l border-border/60 pl-4 space-y-3">
         {events.map((ev) => {
-          const Icon =
-            ev.kind === "approve"
-              ? CheckCircle2
-              : ev.kind === "reject"
-                ? XCircle
-                : ev.kind === "delegate"
-                  ? UserCog
-                  : Clock;
-          const iconColor =
-            ev.kind === "approve"
-              ? "text-emerald-500"
-              : ev.kind === "reject"
-                ? "text-destructive"
-                : ev.kind === "delegate"
-                  ? "text-primary"
-                  : "text-muted-foreground";
+          const iconMap: Record<HistoryEvent["kind"], typeof CheckCircle2> = {
+            approve: CheckCircle2,
+            reject: XCircle,
+            delegate: UserCog,
+            transfer: Send,
+            created: FileText,
+            updated: Pencil,
+            cancelled: XCircle,
+            reverted: RotateCcw,
+            other: Clock,
+          };
+          const colorMap: Record<HistoryEvent["kind"], string> = {
+            approve: "text-emerald-500",
+            reject: "text-destructive",
+            delegate: "text-primary",
+            transfer: "text-primary",
+            created: "text-emerald-500",
+            updated: "text-amber-500",
+            cancelled: "text-destructive",
+            reverted: "text-amber-500",
+            other: "text-muted-foreground",
+          };
+          const Icon = iconMap[ev.kind];
+          const iconColor = colorMap[ev.kind];
           return (
             <li key={ev.id} className="relative">
               <span
