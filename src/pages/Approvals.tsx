@@ -1194,14 +1194,10 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     cardCode: e.supplier_code || "",
     cardName: e.supplier_name || "—",
     requester: e.requester_name || "—",
-    currentApprover: (() => {
-      const current = e.current_approver && e.current_approver.trim() ? e.current_approver : "Administrador";
-      const original = (e.original_approver || "").trim();
-      if (original && original.toLowerCase() !== current.toLowerCase()) {
-        return `${original} → ${current}`;
-      }
-      return current;
-    })(),
+    currentApprover: e.current_approver && e.current_approver.trim() ? e.current_approver : "Administrador",
+    delegatedFrom: (e.original_approver || "").trim() && (e.original_approver || "").trim().toLowerCase() !== (e.current_approver || "").trim().toLowerCase()
+      ? (e.original_approver || "").trim()
+      : undefined,
     approverEmail: "",
     currentStage: "Aprovação Interna",
     status: "pending",
