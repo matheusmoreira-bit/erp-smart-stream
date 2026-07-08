@@ -437,6 +437,12 @@ export default function ApprovalHistory() {
 function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelationsMap?: () => void }) {
   const isApproved = row.decision === "Y";
   const isRejected = row.decision === "N";
+  const sourceLabel = row.source === "erp_flow" ? "ERP Flow" : row.source === "audit_log" ? "Ação" : "SAP";
+  const sourceTitle = row.source === "erp_flow"
+    ? "Decisão registrada no ERP Flow"
+    : row.source === "audit_log"
+      ? "Decisão carregada do histórico de ações"
+      : "Decisão sincronizada do SAP Approval Hub";
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -453,11 +459,13 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
               className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                 row.source === "erp_flow"
                   ? "text-sky-600 bg-sky-500/10 border-sky-500/30"
+                  : row.source === "audit_log"
+                    ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/30"
                   : "text-violet-600 bg-violet-500/10 border-violet-500/30"
               }`}
-              title={row.source === "erp_flow" ? "Decisão registrada no ERP Flow" : "Decisão sincronizada do SAP Approval Hub"}
+              title={sourceTitle}
             >
-              {row.source === "erp_flow" ? "ERP Flow" : "SAP"}
+              {sourceLabel}
             </span>
           </div>
           <h3 className="font-mono font-semibold mt-1">#{row.doc_num || row.doc_entry || "—"}</h3>
