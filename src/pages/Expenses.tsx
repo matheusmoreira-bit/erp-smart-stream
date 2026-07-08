@@ -1321,6 +1321,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     }
   }, [filtersOpen]);
 
+  if (!session) return null;
+
   return (
     <div className="min-h-screen bg-background">
       <Helmet><title>{`${isSales ? "Vendas" : "Compras"} — ERP Flow`}</title></Helmet>
