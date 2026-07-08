@@ -136,6 +136,18 @@ export function CachedSearchCombobox({
     setIsOpen(false);
   };
 
+  const handleOptionPointerDown = (e: React.PointerEvent<HTMLButtonElement>, opt: SapSearchOption) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleSelect(opt);
+  };
+
+  const handleOptionMouseDown = (e: React.MouseEvent<HTMLButtonElement>, opt: SapSearchOption) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleSelect(opt);
+  };
+
   const handleClear = () => {
     onChange(null);
     setQuery("");
@@ -177,6 +189,13 @@ export function CachedSearchCombobox({
           <Input
             value={value ? displayValue : query}
             onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && isOpen && filtered.length > 0) {
+                e.preventDefault();
+                handleSelect(filtered[0]);
+              }
+              if (e.key === "Escape") setIsOpen(false);
+            }}
             onFocus={() => {
               if (!value) setIsOpen(true);
             }}
@@ -221,7 +240,13 @@ export function CachedSearchCombobox({
               <button
                 key={opt.code}
                 type="button"
-                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleSelect(opt); }}
+                onPointerDownCapture={(e) => handleOptionPointerDown(e, opt)}
+                onMouseDown={(e) => handleOptionMouseDown(e, opt)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleSelect(opt);
+                }}
                 className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 {hasColumns ? (
