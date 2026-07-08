@@ -202,7 +202,7 @@ async function runBackup(supabase: Sup, log: (m: string) => void) {
   try {
     if (!LOVABLE_API_KEY || !GD_KEY) throw new Error("Credenciais do Google Drive ausentes");
 
-    const rootId = await findOrCreateFolder(ROOT_FOLDER_NAME);
+    const rootId = ROOT_FOLDER_ID;
     const dataRootId = await findOrCreateFolder(DATA_FOLDER_NAME, rootId);
     const attachId = await findOrCreateFolder(ATTACH_FOLDER_NAME, rootId);
     const nfId = await findOrCreateFolder(NF_FOLDER_NAME, rootId);
