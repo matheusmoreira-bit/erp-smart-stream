@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Quick-book de Aprovações — ERP Flow</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root{
+    --ink:#1a1d24;
+    --ink-soft:#3d4351;
+    --muted:#6b7280;
+    --line:#e5e7eb;
+    --bg:#ffffff;
+    --paper:#fbfaf7;
+    --accent:#0f766e;
+    --accent-soft:#ecfdf5;
+    --amber:#b45309;
+    --amber-bg:#fffbeb;
+    --red:#b91c1c;
+    --red-bg:#fef2f2;
+    --blue:#1d4ed8;
+    --blue-bg:#eff6ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#eceae4;color:var(--ink);font-family:Georgia,"Source Serif Pro","Times New Roman",serif;line-height:1.55;font-size:15px}
+  .page{
+    background:var(--bg);
+    width:210mm;
+    min-height:297mm;
+    margin:16px auto;
+    padding:22mm 20mm 24mm 20mm;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+    position:relative;
+  }
+  .page::before{
+    content:"Quick-book de Aprovações — ERP Flow";
+    position:absolute; top:8mm; left:20mm; right:20mm;
+    font-family:-apple-system,system-ui,"Segoe UI",Arial,sans-serif;
+    font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted); border-bottom:1px solid var(--line); padding-bottom:4mm;
+  }
+  .page::after{
+    content:"v1.0 · 08/07/2026";
+    position:absolute; bottom:10mm; left:20mm; right:20mm;
+    font-family:-apple-system,system-ui,Arial,sans-serif;
+    font-size:10px; color:var(--muted); text-align:right;
+    border-top:1px solid var(--line); padding-top:4mm;
+  }
+  h1,h2,h3,h4{font-family:Georgia,"Source Serif Pro",serif;color:var(--ink);letter-spacing:-.01em}
+  h1{font-size:34px;line-height:1.15;margin:0 0 8px}
+  h2{font-size:24px;margin:0 0 6px;padding-bottom:6px;border-bottom:2px solid var(--ink)}
+  h3{font-size:18px;margin:22px 0 6px;color:var(--accent)}
+  h4{font-size:15px;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-family:-apple-system,system-ui,Arial,sans-serif}
+  p{margin:0 0 10px}
+  ul,ol{margin:0 0 12px 20px;padding:0}
+  li{margin-bottom:4px}
+  code,kbd{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px}
+  kbd{background:#f3f4f6;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 6px;color:var(--ink)}
+  code{background:#f3f4f6;padding:1px 5px;border-radius:3px;color:var(--ink)}
+  pre{background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--accent);padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.5;white-space:pre;font-family:"SF Mono",Menlo,Consolas,monospace;color:var(--ink)}
+  .cover{padding-top:60mm;text-align:left}
+  .cover .kicker{font-family:-apple-system,system-ui,Arial,sans-serif;text-transform:uppercase;letter-spacing:.24em;font-size:11px;color:var(--accent);margin-bottom:12px}
+  .cover h1{font-size:56px;line-height:1.05;margin-bottom:14px}
+  .cover .lede{font-size:18px;color:var(--ink-soft);max-width:140mm}
+  .cover .meta{margin-top:60mm;font-family:-apple-system,system-ui,Arial,sans-serif;font-size:12px;color:var(--muted)}
+  .cover .meta div{margin-bottom:2px}
+  .toc{columns:1;font-family:-apple-system,system-ui,Arial,sans-serif;font-size:14px}
+  .toc ol{list-style:none;margin:0;padding:0;counter-reset:s}
+  .toc li{counter-increment:s;padding:6px 0;border-bottom:1px dotted var(--line);display:flex;justify-content:space-between}
+  .toc li::before{content:counter(s,decimal-leading-zero) "  ";color:var(--accent);font-family:"SF Mono",monospace;font-size:12px;margin-right:10px}
+  .lede{font-size:16px;color:var(--ink-soft);margin-bottom:18px}
+  .callout{border-radius:6px;padding:12px 14px;margin:14px 0;font-family:-apple-system,system-ui,Arial,sans-serif;font-size:13.5px;line-height:1.5}
+  .callout .tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-right:8px;padding:2px 6px;border-radius:3px;color:#fff;vertical-align:1px}
+  .callout.tip{background:var(--accent-soft);border-left:3px solid var(--accent);color:#064e3b}
+  .callout.tip .tag{background:var(--accent)}
+  .callout.warn{background:var(--amber-bg);border-left:3px solid var(--amber);color:#78350f}
+  .callout.warn .tag{background:var(--amber)}
+  .callout.admin{background:var(--red-bg);border-left:3px solid var(--red);color:#7f1d1d}
+  .callout.admin .tag{background:var(--red)}
+  .callout.info{background:var(--blue-bg);border-left:3px solid var(--blue);color:#1e3a8a}
+  .callout.info .tag{background:var(--blue)}
+  .figure{margin:16px 0 22px}
+  .figure img{max-width:100%;display:block;border:1px solid var(--line);border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .figure figcaption{font-family:-apple-system,system-ui,Arial,sans-serif;font-size:11.5px;color:var(--muted);margin-top:6px;font-style:italic}
+  .placeholder{
+    border:1.5px dashed #cbd5e1;background:repeating-linear-gradient(45deg,#fafafa,#fafafa 12px,#f3f4f6 12px,#f3f4f6 24px);
+    padding:36px 22px;border-radius:6px;
+    font-family:-apple-system,system-ui,Arial,sans-serif;font-size:13px;color:var(--ink-soft);
+  }
+  .placeholder strong{color:var(--ink)}
+  .placeholder .path{display:inline-block;background:#fff;border:1px solid var(--line);padding:1px 6px;border-radius:3px;font-family:"SF Mono",monospace;font-size:11.5px;color:var(--ink)}
+  table.roles{width:100%;border-collapse:collapse;margin:12px 0;font-family:-apple-system,system-ui,Arial,sans-serif;font-size:13px}
+  table.roles th,table.roles td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.roles th{background:var(--paper);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft)}
+  .diagram{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:14px 16px;font-family:"SF Mono",Menlo,monospace;font-size:12px;line-height:1.35;white-space:pre;color:var(--ink-soft);overflow:auto}
+  .field-list dt{font-family:-apple-system,system-ui,Arial,sans-serif;font-weight:600;color:var(--ink);margin-top:8px;font-size:13.5px}
+  .field-list dd{margin:2px 0 0;font-size:14px;color:var(--ink-soft)}
+  .pill{display:inline-block;background:#eef2ff;color:#3730a3;font-family:-apple-system,system-ui,Arial,sans-serif;font-size:11px;padding:1px 8px;border-radius:99px;margin-left:6px;letter-spacing:.02em}
+  .pill.warn{background:#fef3c7;color:#92400e}
+  .pill.ok{background:#dcfce7;color:#166534}
+  .pill.err{background:#fee2e2;color:#991b1b}
+  hr{border:none;border-top:1px solid var(--line);margin:22px 0}
+
+  @page{ size:A4; margin:16mm 14mm 18mm 14mm; }
+  @media print{
+    html,body{background:#fff}
+    .page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;page-break-after:always}
+    .page::before,.page::after{position:fixed}
+    .no-print{display:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- =================== CAPA =================== -->
+<section class="page cover">
+  <div class="kicker">Guia de referência rápida</div>
+  <h1>Fluxo de Aprovação</h1>
+  <p class="lede">Um quick-book gerencial para aprovadores, solicitantes e administradores do ERP Flow. Cobre fluxos padrão e personalizados, aprovadores substitutos e delegados, despesas internas e despesas do ERP.</p>
+  <div class="meta">
+    <div><strong>Versão</strong> 1.0</div>
+    <div><strong>Data</strong> 08 de julho de 2026</div>
+    <div><strong>Público</strong> Solicitantes, aprovadores e administradores</div>
+    <div><strong>Sistema</strong> ERP Flow · Cactus Corporation</div>
+  </div>
+</section>
+
+<!-- =================== SUMÁRIO =================== -->
+<section class="page">
+  <h2>Sumário</h2>
+  <nav class="toc">
+    <ol>
+      <li><span>Visão geral do fluxo</span><span>3</span></li>
+      <li><span>Papéis envolvidos</span><span>4</span></li>
+      <li><span>Tela de aprovações pendentes</span><span>5</span></li>
+      <li><span>Modal de decisão do documento</span><span>6</span></li>
+      <li><span>Fluxos de aprovação padrão</span><span>8</span></li>
+      <li><span>Fluxos personalizados (regras)</span><span>9</span></li>
+      <li><span>Aprovadores substitutos</span><span>11</span></li>
+      <li><span>Aprovadores delegados</span><span>12</span></li>
+      <li><span>Despesas internas</span><span>14</span></li>
+      <li><span>Despesas do ERP (compras)</span><span>15</span></li>
+      <li><span>Histórico de aprovações</span><span>16</span></li>
+      <li><span>Funcionalidades gerais</span><span>17</span></li>
+      <li><span>Perguntas frequentes</span><span>18</span></li>
+    </ol>
+  </nav>
+
+  <div class="callout info" style="margin-top:24px">
+    <span class="tag">Como usar</span>
+    Abra este arquivo no navegador e imprima com <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd> → <em>Salvar como PDF</em>. O layout foi preparado para papel A4 com cabeçalho, rodapé e quebras entre seções.
+  </div>
+</section>
+
+<!-- =================== 1. VISÃO GERAL =================== -->
+<section class="page">
+  <h2>1. Visão geral do fluxo</h2>
+  <p class="lede">Todo documento sujeito a aprovação percorre o mesmo caminho conceitual, independentemente da origem (despesa interna ou compra do ERP).</p>
+
+  <div class="diagram">Solicitante
+   │  cria/importa documento
+   ▼
+┌──────────────────────────┐
+│  Motor de regras         │  ← escolhe o fluxo (padrão ou personalizado)
+└─────────────┬────────────┘
+              ▼
+        Nível 1  ── aprovador designado ─┐
+              │                          │  pode ser coberto por
+              ▼                          │  substituto (ausência)
+        Nível 2  ── aprovador designado ─┤  ou delegado (por documento)
+              │                          │
+              ▼                          │
+        Nível N ─────────────────────────┘
+              │
+   ┌──────────┴───────────┐
+   ▼                      ▼
+Aprovado              Reprovado
+   │
+   ▼
+Integração/pagamento
+</div>
+
+  <h3>Onde cada coisa vive no app</h3>
+  <ul>
+    <li><code>/aprovacoes</code> — hub de aprovações; abre por padrão em <strong>Pendentes</strong>.</li>
+    <li><code>/aprovacoes?tab=history</code> — histórico completo das decisões.</li>
+    <li><code>/aprovacoes/regras</code> — regras de aprovação personalizadas (admin).</li>
+    <li><code>/compras</code> — despesas originadas no ERP (OMIE/SAP).</li>
+    <li><code>/usuarios/lista</code> — configuração de substitutos por usuário.</li>
+  </ul>
+
+  <div class="callout tip">
+    <span class="tag">Dica</span>
+    Um link direto para um documento tem o formato <code>/aprovacoes?doc=internal:&lt;id&gt;</code> ou <code>/aprovacoes?doc=erp:&lt;id&gt;</code>. Cole no navegador para abrir direto o modal de decisão.
+  </div>
+</section>
+
+<!-- =================== 2. PAPÉIS =================== -->
+<section class="page">
+  <h2>2. Papéis envolvidos</h2>
+
+  <table class="roles">
+    <thead><tr><th style="width:22%">Papel</th><th>O que faz</th><th style="width:22%">Quem configura</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Solicitante</strong></td><td>Cria o documento (despesa interna) ou o documento chega via integração (compra do ERP).</td><td>Qualquer usuário com acesso ao módulo.</td></tr>
+      <tr><td><strong>Aprovador designado</strong></td><td>Recebe o documento no seu nível do fluxo e decide (aprovar, reprovar ou delegar).</td><td>Regra de aprovação (padrão ou personalizada).</td></tr>
+      <tr><td><strong>Aprovador substituto</strong></td><td>Cobre um titular ausente durante um período. Herda automaticamente as pendências enquanto vigora.</td><td>Admin, na tela de usuários.</td></tr>
+      <tr><td><strong>Aprovador delegado</strong></td><td>Recebe pontualmente a decisão em nome do titular, com validade e motivo registrados.</td><td>Super-usuário, no próprio modal do documento.</td></tr>
+      <tr><td><strong>Super-usuário / Admin</strong></td><td>Pode ver todos os documentos, delegar em nome de outros, criar regras e reintegrar manualmente ao ERP.</td><td>Perfil de acesso.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <span class="tag">Atenção</span>
+    <strong>Substituto ≠ Delegado.</strong> Substituto é para <em>ausência</em> (férias, licença) e cobre <em>todas</em> as pendências do titular no período. Delegação é <em>por documento</em>, pontual, com data de validade explícita.
+  </div>
+
+  <div class="callout admin">
+    <span class="tag">Somente admin</span>
+    Ações restritas a super-usuários incluem: ver aprovações de outros usuários (toggle <em>Ver todas</em>), delegar em nome de terceiros, revogar delegações ativas e reintegrar despesas ao SAP/OMIE manualmente.
+  </div>
+</section>
+
+<!-- =================== 3. TELA DE PENDENTES =================== -->
+<section class="page">
+  <h2>3. Tela de aprovações pendentes</h2>
+  <p class="lede">Rota <code>/aprovacoes</code>. Lista tudo o que aguarda a sua decisão — despesas internas e compras do ERP, no mesmo lugar.</p>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="01-approvals-list.png">
+      <strong>[PRINT 01]</strong> Lista de aprovações pendentes — <span class="path">/aprovacoes</span><br>
+      Deve mostrar: barra superior com filtros, toggle <em>Ver todas as aprovações</em> (admin), cards de documentos com valor, solicitante, projeto e botão de decisão.
+    </div>
+    <figcaption>Figura 3.1 — Lista de pendências agrupadas por documento.</figcaption>
+  </figure>
+
+  <h3>O que você encontra na tela</h3>
+  <dl class="field-list">
+    <dt>Busca e filtros</dt>
+    <dd>Filtre por tipo (interna/ERP), projeto, categoria, faixa de valor e status.</dd>
+    <dt>Toggle "Ver todas as aprovações" <span class="pill">admin</span></dt>
+    <dd>Padrão <strong>ligado</strong> para admin. Desligado, mostra apenas o que <em>você</em> aprova ou criou. As delegações continuam aparecendo mesmo com o toggle desligado.</dd>
+    <dt>Cards de documento</dt>
+    <dd>Cada card resume o documento e leva ao modal de decisão. Documentos delegados a você aparecem sinalizados.</dd>
+  </dl>
+
+  <div class="callout tip">
+    <span class="tag">Dica</span>
+    Use a busca por número do documento ou fornecedor para achar rapidamente o item em pauta em reuniões.
+  </div>
+</section>
+
+<!-- =================== 4. MODAL DE DECISÃO =================== -->
+<section class="page">
+  <h2>4. Modal de decisão do documento</h2>
+  <p class="lede">Abre ao clicar em qualquer documento da lista. Concentra tudo o que você precisa para decidir.</p>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="02-decision-modal.png">
+      <strong>[PRINT 02]</strong> Modal aberto em um documento pendente.<br>
+      Deve mostrar: cabeçalho com número/tipo, dados do solicitante, itens do documento, aviso de super-usuário (quando aplicável), campo <em>Comentário</em> e rodapé fixo com <strong>Aprovar</strong> / <strong>Reprovar</strong> / <strong>Delegar</strong>.
+    </div>
+    <figcaption>Figura 4.1 — Modal de decisão com rodapé fixo de ações.</figcaption>
+  </figure>
+
+  <h3>Seções do modal</h3>
+  <ol>
+    <li><strong>Cabeçalho</strong> — número, tipo, valor total, status atual e projeto.</li>
+    <li><strong>Solicitante e fluxo</strong> — quem criou, aprovadores anteriores e o nível corrente.</li>
+    <li><strong>Itens do documento</strong> — código, descrição, quantidade, preço unitário, total e projeto.</li>
+    <li><strong>Aviso de contexto</strong> — banner âmbar quando você está agindo como super-usuário em nome de outro aprovador.</li>
+    <li><strong>Comentário</strong> — opcional para aprovar; recomendado ao reprovar.</li>
+    <li><strong>Rodapé fixo</strong> — botões <em>Cancelar</em>, <em>Aprovar</em>, <em>Reprovar</em> e, quando aplicável, <em>Delegar</em> / <em>Revogar delegação</em>.</li>
+  </ol>
+
+  <h3>Atalhos de teclado</h3>
+  <ul>
+    <li><kbd>Esc</kbd> — cancela e fecha o modal.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> — confirma a decisão em foco.</li>
+  </ul>
+
+  <div class="callout warn">
+    <span class="tag">Atenção</span>
+    Se o rodapé exibir <em>"Somente leitura — você não é o aprovador deste documento"</em>, você está visualizando por conta do toggle <em>Ver todas</em>. Só o aprovador designado, um substituto vigente ou um delegado ativo pode decidir.
+  </div>
+</section>
+
+<!-- =================== 4b. MODAL — VARIAÇÕES =================== -->
+<section class="page">
+  <h2>4.1 Variações do modal</h2>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="03-modal-super-user.png">
+      <strong>[PRINT 03]</strong> Banner âmbar de super-usuário.<br>
+      Texto: "Você está atuando como super-usuário. O aprovador designado é <em>&lt;nome&gt;</em>." Deve aparecer entre os itens e o campo de comentário.
+    </div>
+    <figcaption>Figura 4.2 — Aviso quando um admin decide em nome de outro aprovador.</figcaption>
+  </figure>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="04-modal-readonly.png">
+      <strong>[PRINT 04]</strong> Modal em modo somente leitura.<br>
+      Botões de ação desabilitados e mensagem em itálico no rodapé.
+    </div>
+    <figcaption>Figura 4.3 — Modo somente leitura para observadores.</figcaption>
+  </figure>
+</section>
+
+<!-- =================== 5. FLUXO PADRÃO =================== -->
+<section class="page">
+  <h2>5. Fluxos de aprovação padrão</h2>
+  <p class="lede">Quando nenhuma regra personalizada casa com o documento, ele entra no fluxo padrão da empresa. É o comportamento base — desenhado para cobrir a maioria dos casos sem configuração adicional.</p>
+
+  <h3>Como funciona</h3>
+  <ol>
+    <li>O documento é criado ou importado.</li>
+    <li>O motor de regras verifica se há alguma regra personalizada ativa que case com os critérios do documento.</li>
+    <li>Se nenhuma regra casar, aplica-se o fluxo padrão: aprovação escalonada por valor, do gestor imediato até a diretoria.</li>
+    <li>Cada nível decide sequencialmente; o próximo só é notificado quando o anterior aprova.</li>
+  </ol>
+
+  <div class="callout info">
+    <span class="tag">Bom saber</span>
+    O fluxo padrão sempre existe como <em>fallback</em>. Mesmo depois de criar regras personalizadas, documentos que não caem em nenhuma delas continuam sendo tratados pelo padrão.
+  </div>
+
+  <h3>Quando o documento pula um nível</h3>
+  <ul>
+    <li>Quando o solicitante <em>é</em> o aprovador do nível — o sistema salta para o próximo nível para evitar auto-aprovação.</li>
+    <li>Quando existe delegação ativa — o delegado assume aquele nível.</li>
+    <li>Quando existe substituto vigente para o titular ausente.</li>
+  </ul>
+</section>
+
+<!-- =================== 6. FLUXOS PERSONALIZADOS =================== -->
+<section class="page">
+  <h2>6. Fluxos personalizados (regras)</h2>
+  <p class="lede">Rota <code>/aprovacoes/regras</code>. Onde admins criam fluxos específicos por projeto, categoria, tipo de documento ou faixa de valor.</p>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="05-rules-list.png">
+      <strong>[PRINT 05]</strong> Lista de regras de aprovação — <span class="path">/aprovacoes/regras</span><br>
+      Deve mostrar: cards de regra com nome, prioridade (P1, P2…), status Ativa/Inativa, resumo dos critérios e níveis, botão <em>Nova regra</em> e simulador.
+    </div>
+    <figcaption>Figura 6.1 — Regras ordenadas por prioridade.</figcaption>
+  </figure>
+
+  <h3>Anatomia de uma regra</h3>
+  <dl class="field-list">
+    <dt>Nome</dt><dd>Identificação humana da regra (aparece nos históricos).</dd>
+    <dt>Tipo de documento</dt><dd>Aplica-se a despesas internas, do ERP ou ambos.</dd>
+    <dt>Critérios</dt><dd>Um ou mais filtros combinados (E lógico): projeto, categoria, valor mínimo/máximo, fornecedor, etc.</dd>
+    <dt>Níveis</dt><dd>Sequência de aprovadores. Cada nível tem seus próprios aprovadores designados.</dd>
+    <dt>Prioridade</dt><dd>Número inteiro. <strong>Maior prioridade vence</strong> quando várias regras casam com o mesmo documento.</dd>
+    <dt>Status</dt><dd>Ativa ou Inativa. Regras inativas ficam salvas mas não são avaliadas.</dd>
+  </dl>
+</section>
+
+<section class="page">
+  <h2>6.1 Criando uma regra</h2>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="06-rule-modal.png">
+      <strong>[PRINT 06]</strong> Modal <em>Nova Regra de Aprovação</em>.<br>
+      Deve mostrar: campos <em>Nome</em>, <em>Tipo de documento</em>, seção <em>Critérios</em> (botão adicionar), seção <em>Níveis de aprovação</em> e ações <em>Cancelar</em> / <em>Criar regra</em>.
+    </div>
+    <figcaption>Figura 6.2 — Formulário de criação/edição de regra.</figcaption>
+  </figure>
+
+  <h3>Passo a passo</h3>
+  <ol>
+    <li>Clique em <em>Nova regra</em> na tela de regras.</li>
+    <li>Dê um nome claro (ex.: "Compras &gt; R$ 50k · Diretoria").</li>
+    <li>Escolha o <em>Tipo de documento</em>.</li>
+    <li>Adicione um ou mais <em>critérios</em> — o documento precisa casar com <strong>todos</strong> para a regra valer.</li>
+    <li>Adicione os <em>níveis de aprovação</em> na ordem desejada.</li>
+    <li>Ajuste a <em>prioridade</em> se houver risco de conflito com outra regra.</li>
+    <li>Ative e salve.</li>
+  </ol>
+
+  <div class="callout tip">
+    <span class="tag">Simulador</span>
+    Antes de ativar uma regra crítica, use o <em>Simulador</em> na mesma tela: informe um documento hipotético e veja qual regra o motor escolheria e quais aprovadores seriam acionados.
+  </div>
+
+  <div class="callout warn">
+    <span class="tag">Atenção</span>
+    Alterações em regras só afetam <strong>documentos futuros</strong>. Documentos já em curso mantêm o fluxo pelo qual entraram.
+  </div>
+</section>
+
+<!-- =================== 7. SUBSTITUTOS =================== -->
+<section class="page">
+  <h2>7. Aprovadores substitutos</h2>
+  <p class="lede">Configurados por usuário em <code>/usuarios/lista</code> → aba <em>Substitutos</em>. Servem para períodos de ausência do titular.</p>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="07-substitutes.png">
+      <strong>[PRINT 07]</strong> Aba <em>Substitutos</em> do usuário.<br>
+      Deve mostrar: lista de substitutos ativos com nome, período (início/fim) e ações; botão para adicionar.
+    </div>
+    <figcaption>Figura 7.1 — Substitutos vigentes para um usuário.</figcaption>
+  </figure>
+
+  <h3>Como funciona</h3>
+  <ul>
+    <li>Ao configurar um substituto, informe <strong>início</strong> e <strong>fim</strong> da vigência.</li>
+    <li>Enquanto o período estiver ativo, o substituto vê todas as pendências do titular na sua lista de <em>/aprovacoes</em> e pode decidir por ele.</li>
+    <li>Ao fim do período, o acesso cessa automaticamente — não é preciso remover manualmente.</li>
+    <li>Decisões tomadas pelo substituto ficam registradas com identificação clara no histórico.</li>
+  </ul>
+
+  <div class="callout tip">
+    <span class="tag">Dica</span>
+    Cadastre substitutos com antecedência para férias e viagens. Você pode configurar vários substitutos com períodos distintos.
+  </div>
+
+  <div class="callout warn">
+    <span class="tag">Atenção</span>
+    Substituto cobre <em>todas</em> as pendências do titular no período. Para redirecionar apenas um documento específico, use <strong>delegação</strong> em vez de substituição.
+  </div>
+</section>
+
+<!-- =================== 8. DELEGADOS =================== -->
+<section class="page">
+  <h2>8. Aprovadores delegados</h2>
+  <p class="lede">Delegação é uma decisão <strong>por documento</strong>, feita pelo super-usuário no próprio modal. Útil para casos pontuais em que o aprovador designado precisa transferir uma decisão específica.</p>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="08-delegate-button.png">
+      <strong>[PRINT 08]</strong> Botão <em>Delegar</em> visível no rodapé do modal para super-usuários.<br>
+      Deve mostrar: rodapé fixo com <em>Cancelar</em>, <em>Delegar</em> (destaque) e, quando já delegado, <em>Revogar delegação</em>.
+    </div>
+    <figcaption>Figura 8.1 — Ação de delegação no rodapé do modal.</figcaption>
+  </figure>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="09-delegate-modal.png">
+      <strong>[PRINT 09]</strong> Modal de delegação.<br>
+      Deve mostrar: seleção do delegado pelo <strong>nome</strong>, campos de validade (início/fim) e motivo. Botão <em>Confirmar delegação</em>.
+    </div>
+    <figcaption>Figura 8.2 — Formulário de delegação.</figcaption>
+  </figure>
+</section>
+
+<section class="page">
+  <h2>8.1 Como a delegação se comporta</h2>
+
+  <ul>
+    <li>O <strong>delegado</strong> passa a ver o documento na sua <em>/aprovacoes</em>, <strong>mesmo sem</strong> ligar o toggle <em>Ver todas</em>.</li>
+    <li>O aprovador <strong>titular</strong> continua vendo o documento no histórico, marcado como delegado.</li>
+    <li>A delegação tem <strong>validade</strong>: fora do período, o documento volta ao titular.</li>
+    <li>Uma delegação pode ser <strong>revogada</strong> pelo super-usuário a qualquer momento (botão <em>Revogar delegação</em> no rodapé).</li>
+    <li>Toda delegação registra um evento <code>delegate_approval</code> no histórico com quem delegou, para quem, validade, status atual e motivo.</li>
+  </ul>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="10-history-delegation.png">
+      <strong>[PRINT 10]</strong> Evento de delegação no histórico interno do documento.<br>
+      Deve mostrar: linha do tempo com "Documento delegado por <em>&lt;nome&gt;</em> para <em>&lt;nome&gt;</em>" · período de validade · status (Ativa/Expirada) · motivo.
+    </div>
+    <figcaption>Figura 8.3 — Registro da delegação no histórico.</figcaption>
+  </figure>
+
+  <div class="callout admin">
+    <span class="tag">Somente admin</span>
+    Delegar e revogar são ações exclusivas de super-usuários. Use com parcimônia — cada delegação altera oficialmente quem responde pela decisão do documento.
+  </div>
+</section>
+
+<!-- =================== 9. DESPESAS INTERNAS =================== -->
+<section class="page">
+  <h2>9. Despesas internas</h2>
+  <p class="lede">Documentos criados diretamente no ERP Flow, sem origem no sistema fiscal. Cobrem reembolsos, adiantamentos, serviços e outras despesas administradas internamente.</p>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="11-internal-expense-create.png">
+      <strong>[PRINT 11]</strong> Modal <em>Nova despesa interna</em>.<br>
+      Deve mostrar: campos de solicitante, categoria, projeto, itens, valor total, anexos e botão <em>Enviar para aprovação</em>.
+    </div>
+    <figcaption>Figura 9.1 — Criação de despesa interna.</figcaption>
+  </figure>
+
+  <h3>Ciclo de vida</h3>
+  <ol>
+    <li><strong>Rascunho</strong> <span class="pill">draft</span> — solicitante pode editar livremente.</li>
+    <li><strong>Em aprovação</strong> <span class="pill warn">pending</span> — motor de regras aplicado; documento visível para os aprovadores.</li>
+    <li><strong>Aprovado</strong> <span class="pill ok">approved</span> — segue para pagamento/integração.</li>
+    <li><strong>Reprovado</strong> <span class="pill err">rejected</span> — encerrado; solicitante recebe o motivo.</li>
+    <li><strong>Pago</strong> — quando a liquidação é registrada.</li>
+  </ol>
+
+  <div class="callout info">
+    <span class="tag">Visibilidade</span>
+    Regra geral do sistema: o usuário só vê o que ele criou ou aprova. Admin tem o toggle <em>Ver todos</em> ligado por padrão nas telas de aprovação, histórico e despesas.
+  </div>
+</section>
+
+<!-- =================== 10. DESPESAS ERP =================== -->
+<section class="page">
+  <h2>10. Despesas do ERP (compras)</h2>
+  <p class="lede">Rota <code>/compras</code>. Documentos importados de sistemas externos (OMIE, SAP). O fluxo de aprovação é o mesmo, mas a origem e a integração de retorno são diferentes.</p>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="12-erp-expenses.png">
+      <strong>[PRINT 12]</strong> Lista de despesas do ERP — <span class="path">/compras</span><br>
+      Deve mostrar: tabela virtualizada com número, fornecedor, valor, status de aprovação e status de integração.
+    </div>
+    <figcaption>Figura 10.1 — Documentos importados aguardando aprovação e integração.</figcaption>
+  </figure>
+
+  <h3>O que difere das despesas internas</h3>
+  <ul>
+    <li>Documento não é criado por usuário — chega por integração periódica com o ERP.</li>
+    <li>Após aprovado, o retorno é integrado de volta ao ERP. Falhas de integração aparecem sinalizadas.</li>
+    <li>Empresas OMIE têm módulos abertos para todos os usuários (regra atual da operação); não há controle por nível de permissão.</li>
+  </ul>
+
+  <div class="callout admin">
+    <span class="tag">Somente admin</span>
+    Quando uma integração de volta ao SAP falha, super-usuários podem <strong>reintegrar manualmente</strong> pelo detalhe do documento. Usuários comuns não veem essa ação.
+  </div>
+</section>
+
+<!-- =================== 11. HISTÓRICO =================== -->
+<section class="page">
+  <h2>11. Histórico de aprovações</h2>
+  <p class="lede">Rota <code>/aprovacoes?tab=history</code>. Registra tudo o que aconteceu com cada documento, do envio ao pagamento.</p>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="13-history-list.png">
+      <strong>[PRINT 13]</strong> Aba <em>Histórico</em> da tela de aprovações.<br>
+      Deve mostrar: filtros por período, tipo e status; toggle <em>Ver todos</em> (admin); lista de documentos já decididos.
+    </div>
+    <figcaption>Figura 11.1 — Consulta ao histórico.</figcaption>
+  </figure>
+
+  <figure class="figure">
+    <div class="placeholder" data-shot="14-history-timeline.png">
+      <strong>[PRINT 14]</strong> Timeline detalhada de um documento (<code>InternalApprovalHistory</code>).<br>
+      Deve mostrar: eventos "Documento submetido", "Aprovado no nível X por &lt;nome&gt;", "Documento delegado por &lt;nome&gt; para &lt;nome&gt; · válido de … até … · Ativa/Expirada · motivo", "Reprovado por &lt;nome&gt;" e comentários.
+    </div>
+    <figcaption>Figura 11.2 — Detalhamento em linha do tempo.</figcaption>
+  </figure>
+
+  <h3>Eventos exibidos</h3>
+  <ul>
+    <li><strong>Submissão</strong> — quem enviou e quando.</li>
+    <li><strong>Aprovação por nível</strong> — aprovador, data, comentário (se houver).</li>
+    <li><strong>Reprovação</strong> — quem reprovou e o motivo.</li>
+    <li><strong>Delegação</strong> — delegador, delegado, validade, status atual e motivo.</li>
+    <li><strong>Substituição</strong> — quando um substituto atuou no lugar do titular.</li>
+    <li><strong>Integração</strong> — retorno bem-sucedido ou erro no ERP.</li>
+  </ul>
+
+  <div class="callout info">
+    <span class="tag">Visibilidade</span>
+    Assim como em Aprovações, admin tem o toggle <em>Ver todos</em> ligado por padrão. Usuário comum vê apenas o que criou ou aprovou — e as delegações que recebeu.
+  </div>
+</section>
+
+<!-- =================== 12. FUNCIONALIDADES GERAIS =================== -->
+<section class="page">
+  <h2>12. Funcionalidades gerais</h2>
+
+  <h3>Notificações</h3>
+  <ul>
+    <li>Badge de contagem no menu <em>Aprovações</em> indica pendências suas.</li>
+    <li>Documentos delegados a você são contabilizados no badge.</li>
+    <li>Alterações de status geram notificações internas para solicitante e aprovadores.</li>
+  </ul>
+
+  <h3>Comentários</h3>
+  <ul>
+    <li>Opcionais em aprovações — recomendados quando há condição ou observação.</li>
+    <li>Fortemente recomendados em reprovações — o motivo aparece para o solicitante e no histórico.</li>
+    <li>Comentários são imutáveis após confirmados; para corrigir, adicione um novo.</li>
+  </ul>
+
+  <h3>Atalhos globais</h3>
+  <ul>
+    <li><kbd>Esc</kbd> fecha qualquer modal em foco.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> confirma a ação primária.</li>
+  </ul>
+
+  <h3>Segurança e trilha de auditoria</h3>
+  <ul>
+    <li>Toda decisão fica registrada em log de auditoria (data, usuário, IP quando disponível).</li>
+    <li>Ações de super-usuário em nome de terceiros são marcadas no log com essa distinção.</li>
+    <li>Não é possível excluir eventos do histórico — correções são feitas por nova decisão.</li>
+  </ul>
+</section>
+
+<!-- =================== 13. FAQ =================== -->
+<section class="page">
+  <h2>13. Perguntas frequentes</h2>
+
+  <h3>Não estou vendo um documento que deveria aprovar</h3>
+  <ul>
+    <li>Confirme que o filtro <em>Ver todas</em> está no modo correto para o seu caso.</li>
+    <li>Verifique se há filtros de busca ativos limitando a lista.</li>
+    <li>Confirme com o admin se você é o aprovador designado do nível corrente.</li>
+    <li>Confirme se não existe um substituto vigente cobrindo você no período.</li>
+  </ul>
+
+  <h3>Deleguei um documento e o outro aprovador não vê</h3>
+  <ul>
+    <li>Confirme a <strong>validade</strong> da delegação — se o período ainda não começou ou já expirou, o delegado não recebe.</li>
+    <li>Confirme se a delegação não foi <em>revogada</em>.</li>
+    <li>Peça para o delegado atualizar a página; o modal exibe a delegação assim que carrega os dados.</li>
+  </ul>
+
+  <h3>Aprovador titular saiu de férias — o que fazer?</h3>
+  <p>Use <strong>substituto</strong>, não delegação. Substituto cobre todas as pendências no período automaticamente; delegação teria que ser feita documento por documento.</p>
+
+  <h3>Reprovei por engano — como reverter?</h3>
+  <p>Reprovação encerra o documento. O solicitante precisa criar um novo (despesa interna) ou solicitar reprocessamento (despesa do ERP). Documente o ocorrido no comentário do novo documento para rastreabilidade.</p>
+
+  <h3>Aparece "Somente leitura — você não é o aprovador"</h3>
+  <p>Você está vendo o documento por conta do toggle <em>Ver todas</em>. Só o aprovador designado do nível corrente, um substituto vigente ou um delegado ativo pode decidir. Se o documento deveria estar com você, avise o admin.</p>
+
+  <hr>
+  <p style="font-family:-apple-system,system-ui,Arial,sans-serif;font-size:11px;color:var(--muted);text-align:center;margin-top:30px">
+    ERP Flow · Cactus Corporation · Quick-book de Aprovações v1.0 · 08/07/2026
+  </p>
+</section>
+
+</body>
+</html>
