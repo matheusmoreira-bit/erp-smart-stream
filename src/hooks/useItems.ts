@@ -136,6 +136,7 @@ export async function createItem(input: ItemInput, session: SapSession): Promise
   };
   if (input.items_group_code != null) payload.ItemsGroupCode = input.items_group_code;
   await sapAction(session, "Items", "POST", payload);
+  await invalidateItemsCaches(session.companyDB);
 }
 
 export async function updateItem(itemCode: string, input: Partial<ItemInput>, session: SapSession): Promise<void> {
@@ -150,6 +151,7 @@ export async function updateItem(itemCode: string, input: Partial<ItemInput>, se
   if (input.is_inventory_item !== undefined) payload.InventoryItem = input.is_inventory_item ? "tYES" : "tNO";
   if (input.is_purchase_item !== undefined) payload.PurchaseItem = input.is_purchase_item ? "tYES" : "tNO";
   await sapAction(session, `Items('${itemCode}')`, "PATCH", payload);
+  await invalidateItemsCaches(session.companyDB);
 }
 
 export async function toggleItemActive(item: SapItem, session: SapSession): Promise<void> {
@@ -158,4 +160,5 @@ export async function toggleItemActive(item: SapItem, session: SapSession): Prom
     Valid: newActive ? "tYES" : "tNO",
     Frozen: newActive ? "tNO" : "tYES",
   });
+  await invalidateItemsCaches(session.companyDB);
 }
