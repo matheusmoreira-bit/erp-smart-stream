@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { requireAdminOrSapAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
@@ -207,6 +207,8 @@ async function updateSyncState(
 
 async function listApprovalHistory(
   supabase: ReturnType<typeof createClient>,
+  req: Request,
+  caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>,
   body: { companyDb?: string; decision?: string; limit?: number },
 ) {
   const companyDb = (body.companyDb || "").trim();
@@ -222,6 +224,20 @@ async function listApprovalHistory(
     .order("decision_date", { ascending: false, nullsFirst: false })
     .limit(limit);
   if (decision !== "all") q = q.eq("decision", decision);
+
+  if (caller.source === "sap_session") {
+    let canReadAll = false;
+    try {
+      await requireAdminOrSapAdmin(req);
+      canReadAll = true;
+    } catch { /* usuário ERP comum: restringe ao próprio histórico */ }
+    if (!canReadAll) {
+      const user = caller.userName.toLowerCase();
+      q = q.or(
+        `approver_email.ilike.${user},approver_code.ilike.${user},approver_name.ilike.${user},requester_code.ilike.${user},requester_name.ilike.${user}`,
+      );
+    }
+  }
 
   const { data: rows, error } = await q;
   if (error) throw new Error(error.message);
@@ -266,7 +282,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: "Empresa inválida para a sessão atual" }, 403);
     }
     if (body.action === "list") {
-      return await listApprovalHistory(supabase, { ...body, companyDb });
+      return await listApprovalHistory(supabase, req, caller, { ...body, companyDb });
     }
 
     // Lock anti-execução-paralela
