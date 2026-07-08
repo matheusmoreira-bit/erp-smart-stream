@@ -977,7 +977,10 @@ function ApprovalDetailModal({
                 >
                   Cancelar
                 </Button>
-                {isSuperUser && doc.approvalRequestId > 0 && (
+                {/* Delegação disponível apenas para aprovações internas (Regra Interna).
+                    Aprovações nativas do SAP não podem ser delegadas daqui porque a
+                    decisão precisa ser enviada pelo próprio usuário SAP. */}
+                {isSuperUser && doc.approvalRequestId <= 0 && (
                   <Button
                     variant="outline"
                     onClick={() => onDelegate(doc)}
