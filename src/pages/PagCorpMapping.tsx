@@ -8,6 +8,7 @@ import {
   Loader2,
   MapPin,
   CreditCard,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
