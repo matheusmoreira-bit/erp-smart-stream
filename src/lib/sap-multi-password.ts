@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { sapLogin, sapLogout, sapAction, sapQuery } from "@/lib/sap-client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 export interface MultiCompanyPasswordResult {
