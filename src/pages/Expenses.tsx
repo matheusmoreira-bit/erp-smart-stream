@@ -692,14 +692,17 @@ function ExpenseCard({
   expense,
   onOpen,
   originBadge,
+  erpLabel,
   onRelationsMap,
 }: {
   expense: Expense;
   onOpen: () => void;
   originBadge?: "erp_flow" | "erp";
+  erpLabel?: string;
   onRelationsMap?: () => void;
 }) {
-  const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? " · ERP" : "";
+  const erpLbl = erpLabel || "ERP";
+  const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? ` · ${erpLbl}` : "";
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -726,7 +729,7 @@ function ExpenseCard({
           )}
           {originBadge === "erp" && (
             <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/40 text-amber-500">
-              ERP
+              {erpLbl}
             </Badge>
           )}
         </div>
