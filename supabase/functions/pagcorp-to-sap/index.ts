@@ -584,7 +584,9 @@ Deno.serve(async (req) => {
         UnitPrice: Number(tx.amount) || 0,
         ...lineCustom,
       };
-      if (lineCurrency && /^[A-Z]{3}$/.test(lineCurrency)) {
+      // Só envia Currency para moedas estrangeiras. BRL é a moeda local
+      // no SAP (código pode ser "R$"), enviar "BRL" resulta em -5002.
+      if (lineCurrency && lineCurrency !== "BRL" && /^[A-Z]{3}$/.test(lineCurrency)) {
         line.Currency = lineCurrency;
       }
       if (finalCostCenter) line.CostingCode = finalCostCenter;
