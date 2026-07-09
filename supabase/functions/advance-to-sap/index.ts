@@ -143,22 +143,60 @@ Deno.serve(async (req) => {
       attachmentEntry = await uploadAttachmentsToSap(baseUrl, cookies, files);
     }
 
-    const payload: Record<string, unknown> = {
-      CardCode: adv.supplier_card_code,
-      DocDate: today,
-      DocDueDate: dueDate,
-      TaxDate: today,
-      DocCurrency: adv.currency,
-      DownPaymentType: "dptInvoice",
-      Comments: adv.remarks || `Adiantamento a fornecedor — solicitante: ${adv.requester_email || ""}`,
-      DocumentLines: [
+    // Carrega linhas do adiantamento
+    const { data: lineRows } = await supabase
+      .from("advance_payment_items")
+      .select("*")
+      .eq("advance_id", advanceId)
+      .order("created_at", { ascending: true });
+
+    const items = (lineRows as any[]) || [];
+    const anyItem = items.some((l) => l.item_code);
+    const docType = anyItem ? "dDocument_Items" : "dDocument_Service";
+
+    let documentLines: Record<string, unknown>[];
+    if (items.length === 0) {
+      // Fallback legado: uma única linha com valor total do cabeçalho
+      documentLines = [
         {
           AccountCode: dpmAccount,
           LineTotal: Number(adv.amount),
           Currency: adv.currency,
           ...(adv.cost_center ? { CostingCode: adv.cost_center } : {}),
         },
-      ],
+      ];
+    } else {
+      documentLines = items.map((l) => {
+        const line: Record<string, unknown> = {
+          Quantity: Number(l.quantity) || 1,
+          UnitPrice: Number(l.unit_price) || 0,
+          Currency: adv.currency,
+        };
+        if (l.item_code) {
+          line.ItemCode = l.item_code;
+          if (l.description) line.FreeText = String(l.description).slice(0, 254);
+        } else {
+          line.LineType = "dDocument_Service";
+          line.AccountCode = dpmAccount;
+          line.ItemDescription = String(l.description || "Adiantamento").slice(0, 100);
+        }
+        if (l.cost_center) line.CostingCode = l.cost_center;
+        if (l.project) line.ProjectCode = l.project;
+        return line;
+      });
+    }
+
+    const payload: Record<string, unknown> = {
+      CardCode: adv.supplier_card_code,
+      DocDate: today,
+      DocDueDate: dueDate,
+      TaxDate: today,
+      DocType: docType,
+      DocCurrency: adv.currency,
+      DownPaymentType: "dptInvoice",
+      DownPaymentPercentage: 100,
+      Comments: adv.remarks || `Adiantamento a fornecedor — solicitante: ${adv.requester_email || ""}`,
+      DocumentLines: documentLines,
     };
     if (attachmentEntry) payload.AttachmentEntry = attachmentEntry;
 
