@@ -197,12 +197,16 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
               <p className="text-xs text-muted-foreground">Nenhum pagamento vinculado às NFs deste PC.</p>
             ) : (
               <ul className="space-y-1 text-xs">
-                {payments.map((p) => (
-                  <li key={p.DocEntry} className="flex justify-between gap-2">
-                    <span>Pgto #{p.DocNum} • {p.DocDate?.slice(0,10)}</span>
-                    <span className="tabular-nums">{formatCurrency(Number(p.DocTotal || 0), p.DocCurrency || poCurrency)}</span>
-                  </li>
-                ))}
+                {payments.map((p) => {
+                  const cur = p.DocCurrency || poCurrency;
+                  const total = cur && cur !== "BRL" ? Number(p.DocTotalFC ?? 0) : Number(p.DocTotal ?? 0);
+                  return (
+                    <li key={p.DocEntry} className="flex justify-between gap-2">
+                      <span>Pgto #{p.DocNum} • {p.DocDate?.slice(0,10)}</span>
+                      <span className="tabular-nums">{formatCurrency(total, cur)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
