@@ -2012,7 +2012,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 {([
                   ["all", "Todas"],
                   ["erp_flow", "ERP Flow"],
-                  ["erp", "ERP"],
+                  ["erp", erpLabel],
                 ] as const).map(([val, lbl]) => (
                   <button
                     key={val}
