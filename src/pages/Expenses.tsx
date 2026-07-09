@@ -215,7 +215,7 @@ function ExpenseDetailModal({
                 <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
               )}
               {originBadge === "erp" && (
-                <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">ERP</Badge>
+                <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">{erpLabel || "ERP"}</Badge>
               )}
               {expense.origin === "pagcorp" && (
                 <Badge variant="outline" className="text-xs">PagCorp</Badge>
