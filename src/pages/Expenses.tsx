@@ -157,6 +157,7 @@ function ExpenseDetailModal({
   isActioning,
   mode,
   originBadge,
+  erpLabel,
 }: {
   expense: Expense | null;
   open: boolean;
