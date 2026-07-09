@@ -323,6 +323,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         remarks: remarks || null,
         doc_date: docDate || null,
         due_date: dueDate || null,
+        rateio_type: !isSales ? rateioType : undefined,
         items: items.map((it) => ({
           item_code: it.item_code,
           description: it.description,
@@ -333,7 +334,12 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           project: it.project,
         })),
       });
-      toast.success("Pedido atualizado com sucesso!");
+      const rateioChanged = !isSales && rateioType !== initialRateioTypeRef.current;
+      if (rateioChanged) {
+        toast.success("Pedido atualizado e fluxo de aprovação reiniciado.");
+      } else {
+        toast.success("Pedido atualizado com sucesso!");
+      }
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
