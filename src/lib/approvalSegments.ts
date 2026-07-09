@@ -138,7 +138,7 @@ export function segmentDocByRules(
       supplier_name: `${doc.cardName || ""} ${doc.cardCode || ""}`.trim(),
       currency: (doc.currency || "BRL").toUpperCase(),
       doc_type: docType,
-      item_codes: toList(groupLines.map((l) => l.ItemCode || "")),
+      item_codes: toList(groupLines.flatMap((l) => [l.ItemCode || "", l.Description || ""])),
       item_groups: "",
     };
     const rule = findMatchingRule(rules, ctx, docType);

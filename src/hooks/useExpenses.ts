@@ -78,12 +78,13 @@ async function enrichItemsWithGroup(
 }
 
 function buildItemCtx(
-  items: Array<{ item_code?: string | null }>,
+  items: Array<{ item_code?: string | null; description?: string | null }>,
   enriched: Record<string, EnrichedItem>,
 ): { item_codes: string; item_groups: string } {
   // Wrap with spaces so `like '% fol%'` and `like '% folha %'` work.
   const codes = items
-    .map((i) => (i.item_code || "").trim().toLowerCase())
+    .flatMap((i) => [i.item_code, i.description])
+    .map((v) => (v || "").trim().toLowerCase())
     .filter(Boolean);
   const groups = items
     .map((i) => {
