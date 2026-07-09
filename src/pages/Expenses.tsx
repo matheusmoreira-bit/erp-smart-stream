@@ -38,6 +38,7 @@ import {
   List,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
+import { getErpShortLabel } from "@/lib/erp-labels";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -156,6 +157,7 @@ function ExpenseDetailModal({
   isActioning,
   mode,
   originBadge,
+  erpLabel,
 }: {
   expense: Expense | null;
   open: boolean;
@@ -179,6 +181,7 @@ function ExpenseDetailModal({
   isActioning: boolean;
   mode?: "purchase" | "sales";
   originBadge?: "erp_flow" | "erp";
+  erpLabel?: string;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -212,7 +215,7 @@ function ExpenseDetailModal({
                 <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
               )}
               {originBadge === "erp" && (
-                <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">ERP</Badge>
+                <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">{erpLabel || "ERP"}</Badge>
               )}
               {expense.origin === "pagcorp" && (
                 <Badge variant="outline" className="text-xs">PagCorp</Badge>
@@ -689,14 +692,17 @@ function ExpenseCard({
   expense,
   onOpen,
   originBadge,
+  erpLabel,
   onRelationsMap,
 }: {
   expense: Expense;
   onOpen: () => void;
   originBadge?: "erp_flow" | "erp";
+  erpLabel?: string;
   onRelationsMap?: () => void;
 }) {
-  const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? " · ERP" : "";
+  const erpLbl = erpLabel || "ERP";
+  const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? ` · ${erpLbl}` : "";
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -723,7 +729,7 @@ function ExpenseCard({
           )}
           {originBadge === "erp" && (
             <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/40 text-amber-500">
-              ERP
+              {erpLbl}
             </Badge>
           )}
         </div>
@@ -775,6 +781,7 @@ function ExpenseCard({
 /* ─── Main Page ─── */
 export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" | "sales" } = {}) {
   const { session, logout } = useSap();
+  const erpLabel = getErpShortLabel(session?.erpType);
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
@@ -1429,7 +1436,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   { header: "Vencimento", cell: (r: typeof filtered[number]) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
                   { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
-                  { header: "Origem", cell: (r: typeof filtered[number]) => r.origin === "erp_flow" ? "ERP Flow" : "ERP" },
+                  { header: "Origem", cell: (r: typeof filtered[number]) => r.origin === "erp_flow" ? "ERP Flow" : erpLabel },
                 ],
                 rows: filtered,
                 fileName: isSales ? "vendas" : "compras",
@@ -1725,6 +1732,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   key={exp.id}
                   expense={exp}
                   originBadge={origin}
+                  erpLabel={erpLabel}
                   onOpen={() => openExpense(exp, origin)}
                   onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
                 />
@@ -1736,6 +1744,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               {visibleItems.length >= 50 ? (
                 <VirtualExpensesTable
                   items={visibleItems}
+                  erpLabel={erpLabel}
                   onOpen={openExpense}
                   onRelations={(exp) => setRelationsMapExpense(exp)}
                   header={
@@ -1780,7 +1789,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                               <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
                             )}
                             {origin === "erp" && (
-                              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">ERP</Badge>
+                              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">{erpLabel}</Badge>
                             )}
                           </div>
                         </td>
@@ -1928,6 +1937,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       <ExpenseDetailModal
         expense={selectedExpense}
         originBadge={selectedOrigin}
+        erpLabel={erpLabel}
         open={!!selectedExpense}
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
@@ -2004,7 +2014,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 {([
                   ["all", "Todas"],
                   ["erp_flow", "ERP Flow"],
-                  ["erp", "ERP"],
+                  ["erp", erpLabel],
                 ] as const).map(([val, lbl]) => (
                   <button
                     key={val}
