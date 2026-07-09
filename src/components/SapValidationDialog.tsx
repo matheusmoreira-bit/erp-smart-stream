@@ -172,12 +172,16 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
               <p className="text-xs text-muted-foreground">Nenhuma NF vinculada a este PC.</p>
             ) : (
               <ul className="space-y-1 text-xs">
-                {invoices.map((i) => (
-                  <li key={i.DocEntry} className="flex justify-between gap-2">
-                    <span>NF #{i.DocNum} • {i.DocDate?.slice(0,10)}</span>
-                    <span className="tabular-nums">{formatCurrency(Number(i.DocTotal || 0), i.DocCurrency || poCurrency)} • {i.DocumentStatus}</span>
-                  </li>
-                ))}
+                {invoices.map((i) => {
+                  const cur = i.DocCurrency || poCurrency;
+                  const total = cur && cur !== "BRL" ? Number(i.DocTotalFC ?? 0) : Number(i.DocTotal ?? 0);
+                  return (
+                    <li key={i.DocEntry} className="flex justify-between gap-2">
+                      <span>NF #{i.DocNum} • {i.DocDate?.slice(0,10)}</span>
+                      <span className="tabular-nums">{formatCurrency(total, cur)} • {i.DocumentStatus}</span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
