@@ -289,9 +289,9 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // 2. Localiza a NF que fechou o PO
-              const invoice = await findInvoiceForPO(baseUrl, cookie, row.sap_doc_entry);
-              if (!invoice) {
+              // 2. Localiza TODAS as NFs que apontam para o PO (1 PO → N NF)
+              const invoices = await findInvoicesForPO(baseUrl, cookie, row.sap_doc_entry);
+              if (invoices.length === 0) {
                 await sb
                   .from("pagcorp_integration_log")
                   .update({
@@ -322,28 +322,57 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // 4. Cria o Journal Entry
-              const jeNumber = await createJournalEntry(baseUrl, cookie, {
-                refDate: invoice.DocDate,
-                memo: `Baixa PagCorp PC ${po.DocNum ?? row.sap_doc_num} NF ${invoice.DocNum}`,
-                ref1: String(po.DocNum ?? row.sap_doc_num ?? row.sap_doc_entry),
-                ref2: String(invoice.DocNum),
-                cardCode: invoice.CardCode,
-                accountCode: account.settlement_account_code,
-                amount: invoice.DocTotal,
-                costCenter: account.cost_center,
-                project: account.project,
-                bplId: invoice.BPLId,
-              });
+              // 4. Cria um Journal Entry POR NF e vincula à NF de entrada correspondente
+              const jeNumbers: number[] = [];
+              const invoiceEntries: number[] = [];
+              const invoiceNums: number[] = [];
+              for (const invoice of invoices) {
+                const jeNumber = await createJournalEntry(baseUrl, cookie, {
+                  refDate: invoice.DocDate,
+                  memo: `Baixa PagCorp PC ${po.DocNum ?? row.sap_doc_num} NF ${invoice.DocNum}`,
+                  ref1: String(po.DocNum ?? row.sap_doc_num ?? row.sap_doc_entry),
+                  ref2: String(invoice.DocNum),
+                  cardCode: invoice.CardCode,
+                  accountCode: account.settlement_account_code,
+                  amount: invoice.DocTotal,
+                  costCenter: account.cost_center,
+                  project: account.project,
+                  bplId: invoice.BPLId,
+                });
+                jeNumbers.push(jeNumber);
+                invoiceEntries.push(invoice.DocEntry);
+                invoiceNums.push(invoice.DocNum);
+
+                // Vincula NF ↔ Conta a Pagar (PurchaseInvoice) na tabela de rastreamento
+                const { data: nfRow } = await sb
+                  .from("nf_entrada_imports")
+                  .select("id")
+                  .eq("sap_company_db", companyDb)
+                  .eq("sap_matched_po_doc_entry", String(row.sap_doc_entry))
+                  .eq("valor_total", invoice.DocTotal)
+                  .maybeSingle();
+                if (nfRow?.id) {
+                  await linkNfToAp(sb, {
+                    nfImportId: nfRow.id,
+                    source: "sap",
+                    companyDb,
+                    apDocEntry: invoice.DocEntry,
+                    apDocNum: invoice.DocNum,
+                    apTotal: invoice.DocTotal,
+                    linkedBy: "pagcorp-settlement-watcher",
+                    notes: `JE ${jeNumber} gerado em ${invoice.DocDate}`,
+                  });
+                }
+              }
 
               await sb
                 .from("pagcorp_integration_log")
                 .update({
                   settlement_status: "settled",
-                  settlement_journal_entry: jeNumber,
-                  settlement_invoice_doc_entry: invoice.DocEntry,
-                  settlement_invoice_doc_num: invoice.DocNum,
-                  settlement_error: null,
+                  settlement_journal_entry: jeNumbers[0],
+                  settlement_invoice_doc_entry: invoiceEntries[0],
+                  settlement_invoice_doc_num: invoiceNums[0],
+                  settlement_error: jeNumbers.length > 1 ? `${jeNumbers.length} baixas emitidas (JEs: ${jeNumbers.join(", ")})` : null,
                   settlement_attempts: (row.settlement_attempts || 0) + 1,
                   settlement_attempted_at: new Date().toISOString(),
                   settlement_completed_at: new Date().toISOString(),
@@ -357,8 +386,8 @@ Deno.serve(async (req) => {
                 company_db: companyDb,
                 status: "ok",
                 duration_ms: Date.now() - t0,
-                request_meta: { poEntry: row.sap_doc_entry, invoiceEntry: invoice.DocEntry },
-                response_meta: { journalEntry: jeNumber, account: account.settlement_account_code },
+                request_meta: { poEntry: row.sap_doc_entry, invoiceEntries },
+                response_meta: { journalEntries: jeNumbers, account: account.settlement_account_code },
               });
               results.push({ id: row.id, status: "settled" });
             } catch (e) {
