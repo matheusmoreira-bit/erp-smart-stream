@@ -864,16 +864,22 @@ Deno.serve(async (req) => {
         if (unit === 0 && lineTotal !== 0 && qty !== 0) {
           unit = lineTotal / qty;
         }
+        const invoiceDesc = truncateSapText(it.description, 254);
         const line: Record<string, unknown> = {
-          ItemDescription: truncateSapText(it.description, 100),
           Quantity: qty,
           UnitPrice: unit,
           ...lineCustom,
         };
         if (hasItem) {
+          // Mantém a descrição do item vinda do SAP (não sobrescreve com a da NF).
+          // A descrição vinda da NF vai para o campo "Texto Livre" (FreeText).
           line.ItemCode = it.item_code;
+          if (invoiceDesc) line.FreeText = invoiceDesc;
         } else {
+          // Linha de serviço: sem ItemCode, a descrição é o próprio texto do item.
           line.LineType = "dDocument_Service";
+          line.ItemDescription = truncateSapText(it.description, 100);
+          if (invoiceDesc) line.FreeText = invoiceDesc;
         }
         if (it.cost_center || expense.cost_center) line.CostingCode = it.cost_center || expense.cost_center;
         // Open Gaming: se o projeto não vier preenchido na linha nem no cabeçalho,
