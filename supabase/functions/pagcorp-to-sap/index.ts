@@ -573,13 +573,18 @@ Deno.serve(async (req) => {
         override.project ?? cardMapping?.project ?? acctMapping?.project ?? projectFallback;
       const finalItem = override.item || itemCode!;
       const lineCurrency = String(tx.currency || "").toUpperCase();
+      // Mantém a descrição do item cadastrada no SAP (ItemDescription não é
+      // sobrescrita). A descrição vinda da nota do PagCorp vai para o campo
+      // de texto livre da linha (FreeText), preservando a rastreabilidade
+      // sem alterar o nome do item.
+      const lineFreeText = (
+        isConsolidated
+          ? `[#${tx.id}] ${tx.description || "PagCorp"}`
+          : (tx.description || "PagCorp")
+      ).slice(0, 254);
       const line: Record<string, unknown> = {
         ItemCode: finalItem,
-        ItemDescription: (
-          isConsolidated
-            ? `[#${tx.id}] ${tx.description || "PagCorp"}`
-            : (tx.description || "PagCorp")
-        ).slice(0, 100),
+        FreeText: lineFreeText,
         Quantity: 1,
         UnitPrice: Number(tx.amount) || 0,
         ...lineCustom,
