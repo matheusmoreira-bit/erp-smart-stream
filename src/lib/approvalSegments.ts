@@ -56,7 +56,11 @@ export function evaluateCriterion(
  * - Dentro do grupo, critérios são combinados esquerda→direita pelo conector `logic`
  *   (padrão "and") aplicado a partir do 2º critério do grupo.
  * - Entre grupos, o resultado de cada grupo é combinado esquerda→direita pelo conector
- *   `groupLogic` (padrão "or") do PRIMEIRO critério de cada grupo (a partir do 2º grupo).
+ *   `groupLogic` do PRIMEIRO critério de cada grupo (a partir do 2º grupo).
+ *
+ * FALLBACK LEGADO: quando `logic` ou `groupLogic` não existem (regras antigas,
+ * anteriores ao seletor E/OU), assumimos `"and"` para preservar o
+ * comportamento original (equivalente a `criteria.every(...)`).
  */
 export function evaluateCriteria(
   criteria: RuleCriterion[],
@@ -84,20 +88,21 @@ export function evaluateCriteria(
     let acc = evaluateCriterion(bucket[0], ctx);
     for (let i = 1; i < bucket.length; i++) {
       const passed = evaluateCriterion(bucket[i], ctx);
-      const logic = bucket[i].logic === "or" ? "or" : "and";
+      const logic = bucket[i].logic === "or" ? "or" : "and"; // fallback → AND
       acc = logic === "or" ? (acc || passed) : (acc && passed);
     }
     // Between-group combination.
     if (groupIdx === 0) {
       overall = acc;
     } else {
-      const gLogic = bucket[0].groupLogic === "and" ? "and" : "or";
+      const gLogic = bucket[0].groupLogic === "or" ? "or" : "and"; // fallback → AND
       overall = gLogic === "and" ? (overall && acc) : (overall || acc);
     }
     groupIdx++;
   }
   return overall;
 }
+
 
 function inferDocTypeFromName(name?: string): RuleDocType {
   const n = (name || "").toLowerCase();
