@@ -153,8 +153,7 @@ const resolvedCache = new Map<string, { at: number; data: ResolvedRequest[] }>()
 const inflightCache = new Map<string, Promise<ResolvedRequest[]>>();
 
 function cacheKey(session: SapSession, docEntry: number, objectType: string): string {
-  const company = session.companyDb || session.baseUrl || "default";
-  return `${company}::${objectType}::${docEntry}`;
+  return `${session.companyDB || "default"}::${objectType}::${docEntry}`;
 }
 
 export function invalidateSapDocApprovalCache(docEntry?: number) {
