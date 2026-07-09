@@ -343,6 +343,7 @@ function CriterionRow({
   catalogs,
   users,
   usersLoading,
+  showLogicConnector,
 }: {
   criterion: RuleCriterion;
   index: number;
