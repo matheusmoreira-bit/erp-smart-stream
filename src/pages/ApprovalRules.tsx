@@ -55,6 +55,8 @@ import {
   useApprovalRules,
   OPERATOR_LABELS,
   FIELD_OPTIONS,
+  ENTITY_OPTIONS,
+  FIELD_TO_ENTITY,
   DOC_TYPE_LABELS,
   type ApprovalRule,
   type ApprovalRuleLevel,
