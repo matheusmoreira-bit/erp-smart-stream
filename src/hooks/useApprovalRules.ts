@@ -42,8 +42,15 @@ export interface RuleCriterion {
   operator: CriterionOperator;
   value: string;
   value2?: string; // for "between"
-  /** Conector com o critério anterior. Ignorado no primeiro critério. Default: "and". */
+  /** Conector com o critério anterior DENTRO do mesmo grupo. Default: "and". */
   logic?: CriterionLogic;
+  /** Índice do grupo (0-based). Critérios sem grupo definido são tratados como grupo 0. */
+  group?: number;
+  /**
+   * Conector com o GRUPO anterior. Aplicável apenas ao primeiro critério de um grupo
+   * (index de posição dentro dos grupos). Ignorado no primeiro grupo. Default: "or".
+   */
+  groupLogic?: CriterionLogic;
 }
 
 export interface ApprovalRuleLevel {
