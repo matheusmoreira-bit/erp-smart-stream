@@ -37,6 +37,7 @@ function VirtualRowComponent({
   index,
   style,
   items,
+  erpLabel,
   onOpen,
   onRelations,
 }: RowComponentProps<RowProps>) {
@@ -63,7 +64,7 @@ function VirtualRowComponent({
           <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
         )}
         {origin === "erp" && (
-          <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">ERP</Badge>
+          <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">{erpLabel}</Badge>
         )}
       </div>
       <div role="cell" className="flex items-center gap-2 text-foreground min-w-0">
