@@ -636,8 +636,8 @@ async function buildApprovalReportPdf(
     const supplierSlug = String(expense.supplier_name || "pedido")
       .replace(/[^A-Za-z0-9-_]+/g, "_")
       .slice(0, 40) || "pedido";
-    const idSlug = String(expense.id || "").slice(0, 8);
-    return { name: `ERPFlow_Aprovacao_${supplierSlug}_${idSlug}.pdf`, blob };
+    const erpFlowCode = String(expense.id || "").slice(0, 8) || "sem-codigo";
+    return { name: `ERPFlow_${erpFlowCode}_Aprovacao_${supplierSlug}.pdf`, blob };
   } catch (e) {
     console.warn("buildApprovalReportPdf failed:", e);
     return null;
