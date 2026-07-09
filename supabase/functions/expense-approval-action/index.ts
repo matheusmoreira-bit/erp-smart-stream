@@ -700,18 +700,19 @@ Deno.serve(async (req) => {
   await writeAuditLog("approved", currentLevel);
 
   if (!isFinalLevel) {
-    // Self-approval guard: skip any subsequent level whose approver is the
-    // requester. If every remaining level matches → Juliana fallback (final).
+    // Próximo nível DISTINTO (paralelo: várias linhas com o mesmo level_order
+    // contam como 1 só nível). Self-approval guard continua valendo.
+    const nextDistinct = distinctLevels.find((lo) => lo > currentLevel) || (currentLevel + 1);
     const picked = pickApproverSkippingRequester(
       levels as any,
       (exp as any).requester_name,
       (exp as any).requester_email,
-      currentLevel + 1,
+      nextDistinct,
     );
     const nextLevelOrder = picked.level_order;
     const nextApproverName = picked.approver_name;
     const nextApproverEmail = picked.approver_email;
-    const jumped = nextLevelOrder > currentLevel + 1 || picked.fallback_used;
+    const jumped = nextLevelOrder > nextDistinct || picked.fallback_used;
 
     const updates: Record<string, unknown> = {
       current_level_order: nextLevelOrder,
