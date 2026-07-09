@@ -797,6 +797,22 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
                         {nf.chave_acesso}
                       </div>
                     )}
+                    {nf.ap_links && nf.ap_links.length > 0 && (
+                      <div className="mt-2 pl-2 border-l-2 border-primary/30 space-y-1">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Contas a pagar vinculadas ({nf.ap_links.length})
+                        </div>
+                        {nf.ap_links.map((ap) => (
+                          <div key={`${ap.source}-${ap.ap_doc_entry}`} className="flex items-baseline justify-between gap-2 text-[11px]">
+                            <span>
+                              <Badge variant="outline" className="text-[9px] uppercase mr-1">{ap.source}</Badge>
+                              Doc {ap.ap_doc_num || ap.ap_doc_entry}
+                            </span>
+                            <span className="font-mono">{formatCurrency(ap.ap_total ?? undefined, expense.currency)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
