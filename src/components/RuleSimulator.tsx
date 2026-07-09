@@ -23,7 +23,7 @@ import {
   type RuleCriterion,
   type RuleDocType,
 } from "@/hooks/useApprovalRules";
-import { evaluateCriterion } from "@/lib/approvalSegments";
+import { evaluateCriterion, evaluateCriteria } from "@/lib/approvalSegments";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSapUsers } from "@/hooks/useSapUsers";
