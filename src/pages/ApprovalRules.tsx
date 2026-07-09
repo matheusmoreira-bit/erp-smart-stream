@@ -1266,7 +1266,7 @@ function RuleCard({
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 {order.map((g, gIdx) => {
                   const items = buckets.get(g)!;
-                  const gLogic = (items[0]?.c?.groupLogic === "and") ? "E" : "OU";
+                  const gLogic = items[0]?.c?.groupLogic === "and" ? "E" : items[0]?.c?.groupLogic === "either" ? "E/OU" : "OU";
                   return (
                     <span key={`g-${g}`} className="flex flex-wrap items-center gap-1.5">
                       {gIdx > 0 && (
