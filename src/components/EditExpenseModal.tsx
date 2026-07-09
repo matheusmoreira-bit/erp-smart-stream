@@ -192,6 +192,10 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           sapProject: findSapOption(projectOptions, it.project),
         })),
       );
+      const rt = (expense.rateio_type as RateioType | null) || "padrao";
+      const validRt: RateioType = (["padrao","folha","imposto","reembolso","viagens"] as RateioType[]).includes(rt) ? rt : "padrao";
+      setRateioType(validRt);
+      initialRateioTypeRef.current = validRt;
       setSupplier(null);
     }
   }, [open, expense]);
