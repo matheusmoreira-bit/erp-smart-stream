@@ -148,23 +148,17 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
               <label className="text-xs font-medium text-muted-foreground mb-1 block">
                 Fornecedor SAP <span className="text-destructive">*</span>
               </label>
-              <SapSearchCombobox
-                endpoint="BusinessPartners"
-                filterTemplate="CardType eq 'cSupplier' and Frozen ne 'tYES' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}') or contains(tolower(AliasName),'{qLower}') or contains(FederalTaxID,'{q}'))"
-                selectFields="CardCode,CardName,AliasName,FederalTaxID"
-                mapRow={(row: any) => ({
-                  code: row.CardCode,
-                  name: row.CardName,
-                  extra: row.FederalTaxID || undefined,
-                  details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
-                })}
+              <CachedSearchCombobox
+                options={supplierOptions}
+                isLoading={suppliersLoading}
                 value={supplier}
                 onChange={setSupplier}
                 placeholder="Buscar por código, razão social, nome fantasia ou CNPJ…"
-                topResults={50}
+                required
               />
             </div>
           </div>
+
 
           {/* ====== Padrões aplicados ====== */}
           <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
