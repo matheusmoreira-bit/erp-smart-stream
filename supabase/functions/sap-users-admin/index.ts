@@ -1,9 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { requireAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -121,7 +121,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const caller = await requireAdmin(req);
     const body = await req.json().catch(() => ({}));
     const action = body.action as string | undefined;
     const companyDb = body.company_db as string | undefined;
@@ -133,6 +132,59 @@ Deno.serve(async (req) => {
     }
 
     const admin = getServiceClient();
+
+    // Read-only approver picker: users authenticated by the active SAP session
+    // may list active users for their current company. The SAP session is only
+    // used to validate the caller; the actual list uses stored admin credentials
+    // because many regular SAP sessions cannot query /Users.
+    if (action === "list_users_for_selection") {
+      const caller = await requireAdminOrSapSession(req);
+      if (!companyDb) {
+        return new Response(JSON.stringify({ error: "company_db requerido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const sapCaller = caller as { source?: string; companyDB?: string };
+      if (sapCaller.source === "sap_session" && sapCaller.companyDB !== companyDb) {
+        return new Response(JSON.stringify({ error: "Empresa inválida para a sessão atual" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const creds = await getAdminCreds(admin, companyDb);
+      if (!creds) {
+        return new Response(JSON.stringify({ error: "Sem credenciais administrativas configuradas para a empresa" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const baseUrl = await getSapBaseUrl(admin, companyDb);
+      const sapSession = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password);
+      try {
+        const select = "InternalKey,UserCode,UserName,eMail,Locked";
+        const all: Record<string, unknown>[] = [];
+        let next: string | null = `Users?$select=${select}&$top=200`;
+        while (next) {
+          const result = await sapRequest(sapSession, next, "GET");
+          if (!result.ok) throw new Error(extractSapError(result.data, `Falha ao listar usuários (${result.status})`));
+          const payload = result.data as { value?: Record<string, unknown>[]; "@odata.nextLink"?: string } | null;
+          if (payload?.value) all.push(...payload.value.filter((u) => u.Locked !== "tYES"));
+          next = payload?.["@odata.nextLink"] ?? null;
+          if (all.length > 5000) break;
+        }
+        return new Response(JSON.stringify({ users: all }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } finally {
+        await sapLogout(sapSession);
+      }
+    }
+
+    const caller = await requireAdmin(req);
 
     // List active SAP companies
     if (action === "list_companies") {
