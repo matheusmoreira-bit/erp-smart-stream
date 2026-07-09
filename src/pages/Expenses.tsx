@@ -508,6 +508,10 @@ function ExpenseDetailModal({
 
             <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
 
+            {expense.sap_doc_entry != null && (
+              <SapDocApprovalHistory docEntry={Number(expense.sap_doc_entry)} objectType="22" />
+            )}
+
 
 
             {(showSubmit || showCancel || showRetrySap || showEdit || showApproval) && (
