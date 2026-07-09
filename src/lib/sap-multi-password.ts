@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { sapLogin, sapLogout, sapAction, sapQuery } from "@/lib/sap-client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 export interface MultiCompanyPasswordResult {
@@ -47,86 +46,59 @@ export async function listSapTargetCompanies(excludeCompanyDb?: string): Promise
   return (data || []) as CompanyRow[];
 }
 
-async function getCompanyAdminCreds(companyDb: string): Promise<{ username: string; password: string } | null> {
-  try {
-    const res = await sapFunctionFetch(`credentials?system=sap&company_db=${encodeURIComponent(companyDb)}&keys=username,password`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const creds = data.credentials || [];
-    const get = (k: string) => creds.find((c: { credential_key: string; credential_value?: string }) => c.credential_key === k)?.credential_value;
-    const username = get("username");
-    const password = get("password");
-    if (!username || !password) return null;
-    return { username, password };
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Change a user's password across multiple SAP companies using the configured
- * admin credentials of each company. The user is identified by UserCode.
+ * Change a user's password across multiple SAP companies. Runs server-side
+ * via the `sap-change-password` edge function, which uses service-role to read
+ * the admin credentials of each company (falling back to the configured
+ * `SAP_FALLBACK_ADMIN_*` secrets when a company has no credentials stored).
+ * Client-side code has no access to admin credentials by design.
  */
 export async function changePasswordInCompanies(
   userCode: string,
   newPassword: string,
   companyDbs: string[],
 ): Promise<MultiCompanyPasswordResult[]> {
+  if (companyDbs.length === 0) return [];
+
   const companies = await listSapTargetCompanies();
-  const map = new Map(companies.map((c) => [c.company_db, c]));
-  const results: MultiCompanyPasswordResult[] = [];
+  const nameMap = new Map(companies.map((c) => [c.company_db, c.display_name]));
 
-  for (const companyDb of companyDbs) {
-    const company = map.get(companyDb);
-    const displayName = company?.display_name || companyDb;
-
-    const admin = await getCompanyAdminCreds(companyDb);
-    if (!admin) {
-      results.push({ companyDB: companyDb, displayName, status: "error", message: "Sem credenciais administrativas configuradas" });
-      continue;
+  try {
+    const res = await sapFunctionFetch("sap-change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_code: userCode,
+        new_password: newPassword,
+        company_dbs: companyDbs,
+      }),
+    });
+    const data = await res.json().catch(() => ({} as { results?: MultiCompanyPasswordResult[]; error?: string }));
+    if (!res.ok) {
+      const message = (data as { error?: string }).error || `HTTP ${res.status}`;
+      return companyDbs.map((db) => ({
+        companyDB: db,
+        displayName: nameMap.get(db) || db,
+        status: "error",
+        message,
+      }));
     }
-
-    let session;
-    try {
-      session = await sapLogin(admin.username, admin.password, companyDb);
-    } catch (e) {
-      results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Falha ao autenticar" });
-      continue;
-    }
-
-    try {
-      // Find user InternalKey by UserCode
-      const lookup = await sapQuery(
-        session,
-        `Users?$filter=UserCode eq '${userCode.replace(/'/g, "''")}'&$select=InternalKey,UserCode`,
-        undefined,
-        false,
-      );
-      const rows = Array.isArray(lookup.data)
-        ? (lookup.data as Array<{ InternalKey?: number; UserCode?: string }>)
-        : (((lookup.data as { value?: Array<{ InternalKey?: number; UserCode?: string }> })?.value) || []);
-
-      if (rows.length === 0 || rows[0].InternalKey == null) {
-        results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Usuário não existe nesta empresa" });
-      } else {
-        try {
-          await sapAction(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword, Locked: "tNO" });
-          results.push({ companyDB: companyDb, displayName, status: "success" });
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "Erro ao alterar senha";
-          if (isSamePasswordError(msg)) {
-            results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" });
-          } else {
-            results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
-          }
-        }
-      }
-    } catch (e) {
-      results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro ao alterar senha" });
-    } finally {
-      await sapLogout(session).catch(() => {});
-    }
+    const results = ((data as { results?: MultiCompanyPasswordResult[] }).results) || [];
+    // Garante que toda empresa solicitada aparece no resumo (ordem preservada).
+    const byDb = new Map(results.map((r) => [r.companyDB, r]));
+    return companyDbs.map((db) => byDb.get(db) || {
+      companyDB: db,
+      displayName: nameMap.get(db) || db,
+      status: "error" as const,
+      message: "Sem resposta do servidor",
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Erro ao contatar o servidor";
+    return companyDbs.map((db) => ({
+      companyDB: db,
+      displayName: nameMap.get(db) || db,
+      status: "error",
+      message,
+    }));
   }
-
-  return results;
 }
