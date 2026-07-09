@@ -198,19 +198,26 @@ Deno.serve(async (req) => {
         sap_matched_po_doc_entry: match.docEntry,
         sap_matched_po_is_draft: match.isDraft,
         sap_po_draft_id: match.docEntry,
-        sap_match_reason: `cnpj+valor (${match.isDraft ? "draft" : "PO"}) [rematch manual]`,
+        sap_match_reason: `cnpj+fornecedor (${match.isDraft ? "draft" : "PO"}) [rematch — 1 PO : N NF]`,
       }).eq("id", row.id);
+
+      // Conta quantas NFs já apontam para o mesmo PC — informativo, não bloqueia
+      const { count: shared } = await supabase
+        .from("nf_entrada_imports")
+        .select("id", { count: "exact", head: true })
+        .eq("sap_matched_po_doc_entry", match.docEntry)
+        .eq("sap_company_db", companyDb);
 
       await supabase.from("nf_entrada_logs").insert({
         import_id: row.id,
         step: "rematch_existing_po",
         status_to: "awaiting_sap",
         actor: "nf-entrada-rematch",
-        message: `Vínculo refeito: PC ${match.isDraft ? "esboço" : "efetivo"} DocEntry ${match.docEntry}, CardCode ${cardCode}.`,
+        message: `Vínculo refeito: PC ${match.isDraft ? "esboço" : "efetivo"} DocEntry ${match.docEntry} (DocTotal ${match.docTotal.toFixed(2)}), CardCode ${cardCode}. Total de NFs vinculadas a este PC: ${shared ?? 1}.`,
       });
 
       return new Response(JSON.stringify({
-        matched: true, cardCode, docEntry: match.docEntry, isDraft: match.isDraft,
+        matched: true, cardCode, docEntry: match.docEntry, isDraft: match.isDraft, sharedNfCount: shared ?? 1,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } finally {
       await fetch(`${sap.baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
