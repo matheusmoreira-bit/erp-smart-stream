@@ -453,7 +453,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       const origin: ExpenseOrigin = input.origin || "manual";
 
       // Determine initial status
-      let status: ExpenseStatus = input.initialStatus || "rascunho";
+      // Regra de negócio: despesas com origem PagCorp (gastos de cartão) NÃO
+      // passam por processo de aprovação — vão direto para integração no ERP.
+      // Se o chamador não informar `initialStatus`, forçamos "aprovado" para
+      // que o fluxo pós-criação já dispare a integração SAP.
+      const pagcorpDefaultStatus: ExpenseStatus | undefined =
+        origin === "pagcorp" ? "aprovado" : undefined;
+      let status: ExpenseStatus =
+        input.initialStatus || pagcorpDefaultStatus || "rascunho";
       let currentApprover: string | null = null;
       let matchedRuleId: string | null = null;
 
