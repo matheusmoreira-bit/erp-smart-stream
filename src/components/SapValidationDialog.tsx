@@ -45,14 +45,18 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
     setPo(null); setInvoices([]); setPayments([]);
     try {
       // 1. Pedido de Compra
-      const { data: poData } = await sapQuery(session, `PurchaseOrders(${docEntry})`, {});
+      const { data: poData } = await sapQuery(
+        session,
+        `PurchaseOrders(${docEntry})`,
+        { $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName" },
+      );
       setPo(poData);
 
       // 2. Notas fiscais (PurchaseInvoices) que tenham linha vindas desse PC
       try {
         const { data: invData } = await sapQuery(session, "PurchaseInvoices", {
           $filter: `DocumentLines/any(d: d/BaseEntry eq ${docEntry} and d/BaseType eq 22)`,
-          $select: "DocEntry,DocNum,DocDate,DocTotal,DocCurrency,DocumentStatus,CardCode,CardName",
+          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName",
           $top: 10,
         });
         setInvoices((invData as any)?.value || []);
@@ -70,7 +74,7 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
             .join(" or ");
           const { data: payData } = await sapQuery(session, "VendorPayments", {
             $filter: filter,
-            $select: "DocEntry,DocNum,DocDate,DocTotal,DocCurrency,CardCode,CardName",
+            $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,CardCode,CardName",
             $top: 20,
           });
           setPayments((payData as any)?.value || []);
@@ -92,8 +96,11 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, docEntry]);
 
-  const poTotal = po?.DocTotal ?? null;
+  // SAP B1 Service Layer retorna DocTotal em moeda local (BRL) e DocTotalFC em moeda estrangeira.
+  // Se o PC estiver em moeda estrangeira (DocCurrency != BRL), o valor comparável é DocTotalFC.
   const poCurrency = po?.DocCurrency || expectedCurrency || "BRL";
+  const isForeign = poCurrency && poCurrency !== "BRL";
+  const poTotal = po ? Number((isForeign ? po.DocTotalFC : po.DocTotal) ?? 0) : null;
   const amountOk = expectedAmount != null && poTotal != null
     ? Math.abs(Number(poTotal) - Number(expectedAmount)) < 0.01
     : null;
@@ -165,12 +172,16 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
               <p className="text-xs text-muted-foreground">Nenhuma NF vinculada a este PC.</p>
             ) : (
               <ul className="space-y-1 text-xs">
-                {invoices.map((i) => (
-                  <li key={i.DocEntry} className="flex justify-between gap-2">
-                    <span>NF #{i.DocNum} • {i.DocDate?.slice(0,10)}</span>
-                    <span className="tabular-nums">{formatCurrency(Number(i.DocTotal || 0), i.DocCurrency || poCurrency)} • {i.DocumentStatus}</span>
-                  </li>
-                ))}
+                {invoices.map((i) => {
+                  const cur = i.DocCurrency || poCurrency;
+                  const total = cur && cur !== "BRL" ? Number(i.DocTotalFC ?? 0) : Number(i.DocTotal ?? 0);
+                  return (
+                    <li key={i.DocEntry} className="flex justify-between gap-2">
+                      <span>NF #{i.DocNum} • {i.DocDate?.slice(0,10)}</span>
+                      <span className="tabular-nums">{formatCurrency(total, cur)} • {i.DocumentStatus}</span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -186,12 +197,16 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
               <p className="text-xs text-muted-foreground">Nenhum pagamento vinculado às NFs deste PC.</p>
             ) : (
               <ul className="space-y-1 text-xs">
-                {payments.map((p) => (
-                  <li key={p.DocEntry} className="flex justify-between gap-2">
-                    <span>Pgto #{p.DocNum} • {p.DocDate?.slice(0,10)}</span>
-                    <span className="tabular-nums">{formatCurrency(Number(p.DocTotal || 0), p.DocCurrency || poCurrency)}</span>
-                  </li>
-                ))}
+                {payments.map((p) => {
+                  const cur = p.DocCurrency || poCurrency;
+                  const total = cur && cur !== "BRL" ? Number(p.DocTotalFC ?? 0) : Number(p.DocTotal ?? 0);
+                  return (
+                    <li key={p.DocEntry} className="flex justify-between gap-2">
+                      <span>Pgto #{p.DocNum} • {p.DocDate?.slice(0,10)}</span>
+                      <span className="tabular-nums">{formatCurrency(total, cur)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
