@@ -1029,7 +1029,11 @@ function RuleFormModal({
               <div className="space-y-3">
                 {criteriaGroups.map(({ group, items }, gIdx) => {
                   const first = items[0]?.criterion;
-                  const groupLogic = first?.groupLogic === "and" ? "and" : "or";
+                  const groupLogic = first?.groupLogic === "and"
+                    ? "and"
+                    : first?.groupLogic === "either"
+                      ? "either"
+                      : "or";
                   return (
                     <div key={`grp-${group}`}>
                       {gIdx > 0 && (
@@ -1037,14 +1041,15 @@ function RuleFormModal({
                           <div className="h-px flex-1 bg-border" />
                           <Select
                             value={groupLogic}
-                            onValueChange={(v) => setGroupLogic(group, v as "and" | "or")}
+                            onValueChange={(v) => setGroupLogic(group, v as "and" | "or" | "either")}
                           >
-                            <SelectTrigger className="h-7 w-[80px] text-[10px] font-semibold uppercase tracking-wider px-2">
+                            <SelectTrigger className="h-7 w-[90px] text-[10px] font-semibold uppercase tracking-wider px-2">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="and" className="text-xs">E</SelectItem>
                               <SelectItem value="or" className="text-xs">OU</SelectItem>
+                              <SelectItem value="either" className="text-xs">E/OU</SelectItem>
                             </SelectContent>
                           </Select>
                           <span className="text-[10px] text-muted-foreground">com o grupo anterior</span>
