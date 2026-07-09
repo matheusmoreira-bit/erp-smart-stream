@@ -180,16 +180,28 @@ export function segmentDocByRules(
       (s, l) => s + Number(l.LineTotalFC ?? l.LineTotal ?? 0),
       0,
     );
+    const codes = toList(groupLines.map((l) => l.ItemCode || ""));
+    const names = toList(groupLines.map((l) => l.Description || ""));
+    const any = toList(groupLines.flatMap((l) => [l.ItemCode || "", l.Description || ""]));
     const ctx: Record<string, unknown> = {
       total_amount: doc.currency !== "BRL" ? amountFC : amount,
       cost_center: cc === "__no_cc__" ? "" : cc,
       project: (groupLines.find((l) => l.Project)?.Project || "").trim(),
       requester_name: doc.requester || "",
+      // Legado: combinação nome + código.
       supplier_name: `${doc.cardName || ""} ${doc.cardCode || ""}`.trim(),
+      "supplier.name": (doc.cardName || "").toLowerCase(),
+      "supplier.code": (doc.cardCode || "").toLowerCase(),
+      // CNPJ/status não estão no ApprovalDoc — deixa vazio para regras que não os usem.
+      "supplier.cnpj": "",
+      "supplier.status": "",
       currency: (doc.currency || "BRL").toUpperCase(),
       doc_type: docType,
-      item_codes: toList(groupLines.flatMap((l) => [l.ItemCode || "", l.Description || ""])),
+      item_codes: any,
       item_groups: "",
+      "item.code": codes,
+      "item.name": names,
+      "item.any": any,
     };
     const rule = findMatchingRule(rules, ctx, docType);
     const levels = rule ? [...rule.levels].sort((a, b) => a.level_order - b.level_order) : [];
