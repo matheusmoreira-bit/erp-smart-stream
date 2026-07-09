@@ -1276,7 +1276,7 @@ function RuleCard({
                       )}
                       <span className="flex flex-wrap items-center gap-1.5 border border-primary/20 rounded-lg px-2 py-1 bg-primary/[0.03]">
                         {items.map(({ label, c }, i) => {
-                          const logic = c.logic === "or" ? "OU" : "E";
+                          const logic = c.logic === "or" ? "OU" : c.logic === "either" ? "E/OU" : "E";
                           return (
                             <span key={i} className="flex items-center gap-1.5">
                               {i > 0 && (
