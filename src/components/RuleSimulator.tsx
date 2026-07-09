@@ -115,7 +115,16 @@ function buildContext(input: SimulationInput): Record<string, unknown> {
 
 interface Match {
   rule: ApprovalRule;
-  perCriterion: { criterion: RuleCriterion; passed: boolean }[];
+  groups: {
+    /** Conector com o grupo anterior (vazio no primeiro grupo). */
+    connector: "and" | "or" | null;
+    items: {
+      criterion: RuleCriterion;
+      passed: boolean;
+      /** Conector com o critério anterior no mesmo grupo (vazio no primeiro). */
+      connector: "and" | "or" | null;
+    }[];
+  }[];
   allMatched: boolean;
 }
 
