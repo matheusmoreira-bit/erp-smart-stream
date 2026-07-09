@@ -53,6 +53,15 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
 
   const ccMap = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const prMap = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
+  const supMap = useCallback(
+    (row: any) => ({
+      code: row.CardCode,
+      name: row.CardName,
+      extra: row.FederalTaxID || undefined,
+      details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
+    }),
+    [],
+  );
   const { options: ccOptions, isLoading: ccLoading } = useSapCachedList({
     cacheKey: "cost_centers",
     endpoint: "ProfitCenters",
@@ -64,6 +73,15 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
     endpoint: "Projects",
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: prMap,
+  });
+  const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
+    cacheKey: "suppliers_active_v2",
+    endpoint: "BusinessPartners",
+    params: {
+      $select: "CardCode,CardName,AliasName,FederalTaxID,Currency",
+      $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'",
+    },
+    mapRow: supMap,
   });
 
   const totalsByCurrency: Record<string, number> = {};
