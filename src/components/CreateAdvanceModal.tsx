@@ -184,6 +184,20 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
           </div>
 
           <div className="space-y-2">
+            <Label>Centro de custo <span className="text-destructive">*</span></Label>
+            <SapSearchCombobox
+              endpoint="ProfitCenters"
+              filterTemplate="Active eq 'tYES' and (contains(CenterCode,'{q}') or contains(CenterName,'{q}'))"
+              selectFields="CenterCode,CenterName"
+              topResults={50}
+              mapRow={(r) => ({ code: r.CenterCode, name: r.CenterName })}
+              value={costCenter}
+              onChange={(v) => setCostCenter(v)}
+              placeholder="Buscar centro de custo"
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label>Observação / justificativa</Label>
             <Textarea
               value={remarks}
