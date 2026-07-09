@@ -196,7 +196,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     doc_date: input.doc_date || null,
     due_date: input.due_date || null,
     rateio_type: input.rateio_type || null,
-    current_level_order: status === "pendente_aprovacao" ? resolvedLevel : null,
+    current_level_order: resolvedLevel || 1,
   };
 
   const { data: expense, error: expErr } = await admin
