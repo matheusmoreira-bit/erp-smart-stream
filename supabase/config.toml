@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.resend-missing-attachment-notifications]
 verify_jwt = false
+
+[functions.pagcorp-settlement-watcher]
+verify_jwt = false
