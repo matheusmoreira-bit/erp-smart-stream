@@ -84,18 +84,21 @@ export function evaluateCriteria(
   let overall = false;
   for (const g of groupOrder) {
     const bucket = buckets.get(g)!;
-    // Within-group combination.
+    // Within-group combination. "either" (E/OU) = indiferente → tratamos como OR
+    // (inclusivo: passa se qualquer um dos combinadores casaria).
     let acc = evaluateCriterion(bucket[0], ctx);
     for (let i = 1; i < bucket.length; i++) {
       const passed = evaluateCriterion(bucket[i], ctx);
-      const logic = bucket[i].logic === "or" ? "or" : "and"; // fallback → AND
+      const raw = bucket[i].logic;
+      const logic = raw === "or" || raw === "either" ? "or" : "and"; // fallback → AND
       acc = logic === "or" ? (acc || passed) : (acc && passed);
     }
     // Between-group combination.
     if (groupIdx === 0) {
       overall = acc;
     } else {
-      const gLogic = bucket[0].groupLogic === "or" ? "or" : "and"; // fallback → AND
+      const rawG = bucket[0].groupLogic;
+      const gLogic = rawG === "or" || rawG === "either" ? "or" : "and"; // fallback → AND
       overall = gLogic === "and" ? (overall && acc) : (overall || acc);
     }
     groupIdx++;

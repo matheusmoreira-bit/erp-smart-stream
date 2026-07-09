@@ -111,7 +111,7 @@ export const FIELD_OPTIONS: { value: string; label: string }[] = ENTITY_OPTIONS.
   }));
 });
 
-export type CriterionLogic = "and" | "or";
+export type CriterionLogic = "and" | "or" | "either";
 
 export interface RuleCriterion {
   field: string;
@@ -231,7 +231,7 @@ export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null):
     if (!firstIndexByGroup.has(c.group!)) firstIndexByGroup.set(c.group!, i);
   });
   const coerce = (v: unknown): CriterionLogic =>
-    v === "or" ? "or" : v === "and" ? "and" : "and"; // fallback legado → AND
+    v === "or" ? "or" : v === "either" ? "either" : v === "and" ? "and" : "and"; // fallback legado → AND
   return withGroup.map((c, i) => {
     const isFirstOfGroup = firstIndexByGroup.get(c.group!) === i;
     const groupPos = groupOrder.indexOf(c.group!);

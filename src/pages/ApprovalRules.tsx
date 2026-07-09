@@ -429,15 +429,16 @@ function CriterionRow({
         <div className="flex items-center gap-2 pl-1">
           <div className="h-3 w-px bg-border" />
           <Select
-            value={(criterion.logic === "or" ? "or" : "and")}
-            onValueChange={(v) => onChange(index, { ...criterion, logic: v as "and" | "or" })}
+            value={(criterion.logic === "or" ? "or" : criterion.logic === "either" ? "either" : "and")}
+            onValueChange={(v) => onChange(index, { ...criterion, logic: v as "and" | "or" | "either" })}
           >
-            <SelectTrigger className="h-6 w-[70px] text-[10px] font-semibold uppercase tracking-wider px-2">
+            <SelectTrigger className="h-6 w-[80px] text-[10px] font-semibold uppercase tracking-wider px-2">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="and" className="text-xs">E</SelectItem>
               <SelectItem value="or" className="text-xs">OU</SelectItem>
+              <SelectItem value="either" className="text-xs">E/OU</SelectItem>
             </SelectContent>
           </Select>
           <span className="text-[10px] text-muted-foreground">com o critério anterior</span>
@@ -851,7 +852,7 @@ function RuleFormModal({
     });
   };
 
-  const setGroupLogic = (group: number, logic: "and" | "or") => {
+  const setGroupLogic = (group: number, logic: "and" | "or" | "either") => {
     setCriteria((prev) => {
       const firstIdx = prev.findIndex((c) => (c.group ?? 0) === group);
       if (firstIdx < 0) return prev;
@@ -1028,7 +1029,11 @@ function RuleFormModal({
               <div className="space-y-3">
                 {criteriaGroups.map(({ group, items }, gIdx) => {
                   const first = items[0]?.criterion;
-                  const groupLogic = first?.groupLogic === "and" ? "and" : "or";
+                  const groupLogic = first?.groupLogic === "and"
+                    ? "and"
+                    : first?.groupLogic === "either"
+                      ? "either"
+                      : "or";
                   return (
                     <div key={`grp-${group}`}>
                       {gIdx > 0 && (
@@ -1036,14 +1041,15 @@ function RuleFormModal({
                           <div className="h-px flex-1 bg-border" />
                           <Select
                             value={groupLogic}
-                            onValueChange={(v) => setGroupLogic(group, v as "and" | "or")}
+                            onValueChange={(v) => setGroupLogic(group, v as "and" | "or" | "either")}
                           >
-                            <SelectTrigger className="h-7 w-[80px] text-[10px] font-semibold uppercase tracking-wider px-2">
+                            <SelectTrigger className="h-7 w-[90px] text-[10px] font-semibold uppercase tracking-wider px-2">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="and" className="text-xs">E</SelectItem>
                               <SelectItem value="or" className="text-xs">OU</SelectItem>
+                              <SelectItem value="either" className="text-xs">E/OU</SelectItem>
                             </SelectContent>
                           </Select>
                           <span className="text-[10px] text-muted-foreground">com o grupo anterior</span>
@@ -1260,7 +1266,7 @@ function RuleCard({
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 {order.map((g, gIdx) => {
                   const items = buckets.get(g)!;
-                  const gLogic = (items[0]?.c?.groupLogic === "and") ? "E" : "OU";
+                  const gLogic = items[0]?.c?.groupLogic === "and" ? "E" : items[0]?.c?.groupLogic === "either" ? "E/OU" : "OU";
                   return (
                     <span key={`g-${g}`} className="flex flex-wrap items-center gap-1.5">
                       {gIdx > 0 && (
@@ -1270,7 +1276,7 @@ function RuleCard({
                       )}
                       <span className="flex flex-wrap items-center gap-1.5 border border-primary/20 rounded-lg px-2 py-1 bg-primary/[0.03]">
                         {items.map(({ label, c }, i) => {
-                          const logic = c.logic === "or" ? "OU" : "E";
+                          const logic = c.logic === "or" ? "OU" : c.logic === "either" ? "E/OU" : "E";
                           return (
                             <span key={i} className="flex items-center gap-1.5">
                               {i > 0 && (

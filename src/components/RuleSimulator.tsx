@@ -40,9 +40,9 @@ function criterionSummary(c: RuleCriterion): string {
   return `${f} ${op} ${c.value}`;
 }
 
-/** Conector efetivo (aplica o mesmo fallback de evaluateCriteria: ausente → "and"). */
-function effectiveLogic(v: unknown): "and" | "or" {
-  return v === "or" ? "or" : "and";
+/** Conector efetivo (aplica o mesmo fallback de evaluateCriteria: "either" e ausente/inválido → "or" ou "and"). */
+function effectiveLogic(v: unknown): "and" | "or" | "either" {
+  return v === "or" ? "or" : v === "either" ? "either" : "and";
 }
 
 /** Agrupa critérios por `group` (default 0) preservando a ordem de entrada. */
@@ -61,8 +61,8 @@ function groupCriteria(criteria: RuleCriterion[]): RuleCriterion[][] {
 }
 
 /** Rótulo curto do conector para chips. */
-function logicBadge(l: "and" | "or"): string {
-  return l === "or" ? "OU" : "E";
+function logicBadge(l: "and" | "or" | "either"): string {
+  return l === "or" ? "OU" : l === "either" ? "E/OU" : "E";
 }
 
 interface SimulationInput {
@@ -117,12 +117,12 @@ interface Match {
   rule: ApprovalRule;
   groups: {
     /** Conector com o grupo anterior (vazio no primeiro grupo). */
-    connector: "and" | "or" | null;
+    connector: "and" | "or" | "either" | null;
     items: {
       criterion: RuleCriterion;
       passed: boolean;
       /** Conector com o critério anterior no mesmo grupo (vazio no primeiro). */
-      connector: "and" | "or" | null;
+      connector: "and" | "or" | "either" | null;
     }[];
   }[];
   allMatched: boolean;
@@ -489,16 +489,21 @@ export function RuleSimulator({
                     const connectors = [
                       ...winner.groups.slice(1).map((g) => g.connector),
                       ...winner.groups.flatMap((g) => g.items.slice(1).map((it) => it.connector)),
-                    ].filter((x): x is "and" | "or" => x === "and" || x === "or");
+                    ].filter((x): x is "and" | "or" | "either" => x === "and" || x === "or" || x === "either");
                     if (connectors.length === 0) return null;
+                    const hasEither = connectors.includes("either");
                     const hasOr = connectors.includes("or");
                     const hasAnd = connectors.includes("and");
-                    const label = hasOr && hasAnd ? "E + OU" : hasOr ? "somente OU" : "somente E";
+                    const parts: string[] = [];
+                    if (hasAnd) parts.push("E");
+                    if (hasOr) parts.push("OU");
+                    if (hasEither) parts.push("E/OU");
+                    const label = parts.length === 1 ? `somente ${parts[0]}` : parts.join(" + ");
                     return (
                       <p className="text-[11px] text-muted-foreground">
                         Lógica efetiva dos critérios:{" "}
                         <span className="font-semibold text-foreground">{label}</span>
-                        <span className="text-muted-foreground/70"> (regras antigas sem conector = E)</span>
+                        <span className="text-muted-foreground/70"> (regras antigas sem conector = E; E/OU trata como OU inclusivo)</span>
                       </p>
                     );
                   })()}
