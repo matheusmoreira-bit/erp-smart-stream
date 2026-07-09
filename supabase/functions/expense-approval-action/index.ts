@@ -445,11 +445,17 @@ Deno.serve(async (req) => {
     levels = (lvls || []) as any;
   }
 
-  const totalLevels = levels.length || 1;
-  const isFinalLevel = currentLevel >= totalLevels;
-  const currentLevelRow = levels.find((l) => l.level_order === currentLevel) || null;
+  // Suporte a APROVADORES PARALELOS: múltiplas linhas podem compartilhar
+  // o mesmo `level_order` (o primeiro que decidir encerra o nível).
+  const distinctLevels = Array.from(new Set(levels.map((l) => l.level_order))).sort((a, b) => a - b);
+  const totalLevels = distinctLevels.length || 1;
+  const maxLevelOrder = distinctLevels.length > 0 ? distinctLevels[distinctLevels.length - 1] : 1;
+  const isFinalLevel = currentLevel >= maxLevelOrder;
+  const currentLevelRows = levels.filter((l) => l.level_order === currentLevel);
+  const currentLevelRow = currentLevelRows[0] || null;
   stageLog("load_levels", "info", {
     requestId, expenseId, currentLevel, totalLevels, isFinalLevel,
+    parallelAtCurrent: currentLevelRows.length,
   });
 
 
@@ -458,16 +464,29 @@ Deno.serve(async (req) => {
   // isso permite delegação (reatribuição do aprovador atual) sem alterar a
   // regra global. Só cai para o nível da regra quando não houver override.
   const overrideApprover = ((exp as any).current_approver as string | null) || null;
-  const designatedName = overrideApprover || currentLevelRow?.approver_name || null;
-  // Se o override é um e-mail, aproveita para email match; caso contrário
-  // usa o e-mail do nível da regra (quando o override é apenas o nome).
   const overrideIsEmail = !!overrideApprover && overrideApprover.includes("@");
+
+  const isOverride = isCloudAdmin || isSuperUser;
+  // Casa contra QUALQUER linha do nível atual (paralelo). Se houver override
+  // (delegação), o nome/email do override toma precedência.
+  const isMatch = !!callerIdentity && (
+    overrideApprover
+      ? isDesignatedApprover(
+          callerIdentity,
+          overrideIsEmail ? null : overrideApprover,
+          overrideIsEmail ? overrideApprover : null,
+        )
+      : currentLevelRows.some((row) =>
+          isDesignatedApprover(callerIdentity, row.approver_name, row.approver_email),
+        )
+  );
+
+  // Compat: para os blocos que rodam depois (logs, substitutos), continuamos
+  // expondo um "designatedName/Email" — usamos a primeira linha do nível.
+  const designatedName = overrideApprover || currentLevelRow?.approver_name || null;
   const designatedEmail = overrideIsEmail
     ? overrideApprover
     : (currentLevelRow?.approver_email || null);
-
-  const isOverride = isCloudAdmin || isSuperUser;
-  const isMatch = !!callerIdentity && isDesignatedApprover(callerIdentity, designatedName, designatedEmail);
 
   // ── Substitute-approver check ─────────────────────────────────────────
   // A caller who is not the designated approver may still act if they have
@@ -681,18 +700,19 @@ Deno.serve(async (req) => {
   await writeAuditLog("approved", currentLevel);
 
   if (!isFinalLevel) {
-    // Self-approval guard: skip any subsequent level whose approver is the
-    // requester. If every remaining level matches → Juliana fallback (final).
+    // Próximo nível DISTINTO (paralelo: várias linhas com o mesmo level_order
+    // contam como 1 só nível). Self-approval guard continua valendo.
+    const nextDistinct = distinctLevels.find((lo) => lo > currentLevel) || (currentLevel + 1);
     const picked = pickApproverSkippingRequester(
       levels as any,
       (exp as any).requester_name,
       (exp as any).requester_email,
-      currentLevel + 1,
+      nextDistinct,
     );
     const nextLevelOrder = picked.level_order;
     const nextApproverName = picked.approver_name;
     const nextApproverEmail = picked.approver_email;
-    const jumped = nextLevelOrder > currentLevel + 1 || picked.fallback_used;
+    const jumped = nextLevelOrder > nextDistinct || picked.fallback_used;
 
     const updates: Record<string, unknown> = {
       current_level_order: nextLevelOrder,

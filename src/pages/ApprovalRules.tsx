@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -64,6 +64,8 @@ import {
   type CreateRuleInput,
 } from "@/hooks/useApprovalRules";
 import { useSapUsers } from "@/hooks/useSapUsers";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { supabase } from "@/integrations/supabase/client";
 import type { SapUser } from "@/lib/cache-repository";
 
 import { useCompanies } from "@/hooks/useCompanies";
@@ -114,7 +116,6 @@ function UserSelect({
 
   return (
     <div>
-      <PageTitle title="Regras de Aprovação" />
       {label && <label className="text-[10px] text-muted-foreground mb-1 block">{label}</label>}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -131,7 +132,7 @@ function UserSelect({
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0" align="start">
+        <PopoverContent className="w-[320px] p-0" align="start">
           <div className="p-2 border-b border-border">
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -144,17 +145,31 @@ function UserSelect({
               />
             </div>
           </div>
-          <div className="max-h-[200px] overflow-y-auto p-1">
+          <div className="max-h-[240px] overflow-y-auto p-1">
             {isLoading ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               </div>
             ) : filtered.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">Nenhum usuário encontrado</p>
+              <div className="py-4 space-y-2">
+                <p className="text-xs text-muted-foreground text-center">Nenhum usuário encontrado</p>
+                {search.trim() && (
+                  <button
+                    onClick={() => {
+                      onSelect(search.trim(), search.includes("@") ? search.trim() : "");
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-md text-xs bg-primary/10 text-primary hover:bg-primary/15"
+                  >
+                    Usar "<span className="font-medium">{search.trim()}</span>" mesmo assim
+                  </button>
+                )}
+              </div>
             ) : (
               filtered.map((u) => (
                 <button
-                  key={u.InternalKey}
+                  key={`${u.InternalKey}-${u.UserCode}-${u.eMail || ""}`}
                   onClick={() => {
                     onSelect(u.UserName, u.eMail || "");
                     setOpen(false);
@@ -164,11 +179,13 @@ function UserSelect({
                     value === u.UserName ? "bg-primary/10 text-primary" : "text-foreground"
                   }`}
                 >
-                  <div>
-                    <p className="font-medium">{u.UserName}</p>
-                    {u.eMail && <p className="text-[10px] text-muted-foreground">{u.eMail}</p>}
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{u.UserName}</p>
+                    {u.eMail && <p className="text-[10px] text-muted-foreground truncate">{u.eMail}</p>}
                   </div>
-                  <span className="text-[10px] text-muted-foreground font-mono">{u.UserCode}</span>
+                  {u.UserCode && (
+                    <span className="text-[10px] text-muted-foreground font-mono ml-2 shrink-0">{u.UserCode}</span>
+                  )}
                 </button>
               ))
             )}
@@ -179,20 +196,133 @@ function UserSelect({
   );
 }
 
+/* ─── Catalog Value Select (cost center / project / supplier / item) ─── */
+function CatalogValueSelect({
+  options,
+  isLoading,
+  value,
+  onChange,
+  placeholder,
+}: {
+  options: { code: string; name?: string }[];
+  isLoading: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return options.slice(0, 200);
+    return options
+      .filter((o) => o.code.toLowerCase().includes(q) || (o.name || "").toLowerCase().includes(q))
+      .slice(0, 200);
+  }, [options, search]);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-full h-9 justify-start text-sm font-normal px-3">
+          {isLoading ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-2" />
+          ) : value ? (
+            <span className="truncate">{value}</span>
+          ) : (
+            <span className="text-muted-foreground">{placeholder}</span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[360px] p-0" align="start">
+        <div className="p-2 border-b border-border">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-xs pl-8"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="max-h-[240px] overflow-y-auto p-1">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-4 space-y-2">
+              <p className="text-xs text-muted-foreground text-center">Nenhum resultado</p>
+              {search.trim() && (
+                <button
+                  onClick={() => {
+                    onChange(search.trim());
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md text-xs bg-primary/10 text-primary hover:bg-primary/15"
+                >
+                  Usar "<span className="font-medium">{search.trim()}</span>" mesmo assim
+                </button>
+              )}
+            </div>
+          ) : (
+            filtered.map((o) => (
+              <button
+                key={o.code}
+                onClick={() => {
+                  onChange(o.code);
+                  setOpen(false);
+                  setSearch("");
+                }}
+                className={`w-full text-left px-3 py-2 rounded-md text-xs hover:bg-muted/50 transition-colors flex items-center justify-between ${
+                  value === o.code ? "bg-primary/10 text-primary" : "text-foreground"
+                }`}
+              >
+                <span className="font-mono">{o.code}</span>
+                {o.name && <span className="text-[10px] text-muted-foreground truncate ml-2">{o.name}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /* ─── Criterion Row ─── */
+/** Campos que suportam busca em catálogo (SAP cached lists) para o valor. */
+const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes"]);
+/** Operadores que exigem valor exato — habilitamos o seletor de catálogo. */
+const EXACT_OPERATORS = new Set(["equal", "not_equal"]);
+
 function CriterionRow({
   criterion,
   index,
   onChange,
   onRemove,
+  catalogs,
 }: {
   criterion: RuleCriterion;
   index: number;
   onChange: (index: number, updated: RuleCriterion) => void;
   onRemove: (index: number) => void;
+  catalogs: {
+    cost_center: { options: { code: string; name?: string }[]; isLoading: boolean };
+    project: { options: { code: string; name?: string }[]; isLoading: boolean };
+    supplier_name: { options: { code: string; name?: string }[]; isLoading: boolean };
+    item_codes: { options: { code: string; name?: string }[]; isLoading: boolean };
+  };
 }) {
   const isNumericField = criterion.field === "total_amount";
   const isBetween = criterion.operator === "between";
+  const useCatalog =
+    CATALOG_FIELDS.has(criterion.field) && EXACT_OPERATORS.has(criterion.operator);
+
+  const catalog =
+    useCatalog && (criterion.field as any) in catalogs
+      ? (catalogs as any)[criterion.field] as { options: { code: string; name?: string }[]; isLoading: boolean }
+      : null;
 
   return (
     <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/20 border border-border">
@@ -236,13 +366,23 @@ function CriterionRow({
         {/* Value */}
         <div className={isBetween ? "col-span-3" : "col-span-5"}>
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Valor</label>}
-          <Input
-            type={isNumericField ? "number" : "text"}
-            value={criterion.value}
-            onChange={(e) => onChange(index, { ...criterion, value: e.target.value })}
-            placeholder={criterion.operator === "like" ? "Ex: %gaming%" : "Valor"}
-            className="text-sm h-9"
-          />
+          {catalog ? (
+            <CatalogValueSelect
+              options={catalog.options}
+              isLoading={catalog.isLoading}
+              value={criterion.value}
+              onChange={(v) => onChange(index, { ...criterion, value: v })}
+              placeholder="Buscar..."
+            />
+          ) : (
+            <Input
+              type={isNumericField ? "number" : "text"}
+              value={criterion.value}
+              onChange={(e) => onChange(index, { ...criterion, value: e.target.value })}
+              placeholder={criterion.operator === "like" ? "Ex: 1.6.% ou %gaming%" : "Valor"}
+              className="text-sm h-9"
+            />
+          )}
         </div>
 
         {/* Value2 for between */}
@@ -290,12 +430,115 @@ function RuleFormModal({
   sapUsersLoading: boolean;
   editing?: ApprovalRule | null;
 }) {
+  const { session } = useSap();
   const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(0);
   const [docType, setDocType] = useState<RuleDocType>("both");
   const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
   const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
+
+  // ── Catálogos SAP (busca no campo Valor) ───────────────────────────────
+  const ccMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
+  const { options: rawCcOptions, isLoading: ccLoading } = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "ProfitCenters",
+    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    mapRow: ccMapRow,
+    enabled: open,
+  });
+  const ccOptions = useMemo(
+    () => rawCcOptions
+      .filter((o) => !(o.name || "").toLowerCase().startsWith("centro geral"))
+      .map((o) => ({ code: o.code, name: o.name })),
+    [rawCcOptions],
+  );
+
+  const projMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
+  const { options: projOptions, isLoading: projLoading } = useSapCachedList({
+    cacheKey: "projects",
+    endpoint: "Projects",
+    params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
+    mapRow: projMapRow,
+    enabled: open,
+  });
+
+  const supMapRow = useCallback((row: any) => ({ code: row.CardName || row.CardCode, name: row.CardCode }), []);
+  const { options: supOptions, isLoading: supLoading } = useSapCachedList({
+    cacheKey: "suppliers_active_v2",
+    endpoint: "BusinessPartners",
+    params: { $select: "CardCode,CardName", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
+    mapRow: supMapRow,
+    enabled: open,
+  });
+
+  const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
+  const { options: itemOptions, isLoading: itemLoading } = useSapCachedList({
+    cacheKey: "items_purchase_active_v3",
+    endpoint: "Items",
+    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    mapRow: itemMapRow,
+    enabled: open,
+  });
+
+  const catalogs = useMemo(
+    () => ({
+      cost_center: { options: ccOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: ccLoading },
+      project: { options: projOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: projLoading },
+      supplier_name: { options: supOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: supLoading },
+      item_codes: { options: itemOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: itemLoading },
+    }),
+    [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading],
+  );
+
+  // ── Fallback de aprovadores: mescla SAP Users + user_profiles ─────────
+  const [profileUsers, setProfileUsers] = useState<SapUser[]>([]);
+  const [profileLoading, setProfileLoading] = useState(false);
+  useEffect(() => {
+    if (!open || !session?.companyDB) return;
+    let cancelled = false;
+    setProfileLoading(true);
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("user_profiles")
+          .select("user_code, display_name, email")
+          .eq("company_db", session.companyDB || "")
+          .order("display_name", { ascending: true });
+        if (cancelled) return;
+        const rows: SapUser[] = (data || []).map((p: any, i: number) => ({
+          InternalKey: -(i + 1), // pseudo key negativo para não colidir com SAP
+          UserCode: p.user_code || "",
+          UserName: p.display_name || p.user_code || p.email || "",
+          eMail: p.email || undefined,
+          Locked: "tNO" as const,
+          LastLoginDate: undefined,
+          LastLoginTime: undefined,
+        }));
+        setProfileUsers(rows);
+      } catch (e) {
+        console.warn("Falha ao carregar user_profiles para fallback:", e);
+      } finally {
+        if (!cancelled) setProfileLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, session?.companyDB]);
+
+  const mergedUsers: SapUser[] = useMemo(() => {
+    const byKey = new Map<string, SapUser>();
+    const add = (u: SapUser) => {
+      const key = (u.eMail || "").trim().toLowerCase()
+        || (u.UserCode || "").trim().toLowerCase()
+        || (u.UserName || "").trim().toLowerCase();
+      if (!key) return;
+      if (!byKey.has(key)) byKey.set(key, u);
+    };
+    sapUsers.forEach(add);
+    profileUsers.forEach(add);
+    return Array.from(byKey.values()).sort((a, b) => a.UserName.localeCompare(b.UserName));
+  }, [sapUsers, profileUsers]);
+  const usersLoading = sapUsersLoading || profileLoading;
 
   // Hydrate form when opening / switching between create and edit
   useEffect(() => {
@@ -336,26 +579,65 @@ function RuleFormModal({
     setCriteria((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // ── Níveis (agora agrupados por level_order, permitindo paralelismo) ──
+  const levelsGrouped = useMemo(() => {
+    const map = new Map<number, Array<{ idx: number; approver_name: string; approver_email?: string }>>();
+    levels.forEach((l, idx) => {
+      const key = l.level_order;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push({ idx, approver_name: l.approver_name, approver_email: l.approver_email });
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+  }, [levels]);
+
+  const nextLevelOrder = () => {
+    if (levels.length === 0) return 1;
+    return Math.max(...levels.map((l) => l.level_order)) + 1;
+  };
+
   const addLevel = () => {
+    const lo = nextLevelOrder();
     setLevels((prev) => [
       ...prev,
-      { level_order: prev.length + 1, approver_name: "", approver_email: "" },
+      { level_order: lo, approver_name: "", approver_email: "" },
     ]);
   };
 
-  const removeLevel = (index: number) => {
-    setLevels((prev) =>
-      prev.filter((_, i) => i !== index).map((lvl, i) => ({ ...lvl, level_order: i + 1 }))
-    );
+  const addParallelApprover = (levelOrder: number) => {
+    setLevels((prev) => [
+      ...prev,
+      { level_order: levelOrder, approver_name: "", approver_email: "" },
+    ]);
   };
 
-  const updateLevel = (index: number, field: string, value: string) => {
+  const removeApproverRow = (index: number) => {
+    setLevels((prev) => {
+      // Remove a linha e, se um nível ficar sem ninguém, renumera os posteriores.
+      const removedLevel = prev[index]?.level_order;
+      const next = prev.filter((_, i) => i !== index);
+      if (removedLevel != null && !next.some((l) => l.level_order === removedLevel)) {
+        // Renumera níveis > removido para fechar o gap
+        const remaining = next
+          .sort((a, b) => a.level_order - b.level_order)
+          .map((l) => ({ ...l }));
+        // Constrói mapping para renumerar
+        const distinct = Array.from(new Set(remaining.map((l) => l.level_order))).sort((a, b) => a - b);
+        const rank: Record<number, number> = {};
+        distinct.forEach((lo, i) => { rank[lo] = i + 1; });
+        return remaining.map((l) => ({ ...l, level_order: rank[l.level_order] }));
+      }
+      return next;
+    });
+  };
+
+  const updateLevelRow = (index: number, field: "approver_name" | "approver_email", value: string) => {
     setLevels((prev) => {
       const updated = [...prev];
       (updated[index] as any)[field] = value;
       return updated;
     });
   };
+
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -451,13 +733,14 @@ function RuleFormModal({
                     index={i}
                     onChange={updateCriterion}
                     onRemove={removeCriterion}
+                    catalogs={catalogs}
                   />
                 ))}
               </div>
             )}
           </div>
 
-          {/* Dynamic Levels */}
+          {/* Dynamic Levels — grouped by level_order (parallel approvers) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -476,46 +759,71 @@ function RuleFormModal({
                 Adicionar primeiro nível de aprovação
               </button>
             ) : (
-              <div className="space-y-2">
-                {levels.map((lvl, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 text-primary text-sm font-bold shrink-0">
-                      {lvl.level_order}
-                    </div>
-                    <div className="flex-1 grid grid-cols-2 gap-2">
-                      <UserSelect
-                        users={sapUsers}
-                        isLoading={sapUsersLoading}
-                        value={lvl.approver_name}
-                        onSelect={(userName, email) => {
-                          updateLevel(i, "approver_name", userName);
-                          updateLevel(i, "approver_email", email);
-                        }}
-                        label={i === 0 ? "Aprovador *" : undefined}
-                      />
-                      <div>
-                        {i === 0 && <label className="text-[10px] text-muted-foreground">Email</label>}
-                        <Input
-                          value={lvl.approver_email || ""}
-                          readOnly
-                          className="text-sm h-9 bg-muted/30 text-muted-foreground"
-                          placeholder="Preenchido automaticamente"
-                        />
+              <div className="space-y-3">
+                {levelsGrouped.map(([lo, rows]) => (
+                  <div key={lo} className="rounded-lg border border-border bg-muted/10 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/15 text-primary text-xs font-bold shrink-0">
+                          {lo}
+                        </span>
+                        <div>
+                          <p className="text-xs font-medium text-foreground">Nível {lo}</p>
+                          {rows.length > 1 && (
+                            <p className="text-[10px] text-muted-foreground">
+                              Aprovação em paralelo — {rows.length} aprovadores. O primeiro que decidir encerra o nível.
+                            </p>
+                          )}
+                        </div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => addParallelApprover(lo)}
+                        className="gap-1 text-[11px] h-7"
+                      >
+                        <Plus className="w-3 h-3" /> Aprovador paralelo
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeLevel(i)}
-                      className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="space-y-2">
+                      {rows.map((row) => (
+                        <div key={row.idx} className="flex items-start gap-2">
+                          <div className="flex-1 grid grid-cols-2 gap-2">
+                            <UserSelect
+                              users={mergedUsers}
+                              isLoading={usersLoading}
+                              value={row.approver_name}
+                              onSelect={(userName, email) => {
+                                updateLevelRow(row.idx, "approver_name", userName);
+                                updateLevelRow(row.idx, "approver_email", email);
+                              }}
+                              label={undefined}
+                            />
+                            <Input
+                              value={row.approver_email || ""}
+                              readOnly
+                              className="text-sm h-9 bg-muted/30 text-muted-foreground"
+                              placeholder="Preenchido automaticamente"
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeApproverRow(row.idx)}
+                            className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+                            title="Remover aprovador"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
             <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
@@ -590,30 +898,58 @@ function RuleCard({
             </div>
           )}
 
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Users className="w-3 h-3" />
-            {rule.levels.length} nível(is) de aprovação
-            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
+          {(() => {
+            const distinctCount = new Set(rule.levels.map((l) => l.level_order)).size;
+            return (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="flex items-center gap-1 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Users className="w-3 h-3" />
+                {distinctCount} nível(is) de aprovação
+                {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            );
+          })()}
 
-          {expanded && (
-            <div className="mt-3 space-y-1.5 pl-2 border-l-2 border-primary/20">
-              {rule.levels.map((lvl) => (
-                <div key={lvl.id || lvl.level_order} className="flex items-center gap-2 text-sm">
-                  <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
-                    {lvl.level_order}
-                  </span>
-                  <span className="text-foreground font-medium">{lvl.approver_name}</span>
-                  {lvl.approver_email && (
-                    <span className="text-xs text-muted-foreground">{lvl.approver_email}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          {expanded && (() => {
+            // Agrupa por level_order para renderizar aprovadores paralelos
+            const grouped = new Map<number, typeof rule.levels>();
+            for (const l of rule.levels) {
+              if (!grouped.has(l.level_order)) grouped.set(l.level_order, [] as any);
+              (grouped.get(l.level_order) as any).push(l);
+            }
+            const entries = Array.from(grouped.entries()).sort((a, b) => a[0] - b[0]);
+            return (
+              <div className="mt-3 space-y-2 pl-2 border-l-2 border-primary/20">
+                {entries.map(([lo, rows]) => (
+                  <div key={lo} className="text-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {lo}
+                      </span>
+                      {rows.length > 1 && (
+                        <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full font-medium">
+                          Paralelo — 1º decide
+                        </span>
+                      )}
+                    </div>
+                    <div className="ml-7 space-y-0.5">
+                      {rows.map((lvl) => (
+                        <div key={lvl.id || `${lo}-${lvl.approver_name}`} className="flex items-center gap-2 text-sm">
+                          <span className="text-foreground">{lvl.approver_name}</span>
+                          {lvl.approver_email && (
+                            <span className="text-xs text-muted-foreground">{lvl.approver_email}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

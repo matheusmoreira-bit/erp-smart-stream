@@ -608,12 +608,42 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // lista) rodam em segundo plano com toasts próprios em caso de
       // falha — assim o tempo percebido de lançamento cai drasticamente.
       const finalize = async () => {
-        // 1) Notificar próximo aprovador (não bloqueia o retorno)
-        if (
+        // 1) Notificar TODOS os aprovadores do nível 1 (paralelo: primeiro que decidir encerra)
+        if (status === "pendente_aprovacao" && matchedRuleId) {
+          try {
+            const { data: firstLevelRows } = await supabase
+              .from("approval_rule_levels")
+              .select("approver_name, approver_email, level_order")
+              .eq("rule_id", matchedRuleId)
+              .order("level_order", { ascending: true });
+            const rows = (firstLevelRows || []) as Array<{ approver_name: string; approver_email: string | null; level_order: number }>;
+            const minLevel = rows.length > 0 ? Math.min(...rows.map((r) => r.level_order)) : 1;
+            const targets = rows
+              .filter((r) => r.level_order === minLevel)
+              .map((r) => (r.approver_email || r.approver_name || "").trim())
+              .filter(Boolean);
+            const uniqTargets = Array.from(new Set(targets));
+            const parallelNote = uniqTargets.length > 1 ? " (aprovação em paralelo — o primeiro que decidir encerra)" : "";
+            for (const t of uniqTargets) {
+              createNotification({
+                user_identifier: t,
+                title: "Nova aprovação pendente",
+                body: `${session.userName} enviou "${input.supplier_name}" (${input.currency || "BRL"} ${totalAmount.toFixed(2)}) para sua aprovação${parallelNote}.`,
+                category: "approval",
+                company_db: session.companyDB,
+                link: `/approvals`,
+                metadata: { expense_id: createdId },
+              }).catch((err) => console.warn("Notificação ao aprovador falhou:", err));
+            }
+          } catch (err) {
+            console.warn("Falha ao listar aprovadores paralelos, fallback para currentApprover:", err);
+          }
+        } else if (
           status === "pendente_aprovacao" &&
           currentApprover &&
           currentApprover !== "Administrador"
         ) {
+          // Sem regra casada (fallback administrativo) — notifica só o currentApprover
           createNotification({
             user_identifier: currentApprover,
             title: "Nova aprovação pendente",
@@ -624,6 +654,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             metadata: { expense_id: createdId },
           }).catch((err) => console.warn("Notificação ao aprovador falhou:", err));
         }
+
 
         // 2) Upload de anexos em PARALELO (era serial → gargalo principal)
         if (input.files && input.files.length > 0) {

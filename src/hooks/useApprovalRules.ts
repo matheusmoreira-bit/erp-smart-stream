@@ -81,27 +81,32 @@ export interface CreateRuleInput {
 }
 
 /**
- * Colapsa níveis consecutivos do mesmo aprovador em um único nível.
- * Match por e-mail (case-insensitive) quando presente; senão, pelo nome.
- * Reordena `level_order` para 1..N após o colapso.
+ * Deduplica aprovadores idênticos DENTRO do mesmo nível (mesmo `level_order`).
+ *
+ * Regra nova: aprovadores em paralelo — múltiplas linhas com o MESMO
+ * `level_order` são preservadas (o primeiro que decidir encerra o nível).
+ * Só removemos duplicatas exatas (mesmo email/nome) dentro do próprio nível
+ * para evitar linhas repetidas por engano na UI.
  */
-export function collapseConsecutiveApprovers(
+export function dedupeParallelApprovers(
   levels: Omit<ApprovalRuleLevel, "id">[],
 ): Omit<ApprovalRuleLevel, "id">[] {
-  const sorted = [...levels].sort((a, b) => a.level_order - b.level_order);
-  const key = (l: Omit<ApprovalRuleLevel, "id">) =>
-    (l.approver_email || "").trim().toLowerCase() ||
-    `name:${(l.approver_name || "").trim().toLowerCase()}`;
-  const collapsed: Omit<ApprovalRuleLevel, "id">[] = [];
-  let lastKey = "";
-  for (const lvl of sorted) {
-    const k = key(lvl);
-    if (k && k === lastKey) continue;
-    collapsed.push(lvl);
-    lastKey = k;
+  const seen = new Set<string>();
+  const out: Omit<ApprovalRuleLevel, "id">[] = [];
+  for (const lvl of [...levels].sort((a, b) => a.level_order - b.level_order)) {
+    const k =
+      `${lvl.level_order}|` +
+      ((lvl.approver_email || "").trim().toLowerCase() ||
+        `name:${(lvl.approver_name || "").trim().toLowerCase()}`);
+    if (!k.endsWith("|") && seen.has(k)) continue;
+    seen.add(k);
+    out.push(lvl);
   }
-  return collapsed.map((lvl, i) => ({ ...lvl, level_order: i + 1 }));
+  return out;
 }
+
+/** @deprecated mantida por compatibilidade com testes antigos. */
+export const collapseConsecutiveApprovers = dedupeParallelApprovers;
 
 
 export function useApprovalRules() {
@@ -190,7 +195,7 @@ export function useApprovalRules() {
       if (err) throw err;
 
       if (input.levels.length > 0) {
-        const normalizedLevels = collapseConsecutiveApprovers(input.levels);
+        const normalizedLevels = dedupeParallelApprovers(input.levels);
         const { error: lvlErr } = await supabase.from("approval_rule_levels").insert(
           normalizedLevels.map((lvl) => ({
             rule_id: (rule as any).id,
@@ -238,7 +243,7 @@ export function useApprovalRules() {
       if (delErr) throw delErr;
 
       if (input.levels.length > 0) {
-        const normalizedLevels = collapseConsecutiveApprovers(input.levels);
+        const normalizedLevels = dedupeParallelApprovers(input.levels);
         const { error: insErr } = await supabase.from("approval_rule_levels").insert(
           normalizedLevels.map((lvl) => ({
             rule_id: id,
