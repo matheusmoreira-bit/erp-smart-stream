@@ -66,19 +66,29 @@ async function findSapSupplierCardCode(
 
 async function findExistingPo(
   baseUrl: string, cookie: string, cardCode: string, valor: number,
-): Promise<{ docEntry: string; isDraft: boolean } | null> {
-  const v = Number(valor).toFixed(2);
-  const poUrl = `${baseUrl}/PurchaseOrders?$filter=CardCode eq '${escapeOData(cardCode)}' and DocumentStatus eq 'bost_Open' and DocTotal eq ${v}&$select=DocEntry&$top=1`;
+): Promise<{ docEntry: string; isDraft: boolean; docTotal: number } | null> {
+  // Regra de cardinalidade N NF → 1 PO: não exigimos igualdade de DocTotal.
+  // Preferimos o PO aberto mais recente do fornecedor; se não houver, cai em Draft.
+  const poUrl = `${baseUrl}/PurchaseOrders?$filter=CardCode eq '${escapeOData(cardCode)}' and DocumentStatus eq 'bost_Open'&$select=DocEntry,DocTotal&$orderby=DocEntry desc&$top=10`;
   const poR = await fetch(poUrl, { headers: { Cookie: cookie } });
   if (poR.ok) {
-    const de = (await poR.json())?.value?.[0]?.DocEntry;
-    if (de != null) return { docEntry: String(de), isDraft: false };
+    const arr = (await poR.json())?.value || [];
+    if (arr.length > 0) {
+      // Match preferencial por valor (mesmo total); caso contrário, o mais recente
+      const exact = arr.find((r: any) => Math.abs(Number(r.DocTotal) - valor) < 0.01);
+      const pick = exact || arr[0];
+      return { docEntry: String(pick.DocEntry), isDraft: false, docTotal: Number(pick.DocTotal) };
+    }
   }
-  const drUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseOrders' and CardCode eq '${escapeOData(cardCode)}' and DocTotal eq ${v}&$select=DocEntry&$top=1`;
+  const drUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseOrders' and CardCode eq '${escapeOData(cardCode)}'&$select=DocEntry,DocTotal&$orderby=DocEntry desc&$top=10`;
   const drR = await fetch(drUrl, { headers: { Cookie: cookie } });
   if (drR.ok) {
-    const de = (await drR.json())?.value?.[0]?.DocEntry;
-    if (de != null) return { docEntry: String(de), isDraft: true };
+    const arr = (await drR.json())?.value || [];
+    if (arr.length > 0) {
+      const exact = arr.find((r: any) => Math.abs(Number(r.DocTotal) - valor) < 0.01);
+      const pick = exact || arr[0];
+      return { docEntry: String(pick.DocEntry), isDraft: true, docTotal: Number(pick.DocTotal) };
+    }
   }
   return null;
 }
@@ -188,19 +198,26 @@ Deno.serve(async (req) => {
         sap_matched_po_doc_entry: match.docEntry,
         sap_matched_po_is_draft: match.isDraft,
         sap_po_draft_id: match.docEntry,
-        sap_match_reason: `cnpj+valor (${match.isDraft ? "draft" : "PO"}) [rematch manual]`,
+        sap_match_reason: `cnpj+fornecedor (${match.isDraft ? "draft" : "PO"}) [rematch — 1 PO : N NF]`,
       }).eq("id", row.id);
+
+      // Conta quantas NFs já apontam para o mesmo PC — informativo, não bloqueia
+      const { count: shared } = await supabase
+        .from("nf_entrada_imports")
+        .select("id", { count: "exact", head: true })
+        .eq("sap_matched_po_doc_entry", match.docEntry)
+        .eq("sap_company_db", companyDb);
 
       await supabase.from("nf_entrada_logs").insert({
         import_id: row.id,
         step: "rematch_existing_po",
         status_to: "awaiting_sap",
         actor: "nf-entrada-rematch",
-        message: `Vínculo refeito: PC ${match.isDraft ? "esboço" : "efetivo"} DocEntry ${match.docEntry}, CardCode ${cardCode}.`,
+        message: `Vínculo refeito: PC ${match.isDraft ? "esboço" : "efetivo"} DocEntry ${match.docEntry} (DocTotal ${match.docTotal.toFixed(2)}), CardCode ${cardCode}. Total de NFs vinculadas a este PC: ${shared ?? 1}.`,
       });
 
       return new Response(JSON.stringify({
-        matched: true, cardCode, docEntry: match.docEntry, isDraft: match.isDraft,
+        matched: true, cardCode, docEntry: match.docEntry, isDraft: match.isDraft, sharedNfCount: shared ?? 1,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } finally {
       await fetch(`${sap.baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
