@@ -977,6 +977,14 @@ Deno.serve(async (req) => {
             files.push({ name: a.file_name, blob });
           }
 
+          // Sempre incluir o "Comprovante de Aprovação (ERP Flow)" como anexo
+          // adicional para deixar rastro do fluxo interno de aprovação
+          // dentro do documento do ERP, além dos anexos enviados pelo usuário.
+          const approvalPdf = await buildApprovalReportPdf(supabase, expense as any, items as any[]);
+          if (approvalPdf) {
+            files.push(approvalPdf);
+          }
+
           if (files.length === 0) {
             // No attachments to upload — feature is enabled but nothing to send.
             attachmentStatus = "not_applicable";
