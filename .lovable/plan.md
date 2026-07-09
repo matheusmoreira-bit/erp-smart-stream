@@ -1,59 +1,113 @@
-## Problema
+# Baixa automática PagCorp: PO + NF → Journal Entry
 
-Na tela "Editar Regra de Aprovação" (/aprovacoes/regras):
+## Fluxo alvo
 
-1. O campo **Valor** de um critério é sempre input livre — para `Centro de Custo`, `Projeto`, `Fornecedor`, `Códigos dos Itens` e `Grupos dos Itens`, o usuário quer buscar em uma lista, não digitar.
-2. O seletor **Aprovador** aparece vazio ("Nenhum usuário encontrado"). O componente lê `useSapUsers`, que só popula quando há sessão SAP ativa e o Service Layer retorna Users; hoje ele não faz fallback para as fontes que já existem no app (perfis autenticados / mapeamento IdP).
-3. Não é possível colocar **mais de um aprovador no mesmo nível em paralelo** (primeiro que decide encerra o nível).
+```
+Compra PagCorp
+  → Prestação de contas
+  → Integração SAP (PO gerado pela despesa PagCorp)  [já funciona]
+  → NF de entrada lançada (PurchaseInvoice fecha o PO)  [já funciona]
+  → **NOVO: Baixa automática (Journal Entry) da fatura contra
+     a conta contábil do cartão PagCorp**
+```
 
-## O que vou entregar
+Quando a NF de entrada é lançada, a fatura de compras (AP Invoice) fica em aberto no fornecedor. O objetivo é gerar um Journal Entry que:
 
-### 1. Busca em `Valor` conforme o campo do critério
+- **Debita** a conta do fornecedor (zerando o saldo da fatura, como se o cartão tivesse pago)
+- **Credita** a conta contábil do cartão PagCorp (que já foi debitada quando o cartão foi lançado no extrato bancário)
 
-Substituir o `<Input>` puro por um seletor com busca (mesmo padrão do `UserSelect` atual — Popover + Command) quando o campo suportar catálogo:
+Isso reconcilia o passivo do fornecedor contra o passivo do cartão, refletindo que o pagamento já ocorreu via cartão.
 
-- `cost_center` → `useSapCostCenters` (já existe no app, usado no CreateExpense).
-- `project` → `useSapProjects`.
-- `supplier_name` → busca via `sap_cache` de fornecedores + fallback Service Layer, mesma fonte usada no modal de despesas.
-- `item_codes` → busca de itens (código + descrição).
-- `item_groups` → lista de grupos de itens.
-- `requester_name` → usa o mesmo seletor de usuários corrigido no passo 2.
-- `total_amount`, `doc_type`, `currency` → continuam como estão (número / select fixo).
+## Componentes
 
-Quando o operador for `like`, `contains` ou `not_contains`, o campo continua livre (padrão wildcard como `1.6.%`). Nos demais operadores, mostra o seletor.
+### 1. Cadastro da conta contábil do PagCorp
 
-### 2. Lista de aprovadores populada
+Nova tabela `pagcorp_settlement_accounts` (uma linha por empresa + opcionalmente por cartão):
 
-Ajustar o `UserSelect` para não depender só de `useSapUsers`:
+- `company_db` (obrigatório)
+- `card_identifier` (opcional; NULL = fallback da empresa)
+- `settlement_account_code` — conta contábil do cartão no SAP (ex.: `2.1.03.001`)
+- `cost_center`, `project` (opcionais)
+- `enabled` (bool, default true)
 
-- Continua tentando o Service Layer (quando há sessão SAP).
-- Combina com `idp_user_mapping` + `user_profiles` (usuários autenticados no ERP Flow), deduplicando por e-mail. Isso resolve o caso de empresas OMIE e o caso em que o cache SAP ainda não carregou.
-- Se todas as fontes vierem vazias, mostrar mensagem explicando o motivo em vez de só "Nenhum usuário encontrado".
+Resolução na baixa: match exato `(company_db, card_identifier)` → fallback `(company_db, NULL)`.
 
-### 3. Aprovadores paralelos no mesmo nível
+Tela de cadastro: adicionar seção **"Conta contábil de baixa"** em `src/pages/PagCorpMapping.tsx`, ao lado dos mapeamentos existentes de cartão/item/conta.
 
-**Schema:** o modelo `approval_rule_levels` já suporta múltiplas linhas por `level_order` (não há unique em `(rule_id, level_order)`). Vou remover o "collapse" que hoje força um aprovador por nível e passar a permitir N linhas com o mesmo `level_order`.
+### 2. Rastreamento PO → NF → baixa
 
-**UI:** cada nível vira um bloco com lista de aprovadores + botão "+ Adicionar aprovador em paralelo". Mensagem clara: "Qualquer um pode responder; a primeira decisão encerra este nível".
+Adicionar colunas em `pagcorp_integration_log`:
 
-**Engine de aprovação (crítico):** `src/lib/approval-authz.ts`, `src/lib/approvalSegments.ts` e a página `Approvals.tsx` hoje assumem 1 aprovador por nível. Vou:
+- `settlement_status` (`pending` | `awaiting_invoice` | `awaiting_settlement` | `settled` | `error` | `skipped`)
+- `settlement_journal_entry` (int, DocEntry do JE)
+- `settlement_error` (text)
+- `settlement_attempted_at` (timestamptz)
+- `settlement_locked_at` (timestamptz — lock otimista por linha)
 
-- Tornar `canApprove(expense, user)` verdadeiro se o usuário bate com **qualquer** linha do `current_level_order`.
-- Ao aprovar/reprovar, avançar o nível (ou finalizar como rejeitado) mesmo que existam outras linhas pendentes no mesmo nível — a primeira decisão vale.
-- Notificar todos os aprovadores paralelos quando o documento chegar no nível.
-- Ajustar `expense_approval_log` para registrar quem decidiu, sem exigir que os demais respondam.
-- No card da regra (visualização), mostrar aprovadores do mesmo nível com o rótulo "(paralelo)".
+Como o vínculo NF↔PO já é automático (via `nf-entrada-rematch` gravando `sap_matched_po_doc_entry` em `nf_entrada_imports`), o watcher casa `pagcorp_integration_log.sap_doc_entry` (PO) com `nf_entrada_imports.sap_matched_po_doc_entry` para achar a fatura correspondente.
 
-### Arquivos afetados
+### 3. Watcher `pagcorp-settlement-watcher` (novo edge function)
 
-- `src/pages/ApprovalRules.tsx` — seletores com busca, UI de níveis paralelos, card de regra.
-- `src/hooks/useApprovalRules.ts` — remover `collapseConsecutiveApprovers`, permitir múltiplos aprovadores por nível.
-- `src/lib/approval-authz.ts` — `canApprove` e cálculo de próximo aprovador com múltiplas linhas por nível.
-- `src/lib/approvalSegments.ts` — segmentos e resumos que hoje leem 1 linha por nível.
-- `src/pages/Approvals.tsx` / `src/hooks/useExpenses.ts` — avanço de nível considera "primeira decisão encerra".
-- Notificações de aprovação: enviar para todos os aprovadores do nível atual.
+Cron a cada 5 min. Para cada `pagcorp_integration_log` com `status = 'success'` e `settlement_status IN ('pending','awaiting_invoice','awaiting_settlement')`:
 
-## Fora do escopo
+1. Lock global (`watcher_runs`) + lock por linha (`settlement_locked_at` com TTL 5 min).
+2. Pula bases de teste (`isTestCompanyDb`).
+3. Para cada log: consulta SAP `PurchaseOrders(<sap_doc_entry>)` — se `DocumentStatus = 'bost_Close'` significa que a NF fechou o PO; caso contrário mantém `awaiting_invoice`.
+4. Busca a `PurchaseInvoice` que fechou o PO (via `DocumentLines/BaseEntry eq <sap_doc_entry>` no endpoint de `PurchaseInvoices`).
+5. Resolve conta de baixa em `pagcorp_settlement_accounts` (por cartão → fallback). Se não houver, marca `skipped` com motivo claro.
+6. Cria `JournalEntries` no SAP:
+   - Linha 1 (débito): `ShortName = <CardCode do fornecedor>`, `Debit = DocTotal`, `ContraAccount = settlement_account_code`
+   - Linha 2 (crédito): `AccountCode = settlement_account_code`, `Credit = DocTotal`, `CostingCode`/`ProjectCode` se houver
+   - `Memo`: `"Baixa PagCorp PO {docNum} / NF {invoiceDocNum}"`, `Reference1 = PO DocNum`, `Reference2 = Invoice DocNum`
+7. Grava `settlement_journal_entry`, marca `settled`. Em erro: incrementa contagem e marca `error` com mensagem; watcher re-tenta em execuções futuras (backoff simples via `settlement_attempted_at`).
+8. Timeout global de 90s; próxima página no próximo cron.
+9. Log em `integration_log` (`system_name = 'pagcorp'`, `action = 'settlement'`) com `company_db`.
 
-- Aprovação por quórum (ex.: 2 de 3 devem aprovar). Só implemento "primeiro decide". Se quiser quórum depois, faço em uma etapa nova.
-- Mudança de schema no banco — o modelo atual já suporta múltiplas linhas por nível.
+### 4. Agendamento cron
+
+`pg_cron` via `supabase.insert` (não migration):
+
+```sql
+select cron.schedule(
+  'pagcorp-settlement-watcher',
+  '*/5 * * * *',
+  $$ select net.http_post(
+       url:='https://<project>.supabase.co/functions/v1/pagcorp-settlement-watcher',
+       headers:='{"Content-Type":"application/json","apikey":"<anon>"}'::jsonb,
+       body:='{}'::jsonb) $$
+);
+```
+
+### 5. UI de acompanhamento
+
+Em `src/pages/PagCorp.tsx` (e/ou `IntegrationHistory`): coluna extra **"Baixa"** com badge:
+- `awaiting_invoice` → cinza "Aguardando NF"
+- `awaiting_settlement` → amarelo "Pronta p/ baixa"
+- `settled` → verde "Baixada · JE #{n}"
+- `error` → vermelho com tooltip da mensagem
+- `skipped` → cinza claro com motivo
+
+Botão **"Reprocessar baixa"** (admin) que zera `settlement_status → pending` e invoca o watcher.
+
+## Detalhes técnicos
+
+- Todas as operações filtram/gravam por `company_db` (regra de segregação de bases).
+- Reutiliza `sap-b1-proxy`? Não — o watcher usa credenciais de `system_credentials` diretamente (mesmo padrão de `nf-entrada-sap-watcher`).
+- Idempotência: `settlement_status = 'settled'` bloqueia novo JE; `settlement_locked_at` evita corrida.
+- `DocumentLines/BaseType = 22` (Purchase Order) para localizar a NF que fechou o PO.
+- Valor da baixa = `DocTotal` da NF em moeda local (não da despesa PagCorp — evita divergência de câmbio/impostos).
+- Journal Entry usa `TransactionCode` opcional (a definir) e `RefDate = DocDate da NF`.
+
+## Passos de implementação
+
+1. Migração: cria `pagcorp_settlement_accounts` (com GRANTs + RLS admin/authenticated read) e adiciona colunas de `settlement_*` em `pagcorp_integration_log`.
+2. UI de cadastro em `PagCorpMapping.tsx` + hook `usePagcorpSettlementAccounts`.
+3. Edge function `pagcorp-settlement-watcher` + entrada em `config.toml` (`verify_jwt = false`).
+4. Cron via `supabase.insert`.
+5. UI de status/reprocesso.
+
+## Pontos que preciso confirmar antes de codificar
+
+- **Conta contábil do PagCorp**: uma por empresa é suficiente ou você precisa **por cartão** desde já? (o schema já suporta os dois; só quero saber quantas linhas cadastrar inicialmente).
+- **Memo/Reference1/2 do JE**: OK como proposto?
+- **Filial (BPLId)**: alguma empresa usa multi-branch e precisa do BPL na baixa?

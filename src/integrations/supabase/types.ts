@@ -2696,6 +2696,15 @@ export type Database = {
           sap_doc_num: number | null
           sap_payload: Json | null
           sap_response: Json | null
+          settlement_attempted_at: string | null
+          settlement_attempts: number
+          settlement_completed_at: string | null
+          settlement_error: string | null
+          settlement_invoice_doc_entry: number | null
+          settlement_invoice_doc_num: number | null
+          settlement_journal_entry: number | null
+          settlement_locked_at: string | null
+          settlement_status: string
           status: string
           updated_at: string
         }
@@ -2712,6 +2721,15 @@ export type Database = {
           sap_doc_num?: number | null
           sap_payload?: Json | null
           sap_response?: Json | null
+          settlement_attempted_at?: string | null
+          settlement_attempts?: number
+          settlement_completed_at?: string | null
+          settlement_error?: string | null
+          settlement_invoice_doc_entry?: number | null
+          settlement_invoice_doc_num?: number | null
+          settlement_journal_entry?: number | null
+          settlement_locked_at?: string | null
+          settlement_status?: string
           status?: string
           updated_at?: string
         }
@@ -2728,6 +2746,15 @@ export type Database = {
           sap_doc_num?: number | null
           sap_payload?: Json | null
           sap_response?: Json | null
+          settlement_attempted_at?: string | null
+          settlement_attempts?: number
+          settlement_completed_at?: string | null
+          settlement_error?: string | null
+          settlement_invoice_doc_entry?: number | null
+          settlement_invoice_doc_num?: number | null
+          settlement_journal_entry?: number | null
+          settlement_locked_at?: string | null
+          settlement_status?: string
           status?: string
           updated_at?: string
         }
@@ -2834,6 +2861,42 @@ export type Database = {
           reason?: string | null
           supplier_code?: string | null
           supplier_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pagcorp_settlement_accounts: {
+        Row: {
+          card_identifier: string | null
+          company_db: string
+          cost_center: string | null
+          created_at: string
+          enabled: boolean
+          id: string
+          project: string | null
+          settlement_account_code: string
+          updated_at: string
+        }
+        Insert: {
+          card_identifier?: string | null
+          company_db: string
+          cost_center?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          project?: string | null
+          settlement_account_code: string
+          updated_at?: string
+        }
+        Update: {
+          card_identifier?: string | null
+          company_db?: string
+          cost_center?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          project?: string | null
+          settlement_account_code?: string
           updated_at?: string
         }
         Relationships: []
