@@ -8,6 +8,16 @@ import { omieListarContasPagar, type OmieContaPagar } from "@/lib/omie-client";
 /** TTL curto — evita bater no ERP toda vez que o usuário reabre o mapa. */
 const TTL_MS = 5 * 60 * 1000;
 
+export interface NfApLink {
+  ap_doc_entry: string;
+  ap_doc_num: string | null;
+  ap_total: number | null;
+  ap_paid: number | null;
+  source: "sap" | "omie";
+  linked_at: string;
+  notes: string | null;
+}
+
 export interface NfEntradaLink {
   id: string;
   chave_acesso: string;
@@ -19,6 +29,7 @@ export interface NfEntradaLink {
   sap_invoice_draft_id: string | null;
   created_at: string;
   updated_at: string;
+  ap_links: NfApLink[];
 }
 
 export interface PurchaseInvoiceLink {
