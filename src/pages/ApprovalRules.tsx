@@ -715,10 +715,39 @@ function RuleFormModal({
     }
   }, [open, editing]);
 
-  const addCriterion = () => {
+  // Grupo do último critério (para "adicionar critério" ir para o grupo mais recente).
+  const lastGroupId = () => {
+    if (criteria.length === 0) return 0;
+    return Math.max(...criteria.map((c) => (typeof c.group === "number" ? c.group : 0)));
+  };
+
+  const addCriterion = (group?: number) => {
+    const g = typeof group === "number" ? group : lastGroupId();
+    // Se este critério não for o primeiro do grupo, começa com "and".
+    const hasSiblings = criteria.some((c) => (c.group ?? 0) === g);
     setCriteria((prev) => [
       ...prev,
-      { field: "total_amount", operator: "greater_than" as CriterionOperator, value: "" },
+      {
+        field: "total_amount",
+        operator: "greater_than" as CriterionOperator,
+        value: "",
+        group: g,
+        logic: hasSiblings ? "and" : undefined,
+      },
+    ]);
+  };
+
+  const addGroup = () => {
+    const nextGroup = criteria.length === 0 ? 0 : lastGroupId() + 1;
+    setCriteria((prev) => [
+      ...prev,
+      {
+        field: "total_amount",
+        operator: "greater_than" as CriterionOperator,
+        value: "",
+        group: nextGroup,
+        groupLogic: nextGroup === 0 ? undefined : "or",
+      },
     ]);
   };
 
@@ -727,8 +756,47 @@ function RuleFormModal({
   };
 
   const removeCriterion = (index: number) => {
-    setCriteria((prev) => prev.filter((_, i) => i !== index));
+    setCriteria((prev) => {
+      const removed = prev[index];
+      const next = prev.filter((_, i) => i !== index);
+      // Se removemos o primeiro critério de um grupo (que carrega o groupLogic),
+      // e ainda restam critérios no mesmo grupo, transfere o groupLogic para o
+      // novo primeiro do grupo.
+      if (removed && typeof removed.group === "number" && removed.groupLogic) {
+        const firstIdx = next.findIndex((c) => (c.group ?? 0) === removed.group);
+        if (firstIdx >= 0 && !next[firstIdx].groupLogic) {
+          next[firstIdx] = { ...next[firstIdx], groupLogic: removed.groupLogic };
+        }
+      }
+      return next;
+    });
   };
+
+  const setGroupLogic = (group: number, logic: "and" | "or") => {
+    setCriteria((prev) => {
+      const firstIdx = prev.findIndex((c) => (c.group ?? 0) === group);
+      if (firstIdx < 0) return prev;
+      return prev.map((c, i) => (i === firstIdx ? { ...c, groupLogic: logic } : c));
+    });
+  };
+
+  const removeGroup = (group: number) => {
+    setCriteria((prev) => prev.filter((c) => (c.group ?? 0) !== group));
+  };
+
+  // Estrutura auxiliar: ordena grupos por ordem de primeira aparição e devolve
+  // pares [groupId, itens com índice global].
+  const criteriaGroups = useMemo(() => {
+    const order: number[] = [];
+    const map = new Map<number, Array<{ idx: number; criterion: RuleCriterion }>>();
+    criteria.forEach((c, idx) => {
+      const g = c.group ?? 0;
+      if (!map.has(g)) { map.set(g, []); order.push(g); }
+      map.get(g)!.push({ idx, criterion: c });
+    });
+    return order.map((g) => ({ group: g, items: map.get(g)! }));
+  }, [criteria]);
+
 
   // ── Níveis (agora agrupados por level_order, permitindo paralelismo) ──
   const levelsGrouped = useMemo(() => {
