@@ -132,7 +132,11 @@ async function fetchApprovalRequests(
   objectTypes: string[],
 ): Promise<SLApprovalRequest[]> {
   const tryFilter = async (filter: string): Promise<SLApprovalRequest[]> => {
-    const path = `ApprovalRequests?$filter=${encodeURIComponent(filter)}&$orderby=CreationDate desc&$top=20`;
+    // Ordenamos por AbsoluteEntry desc para trazer a solicitação mais recente
+    // primeiro (útil quando o documento foi reenviado para aprovação após
+    // rejeição — cada envio gera uma nova ApprovalRequest para o mesmo
+    // ObjectEntry, e queremos manter todas em ordem cronológica invertida).
+    const path = `ApprovalRequests?$filter=${encodeURIComponent(filter)}&$orderby=AbsoluteEntry desc&$top=20`;
     try {
       const res = await sapQuery(session, path, undefined, false);
       const data = res.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
@@ -154,13 +158,22 @@ async function fetchApprovalRequests(
 
   const types = objectTypes.length > 0 ? objectTypes : [...DEFAULT_PURCHASE_OBJECT_TYPES];
 
-  // 1) DocumentEntry para cada ObjectType em paralelo
-  const docResults = await Promise.all(
-    types.map((t) => tryFilter(`DocumentEntry eq ${docEntry} and ObjectType eq '${t}'`)),
+  // 1) ObjectEntry — nome canônico do vínculo doc → ApprovalRequest no Service
+  //    Layer (a ligação é lógica, via ObjectType + ObjectEntry — não FK direta).
+  const objResults = await Promise.all(
+    types.map((t) => tryFilter(`ObjectEntry eq ${docEntry} and ObjectType eq '${t}'`)),
   );
-  let raw = dedupe(docResults.flat());
+  let raw = dedupe(objResults.flat());
 
-  // 2) Fallback: DraftEntry para cada ObjectType
+  // 2) Fallback: DocumentEntry (algumas versões do SL expõem esse alias)
+  if (raw.length === 0) {
+    const docResults = await Promise.all(
+      types.map((t) => tryFilter(`DocumentEntry eq ${docEntry} and ObjectType eq '${t}'`)),
+    );
+    raw = dedupe(docResults.flat());
+  }
+
+  // 3) Fallback: DraftEntry (documento ainda como rascunho ODRF)
   if (raw.length === 0) {
     const draftResults = await Promise.all(
       types.map((t) => tryFilter(`DraftEntry eq ${docEntry} and ObjectType eq '${t}'`)),
@@ -168,13 +181,15 @@ async function fetchApprovalRequests(
     raw = dedupe(draftResults.flat());
   }
 
-  // 3) Último fallback: sem filtro de ObjectType (cobre tipos não listados)
+  // 4) Último fallback: sem filtro de ObjectType (cobre tipos não listados
+  //    e variações de patch level onde o campo do vínculo é outro).
   if (raw.length === 0) {
-    const [byDoc, byDraft] = await Promise.all([
+    const [byObj, byDoc, byDraft] = await Promise.all([
+      tryFilter(`ObjectEntry eq ${docEntry}`),
       tryFilter(`DocumentEntry eq ${docEntry}`),
       tryFilter(`DraftEntry eq ${docEntry}`),
     ]);
-    raw = dedupe([...byDoc, ...byDraft]);
+    raw = dedupe([...byObj, ...byDoc, ...byDraft]);
   }
 
   return raw;
