@@ -551,6 +551,8 @@ function RuleCard({
       ? { icon: ShoppingCart, cls: "bg-blue-500/15 text-blue-500" }
       : dt === "sales"
       ? { icon: Tag, cls: "bg-emerald-500/15 text-emerald-500" }
+      : dt === "advance"
+      ? { icon: Tag, cls: "bg-amber-500/15 text-amber-500" }
       : { icon: Shield, cls: "bg-muted text-muted-foreground" };
   const DocIcon = docTypeBadge.icon;
 
