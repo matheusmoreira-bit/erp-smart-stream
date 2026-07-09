@@ -566,6 +566,9 @@ Deno.serve(async (req) => {
       BPL_IDAssignedToInvoice: branchId,
       Comments: description,
       DocumentLines: documentLines,
+      // ANA Gaming: por padrão, todos os pedidos de compra são marcados como
+      // "sem contrato" (U_FGR_CONTRATO = "N"). headerCustom pode sobrescrever.
+      ...(/ANAGAMING/i.test(String(companyDb || "")) ? { U_FGR_CONTRATO: "N" } : {}),
       ...headerCustom,
     };
     if (headerCurrency && /^[A-Z]{3}$/.test(headerCurrency)) {

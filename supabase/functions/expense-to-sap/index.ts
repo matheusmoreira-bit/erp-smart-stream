@@ -1084,6 +1084,10 @@ Deno.serve(async (req) => {
       // pelos pedidos criados por um usuário específico sem depender do texto.
       ...(requesterCode ? { U_FGR_SOLICITANTE: truncateSapText(requesterCode, 50) } : {}),
       ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
+      // ANA Gaming: por padrão, todos os pedidos de compra são marcados como
+      // "sem contrato" (U_FGR_CONTRATO = "N"). Pode ser sobrescrito por
+      // headerCustom quando o usuário/regra informar explicitamente.
+      ...(/ANAGAMING/i.test(String(expense.company_db || "")) ? { U_FGR_CONTRATO: "N" } : {}),
       ...headerCustom,
       DocumentLines: items.map((it: any) => {
         const hasItem = !!it.item_code;
