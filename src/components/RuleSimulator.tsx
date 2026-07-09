@@ -40,6 +40,31 @@ function criterionSummary(c: RuleCriterion): string {
   return `${f} ${op} ${c.value}`;
 }
 
+/** Conector efetivo (aplica o mesmo fallback de evaluateCriteria: ausente → "and"). */
+function effectiveLogic(v: unknown): "and" | "or" {
+  return v === "or" ? "or" : "and";
+}
+
+/** Agrupa critérios por `group` (default 0) preservando a ordem de entrada. */
+function groupCriteria(criteria: RuleCriterion[]): RuleCriterion[][] {
+  const map = new Map<number, RuleCriterion[]>();
+  const order: number[] = [];
+  criteria.forEach((c) => {
+    const g = typeof c.group === "number" ? c.group : 0;
+    if (!map.has(g)) {
+      map.set(g, []);
+      order.push(g);
+    }
+    map.get(g)!.push(c);
+  });
+  return order.sort((a, b) => a - b).map((g) => map.get(g)!);
+}
+
+/** Rótulo curto do conector para chips. */
+function logicBadge(l: "and" | "or"): string {
+  return l === "or" ? "OU" : "E";
+}
+
 interface SimulationInput {
   total_amount: string;
   cost_center: SapSearchOption | null;
@@ -90,7 +115,16 @@ function buildContext(input: SimulationInput): Record<string, unknown> {
 
 interface Match {
   rule: ApprovalRule;
-  perCriterion: { criterion: RuleCriterion; passed: boolean }[];
+  groups: {
+    /** Conector com o grupo anterior (vazio no primeiro grupo). */
+    connector: "and" | "or" | null;
+    items: {
+      criterion: RuleCriterion;
+      passed: boolean;
+      /** Conector com o critério anterior no mesmo grupo (vazio no primeiro). */
+      connector: "and" | "or" | null;
+    }[];
+  }[];
   allMatched: boolean;
 }
 
@@ -195,14 +229,19 @@ export function RuleSimulator({
       })
       .sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
-    return scoped.map((r) => {
+    return scoped.map<Match>((r) => {
       const criteria = Array.isArray(r.criteria) ? r.criteria : [];
-      const perCriterion = criteria.map((c) => ({
-        criterion: c,
-        passed: evaluateCriterion(c, ctx),
+      const buckets = groupCriteria(criteria);
+      const groups = buckets.map((bucket, gIdx) => ({
+        connector: gIdx === 0 ? null : effectiveLogic(bucket[0]?.groupLogic),
+        items: bucket.map((c, i) => ({
+          criterion: c,
+          passed: evaluateCriterion(c, ctx),
+          connector: i === 0 ? null : effectiveLogic(c.logic),
+        })),
       }));
       const allMatched = criteria.length > 0 && evaluateCriteria(criteria, ctx);
-      return { rule: r, perCriterion, allMatched };
+      return { rule: r, groups, allMatched };
     });
   }, [ran, input, rules]);
 
@@ -446,6 +485,23 @@ export function RuleSimulator({
                     </Badge>
                   </div>
                   <p className="text-sm font-semibold text-foreground">{winner.rule.name}</p>
+                  {(() => {
+                    const connectors = [
+                      ...winner.groups.slice(1).map((g) => g.connector),
+                      ...winner.groups.flatMap((g) => g.items.slice(1).map((it) => it.connector)),
+                    ].filter((x): x is "and" | "or" => x === "and" || x === "or");
+                    if (connectors.length === 0) return null;
+                    const hasOr = connectors.includes("or");
+                    const hasAnd = connectors.includes("and");
+                    const label = hasOr && hasAnd ? "E + OU" : hasOr ? "somente OU" : "somente E";
+                    return (
+                      <p className="text-[11px] text-muted-foreground">
+                        Lógica efetiva dos critérios:{" "}
+                        <span className="font-semibold text-foreground">{label}</span>
+                        <span className="text-muted-foreground/70"> (regras antigas sem conector = E)</span>
+                      </p>
+                    );
+                  })()}
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1">
                       <UsersIcon className="w-3 h-3" /> Cadeia de aprovadores
@@ -548,24 +604,52 @@ export function RuleSimulator({
                             P{m.rule.priority}
                           </Badge>
                         </div>
-                        {m.perCriterion.length === 0 ? (
+                        {m.groups.length === 0 || m.groups.every((g) => g.items.length === 0) ? (
                           <p className="text-[11px] text-muted-foreground italic">
                             Regra sem critérios — nunca casa automaticamente.
                           </p>
                         ) : (
-                          <ul className="space-y-0.5 ml-5">
-                            {m.perCriterion.map((p, idx) => (
-                              <li
-                                key={idx}
-                                className={`flex items-center gap-1.5 ${
-                                  p.passed ? "text-success" : "text-muted-foreground"
-                                }`}
-                              >
-                                {p.passed ? "✓" : "✗"}
-                                <span>{criterionSummary(p.criterion)}</span>
-                              </li>
+                          <div className="space-y-1.5 ml-1">
+                            {m.groups.map((g, gIdx) => (
+                              <div key={gIdx}>
+                                {g.connector && (
+                                  <div className="flex items-center gap-2 my-1">
+                                    <div className="h-px flex-1 bg-border" />
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[9px] font-bold ${
+                                        g.connector === "or"
+                                          ? "border-primary/40 text-primary"
+                                          : "border-border text-muted-foreground"
+                                      }`}
+                                    >
+                                      {logicBadge(g.connector)} (entre grupos)
+                                    </Badge>
+                                    <div className="h-px flex-1 bg-border" />
+                                  </div>
+                                )}
+                                <ul className="space-y-0.5 ml-4">
+                                  {g.items.map((p, idx) => (
+                                    <li key={idx}>
+                                      {p.connector && (
+                                        <span className="inline-block ml-[-1rem] mr-1 text-[9px] font-bold uppercase text-muted-foreground/70">
+                                          {logicBadge(p.connector)}
+                                        </span>
+                                      )}
+                                      <span
+                                        className={`inline-flex items-center gap-1.5 ${
+                                          p.passed ? "text-success" : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {p.passed ? "✓" : "✗"}
+                                        <span>{criterionSummary(p.criterion)}</span>
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         )}
                       </div>
                     ))
