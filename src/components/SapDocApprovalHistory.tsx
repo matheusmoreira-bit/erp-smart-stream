@@ -193,6 +193,8 @@ interface ResolvedRequest {
   code: number;
   statusLabel: string;
   templateName: string;
+  /** Observação enviada pelo originador do pedido no SAP (nível da request). */
+  originatorRemarks: string;
   history: ApprovalHistoryEntry[];
 }
 
