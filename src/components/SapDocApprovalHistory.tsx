@@ -479,7 +479,7 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
                               <p className="text-xs text-muted-foreground mt-0.5 font-mono">{formatDate(h.date)}</p>
                             )}
                             {h.remarks && (
-                              <p className="text-xs text-foreground bg-background/60 rounded p-2 mt-2">{h.remarks}</p>
+                              <p className="text-xs text-foreground bg-background/60 rounded p-2 mt-2 whitespace-pre-wrap">{h.remarks}</p>
                             )}
                           </div>
                         </div>
