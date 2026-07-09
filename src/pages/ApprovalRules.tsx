@@ -357,6 +357,8 @@ function CriterionRow({
   };
   users: SapUser[];
   usersLoading: boolean;
+  /** Se true, não é o primeiro critério do grupo — mostra o conector local (E/OU). */
+  showLogicConnector?: boolean;
 }) {
   const isNumericField = criterion.field === "total_amount";
   const isRequesterField = criterion.field === "requester_name";
