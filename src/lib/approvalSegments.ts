@@ -95,7 +95,7 @@ export function findMatchingRule(
   for (const r of scoped) {
     const criteria = Array.isArray(r.criteria) ? r.criteria : [];
     if (criteria.length === 0) continue;
-    if (criteria.every((c) => evaluateCriterion(c, ctx))) return r;
+    if (evaluateCriteria(criteria, ctx)) return r;
   }
   return null;
 }
