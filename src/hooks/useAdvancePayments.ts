@@ -40,6 +40,19 @@ export interface AdvanceAttachment {
   mime_type?: string;
 }
 
+export interface AdvanceItem {
+  id?: string;
+  item_code?: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  cost_center?: string | null;
+  cost_center_name?: string | null;
+  project?: string | null;
+  project_name?: string | null;
+}
+
 export interface AdvancePayment {
   id: string;
   company_db: string;
@@ -64,6 +77,7 @@ export interface AdvancePayment {
   created_at: string;
   updated_at: string;
   attachments?: AdvanceAttachment[];
+  items?: AdvanceItem[];
 }
 
 export interface CreateAdvanceInput {
@@ -71,12 +85,10 @@ export interface CreateAdvanceInput {
   supplier_card_code: string;
   supplier_name: string;
   supplier_cnpj?: string;
-  amount: number;
   currency: string;
   due_date?: string;
   remarks?: string;
-  cost_center?: string;
-  cost_center_name?: string;
+  items: AdvanceItem[];
   files?: File[];
   submit?: boolean; // true => goes to pending; false => draft
 }
