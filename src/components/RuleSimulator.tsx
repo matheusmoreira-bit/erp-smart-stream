@@ -117,12 +117,12 @@ interface Match {
   rule: ApprovalRule;
   groups: {
     /** Conector com o grupo anterior (vazio no primeiro grupo). */
-    connector: "and" | "or" | null;
+    connector: "and" | "or" | "either" | null;
     items: {
       criterion: RuleCriterion;
       passed: boolean;
       /** Conector com o critério anterior no mesmo grupo (vazio no primeiro). */
-      connector: "and" | "or" | null;
+      connector: "and" | "or" | "either" | null;
     }[];
   }[];
   allMatched: boolean;
