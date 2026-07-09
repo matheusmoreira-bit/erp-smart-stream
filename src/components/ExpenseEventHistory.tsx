@@ -332,8 +332,10 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
         color: "text-success",
       });
     }
+  }
 
   // SAP B1 approval history (via Service Layer) — merged into the same timeline
+
   for (const req of sapApproval.requests) {
     for (const h of req.history) {
       const iconMap = {
