@@ -423,7 +423,48 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     }
   }
 
-  if (shouldResubmit) {
+  // ── Aplica mudanças de anexos ───────────────────────────────────────────
+  const addedNames: string[] = [];
+  const removedNames: string[] = [];
+  if (attachmentsChanged) {
+    if (removeTargets.length > 0) {
+      const paths = removeTargets.map((r) => r.file_path).filter(Boolean);
+      if (paths.length > 0) {
+        // Best-effort: remove files from storage; DB delete é a fonte de verdade.
+        try { await admin.storage.from("expense-attachments").remove(paths); } catch { /* silent */ }
+      }
+      const { data: delAtt, error: delAttErr } = await admin
+        .from("expense_attachments")
+        .delete()
+        .eq("expense_id", expenseId)
+        .in("id", removeTargets.map((r) => r.id))
+        .select("file_name");
+      if (delAttErr) return json(500, { error: `Falha ao remover anexos: ${delAttErr.message}` });
+      for (const r of (delAtt || []) as Array<{ file_name: string }>) removedNames.push(r.file_name);
+    }
+    if (addAttachments.length > 0) {
+      const addRows = addAttachments.map((a) => ({
+        expense_id: expenseId,
+        file_path: String(a.file_path || ""),
+        file_name: String(a.file_name || ""),
+        file_size: Number(a.file_size || 0),
+        mime_type: String(a.mime_type || "application/octet-stream"),
+      })).filter((r) => r.file_path && r.file_name);
+      if (addRows.length > 0) {
+        const { error: addErr } = await admin.from("expense_attachments").insert(addRows as any);
+        if (addErr) return json(500, { error: `Falha ao registrar novos anexos: ${addErr.message}` });
+        for (const r of addRows) addedNames.push(r.file_name);
+      }
+    }
+  }
+
+  if (shouldResubmit || (attachmentsChanged && status === "pendente_aprovacao")) {
+    const parts: string[] = [];
+    if (attachmentsChanged) {
+      if (addedNames.length > 0) parts.push(`anexos adicionados: ${addedNames.join(", ")}`);
+      if (removedNames.length > 0) parts.push(`anexos removidos: ${removedNames.join(", ")}`);
+    }
+    const attachmentNote = parts.length > 0 ? ` — ${parts.join("; ")}` : "";
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "submitted",
@@ -431,8 +472,8 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
       level_order: resubmittedLevel,
       remarks: resubmitFallbackUsed
-        ? `Reenviado após edição — solicitante coincide com aprovador(es); direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
-        : `Reenviado após edição — fluxo de aprovação reiniciado a partir do nível ${resubmittedLevel}.`,
+        ? `Reenviado após edição${attachmentNote} — solicitante coincide com aprovador(es); direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
+        : `Reenviado após edição${attachmentNote} — fluxo de aprovação reiniciado a partir do nível ${resubmittedLevel}.`,
     } as any);
   }
 
