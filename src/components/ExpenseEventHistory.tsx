@@ -132,6 +132,7 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
   };
   const nfLinks = useNfEntradaLinks(derivedInput);
   const apLinks = useContasPagarLinks(derivedInput);
+  const sapApproval = useSapDocApprovalHistory(expense?.sap_doc_entry ?? null);
 
   useEffect(() => {
     if (!expenseId) {
