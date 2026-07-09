@@ -860,6 +860,7 @@ export default function ApprovalRulesPage() {
               <SelectItem value="both">Ambos</SelectItem>
               <SelectItem value="purchase">Compra</SelectItem>
               <SelectItem value="sales">Venda</SelectItem>
+              <SelectItem value="advance">Adiantamento</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
