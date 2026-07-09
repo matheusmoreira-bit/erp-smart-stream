@@ -40,9 +40,9 @@ function criterionSummary(c: RuleCriterion): string {
   return `${f} ${op} ${c.value}`;
 }
 
-/** Conector efetivo (aplica o mesmo fallback de evaluateCriteria: ausente → "and"). */
-function effectiveLogic(v: unknown): "and" | "or" {
-  return v === "or" ? "or" : "and";
+/** Conector efetivo (aplica o mesmo fallback de evaluateCriteria: "either" e ausente/inválido → "or" ou "and"). */
+function effectiveLogic(v: unknown): "and" | "or" | "either" {
+  return v === "or" ? "or" : v === "either" ? "either" : "and";
 }
 
 /** Agrupa critérios por `group` (default 0) preservando a ordem de entrada. */
@@ -61,8 +61,8 @@ function groupCriteria(criteria: RuleCriterion[]): RuleCriterion[][] {
 }
 
 /** Rótulo curto do conector para chips. */
-function logicBadge(l: "and" | "or"): string {
-  return l === "or" ? "OU" : "E";
+function logicBadge(l: "and" | "or" | "either"): string {
+  return l === "or" ? "OU" : l === "either" ? "E/OU" : "E";
 }
 
 interface SimulationInput {
