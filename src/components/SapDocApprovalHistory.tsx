@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock, History, Loader2, XOctagon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, History, RefreshCw, XOctagon } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { sapQuery, type SapSession } from "@/lib/sap-client";
 import type { ApprovalHistoryEntry } from "@/hooks/useMyRequests";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 /**
  * Histórico de aprovação de um documento diretamente no ERP (SAP B1),
