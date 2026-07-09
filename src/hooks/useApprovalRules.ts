@@ -23,17 +23,93 @@ export const OPERATOR_LABELS: Record<CriterionOperator, string> = {
   like: "LIKE (wildcard)",
 };
 
-export const FIELD_OPTIONS = [
-  { value: "total_amount", label: "Valor Total" },
-  { value: "cost_center", label: "Centro de Custo" },
-  { value: "project", label: "Projeto" },
-  { value: "requester_name", label: "Solicitante" },
-  { value: "supplier_name", label: "Fornecedor" },
-  { value: "doc_type", label: "Tipo de Documento" },
-  { value: "currency", label: "Moeda" },
-  { value: "item_codes", label: "Códigos dos Itens" },
-  { value: "item_groups", label: "Grupos dos Itens" },
+/**
+ * Modelo de entidades para o construtor de regras.
+ *
+ * Cada entidade pode ter atributos (ex.: Fornecedor → Nome / Código / CNPJ / Status).
+ * Entidades sem atributos (ex.: Valor Total) escondem o seletor secundário.
+ *
+ * O `field` persistido é um token único:
+ *   - Entidade sem atributos: usa `entity.key` (ex.: "total_amount").
+ *   - Entidade com atributos: usa `entity.key + "." + attr.key` (ex.: "supplier.cnpj").
+ * Chaves LEGADAS (ex.: "supplier_name", "item_codes") continuam sendo aceitas
+ * pelo avaliador e são mapeadas visualmente pela UI.
+ */
+export interface EntityAttribute {
+  value: string; // token do atributo (compõe o field final)
+  label: string;
+}
+
+export interface EntityOption {
+  value: string; // chave da entidade
+  label: string;
+  attributes?: EntityAttribute[]; // se ausente, entidade não tem atributos
+  /** Field persistido quando a entidade NÃO tem atributos. */
+  fieldWhenNoAttribute?: string;
+}
+
+export const ENTITY_OPTIONS: EntityOption[] = [
+  { value: "total_amount", label: "Valor Total", fieldWhenNoAttribute: "total_amount" },
+  { value: "cost_center", label: "Centro de Custo", fieldWhenNoAttribute: "cost_center" },
+  { value: "project", label: "Projeto", fieldWhenNoAttribute: "project" },
+  { value: "requester", label: "Solicitante", fieldWhenNoAttribute: "requester_name" },
+  {
+    value: "supplier",
+    label: "Fornecedor",
+    attributes: [
+      { value: "name", label: "Nome" },
+      { value: "code", label: "Código" },
+      { value: "cnpj", label: "CNPJ" },
+      { value: "status", label: "Status" },
+    ],
+  },
+  {
+    value: "item",
+    label: "Item",
+    attributes: [
+      { value: "any", label: "Código ou Descrição" },
+      { value: "code", label: "Código" },
+      { value: "name", label: "Descrição" },
+    ],
+  },
+  { value: "item_groups", label: "Grupo de Itens", fieldWhenNoAttribute: "item_groups" },
+  { value: "doc_type", label: "Tipo de Documento", fieldWhenNoAttribute: "doc_type" },
+  { value: "currency", label: "Moeda", fieldWhenNoAttribute: "currency" },
 ];
+
+/**
+ * Mapeamento field → { entity, attribute? } para dar suporte a chaves legadas
+ * (as regras já persistidas continuam a abrir corretamente na UI).
+ */
+export const FIELD_TO_ENTITY: Record<string, { entity: string; attribute?: string }> = {
+  total_amount: { entity: "total_amount" },
+  cost_center: { entity: "cost_center" },
+  project: { entity: "project" },
+  requester_name: { entity: "requester" },
+  supplier_name: { entity: "supplier", attribute: "name" },
+  "supplier.name": { entity: "supplier", attribute: "name" },
+  "supplier.code": { entity: "supplier", attribute: "code" },
+  "supplier.cnpj": { entity: "supplier", attribute: "cnpj" },
+  "supplier.status": { entity: "supplier", attribute: "status" },
+  item_codes: { entity: "item", attribute: "any" },
+  "item.any": { entity: "item", attribute: "any" },
+  "item.code": { entity: "item", attribute: "code" },
+  "item.name": { entity: "item", attribute: "name" },
+  item_groups: { entity: "item_groups" },
+  doc_type: { entity: "doc_type" },
+  currency: { entity: "currency" },
+};
+
+/**
+ * Compat: mantém o export antigo com os labels planos (usado pelo resumo em chip).
+ */
+export const FIELD_OPTIONS: { value: string; label: string }[] = ENTITY_OPTIONS.flatMap((e) => {
+  if (!e.attributes) return [{ value: e.fieldWhenNoAttribute || e.value, label: e.label }];
+  return e.attributes.map((a) => ({
+    value: `${e.value}.${a.value}`,
+    label: `${e.label} — ${a.label}`,
+  }));
+});
 
 export type CriterionLogic = "and" | "or";
 

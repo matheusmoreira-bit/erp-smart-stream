@@ -55,6 +55,8 @@ import {
   useApprovalRules,
   OPERATOR_LABELS,
   FIELD_OPTIONS,
+  ENTITY_OPTIONS,
+  FIELD_TO_ENTITY,
   DOC_TYPE_LABELS,
   type ApprovalRule,
   type ApprovalRuleLevel,
@@ -315,17 +317,31 @@ function CatalogValueSelect({
 
 /* ─── Criterion Row ─── */
 /** Campos que suportam busca em catálogo (SAP cached lists) para o valor. */
-const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes", "item_groups"]);
+const CATALOG_FIELDS = new Set([
+  "cost_center",
+  "project",
+  "supplier_name",
+  "supplier.code",
+  "item_codes",
+  "item.any",
+  "item.code",
+  "item_groups",
+]);
+const SUPPLIER_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "ativo", label: "Ativo" },
+  { value: "inativo", label: "Inativo" },
+];
 const TEXT_OPERATORS: CriterionOperator[] = ["equal", "not_equal", "contains", "not_contains", "like"];
 const NUMERIC_OPERATORS: CriterionOperator[] = ["greater_than", "less_than", "between", "equal", "not_equal"];
 const DOC_TYPE_OPERATORS: CriterionOperator[] = ["equal", "not_equal"];
 
 function defaultOperatorForField(field: string): CriterionOperator {
   if (field === "total_amount") return "greater_than";
-  if (field === "cost_center" || field === "item_codes") return "like";
-  if (field === "supplier_name") return "contains";
+  if (field === "cost_center" || field === "item_codes" || field === "item.any" || field === "item.code") return "like";
+  if (field === "supplier_name" || field === "supplier.name" || field === "item.name") return "contains";
   if (field === "requester_name") return "equal";
   if (field === "doc_type") return "equal";
+  if (field === "supplier.status") return "equal";
   return "equal";
 }
 
@@ -333,6 +349,26 @@ function operatorAllowedForField(field: string, operator: CriterionOperator): bo
   if (field === "total_amount") return NUMERIC_OPERATORS.includes(operator);
   if (field === "doc_type") return DOC_TYPE_OPERATORS.includes(operator);
   return TEXT_OPERATORS.includes(operator);
+}
+
+function entityAndAttrFromField(field: string): { entity: string; attribute?: string } {
+  if (FIELD_TO_ENTITY[field]) return FIELD_TO_ENTITY[field];
+  // fallback: parse "entity.attribute"
+  if (field.includes(".")) {
+    const [entity, attribute] = field.split(".", 2);
+    return { entity, attribute };
+  }
+  return { entity: field };
+}
+
+function fieldFromEntityAttr(entity: string, attribute?: string): string {
+  const ent = ENTITY_OPTIONS.find((e) => e.value === entity);
+  if (!ent) return entity;
+  if (!ent.attributes || ent.attributes.length === 0) {
+    return ent.fieldWhenNoAttribute || ent.value;
+  }
+  const attr = attribute || ent.attributes[0].value;
+  return `${entity}.${attr}`;
 }
 
 function CriterionRow({
@@ -349,13 +385,7 @@ function CriterionRow({
   index: number;
   onChange: (index: number, updated: RuleCriterion) => void;
   onRemove: (index: number) => void;
-  catalogs: {
-    cost_center: { options: { code: string; name?: string }[]; isLoading: boolean };
-    project: { options: { code: string; name?: string }[]; isLoading: boolean };
-    supplier_name: { options: { code: string; name?: string }[]; isLoading: boolean };
-    item_codes: { options: { code: string; name?: string }[]; isLoading: boolean };
-    item_groups: { options: { code: string; name?: string }[]; isLoading: boolean };
-  };
+  catalogs: Record<string, { options: { code: string; name?: string }[]; isLoading: boolean }>;
   users: SapUser[];
   usersLoading: boolean;
   /** Se true, não é o primeiro critério do grupo — mostra o conector local (E/OU). */
@@ -415,22 +445,46 @@ function CriterionRow({
       )}
       <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/20 border border-border">
         <div className="flex-1 grid grid-cols-12 gap-2">
-        {/* Field */}
-        <div className="col-span-3">
+        {/* Field = Entity + optional Attribute */}
+        <div className="col-span-4">
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Campo</label>}
-          <Select
-            value={criterion.field}
-            onValueChange={handleFieldChange}
-          >
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FIELD_OPTIONS.map((f) => (
-                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {(() => {
+            const parsed = entityAndAttrFromField(criterion.field);
+            const entity = ENTITY_OPTIONS.find((e) => e.value === parsed.entity);
+            const hasAttrs = !!entity?.attributes?.length;
+            return (
+              <div className={hasAttrs ? "grid grid-cols-2 gap-1.5" : ""}>
+                <Select
+                  value={parsed.entity}
+                  onValueChange={(v) => handleFieldChange(fieldFromEntityAttr(v))}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ENTITY_OPTIONS.map((e) => (
+                      <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {hasAttrs && (
+                  <Select
+                    value={parsed.attribute || entity!.attributes![0].value}
+                    onValueChange={(v) => handleFieldChange(fieldFromEntityAttr(parsed.entity, v))}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {entity!.attributes!.map((a) => (
+                        <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Operator */}
@@ -472,6 +526,20 @@ function CriterionRow({
               <SelectContent>
                 {(Object.keys(DOC_TYPE_LABELS) as RuleDocType[]).map((key) => (
                   <SelectItem key={key} value={key}>{DOC_TYPE_LABELS[key]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : criterion.field === "supplier.status" ? (
+            <Select
+              value={criterion.value || ""}
+              onValueChange={(v) => onChange(index, { ...criterion, value: v })}
+            >
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Selecionar status..." />
+              </SelectTrigger>
+              <SelectContent>
+                {SUPPLIER_STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -602,16 +670,24 @@ function RuleFormModal({
     enabled: open,
   });
 
-  const catalogs = useMemo(
-    () => ({
+  const catalogs = useMemo(() => {
+    const sup = { options: supOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: supLoading };
+    const item = { options: itemOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: itemLoading };
+    return {
       cost_center: { options: ccOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: ccLoading },
       project: { options: projOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: projLoading },
-      supplier_name: { options: supOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: supLoading },
-      item_codes: { options: itemOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: itemLoading },
+      // Fornecedor: mesma lista para nome e código (o Select mostra ambos).
+      supplier_name: sup,
+      "supplier.name": sup,
+      "supplier.code": sup,
+      // Item: mesma lista para código, descrição e "qualquer".
+      item_codes: item,
+      "item.any": item,
+      "item.code": item,
+      "item.name": item,
       item_groups: { options: groupOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: groupLoading },
-    }),
-    [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading, groupOptions, groupLoading],
-  );
+    };
+  }, [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading, groupOptions, groupLoading]);
 
   // ── Fallback de aprovadores: mescla SAP Users + user_profiles ─────────
   const [profileUsers, setProfileUsers] = useState<SapUser[]>([]);

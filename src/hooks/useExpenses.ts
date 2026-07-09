@@ -80,22 +80,58 @@ async function enrichItemsWithGroup(
 function buildItemCtx(
   items: Array<{ item_code?: string | null; description?: string | null }>,
   enriched: Record<string, EnrichedItem>,
-): { item_codes: string; item_groups: string } {
+): { item_codes: string; item_groups: string; "item.code": string; "item.name": string; "item.any": string } {
   // Wrap with spaces so `like '% fol%'` and `like '% folha %'` work.
-  const codes = items
-    .flatMap((i) => [i.item_code, i.description])
-    .map((v) => (v || "").trim().toLowerCase())
+  const codeTokens = items
+    .map((i) => (i.item_code || "").trim().toLowerCase())
     .filter(Boolean);
+  const nameTokens = items
+    .map((i) => (i.description || "").trim().toLowerCase())
+    .filter(Boolean);
+  const anyTokens = [...codeTokens, ...nameTokens];
   const groups = items
     .map((i) => {
       const c = (i.item_code || "").trim();
       return (enriched[c]?.items_group_name || "").trim().toLowerCase();
     })
     .filter(Boolean);
+  const wrap = (arr: string[]) => (arr.length ? ` ${arr.join(" ")} ` : "");
   return {
-    item_codes: codes.length ? ` ${codes.join(" ")} ` : "",
-    item_groups: groups.length ? ` ${groups.join(" ")} ` : "",
+    item_codes: wrap(anyTokens), // legacy: matches code OR description
+    item_groups: wrap(groups),
+    "item.code": wrap(codeTokens),
+    "item.name": wrap(nameTokens),
+    "item.any": wrap(anyTokens),
   };
+}
+
+/**
+ * Consulta atributos adicionais do fornecedor (CNPJ e status) para uso em regras.
+ * Retorna valores em minúsculas para compatibilidade com o avaliador. Silencioso
+ * em caso de falha — o critério simplesmente não vai bater.
+ */
+async function fetchSupplierAttributes(
+  supplierCode: string | null | undefined,
+  session: SapSession,
+): Promise<{ cnpj: string; status: string }> {
+  const code = (supplierCode || "").trim();
+  if (!code) return { cnpj: "", status: "" };
+  try {
+    const { data } = await sapQuery(
+      session,
+      `BusinessPartners('${code.replace(/'/g, "''")}')`,
+      { $select: "CardCode,LicTradNum,Frozen,Valid" },
+      true,
+    );
+    const cnpj = String((data as any)?.LicTradNum || "").toLowerCase();
+    const frozen = String((data as any)?.Frozen || "");
+    const valid = String((data as any)?.Valid || "");
+    // Traduz para termos usuais que o usuário digitaria na regra.
+    const status = frozen === "tYES" ? "inativo" : valid === "tNO" ? "invalido" : "ativo";
+    return { cnpj, status };
+  } catch {
+    return { cnpj: "", status: "" };
+  }
 }
 
 export type ExpenseStatus =
@@ -548,6 +584,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           const headerCc = (input.cost_center || "").trim();
           const candidateCcs = headerCc ? [headerCc] : itemCostCenters;
 
+          // Enriquece atributos do fornecedor (CNPJ / status) para regras baseadas em Fornecedor.
+          const supplierAttrs = await fetchSupplierAttributes(input.supplier_code, session);
+
           let match: Awaited<ReturnType<typeof findMatchingRule>> = null;
           for (const cc of (candidateCcs.length > 0 ? candidateCcs : [""])) {
             const ctx = {
@@ -555,11 +594,20 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
               cost_center: cc,
               project: input.project || "",
               requester_name: session.userName,
+              // Legado: mantém supplier_name como "Nome Código" para regras existentes.
               supplier_name: `${input.supplier_name || ""} ${input.supplier_code || ""}`.trim(),
+              // Novo modelo entidade.atributo:
+              "supplier.name": (input.supplier_name || "").toLowerCase(),
+              "supplier.code": (input.supplier_code || "").toLowerCase(),
+              "supplier.cnpj": supplierAttrs.cnpj,
+              "supplier.status": supplierAttrs.status,
               currency: input.currency || "BRL",
               doc_type: docType,
               item_codes: itemCtx.item_codes,
               item_groups: itemCtx.item_groups,
+              "item.code": itemCtx["item.code"],
+              "item.name": itemCtx["item.name"],
+              "item.any": itemCtx["item.any"],
             };
             match = await findMatchingRule(ctx, session.companyDB || null, docType);
             if (match) break;
