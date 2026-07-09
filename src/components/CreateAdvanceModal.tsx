@@ -39,6 +39,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
   const [currency, setCurrency] = useState<string>(defaultCurrency);
   const [dueDate, setDueDate] = useState<string>("");
   const [remarks, setRemarks] = useState<string>("");
+  const [costCenter, setCostCenter] = useState<SapSearchOption | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
 
