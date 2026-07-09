@@ -90,8 +90,10 @@ function normalizeSearch(value: unknown): string {
 function criterionSummary(c: RuleCriterion): string {
   const f = fieldLabel(c.field);
   const op = OPERATOR_LABELS[c.operator];
-  if (c.operator === "between") return `${f} ${op} ${c.value} e ${c.value2}`;
-  return `${f} ${op} ${c.value}`;
+  const formatVal = (v: string) =>
+    c.field === "doc_type" ? (DOC_TYPE_LABELS[v as RuleDocType] || v) : v;
+  if (c.operator === "between") return `${f} ${op} ${formatVal(c.value)} e ${formatVal(c.value2 || "")}`;
+  return `${f} ${op} ${formatVal(c.value)}`;
 }
 
 /* ─── User Select with search ─── */
@@ -313,19 +315,23 @@ function CatalogValueSelect({
 
 /* ─── Criterion Row ─── */
 /** Campos que suportam busca em catálogo (SAP cached lists) para o valor. */
-const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes"]);
+const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes", "item_groups"]);
 const TEXT_OPERATORS: CriterionOperator[] = ["equal", "not_equal", "contains", "not_contains", "like"];
 const NUMERIC_OPERATORS: CriterionOperator[] = ["greater_than", "less_than", "between", "equal", "not_equal"];
+const DOC_TYPE_OPERATORS: CriterionOperator[] = ["equal", "not_equal"];
 
 function defaultOperatorForField(field: string): CriterionOperator {
   if (field === "total_amount") return "greater_than";
   if (field === "cost_center" || field === "item_codes") return "like";
-  if (field === "supplier_name" || field === "requester_name") return "contains";
+  if (field === "supplier_name") return "contains";
+  if (field === "requester_name") return "equal";
+  if (field === "doc_type") return "equal";
   return "equal";
 }
 
 function operatorAllowedForField(field: string, operator: CriterionOperator): boolean {
   if (field === "total_amount") return NUMERIC_OPERATORS.includes(operator);
+  if (field === "doc_type") return DOC_TYPE_OPERATORS.includes(operator);
   return TEXT_OPERATORS.includes(operator);
 }
 
@@ -335,6 +341,8 @@ function CriterionRow({
   onChange,
   onRemove,
   catalogs,
+  users,
+  usersLoading,
 }: {
   criterion: RuleCriterion;
   index: number;
@@ -345,15 +353,24 @@ function CriterionRow({
     project: { options: { code: string; name?: string }[]; isLoading: boolean };
     supplier_name: { options: { code: string; name?: string }[]; isLoading: boolean };
     item_codes: { options: { code: string; name?: string }[]; isLoading: boolean };
+    item_groups: { options: { code: string; name?: string }[]; isLoading: boolean };
   };
+  users: SapUser[];
+  usersLoading: boolean;
 }) {
   const isNumericField = criterion.field === "total_amount";
+  const isRequesterField = criterion.field === "requester_name";
+  const isDocTypeField = criterion.field === "doc_type";
   const isBetween = criterion.operator === "between";
   const useCatalog = CATALOG_FIELDS.has(criterion.field) && !isBetween;
   const effectiveOperator = operatorAllowedForField(criterion.field, criterion.operator)
     ? criterion.operator
     : defaultOperatorForField(criterion.field);
-  const operatorOptions = isNumericField ? NUMERIC_OPERATORS : TEXT_OPERATORS;
+  const operatorOptions = isNumericField
+    ? NUMERIC_OPERATORS
+    : isDocTypeField
+      ? DOC_TYPE_OPERATORS
+      : TEXT_OPERATORS;
 
   const catalog =
     useCatalog && (criterion.field as any) in catalogs
@@ -415,13 +432,34 @@ function CriterionRow({
         {/* Value */}
         <div className={isBetween ? "col-span-3" : "col-span-5"}>
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Valor</label>}
-          {catalog ? (
+          {isRequesterField ? (
+            <UserSelect
+              users={users}
+              isLoading={usersLoading}
+              value={criterion.value}
+              onSelect={(userName) => onChange(index, { ...criterion, value: userName })}
+            />
+          ) : isDocTypeField ? (
+            <Select
+              value={criterion.value || ""}
+              onValueChange={(v) => onChange(index, { ...criterion, value: v })}
+            >
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Selecionar tipo..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(DOC_TYPE_LABELS) as RuleDocType[]).map((key) => (
+                  <SelectItem key={key} value={key}>{DOC_TYPE_LABELS[key]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : catalog ? (
             <CatalogValueSelect
               options={catalog.options}
               isLoading={catalog.isLoading}
               value={criterion.value}
               onChange={(v) => onChange(index, { ...criterion, value: v })}
-              placeholder="Buscar..."
+              placeholder={criterion.field === "item_codes" ? "Buscar por código ou descrição..." : "Buscar..."}
               field={criterion.field}
               operator={effectiveOperator}
             />
@@ -532,14 +570,24 @@ function RuleFormModal({
     enabled: open,
   });
 
+  const groupMapRow = useCallback((row: any) => ({ code: String(row.Number ?? ""), name: row.GroupName }), []);
+  const { options: groupOptions, isLoading: groupLoading } = useSapCachedList({
+    cacheKey: "item_groups_v1",
+    endpoint: "ItemGroups",
+    params: { $select: "Number,GroupName" },
+    mapRow: groupMapRow,
+    enabled: open,
+  });
+
   const catalogs = useMemo(
     () => ({
       cost_center: { options: ccOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: ccLoading },
       project: { options: projOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: projLoading },
       supplier_name: { options: supOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: supLoading },
       item_codes: { options: itemOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: itemLoading },
+      item_groups: { options: groupOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: groupLoading },
     }),
-    [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading],
+    [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading, groupOptions, groupLoading],
   );
 
   // ── Fallback de aprovadores: mescla SAP Users + user_profiles ─────────
@@ -817,6 +865,8 @@ function RuleFormModal({
                     onChange={updateCriterion}
                     onRemove={removeCriterion}
                     catalogs={catalogs}
+                    users={mergedUsers}
+                    usersLoading={usersLoading}
                   />
                 ))}
               </div>
