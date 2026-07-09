@@ -73,8 +73,12 @@ export function requesterMatchesApprover(
 
 /**
  * Given the ordered approval levels and the requester identity, pick the
- * first level whose approver is NOT the requester. If none qualifies, return
- * the Juliana fallback pinned to the final level.
+ * first level whose approver(s) are NOT the requester. Supports MULTIPLE rows
+ * per `level_order` (parallel approvers — the first to decide encerra o nível).
+ *
+ * A level is "skippable" only when EVERY row at that `level_order` matches
+ * the requester. If any row differs, the requester can't self-approve there
+ * and the level is used.
  */
 export function pickApproverSkippingRequester(
   levels: ApprovalLevel[],
@@ -83,19 +87,29 @@ export function pickApproverSkippingRequester(
   startFrom = 1,
 ): ResolvedApprover {
   const ordered = [...levels].sort((a, b) => a.level_order - b.level_order);
-  for (const lvl of ordered) {
-    if (lvl.level_order < startFrom) continue;
-    if (!lvl.approver_name && !lvl.approver_email) continue;
-    if (!requesterMatchesApprover(requesterName, requesterEmail, lvl.approver_name, lvl.approver_email)) {
+  const distinct = Array.from(new Set(ordered.map((l) => l.level_order))).sort((a, b) => a - b);
+
+  for (const lo of distinct) {
+    if (lo < startFrom) continue;
+    const rowsAtLevel = ordered.filter(
+      (l) => l.level_order === lo && (l.approver_name || l.approver_email),
+    );
+    if (rowsAtLevel.length === 0) continue;
+    // Prefer the first row whose approver is NOT the requester.
+    const notRequester = rowsAtLevel.find(
+      (r) => !requesterMatchesApprover(requesterName, requesterEmail, r.approver_name, r.approver_email),
+    );
+    if (notRequester) {
       return {
-        level_order: lvl.level_order,
-        approver_name: lvl.approver_name || "",
-        approver_email: lvl.approver_email,
+        level_order: lo,
+        approver_name: notRequester.approver_name || "",
+        approver_email: notRequester.approver_email,
         fallback_used: false,
       };
     }
+    // All rows at this level are the requester → skip the whole level.
   }
-  const finalLevel = ordered.length > 0 ? ordered[ordered.length - 1].level_order : startFrom;
+  const finalLevel = distinct.length > 0 ? distinct[distinct.length - 1] : startFrom;
   return {
     level_order: finalLevel,
     approver_name: SELF_APPROVAL_FALLBACK.name,
