@@ -1788,7 +1788,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                               <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
                             )}
                             {origin === "erp" && (
-                              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">ERP</Badge>
+                              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">{erpLabel}</Badge>
                             )}
                           </div>
                         </td>
