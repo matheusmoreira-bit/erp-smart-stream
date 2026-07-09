@@ -1937,6 +1937,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       <ExpenseDetailModal
         expense={selectedExpense}
         originBadge={selectedOrigin}
+        erpLabel={erpLabel}
         open={!!selectedExpense}
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
