@@ -79,6 +79,14 @@ function fieldLabel(field: string): string {
   return FIELD_OPTIONS.find((f) => f.value === field)?.label || field;
 }
 
+function normalizeSearch(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function criterionSummary(c: RuleCriterion): string {
   const f = fieldLabel(c.field);
   const op = OPERATOR_LABELS[c.operator];
@@ -105,13 +113,13 @@ function UserSelect({
 
   const filtered = useMemo(() => {
     if (!search) return users;
-    const q = search.toLowerCase();
-    return users.filter(
-      (u) =>
-        u.UserName.toLowerCase().includes(q) ||
-        u.UserCode.toLowerCase().includes(q) ||
-        (u.eMail || "").toLowerCase().includes(q)
-    );
+    const q = normalizeSearch(search);
+    return users.filter((u) => {
+      const haystack = [u.UserName, u.UserCode, u.eMail, (u as any).searchText]
+        .map(normalizeSearch)
+        .join(" ");
+      return haystack.includes(q);
+    });
   }, [users, search]);
 
   return (
@@ -203,22 +211,35 @@ function CatalogValueSelect({
   value,
   onChange,
   placeholder,
+  field,
+  operator,
 }: {
   options: { code: string; name?: string }[];
   isLoading: boolean;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
+  field: string;
+  operator: CriterionOperator;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = normalizeSearch(search);
     if (!q) return options.slice(0, 200);
     return options
-      .filter((o) => o.code.toLowerCase().includes(q) || (o.name || "").toLowerCase().includes(q))
+      .filter((o) => normalizeSearch(o.code).includes(q) || normalizeSearch(o.name).includes(q))
       .slice(0, 200);
   }, [options, search]);
+
+  const formatSelectedValue = (code: string) => {
+    const normalizedCode = code.trim();
+    if (operator === "like" && field === "cost_center" && !/%|_/.test(normalizedCode)) {
+      return `${normalizedCode}%`;
+    }
+    return normalizedCode;
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -271,7 +292,7 @@ function CatalogValueSelect({
               <button
                 key={o.code}
                 onClick={() => {
-                  onChange(o.code);
+                  onChange(formatSelectedValue(o.code));
                   setOpen(false);
                   setSearch("");
                 }}
@@ -293,8 +314,20 @@ function CatalogValueSelect({
 /* ─── Criterion Row ─── */
 /** Campos que suportam busca em catálogo (SAP cached lists) para o valor. */
 const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes"]);
-/** Operadores que exigem valor exato — habilitamos o seletor de catálogo. */
-const EXACT_OPERATORS = new Set(["equal", "not_equal"]);
+const TEXT_OPERATORS: CriterionOperator[] = ["equal", "not_equal", "contains", "not_contains", "like"];
+const NUMERIC_OPERATORS: CriterionOperator[] = ["greater_than", "less_than", "between", "equal", "not_equal"];
+
+function defaultOperatorForField(field: string): CriterionOperator {
+  if (field === "total_amount") return "greater_than";
+  if (field === "cost_center" || field === "item_codes") return "like";
+  if (field === "supplier_name" || field === "requester_name") return "contains";
+  return "equal";
+}
+
+function operatorAllowedForField(field: string, operator: CriterionOperator): boolean {
+  if (field === "total_amount") return NUMERIC_OPERATORS.includes(operator);
+  return TEXT_OPERATORS.includes(operator);
+}
 
 function CriterionRow({
   criterion,
@@ -316,13 +349,29 @@ function CriterionRow({
 }) {
   const isNumericField = criterion.field === "total_amount";
   const isBetween = criterion.operator === "between";
-  const useCatalog =
-    CATALOG_FIELDS.has(criterion.field) && EXACT_OPERATORS.has(criterion.operator);
+  const useCatalog = CATALOG_FIELDS.has(criterion.field) && !isBetween;
+  const effectiveOperator = operatorAllowedForField(criterion.field, criterion.operator)
+    ? criterion.operator
+    : defaultOperatorForField(criterion.field);
+  const operatorOptions = isNumericField ? NUMERIC_OPERATORS : TEXT_OPERATORS;
 
   const catalog =
     useCatalog && (criterion.field as any) in catalogs
       ? (catalogs as any)[criterion.field] as { options: { code: string; name?: string }[]; isLoading: boolean }
       : null;
+
+  useEffect(() => {
+    if (criterion.operator !== effectiveOperator) {
+      onChange(index, { ...criterion, operator: effectiveOperator });
+    }
+  }, [criterion, effectiveOperator, index, onChange]);
+
+  const handleFieldChange = (field: string) => {
+    const nextOperator = operatorAllowedForField(field, criterion.operator)
+      ? criterion.operator
+      : defaultOperatorForField(field);
+    onChange(index, { ...criterion, field, operator: nextOperator, value: "", value2: undefined });
+  };
 
   return (
     <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/20 border border-border">
@@ -332,7 +381,7 @@ function CriterionRow({
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Campo</label>}
           <Select
             value={criterion.field}
-            onValueChange={(v) => onChange(index, { ...criterion, field: v })}
+            onValueChange={handleFieldChange}
           >
             <SelectTrigger className="h-9 text-xs">
               <SelectValue />
@@ -349,15 +398,15 @@ function CriterionRow({
         <div className="col-span-3">
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Operador</label>}
           <Select
-            value={criterion.operator}
+            value={effectiveOperator}
             onValueChange={(v) => onChange(index, { ...criterion, operator: v as CriterionOperator })}
           >
             <SelectTrigger className="h-9 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(OPERATOR_LABELS).map(([key, label]) => (
-                <SelectItem key={key} value={key}>{label}</SelectItem>
+              {operatorOptions.map((key) => (
+                <SelectItem key={key} value={key}>{OPERATOR_LABELS[key]}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -373,6 +422,8 @@ function CriterionRow({
               value={criterion.value}
               onChange={(v) => onChange(index, { ...criterion, value: v })}
               placeholder="Buscar..."
+              field={criterion.field}
+              operator={effectiveOperator}
             />
           ) : (
             <Input
@@ -463,20 +514,20 @@ function RuleFormModal({
     enabled: open,
   });
 
-  const supMapRow = useCallback((row: any) => ({ code: row.CardName || row.CardCode, name: row.CardCode }), []);
+  const supMapRow = useCallback((row: any) => ({ code: row.CardCode, name: row.CardName }), []);
   const { options: supOptions, isLoading: supLoading } = useSapCachedList({
-    cacheKey: "suppliers_active_v2",
+    cacheKey: "suppliers_active_v3",
     endpoint: "BusinessPartners",
-    params: { $select: "CardCode,CardName", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
+    params: { $select: "CardCode,CardName", $filter: "CardType eq 'cSupplier' and Frozen ne 'tYES'" },
     mapRow: supMapRow,
     enabled: open,
   });
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
   const { options: itemOptions, isLoading: itemLoading } = useSapCachedList({
-    cacheKey: "items_purchase_active_v3",
+    cacheKey: "items_purchase_active_v4",
     endpoint: "Items",
-    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    params: { $filter: "Valid eq 'tYES' and Frozen ne 'tYES'", $select: "ItemCode,ItemName" },
     mapRow: itemMapRow,
     enabled: open,
   });
@@ -493,6 +544,7 @@ function RuleFormModal({
 
   // ── Fallback de aprovadores: mescla SAP Users + user_profiles ─────────
   const [profileUsers, setProfileUsers] = useState<SapUser[]>([]);
+  const [idpUsers, setIdpUsers] = useState<SapUser[]>([]);
   const [profileLoading, setProfileLoading] = useState(false);
   useEffect(() => {
     if (!open || !session?.companyDB) return;
@@ -515,7 +567,24 @@ function RuleFormModal({
           LastLoginDate: undefined,
           LastLoginTime: undefined,
         }));
+        const { data: idpData } = await supabase
+          .from("idp_user_mapping")
+          .select("sap_user_code, sap_user_name, sap_email, idp_email, idp_display_name, status")
+          .order("sap_user_name", { ascending: true });
+        const idpRows: SapUser[] = (idpData || []).map((p: any, i: number) => ({
+          InternalKey: -(10_000 + i + 1),
+          UserCode: p.sap_user_code || "",
+          UserName: p.sap_user_name || p.idp_display_name || p.sap_user_code || p.sap_email || p.idp_email || "",
+          eMail: p.sap_email || p.idp_email || undefined,
+          Locked: p.status === "disabled" ? "tYES" as const : "tNO" as const,
+          LastLoginDate: undefined,
+          LastLoginTime: undefined,
+          searchText: [p.sap_user_code, p.sap_user_name, p.sap_email, p.idp_email, p.idp_display_name]
+            .filter(Boolean)
+            .join(" "),
+        } as SapUser & { searchText?: string }));
         setProfileUsers(rows);
+        setIdpUsers(idpRows);
       } catch (e) {
         console.warn("Falha ao carregar user_profiles para fallback:", e);
       } finally {
@@ -532,12 +601,26 @@ function RuleFormModal({
         || (u.UserCode || "").trim().toLowerCase()
         || (u.UserName || "").trim().toLowerCase();
       if (!key) return;
-      if (!byKey.has(key)) byKey.set(key, u);
+      if (!byKey.has(key)) {
+        byKey.set(key, u);
+        return;
+      }
+      const existing = byKey.get(key)! as SapUser & { searchText?: string };
+      existing.searchText = [
+        existing.searchText,
+        (u as any).searchText,
+        u.UserName,
+        u.UserCode,
+        u.eMail,
+      ].filter(Boolean).join(" ");
+      if (!existing.eMail && u.eMail) existing.eMail = u.eMail;
+      if (!existing.UserName && u.UserName) existing.UserName = u.UserName;
     };
     sapUsers.forEach(add);
     profileUsers.forEach(add);
+    idpUsers.forEach(add);
     return Array.from(byKey.values()).sort((a, b) => a.UserName.localeCompare(b.UserName));
-  }, [sapUsers, profileUsers]);
+  }, [sapUsers, profileUsers, idpUsers]);
   const usersLoading = sapUsersLoading || profileLoading;
 
   // Hydrate form when opening / switching between create and edit

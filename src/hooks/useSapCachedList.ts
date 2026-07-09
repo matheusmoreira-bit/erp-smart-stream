@@ -9,9 +9,11 @@ const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const CACHE_TTL_OVERRIDES: Record<string, number> = {
   items_purchase_active_v3: FIVE_MIN_MS,
+  items_purchase_active_v4: FIVE_MIN_MS,
   items_sales_active_v3: FIVE_MIN_MS,
   items_active_v2: FIVE_MIN_MS,
   suppliers_active_v2: FIVE_MIN_MS,
+  suppliers_active_v3: FIVE_MIN_MS,
   customers_active_v2: FIVE_MIN_MS,
 };
 const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE_TTL_MS;

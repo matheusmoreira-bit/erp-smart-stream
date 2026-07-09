@@ -13,6 +13,9 @@ export function evaluateCriterion(
   if (raw === undefined || raw === null) return false;
   const val = String(raw).toLowerCase();
   const target = String(c.value ?? "").toLowerCase();
+  const tokens = val.split(/\s+/).filter(Boolean);
+  const matchesExact = val === target || tokens.includes(target);
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   switch (c.operator) {
     case "greater_than":
@@ -25,17 +28,18 @@ export function evaluateCriterion(
         Number(raw) <= Number(c.value2 ?? c.value)
       );
     case "equal":
-      return val === target;
+      return matchesExact;
     case "not_equal":
-      return val !== target;
+      return !matchesExact;
     case "contains":
       return val.includes(target);
     case "not_contains":
       return !val.includes(target);
     case "like": {
-      const pattern = target.replace(/%/g, ".*").replace(/_/g, ".");
+      const pattern = target.split("").map((ch) => ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)).join("");
       try {
-        return new RegExp(`^${pattern}$`).test(val);
+        const re = new RegExp(`^${pattern}$`);
+        return re.test(val) || tokens.some((t) => re.test(t));
       } catch {
         return false;
       }
@@ -131,10 +135,10 @@ export function segmentDocByRules(
       cost_center: cc === "__no_cc__" ? "" : cc,
       project: (groupLines.find((l) => l.Project)?.Project || "").trim(),
       requester_name: doc.requester || "",
-      supplier_name: doc.cardName || "",
+      supplier_name: `${doc.cardName || ""} ${doc.cardCode || ""}`.trim(),
       currency: (doc.currency || "BRL").toUpperCase(),
       doc_type: docType,
-      item_codes: toList(groupLines.map((l) => l.ItemCode || "")),
+      item_codes: toList(groupLines.flatMap((l) => [l.ItemCode || "", l.Description || ""])),
       item_groups: "",
     };
     const rule = findMatchingRule(rules, ctx, docType);
