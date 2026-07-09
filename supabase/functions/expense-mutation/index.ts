@@ -312,23 +312,30 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   // Também dispara resubmit quando o tipo de rateio muda em rascunho (o
   // caminho de aprovação depende do rateio_type).
   const rateioChanged = !!input.rateio_changed;
-  const shouldResubmit = status === "pendente_aprovacao" || editableForFix || (rateioChanged && status === "rascunho");
+  const shouldResubmit = status === "pendente_aprovacao" || editableForFix;
   let resubmittedApprover: string | null = null;
   let resubmittedLevel = 1;
   let resubmitFallbackUsed = false;
+
+  // Se o rateio mudou, o cliente já resolveu a nova regra e o 1º aprovador.
+  // - Em rascunho: atualiza apenas os campos de roteamento; status continua rascunho.
+  // - Em pendente_aprovacao (ou aprovado com erro): resubmete a partir do nível 1
+  //   usando a NOVA regra.
+  if (rateioChanged) {
+    updates.approval_rule_id = input.new_approval_rule_id ?? null;
+    if (status === "rascunho") {
+      updates.current_level_order = 1;
+      updates.current_approver = input.new_current_approver ?? null;
+    }
+  }
+
   if (shouldResubmit) {
-    // Se rateio mudou, o cliente já resolveu a nova regra e o aprovador do nível 1.
-    // Caso contrário, usa a regra atual da despesa.
     const nextRuleId = rateioChanged
       ? (input.new_approval_rule_id ?? null)
       : (current.approval_rule_id ?? null);
     const nextApproverFromClient = rateioChanged
       ? (input.new_current_approver ?? null)
       : null;
-
-    if (rateioChanged) {
-      updates.approval_rule_id = nextRuleId;
-    }
 
     let resolvedLevel = 1;
     let resolvedApprover: string | null = nextApproverFromClient;
