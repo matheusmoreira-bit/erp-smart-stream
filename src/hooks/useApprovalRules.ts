@@ -111,7 +111,7 @@ export const FIELD_OPTIONS: { value: string; label: string }[] = ENTITY_OPTIONS.
   }));
 });
 
-export type CriterionLogic = "and" | "or";
+export type CriterionLogic = "and" | "or" | "either";
 
 export interface RuleCriterion {
   field: string;
