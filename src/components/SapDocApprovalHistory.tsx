@@ -259,17 +259,175 @@ function StatusPill({ status, label }: { status: ApprovalHistoryEntry["status"];
   );
 }
 
-export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHistoryProps) {
+export interface SapApprovalHistoryState {
+  loading: boolean;
+  requests: ResolvedRequest[];
+  error: string | null;
+  retry: () => void;
+  enabled: boolean;
+}
+
+export function useSapDocApprovalHistory(
+  docEntry?: number | null,
+  objectType?: string | string[],
+): SapApprovalHistoryState {
   const { session } = useSap();
   const [loading, setLoading] = useState(false);
   const [requests, setRequests] = useState<ResolvedRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const handleRetry = () => {
+  const objectTypes: string[] = Array.isArray(objectType)
+    ? objectType
+    : objectType
+      ? [objectType]
+      : [...DEFAULT_PURCHASE_OBJECT_TYPES];
+  const objectTypesKey = objectTypes.join(",");
+
+  const retry = () => {
     if (docEntry) invalidateSapDocApprovalCache(docEntry);
     setReloadKey((k) => k + 1);
   };
+
+  useEffect(() => {
+    if (!session || session.erpType !== "sap" || !docEntry) {
+      setRequests([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    const key = cacheKey(session as SapSession, docEntry, objectTypesKey);
+    const cached = resolvedCache.get(key);
+    if (cached && Date.now() - cached.at < RESOLVED_CACHE_TTL_MS) {
+      setRequests(cached.data);
+      setLoading(false);
+      setError(null);
+      return () => { cancelled = true; };
+    }
+    const loader = inflightCache.get(key) ?? (async (): Promise<ResolvedRequest[]> => {
+      const raw = await fetchApprovalRequests(session as SapSession, docEntry, objectTypes);
+      if (raw.length === 0) return [];
+      const userIds = new Set<number>();
+      const stageCodes = new Set<number>();
+      const templateIds = new Set<number>();
+      for (const r of raw) {
+        if (r.ApprovalTemplatesID) templateIds.add(r.ApprovalTemplatesID);
+        for (const d of r.ApprovalRequestDecisions || []) {
+          if (d.UserID) userIds.add(d.UserID);
+        }
+        for (const l of r.ApprovalRequestLines || []) {
+          if (l.UserID) userIds.add(l.UserID);
+          const s = l.StageCode || l.ApprovalRequestStep;
+          if (s) stageCodes.add(Number(s));
+        }
+      }
+      const [usersMap, templateEntries, stageEntries] = await Promise.all([
+        fetchUsersByIds(session as SapSession, Array.from(userIds)),
+        Promise.all(Array.from(templateIds).map(async (id) => [id, await fetchTemplate(session as SapSession, id)] as const)),
+        Promise.all(Array.from(stageCodes).map(async (code) => [code, await fetchStage(session as SapSession, code)] as const)),
+      ]);
+      const templatesMap = new Map<number, SLTemplate>();
+      for (const [id, t] of templateEntries) if (t) templatesMap.set(id, t);
+      const stagesMap = new Map<number, SLStage>();
+      for (const [code, s] of stageEntries) if (s) stagesMap.set(code, s);
+      const resolved: ResolvedRequest[] = raw.map((r) => {
+        const templateName = r.ApprovalTemplatesID
+          ? templatesMap.get(r.ApprovalTemplatesID)?.Name || ""
+          : "";
+        const statusLabel = REQUEST_STATUS_LABEL[r.Status || ""] || r.Status || "—";
+        const linesByStep = new Map<number, SLRequestLine>();
+        for (const l of r.ApprovalRequestLines || []) {
+          const step = Number(l.ApprovalRequestStep || 0);
+          if (step) linesByStep.set(step, l);
+        }
+        const decisions = (r.ApprovalRequestDecisions || []).slice().sort((a, b) => {
+          const sa = Number(a.ApprovalRequestStep || 0);
+          const sb = Number(b.ApprovalRequestStep || 0);
+          if (sa !== sb) return sa - sb;
+          return (a.UpdateDate || "").localeCompare(b.UpdateDate || "");
+        });
+        const history: ApprovalHistoryEntry[] = decisions.map((d) => {
+          const step = Number(d.ApprovalRequestStep || 0);
+          const line = linesByStep.get(step);
+          const stageCode = line?.StageCode ? Number(line.StageCode) : undefined;
+          const stage = stageCode ? stagesMap.get(stageCode) : undefined;
+          const user = d.UserID ? usersMap.get(d.UserID) : (line?.UserID ? usersMap.get(line.UserID) : undefined);
+          const info = DECISION_STATUS_MAP[d.Status || ""] || { key: "pending" as const, label: d.Status || "—" };
+          const decisionRemarks = (d.Remarks || "").trim();
+          const lineRemarks = (line?.Remarks || "").trim();
+          const remarks = decisionRemarks && lineRemarks && decisionRemarks !== lineRemarks
+            ? `${decisionRemarks}\n\n${lineRemarks}`
+            : (decisionRemarks || lineRemarks);
+          return {
+            step,
+            stageName: stage?.Name || templateName || "—",
+            approverName: user?.UserName || user?.UserCode || "—",
+            approverEmail: user?.eMail || "",
+            status: info.key,
+            statusLabel: info.label,
+            date: d.UpdateDate || d.CreateDate || "",
+            remarks,
+          };
+        });
+        if (history.length === 0 && (r.ApprovalRequestLines || []).length > 0) {
+          const lines = (r.ApprovalRequestLines || []).slice().sort(
+            (a, b) => Number(a.ApprovalRequestStep || 0) - Number(b.ApprovalRequestStep || 0),
+          );
+          for (const l of lines) {
+            const step = Number(l.ApprovalRequestStep || 0);
+            const stageCode = l.StageCode ? Number(l.StageCode) : undefined;
+            const stage = stageCode ? stagesMap.get(stageCode) : undefined;
+            const user = l.UserID ? usersMap.get(l.UserID) : undefined;
+            const info = DECISION_STATUS_MAP[l.Status || ""] || { key: "pending" as const, label: "Pendente" };
+            history.push({
+              step,
+              stageName: stage?.Name || templateName || "—",
+              approverName: user?.UserName || user?.UserCode || "—",
+              approverEmail: user?.eMail || "",
+              status: info.key,
+              statusLabel: info.label,
+              date: "",
+              remarks: (l.Remarks || "").trim(),
+            });
+          }
+        }
+        const originatorRemarks = (r.RemarksFromOriginator || r.Remarks || "").trim();
+        return { code: Number(r.Code || 0), statusLabel, templateName, originatorRemarks, history };
+      });
+      return resolved;
+    })();
+    if (!inflightCache.has(key)) inflightCache.set(key, loader);
+    setLoading(true);
+    setError(null);
+    loader
+      .then((resolved) => {
+        resolvedCache.set(key, { at: Date.now(), data: resolved });
+        if (!cancelled) setRequests(resolved);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Falha ao carregar histórico do ERP");
+      })
+      .finally(() => {
+        inflightCache.delete(key);
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, docEntry, objectTypesKey, reloadKey]);
+
+  return {
+    loading,
+    requests,
+    error,
+    retry,
+    enabled: !!(session && session.erpType === "sap" && docEntry),
+  };
+}
+
+export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHistoryProps) {
+  const { session } = useSap();
+  const { loading, requests, error, retry: handleRetry } = useSapDocApprovalHistory(docEntry, objectType);
 
   // Normaliza objectType para array; usa defaults de compra quando não informado.
   const objectTypes: string[] = Array.isArray(objectType)
