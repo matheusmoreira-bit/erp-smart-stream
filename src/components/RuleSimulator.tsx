@@ -587,24 +587,52 @@ export function RuleSimulator({
                             P{m.rule.priority}
                           </Badge>
                         </div>
-                        {m.perCriterion.length === 0 ? (
+                        {m.groups.length === 0 || m.groups.every((g) => g.items.length === 0) ? (
                           <p className="text-[11px] text-muted-foreground italic">
                             Regra sem critérios — nunca casa automaticamente.
                           </p>
                         ) : (
-                          <ul className="space-y-0.5 ml-5">
-                            {m.perCriterion.map((p, idx) => (
-                              <li
-                                key={idx}
-                                className={`flex items-center gap-1.5 ${
-                                  p.passed ? "text-success" : "text-muted-foreground"
-                                }`}
-                              >
-                                {p.passed ? "✓" : "✗"}
-                                <span>{criterionSummary(p.criterion)}</span>
-                              </li>
+                          <div className="space-y-1.5 ml-1">
+                            {m.groups.map((g, gIdx) => (
+                              <div key={gIdx}>
+                                {g.connector && (
+                                  <div className="flex items-center gap-2 my-1">
+                                    <div className="h-px flex-1 bg-border" />
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[9px] font-bold ${
+                                        g.connector === "or"
+                                          ? "border-primary/40 text-primary"
+                                          : "border-border text-muted-foreground"
+                                      }`}
+                                    >
+                                      {logicBadge(g.connector)} (entre grupos)
+                                    </Badge>
+                                    <div className="h-px flex-1 bg-border" />
+                                  </div>
+                                )}
+                                <ul className="space-y-0.5 ml-4">
+                                  {g.items.map((p, idx) => (
+                                    <li key={idx}>
+                                      {p.connector && (
+                                        <span className="inline-block ml-[-1rem] mr-1 text-[9px] font-bold uppercase text-muted-foreground/70">
+                                          {logicBadge(p.connector)}
+                                        </span>
+                                      )}
+                                      <span
+                                        className={`inline-flex items-center gap-1.5 ${
+                                          p.passed ? "text-success" : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {p.passed ? "✓" : "✗"}
+                                        <span>{criterionSummary(p.criterion)}</span>
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         )}
                       </div>
                     ))
