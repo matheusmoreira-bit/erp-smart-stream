@@ -229,14 +229,19 @@ export function RuleSimulator({
       })
       .sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
-    return scoped.map((r) => {
+    return scoped.map<Match>((r) => {
       const criteria = Array.isArray(r.criteria) ? r.criteria : [];
-      const perCriterion = criteria.map((c) => ({
-        criterion: c,
-        passed: evaluateCriterion(c, ctx),
+      const buckets = groupCriteria(criteria);
+      const groups = buckets.map((bucket, gIdx) => ({
+        connector: gIdx === 0 ? null : effectiveLogic(bucket[0]?.groupLogic),
+        items: bucket.map((c, i) => ({
+          criterion: c,
+          passed: evaluateCriterion(c, ctx),
+          connector: i === 0 ? null : effectiveLogic(c.logic),
+        })),
       }));
       const allMatched = criteria.length > 0 && evaluateCriteria(criteria, ctx);
-      return { rule: r, perCriterion, allMatched };
+      return { rule: r, groups, allMatched };
     });
   }, [ran, input, rules]);
 
