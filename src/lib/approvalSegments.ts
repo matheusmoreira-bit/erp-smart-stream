@@ -38,7 +38,8 @@ export function evaluateCriterion(
     case "like": {
       const pattern = target.split("").map((ch) => ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)).join("");
       try {
-        return new RegExp(`^${pattern}$`).test(val);
+        const re = new RegExp(`^${pattern}$`);
+        return re.test(val) || tokens.some((t) => re.test(t));
       } catch {
         return false;
       }

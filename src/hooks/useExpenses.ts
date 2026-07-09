@@ -296,7 +296,8 @@ function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean 
     case "not_contains": return !val.includes(target);
     case "like": {
       const pattern = target.split("").map((ch) => ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)).join("");
-      return new RegExp(`^${pattern}$`).test(val);
+      const re = new RegExp(`^${pattern}$`);
+      return re.test(val) || tokens.some((t) => re.test(t));
     }
     default: return false;
   }
