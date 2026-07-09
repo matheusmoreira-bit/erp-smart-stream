@@ -733,13 +733,14 @@ function RuleFormModal({
                     index={i}
                     onChange={updateCriterion}
                     onRemove={removeCriterion}
+                    catalogs={catalogs}
                   />
                 ))}
               </div>
             )}
           </div>
 
-          {/* Dynamic Levels */}
+          {/* Dynamic Levels — grouped by level_order (parallel approvers) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -758,46 +759,71 @@ function RuleFormModal({
                 Adicionar primeiro nível de aprovação
               </button>
             ) : (
-              <div className="space-y-2">
-                {levels.map((lvl, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 text-primary text-sm font-bold shrink-0">
-                      {lvl.level_order}
-                    </div>
-                    <div className="flex-1 grid grid-cols-2 gap-2">
-                      <UserSelect
-                        users={sapUsers}
-                        isLoading={sapUsersLoading}
-                        value={lvl.approver_name}
-                        onSelect={(userName, email) => {
-                          updateLevel(i, "approver_name", userName);
-                          updateLevel(i, "approver_email", email);
-                        }}
-                        label={i === 0 ? "Aprovador *" : undefined}
-                      />
-                      <div>
-                        {i === 0 && <label className="text-[10px] text-muted-foreground">Email</label>}
-                        <Input
-                          value={lvl.approver_email || ""}
-                          readOnly
-                          className="text-sm h-9 bg-muted/30 text-muted-foreground"
-                          placeholder="Preenchido automaticamente"
-                        />
+              <div className="space-y-3">
+                {levelsGrouped.map(([lo, rows]) => (
+                  <div key={lo} className="rounded-lg border border-border bg-muted/10 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/15 text-primary text-xs font-bold shrink-0">
+                          {lo}
+                        </span>
+                        <div>
+                          <p className="text-xs font-medium text-foreground">Nível {lo}</p>
+                          {rows.length > 1 && (
+                            <p className="text-[10px] text-muted-foreground">
+                              Aprovação em paralelo — {rows.length} aprovadores. O primeiro que decidir encerra o nível.
+                            </p>
+                          )}
+                        </div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => addParallelApprover(lo)}
+                        className="gap-1 text-[11px] h-7"
+                      >
+                        <Plus className="w-3 h-3" /> Aprovador paralelo
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeLevel(i)}
-                      className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="space-y-2">
+                      {rows.map((row) => (
+                        <div key={row.idx} className="flex items-start gap-2">
+                          <div className="flex-1 grid grid-cols-2 gap-2">
+                            <UserSelect
+                              users={mergedUsers}
+                              isLoading={usersLoading}
+                              value={row.approver_name}
+                              onSelect={(userName, email) => {
+                                updateLevelRow(row.idx, "approver_name", userName);
+                                updateLevelRow(row.idx, "approver_email", email);
+                              }}
+                              label={undefined}
+                            />
+                            <Input
+                              value={row.approver_email || ""}
+                              readOnly
+                              className="text-sm h-9 bg-muted/30 text-muted-foreground"
+                              placeholder="Preenchido automaticamente"
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeApproverRow(row.idx)}
+                            className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+                            title="Remover aprovador"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
 
           <div className="border-t border-border pt-4 flex justify-end gap-3">
             <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
