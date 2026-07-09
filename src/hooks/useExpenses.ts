@@ -332,7 +332,7 @@ async function findMatchingRule(
   for (const r of filtered) {
     const criteria: RuleCriterion[] = Array.isArray(r.criteria) ? r.criteria : [];
     if (criteria.length === 0) continue;
-    const allMatch = criteria.every((c) => evaluateCriterion(c, ctx));
+    const allMatch = evaluateCriteriaList(criteria, ctx);
     if (allMatch) {
       const { data: levels } = await supabase
         .from("approval_rule_levels")
