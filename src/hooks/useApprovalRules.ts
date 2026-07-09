@@ -303,14 +303,30 @@ export function useApprovalRules() {
       }
 
 
-      setRules(
-        (data || []).map((r: any) => ({
+      const normalized = (data || []).map((r: any) => {
+        const rawCriteria = Array.isArray(r.criteria) ? r.criteria : [];
+        const normalizedCriteria = normalizeCriteria(rawCriteria);
+        // Backfill oportunista: se a normalização mudou a forma persistida
+        // (regra legada sem `logic`/`group`/`groupLogic`), grava a versão
+        // normalizada de volta no banco em segundo plano. Falhas são
+        // silenciosas — na próxima leitura tentaremos de novo.
+        if (JSON.stringify(rawCriteria) !== JSON.stringify(normalizedCriteria)) {
+          void supabase
+            .from("approval_rules")
+            .update({ criteria: normalizedCriteria as any })
+            .eq("id", r.id)
+            .then(({ error }) => {
+              if (error) console.warn("[approval-rules] backfill logic falhou:", r.id, error.message);
+            });
+        }
+        return {
           ...r,
-          criteria: normalizeCriteria(Array.isArray(r.criteria) ? r.criteria : []),
+          criteria: normalizedCriteria,
           doc_type: (r.doc_type as RuleDocType) || "both",
           levels: levelsMap[r.id] || [],
-        }))
-      );
+        };
+      });
+      setRules(normalized);
 
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao buscar regras");
