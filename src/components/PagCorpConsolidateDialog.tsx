@@ -9,7 +9,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
