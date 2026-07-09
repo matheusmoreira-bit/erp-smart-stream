@@ -489,16 +489,21 @@ export function RuleSimulator({
                     const connectors = [
                       ...winner.groups.slice(1).map((g) => g.connector),
                       ...winner.groups.flatMap((g) => g.items.slice(1).map((it) => it.connector)),
-                    ].filter((x): x is "and" | "or" => x === "and" || x === "or");
+                    ].filter((x): x is "and" | "or" | "either" => x === "and" || x === "or" || x === "either");
                     if (connectors.length === 0) return null;
+                    const hasEither = connectors.includes("either");
                     const hasOr = connectors.includes("or");
                     const hasAnd = connectors.includes("and");
-                    const label = hasOr && hasAnd ? "E + OU" : hasOr ? "somente OU" : "somente E";
+                    const parts: string[] = [];
+                    if (hasAnd) parts.push("E");
+                    if (hasOr) parts.push("OU");
+                    if (hasEither) parts.push("E/OU");
+                    const label = parts.length === 1 ? `somente ${parts[0]}` : parts.join(" + ");
                     return (
                       <p className="text-[11px] text-muted-foreground">
                         Lógica efetiva dos critérios:{" "}
                         <span className="font-semibold text-foreground">{label}</span>
-                        <span className="text-muted-foreground/70"> (regras antigas sem conector = E)</span>
+                        <span className="text-muted-foreground/70"> (regras antigas sem conector = E; E/OU trata como OU inclusivo)</span>
                       </p>
                     );
                   })()}
