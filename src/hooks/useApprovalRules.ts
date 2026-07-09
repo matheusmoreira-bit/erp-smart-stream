@@ -198,16 +198,20 @@ export const collapseConsecutiveApprovers = dedupeParallelApprovers;
 /**
  * Normaliza os conectores lógicos dos critérios (`logic` e `groupLogic`) para
  * garantir que sejam persistidos de forma consistente e reaparecem corretos ao
- * editar a regra. Regras salvas antes deste campo existir também são
- * "hidratadas" com defaults sensatos (dentro do grupo: "and"; entre grupos:
- * "or").
+ * editar a regra.
+ *
+ * FALLBACK PARA REGRAS LEGADAS: regras salvas antes do campo E/OU existir NÃO
+ * têm `logic` nem `groupLogic`. Nesses casos assumimos o conector padrão
+ * `"and"` (comportamento equivalente ao antigo `criteria.every(...)`), para
+ * que o significado da regra permaneça idêntico após a migração.
  *
  * Convenções:
  *  - Todo critério ganha `group` (default 0).
- *  - Primeiro critério de cada grupo: `logic` é removido; se o grupo não for o
- *    primeiro, `groupLogic` recebe default "or".
- *  - Demais critérios do grupo: `logic` recebe default "and"; `groupLogic` é
- *    removido (só o primeiro do grupo carrega o conector entre grupos).
+ *  - Primeiro critério de cada grupo: `logic` é removido; se o grupo não for
+ *    o primeiro, `groupLogic` recebe default `"and"` (fallback legado).
+ *  - Demais critérios do grupo: `logic` recebe default `"and"`; `groupLogic`
+ *    é removido (só o primeiro do grupo carrega o conector entre grupos).
+ *  - Valores explícitos (`"or"` ou `"and"`) são sempre preservados.
  */
 export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null): RuleCriterion[] {
   if (!Array.isArray(criteria) || criteria.length === 0) return [];
@@ -226,6 +230,8 @@ export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null):
   withGroup.forEach((c, i) => {
     if (!firstIndexByGroup.has(c.group!)) firstIndexByGroup.set(c.group!, i);
   });
+  const coerce = (v: unknown): CriterionLogic =>
+    v === "or" ? "or" : v === "and" ? "and" : "and"; // fallback legado → AND
   return withGroup.map((c, i) => {
     const isFirstOfGroup = firstIndexByGroup.get(c.group!) === i;
     const groupPos = groupOrder.indexOf(c.group!);
@@ -235,15 +241,16 @@ export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null):
       if (groupPos === 0) {
         delete next.groupLogic;
       } else {
-        next.groupLogic = next.groupLogic === "and" ? "and" : "or";
+        next.groupLogic = coerce(next.groupLogic);
       }
     } else {
       delete next.groupLogic;
-      next.logic = next.logic === "or" ? "or" : "and";
+      next.logic = coerce(next.logic);
     }
     return next;
   });
 }
+
 
 
 

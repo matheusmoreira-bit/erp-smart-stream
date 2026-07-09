@@ -361,7 +361,7 @@ function evaluateCriteriaList(criteria: RuleCriterion[], ctx: Record<string, any
     }
     if (idx === 0) overall = acc;
     else {
-      const gLogic = (bucket[0] as any).groupLogic === "and" ? "and" : "or";
+      const gLogic = (bucket[0] as any).groupLogic === "or" ? "or" : "and"; // fallback → AND
       overall = gLogic === "and" ? (overall && acc) : (overall || acc);
     }
     idx++;

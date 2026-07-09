@@ -23,18 +23,27 @@ describe("normalizeCriteria — persistência dos conectores E/OU", () => {
     expect(out[2].logic).toBe("and");
   });
 
-  it("primeiro critério de grupo>0 recebe groupLogic default 'or'", () => {
+  it("primeiro critério de grupo>0 recebe groupLogic default 'and' (fallback legado)", () => {
     const out = normalizeCriteria([
       c("a", { group: 0 }),
       c("b", { group: 1 }),
       c("c", { group: 1 }),
     ]);
     expect(out[0].groupLogic).toBeUndefined();
-    expect(out[1].groupLogic).toBe("or");
+    expect(out[1].groupLogic).toBe("and");
     expect(out[2].groupLogic).toBeUndefined(); // só o primeiro do grupo carrega
     expect(out[1].logic).toBeUndefined();      // primeiro do grupo não tem logic
     expect(out[2].logic).toBe("and");
   });
+
+  it("preserva groupLogic='or' explicitamente escolhido no 1º do grupo", () => {
+    const out = normalizeCriteria([
+      c("a", { group: 0 }),
+      c("b", { group: 1, groupLogic: "or" }),
+    ]);
+    expect(out[1].groupLogic).toBe("or");
+  });
+
 
   it("preserva groupLogic='and' escolhido pelo usuário no 1º do grupo", () => {
     const out = normalizeCriteria([
