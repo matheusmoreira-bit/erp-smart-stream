@@ -339,6 +339,8 @@ function CriterionRow({
   onChange,
   onRemove,
   catalogs,
+  users,
+  usersLoading,
 }: {
   criterion: RuleCriterion;
   index: number;
@@ -349,15 +351,24 @@ function CriterionRow({
     project: { options: { code: string; name?: string }[]; isLoading: boolean };
     supplier_name: { options: { code: string; name?: string }[]; isLoading: boolean };
     item_codes: { options: { code: string; name?: string }[]; isLoading: boolean };
+    item_groups: { options: { code: string; name?: string }[]; isLoading: boolean };
   };
+  users: SapUser[];
+  usersLoading: boolean;
 }) {
   const isNumericField = criterion.field === "total_amount";
+  const isRequesterField = criterion.field === "requester_name";
+  const isDocTypeField = criterion.field === "doc_type";
   const isBetween = criterion.operator === "between";
   const useCatalog = CATALOG_FIELDS.has(criterion.field) && !isBetween;
   const effectiveOperator = operatorAllowedForField(criterion.field, criterion.operator)
     ? criterion.operator
     : defaultOperatorForField(criterion.field);
-  const operatorOptions = isNumericField ? NUMERIC_OPERATORS : TEXT_OPERATORS;
+  const operatorOptions = isNumericField
+    ? NUMERIC_OPERATORS
+    : isDocTypeField
+      ? DOC_TYPE_OPERATORS
+      : TEXT_OPERATORS;
 
   const catalog =
     useCatalog && (criterion.field as any) in catalogs
