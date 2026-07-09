@@ -1106,9 +1106,11 @@ Deno.serve(async (req) => {
           unit = lineTotal / qty;
         }
         const invoiceDesc = truncateSapText(it.description, 254);
+        const lineCurrency = String((expense as any).currency || "").toUpperCase().trim();
         const line: Record<string, unknown> = {
           Quantity: qty,
           UnitPrice: unit,
+          ...(/^[A-Z]{3}$/.test(lineCurrency) ? { Currency: lineCurrency } : {}),
           ...lineCustom,
         };
         if (hasItem) {
