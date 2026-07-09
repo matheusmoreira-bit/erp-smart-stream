@@ -45,14 +45,18 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
     setPo(null); setInvoices([]); setPayments([]);
     try {
       // 1. Pedido de Compra
-      const { data: poData } = await sapQuery(session, `PurchaseOrders(${docEntry})`, {});
+      const { data: poData } = await sapQuery(
+        session,
+        `PurchaseOrders(${docEntry})`,
+        { $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName" },
+      );
       setPo(poData);
 
       // 2. Notas fiscais (PurchaseInvoices) que tenham linha vindas desse PC
       try {
         const { data: invData } = await sapQuery(session, "PurchaseInvoices", {
           $filter: `DocumentLines/any(d: d/BaseEntry eq ${docEntry} and d/BaseType eq 22)`,
-          $select: "DocEntry,DocNum,DocDate,DocTotal,DocCurrency,DocumentStatus,CardCode,CardName",
+          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName",
           $top: 10,
         });
         setInvoices((invData as any)?.value || []);
