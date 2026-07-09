@@ -289,19 +289,38 @@ function CatalogValueSelect({
 }
 
 /* ─── Criterion Row ─── */
+/** Campos que suportam busca em catálogo (SAP cached lists) para o valor. */
+const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes"]);
+/** Operadores que exigem valor exato — habilitamos o seletor de catálogo. */
+const EXACT_OPERATORS = new Set(["equal", "not_equal"]);
+
 function CriterionRow({
   criterion,
   index,
   onChange,
   onRemove,
+  catalogs,
 }: {
   criterion: RuleCriterion;
   index: number;
   onChange: (index: number, updated: RuleCriterion) => void;
   onRemove: (index: number) => void;
+  catalogs: {
+    cost_center: { options: { code: string; name?: string }[]; isLoading: boolean };
+    project: { options: { code: string; name?: string }[]; isLoading: boolean };
+    supplier_name: { options: { code: string; name?: string }[]; isLoading: boolean };
+    item_codes: { options: { code: string; name?: string }[]; isLoading: boolean };
+  };
 }) {
   const isNumericField = criterion.field === "total_amount";
   const isBetween = criterion.operator === "between";
+  const useCatalog =
+    CATALOG_FIELDS.has(criterion.field) && EXACT_OPERATORS.has(criterion.operator);
+
+  const catalog =
+    useCatalog && (criterion.field as any) in catalogs
+      ? (catalogs as any)[criterion.field] as { options: { code: string; name?: string }[]; isLoading: boolean }
+      : null;
 
   return (
     <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/20 border border-border">
@@ -345,13 +364,23 @@ function CriterionRow({
         {/* Value */}
         <div className={isBetween ? "col-span-3" : "col-span-5"}>
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Valor</label>}
-          <Input
-            type={isNumericField ? "number" : "text"}
-            value={criterion.value}
-            onChange={(e) => onChange(index, { ...criterion, value: e.target.value })}
-            placeholder={criterion.operator === "like" ? "Ex: %gaming%" : "Valor"}
-            className="text-sm h-9"
-          />
+          {catalog ? (
+            <CatalogValueSelect
+              options={catalog.options}
+              isLoading={catalog.isLoading}
+              value={criterion.value}
+              onChange={(v) => onChange(index, { ...criterion, value: v })}
+              placeholder="Buscar..."
+            />
+          ) : (
+            <Input
+              type={isNumericField ? "number" : "text"}
+              value={criterion.value}
+              onChange={(e) => onChange(index, { ...criterion, value: e.target.value })}
+              placeholder={criterion.operator === "like" ? "Ex: 1.6.% ou %gaming%" : "Valor"}
+              className="text-sm h-9"
+            />
+          )}
         </div>
 
         {/* Value2 for between */}
