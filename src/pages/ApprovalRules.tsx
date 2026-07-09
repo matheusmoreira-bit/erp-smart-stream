@@ -660,16 +660,24 @@ function RuleFormModal({
     enabled: open,
   });
 
-  const catalogs = useMemo(
-    () => ({
+  const catalogs = useMemo(() => {
+    const sup = { options: supOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: supLoading };
+    const item = { options: itemOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: itemLoading };
+    return {
       cost_center: { options: ccOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: ccLoading },
       project: { options: projOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: projLoading },
-      supplier_name: { options: supOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: supLoading },
-      item_codes: { options: itemOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: itemLoading },
+      // Fornecedor: mesma lista para nome e código (o Select mostra ambos).
+      supplier_name: sup,
+      "supplier.name": sup,
+      "supplier.code": sup,
+      // Item: mesma lista para código, descrição e "qualquer".
+      item_codes: item,
+      "item.any": item,
+      "item.code": item,
+      "item.name": item,
       item_groups: { options: groupOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: groupLoading },
-    }),
-    [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading, groupOptions, groupLoading],
-  );
+    };
+  }, [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading, groupOptions, groupLoading]);
 
   // ── Fallback de aprovadores: mescla SAP Users + user_profiles ─────────
   const [profileUsers, setProfileUsers] = useState<SapUser[]>([]);
