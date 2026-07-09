@@ -62,6 +62,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
     setCurrency(defaultCurrency);
     setDueDate("");
     setRemarks("");
+    setCostCenter(null);
     setFiles([]);
   };
 
@@ -70,6 +71,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
     if (!companyDb) return toast.error("Sessão sem empresa selecionada");
     const amt = Number(amount.replace(",", "."));
     if (!Number.isFinite(amt) || amt <= 0) return toast.error("Informe um valor válido");
+    if (submit && !costCenter?.code) return toast.error("Selecione o centro de custo");
 
     setSaving(true);
     try {
@@ -82,6 +84,8 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
         currency,
         due_date: dueDate || undefined,
         remarks: remarks || undefined,
+        cost_center: costCenter?.code || undefined,
+        cost_center_name: costCenter?.name || undefined,
         files,
         submit,
       };
