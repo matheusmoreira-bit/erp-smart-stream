@@ -96,8 +96,11 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, docEntry]);
 
-  const poTotal = po?.DocTotal ?? null;
+  // SAP B1 Service Layer retorna DocTotal em moeda local (BRL) e DocTotalFC em moeda estrangeira.
+  // Se o PC estiver em moeda estrangeira (DocCurrency != BRL), o valor comparável é DocTotalFC.
   const poCurrency = po?.DocCurrency || expectedCurrency || "BRL";
+  const isForeign = poCurrency && poCurrency !== "BRL";
+  const poTotal = po ? Number((isForeign ? po.DocTotalFC : po.DocTotal) ?? 0) : null;
   const amountOk = expectedAmount != null && poTotal != null
     ? Math.abs(Number(poTotal) - Number(expectedAmount)) < 0.01
     : null;
