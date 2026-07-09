@@ -370,7 +370,7 @@ export function useApprovalRules() {
         .update({
           name: input.name,
           priority: input.priority || 0,
-          criteria: input.criteria as any,
+          criteria: normalizeCriteria(input.criteria) as any,
           doc_type: input.doc_type || "both",
         })
         .eq("id", id);
