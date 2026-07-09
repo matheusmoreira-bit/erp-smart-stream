@@ -113,6 +113,11 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const initialRateioTypeRef = useRef<RateioType>("padrao");
   const [isSaving, setIsSaving] = useState(false);
   const [showRelationsMap, setShowRelationsMap] = useState(false);
+
+  // Anexos: `removedIds` marca anexos existentes a excluir; `newFiles` é fila de uploads.
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogContentRef = useRef<HTMLDivElement>(null);
   const [dialogContainer, setDialogContainer] = useState<HTMLElement | null>(null);
   useEffect(() => {
