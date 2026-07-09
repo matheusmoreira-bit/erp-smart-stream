@@ -898,30 +898,58 @@ function RuleCard({
             </div>
           )}
 
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Users className="w-3 h-3" />
-            {rule.levels.length} nível(is) de aprovação
-            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
+          {(() => {
+            const distinctCount = new Set(rule.levels.map((l) => l.level_order)).size;
+            return (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="flex items-center gap-1 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Users className="w-3 h-3" />
+                {distinctCount} nível(is) de aprovação
+                {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            );
+          })()}
 
-          {expanded && (
-            <div className="mt-3 space-y-1.5 pl-2 border-l-2 border-primary/20">
-              {rule.levels.map((lvl) => (
-                <div key={lvl.id || lvl.level_order} className="flex items-center gap-2 text-sm">
-                  <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
-                    {lvl.level_order}
-                  </span>
-                  <span className="text-foreground font-medium">{lvl.approver_name}</span>
-                  {lvl.approver_email && (
-                    <span className="text-xs text-muted-foreground">{lvl.approver_email}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          {expanded && (() => {
+            // Agrupa por level_order para renderizar aprovadores paralelos
+            const grouped = new Map<number, typeof rule.levels>();
+            for (const l of rule.levels) {
+              if (!grouped.has(l.level_order)) grouped.set(l.level_order, [] as any);
+              (grouped.get(l.level_order) as any).push(l);
+            }
+            const entries = Array.from(grouped.entries()).sort((a, b) => a[0] - b[0]);
+            return (
+              <div className="mt-3 space-y-2 pl-2 border-l-2 border-primary/20">
+                {entries.map(([lo, rows]) => (
+                  <div key={lo} className="text-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {lo}
+                      </span>
+                      {rows.length > 1 && (
+                        <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full font-medium">
+                          Paralelo — 1º decide
+                        </span>
+                      )}
+                    </div>
+                    <div className="ml-7 space-y-0.5">
+                      {rows.map((lvl) => (
+                        <div key={lvl.id || `${lo}-${lvl.approver_name}`} className="flex items-center gap-2 text-sm">
+                          <span className="text-foreground">{lvl.approver_name}</span>
+                          {lvl.approver_email && (
+                            <span className="text-xs text-muted-foreground">{lvl.approver_email}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
