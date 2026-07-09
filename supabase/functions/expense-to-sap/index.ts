@@ -2,6 +2,7 @@
 // Endpoint: POST /functions/v1/expense-to-sap
 // Body: { expense_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 import { requireUserOrSapSession } from "../_shared/auth.ts";
 import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 
@@ -423,6 +424,228 @@ async function uploadAttachmentsToSap(
   return body.AbsoluteEntry ?? null;
 }
 
+// ─── Comprovante de aprovação (PDF) ──────────────────────────────────────────
+// Gera um PDF simples com o resumo do pedido e o histórico de aprovações do
+// ERP Flow. Enviado junto com os anexos do usuário para comprovar o fluxo
+// interno de aprovação no documento do ERP.
+
+function sanitizePdfText(input: unknown): string {
+  const s = String(input ?? "");
+  return s
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\u2022/g, "-")
+    .replace(/\u2026/g, "...")
+    .replace(/\u00A0/g, " ")
+    // WinAnsi (Windows-1252) suporta 0x20-0xFF menos alguns; substituímos
+    // qualquer coisa fora desse range por "?" para não quebrar o pdf-lib.
+    .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, "?");
+}
+
+function formatPdfDate(iso: unknown): string {
+  if (!iso) return "-";
+  try {
+    return new Date(String(iso)).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  } catch { return "-"; }
+}
+
+function formatPdfDateTime(iso: unknown): string {
+  if (!iso) return "-";
+  try {
+    return new Date(String(iso)).toLocaleString("pt-BR", {
+      dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo",
+    });
+  } catch { return "-"; }
+}
+
+function formatPdfCurrency(value: unknown, currency: unknown): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  const code = /^[A-Z]{3}$/.test(String(currency || "")) ? String(currency) : "BRL";
+  try {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: code }).format(n);
+  } catch {
+    return `${code} ${n.toFixed(2)}`;
+  }
+}
+
+async function buildApprovalReportPdf(
+  supabase: ReturnType<typeof createClient>,
+  expense: Record<string, any>,
+  items: Array<Record<string, any>>,
+): Promise<{ name: string; blob: Blob } | null> {
+  try {
+    // Histórico de aprovação — mesma fonte usada pelo componente/UI.
+    const { data: logRows } = await supabase
+      .from("expense_approval_log")
+      .select("decision,approver_name,approver_email,level_order,remarks,decided_at")
+      .eq("expense_id", expense.id)
+      .order("decided_at", { ascending: true });
+
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const A4 = { w: 595.28, h: 841.89 };
+    const margin = 48;
+    let page = pdf.addPage([A4.w, A4.h]);
+    let y = A4.h - margin;
+    const usableWidth = A4.w - margin * 2;
+
+    const lineHeight = (size: number) => size + 4;
+
+    const wrap = (text: string, size: number, f: typeof font): string[] => {
+      const words = text.split(/\s+/);
+      const lines: string[] = [];
+      let current = "";
+      for (const w of words) {
+        const candidate = current ? `${current} ${w}` : w;
+        const width = f.widthOfTextAtSize(candidate, size);
+        if (width > usableWidth && current) {
+          lines.push(current);
+          current = w;
+        } else {
+          current = candidate;
+        }
+      }
+      if (current) lines.push(current);
+      return lines.length ? lines : [""];
+    };
+
+    const draw = (
+      text: string,
+      opts: { size?: number; bold?: boolean; color?: [number, number, number]; extraGap?: number } = {},
+    ) => {
+      const size = opts.size ?? 10;
+      const f = opts.bold ? bold : font;
+      const color = opts.color ?? [0, 0, 0];
+      const clean = sanitizePdfText(text);
+      const lines = wrap(clean, size, f);
+      for (const line of lines) {
+        if (y < margin + size) {
+          page = pdf.addPage([A4.w, A4.h]);
+          y = A4.h - margin;
+        }
+        page.drawText(line, {
+          x: margin,
+          y,
+          size,
+          font: f,
+          color: rgb(color[0], color[1], color[2]),
+        });
+        y -= lineHeight(size);
+      }
+      if (opts.extraGap) y -= opts.extraGap;
+    };
+
+    const rule = () => {
+      if (y < margin + 12) { page = pdf.addPage([A4.w, A4.h]); y = A4.h - margin; }
+      page.drawLine({
+        start: { x: margin, y },
+        end: { x: A4.w - margin, y },
+        thickness: 0.6,
+        color: rgb(0.75, 0.75, 0.75),
+      });
+      y -= 12;
+    };
+
+    // Cabeçalho
+    draw("Comprovante de Aprovacao — ERP Flow", { size: 16, bold: true });
+    draw(
+      `Pedido ${String(expense.id || "").slice(0, 8)}${
+        expense.sap_doc_num ? ` · ERP #${expense.sap_doc_num}` : ""
+      }`,
+      { size: 10, color: [0.35, 0.35, 0.35], extraGap: 6 },
+    );
+    rule();
+
+    // Cabeçalho do documento
+    draw("Cabecalho", { size: 12, bold: true, extraGap: 2 });
+    const bpLabel = expense.doc_type === "sales" ? "Cliente" : "Fornecedor";
+    const headerFields: Array<[string, string]> = [
+      [bpLabel, `${expense.supplier_name || "-"}${expense.supplier_code ? ` (${expense.supplier_code})` : ""}`],
+      ["Solicitante", `${expense.requester_name || "-"}${expense.requester_email ? ` <${expense.requester_email}>` : ""}`],
+      ["Empresa", String(expense.company_db || "-")],
+      ["Data do documento", formatPdfDate(expense.doc_date)],
+      ["Vencimento", formatPdfDate(expense.due_date)],
+      ["Centro de custo", String(expense.cost_center || "-")],
+      ["Projeto", String(expense.project || "-")],
+      ["Valor total", formatPdfCurrency(expense.total_amount, expense.currency)],
+      ["Criado em", formatPdfDateTime(expense.created_at)],
+    ];
+    for (const [label, value] of headerFields) {
+      draw(`${label}: ${value}`, { size: 10 });
+    }
+    if (expense.remarks) {
+      draw(" ", { size: 4 });
+      draw("Observacoes", { size: 10, bold: true });
+      draw(String(expense.remarks), { size: 10 });
+    }
+    y -= 6;
+    rule();
+
+    // Itens (resumido)
+    if (Array.isArray(items) && items.length > 0) {
+      draw(`Itens (${items.length})`, { size: 12, bold: true, extraGap: 2 });
+      for (const it of items) {
+        const desc = String(it.description || it.item_code || "-");
+        const qty = Number(it.quantity || 0);
+        const unit = formatPdfCurrency(it.unit_price, expense.currency);
+        const total = formatPdfCurrency(it.line_total, expense.currency);
+        const cc = it.cost_center ? ` · CC ${it.cost_center}` : "";
+        const proj = it.project ? ` · Projeto ${it.project}` : "";
+        draw(`- ${desc}`, { size: 10, bold: true });
+        draw(`  Qtde ${qty} · Unit. ${unit} · Total ${total}${cc}${proj}`, { size: 9, color: [0.3, 0.3, 0.3] });
+      }
+      y -= 6;
+      rule();
+    }
+
+    // Histórico de aprovação
+    draw("Historico de Aprovacao", { size: 12, bold: true, extraGap: 2 });
+    const decisionLabel: Record<string, string> = {
+      created: "Criado",
+      submitted: "Enviado para aprovacao",
+      approved: "Aprovado",
+      rejected: "Rejeitado",
+      cancelled: "Cancelado",
+      integrated: "Integrado ao ERP",
+      integration_failed: "Falha na integracao",
+    };
+    if (!logRows || logRows.length === 0) {
+      draw("Sem registros no historico de aprovacao.", { size: 10, color: [0.4, 0.4, 0.4] });
+    } else {
+      for (const r of logRows as Array<Record<string, any>>) {
+        const label = decisionLabel[String(r.decision)] || String(r.decision || "-");
+        const when = formatPdfDateTime(r.decided_at);
+        const who = r.approver_name || r.approver_email || "-";
+        const nivel = r.level_order ? ` · Nivel ${r.level_order}` : "";
+        draw(`- ${when} — ${label} — ${who}${nivel}`, { size: 10, bold: true });
+        if (r.remarks) draw(`  Obs.: ${r.remarks}`, { size: 9, color: [0.3, 0.3, 0.3] });
+      }
+    }
+
+    y -= 10;
+    draw(
+      `Gerado automaticamente pelo ERP Flow em ${formatPdfDateTime(new Date().toISOString())}.`,
+      { size: 8, color: [0.5, 0.5, 0.5] },
+    );
+
+    const bytes = await pdf.save();
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const supplierSlug = String(expense.supplier_name || "pedido")
+      .replace(/[^A-Za-z0-9-_]+/g, "_")
+      .slice(0, 40) || "pedido";
+    const idSlug = String(expense.id || "").slice(0, 8);
+    return { name: `ERPFlow_Aprovacao_${supplierSlug}_${idSlug}.pdf`, blob };
+  } catch (e) {
+    console.warn("buildApprovalReportPdf failed:", e);
+    return null;
+  }
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -752,6 +975,14 @@ Deno.serve(async (req) => {
               continue;
             }
             files.push({ name: a.file_name, blob });
+          }
+
+          // Sempre incluir o "Comprovante de Aprovação (ERP Flow)" como anexo
+          // adicional para deixar rastro do fluxo interno de aprovação
+          // dentro do documento do ERP, além dos anexos enviados pelo usuário.
+          const approvalPdf = await buildApprovalReportPdf(supabase, expense as any, items as any[]);
+          if (approvalPdf) {
+            files.push(approvalPdf);
           }
 
           if (files.length === 0) {
