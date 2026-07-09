@@ -781,6 +781,7 @@ function ExpenseCard({
 /* ─── Main Page ─── */
 export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" | "sales" } = {}) {
   const { session, logout } = useSap();
+  const erpLabel = getErpShortLabel(session?.erpType);
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
