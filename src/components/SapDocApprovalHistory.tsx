@@ -328,6 +328,12 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
           const stage = stageCode ? stagesMap.get(stageCode) : undefined;
           const user = d.UserID ? usersMap.get(d.UserID) : (line?.UserID ? usersMap.get(line.UserID) : undefined);
           const info = DECISION_STATUS_MAP[d.Status || ""] || { key: "pending" as const, label: d.Status || "—" };
+          // Combina observações da decisão + linha (se distintas) para não perder nenhum comentário.
+          const decisionRemarks = (d.Remarks || "").trim();
+          const lineRemarks = (line?.Remarks || "").trim();
+          const remarks = decisionRemarks && lineRemarks && decisionRemarks !== lineRemarks
+            ? `${decisionRemarks}\n\n${lineRemarks}`
+            : (decisionRemarks || lineRemarks);
           return {
             step,
             stageName: stage?.Name || templateName || "—",
@@ -336,7 +342,7 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
             status: info.key,
             statusLabel: info.label,
             date: d.UpdateDate || d.CreateDate || "",
-            remarks: d.Remarks || "",
+            remarks,
           };
         });
 
@@ -358,12 +364,13 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
               status: info.key,
               statusLabel: info.label,
               date: "",
-              remarks: "",
+              remarks: (l.Remarks || "").trim(),
             });
           }
         }
 
-        return { code: Number(r.Code || 0), statusLabel, templateName, history };
+        const originatorRemarks = (r.RemarksFromOriginator || r.Remarks || "").trim();
+        return { code: Number(r.Code || 0), statusLabel, templateName, originatorRemarks, history };
       });
 
       return resolved;
