@@ -439,6 +439,24 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
           })}
         </ol>
       )}
+
+      {sapApproval.error && (
+        <div className="flex items-start gap-2 border border-destructive/30 bg-destructive/5 rounded p-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-destructive mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-medium text-destructive">Não foi possível carregar aprovações do ERP</p>
+            <p className="text-[11px] text-muted-foreground break-words">{sapApproval.error}</p>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={sapApproval.retry} className="h-6 px-2 text-[10px] shrink-0">
+            <RefreshCw className="w-3 h-3 mr-1" /> Tentar
+          </Button>
+        </div>
+      )}
+      {sapNoFlow && (
+        <p className="text-[11px] text-muted-foreground italic">
+          Nenhum fluxo de aprovação encontrado no ERP para este documento.
+        </p>
+      )}
     </div>
   );
 }
