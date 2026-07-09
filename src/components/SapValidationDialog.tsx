@@ -74,7 +74,7 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
             .join(" or ");
           const { data: payData } = await sapQuery(session, "VendorPayments", {
             $filter: filter,
-            $select: "DocEntry,DocNum,DocDate,DocTotal,DocCurrency,CardCode,CardName",
+            $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,CardCode,CardName",
             $top: 20,
           });
           setPayments((payData as any)?.value || []);
