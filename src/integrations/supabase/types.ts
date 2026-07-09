@@ -3144,6 +3144,117 @@ export type Database = {
         }
         Relationships: []
       }
+      sap_nf_entrada_cache: {
+        Row: {
+          base_po_doc_entry: number | null
+          cancelled: string | null
+          card_code: string | null
+          card_name: string | null
+          company_db: string
+          created_at: string
+          doc_currency: string | null
+          doc_date: string | null
+          doc_due_date: string | null
+          doc_entry: number
+          doc_num: number | null
+          doc_total: number | null
+          document_status: string | null
+          id: string
+          raw_json: Json
+          sap_update_date: string | null
+          series: number | null
+          synced_at: string
+          tax_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          base_po_doc_entry?: number | null
+          cancelled?: string | null
+          card_code?: string | null
+          card_name?: string | null
+          company_db: string
+          created_at?: string
+          doc_currency?: string | null
+          doc_date?: string | null
+          doc_due_date?: string | null
+          doc_entry: number
+          doc_num?: number | null
+          doc_total?: number | null
+          document_status?: string | null
+          id?: string
+          raw_json?: Json
+          sap_update_date?: string | null
+          series?: number | null
+          synced_at?: string
+          tax_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          base_po_doc_entry?: number | null
+          cancelled?: string | null
+          card_code?: string | null
+          card_name?: string | null
+          company_db?: string
+          created_at?: string
+          doc_currency?: string | null
+          doc_date?: string | null
+          doc_due_date?: string | null
+          doc_entry?: number
+          doc_num?: number | null
+          doc_total?: number | null
+          document_status?: string | null
+          id?: string
+          raw_json?: Json
+          sap_update_date?: string | null
+          series?: number | null
+          synced_at?: string
+          tax_date?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_nf_entrada_sync_state: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          last_batch_count: number | null
+          last_doc_entry: number | null
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          last_update_date: string | null
+          total_synced: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          last_batch_count?: number | null
+          last_doc_entry?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          last_update_date?: string | null
+          total_synced?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          last_batch_count?: number | null
+          last_doc_entry?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          last_update_date?: string | null
+          total_synced?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       submitted_document_hashes: {
         Row: {
           company_db: string | null
