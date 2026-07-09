@@ -11,12 +11,18 @@ import {
   Receipt,
   Wallet,
   Loader2,
+  Clock,
+  XOctagon,
+  RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useNfEntradaLinks,
   useContasPagarLinks,
 } from "@/hooks/useRelationsMapDerived";
+import { useSapDocApprovalHistory } from "@/components/SapDocApprovalHistory";
+import { Button } from "@/components/ui/button";
+
 
 type LogDecision =
   | "created"
@@ -126,6 +132,7 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
   };
   const nfLinks = useNfEntradaLinks(derivedInput);
   const apLinks = useContasPagarLinks(derivedInput);
+  const sapApproval = useSapDocApprovalHistory(expense?.sap_doc_entry ?? null);
 
   useEffect(() => {
     if (!expenseId) {
@@ -327,9 +334,54 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
     }
   }
 
+  // SAP B1 approval history (via Service Layer) — merged into the same timeline
+
+  for (const req of sapApproval.requests) {
+    for (const h of req.history) {
+      const iconMap = {
+        approved: CheckCircle2,
+        rejected: XOctagon,
+        pending: Clock,
+        without_decision: Clock,
+      } as const;
+      const colorMap = {
+        approved: "text-success",
+        rejected: "text-destructive",
+        pending: "text-amber-500",
+        without_decision: "text-muted-foreground",
+      } as const;
+      const when = h.date || expense?.sap_integration_last_attempt_at || expense?.updated_at || new Date().toISOString();
+      const actor = h.approverName
+        ? `${h.approverName}${h.approverEmail ? ` · ${h.approverEmail}` : ""}${h.step ? ` · etapa ${h.step}` : ""} [ERP]`
+        : `[ERP]`;
+      items.push({
+        key: `sap:${req.code}:${h.step}:${h.status}`,
+        when,
+        label: `${h.stageName} — ${h.statusLabel} (ERP)`,
+        detail: h.remarks || undefined,
+        actor,
+        icon: iconMap[h.status] || Clock,
+        color: colorMap[h.status] || "text-muted-foreground",
+      });
+    }
+    if (req.originatorRemarks) {
+      items.push({
+        key: `sap-remarks:${req.code}`,
+        when: expense?.created_at || new Date().toISOString(),
+        label: `Observação do solicitante (ERP)`,
+        detail: req.originatorRemarks,
+        icon: FileText,
+        color: "text-muted-foreground",
+      });
+    }
+  }
+
   items.sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
 
-  const busy = isLoading || nfLinks.isLoading || apLinks.isLoading;
+  const busy = isLoading || nfLinks.isLoading || apLinks.isLoading || sapApproval.loading;
+  const sapNoFlow =
+    sapApproval.enabled && !sapApproval.loading && !sapApproval.error && sapApproval.requests.length === 0;
+
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
@@ -386,6 +438,24 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
             );
           })}
         </ol>
+      )}
+
+      {sapApproval.error && (
+        <div className="flex items-start gap-2 border border-destructive/30 bg-destructive/5 rounded p-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-destructive mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-medium text-destructive">Não foi possível carregar aprovações do ERP</p>
+            <p className="text-[11px] text-muted-foreground break-words">{sapApproval.error}</p>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={sapApproval.retry} className="h-6 px-2 text-[10px] shrink-0">
+            <RefreshCw className="w-3 h-3 mr-1" /> Tentar
+          </Button>
+        </div>
+      )}
+      {sapNoFlow && (
+        <p className="text-[11px] text-muted-foreground italic">
+          Nenhum fluxo de aprovação encontrado no ERP para este documento.
+        </p>
       )}
     </div>
   );
