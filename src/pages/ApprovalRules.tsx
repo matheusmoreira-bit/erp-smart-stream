@@ -514,7 +514,7 @@ function RuleFormModal({
     enabled: open,
   });
 
-  const supMapRow = useCallback((row: any) => ({ code: row.CardName || row.CardCode, name: row.CardCode }), []);
+  const supMapRow = useCallback((row: any) => ({ code: row.CardCode, name: row.CardName }), []);
   const { options: supOptions, isLoading: supLoading } = useSapCachedList({
     cacheKey: "suppliers_active_v3",
     endpoint: "BusinessPartners",
