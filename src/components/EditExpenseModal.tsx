@@ -203,6 +203,8 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
       const validRt: RateioType = (["padrao","folha","imposto","reembolso","viagens"] as RateioType[]).includes(rt) ? rt : "padrao";
       setRateioType(validRt);
       initialRateioTypeRef.current = validRt;
+      setRemovedIds([]);
+      setNewFiles([]);
       setSupplier(null);
     }
   }, [open, expense]);
