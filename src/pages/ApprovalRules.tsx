@@ -391,8 +391,27 @@ function CriterionRow({
   };
 
   return (
-    <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/20 border border-border">
-      <div className="flex-1 grid grid-cols-12 gap-2">
+    <div className="space-y-1">
+      {index > 0 && (
+        <div className="flex items-center gap-2 pl-1">
+          <div className="h-3 w-px bg-border" />
+          <Select
+            value={(criterion.logic === "or" ? "or" : "and")}
+            onValueChange={(v) => onChange(index, { ...criterion, logic: v as "and" | "or" })}
+          >
+            <SelectTrigger className="h-6 w-[70px] text-[10px] font-semibold uppercase tracking-wider px-2">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="and" className="text-xs">E</SelectItem>
+              <SelectItem value="or" className="text-xs">OU</SelectItem>
+            </SelectContent>
+          </Select>
+          <span className="text-[10px] text-muted-foreground">com o critério anterior</span>
+        </div>
+      )}
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/20 border border-border">
+        <div className="flex-1 grid grid-cols-12 gap-2">
         {/* Field */}
         <div className="col-span-3">
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Campo</label>}
@@ -498,6 +517,7 @@ function CriterionRow({
         >
           <Trash2 className="w-3.5 h-3.5" />
         </Button>
+      </div>
       </div>
     </div>
   );
@@ -1022,12 +1042,22 @@ function RuleCard({
           </div>
 
           {criteriaLabels.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {criteriaLabels.map((c, i) => (
-                <span key={i} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                  {c}
-                </span>
-              ))}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {criteriaLabels.map((c, i) => {
+                const logic = ((rule.criteria?.[i] as any)?.logic === "or") ? "OU" : "E";
+                return (
+                  <span key={i} className="flex items-center gap-1.5">
+                    {i > 0 && (
+                      <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                        {logic}
+                      </span>
+                    )}
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {c}
+                    </span>
+                  </span>
+                );
+              })}
             </div>
           )}
 

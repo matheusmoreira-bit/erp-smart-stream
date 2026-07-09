@@ -304,6 +304,18 @@ function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean 
   }
 }
 
+function evaluateCriteriaList(criteria: RuleCriterion[], ctx: Record<string, any>): boolean {
+  if (!criteria || criteria.length === 0) return false;
+  let acc = evaluateCriterion(criteria[0], ctx);
+  for (let i = 1; i < criteria.length; i++) {
+    const c = criteria[i];
+    const passed = evaluateCriterion(c, ctx);
+    const logic = (c as any).logic === "or" ? "or" : "and";
+    acc = logic === "or" ? (acc || passed) : (acc && passed);
+  }
+  return acc;
+}
+
 async function findMatchingRule(
   ctx: Record<string, any>,
   companyDb: string | null,
@@ -332,7 +344,7 @@ async function findMatchingRule(
   for (const r of filtered) {
     const criteria: RuleCriterion[] = Array.isArray(r.criteria) ? r.criteria : [];
     if (criteria.length === 0) continue;
-    const allMatch = criteria.every((c) => evaluateCriterion(c, ctx));
+    const allMatch = evaluateCriteriaList(criteria, ctx);
     if (allMatch) {
       const { data: levels } = await supabase
         .from("approval_rule_levels")
