@@ -55,6 +55,59 @@ export type Database = {
           },
         ]
       }
+      advance_payment_items: {
+        Row: {
+          advance_id: string
+          cost_center: string | null
+          cost_center_name: string | null
+          created_at: string
+          description: string
+          id: string
+          item_code: string | null
+          line_total: number
+          project: string | null
+          project_name: string | null
+          quantity: number
+          unit_price: number
+        }
+        Insert: {
+          advance_id: string
+          cost_center?: string | null
+          cost_center_name?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          item_code?: string | null
+          line_total?: number
+          project?: string | null
+          project_name?: string | null
+          quantity?: number
+          unit_price?: number
+        }
+        Update: {
+          advance_id?: string
+          cost_center?: string | null
+          cost_center_name?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          item_code?: string | null
+          line_total?: number
+          project?: string | null
+          project_name?: string | null
+          quantity?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advance_payment_items_advance_id_fkey"
+            columns: ["advance_id"]
+            isOneToOne: false
+            referencedRelation: "advance_payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advance_payments: {
         Row: {
           amount: number
