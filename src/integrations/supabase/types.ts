@@ -59,6 +59,8 @@ export type Database = {
         Row: {
           amount: number
           company_db: string
+          cost_center: string | null
+          cost_center_name: string | null
           created_at: string
           currency: string
           current_approval_level: number
@@ -85,6 +87,8 @@ export type Database = {
         Insert: {
           amount: number
           company_db: string
+          cost_center?: string | null
+          cost_center_name?: string | null
           created_at?: string
           currency?: string
           current_approval_level?: number
@@ -111,6 +115,8 @@ export type Database = {
         Update: {
           amount?: number
           company_db?: string
+          cost_center?: string | null
+          cost_center_name?: string | null
           created_at?: string
           currency?: string
           current_approval_level?: number
