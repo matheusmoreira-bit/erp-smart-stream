@@ -80,7 +80,7 @@ function buildContext(input: SimulationInput): Record<string, unknown> {
     cost_center: (input.cost_center?.code || "").trim(),
     project: (input.project?.code || "").trim(),
     requester_name: (input.requester?.code || input.requester?.name || "").trim(),
-    supplier_name: (input.supplier?.name || "").trim(),
+    supplier_name: `${input.supplier?.name || ""} ${input.supplier?.code || ""}`.trim(),
     currency: input.currency.trim().toUpperCase(),
     doc_type: input.doc_type,
     item_codes: toList(input.item_codes),

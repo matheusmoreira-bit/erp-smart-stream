@@ -282,17 +282,20 @@ function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean 
   if (raw === undefined || raw === null) return false;
   const val = String(raw).toLowerCase();
   const target = String(c.value ?? "").toLowerCase();
+  const tokens = val.split(/\s+/).filter(Boolean);
+  const matchesExact = val === target || tokens.includes(target);
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   switch (c.operator) {
     case "greater_than": return Number(raw) > Number(c.value);
     case "less_than": return Number(raw) < Number(c.value);
     case "between": return Number(raw) >= Number(c.value) && Number(raw) <= Number(c.value2 ?? c.value);
-    case "equal": return val === target;
-    case "not_equal": return val !== target;
+    case "equal": return matchesExact;
+    case "not_equal": return !matchesExact;
     case "contains": return val.includes(target);
     case "not_contains": return !val.includes(target);
     case "like": {
-      const pattern = target.replace(/%/g, ".*").replace(/_/g, ".");
+      const pattern = target.split("").map((ch) => ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)).join("");
       return new RegExp(`^${pattern}$`).test(val);
     }
     default: return false;
@@ -521,7 +524,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
               cost_center: cc,
               project: input.project || "",
               requester_name: session.userName,
-              supplier_name: input.supplier_name,
+              supplier_name: `${input.supplier_name || ""} ${input.supplier_code || ""}`.trim(),
               currency: input.currency || "BRL",
               doc_type: docType,
               item_codes: itemCtx.item_codes,
