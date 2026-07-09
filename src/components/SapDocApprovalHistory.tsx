@@ -413,11 +413,44 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
         <History className="w-3.5 h-3.5" aria-hidden="true" /> Histórico de Aprovação (ERP)
       </p>
       {loading ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Carregando histórico do ERP…
+        <div className="space-y-3" role="status" aria-live="polite" aria-label="Carregando histórico do ERP">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-20 rounded" />
+            <Skeleton className="h-4 w-12 rounded" />
+          </div>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-start gap-3 border border-border rounded-lg p-3 bg-muted/20">
+              <Skeleton className="w-4 h-4 rounded-full mt-0.5" />
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-16 rounded" />
+                </div>
+                <Skeleton className="h-3 w-48" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : error ? (
-        <p className="text-xs text-destructive">{error}</p>
+        <div className="flex items-start gap-2 border border-destructive/30 bg-destructive/5 rounded-lg p-3">
+          <AlertCircle className="w-4 h-4 text-destructive mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-destructive">Não foi possível carregar o histórico do ERP</p>
+            <p className="text-xs text-muted-foreground mt-0.5 break-words">{error}</p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleRetry}
+            className="h-7 px-2 text-xs shrink-0"
+          >
+            <RefreshCw className="w-3 h-3 mr-1" aria-hidden="true" />
+            Tentar novamente
+          </Button>
+        </div>
       ) : requests.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">Nenhum fluxo de aprovação encontrado no ERP para este documento.</p>
       ) : (
