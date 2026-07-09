@@ -249,6 +249,12 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
   const [loading, setLoading] = useState(false);
   const [requests, setRequests] = useState<ResolvedRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const handleRetry = () => {
+    if (docEntry) invalidateSapDocApprovalCache(docEntry);
+    setReloadKey((k) => k + 1);
+  };
 
   // Normaliza objectType para array; usa defaults de compra quando não informado.
   const objectTypes: string[] = Array.isArray(objectType)
