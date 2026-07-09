@@ -321,14 +321,16 @@ const CATALOG_FIELDS = new Set([
   "cost_center",
   "project",
   "supplier_name",
-  "supplier.name",
   "supplier.code",
   "item_codes",
   "item.any",
   "item.code",
-  "item.name",
   "item_groups",
 ]);
+const SUPPLIER_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "ativo", label: "Ativo" },
+  { value: "inativo", label: "Inativo" },
+];
 const TEXT_OPERATORS: CriterionOperator[] = ["equal", "not_equal", "contains", "not_contains", "like"];
 const NUMERIC_OPERATORS: CriterionOperator[] = ["greater_than", "less_than", "between", "equal", "not_equal"];
 const DOC_TYPE_OPERATORS: CriterionOperator[] = ["equal", "not_equal"];
