@@ -28,6 +28,7 @@ const ROW_HEIGHT = 52;
 
 type RowProps = {
   items: VirtualRow[];
+  erpLabel: string;
   onOpen: (exp: Expense, origin?: "erp_flow" | "erp") => void;
   onRelations: (exp: Expense) => void;
 };
