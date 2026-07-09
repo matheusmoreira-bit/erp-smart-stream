@@ -304,6 +304,18 @@ function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean 
   }
 }
 
+function evaluateCriteriaList(criteria: RuleCriterion[], ctx: Record<string, any>): boolean {
+  if (!criteria || criteria.length === 0) return false;
+  let acc = evaluateCriterion(criteria[0], ctx);
+  for (let i = 1; i < criteria.length; i++) {
+    const c = criteria[i];
+    const passed = evaluateCriterion(c, ctx);
+    const logic = (c as any).logic === "or" ? "or" : "and";
+    acc = logic === "or" ? (acc || passed) : (acc && passed);
+  }
+  return acc;
+}
+
 async function findMatchingRule(
   ctx: Record<string, any>,
   companyDb: string | null,
