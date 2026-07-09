@@ -180,6 +180,7 @@ function ExpenseDetailModal({
   isActioning: boolean;
   mode?: "purchase" | "sales";
   originBadge?: "erp_flow" | "erp";
+  erpLabel?: string;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
