@@ -299,11 +299,12 @@ export function useApprovalRules() {
       setRules(
         (data || []).map((r: any) => ({
           ...r,
-          criteria: Array.isArray(r.criteria) ? r.criteria : [],
+          criteria: normalizeCriteria(Array.isArray(r.criteria) ? r.criteria : []),
           doc_type: (r.doc_type as RuleDocType) || "both",
           levels: levelsMap[r.id] || [],
         }))
       );
+
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao buscar regras");
     } finally {
