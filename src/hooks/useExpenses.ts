@@ -909,6 +909,34 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         }
       }
 
+      // Upload de novos anexos (se houver) antes da chamada de mutação, para
+      // que o servidor persista storage + expense_attachments numa única
+      // transação lógica (e reinicie o fluxo de aprovação).
+      const uploadedAttachments: Array<{ file_path: string; file_name: string; file_size: number; mime_type: string }> = [];
+      const newFiles = input.new_attachment_files || [];
+      const uploadFailures: string[] = [];
+      for (const file of newFiles) {
+        try {
+          const fd = new FormData();
+          fd.append("expense_id", expenseId);
+          fd.append("file", file, file.name);
+          const res = await sapFunctionFetch("expense-attachment-storage", { method: "POST", body: fd });
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data?.ok) throw new Error(data?.error || `upload retornou ${res.status}`);
+          uploadedAttachments.push({
+            file_path: data.file_path,
+            file_name: data.file_name,
+            file_size: data.file_size,
+            mime_type: data.mime_type,
+          });
+        } catch (err) {
+          uploadFailures.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (uploadFailures.length > 0) {
+        throw new Error(`Falha ao enviar ${uploadFailures.length} anexo(s): ${uploadFailures.join("; ")}`);
+      }
+
       // Ownership + status guards live in the edge function (RLS is closed).
       await invokeExpenseMutation({
         action: "update",
@@ -924,6 +952,10 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           rateio_changed: rateioChanged,
           new_approval_rule_id: forcedRuleId,
           new_current_approver: forcedApprover,
+          add_attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+          remove_attachment_ids: (input.remove_attachment_ids && input.remove_attachment_ids.length > 0)
+            ? input.remove_attachment_ids
+            : undefined,
         },
       });
 
