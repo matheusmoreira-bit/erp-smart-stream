@@ -23,7 +23,7 @@ import {
   type RuleCriterion,
   type RuleDocType,
 } from "@/hooks/useApprovalRules";
-import { evaluateCriterion } from "@/lib/approvalSegments";
+import { evaluateCriterion, evaluateCriteria } from "@/lib/approvalSegments";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSapUsers } from "@/hooks/useSapUsers";
@@ -201,12 +201,7 @@ export function RuleSimulator({
         criterion: c,
         passed: evaluateCriterion(c, ctx),
       }));
-      // Combina passed com o conector logic (and/or) da esquerda para a direita.
-      let allMatched = criteria.length > 0 ? perCriterion[0].passed : false;
-      for (let i = 1; i < perCriterion.length; i++) {
-        const logic = ((criteria[i] as any).logic === "or") ? "or" : "and";
-        allMatched = logic === "or" ? (allMatched || perCriterion[i].passed) : (allMatched && perCriterion[i].passed);
-      }
+      const allMatched = criteria.length > 0 && evaluateCriteria(criteria, ctx);
       return { rule: r, perCriterion, allMatched };
     });
   }, [ran, input, rules]);

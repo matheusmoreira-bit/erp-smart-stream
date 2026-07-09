@@ -50,23 +50,53 @@ export function evaluateCriterion(
 }
 
 /**
- * Avalia uma lista de critérios combinando com o conector `logic` de cada um
- * (a partir do 2º critério). Combinação é feita da esquerda para a direita,
- * sem precedência: `A and B or C` = `(A and B) or C`.
+ * Avalia uma lista de critérios com suporte a GRUPOS.
+ *
+ * - Cada critério pode ter `group` (0-based). Critérios sem grupo caem no grupo 0.
+ * - Dentro do grupo, critérios são combinados esquerda→direita pelo conector `logic`
+ *   (padrão "and") aplicado a partir do 2º critério do grupo.
+ * - Entre grupos, o resultado de cada grupo é combinado esquerda→direita pelo conector
+ *   `groupLogic` (padrão "or") do PRIMEIRO critério de cada grupo (a partir do 2º grupo).
  */
 export function evaluateCriteria(
   criteria: RuleCriterion[],
   ctx: Record<string, unknown>,
 ): boolean {
   if (!criteria || criteria.length === 0) return false;
-  let acc = evaluateCriterion(criteria[0], ctx);
-  for (let i = 1; i < criteria.length; i++) {
-    const c = criteria[i];
-    const passed = evaluateCriterion(c, ctx);
-    const logic = c.logic === "or" ? "or" : "and";
-    acc = logic === "or" ? (acc || passed) : (acc && passed);
+
+  // Group criteria preserving order of first appearance.
+  const groupOrder: number[] = [];
+  const buckets = new Map<number, RuleCriterion[]>();
+  for (const c of criteria) {
+    const g = typeof c.group === "number" ? c.group : 0;
+    if (!buckets.has(g)) {
+      buckets.set(g, []);
+      groupOrder.push(g);
+    }
+    buckets.get(g)!.push(c);
   }
-  return acc;
+
+  let groupIdx = 0;
+  let overall = false;
+  for (const g of groupOrder) {
+    const bucket = buckets.get(g)!;
+    // Within-group combination.
+    let acc = evaluateCriterion(bucket[0], ctx);
+    for (let i = 1; i < bucket.length; i++) {
+      const passed = evaluateCriterion(bucket[i], ctx);
+      const logic = bucket[i].logic === "or" ? "or" : "and";
+      acc = logic === "or" ? (acc || passed) : (acc && passed);
+    }
+    // Between-group combination.
+    if (groupIdx === 0) {
+      overall = acc;
+    } else {
+      const gLogic = bucket[0].groupLogic === "and" ? "and" : "or";
+      overall = gLogic === "and" ? (overall && acc) : (overall || acc);
+    }
+    groupIdx++;
+  }
+  return overall;
 }
 
 function inferDocTypeFromName(name?: string): RuleDocType {

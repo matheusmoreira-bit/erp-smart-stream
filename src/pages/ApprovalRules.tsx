@@ -343,6 +343,7 @@ function CriterionRow({
   catalogs,
   users,
   usersLoading,
+  showLogicConnector,
 }: {
   criterion: RuleCriterion;
   index: number;
@@ -357,6 +358,8 @@ function CriterionRow({
   };
   users: SapUser[];
   usersLoading: boolean;
+  /** Se true, não é o primeiro critério do grupo — mostra o conector local (E/OU). */
+  showLogicConnector?: boolean;
 }) {
   const isNumericField = criterion.field === "total_amount";
   const isRequesterField = criterion.field === "requester_name";
@@ -392,7 +395,7 @@ function CriterionRow({
 
   return (
     <div className="space-y-1">
-      {index > 0 && (
+      {showLogicConnector && (
         <div className="flex items-center gap-2 pl-1">
           <div className="h-3 w-px bg-border" />
           <Select
@@ -715,10 +718,39 @@ function RuleFormModal({
     }
   }, [open, editing]);
 
-  const addCriterion = () => {
+  // Grupo do último critério (para "adicionar critério" ir para o grupo mais recente).
+  const lastGroupId = () => {
+    if (criteria.length === 0) return 0;
+    return Math.max(...criteria.map((c) => (typeof c.group === "number" ? c.group : 0)));
+  };
+
+  const addCriterion = (group?: number) => {
+    const g = typeof group === "number" ? group : lastGroupId();
+    // Se este critério não for o primeiro do grupo, começa com "and".
+    const hasSiblings = criteria.some((c) => (c.group ?? 0) === g);
     setCriteria((prev) => [
       ...prev,
-      { field: "total_amount", operator: "greater_than" as CriterionOperator, value: "" },
+      {
+        field: "total_amount",
+        operator: "greater_than" as CriterionOperator,
+        value: "",
+        group: g,
+        logic: hasSiblings ? "and" : undefined,
+      },
+    ]);
+  };
+
+  const addGroup = () => {
+    const nextGroup = criteria.length === 0 ? 0 : lastGroupId() + 1;
+    setCriteria((prev) => [
+      ...prev,
+      {
+        field: "total_amount",
+        operator: "greater_than" as CriterionOperator,
+        value: "",
+        group: nextGroup,
+        groupLogic: nextGroup === 0 ? undefined : "or",
+      },
     ]);
   };
 
@@ -727,8 +759,47 @@ function RuleFormModal({
   };
 
   const removeCriterion = (index: number) => {
-    setCriteria((prev) => prev.filter((_, i) => i !== index));
+    setCriteria((prev) => {
+      const removed = prev[index];
+      const next = prev.filter((_, i) => i !== index);
+      // Se removemos o primeiro critério de um grupo (que carrega o groupLogic),
+      // e ainda restam critérios no mesmo grupo, transfere o groupLogic para o
+      // novo primeiro do grupo.
+      if (removed && typeof removed.group === "number" && removed.groupLogic) {
+        const firstIdx = next.findIndex((c) => (c.group ?? 0) === removed.group);
+        if (firstIdx >= 0 && !next[firstIdx].groupLogic) {
+          next[firstIdx] = { ...next[firstIdx], groupLogic: removed.groupLogic };
+        }
+      }
+      return next;
+    });
   };
+
+  const setGroupLogic = (group: number, logic: "and" | "or") => {
+    setCriteria((prev) => {
+      const firstIdx = prev.findIndex((c) => (c.group ?? 0) === group);
+      if (firstIdx < 0) return prev;
+      return prev.map((c, i) => (i === firstIdx ? { ...c, groupLogic: logic } : c));
+    });
+  };
+
+  const removeGroup = (group: number) => {
+    setCriteria((prev) => prev.filter((c) => (c.group ?? 0) !== group));
+  };
+
+  // Estrutura auxiliar: ordena grupos por ordem de primeira aparição e devolve
+  // pares [groupId, itens com índice global].
+  const criteriaGroups = useMemo(() => {
+    const order: number[] = [];
+    const map = new Map<number, Array<{ idx: number; criterion: RuleCriterion }>>();
+    criteria.forEach((c, idx) => {
+      const g = c.group ?? 0;
+      if (!map.has(g)) { map.set(g, []); order.push(g); }
+      map.get(g)!.push({ idx, criterion: c });
+    });
+    return order.map((g) => ({ group: g, items: map.get(g)! }));
+  }, [criteria]);
+
 
   // ── Níveis (agora agrupados por level_order, permitindo paralelismo) ──
   const levelsGrouped = useMemo(() => {
@@ -857,41 +928,100 @@ function RuleFormModal({
             </div>
           </div>
 
-          {/* Dynamic Criteria */}
+          {/* Dynamic Criteria (com suporte a grupos) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <Filter className="w-3 h-3" /> Critérios
               </p>
-              <Button variant="ghost" size="sm" onClick={addCriterion} className="gap-1 text-xs h-7">
-                <Plus className="w-3 h-3" /> Critério
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => addGroup()} className="gap-1 text-xs h-7">
+                  <Plus className="w-3 h-3" /> Grupo
+                </Button>
+              </div>
             </div>
             {criteria.length === 0 ? (
               <button
-                onClick={addCriterion}
+                onClick={() => addGroup()}
                 className="w-full py-6 border-2 border-dashed border-border rounded-lg text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                Adicionar primeiro critério
+                Adicionar primeiro grupo de critérios
               </button>
             ) : (
-              <div className="space-y-2">
-                {criteria.map((c, i) => (
-                  <CriterionRow
-                    key={i}
-                    criterion={c}
-                    index={i}
-                    onChange={updateCriterion}
-                    onRemove={removeCriterion}
-                    catalogs={catalogs}
-                    users={mergedUsers}
-                    usersLoading={usersLoading}
-                  />
-                ))}
+              <div className="space-y-3">
+                {criteriaGroups.map(({ group, items }, gIdx) => {
+                  const first = items[0]?.criterion;
+                  const groupLogic = first?.groupLogic === "and" ? "and" : "or";
+                  return (
+                    <div key={`grp-${group}`}>
+                      {gIdx > 0 && (
+                        <div className="flex items-center gap-2 mb-2 pl-1">
+                          <div className="h-px flex-1 bg-border" />
+                          <Select
+                            value={groupLogic}
+                            onValueChange={(v) => setGroupLogic(group, v as "and" | "or")}
+                          >
+                            <SelectTrigger className="h-7 w-[80px] text-[10px] font-semibold uppercase tracking-wider px-2">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="and" className="text-xs">E</SelectItem>
+                              <SelectItem value="or" className="text-xs">OU</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <span className="text-[10px] text-muted-foreground">com o grupo anterior</span>
+                          <div className="h-px flex-1 bg-border" />
+                        </div>
+                      )}
+                      <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded">
+                            Grupo {gIdx + 1}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => addCriterion(group)}
+                              className="gap-1 text-[11px] h-6 px-2"
+                            >
+                              <Plus className="w-3 h-3" /> Critério
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeGroup(group)}
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              title="Remover grupo"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {items.map(({ idx, criterion }, i) => (
+                            <CriterionRow
+                              key={idx}
+                              criterion={criterion}
+                              index={idx}
+                              onChange={updateCriterion}
+                              onRemove={removeCriterion}
+                              catalogs={catalogs}
+                              users={mergedUsers}
+                              usersLoading={usersLoading}
+                              showLogicConnector={i > 0}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
+
 
           {/* Dynamic Levels — grouped by level_order (parallel approvers) */}
           <div>
@@ -1041,25 +1171,50 @@ function RuleCard({
             )}
           </div>
 
-          {criteriaLabels.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {criteriaLabels.map((c, i) => {
-                const logic = ((rule.criteria?.[i] as any)?.logic === "or") ? "OU" : "E";
-                return (
-                  <span key={i} className="flex items-center gap-1.5">
-                    {i > 0 && (
-                      <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
-                        {logic}
+          {criteriaLabels.length > 0 && (() => {
+            // Agrupa por `group` para renderização com conector entre grupos.
+            const order: number[] = [];
+            const buckets = new Map<number, Array<{ label: string; c: any; idx: number }>>();
+            (rule.criteria || []).forEach((c: any, idx: number) => {
+              const g = typeof c.group === "number" ? c.group : 0;
+              if (!buckets.has(g)) { buckets.set(g, []); order.push(g); }
+              buckets.get(g)!.push({ label: criteriaLabels[idx], c, idx });
+            });
+            return (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {order.map((g, gIdx) => {
+                  const items = buckets.get(g)!;
+                  const gLogic = (items[0]?.c?.groupLogic === "and") ? "E" : "OU";
+                  return (
+                    <span key={`g-${g}`} className="flex flex-wrap items-center gap-1.5">
+                      {gIdx > 0 && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/15 px-1.5 py-0.5 rounded">
+                          {gLogic}
+                        </span>
+                      )}
+                      <span className="flex flex-wrap items-center gap-1.5 border border-primary/20 rounded-lg px-2 py-1 bg-primary/[0.03]">
+                        {items.map(({ label, c }, i) => {
+                          const logic = c.logic === "or" ? "OU" : "E";
+                          return (
+                            <span key={i} className="flex items-center gap-1.5">
+                              {i > 0 && (
+                                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                                  {logic}
+                                </span>
+                              )}
+                              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                {label}
+                              </span>
+                            </span>
+                          );
+                        })}
                       </span>
-                    )}
-                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                      {c}
                     </span>
-                  </span>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {(() => {
             const distinctCount = new Set(rule.levels.map((l) => l.level_order)).size;
