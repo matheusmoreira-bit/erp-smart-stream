@@ -146,6 +146,31 @@ function formatDate(iso: string): string {
   } catch { return iso; }
 }
 
+// Cache em memória para reduzir chamadas repetidas ao Service Layer
+// ao reabrir o mesmo pedido durante a sessão.
+const RESOLVED_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const resolvedCache = new Map<string, { at: number; data: ResolvedRequest[] }>();
+const inflightCache = new Map<string, Promise<ResolvedRequest[]>>();
+
+function cacheKey(session: SapSession, docEntry: number, objectType: string): string {
+  const company = session.companyDb || session.baseUrl || "default";
+  return `${company}::${objectType}::${docEntry}`;
+}
+
+export function invalidateSapDocApprovalCache(docEntry?: number) {
+  if (docEntry == null) {
+    resolvedCache.clear();
+    inflightCache.clear();
+    return;
+  }
+  for (const key of Array.from(resolvedCache.keys())) {
+    if (key.endsWith(`::${docEntry}`)) resolvedCache.delete(key);
+  }
+  for (const key of Array.from(inflightCache.keys())) {
+    if (key.endsWith(`::${docEntry}`)) inflightCache.delete(key);
+  }
+}
+
 function StatusPill({ status, label }: { status: ApprovalHistoryEntry["status"]; label: string }) {
   const cls =
     status === "approved" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
