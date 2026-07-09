@@ -394,7 +394,7 @@ function CriterionRow({
 
   return (
     <div className="space-y-1">
-      {index > 0 && (
+      {showLogicConnector && (
         <div className="flex items-center gap-2 pl-1">
           <div className="h-3 w-px bg-border" />
           <Select
