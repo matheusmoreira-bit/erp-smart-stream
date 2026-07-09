@@ -598,7 +598,7 @@ export function PagCorpIntegrateDialog({
                 </div>
                 <SapSearchCombobox
                   endpoint="BusinessPartners"
-                  filterTemplate="CardType eq 'cSupplier' and Frozen eq 'tNO' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}') or contains(tolower(AliasName),'{qLower}') or contains(FederalTaxID,'{q}'))"
+                  filterTemplate="CardType eq 'cSupplier' and Frozen ne 'tYES' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}') or contains(tolower(AliasName),'{qLower}') or contains(FederalTaxID,'{q}'))"
                   selectFields="CardCode,CardName,AliasName,FederalTaxID"
                   mapRow={(row: any) => ({
                     code: row.CardCode,
@@ -610,6 +610,7 @@ export function PagCorpIntegrateDialog({
                   onChange={setSupplier}
                   placeholder="Buscar por código, razão social, nome fantasia ou CNPJ…"
                   suggestedQuery={!supplier && aiResult?.card_name ? aiResult.card_name : undefined}
+                  topResults={50}
                 />
               </div>
             </div>
