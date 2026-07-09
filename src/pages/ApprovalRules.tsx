@@ -383,13 +383,7 @@ function CriterionRow({
   index: number;
   onChange: (index: number, updated: RuleCriterion) => void;
   onRemove: (index: number) => void;
-  catalogs: {
-    cost_center: { options: { code: string; name?: string }[]; isLoading: boolean };
-    project: { options: { code: string; name?: string }[]; isLoading: boolean };
-    supplier_name: { options: { code: string; name?: string }[]; isLoading: boolean };
-    item_codes: { options: { code: string; name?: string }[]; isLoading: boolean };
-    item_groups: { options: { code: string; name?: string }[]; isLoading: boolean };
-  };
+  catalogs: Record<string, { options: { code: string; name?: string }[]; isLoading: boolean }>;
   users: SapUser[];
   usersLoading: boolean;
   /** Se true, não é o primeiro critério do grupo — mostra o conector local (E/OU). */
