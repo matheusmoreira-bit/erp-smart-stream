@@ -459,15 +459,17 @@ function ExpenseDetailModal({
                       Integração com ERP
                     </span>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={onViewIntegration}
-                  >
-                    Ver detalhes
-                  </Button>
+                  {!isErpNative && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={onViewIntegration}
+                    >
+                      Ver detalhes
+                    </Button>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
                   {expense.sap_doc_num != null && (
