@@ -584,6 +584,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           const headerCc = (input.cost_center || "").trim();
           const candidateCcs = headerCc ? [headerCc] : itemCostCenters;
 
+          // Enriquece atributos do fornecedor (CNPJ / status) para regras baseadas em Fornecedor.
+          const supplierAttrs = await fetchSupplierAttributes(input.supplier_code, session);
+
           let match: Awaited<ReturnType<typeof findMatchingRule>> = null;
           for (const cc of (candidateCcs.length > 0 ? candidateCcs : [""])) {
             const ctx = {
@@ -591,11 +594,20 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
               cost_center: cc,
               project: input.project || "",
               requester_name: session.userName,
+              // Legado: mantém supplier_name como "Nome Código" para regras existentes.
               supplier_name: `${input.supplier_name || ""} ${input.supplier_code || ""}`.trim(),
+              // Novo modelo entidade.atributo:
+              "supplier.name": (input.supplier_name || "").toLowerCase(),
+              "supplier.code": (input.supplier_code || "").toLowerCase(),
+              "supplier.cnpj": supplierAttrs.cnpj,
+              "supplier.status": supplierAttrs.status,
               currency: input.currency || "BRL",
               doc_type: docType,
               item_codes: itemCtx.item_codes,
               item_groups: itemCtx.item_groups,
+              "item.code": itemCtx["item.code"],
+              "item.name": itemCtx["item.name"],
+              "item.any": itemCtx["item.any"],
             };
             match = await findMatchingRule(ctx, session.companyDB || null, docType);
             if (match) break;
