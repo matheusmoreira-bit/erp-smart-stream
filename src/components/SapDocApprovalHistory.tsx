@@ -383,7 +383,7 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
       });
 
     return () => { cancelled = true; };
-  }, [session, docEntry, objectType]);
+  }, [session, docEntry, objectTypesKey]);
 
   if (!session || session.erpType !== "sap" || !docEntry) return null;
 
