@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -826,7 +827,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
 
   const companyLabel = getLabel(session?.companyDB || "");
-  const isAdmin = isLovableAdmin || !!session?.isSuperUser;
+  const { hasAccess: canViewAllExpenses } = useModuleAccess("expenses_view_all");
+  const isAdmin = isLovableAdmin || !!session?.isSuperUser || canViewAllExpenses;
   const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
   const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), isAdmin);

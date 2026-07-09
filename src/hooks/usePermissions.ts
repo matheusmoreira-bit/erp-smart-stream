@@ -30,6 +30,7 @@ export const ALL_MODULES = [
   { key: "approvals", label: "Aprovações — Pendentes" },
   { key: "approval_history", label: "Aprovações — Histórico" },
   { key: "approvals_view_all", label: "Aprovações — Ver todas (somente leitura)" },
+  { key: "expenses_view_all", label: "Compras/Vendas — Ver todos os lançamentos" },
   { key: "approval_rules", label: "Regras de Aprovação" },
   { key: "pagcorp", label: "Cartões Corporativos" },
   { key: "users", label: "Usuários" },
