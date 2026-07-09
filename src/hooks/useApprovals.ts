@@ -535,6 +535,13 @@ const APPROVALS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
 const PENDING_APPROVALS_WEBHOOK_URL =
   "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
+// Empresas cujo SAP não possui middleware HANA (VW_APROVACOES_DETALHADAS).
+// Para elas, a listagem de pendências é montada 100% via Service Layer.
+const SERVICE_LAYER_ONLY_DBS = new Set<string>([
+  "cactus_providers",
+  "tst_cactus_providers",
+]);
+
 async function readApprovalsCache(session: SapSession): Promise<{ docs: ApprovalDoc[]; updatedAt: string } | null> {
   const data = await sapReadApprovalsCache<ApprovalDoc[]>(session);
   if (!data.data || !data.updatedAt) return null;
@@ -555,10 +562,16 @@ export function useApprovals() {
 
   const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[]> => {
     if (!session || session.erpType !== "sap") return [];
-    // Fonte única: webhook n8n (middleware HANA). Passamos DB/View/SessionId
+    const companyDb = session.companyDB;
+
+    // Empresas sem HANA: consulta direto no Service Layer.
+    if (SERVICE_LAYER_ONLY_DBS.has(companyDb)) {
+      return fetchApprovalsViaServiceLayer(session as SapSession);
+    }
+
+    // Fonte padrão: webhook n8n (middleware HANA). Passamos DB/View/SessionId
     // via querystring para que o n8n consulte a VW_APROVACOES_DETALHADAS do
     // schema correto (ANA Gaming, Cactus, etc).
-    const companyDb = session.companyDB;
     const url = new URL(PENDING_APPROVALS_WEBHOOK_URL);
     url.searchParams.set("SessionId", session.sessionId || "");
     url.searchParams.set("DB", companyDb);
