@@ -49,11 +49,12 @@ export interface ApprovalRuleLevel {
   approver_email?: string;
 }
 
-export type RuleDocType = "purchase" | "sales" | "both";
+export type RuleDocType = "purchase" | "sales" | "advance" | "both";
 
 export const DOC_TYPE_LABELS: Record<RuleDocType, string> = {
   purchase: "Compra",
   sales: "Venda",
+  advance: "Adiantamento",
   both: "Ambos",
 };
 

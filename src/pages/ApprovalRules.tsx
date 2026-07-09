@@ -413,6 +413,7 @@ function RuleFormModal({
                   <SelectItem value="both">Ambos (Compra e Venda)</SelectItem>
                   <SelectItem value="purchase">Compra</SelectItem>
                   <SelectItem value="sales">Venda</SelectItem>
+                  <SelectItem value="advance">Adiantamento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -550,6 +551,8 @@ function RuleCard({
       ? { icon: ShoppingCart, cls: "bg-blue-500/15 text-blue-500" }
       : dt === "sales"
       ? { icon: Tag, cls: "bg-emerald-500/15 text-emerald-500" }
+      : dt === "advance"
+      ? { icon: Tag, cls: "bg-amber-500/15 text-amber-500" }
       : { icon: Shield, cls: "bg-muted text-muted-foreground" };
   const DocIcon = docTypeBadge.icon;
 
@@ -857,6 +860,7 @@ export default function ApprovalRulesPage() {
               <SelectItem value="both">Ambos</SelectItem>
               <SelectItem value="purchase">Compra</SelectItem>
               <SelectItem value="sales">Venda</SelectItem>
+              <SelectItem value="advance">Adiantamento</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>

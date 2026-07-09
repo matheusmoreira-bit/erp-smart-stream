@@ -269,6 +269,7 @@ export function RuleSimulator({
                 <SelectContent>
                   <SelectItem value="purchase">Compra</SelectItem>
                   <SelectItem value="sales">Venda</SelectItem>
+                  <SelectItem value="advance">Adiantamento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
