@@ -430,13 +430,34 @@ function CriterionRow({
         {/* Value */}
         <div className={isBetween ? "col-span-3" : "col-span-5"}>
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Valor</label>}
-          {catalog ? (
+          {isRequesterField ? (
+            <UserSelect
+              users={users}
+              isLoading={usersLoading}
+              value={criterion.value}
+              onSelect={(userName) => onChange(index, { ...criterion, value: userName })}
+            />
+          ) : isDocTypeField ? (
+            <Select
+              value={criterion.value || ""}
+              onValueChange={(v) => onChange(index, { ...criterion, value: v })}
+            >
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Selecionar tipo..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(DOC_TYPE_LABELS) as RuleDocType[]).map((key) => (
+                  <SelectItem key={key} value={key}>{DOC_TYPE_LABELS[key]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : catalog ? (
             <CatalogValueSelect
               options={catalog.options}
               isLoading={catalog.isLoading}
               value={criterion.value}
               onChange={(v) => onChange(index, { ...criterion, value: v })}
-              placeholder="Buscar..."
+              placeholder={criterion.field === "item_codes" ? "Buscar por código ou descrição..." : "Buscar..."}
               field={criterion.field}
               operator={effectiveOperator}
             />
