@@ -413,6 +413,7 @@ function RuleFormModal({
                   <SelectItem value="both">Ambos (Compra e Venda)</SelectItem>
                   <SelectItem value="purchase">Compra</SelectItem>
                   <SelectItem value="sales">Venda</SelectItem>
+                  <SelectItem value="advance">Adiantamento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
