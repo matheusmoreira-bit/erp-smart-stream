@@ -317,17 +317,29 @@ function CatalogValueSelect({
 
 /* ─── Criterion Row ─── */
 /** Campos que suportam busca em catálogo (SAP cached lists) para o valor. */
-const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes", "item_groups"]);
+const CATALOG_FIELDS = new Set([
+  "cost_center",
+  "project",
+  "supplier_name",
+  "supplier.name",
+  "supplier.code",
+  "item_codes",
+  "item.any",
+  "item.code",
+  "item.name",
+  "item_groups",
+]);
 const TEXT_OPERATORS: CriterionOperator[] = ["equal", "not_equal", "contains", "not_contains", "like"];
 const NUMERIC_OPERATORS: CriterionOperator[] = ["greater_than", "less_than", "between", "equal", "not_equal"];
 const DOC_TYPE_OPERATORS: CriterionOperator[] = ["equal", "not_equal"];
 
 function defaultOperatorForField(field: string): CriterionOperator {
   if (field === "total_amount") return "greater_than";
-  if (field === "cost_center" || field === "item_codes") return "like";
-  if (field === "supplier_name") return "contains";
+  if (field === "cost_center" || field === "item_codes" || field === "item.any" || field === "item.code") return "like";
+  if (field === "supplier_name" || field === "supplier.name" || field === "item.name") return "contains";
   if (field === "requester_name") return "equal";
   if (field === "doc_type") return "equal";
+  if (field === "supplier.status") return "equal";
   return "equal";
 }
 
@@ -335,6 +347,26 @@ function operatorAllowedForField(field: string, operator: CriterionOperator): bo
   if (field === "total_amount") return NUMERIC_OPERATORS.includes(operator);
   if (field === "doc_type") return DOC_TYPE_OPERATORS.includes(operator);
   return TEXT_OPERATORS.includes(operator);
+}
+
+function entityAndAttrFromField(field: string): { entity: string; attribute?: string } {
+  if (FIELD_TO_ENTITY[field]) return FIELD_TO_ENTITY[field];
+  // fallback: parse "entity.attribute"
+  if (field.includes(".")) {
+    const [entity, attribute] = field.split(".", 2);
+    return { entity, attribute };
+  }
+  return { entity: field };
+}
+
+function fieldFromEntityAttr(entity: string, attribute?: string): string {
+  const ent = ENTITY_OPTIONS.find((e) => e.value === entity);
+  if (!ent) return entity;
+  if (!ent.attributes || ent.attributes.length === 0) {
+    return ent.fieldWhenNoAttribute || ent.value;
+  }
+  const attr = attribute || ent.attributes[0].value;
+  return `${entity}.${attr}`;
 }
 
 function CriterionRow({
