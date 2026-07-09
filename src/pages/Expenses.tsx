@@ -68,6 +68,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
+import { SapDocApprovalHistory } from "@/components/SapDocApprovalHistory";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 import { RelationsMap } from "@/components/RelationsMap";
@@ -506,6 +507,10 @@ function ExpenseDetailModal({
             )}
 
             <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
+
+            {expense.sap_doc_entry != null && (
+              <SapDocApprovalHistory docEntry={Number(expense.sap_doc_entry)} objectType="22" />
+            )}
 
 
 
