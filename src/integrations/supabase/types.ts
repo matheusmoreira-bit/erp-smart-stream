@@ -2207,6 +2207,65 @@ export type Database = {
         }
         Relationships: []
       }
+      nf_entrada_contas_pagar: {
+        Row: {
+          ap_currency: string | null
+          ap_doc_entry: string
+          ap_doc_num: string | null
+          ap_paid: number | null
+          ap_total: number | null
+          company_db: string
+          created_at: string
+          id: string
+          linked_at: string
+          linked_by: string | null
+          nf_import_id: string
+          notes: string | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          ap_currency?: string | null
+          ap_doc_entry: string
+          ap_doc_num?: string | null
+          ap_paid?: number | null
+          ap_total?: number | null
+          company_db: string
+          created_at?: string
+          id?: string
+          linked_at?: string
+          linked_by?: string | null
+          nf_import_id: string
+          notes?: string | null
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          ap_currency?: string | null
+          ap_doc_entry?: string
+          ap_doc_num?: string | null
+          ap_paid?: number | null
+          ap_total?: number | null
+          company_db?: string
+          created_at?: string
+          id?: string
+          linked_at?: string
+          linked_by?: string | null
+          nf_import_id?: string
+          notes?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_entrada_contas_pagar_nf_import_id_fkey"
+            columns: ["nf_import_id"]
+            isOneToOne: false
+            referencedRelation: "nf_entrada_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nf_entrada_imports: {
         Row: {
           chave_acesso: string
@@ -2234,6 +2293,7 @@ export type Database = {
           sap_matched_po_is_draft: boolean
           sap_po_draft_id: string | null
           serie: string | null
+          settlement_ap_count: number
           status: Database["public"]["Enums"]["nf_entrada_status"]
           updated_at: string
           valor_total: number | null
@@ -2265,6 +2325,7 @@ export type Database = {
           sap_matched_po_is_draft?: boolean
           sap_po_draft_id?: string | null
           serie?: string | null
+          settlement_ap_count?: number
           status?: Database["public"]["Enums"]["nf_entrada_status"]
           updated_at?: string
           valor_total?: number | null
@@ -2296,6 +2357,7 @@ export type Database = {
           sap_matched_po_is_draft?: boolean
           sap_po_draft_id?: string | null
           serie?: string | null
+          settlement_ap_count?: number
           status?: Database["public"]["Enums"]["nf_entrada_status"]
           updated_at?: string
           valor_total?: number | null
