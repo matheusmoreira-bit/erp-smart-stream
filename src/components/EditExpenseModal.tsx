@@ -11,6 +11,14 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import type { Expense, ExpenseItem } from "@/hooks/useExpenses";
+import { type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RelationsMap } from "@/components/RelationsMap";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
