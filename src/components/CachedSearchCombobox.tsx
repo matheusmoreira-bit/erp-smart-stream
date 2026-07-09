@@ -234,7 +234,7 @@ export function CachedSearchCombobox({
       {typeof document !== "undefined" && showResults && createPortal(
         <div
           ref={dropdownRef}
-          style={dropdownStyle}
+          style={{ ...dropdownStyle, pointerEvents: "auto" }}
           className="z-[9999] max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md"
         >
           {filtered.map((opt) => {
