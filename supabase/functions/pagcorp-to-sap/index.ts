@@ -611,7 +611,10 @@ Deno.serve(async (req) => {
       ...(/ANAGAMING/i.test(String(companyDb || "")) ? { U_FGR_CONTRATO: "N" } : {}),
       ...headerCustom,
     };
-    if (headerCurrency && /^[A-Z]{3}$/.test(headerCurrency)) {
+    // Só envia DocCurrency para moedas estrangeiras. Para BRL (local), deixa
+    // o SAP assumir a moeda local — enviar "BRL" causa erro -5002 quando o
+    // código da moeda local no SAP é diferente (ex.: "R$").
+    if (headerCurrency && headerCurrency !== "BRL" && /^[A-Z]{3}$/.test(headerCurrency)) {
       baseDoc.DocCurrency = headerCurrency;
     }
 
