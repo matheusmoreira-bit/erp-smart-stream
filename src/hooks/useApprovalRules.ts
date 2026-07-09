@@ -195,7 +195,7 @@ export function useApprovalRules() {
       if (err) throw err;
 
       if (input.levels.length > 0) {
-        const normalizedLevels = collapseConsecutiveApprovers(input.levels);
+        const normalizedLevels = dedupeParallelApprovers(input.levels);
         const { error: lvlErr } = await supabase.from("approval_rule_levels").insert(
           normalizedLevels.map((lvl) => ({
             rule_id: (rule as any).id,
@@ -243,7 +243,7 @@ export function useApprovalRules() {
       if (delErr) throw delErr;
 
       if (input.levels.length > 0) {
-        const normalizedLevels = collapseConsecutiveApprovers(input.levels);
+        const normalizedLevels = dedupeParallelApprovers(input.levels);
         const { error: insErr } = await supabase.from("approval_rule_levels").insert(
           normalizedLevels.map((lvl) => ({
             rule_id: id,
