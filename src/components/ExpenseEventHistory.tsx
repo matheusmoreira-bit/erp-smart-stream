@@ -11,12 +11,18 @@ import {
   Receipt,
   Wallet,
   Loader2,
+  Clock,
+  XOctagon,
+  RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useNfEntradaLinks,
   useContasPagarLinks,
 } from "@/hooks/useRelationsMapDerived";
+import { useSapDocApprovalHistory } from "@/components/SapDocApprovalHistory";
+import { Button } from "@/components/ui/button";
+
 
 type LogDecision =
   | "created"
