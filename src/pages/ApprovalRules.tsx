@@ -852,7 +852,7 @@ function RuleFormModal({
     });
   };
 
-  const setGroupLogic = (group: number, logic: "and" | "or") => {
+  const setGroupLogic = (group: number, logic: "and" | "or" | "either") => {
     setCriteria((prev) => {
       const firstIdx = prev.findIndex((c) => (c.group ?? 0) === group);
       if (firstIdx < 0) return prev;
