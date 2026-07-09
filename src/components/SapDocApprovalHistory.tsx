@@ -29,6 +29,7 @@ interface SLRequestLine {
   UserID?: number;
   StageCode?: number;
   ApprovalRequestStep?: number;
+  Remarks?: string;
 }
 interface SLApprovalRequest {
   Code?: number;
@@ -40,6 +41,8 @@ interface SLApprovalRequest {
   CreationDate?: string;
   UpdateDate?: string;
   ApprovalTemplatesID?: number;
+  Remarks?: string;
+  RemarksFromOriginator?: string;
   ApprovalRequestDecisions?: SLDecision[];
   ApprovalRequestLines?: SLRequestLine[];
 }
@@ -190,6 +193,8 @@ interface ResolvedRequest {
   code: number;
   statusLabel: string;
   templateName: string;
+  /** Observação enviada pelo originador do pedido no SAP (nível da request). */
+  originatorRemarks: string;
   history: ApprovalHistoryEntry[];
 }
 
@@ -323,6 +328,12 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
           const stage = stageCode ? stagesMap.get(stageCode) : undefined;
           const user = d.UserID ? usersMap.get(d.UserID) : (line?.UserID ? usersMap.get(line.UserID) : undefined);
           const info = DECISION_STATUS_MAP[d.Status || ""] || { key: "pending" as const, label: d.Status || "—" };
+          // Combina observações da decisão + linha (se distintas) para não perder nenhum comentário.
+          const decisionRemarks = (d.Remarks || "").trim();
+          const lineRemarks = (line?.Remarks || "").trim();
+          const remarks = decisionRemarks && lineRemarks && decisionRemarks !== lineRemarks
+            ? `${decisionRemarks}\n\n${lineRemarks}`
+            : (decisionRemarks || lineRemarks);
           return {
             step,
             stageName: stage?.Name || templateName || "—",
@@ -331,7 +342,7 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
             status: info.key,
             statusLabel: info.label,
             date: d.UpdateDate || d.CreateDate || "",
-            remarks: d.Remarks || "",
+            remarks,
           };
         });
 
@@ -353,12 +364,13 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
               status: info.key,
               statusLabel: info.label,
               date: "",
-              remarks: "",
+              remarks: (l.Remarks || "").trim(),
             });
           }
         }
 
-        return { code: Number(r.Code || 0), statusLabel, templateName, history };
+        const originatorRemarks = (r.RemarksFromOriginator || r.Remarks || "").trim();
+        return { code: Number(r.Code || 0), statusLabel, templateName, originatorRemarks, history };
       });
 
       return resolved;
@@ -419,6 +431,12 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
                     <span className="font-mono">#{req.code}</span>
                   </div>
                 )}
+                {req.originatorRemarks && (
+                  <p className="text-xs text-foreground bg-muted/40 border border-border rounded p-2 whitespace-pre-wrap">
+                    <span className="font-medium text-muted-foreground">Observação do solicitante:</span>{" "}
+                    {req.originatorRemarks}
+                  </p>
+                )}
                 {req.history.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">Sem etapas registradas.</p>
                 ) : (
@@ -461,7 +479,7 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
                               <p className="text-xs text-muted-foreground mt-0.5 font-mono">{formatDate(h.date)}</p>
                             )}
                             {h.remarks && (
-                              <p className="text-xs text-foreground bg-background/60 rounded p-2 mt-2">{h.remarks}</p>
+                              <p className="text-xs text-foreground bg-background/60 rounded p-2 mt-2 whitespace-pre-wrap">{h.remarks}</p>
                             )}
                           </div>
                         </div>
