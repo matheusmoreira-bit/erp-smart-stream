@@ -202,6 +202,10 @@ function ExpenseDetailModal({
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
   const showApproval = canApprove && expense.status === "pendente_aprovacao";
   const hasIntegration = !!(expense.sap_doc_entry || expense.sap_doc_num || expense.sap_integration_error);
+  // ERP-native document (fetched directly from the ERP, not created in ERP Flow).
+  // For these, the ERP integration section already shows every field the monitor
+  // could add, and the monitor only tracks ERP Flow → ERP attempts.
+  const isErpNative = expense.id.startsWith("sap-") || originBadge === "erp";
 
   return (
     <>
@@ -459,15 +463,17 @@ function ExpenseDetailModal({
                       Integração com ERP
                     </span>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={onViewIntegration}
-                  >
-                    Ver detalhes
-                  </Button>
+                  {!isErpNative && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={onViewIntegration}
+                    >
+                      Ver detalhes
+                    </Button>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
                   {expense.sap_doc_num != null && (
