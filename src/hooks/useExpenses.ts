@@ -306,14 +306,31 @@ function evaluateCriterion(c: RuleCriterion, ctx: Record<string, any>): boolean 
 
 function evaluateCriteriaList(criteria: RuleCriterion[], ctx: Record<string, any>): boolean {
   if (!criteria || criteria.length === 0) return false;
-  let acc = evaluateCriterion(criteria[0], ctx);
-  for (let i = 1; i < criteria.length; i++) {
-    const c = criteria[i];
-    const passed = evaluateCriterion(c, ctx);
-    const logic = (c as any).logic === "or" ? "or" : "and";
-    acc = logic === "or" ? (acc || passed) : (acc && passed);
+  const groupOrder: number[] = [];
+  const buckets = new Map<number, RuleCriterion[]>();
+  for (const c of criteria) {
+    const g = typeof (c as any).group === "number" ? (c as any).group : 0;
+    if (!buckets.has(g)) { buckets.set(g, []); groupOrder.push(g); }
+    buckets.get(g)!.push(c);
   }
-  return acc;
+  let idx = 0;
+  let overall = false;
+  for (const g of groupOrder) {
+    const bucket = buckets.get(g)!;
+    let acc = evaluateCriterion(bucket[0], ctx);
+    for (let i = 1; i < bucket.length; i++) {
+      const passed = evaluateCriterion(bucket[i], ctx);
+      const logic = (bucket[i] as any).logic === "or" ? "or" : "and";
+      acc = logic === "or" ? (acc || passed) : (acc && passed);
+    }
+    if (idx === 0) overall = acc;
+    else {
+      const gLogic = (bucket[0] as any).groupLogic === "and" ? "and" : "or";
+      overall = gLogic === "and" ? (overall && acc) : (overall || acc);
+    }
+    idx++;
+  }
+  return overall;
 }
 
 async function findMatchingRule(
