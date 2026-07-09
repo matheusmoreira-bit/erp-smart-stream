@@ -118,12 +118,14 @@ function VirtualRowComponent({
 export function VirtualExpensesTable({
   items,
   header,
+  erpLabel = "ERP",
   onOpen,
   onRelations,
   maxHeight = 640,
 }: {
   items: VirtualRow[];
   header: React.ReactNode;
+  erpLabel?: string;
   onOpen: (exp: Expense, origin?: "erp_flow" | "erp") => void;
   onRelations: (exp: Expense) => void;
   maxHeight?: number;
@@ -144,7 +146,7 @@ export function VirtualExpensesTable({
           rowComponent={VirtualRowComponent}
           rowCount={items.length}
           rowHeight={ROW_HEIGHT}
-          rowProps={{ items, onOpen, onRelations }}
+          rowProps={{ items, erpLabel, onOpen, onRelations }}
           overscanCount={6}
           style={{ height: "100%", width: "100%" }}
         />
