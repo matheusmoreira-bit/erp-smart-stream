@@ -160,18 +160,29 @@ export function useAdvancePayments() {
 
       const status: AdvanceStatus = input.submit ? "pending" : "draft";
 
+      const items = input.items || [];
+      if (!items.length) throw new Error("Adicione ao menos um item.");
+      const totalAmount = items.reduce(
+        (s, it) => s + (Number(it.line_total) || Number(it.quantity) * Number(it.unit_price) || 0),
+        0,
+      );
+
+      // Cost center do cabeçalho: pega da primeira linha para exibição/legado
+      const headerCc = items.find((i) => i.cost_center)?.cost_center || null;
+      const headerCcName = items.find((i) => i.cost_center)?.cost_center_name || null;
+
       const { data: row, error: err } = await (supabase.from("advance_payments") as any)
         .insert({
           company_db: input.company_db,
           supplier_card_code: input.supplier_card_code,
           supplier_name: input.supplier_name,
           supplier_cnpj: input.supplier_cnpj || null,
-          amount: input.amount,
+          amount: totalAmount,
           currency: input.currency,
           due_date: input.due_date || null,
           remarks: input.remarks || null,
-          cost_center: input.cost_center || null,
-          cost_center_name: input.cost_center_name || null,
+          cost_center: headerCc,
+          cost_center_name: headerCcName,
           requester_id: uid,
           requester_name: userIdentifier,
           requester_email: userIdentifier,
@@ -180,6 +191,21 @@ export function useAdvancePayments() {
         .select()
         .single();
       if (err) throw err;
+
+      const itemRows = items.map((it) => ({
+        advance_id: row.id,
+        item_code: it.item_code || null,
+        description: it.description || "Adiantamento",
+        quantity: Number(it.quantity) || 1,
+        unit_price: Number(it.unit_price) || 0,
+        line_total: Number(it.line_total) || Number(it.quantity) * Number(it.unit_price) || 0,
+        cost_center: it.cost_center || null,
+        cost_center_name: it.cost_center_name || null,
+        project: it.project || null,
+        project_name: it.project_name || null,
+      }));
+      const { error: iErr } = await (supabase.from("advance_payment_items") as any).insert(itemRows);
+      if (iErr) throw iErr;
 
       if (input.files?.length) {
         const advId = row.id;
