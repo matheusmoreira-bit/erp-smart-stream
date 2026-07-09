@@ -29,6 +29,7 @@ interface SLRequestLine {
   UserID?: number;
   StageCode?: number;
   ApprovalRequestStep?: number;
+  Remarks?: string;
 }
 interface SLApprovalRequest {
   Code?: number;
@@ -40,6 +41,8 @@ interface SLApprovalRequest {
   CreationDate?: string;
   UpdateDate?: string;
   ApprovalTemplatesID?: number;
+  Remarks?: string;
+  RemarksFromOriginator?: string;
   ApprovalRequestDecisions?: SLDecision[];
   ApprovalRequestLines?: SLRequestLine[];
 }
