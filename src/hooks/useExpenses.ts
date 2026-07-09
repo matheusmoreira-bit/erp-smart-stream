@@ -468,7 +468,8 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       const enriched = await enrichItemsWithGroup(input.items, session);
       const itemCtx = buildItemCtx(input.items, enriched);
 
-      // Evaluate approval rules for manual expenses (PagCorp skips rules)
+      // Evaluate approval rules for manual expenses only.
+      // PagCorp (cartão) sempre pula aprovação — regra fixa do negócio.
       if (!input.skipRules && origin === "manual") {
         // Tipo de rateio no cabeçalho força uma regra específica (override)
         const rt = input.rateio_type && input.rateio_type !== "padrao" ? input.rateio_type : null;
