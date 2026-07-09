@@ -11,6 +11,14 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import type { Expense, ExpenseItem } from "@/hooks/useExpenses";
+import { type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RelationsMap } from "@/components/RelationsMap";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
@@ -81,6 +89,7 @@ interface Props {
     remarks?: string | null;
     doc_date?: string | null;
     due_date?: string | null;
+    rateio_type?: RateioType | null;
     items?: Omit<ExpenseItem, "id">[];
   }) => Promise<void>;
   mode?: "purchase" | "sales";
@@ -98,6 +107,8 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [items, setItems] = useState<EditItem[]>([]);
+  const [rateioType, setRateioType] = useState<RateioType>("padrao");
+  const initialRateioTypeRef = useRef<RateioType>("padrao");
   const [isSaving, setIsSaving] = useState(false);
   const [showRelationsMap, setShowRelationsMap] = useState(false);
   const dialogContentRef = useRef<HTMLDivElement>(null);
@@ -181,6 +192,10 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           sapProject: findSapOption(projectOptions, it.project),
         })),
       );
+      const rt = (expense.rateio_type as RateioType | null) || "padrao";
+      const validRt: RateioType = (["padrao","folha","imposto","reembolso","viagens"] as RateioType[]).includes(rt) ? rt : "padrao";
+      setRateioType(validRt);
+      initialRateioTypeRef.current = validRt;
       setSupplier(null);
     }
   }, [open, expense]);
@@ -308,6 +323,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         remarks: remarks || null,
         doc_date: docDate || null,
         due_date: dueDate || null,
+        rateio_type: !isSales ? rateioType : undefined,
         items: items.map((it) => ({
           item_code: it.item_code,
           description: it.description,
@@ -318,7 +334,12 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           project: it.project,
         })),
       });
-      toast.success("Pedido atualizado com sucesso!");
+      const rateioChanged = !isSales && rateioType !== initialRateioTypeRef.current;
+      if (rateioChanged) {
+        toast.success("Pedido atualizado e fluxo de aprovação reiniciado.");
+      } else {
+        toast.success("Pedido atualizado com sucesso!");
+      }
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
@@ -408,6 +429,35 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
             <label className="text-xs text-muted-foreground mb-1 block">Observações</label>
             <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
           </div>
+
+          {/* Tipo de rateio — força regras de aprovação específicas (só compras).
+              Alterar o valor reinicia o fluxo de aprovação. */}
+          {!isSales && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Tipo de rateio</label>
+              <Select value={rateioType} onValueChange={(v) => setRateioType(v as RateioType)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(RATEIO_TYPE_LABELS) as RateioType[]).map((k) => (
+                    <SelectItem key={k} value={k}>{RATEIO_TYPE_LABELS[k]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {rateioType !== initialRateioTypeRef.current && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                  Alterar o tipo de rateio reinicia o fluxo de aprovação a partir do nível 1.
+                </p>
+              )}
+              {rateioType !== "padrao" && rateioType === initialRateioTypeRef.current && (
+                <p className="text-[11px] text-muted-foreground">
+                  Este tipo força a regra de aprovação correspondente e ignora a matriz normal.
+                  {rateioType === "viagens" && " Viagens seguem o fluxo de Reembolso."}
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">

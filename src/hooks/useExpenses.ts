@@ -826,6 +826,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         remarks?: string | null;
         doc_date?: string | null;
         due_date?: string | null;
+        rateio_type?: RateioType | null;
         items?: Omit<ExpenseItem, "id">[];
       }
     ) => {
@@ -851,6 +852,61 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         });
       }
 
+      // Se o tipo de rateio mudou, precisamos recomputar a regra de aprovação
+      // (o override "Folha/Imposto/Reembolso/Viagens" muda o caminho da aprovação).
+      // Buscamos o rateio_type atual da despesa e comparamos.
+      let forcedRuleId: string | null | undefined;
+      let forcedApprover: string | null | undefined;
+      let rateioChanged = false;
+      if (input.rateio_type !== undefined) {
+        const { data: cur } = await supabase
+          .from("expenses")
+          .select("rateio_type")
+          .eq("id", expenseId)
+          .maybeSingle();
+        const currentRt = ((cur as { rateio_type?: string | null } | null)?.rateio_type || "padrao") as string;
+        const newRt = (input.rateio_type || "padrao") as string;
+        rateioChanged = currentRt !== newRt;
+
+        if (rateioChanged) {
+          const rt = newRt !== "padrao" ? newRt : null;
+          if (rt) {
+            const namePrefix =
+              rt === "folha" ? "Folha"
+              : rt === "imposto" ? "Impostos"
+              : "Reembolso"; // reembolso e viagens caem no mesmo fluxo
+            const { data: forced } = await (supabase as any)
+              .from("approval_rules")
+              .select("id")
+              .eq("is_active", true)
+              .eq("priority", 9999)
+              .eq("company_db", session.companyDB || "")
+              .ilike("name", `${namePrefix}%`)
+              .order("name")
+              .limit(1);
+            const forcedRule = Array.isArray(forced) && forced.length > 0 ? forced[0] : null;
+            if (forcedRule) {
+              forcedRuleId = forcedRule.id as string;
+              const { data: lvls } = await supabase
+                .from("approval_rule_levels")
+                .select("approver_name")
+                .eq("rule_id", forcedRule.id)
+                .order("level_order", { ascending: true })
+                .limit(1);
+              forcedApprover = (Array.isArray(lvls) && lvls[0]?.approver_name) || null;
+            } else {
+              // rateio_type sem regra correspondente — deixa o servidor decidir
+              forcedRuleId = null;
+              forcedApprover = null;
+            }
+          } else {
+            // Voltou para "padrão" — limpa override; servidor rerruteará.
+            forcedRuleId = null;
+            forcedApprover = null;
+          }
+        }
+      }
+
       // Ownership + status guards live in the edge function (RLS is closed).
       await invokeExpenseMutation({
         action: "update",
@@ -862,6 +918,10 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           doc_date: input.doc_date,
           due_date: input.due_date,
           items: enrichedItems,
+          rateio_type: input.rateio_type,
+          rateio_changed: rateioChanged,
+          new_approval_rule_id: forcedRuleId,
+          new_current_approver: forcedApprover,
         },
       });
 
