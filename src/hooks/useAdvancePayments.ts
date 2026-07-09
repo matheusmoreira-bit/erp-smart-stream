@@ -158,6 +158,8 @@ export function useAdvancePayments() {
           currency: input.currency,
           due_date: input.due_date || null,
           remarks: input.remarks || null,
+          cost_center: input.cost_center || null,
+          cost_center_name: input.cost_center_name || null,
           requester_id: uid,
           requester_name: userIdentifier,
           requester_email: userIdentifier,
