@@ -195,6 +195,58 @@ export function dedupeParallelApprovers(
 /** @deprecated mantida por compatibilidade com testes antigos. */
 export const collapseConsecutiveApprovers = dedupeParallelApprovers;
 
+/**
+ * Normaliza os conectores lógicos dos critérios (`logic` e `groupLogic`) para
+ * garantir que sejam persistidos de forma consistente e reaparecem corretos ao
+ * editar a regra. Regras salvas antes deste campo existir também são
+ * "hidratadas" com defaults sensatos (dentro do grupo: "and"; entre grupos:
+ * "or").
+ *
+ * Convenções:
+ *  - Todo critério ganha `group` (default 0).
+ *  - Primeiro critério de cada grupo: `logic` é removido; se o grupo não for o
+ *    primeiro, `groupLogic` recebe default "or".
+ *  - Demais critérios do grupo: `logic` recebe default "and"; `groupLogic` é
+ *    removido (só o primeiro do grupo carrega o conector entre grupos).
+ */
+export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null): RuleCriterion[] {
+  if (!Array.isArray(criteria) || criteria.length === 0) return [];
+  // Preserva a ordem original de aparição de grupos.
+  const groupOrder: number[] = [];
+  const seenGroups = new Set<number>();
+  const withGroup = criteria.map((c) => {
+    const g = typeof c.group === "number" ? c.group : 0;
+    if (!seenGroups.has(g)) {
+      seenGroups.add(g);
+      groupOrder.push(g);
+    }
+    return { ...c, group: g };
+  });
+  const firstIndexByGroup = new Map<number, number>();
+  withGroup.forEach((c, i) => {
+    if (!firstIndexByGroup.has(c.group!)) firstIndexByGroup.set(c.group!, i);
+  });
+  return withGroup.map((c, i) => {
+    const isFirstOfGroup = firstIndexByGroup.get(c.group!) === i;
+    const groupPos = groupOrder.indexOf(c.group!);
+    const next: RuleCriterion = { ...c };
+    if (isFirstOfGroup) {
+      delete next.logic;
+      if (groupPos === 0) {
+        delete next.groupLogic;
+      } else {
+        next.groupLogic = next.groupLogic === "and" ? "and" : "or";
+      }
+    } else {
+      delete next.groupLogic;
+      next.logic = next.logic === "or" ? "or" : "and";
+    }
+    return next;
+  });
+}
+
+
+
 
 export function useApprovalRules() {
   const { session } = useSap();
