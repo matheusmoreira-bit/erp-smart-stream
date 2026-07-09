@@ -128,15 +128,26 @@ export function useAdvancePayments() {
 
       const ids = (data || []).map((r: any) => r.id);
       let attMap: Record<string, AdvanceAttachment[]> = {};
+      let itemMap: Record<string, AdvanceItem[]> = {};
       if (ids.length) {
-        const { data: atts } = await (supabase.from("advance_payment_attachments") as any)
-          .select("*")
-          .in("advance_id", ids);
+        const [{ data: atts }, { data: lines }] = await Promise.all([
+          (supabase.from("advance_payment_attachments") as any).select("*").in("advance_id", ids),
+          (supabase.from("advance_payment_items") as any).select("*").in("advance_id", ids),
+        ]);
         for (const a of (atts || []) as any[]) {
           (attMap[a.advance_id] ||= []).push(a);
         }
+        for (const l of (lines || []) as any[]) {
+          (itemMap[l.advance_id] ||= []).push(l);
+        }
       }
-      setItems((data || []).map((r: any) => ({ ...r, attachments: attMap[r.id] || [] })));
+      setItems(
+        (data || []).map((r: any) => ({
+          ...r,
+          attachments: attMap[r.id] || [],
+          items: itemMap[r.id] || [],
+        })),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setItems([]);
