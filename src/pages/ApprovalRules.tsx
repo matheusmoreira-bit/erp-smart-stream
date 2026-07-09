@@ -449,22 +449,46 @@ function CriterionRow({
       )}
       <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/20 border border-border">
         <div className="flex-1 grid grid-cols-12 gap-2">
-        {/* Field */}
-        <div className="col-span-3">
+        {/* Field = Entity + optional Attribute */}
+        <div className="col-span-4">
           {index === 0 && <label className="text-[10px] text-muted-foreground mb-1 block">Campo</label>}
-          <Select
-            value={criterion.field}
-            onValueChange={handleFieldChange}
-          >
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FIELD_OPTIONS.map((f) => (
-                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {(() => {
+            const parsed = entityAndAttrFromField(criterion.field);
+            const entity = ENTITY_OPTIONS.find((e) => e.value === parsed.entity);
+            const hasAttrs = !!entity?.attributes?.length;
+            return (
+              <div className={hasAttrs ? "grid grid-cols-2 gap-1.5" : ""}>
+                <Select
+                  value={parsed.entity}
+                  onValueChange={(v) => handleFieldChange(fieldFromEntityAttr(v))}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ENTITY_OPTIONS.map((e) => (
+                      <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {hasAttrs && (
+                  <Select
+                    value={parsed.attribute || entity!.attributes![0].value}
+                    onValueChange={(v) => handleFieldChange(fieldFromEntityAttr(parsed.entity, v))}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {entity!.attributes!.map((a) => (
+                        <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Operator */}
