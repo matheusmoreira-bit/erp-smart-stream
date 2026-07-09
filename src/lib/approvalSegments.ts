@@ -49,6 +49,26 @@ export function evaluateCriterion(
   }
 }
 
+/**
+ * Avalia uma lista de critérios combinando com o conector `logic` de cada um
+ * (a partir do 2º critério). Combinação é feita da esquerda para a direita,
+ * sem precedência: `A and B or C` = `(A and B) or C`.
+ */
+export function evaluateCriteria(
+  criteria: RuleCriterion[],
+  ctx: Record<string, unknown>,
+): boolean {
+  if (!criteria || criteria.length === 0) return false;
+  let acc = evaluateCriterion(criteria[0], ctx);
+  for (let i = 1; i < criteria.length; i++) {
+    const c = criteria[i];
+    const passed = evaluateCriterion(c, ctx);
+    const logic = c.logic === "or" ? "or" : "and";
+    acc = logic === "or" ? (acc || passed) : (acc && passed);
+  }
+  return acc;
+}
+
 function inferDocTypeFromName(name?: string): RuleDocType {
   const n = (name || "").toLowerCase();
   if (n.includes("venda") || n.includes("cliente") || n.includes("sales")) return "sales";
