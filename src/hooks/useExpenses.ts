@@ -80,22 +80,58 @@ async function enrichItemsWithGroup(
 function buildItemCtx(
   items: Array<{ item_code?: string | null; description?: string | null }>,
   enriched: Record<string, EnrichedItem>,
-): { item_codes: string; item_groups: string } {
+): { item_codes: string; item_groups: string; "item.code": string; "item.name": string; "item.any": string } {
   // Wrap with spaces so `like '% fol%'` and `like '% folha %'` work.
-  const codes = items
-    .flatMap((i) => [i.item_code, i.description])
-    .map((v) => (v || "").trim().toLowerCase())
+  const codeTokens = items
+    .map((i) => (i.item_code || "").trim().toLowerCase())
     .filter(Boolean);
+  const nameTokens = items
+    .map((i) => (i.description || "").trim().toLowerCase())
+    .filter(Boolean);
+  const anyTokens = [...codeTokens, ...nameTokens];
   const groups = items
     .map((i) => {
       const c = (i.item_code || "").trim();
       return (enriched[c]?.items_group_name || "").trim().toLowerCase();
     })
     .filter(Boolean);
+  const wrap = (arr: string[]) => (arr.length ? ` ${arr.join(" ")} ` : "");
   return {
-    item_codes: codes.length ? ` ${codes.join(" ")} ` : "",
-    item_groups: groups.length ? ` ${groups.join(" ")} ` : "",
+    item_codes: wrap(anyTokens), // legacy: matches code OR description
+    item_groups: wrap(groups),
+    "item.code": wrap(codeTokens),
+    "item.name": wrap(nameTokens),
+    "item.any": wrap(anyTokens),
   };
+}
+
+/**
+ * Consulta atributos adicionais do fornecedor (CNPJ e status) para uso em regras.
+ * Retorna valores em minúsculas para compatibilidade com o avaliador. Silencioso
+ * em caso de falha — o critério simplesmente não vai bater.
+ */
+async function fetchSupplierAttributes(
+  supplierCode: string | null | undefined,
+  session: SapSession,
+): Promise<{ cnpj: string; status: string }> {
+  const code = (supplierCode || "").trim();
+  if (!code) return { cnpj: "", status: "" };
+  try {
+    const { data } = await sapQuery(
+      session,
+      `BusinessPartners('${code.replace(/'/g, "''")}')`,
+      { $select: "CardCode,LicTradNum,Frozen,Valid" },
+      true,
+    );
+    const cnpj = String((data as any)?.LicTradNum || "").toLowerCase();
+    const frozen = String((data as any)?.Frozen || "");
+    const valid = String((data as any)?.Valid || "");
+    // Traduz para termos usuais que o usuário digitaria na regra.
+    const status = frozen === "tYES" ? "inativo" : valid === "tNO" ? "invalido" : "ativo";
+    return { cnpj, status };
+  } catch {
+    return { cnpj: "", status: "" };
+  }
 }
 
 export type ExpenseStatus =
