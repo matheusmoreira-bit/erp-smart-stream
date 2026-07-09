@@ -36,12 +36,12 @@ export function usePagcorpSettlementAccounts(companyDb?: string | null) {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const upsert = useCallback(async (row: Partial<PagcorpSettlementAccount> & { company_db: string; settlement_account_code: string }) => {
-    const payload: Record<string, unknown> = {
+    const payload = {
       company_db: row.company_db,
-      card_identifier: row.card_identifier || null,
+      card_identifier: row.card_identifier ?? null,
       settlement_account_code: row.settlement_account_code,
-      cost_center: row.cost_center || null,
-      project: row.project || null,
+      cost_center: row.cost_center ?? null,
+      project: row.project ?? null,
       enabled: row.enabled ?? true,
     };
     if (row.id) {
