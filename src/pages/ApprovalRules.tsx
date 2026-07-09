@@ -429,15 +429,16 @@ function CriterionRow({
         <div className="flex items-center gap-2 pl-1">
           <div className="h-3 w-px bg-border" />
           <Select
-            value={(criterion.logic === "or" ? "or" : "and")}
-            onValueChange={(v) => onChange(index, { ...criterion, logic: v as "and" | "or" })}
+            value={(criterion.logic === "or" ? "or" : criterion.logic === "either" ? "either" : "and")}
+            onValueChange={(v) => onChange(index, { ...criterion, logic: v as "and" | "or" | "either" })}
           >
-            <SelectTrigger className="h-6 w-[70px] text-[10px] font-semibold uppercase tracking-wider px-2">
+            <SelectTrigger className="h-6 w-[80px] text-[10px] font-semibold uppercase tracking-wider px-2">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="and" className="text-xs">E</SelectItem>
               <SelectItem value="or" className="text-xs">OU</SelectItem>
+              <SelectItem value="either" className="text-xs">E/OU</SelectItem>
             </SelectContent>
           </Select>
           <span className="text-[10px] text-muted-foreground">com o critério anterior</span>
