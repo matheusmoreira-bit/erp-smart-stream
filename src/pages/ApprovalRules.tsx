@@ -568,14 +568,24 @@ function RuleFormModal({
     enabled: open,
   });
 
+  const groupMapRow = useCallback((row: any) => ({ code: String(row.Number ?? ""), name: row.GroupName }), []);
+  const { options: groupOptions, isLoading: groupLoading } = useSapCachedList({
+    cacheKey: "item_groups_v1",
+    endpoint: "ItemGroups",
+    params: { $select: "Number,GroupName" },
+    mapRow: groupMapRow,
+    enabled: open,
+  });
+
   const catalogs = useMemo(
     () => ({
       cost_center: { options: ccOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: ccLoading },
       project: { options: projOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: projLoading },
       supplier_name: { options: supOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: supLoading },
       item_codes: { options: itemOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: itemLoading },
+      item_groups: { options: groupOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: groupLoading },
     }),
-    [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading],
+    [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading, groupOptions, groupLoading],
   );
 
   // ── Fallback de aprovadores: mescla SAP Users + user_profiles ─────────
