@@ -91,6 +91,8 @@ interface Props {
     due_date?: string | null;
     rateio_type?: RateioType | null;
     items?: Omit<ExpenseItem, "id">[];
+    new_attachment_files?: File[];
+    remove_attachment_ids?: string[];
   }) => Promise<void>;
   mode?: "purchase" | "sales";
 }
