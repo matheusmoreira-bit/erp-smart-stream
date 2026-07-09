@@ -175,6 +175,44 @@ function collectReceiptUrls(receipts: any[]): { url: string; name?: string }[] {
   return out;
 }
 
+function extFromContentType(ct: string | null): string {
+  const c = (ct || "").toLowerCase().split(";")[0].trim();
+  const map: Record<string, string> = {
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "application/xml": "xml",
+    "text/xml": "xml",
+    "application/zip": "zip",
+    "text/plain": "txt",
+  };
+  return map[c] || "";
+}
+
+function extFromUrl(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const m = path.match(/\.([a-zA-Z0-9]{2,5})$/);
+    return m ? m[1].toLowerCase() : "";
+  } catch {
+    const m = url.match(/\.([a-zA-Z0-9]{2,5})(?:\?|$)/);
+    return m ? m[1].toLowerCase() : "";
+  }
+}
+
+function ensureFilenameWithExt(rawName: string | undefined, fallbackIndex: number, url: string, contentType: string | null): string {
+  const base = (rawName || `recibo_${fallbackIndex}`).trim().replace(/[\r\n\t]/g, "").replace(/[\\/]+/g, "_");
+  const hasExt = /\.[a-zA-Z0-9]{2,5}$/.test(base);
+  if (hasExt) return base;
+  const ext = extFromUrl(url) || extFromContentType(contentType) || "pdf";
+  return `${base}.${ext}`;
+}
+
 async function downloadReceipts(receipts: any[]): Promise<{ name: string; blob: Blob }[]> {
   const files: { name: string; blob: Blob }[] = [];
   const sources = collectReceiptUrls(receipts);
@@ -186,7 +224,7 @@ async function downloadReceipts(receipts: any[]): Promise<{ name: string; blob: 
         continue;
       }
       const blob = await res.blob();
-      const name = src.name || `recibo_${files.length + 1}`;
+      const name = ensureFilenameWithExt(src.name, files.length + 1, src.url, res.headers.get("content-type"));
       files.push({ name, blob });
     } catch (e) {
       console.warn(`Erro baixando recibo ${src.url}:`, e);
