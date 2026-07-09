@@ -1084,6 +1084,12 @@ Deno.serve(async (req) => {
       // pelos pedidos criados por um usuário específico sem depender do texto.
       ...(requesterCode ? { U_FGR_SOLICITANTE: truncateSapText(requesterCode, 50) } : {}),
       ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
+      // Moeda do documento: sem DocCurrency, o SAP assume moeda local (BRL)
+      // mesmo quando a despesa foi lançada em USD/EUR/etc.
+      ...((): Record<string, unknown> => {
+        const cur = String((expense as any).currency || "").toUpperCase().trim();
+        return /^[A-Z]{3}$/.test(cur) ? { DocCurrency: cur } : {};
+      })(),
       // ANA Gaming: por padrão, todos os pedidos de compra são marcados como
       // "sem contrato" (U_FGR_CONTRATO = "N"). Pode ser sobrescrito por
       // headerCustom quando o usuário/regra informar explicitamente.
@@ -1100,9 +1106,11 @@ Deno.serve(async (req) => {
           unit = lineTotal / qty;
         }
         const invoiceDesc = truncateSapText(it.description, 254);
+        const lineCurrency = String((expense as any).currency || "").toUpperCase().trim();
         const line: Record<string, unknown> = {
           Quantity: qty,
           UnitPrice: unit,
+          ...(/^[A-Z]{3}$/.test(lineCurrency) ? { Currency: lineCurrency } : {}),
           ...lineCustom,
         };
         if (hasItem) {
