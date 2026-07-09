@@ -928,41 +928,100 @@ function RuleFormModal({
             </div>
           </div>
 
-          {/* Dynamic Criteria */}
+          {/* Dynamic Criteria (com suporte a grupos) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <Filter className="w-3 h-3" /> Critérios
               </p>
-              <Button variant="ghost" size="sm" onClick={addCriterion} className="gap-1 text-xs h-7">
-                <Plus className="w-3 h-3" /> Critério
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => addGroup()} className="gap-1 text-xs h-7">
+                  <Plus className="w-3 h-3" /> Grupo
+                </Button>
+              </div>
             </div>
             {criteria.length === 0 ? (
               <button
-                onClick={addCriterion}
+                onClick={() => addGroup()}
                 className="w-full py-6 border-2 border-dashed border-border rounded-lg text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                Adicionar primeiro critério
+                Adicionar primeiro grupo de critérios
               </button>
             ) : (
-              <div className="space-y-2">
-                {criteria.map((c, i) => (
-                  <CriterionRow
-                    key={i}
-                    criterion={c}
-                    index={i}
-                    onChange={updateCriterion}
-                    onRemove={removeCriterion}
-                    catalogs={catalogs}
-                    users={mergedUsers}
-                    usersLoading={usersLoading}
-                  />
-                ))}
+              <div className="space-y-3">
+                {criteriaGroups.map(({ group, items }, gIdx) => {
+                  const first = items[0]?.criterion;
+                  const groupLogic = first?.groupLogic === "and" ? "and" : "or";
+                  return (
+                    <div key={`grp-${group}`}>
+                      {gIdx > 0 && (
+                        <div className="flex items-center gap-2 mb-2 pl-1">
+                          <div className="h-px flex-1 bg-border" />
+                          <Select
+                            value={groupLogic}
+                            onValueChange={(v) => setGroupLogic(group, v as "and" | "or")}
+                          >
+                            <SelectTrigger className="h-7 w-[80px] text-[10px] font-semibold uppercase tracking-wider px-2">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="and" className="text-xs">E</SelectItem>
+                              <SelectItem value="or" className="text-xs">OU</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <span className="text-[10px] text-muted-foreground">com o grupo anterior</span>
+                          <div className="h-px flex-1 bg-border" />
+                        </div>
+                      )}
+                      <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded">
+                            Grupo {gIdx + 1}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => addCriterion(group)}
+                              className="gap-1 text-[11px] h-6 px-2"
+                            >
+                              <Plus className="w-3 h-3" /> Critério
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeGroup(group)}
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              title="Remover grupo"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {items.map(({ idx, criterion }, i) => (
+                            <CriterionRow
+                              key={idx}
+                              criterion={criterion}
+                              index={idx}
+                              onChange={updateCriterion}
+                              onRemove={removeCriterion}
+                              catalogs={catalogs}
+                              users={mergedUsers}
+                              usersLoading={usersLoading}
+                              showLogicConnector={i > 0}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
+
 
           {/* Dynamic Levels — grouped by level_order (parallel approvers) */}
           <div>
