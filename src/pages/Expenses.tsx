@@ -1744,6 +1744,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               {visibleItems.length >= 50 ? (
                 <VirtualExpensesTable
                   items={visibleItems}
+                  erpLabel={erpLabel}
                   onOpen={openExpense}
                   onRelations={(exp) => setRelationsMapExpense(exp)}
                   header={
