@@ -431,6 +431,12 @@ export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHi
                     <span className="font-mono">#{req.code}</span>
                   </div>
                 )}
+                {req.originatorRemarks && (
+                  <p className="text-xs text-foreground bg-muted/40 border border-border rounded p-2 whitespace-pre-wrap">
+                    <span className="font-medium text-muted-foreground">Observação do solicitante:</span>{" "}
+                    {req.originatorRemarks}
+                  </p>
+                )}
                 {req.history.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">Sem etapas registradas.</p>
                 ) : (
