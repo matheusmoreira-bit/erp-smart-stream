@@ -1171,25 +1171,50 @@ function RuleCard({
             )}
           </div>
 
-          {criteriaLabels.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {criteriaLabels.map((c, i) => {
-                const logic = ((rule.criteria?.[i] as any)?.logic === "or") ? "OU" : "E";
-                return (
-                  <span key={i} className="flex items-center gap-1.5">
-                    {i > 0 && (
-                      <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
-                        {logic}
+          {criteriaLabels.length > 0 && (() => {
+            // Agrupa por `group` para renderização com conector entre grupos.
+            const order: number[] = [];
+            const buckets = new Map<number, Array<{ label: string; c: any; idx: number }>>();
+            (rule.criteria || []).forEach((c: any, idx: number) => {
+              const g = typeof c.group === "number" ? c.group : 0;
+              if (!buckets.has(g)) { buckets.set(g, []); order.push(g); }
+              buckets.get(g)!.push({ label: criteriaLabels[idx], c, idx });
+            });
+            return (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {order.map((g, gIdx) => {
+                  const items = buckets.get(g)!;
+                  const gLogic = (items[0]?.c?.groupLogic === "and") ? "E" : "OU";
+                  return (
+                    <span key={`g-${g}`} className="flex flex-wrap items-center gap-1.5">
+                      {gIdx > 0 && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/15 px-1.5 py-0.5 rounded">
+                          {gLogic}
+                        </span>
+                      )}
+                      <span className="flex flex-wrap items-center gap-1.5 border border-primary/20 rounded-lg px-2 py-1 bg-primary/[0.03]">
+                        {items.map(({ label, c }, i) => {
+                          const logic = c.logic === "or" ? "OU" : "E";
+                          return (
+                            <span key={i} className="flex items-center gap-1.5">
+                              {i > 0 && (
+                                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                                  {logic}
+                                </span>
+                              )}
+                              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                {label}
+                              </span>
+                            </span>
+                          );
+                        })}
                       </span>
-                    )}
-                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                      {c}
                     </span>
-                  </span>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {(() => {
             const distinctCount = new Set(rule.levels.map((l) => l.level_order)).size;
