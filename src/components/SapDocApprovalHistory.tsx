@@ -101,35 +101,89 @@ async function fetchStage(session: SapSession, code: number): Promise<SLStage | 
   } catch { return null; }
 }
 
+/**
+ * ObjectTypes de documentos de compra no SAP B1 que podem ter aprovação:
+ *  - 22   PurchaseOrders (Pedido de Compra)
+ *  - 20   PurchaseDeliveryNotes (Entrada de Mercadoria / GRPO)
+ *  - 18   PurchaseInvoices (Nota Fiscal de Entrada)
+ *  - 19   PurchaseCreditNotes (Devolução / Nota de Crédito de Compra)
+ *  - 204  DownPayments A/P (Adiantamento a Fornecedor)
+ *  - 1470000113  PurchaseRequests (Solicitação de Compra)
+ *  - 540000006   PurchaseQuotations (Cotação de Compra)
+ */
+export const DEFAULT_PURCHASE_OBJECT_TYPES = [
+  "22",
+  "20",
+  "18",
+  "19",
+  "204",
+  "1470000113",
+  "540000006",
+] as const;
+
 async function fetchApprovalRequests(
   session: SapSession,
   docEntry: number,
-  objectType: string,
+  objectTypes: string[],
 ): Promise<SLApprovalRequest[]> {
-  // Primeiro tenta pelo documento gerado; se vazio, tenta pelo draft de origem.
   const tryFilter = async (filter: string): Promise<SLApprovalRequest[]> => {
     const path = `ApprovalRequests?$filter=${encodeURIComponent(filter)}&$orderby=CreationDate desc&$top=20`;
-    const res = await sapQuery(session, path, undefined, false);
-    const data = res.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
-    return Array.isArray(data) ? data : (data?.value || []);
+    try {
+      const res = await sapQuery(session, path, undefined, false);
+      const data = res.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
+      return Array.isArray(data) ? data : (data?.value || []);
+    } catch {
+      return [];
+    }
   };
 
-  try {
-    let raw = await tryFilter(`DocumentEntry eq ${docEntry} and ObjectType eq '${objectType}'`);
-    if (raw.length === 0) {
-      raw = await tryFilter(`DraftEntry eq ${docEntry} and ObjectType eq '${objectType}'`);
+  const dedupe = (arr: SLApprovalRequest[]): SLApprovalRequest[] => {
+    const seen = new Set<number>();
+    const out: SLApprovalRequest[] = [];
+    for (const r of arr) {
+      const code = Number(r.Code || 0);
+      if (code && !seen.has(code)) { seen.add(code); out.push(r); }
     }
-    return raw;
-  } catch {
-    return [];
+    return out;
+  };
+
+  const types = objectTypes.length > 0 ? objectTypes : [...DEFAULT_PURCHASE_OBJECT_TYPES];
+
+  // 1) DocumentEntry para cada ObjectType em paralelo
+  const docResults = await Promise.all(
+    types.map((t) => tryFilter(`DocumentEntry eq ${docEntry} and ObjectType eq '${t}'`)),
+  );
+  let raw = dedupe(docResults.flat());
+
+  // 2) Fallback: DraftEntry para cada ObjectType
+  if (raw.length === 0) {
+    const draftResults = await Promise.all(
+      types.map((t) => tryFilter(`DraftEntry eq ${docEntry} and ObjectType eq '${t}'`)),
+    );
+    raw = dedupe(draftResults.flat());
   }
+
+  // 3) Último fallback: sem filtro de ObjectType (cobre tipos não listados)
+  if (raw.length === 0) {
+    const [byDoc, byDraft] = await Promise.all([
+      tryFilter(`DocumentEntry eq ${docEntry}`),
+      tryFilter(`DraftEntry eq ${docEntry}`),
+    ]);
+    raw = dedupe([...byDoc, ...byDraft]);
+  }
+
+  return raw;
 }
 
 interface SapDocApprovalHistoryProps {
-  /** DocEntry do documento no SAP (PurchaseOrders, Invoices, etc.). */
+  /** DocEntry ou DraftEntry do documento no SAP. */
   docEntry?: number | null;
-  /** ObjectType do documento no SAP. Padrão: "22" (Pedido de Compra). */
-  objectType?: string;
+  /**
+   * ObjectType(s) do documento no SAP. Aceita string (compat) ou array.
+   * Padrão: tipos comuns de documentos de compra (PO, GRPO, Invoice, Credit, Downpayment,
+   * Purchase Request, Purchase Quotation).
+   */
+  objectType?: string | string[];
 }
 
 interface ResolvedRequest {
@@ -183,11 +237,19 @@ function StatusPill({ status, label }: { status: ApprovalHistoryEntry["status"];
   );
 }
 
-export function SapDocApprovalHistory({ docEntry, objectType = "22" }: SapDocApprovalHistoryProps) {
+export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHistoryProps) {
   const { session } = useSap();
   const [loading, setLoading] = useState(false);
   const [requests, setRequests] = useState<ResolvedRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Normaliza objectType para array; usa defaults de compra quando não informado.
+  const objectTypes: string[] = Array.isArray(objectType)
+    ? objectType
+    : objectType
+      ? [objectType]
+      : [...DEFAULT_PURCHASE_OBJECT_TYPES];
+  const objectTypesKey = objectTypes.join(",");
 
   useEffect(() => {
     if (!session || session.erpType !== "sap" || !docEntry) {
@@ -195,7 +257,7 @@ export function SapDocApprovalHistory({ docEntry, objectType = "22" }: SapDocApp
       return;
     }
     let cancelled = false;
-    const key = cacheKey(session as SapSession, docEntry, objectType);
+    const key = cacheKey(session as SapSession, docEntry, objectTypesKey);
 
     // Cache hit: sirva imediatamente sem tocar o Service Layer.
     const cached = resolvedCache.get(key);
@@ -207,7 +269,7 @@ export function SapDocApprovalHistory({ docEntry, objectType = "22" }: SapDocApp
     }
 
     const loader = inflightCache.get(key) ?? (async (): Promise<ResolvedRequest[]> => {
-      const raw = await fetchApprovalRequests(session as SapSession, docEntry, objectType);
+      const raw = await fetchApprovalRequests(session as SapSession, docEntry, objectTypes);
       if (raw.length === 0) return [];
 
       const userIds = new Set<number>();
@@ -321,7 +383,7 @@ export function SapDocApprovalHistory({ docEntry, objectType = "22" }: SapDocApp
       });
 
     return () => { cancelled = true; };
-  }, [session, docEntry, objectType]);
+  }, [session, docEntry, objectTypesKey]);
 
   if (!session || session.erpType !== "sap" || !docEntry) return null;
 
