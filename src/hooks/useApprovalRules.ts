@@ -35,11 +35,15 @@ export const FIELD_OPTIONS = [
   { value: "item_groups", label: "Grupos dos Itens" },
 ];
 
+export type CriterionLogic = "and" | "or";
+
 export interface RuleCriterion {
   field: string;
   operator: CriterionOperator;
   value: string;
   value2?: string; // for "between"
+  /** Conector com o critério anterior. Ignorado no primeiro critério. Default: "and". */
+  logic?: CriterionLogic;
 }
 
 export interface ApprovalRuleLevel {
