@@ -324,6 +324,14 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         return;
       }
     }
+    // Validação de anexos: precisa manter ao menos 1 após todas as mudanças.
+    const existingCount = (expense.attachments || []).length;
+    const finalAttachmentCount = existingCount - removedIds.length + newFiles.length;
+    if (finalAttachmentCount < 1) {
+      toast.error("O pedido precisa manter ao menos 1 anexo. Adicione um arquivo antes de salvar.");
+      return;
+    }
+
     setIsSaving(true);
     try {
       await onSave({
@@ -342,9 +350,12 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           cost_center: it.cost_center,
           project: it.project,
         })),
+        new_attachment_files: newFiles.length > 0 ? newFiles : undefined,
+        remove_attachment_ids: removedIds.length > 0 ? removedIds : undefined,
       });
       const rateioChanged = !isSales && rateioType !== initialRateioTypeRef.current;
-      if (rateioChanged) {
+      const attachmentsChanged = newFiles.length > 0 || removedIds.length > 0;
+      if (rateioChanged || attachmentsChanged) {
         toast.success("Pedido atualizado e fluxo de aprovação reiniciado.");
       } else {
         toast.success("Pedido atualizado com sucesso!");
