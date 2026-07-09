@@ -863,6 +863,8 @@ function RuleFormModal({
                     onChange={updateCriterion}
                     onRemove={removeCriterion}
                     catalogs={catalogs}
+                    users={mergedUsers}
+                    usersLoading={usersLoading}
                   />
                 ))}
               </div>
