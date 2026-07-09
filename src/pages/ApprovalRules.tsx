@@ -114,12 +114,12 @@ function UserSelect({
   const filtered = useMemo(() => {
     if (!search) return users;
     const q = normalizeSearch(search);
-    return users.filter(
-      (u) =>
-        normalizeSearch(u.UserName).includes(q) ||
-        normalizeSearch(u.UserCode).includes(q) ||
-        normalizeSearch(u.eMail).includes(q)
-    );
+    return users.filter((u) => {
+      const haystack = [u.UserName, u.UserCode, u.eMail, (u as any).searchText]
+        .map(normalizeSearch)
+        .join(" ");
+      return haystack.includes(q);
+    });
   }, [users, search]);
 
   return (
@@ -579,7 +579,10 @@ function RuleFormModal({
           Locked: p.status === "disabled" ? "tYES" as const : "tNO" as const,
           LastLoginDate: undefined,
           LastLoginTime: undefined,
-        }));
+          searchText: [p.sap_user_code, p.sap_user_name, p.sap_email, p.idp_email, p.idp_display_name]
+            .filter(Boolean)
+            .join(" "),
+        } as SapUser & { searchText?: string }));
         setProfileUsers(rows);
         setIdpUsers(idpRows);
       } catch (e) {
@@ -598,7 +601,20 @@ function RuleFormModal({
         || (u.UserCode || "").trim().toLowerCase()
         || (u.UserName || "").trim().toLowerCase();
       if (!key) return;
-      if (!byKey.has(key)) byKey.set(key, u);
+      if (!byKey.has(key)) {
+        byKey.set(key, u);
+        return;
+      }
+      const existing = byKey.get(key)! as SapUser & { searchText?: string };
+      existing.searchText = [
+        existing.searchText,
+        (u as any).searchText,
+        u.UserName,
+        u.UserCode,
+        u.eMail,
+      ].filter(Boolean).join(" ");
+      if (!existing.eMail && u.eMail) existing.eMail = u.eMail;
+      if (!existing.UserName && u.UserName) existing.UserName = u.UserName;
     };
     sapUsers.forEach(add);
     profileUsers.forEach(add);
