@@ -201,12 +201,7 @@ export function RuleSimulator({
         criterion: c,
         passed: evaluateCriterion(c, ctx),
       }));
-      // Combina passed com o conector logic (and/or) da esquerda para a direita.
-      let allMatched = criteria.length > 0 ? perCriterion[0].passed : false;
-      for (let i = 1; i < perCriterion.length; i++) {
-        const logic = ((criteria[i] as any).logic === "or") ? "or" : "and";
-        allMatched = logic === "or" ? (allMatched || perCriterion[i].passed) : (allMatched && perCriterion[i].passed);
-      }
+      const allMatched = criteria.length > 0 && evaluateCriteria(criteria, ctx);
       return { rule: r, perCriterion, allMatched };
     });
   }, [ran, input, rules]);
