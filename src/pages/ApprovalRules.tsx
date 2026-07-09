@@ -430,12 +430,115 @@ function RuleFormModal({
   sapUsersLoading: boolean;
   editing?: ApprovalRule | null;
 }) {
+  const { session } = useSap();
   const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(0);
   const [docType, setDocType] = useState<RuleDocType>("both");
   const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
   const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
+
+  // ── Catálogos SAP (busca no campo Valor) ───────────────────────────────
+  const ccMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
+  const { options: rawCcOptions, isLoading: ccLoading } = useSapCachedList({
+    cacheKey: "cost_centers",
+    endpoint: "ProfitCenters",
+    params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
+    mapRow: ccMapRow,
+    enabled: open,
+  });
+  const ccOptions = useMemo(
+    () => rawCcOptions
+      .filter((o) => !(o.name || "").toLowerCase().startsWith("centro geral"))
+      .map((o) => ({ code: o.code, name: o.name })),
+    [rawCcOptions],
+  );
+
+  const projMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
+  const { options: projOptions, isLoading: projLoading } = useSapCachedList({
+    cacheKey: "projects",
+    endpoint: "Projects",
+    params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
+    mapRow: projMapRow,
+    enabled: open,
+  });
+
+  const supMapRow = useCallback((row: any) => ({ code: row.CardName || row.CardCode, name: row.CardCode }), []);
+  const { options: supOptions, isLoading: supLoading } = useSapCachedList({
+    cacheKey: "suppliers_active_v2",
+    endpoint: "BusinessPartners",
+    params: { $select: "CardCode,CardName", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
+    mapRow: supMapRow,
+    enabled: open,
+  });
+
+  const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
+  const { options: itemOptions, isLoading: itemLoading } = useSapCachedList({
+    cacheKey: "items_purchase_active_v3",
+    endpoint: "Items",
+    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    mapRow: itemMapRow,
+    enabled: open,
+  });
+
+  const catalogs = useMemo(
+    () => ({
+      cost_center: { options: ccOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: ccLoading },
+      project: { options: projOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: projLoading },
+      supplier_name: { options: supOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: supLoading },
+      item_codes: { options: itemOptions.map((o) => ({ code: o.code, name: o.name })), isLoading: itemLoading },
+    }),
+    [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading],
+  );
+
+  // ── Fallback de aprovadores: mescla SAP Users + user_profiles ─────────
+  const [profileUsers, setProfileUsers] = useState<SapUser[]>([]);
+  const [profileLoading, setProfileLoading] = useState(false);
+  useEffect(() => {
+    if (!open || !session?.companyDB) return;
+    let cancelled = false;
+    setProfileLoading(true);
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("user_profiles")
+          .select("user_code, display_name, email")
+          .eq("company_db", session.companyDB || "")
+          .order("display_name", { ascending: true });
+        if (cancelled) return;
+        const rows: SapUser[] = (data || []).map((p: any, i: number) => ({
+          InternalKey: -(i + 1), // pseudo key negativo para não colidir com SAP
+          UserCode: p.user_code || "",
+          UserName: p.display_name || p.user_code || p.email || "",
+          eMail: p.email || undefined,
+          Locked: "tNO" as const,
+          LastLoginDate: undefined,
+          LastLoginTime: undefined,
+        }));
+        setProfileUsers(rows);
+      } catch (e) {
+        console.warn("Falha ao carregar user_profiles para fallback:", e);
+      } finally {
+        if (!cancelled) setProfileLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, session?.companyDB]);
+
+  const mergedUsers: SapUser[] = useMemo(() => {
+    const byKey = new Map<string, SapUser>();
+    const add = (u: SapUser) => {
+      const key = (u.eMail || "").trim().toLowerCase()
+        || (u.UserCode || "").trim().toLowerCase()
+        || (u.UserName || "").trim().toLowerCase();
+      if (!key) return;
+      if (!byKey.has(key)) byKey.set(key, u);
+    };
+    sapUsers.forEach(add);
+    profileUsers.forEach(add);
+    return Array.from(byKey.values()).sort((a, b) => a.UserName.localeCompare(b.UserName));
+  }, [sapUsers, profileUsers]);
+  const usersLoading = sapUsersLoading || profileLoading;
 
   // Hydrate form when opening / switching between create and edit
   useEffect(() => {
@@ -476,26 +579,65 @@ function RuleFormModal({
     setCriteria((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // ── Níveis (agora agrupados por level_order, permitindo paralelismo) ──
+  const levelsGrouped = useMemo(() => {
+    const map = new Map<number, Array<{ idx: number; approver_name: string; approver_email?: string }>>();
+    levels.forEach((l, idx) => {
+      const key = l.level_order;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push({ idx, approver_name: l.approver_name, approver_email: l.approver_email });
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+  }, [levels]);
+
+  const nextLevelOrder = () => {
+    if (levels.length === 0) return 1;
+    return Math.max(...levels.map((l) => l.level_order)) + 1;
+  };
+
   const addLevel = () => {
+    const lo = nextLevelOrder();
     setLevels((prev) => [
       ...prev,
-      { level_order: prev.length + 1, approver_name: "", approver_email: "" },
+      { level_order: lo, approver_name: "", approver_email: "" },
     ]);
   };
 
-  const removeLevel = (index: number) => {
-    setLevels((prev) =>
-      prev.filter((_, i) => i !== index).map((lvl, i) => ({ ...lvl, level_order: i + 1 }))
-    );
+  const addParallelApprover = (levelOrder: number) => {
+    setLevels((prev) => [
+      ...prev,
+      { level_order: levelOrder, approver_name: "", approver_email: "" },
+    ]);
   };
 
-  const updateLevel = (index: number, field: string, value: string) => {
+  const removeApproverRow = (index: number) => {
+    setLevels((prev) => {
+      // Remove a linha e, se um nível ficar sem ninguém, renumera os posteriores.
+      const removedLevel = prev[index]?.level_order;
+      const next = prev.filter((_, i) => i !== index);
+      if (removedLevel != null && !next.some((l) => l.level_order === removedLevel)) {
+        // Renumera níveis > removido para fechar o gap
+        const remaining = next
+          .sort((a, b) => a.level_order - b.level_order)
+          .map((l) => ({ ...l }));
+        // Constrói mapping para renumerar
+        const distinct = Array.from(new Set(remaining.map((l) => l.level_order))).sort((a, b) => a - b);
+        const rank: Record<number, number> = {};
+        distinct.forEach((lo, i) => { rank[lo] = i + 1; });
+        return remaining.map((l) => ({ ...l, level_order: rank[l.level_order] }));
+      }
+      return next;
+    });
+  };
+
+  const updateLevelRow = (index: number, field: "approver_name" | "approver_email", value: string) => {
     setLevels((prev) => {
       const updated = [...prev];
       (updated[index] as any)[field] = value;
       return updated;
     });
   };
+
 
   const handleSubmit = async () => {
     if (!name.trim()) {
