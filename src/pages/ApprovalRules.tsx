@@ -90,8 +90,10 @@ function normalizeSearch(value: unknown): string {
 function criterionSummary(c: RuleCriterion): string {
   const f = fieldLabel(c.field);
   const op = OPERATOR_LABELS[c.operator];
-  if (c.operator === "between") return `${f} ${op} ${c.value} e ${c.value2}`;
-  return `${f} ${op} ${c.value}`;
+  const formatVal = (v: string) =>
+    c.field === "doc_type" ? (DOC_TYPE_LABELS[v as RuleDocType] || v) : v;
+  if (c.operator === "between") return `${f} ${op} ${formatVal(c.value)} e ${formatVal(c.value2 || "")}`;
+  return `${f} ${op} ${formatVal(c.value)}`;
 }
 
 /* ─── User Select with search ─── */
