@@ -85,7 +85,30 @@ export function useNfEntradaLinks({
       .eq("sap_company_db", companyDb)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return (data || []) as NfEntradaLink[];
+    const nfs = (data || []) as Omit<NfEntradaLink, "ap_links">[];
+    if (nfs.length === 0) return [];
+
+    // Busca contas a pagar vinculadas (N por NF) — tabela de rastreabilidade
+    const ids = nfs.map((n) => n.id);
+    const { data: linksData } = await (supabase as any)
+      .from("nf_entrada_contas_pagar")
+      .select("nf_import_id, ap_doc_entry, ap_doc_num, ap_total, ap_paid, source, linked_at, notes")
+      .in("nf_import_id", ids);
+    const byNf = new Map<string, NfApLink[]>();
+    for (const row of (linksData || []) as Array<NfApLink & { nf_import_id: string }>) {
+      const arr = byNf.get(row.nf_import_id) || [];
+      arr.push({
+        ap_doc_entry: row.ap_doc_entry,
+        ap_doc_num: row.ap_doc_num,
+        ap_total: row.ap_total,
+        ap_paid: row.ap_paid,
+        source: row.source,
+        linked_at: row.linked_at,
+        notes: row.notes,
+      });
+      byNf.set(row.nf_import_id, arr);
+    }
+    return nfs.map((n) => ({ ...n, ap_links: byNf.get(n.id) || [] })) as NfEntradaLink[];
   }, [sapDocEntry, companyDb]);
 
   return useExternalCache<NfEntradaLink[]>({
