@@ -479,6 +479,105 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
             </div>
           )}
 
+          {/* Anexos — pelo menos 1 obrigatório; adicionar/remover reinicia aprovação */}
+          {(() => {
+            const existing = expense.attachments || [];
+            const visibleExisting = existing.filter((a) => !removedIds.includes(a.id));
+            const finalCount = visibleExisting.length + newFiles.length;
+            const changed = removedIds.length > 0 || newFiles.length > 0;
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5" />
+                    <span>Anexos</span>
+                    {finalCount > 0 ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="OK" />
+                    ) : (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                    )}
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length > 0) setNewFiles((prev) => [...prev, ...files]);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="gap-1 text-xs h-7"
+                  >
+                    <Plus className="w-3 h-3" /> Adicionar anexo
+                  </Button>
+                </div>
+
+                <div className={`rounded-md border p-2 space-y-1 ${finalCount > 0 ? validClass : requiredClass}`}>
+                  {visibleExisting.length === 0 && newFiles.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground italic px-1 py-1">
+                      Nenhum anexo. O pedido não pode ser salvo sem anexos.
+                    </p>
+                  )}
+
+                  {visibleExisting.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between gap-2 text-xs px-1.5 py-1 rounded hover:bg-muted/40">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{a.file_name}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setRemovedIds((p) => [...p, a.id])}
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        aria-label={`Remover ${a.file_name}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  {newFiles.map((f, idx) => (
+                    <div key={`new-${idx}`} className="flex items-center justify-between gap-2 text-xs px-1.5 py-1 rounded bg-emerald-500/5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Plus className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0">(novo)</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setNewFiles((p) => p.filter((_, i) => i !== idx))}
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        aria-label={`Descartar ${f.name}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                {changed && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    Alterar anexos reinicia o fluxo de aprovação a partir do nível 1 com anotação no histórico.
+                  </p>
+                )}
+                {finalCount < 1 && (
+                  <p className="text-[11px] text-destructive">
+                    O pedido precisa manter ao menos 1 anexo.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
+
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Itens</p>
