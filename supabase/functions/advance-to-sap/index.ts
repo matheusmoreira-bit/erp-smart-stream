@@ -156,6 +156,7 @@ Deno.serve(async (req) => {
           AccountCode: dpmAccount,
           LineTotal: Number(adv.amount),
           Currency: adv.currency,
+          ...(adv.cost_center ? { CostingCode: adv.cost_center } : {}),
         },
       ],
     };

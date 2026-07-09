@@ -1,0 +1,1 @@
+ALTER TABLE public.advance_payments ADD COLUMN IF NOT EXISTS cost_center TEXT; ALTER TABLE public.advance_payments ADD COLUMN IF NOT EXISTS cost_center_name TEXT;

@@ -55,6 +55,8 @@ export interface AdvancePayment {
   requester_name?: string | null;
   requester_email?: string | null;
   rejection_reason?: string | null;
+  cost_center?: string | null;
+  cost_center_name?: string | null;
   sap_doc_entry?: number | null;
   sap_doc_num?: number | null;
   sap_integration_error?: string | null;
@@ -73,6 +75,8 @@ export interface CreateAdvanceInput {
   currency: string;
   due_date?: string;
   remarks?: string;
+  cost_center?: string;
+  cost_center_name?: string;
   files?: File[];
   submit?: boolean; // true => goes to pending; false => draft
 }
@@ -154,6 +158,8 @@ export function useAdvancePayments() {
           currency: input.currency,
           due_date: input.due_date || null,
           remarks: input.remarks || null,
+          cost_center: input.cost_center || null,
+          cost_center_name: input.cost_center_name || null,
           requester_id: uid,
           requester_name: userIdentifier,
           requester_email: userIdentifier,

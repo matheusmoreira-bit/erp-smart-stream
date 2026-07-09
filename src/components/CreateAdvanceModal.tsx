@@ -39,6 +39,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
   const [currency, setCurrency] = useState<string>(defaultCurrency);
   const [dueDate, setDueDate] = useState<string>("");
   const [remarks, setRemarks] = useState<string>("");
+  const [costCenter, setCostCenter] = useState<SapSearchOption | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -61,6 +62,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
     setCurrency(defaultCurrency);
     setDueDate("");
     setRemarks("");
+    setCostCenter(null);
     setFiles([]);
   };
 
@@ -69,6 +71,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
     if (!companyDb) return toast.error("Sessão sem empresa selecionada");
     const amt = Number(amount.replace(",", "."));
     if (!Number.isFinite(amt) || amt <= 0) return toast.error("Informe um valor válido");
+    if (submit && !costCenter?.code) return toast.error("Selecione o centro de custo");
 
     setSaving(true);
     try {
@@ -81,6 +84,8 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
         currency,
         due_date: dueDate || undefined,
         remarks: remarks || undefined,
+        cost_center: costCenter?.code || undefined,
+        cost_center_name: costCenter?.name || undefined,
         files,
         submit,
       };
@@ -176,6 +181,20 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
           <div className="space-y-2">
             <Label>Data prevista</Label>
             <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Centro de custo <span className="text-destructive">*</span></Label>
+            <SapSearchCombobox
+              endpoint="ProfitCenters"
+              filterTemplate="Active eq 'tYES' and (contains(CenterCode,'{q}') or contains(CenterName,'{q}'))"
+              selectFields="CenterCode,CenterName"
+              topResults={50}
+              mapRow={(r) => ({ code: r.CenterCode, name: r.CenterName })}
+              value={costCenter}
+              onChange={(v) => setCostCenter(v)}
+              placeholder="Buscar centro de custo"
+            />
           </div>
 
           <div className="space-y-2">
