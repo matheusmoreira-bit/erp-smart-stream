@@ -237,11 +237,19 @@ function StatusPill({ status, label }: { status: ApprovalHistoryEntry["status"];
   );
 }
 
-export function SapDocApprovalHistory({ docEntry, objectType = "22" }: SapDocApprovalHistoryProps) {
+export function SapDocApprovalHistory({ docEntry, objectType }: SapDocApprovalHistoryProps) {
   const { session } = useSap();
   const [loading, setLoading] = useState(false);
   const [requests, setRequests] = useState<ResolvedRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Normaliza objectType para array; usa defaults de compra quando não informado.
+  const objectTypes: string[] = Array.isArray(objectType)
+    ? objectType
+    : objectType
+      ? [objectType]
+      : [...DEFAULT_PURCHASE_OBJECT_TYPES];
+  const objectTypesKey = objectTypes.join(",");
 
   useEffect(() => {
     if (!session || session.erpType !== "sap" || !docEntry) {
@@ -249,7 +257,7 @@ export function SapDocApprovalHistory({ docEntry, objectType = "22" }: SapDocApp
       return;
     }
     let cancelled = false;
-    const key = cacheKey(session as SapSession, docEntry, objectType);
+    const key = cacheKey(session as SapSession, docEntry, objectTypesKey);
 
     // Cache hit: sirva imediatamente sem tocar o Service Layer.
     const cached = resolvedCache.get(key);
@@ -261,7 +269,7 @@ export function SapDocApprovalHistory({ docEntry, objectType = "22" }: SapDocApp
     }
 
     const loader = inflightCache.get(key) ?? (async (): Promise<ResolvedRequest[]> => {
-      const raw = await fetchApprovalRequests(session as SapSession, docEntry, objectType);
+      const raw = await fetchApprovalRequests(session as SapSession, docEntry, objectTypes);
       if (raw.length === 0) return [];
 
       const userIds = new Set<number>();
