@@ -65,25 +65,35 @@ export interface InternalExpense {
 }
 
 /**
- * Resolve the effective designated approver for the current level, honoring
- * `current_approver` as an override (this is how delegation actually shifts
- * authorization on internal expenses).
+ * Resolve o(s) aprovador(es) designado(s) para o nível atual. Suporta
+ * APROVADORES PARALELOS: múltiplas linhas com o mesmo `level_order`.
+ * Um override em `current_approver` (delegação) toma precedência sobre a
+ * regra e retorna uma lista com um único item.
  */
+export function resolveDesignatedApprovers(exp: InternalExpense): Array<{
+  name: string | null;
+  email: string | null;
+}> {
+  const override = (exp.current_approver || "").trim() || null;
+  if (override) {
+    const isEmail = override.includes("@");
+    return [{ name: isEmail ? null : override, email: isEmail ? override : null }];
+  }
+  const rows = exp.rule_levels.filter((l) => l.level_order === exp.current_level_order);
+  if (rows.length === 0) return [{ name: null, email: null }];
+  return rows.map((r) => ({ name: r.approver_name || null, email: r.approver_email || null }));
+}
+
+/** @deprecated compat — devolve o PRIMEIRO aprovador do nível atual. */
 export function resolveDesignatedApprover(exp: InternalExpense): {
   name: string | null;
   email: string | null;
 } {
-  const currentRow = exp.rule_levels.find((l) => l.level_order === exp.current_level_order) || null;
-  const override = (exp.current_approver || "").trim() || null;
-  const overrideIsEmail = !!override && override.includes("@");
-  return {
-    name: override || currentRow?.approver_name || null,
-    email: overrideIsEmail ? override : (currentRow?.approver_email || null),
-  };
+  return resolveDesignatedApprovers(exp)[0] || { name: null, email: null };
 }
 
 export function canCallerApproveInternal(caller: string, exp: InternalExpense): boolean {
   if (exp.status !== "pendente_aprovacao") return false;
-  const { name, email } = resolveDesignatedApprover(exp);
-  return isDesignatedApprover(caller, name, email);
+  const candidates = resolveDesignatedApprovers(exp);
+  return candidates.some(({ name, email }) => isDesignatedApprover(caller, name, email));
 }
