@@ -313,19 +313,23 @@ function CatalogValueSelect({
 
 /* ─── Criterion Row ─── */
 /** Campos que suportam busca em catálogo (SAP cached lists) para o valor. */
-const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes"]);
+const CATALOG_FIELDS = new Set(["cost_center", "project", "supplier_name", "item_codes", "item_groups"]);
 const TEXT_OPERATORS: CriterionOperator[] = ["equal", "not_equal", "contains", "not_contains", "like"];
 const NUMERIC_OPERATORS: CriterionOperator[] = ["greater_than", "less_than", "between", "equal", "not_equal"];
+const DOC_TYPE_OPERATORS: CriterionOperator[] = ["equal", "not_equal"];
 
 function defaultOperatorForField(field: string): CriterionOperator {
   if (field === "total_amount") return "greater_than";
   if (field === "cost_center" || field === "item_codes") return "like";
-  if (field === "supplier_name" || field === "requester_name") return "contains";
+  if (field === "supplier_name") return "contains";
+  if (field === "requester_name") return "equal";
+  if (field === "doc_type") return "equal";
   return "equal";
 }
 
 function operatorAllowedForField(field: string, operator: CriterionOperator): boolean {
   if (field === "total_amount") return NUMERIC_OPERATORS.includes(operator);
+  if (field === "doc_type") return DOC_TYPE_OPERATORS.includes(operator);
   return TEXT_OPERATORS.includes(operator);
 }
 
