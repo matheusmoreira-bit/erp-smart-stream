@@ -1732,6 +1732,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   key={exp.id}
                   expense={exp}
                   originBadge={origin}
+                  erpLabel={erpLabel}
                   onOpen={() => openExpense(exp, origin)}
                   onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
                 />
