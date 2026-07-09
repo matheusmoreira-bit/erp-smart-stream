@@ -104,6 +104,9 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
 /* ───────────────────────── Actions ───────────────────────── */
 
 const ALLOWED_CREATE_STATUS = new Set(["rascunho", "pendente_aprovacao"]);
+// Origens que criam despesa já aprovada (não passam pelo fluxo interno de aprovação).
+// PagCorp = gastos de cartão corporativo — vão direto para integração SAP.
+const AUTO_APPROVED_ORIGINS = new Set(["pagcorp"]);
 const ALLOWED_LOG_DECISIONS = new Set([
   "created", "submitted", "cancelled", "integrated", "integration_failed",
 ]);
@@ -112,8 +115,10 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   if (!caller.identity) return json(401, { error: "Não autenticado" });
   const input = body?.input ?? {};
 
+  const origin = String(input.origin || "manual");
   const status = String(input.status || "rascunho");
-  if (!ALLOWED_CREATE_STATUS.has(status)) {
+  const isAutoApproved = status === "aprovado" && AUTO_APPROVED_ORIGINS.has(origin);
+  if (!ALLOWED_CREATE_STATUS.has(status) && !isAutoApproved) {
     return json(400, { error: `status inicial inválido: ${status}` });
   }
 
