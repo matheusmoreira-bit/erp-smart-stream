@@ -40,6 +40,31 @@ function criterionSummary(c: RuleCriterion): string {
   return `${f} ${op} ${c.value}`;
 }
 
+/** Conector efetivo (aplica o mesmo fallback de evaluateCriteria: ausente → "and"). */
+function effectiveLogic(v: unknown): "and" | "or" {
+  return v === "or" ? "or" : "and";
+}
+
+/** Agrupa critérios por `group` (default 0) preservando a ordem de entrada. */
+function groupCriteria(criteria: RuleCriterion[]): RuleCriterion[][] {
+  const map = new Map<number, RuleCriterion[]>();
+  const order: number[] = [];
+  criteria.forEach((c) => {
+    const g = typeof c.group === "number" ? c.group : 0;
+    if (!map.has(g)) {
+      map.set(g, []);
+      order.push(g);
+    }
+    map.get(g)!.push(c);
+  });
+  return order.sort((a, b) => a - b).map((g) => map.get(g)!);
+}
+
+/** Rótulo curto do conector para chips. */
+function logicBadge(l: "and" | "or"): string {
+  return l === "or" ? "OU" : "E";
+}
+
 interface SimulationInput {
   total_amount: string;
   cost_center: SapSearchOption | null;
