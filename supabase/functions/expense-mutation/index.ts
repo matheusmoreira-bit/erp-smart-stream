@@ -297,6 +297,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   if (input.remarks !== undefined) updates.remarks = input.remarks;
   if (input.doc_date !== undefined) updates.doc_date = input.doc_date || null;
   if (input.due_date !== undefined) updates.due_date = input.due_date || null;
+  if (input.rateio_type !== undefined) updates.rateio_type = input.rateio_type || null;
 
   const items: any[] | undefined = Array.isArray(input.items) ? input.items : undefined;
   if (items && items.length > 0) {
@@ -308,19 +309,35 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   // Regra de negócio: qualquer edição em documento que já saiu do rascunho
   // (pendente_aprovacao ou aprovado com erro de SAP) deve retornar ao fluxo
   // de aprovação a partir do nível 1, recomputando o aprovador designado.
-  const shouldResubmit = status === "pendente_aprovacao" || editableForFix;
+  // Também dispara resubmit quando o tipo de rateio muda em rascunho (o
+  // caminho de aprovação depende do rateio_type).
+  const rateioChanged = !!input.rateio_changed;
+  const shouldResubmit = status === "pendente_aprovacao" || editableForFix || (rateioChanged && status === "rascunho");
   let resubmittedApprover: string | null = null;
   let resubmittedLevel = 1;
   let resubmitFallbackUsed = false;
   if (shouldResubmit) {
+    // Se rateio mudou, o cliente já resolveu a nova regra e o aprovador do nível 1.
+    // Caso contrário, usa a regra atual da despesa.
+    const nextRuleId = rateioChanged
+      ? (input.new_approval_rule_id ?? null)
+      : (current.approval_rule_id ?? null);
+    const nextApproverFromClient = rateioChanged
+      ? (input.new_current_approver ?? null)
+      : null;
+
+    if (rateioChanged) {
+      updates.approval_rule_id = nextRuleId;
+    }
+
     let resolvedLevel = 1;
-    let resolvedApprover: string | null = null;
+    let resolvedApprover: string | null = nextApproverFromClient;
     let fallbackUsed = false;
-    if (current.approval_rule_id) {
+    if (nextRuleId) {
       const { data: lvls } = await admin
         .from("approval_rule_levels")
         .select("level_order, approver_name, approver_email")
-        .eq("rule_id", current.approval_rule_id)
+        .eq("rule_id", nextRuleId)
         .order("level_order", { ascending: true });
       const picked = pickApproverSkippingRequester(
         (lvls || []) as any,
@@ -329,7 +346,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
         1,
       );
       resolvedLevel = picked.level_order;
-      resolvedApprover = picked.approver_name || null;
+      resolvedApprover = picked.approver_name || resolvedApprover;
       fallbackUsed = picked.fallback_used;
     }
     updates.status = "pendente_aprovacao";
