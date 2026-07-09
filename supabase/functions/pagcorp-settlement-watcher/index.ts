@@ -103,25 +103,24 @@ async function resolveSettlementAccount(
   return (fb as SettlementAccount) || null;
 }
 
-async function findInvoiceForPO(baseUrl: string, cookie: string, poEntry: number): Promise<
-  { DocEntry: number; DocNum: number; CardCode: string; DocTotal: number; DocDate: string; BPLId?: number } | null
+async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: number): Promise<
+  Array<{ DocEntry: number; DocNum: number; CardCode: string; DocTotal: number; DocDate: string; BPLId?: number }>
 > {
-  // Procura Purchase Invoice cujas DocumentLines referenciam o PO (BaseType=22 / BaseEntry=poEntry).
+  // 1 PO → N NF de entrada: retornamos TODAS as PurchaseInvoices que apontam para o PO.
   const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})` +
-    `&$select=DocEntry,DocNum,CardCode,DocTotal,DocDate,BPL_IDAssignedToInvoice&$top=1`;
-  const r = await fetch(q, { headers: { Cookie: cookie, Prefer: "odata.maxpagesize=1" } });
+    `&$select=DocEntry,DocNum,CardCode,DocTotal,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
+  const r = await fetch(q, { headers: { Cookie: cookie } });
   if (!r.ok) throw new Error(`Consulta PurchaseInvoices falhou ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = await r.json();
-  const inv = Array.isArray(j?.value) && j.value.length ? j.value[0] : null;
-  if (!inv) return null;
-  return {
+  const arr = Array.isArray(j?.value) ? j.value : [];
+  return arr.map((inv: any) => ({
     DocEntry: Number(inv.DocEntry),
     DocNum: Number(inv.DocNum),
     CardCode: String(inv.CardCode),
     DocTotal: Number(inv.DocTotal),
     DocDate: String(inv.DocDate),
     BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
-  };
+  }));
 }
 
 async function createJournalEntry(
