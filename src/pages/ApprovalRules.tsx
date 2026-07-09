@@ -1042,12 +1042,22 @@ function RuleCard({
           </div>
 
           {criteriaLabels.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {criteriaLabels.map((c, i) => (
-                <span key={i} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                  {c}
-                </span>
-              ))}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {criteriaLabels.map((c, i) => {
+                const logic = ((rule.criteria?.[i] as any)?.logic === "or") ? "OU" : "E";
+                return (
+                  <span key={i} className="flex items-center gap-1.5">
+                    {i > 0 && (
+                      <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                        {logic}
+                      </span>
+                    )}
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {c}
+                    </span>
+                  </span>
+                );
+              })}
             </div>
           )}
 
