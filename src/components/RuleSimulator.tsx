@@ -485,6 +485,23 @@ export function RuleSimulator({
                     </Badge>
                   </div>
                   <p className="text-sm font-semibold text-foreground">{winner.rule.name}</p>
+                  {(() => {
+                    const connectors = [
+                      ...winner.groups.slice(1).map((g) => g.connector),
+                      ...winner.groups.flatMap((g) => g.items.slice(1).map((it) => it.connector)),
+                    ].filter((x): x is "and" | "or" => x === "and" || x === "or");
+                    if (connectors.length === 0) return null;
+                    const hasOr = connectors.includes("or");
+                    const hasAnd = connectors.includes("and");
+                    const label = hasOr && hasAnd ? "E + OU" : hasOr ? "somente OU" : "somente E";
+                    return (
+                      <p className="text-[11px] text-muted-foreground">
+                        Lógica efetiva dos critérios:{" "}
+                        <span className="font-semibold text-foreground">{label}</span>
+                        <span className="text-muted-foreground/70"> (regras antigas sem conector = E)</span>
+                      </p>
+                    );
+                  })()}
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1">
                       <UsersIcon className="w-3 h-3" /> Cadeia de aprovadores
