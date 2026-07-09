@@ -89,6 +89,7 @@ interface Props {
     remarks?: string | null;
     doc_date?: string | null;
     due_date?: string | null;
+    rateio_type?: RateioType | null;
     items?: Omit<ExpenseItem, "id">[];
   }) => Promise<void>;
   mode?: "purchase" | "sales";
