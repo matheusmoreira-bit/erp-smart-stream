@@ -64,6 +64,8 @@ import {
   type CreateRuleInput,
 } from "@/hooks/useApprovalRules";
 import { useSapUsers } from "@/hooks/useSapUsers";
+import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { supabase } from "@/integrations/supabase/client";
 import type { SapUser } from "@/lib/cache-repository";
 
 import { useCompanies } from "@/hooks/useCompanies";
