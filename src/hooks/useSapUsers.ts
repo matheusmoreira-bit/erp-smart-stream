@@ -63,6 +63,23 @@ async function fetchUsersFromServiceLayer(session: NonNullable<ReturnType<typeof
   return (data.value as Record<string, unknown>[]).map((row) => normalizeSapUser(row));
 }
 
+async function fetchUsersFromAdminService(session: NonNullable<ReturnType<typeof useSap>["session"]>): Promise<SapUser[]> {
+  const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+  const res = await sapFunctionFetch("sap-users-admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "list_users_for_selection",
+      company_db: session.companyDB,
+    }),
+  });
+
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || `Erro ${res.status}`);
+
+  return ((payload.users || []) as Record<string, unknown>[]).map((row) => normalizeSapUser(row));
+}
+
 export function useSapUsers() {
   const { session } = useSap();
   const [users, setUsers] = useState<SapUser[]>([]);
@@ -145,6 +162,15 @@ export function useSapUsers() {
 
       if (!userList.some(hasDisplayData)) {
         userList = await fetchUsersFromServiceLayer(session);
+      }
+
+      // Some SAP users cannot query /Users with their own session, and the HANA
+      // view may be disabled/misconfigured for a company (returning blank rows).
+      // For selectors such as approval rules, fall back to the backend read-only
+      // listing that validates the current SAP session and reads users with the
+      // company's stored integration credentials.
+      if (!userList.some(hasDisplayData)) {
+        userList = await fetchUsersFromAdminService(session);
       }
 
       if (signal?.aborted) return;
