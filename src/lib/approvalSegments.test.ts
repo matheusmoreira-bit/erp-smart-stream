@@ -178,7 +178,32 @@ describe("evaluateCriteria — grupos (G1 OU G2 OU G3)", () => {
 
 // --- findMatchingRule: regra vencedora no simulador -----------------------
 
+describe("evaluateCriteria — fallback legado (sem campo E/OU) = AND", () => {
+  it("2 critérios sem `logic` → tratados como AND", () => {
+    const crits = [c("a", "equal", "1"), c("b", "equal", "1")]; // sem logic
+    expect(evaluateCriteria(crits, { a: 1, b: 1 })).toBe(true);
+    expect(evaluateCriteria(crits, { a: 1, b: 0 })).toBe(false);
+  });
+
+  it("3 critérios sem `logic` → todos AND (equivalente a .every)", () => {
+    const crits = [c("a", "equal", "1"), c("b", "equal", "1"), c("cc", "equal", "1")];
+    expect(evaluateCriteria(crits, { a: 1, b: 1, cc: 1 })).toBe(true);
+    expect(evaluateCriteria(crits, { a: 1, b: 1, cc: 0 })).toBe(false);
+  });
+
+  it("Grupos sem `groupLogic` → combinados com AND (fallback legado)", () => {
+    // G1 = a=1  ;  G2 = b=1  — sem groupLogic definido
+    const crits = [
+      c("a", "equal", "1", { group: 0 }),
+      c("b", "equal", "1", { group: 1 }),
+    ];
+    expect(evaluateCriteria(crits, { a: 1, b: 1 })).toBe(true);
+    expect(evaluateCriteria(crits, { a: 1, b: 0 })).toBe(false); // AND, não OR
+  });
+});
+
 describe("findMatchingRule — regra vencedora", () => {
+
   const ctx = { total_amount: 5000, cost_center: "CC1" };
 
   it("escolhe a de maior prioridade quando ambas batem", () => {
