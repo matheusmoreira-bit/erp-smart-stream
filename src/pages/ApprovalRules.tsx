@@ -529,6 +529,20 @@ function CriterionRow({
                 ))}
               </SelectContent>
             </Select>
+          ) : criterion.field === "supplier.status" ? (
+            <Select
+              value={criterion.value || ""}
+              onValueChange={(v) => onChange(index, { ...criterion, value: v })}
+            >
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Selecionar status..." />
+              </SelectTrigger>
+              <SelectContent>
+                {SUPPLIER_STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : catalog ? (
             <CatalogValueSelect
               options={catalog.options}
