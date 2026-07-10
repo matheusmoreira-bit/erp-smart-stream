@@ -1116,7 +1116,7 @@ Deno.serve(async (req) => {
         const line: Record<string, unknown> = {
           Quantity: qty,
           UnitPrice: unit,
-          ...(/^[A-Z]{3}$/.test(lineCurrency) ? { Currency: lineCurrency } : {}),
+          ...(/^[A-Z]{3}$/.test(lineCurrency) && lineCurrency !== "BRL" && lineCurrency !== "R$" ? { Currency: lineCurrency } : {}),
           ...lineCustom,
         };
         if (hasItem) {
