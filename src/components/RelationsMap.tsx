@@ -414,7 +414,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         expense={expense}
         log={log}
         approverRows={approverRows}
-        nfLinks={nfLinks.data || []}
+        nfLinks={nfLinksWithPayments}
         nfLoading={nfLinks.isLoading}
         apPayables={apLinks.data?.payables || []}
         apLoading={apLinks.isLoading}
