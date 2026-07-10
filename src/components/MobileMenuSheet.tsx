@@ -21,7 +21,6 @@ import {
   Radar,
   UserCog,
   LogOut,
-  KeyRound,
   Sun,
   Moon,
   type LucideIcon,
@@ -30,7 +29,6 @@ import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useTheme } from "next-themes";
-import { useState } from "react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { cn } from "@/lib/utils";
 
