@@ -84,6 +84,40 @@ function formatDate(dateStr: string) {
     return dateStr;
   }
 }
+// Traduz uma transação PagCorp para o formato consumido pelo `RelationsMap`.
+// Fluxo esperado nas etapas do mapa:
+//   rascunho          → transação PagCorp existe
+//   pendente_aprovacao → prestação de contas enviada (em análise)
+//   aprovado          → prestação de contas aprovada
+//   pc_lancado        → PC criado no SAP (t.integrated)
+//   nf_entrada        → NF de entrada vinculada (derivada pelo próprio mapa)
+//   pagamento         → VendorPayment emitido (settlementStatus === 'settled')
+function buildRelationsExpense(
+  t: PagCorpTransaction | null,
+  companyDb: string | null | undefined,
+): RelationsMapExpense | null {
+  if (!t) return null;
+  let status: string = "rascunho";
+  if (t.settlementStatus === "settled") status = "finalizado";
+  else if (t.integrated && t.sapDocEntry != null) status = "pc_lancado";
+  else if (t.hasAccountability && t.accountabilityApproved) status = "aprovado";
+  else if (t.hasAccountability) status = "pendente_aprovacao";
+  return {
+    id: `pagcorp:${t.id}`,
+    status,
+    company_db: companyDb ?? null,
+    sap_doc_entry: (t.sapDocEntry as number | null) ?? null,
+    sap_doc_num: (t.sapDocNum as number | null) ?? null,
+    total_amount: Number(t.amount) || 0,
+    currency: t.currency ?? null,
+    supplier_name: (t.cardName as string) || (t.accountName as string) || "PagCorp",
+    supplier_code: (t.accountCode as string) || null,
+    requester_name: ((t as any).employeeName as string) || ((t as any).userName as string) || null,
+    requester_email: ((t as any).employeeEmail as string) || ((t as any).userEmail as string) || null,
+    created_at: t.date || undefined,
+  };
+}
+
 
 export default function PagCorp() {
   const navigate = useNavigate();
