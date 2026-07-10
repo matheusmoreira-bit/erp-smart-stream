@@ -506,10 +506,24 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                     ref={fileInputRef}
                     type="file"
                     multiple
+                    accept={ALLOWED_ATTACHMENT_ACCEPT}
                     className="hidden"
                     onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (files.length > 0) setNewFiles((prev) => [...prev, ...files]);
+                      const picked = Array.from(e.target.files || []);
+                      if (picked.length > 0) {
+                        const { valid, errors } = validateAttachments(picked);
+                        for (const msg of errors) toast.error(msg);
+                        if (valid.length > 0) {
+                          setNewFiles((prev) => [...prev, ...valid]);
+                          if (errors.length === 0) {
+                            toast.success(
+                              valid.length === 1
+                                ? "Anexo adicionado."
+                                : `${valid.length} anexos adicionados.`,
+                            );
+                          }
+                        }
+                      }
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                   />
