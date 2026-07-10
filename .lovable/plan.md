@@ -1,77 +1,75 @@
-# Vínculo N:N entre PO ↔ NF ↔ Contas a Pagar
+# Refatoração mobile app-like
 
-Hoje o pipeline assume implicitamente 1 PO → 1 NF → 1 Conta a Pagar. Vamos ajustar dados, integrações e UI para que múltiplas NFs possam se vincular ao mesmo PO e cada NF a várias contas a pagar, sem validação de saldo (regra escolhida: "aceita todas").
+Como o projeto tem 40+ páginas e centenas de componentes, reescrever tudo num único passo garantia regressões em massa. Vou entregar em **fases incrementais**, cada uma testável de forma isolada, mantendo os tokens atuais (teal, glass-card, Inter). Desktop preserva o layout atual; mobile ganha tratamento app-like.
 
-## 1. Modelo de dados
+## Princípios comuns (aplicados em todas as fases)
 
-Migração nova:
+- **Bottom navigation** no mobile (`<md`) com as 4-5 rotas mais usadas + botão "Mais" que abre um `Sheet` com o menu completo.
+- **`Dialog` → `Sheet` lateral/inferior** em telas `<md`. Vou criar um wrapper `<ResponsiveDialog>` que renderiza `Dialog` no desktop e `Sheet` (side="bottom") no mobile — assim os modais existentes migram com 1 linha de mudança.
+- **Tabelas → cards** no mobile. Um utilitário `<ResponsiveTable>` que aceita `columns` + `renderCard(row)`.
+- **Tap targets ≥ 44px**: substituir `size="sm"`/`size="icon"` por `size="default"` em ações primárias no mobile via classe `md:h-9 h-11`.
+- **Header sticky** compacto no mobile: título + ações essenciais colapsam num menu.
+- **Inputs**: `text-base` no mobile (evita zoom do iOS), labels acima, botões full-width nos formulários.
+- **Toasts**: reposicionados para topo no mobile (não conflitam com bottom nav).
 
-- **`nf_entrada_contas_pagar`** (nova tabela de vínculo):
-  - `nf_import_id` (FK → `nf_entrada_imports.id`, on delete cascade)
-  - `source` (`sap` | `omie`)
-  - `company_db`
-  - `ap_doc_entry` (numérico, para SAP `PurchaseInvoices.DocEntry` ou `codigo_lancamento_omie`)
-  - `ap_doc_num` (texto — número visível)
-  - `linked_at`, `linked_by` (texto), `notes`
-  - Índices: `(nf_import_id)`, `(company_db, ap_doc_entry)`
-  - RLS: SELECT para `authenticated`; INSERT/UPDATE/DELETE só via `service_role` (watchers). Sem `anon`.
-  - GRANT: `SELECT` a `authenticated`, `ALL` a `service_role`.
+## Fase 1 — Casca global (navegação, header, notificações)
 
-- **`nf_entrada_imports`**: adicionar coluna `settlement_ap_count` (int, default 0) para exibição rápida na UI, atualizada pelos watchers. Sem `CHECK` dependente de tempo.
+Arquivos:
+- `src/components/MainMenu.tsx` — vira grid de 2 col no mobile, cards maiores, ícones grandes.
+- `src/components/HubTabs.tsx` — tabs scrolláveis horizontal no mobile com snap.
+- **Novo** `src/components/MobileBottomNav.tsx` — 4 ícones (Aprovações, Despesas, Notificações, Menu) + badge de contagem. Só aparece em `<md`.
+- **Novo** `src/components/MobileMenuSheet.tsx` — Sheet lateral com todo o menu, agrupado.
+- `src/App.tsx` — monta o BottomNav como layout global.
+- `src/components/NotificationBell.tsx` — o popover vira Sheet inferior no mobile.
+- Header do `Dashboard`/`Approvals`/etc. — colapsa "empresa + usuário + refresh + logout" em um menu de 3 pontos no mobile.
+- `src/hooks/use-toast.ts` — reposicionar toast para `top` em mobile.
 
-Observação: mantemos `sap_matched_po_doc_entry` na NF (várias NFs podem ter o mesmo valor — já é permitido). Nenhuma constraint de unicidade é adicionada.
+## Fase 2 — Aprovações (fluxo principal)
 
-## 2. Rematch e integração NF ↔ PO
+- `src/pages/Approvals.tsx` — cabeçalho compacto (filtros num Sheet), lista de docs vira cards full-width com ações no rodapé. Linhas do doc aberto num Sheet inferior de altura variável. Botões "Aprovar/Rejeitar" ficam **fixos no bottom** do sheet.
+- `src/components/AttachmentViewer.tsx` — já é modal; ajustar para fullscreen no mobile e adicionar zoom pinch em imagens.
+- `src/components/SapDocApprovalHistory.tsx` e `InternalApprovalHistory.tsx` — timeline compacta.
+- `src/pages/ApprovalHistory.tsx` — mesmo padrão de cards.
+- Modais de rejeição/comentário — migrar para `ResponsiveDialog`.
 
-`supabase/functions/nf-entrada-rematch/index.ts`:
+## Fase 3 — Despesas e Adiantamentos
 
-- Remover o critério `DocTotal eq` (que impedia casar valores parciais) e passar a casar `PurchaseOrders`/`Drafts` **abertos** por `CardCode`, opcionalmente filtrando por proximidade de valor, mas retornando **todos** os candidatos ao usuário via log — o vínculo é aceito mesmo que outras NFs já apontem para o mesmo PO.
-- Não bloquear quando o PO já está referenciado por outra NF. Registrar no `nf_entrada_logs` quantas NFs já compartilham o PO.
+- `src/pages/Expenses.tsx` + `VirtualExpensesTable.tsx` — tabela vira cards no mobile, filtros num Sheet.
+- `src/components/CreateExpenseModal.tsx` + `EditExpenseModal.tsx` + `CreateAdvanceModal.tsx` — viram Sheet fullscreen no mobile com steps verticais, upload de anexo com botão grande de câmera/galeria, rateio como lista de cards empilhados.
+- `src/pages/AdvancePayments.tsx` — cards + Sheet de detalhes.
 
-`supabase/functions/nf-entrada-sap-watcher/index.ts`: nenhuma mudança de lógica — já cria uma Purchase Invoice separada por NF referenciando o mesmo `BaseEntry` (PO).
+## Fase 4 — Dashboards e relatórios
 
-## 3. Vínculo NF ↔ Contas a Pagar
+- `src/components/Dashboard.tsx` — grid já responsivo, mas gráficos Recharts precisam de `aspect-ratio` fixo no mobile e legendas colapsáveis.
+- `src/components/PaymentAnalysis.tsx` — tabelas para cards.
+- `src/pages/Analytics.tsx` — tabs viram Select no mobile.
+- `src/pages/AuditConsole.tsx` + `audit-console/*` — filtros num Sheet, cards.
+- `src/components/PeriodFilter.tsx` — dropdown vira Sheet no mobile.
 
-Novo componente compartilhado `_shared/link-nf-ap.ts` com `linkNfToAp({ nfImportId, source, companyDb, apDocEntry, apDocNum })` que faz upsert em `nf_entrada_contas_pagar` e atualiza `settlement_ap_count`.
+## Fase 5 — Componentes compartilhados restantes
 
-Chamado em dois pontos:
-
-- **`nf-entrada-sap-watcher`**: após criar a Purchase Invoice no SAP, gravar o vínculo (`source='sap'`, `ap_doc_entry = invoiceDocEntry`).
-- **`pagcorp-settlement-watcher`**: já localiza `PurchaseInvoices` que fecham o PO. Vai passar a iterar sobre **todas** as invoices retornadas (não `$top=1`), gravar um vínculo por NF encontrada, e emitir **um Journal Entry por NF** (débito fornecedor / crédito conta PagCorp com o valor daquela NF).
-  - Backfill: se já existir `settlement_journal_entry` para uma das NFs, pular apenas ela e processar as demais.
-  - Só marca `settlement_status='settled'` quando todas as NFs vinculadas ao PO já geraram JE.
-
-## 4. UI — Mapa de Relações
-
-`src/hooks/useRelationsMapDerived.ts`:
-
-- `useContasPagarLinks` passa a retornar `invoices` agrupando por NF: cada `PurchaseInvoice` traz um subarray `payables` (lançamentos vinculados àquela NF via `nf_entrada_contas_pagar` + `PurchaseInvoices` no SAP).
-- No OMIE: manter matching por `numero_pedido`/fornecedor, mas devolver **múltiplas** contas por NF.
-
-`src/components/RelationsMap.tsx`:
-
-- Etapa "NF Entrada": exibir a lista completa de NFs (não apenas contagem), cada uma com badge do status SAP.
-- Etapa "Pagamento": aninhar sob cada NF as contas a pagar correspondentes (valor pago, saldo, data).
-- Diagrama passa a mostrar hierarquia PO → NFs → Contas.
-
-## 5. Compat/segurança
-
-- Nenhuma FK a `auth.users`; RLS validando `service_role` em escritas e `authenticated` só em leitura filtrada por `company_db` do usuário via política existente do `nf_entrada_imports` (join lógico no client).
-- Log estruturado em `nf_entrada_logs` para toda inserção em `nf_entrada_contas_pagar`.
+Migração em massa de `Dialog` → `ResponsiveDialog` nos ~30 modais restantes (CreateUser, EditPhone, ChangePassword, Confirm, PagCorp*, Supplier*, Item*, etc.). Mudança majoritariamente mecânica: swap do import.
 
 ## Detalhes técnicos
 
-Arquivos alterados/criados:
+- `ResponsiveDialog` usa `useIsMobile()` (já existe em `src/hooks/use-mobile.tsx`) para escolher `Dialog` vs `Sheet side="bottom"`. Preserva a API do shadcn `Dialog` (mesmos subcomponentes `Header`/`Title`/`Description`/`Footer`/`Content`).
+- Bottom nav usa `fixed bottom-0 inset-x-0 z-40 md:hidden` + `safe-area-inset-bottom` via `pb-[env(safe-area-inset-bottom)]`.
+- Adicionar `pb-16 md:pb-0` no `<main>` das páginas para não esconder conteúdo atrás do bottom nav.
+- `text-base` em inputs no mobile via classe global em `index.css`: `@media (max-width: 767px) { input, textarea, select { font-size: 16px; } }`.
+- Zero mudanças em lógica de negócio, hooks de dados, edge functions, RLS ou tokens de design.
+
+## Ordem de execução
+
+Vou **entregar a Fase 1 nesta rodada** (casca global — é o que dá sensação de "app" imediata e desbloqueia tudo depois). Nas próximas mensagens você me diz se continuo direto para a Fase 2, ou se quer ajustar algo na Fase 1 primeiro.
 
 ```text
-supabase/migrations/<ts>_nf_ap_link.sql        (novo — tabela + índices + policies + GRANTs)
-supabase/functions/_shared/link-nf-ap.ts       (novo)
-supabase/functions/nf-entrada-rematch/index.ts (afrouxar filtro de valor)
-supabase/functions/nf-entrada-sap-watcher/index.ts (gravar vínculo após criar PI)
-supabase/functions/pagcorp-settlement-watcher/index.ts (iterar N NFs + N JEs)
-src/integrations/supabase/types.ts             (regenera após migração)
-src/hooks/useRelationsMapDerived.ts            (agrupar AP por NF)
-src/components/RelationsMap.tsx                (render hierárquico)
+[Fase 1: navegação global]  ← agora
+        ↓
+[Fase 2: Aprovações]        ← próxima mensagem
+        ↓
+[Fase 3: Despesas]
+        ↓
+[Fase 4: Dashboards]
+        ↓
+[Fase 5: modais restantes]
 ```
-
-Deploy: rodar migração; regenerar types; redeploy das 3 edge functions (`nf-entrada-rematch`, `nf-entrada-sap-watcher`, `pagcorp-settlement-watcher`).
