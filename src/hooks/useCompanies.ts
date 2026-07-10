@@ -60,9 +60,9 @@ export function useCompanies(onlyActive = false) {
 
   useEffect(() => {
     fetchCompanies();
-    const channelName = `companies-sync-${Date.now()}`;
-    const channel = supabase
-      .channel(channelName)
+    const channelName = `companies-sync-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const channel = supabase.channel(channelName);
+    channel
       .on("postgres_changes", { event: "*", schema: "public", table: "companies" }, () => fetchCompanies())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
