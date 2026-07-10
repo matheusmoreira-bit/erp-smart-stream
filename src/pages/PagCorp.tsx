@@ -1158,6 +1158,39 @@ export default function PagCorp() {
                                   Validar SAP
                                 </Button>
                               )}
+                              {(() => {
+                                const st = t.settlementStatus;
+                                if (st === "settled") {
+                                  return (
+                                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1" title="Pagamento de fornecedor emitido no SAP">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      Baixa {t.settlementPaymentDocNum ? `#${t.settlementPaymentDocNum}` : "OK"}
+                                    </span>
+                                  );
+                                }
+                                if (t.sapDocEntry == null) return null;
+                                const isRunning = settling === t.id;
+                                const label = st === "awaiting_invoice"
+                                  ? "Aguardando NF"
+                                  : st === "awaiting_settlement"
+                                    ? "Tentar baixa"
+                                    : st === "error"
+                                      ? "Reprocessar baixa"
+                                      : "Baixa automática";
+                                return (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 px-2 text-[11px] gap-1"
+                                    disabled={isRunning}
+                                    onClick={() => handleAutoSettle(t)}
+                                    title={t.settlementError || "Emite o Pagamento de Fornecedor no SAP quando a NF já estiver lançada."}
+                                  >
+                                    {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                    {label}
+                                  </Button>
+                                );
+                              })()}
                             </div>
                           ) : t.isReversed ? (
                             <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
