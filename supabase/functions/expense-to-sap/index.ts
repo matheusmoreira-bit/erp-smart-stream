@@ -1086,11 +1086,15 @@ Deno.serve(async (req) => {
       // pelos pedidos criados por um usuário específico sem depender do texto.
       ...(requesterCode ? { U_FGR_SOLICITANTE: truncateSapText(requesterCode, 50) } : {}),
       ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
-      // Moeda do documento: sem DocCurrency, o SAP assume moeda local (BRL)
-      // mesmo quando a despesa foi lançada em USD/EUR/etc.
+      // Moeda do documento: sem DocCurrency, o SAP assume moeda local (BRL/R$).
+      // Só enviamos DocCurrency para moedas estrangeiras — algumas bases do SAP
+      // rejeitam "BRL" como código válido quando a moeda local está cadastrada
+      // como "R$" ("Enter valid currency code [OPOR.DocCur], 'BRL'").
       ...((): Record<string, unknown> => {
         const cur = String((expense as any).currency || "").toUpperCase().trim();
-        return /^[A-Z]{3}$/.test(cur) ? { DocCurrency: cur } : {};
+        if (!/^[A-Z]{3}$/.test(cur)) return {};
+        if (cur === "BRL" || cur === "R$") return {};
+        return { DocCurrency: cur };
       })(),
       // ANA Gaming: por padrão, todos os pedidos de compra são marcados como
       // "sem contrato" (U_FGR_CONTRATO = "N"). Pode ser sobrescrito por
