@@ -583,6 +583,7 @@ export default function IntegrationsMonitor() {
 
               {selected.source === "pagcorp" && (
                 <>
+                  <PtaxBlock raw={selected.raw as any} />
                   <RawBlock title="Dados do PagCorp" data={(selected.raw as any).pagcorp_data} />
                   <RawBlock title="Payload enviado ao SAP" data={(selected.raw as any).sap_payload} />
                   <RawBlock title="Resposta do SAP" data={(selected.raw as any).sap_response} />
