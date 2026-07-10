@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   const s = sc.match(/B1SESSION=([^;]+)/)?.[1];
   const rt = sc.match(/ROUTEID=([^;]+)/)?.[1];
   const cookie = `B1SESSION=${s}${rt?`; ROUTEID=${rt}`:""}`;
-  const r = await fetch(`${baseUrl}/VendorPayments(${docEntry})`, { headers:{ Cookie: cookie } });
+  const r = await fetch(`${baseUrl}/VendorPayments?$filter=DocNum eq ${docEntry}&$top=1`, { headers:{ Cookie: cookie } });
   const body = await r.text();
   return new Response(body, { status: r.status, headers: { ...corsHeaders, "Content-Type":"application/json" } });
 });
