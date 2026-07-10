@@ -151,6 +151,33 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const nfLinks = useNfEntradaLinks(derivedInput);
   const apLinks = useContasPagarLinks(derivedInput);
 
+  // Une pagamentos SAP (VendorPayments) às NFs pelo DocEntry da fatura.
+  const nfLinksWithPayments = useMemo(() => {
+    const raw = nfLinks.data || [];
+    const byInv = apLinks.data?.paymentsByInvoice || {};
+    if (!raw.length || Object.keys(byInv).length === 0) return raw;
+    return raw.map((nf) => {
+      const de = nf.sap_invoice_draft_id ? Number(nf.sap_invoice_draft_id) : null;
+      if (!de || !byInv[de]?.length) return nf;
+      const extra = byInv[de].map((p) => ({
+        ap_doc_entry: String(p.DocEntry),
+        ap_doc_num: String(p.DocNum),
+        ap_total: p.appliedByInvoice[de] ?? p.DocTotal,
+        ap_paid: p.appliedByInvoice[de] ?? p.DocTotal,
+        source: "sap" as const,
+        linked_at: p.DocDate,
+        notes: p.Remarks,
+        payment_doc_entry: p.DocEntry,
+        payment_doc_num: p.DocNum,
+        payment_date: p.DocDate,
+      }));
+      // dedup por ap_doc_entry (evita duplicar se já veio de nf_entrada_contas_pagar)
+      const seen = new Set(nf.ap_links.map((l) => l.ap_doc_entry));
+      const merged = [...nf.ap_links, ...extra.filter((l) => !seen.has(l.ap_doc_entry))];
+      return { ...nf, ap_links: merged };
+    });
+  }, [nfLinks.data, apLinks.data]);
+
   useEffect(() => {
     if (!open || !expense) return;
     let cancelled = false;
@@ -357,7 +384,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
               <RelationsMapFlow
                 expense={expense}
                 approverRows={approverRows}
-                nfLinks={nfLinks.data || []}
+                nfLinks={nfLinksWithPayments}
                 apPayables={apLinks.data?.payables || []}
                 enriched={enriched}
                 onNodeClick={(id) => {
@@ -387,7 +414,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         expense={expense}
         log={log}
         approverRows={approverRows}
-        nfLinks={nfLinks.data || []}
+        nfLinks={nfLinksWithPayments}
         nfLoading={nfLinks.isLoading}
         apPayables={apLinks.data?.payables || []}
         apLoading={apLinks.isLoading}

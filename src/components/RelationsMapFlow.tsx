@@ -383,8 +383,12 @@ function buildGraph(props: Props): { nodes: Node[]; edges: Edge[] } {
     (nf.ap_links || []).forEach((ap) => linkedAp.add(`${ap.source}:${ap.ap_doc_entry}`)),
   );
   const orphanAp = apPayables.filter((ap) => {
-    const key = String(ap.id).replace(":", ":");
-    return !linkedAp.has(key.replace(/^(sap|omie):/, "$1:"));
+    // ap.id vem como "sap:<InvoiceDocEntry>", "sap-vp:<PaymentDocEntry>" ou "omie:<id>".
+    // Nas NFs, ap_links guarda source="sap" e ap_doc_entry = DocEntry (fatura OU pagamento).
+    const idStr = String(ap.id);
+    const parts = idStr.split(":");
+    const entry = parts[parts.length - 1];
+    return !linkedAp.has(`sap:${entry}`) && !linkedAp.has(`omie:${entry}`);
   });
 
   if (orphanAp.length > 0) {

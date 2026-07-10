@@ -16,6 +16,10 @@ export interface NfApLink {
   source: "sap" | "omie";
   linked_at: string;
   notes: string | null;
+  /** VendorPayment DocEntry quando a origem é um pagamento SAP */
+  payment_doc_entry?: number | null;
+  payment_doc_num?: number | null;
+  payment_date?: string | null;
 }
 
 export interface NfEntradaLink {
@@ -43,6 +47,20 @@ export interface PurchaseInvoiceLink {
   CardCode: string;
   CardName: string;
   isFullyPaid: boolean;
+}
+
+export interface VendorPaymentLink {
+  DocEntry: number;
+  DocNum: number;
+  DocDate: string;
+  DocTotal: number;
+  CardCode: string;
+  CardName: string;
+  Remarks: string | null;
+  /** DocEntries das PurchaseInvoices quitadas por este pagamento */
+  invoiceDocEntries: number[];
+  /** valor aplicado a cada InvoiceDocEntry */
+  appliedByInvoice: Record<number, number>;
 }
 
 export interface ContaPagarLink {
@@ -185,8 +203,11 @@ export function useContasPagarLinks({
   const fetcher = useCallback(async (): Promise<{
     invoices: PurchaseInvoiceLink[];
     payables: ContaPagarLink[];
+    payments: VendorPaymentLink[];
+    paymentsByInvoice: Record<number, VendorPaymentLink[]>;
   }> => {
-    if (!companyDb) return { invoices: [], payables: [] };
+    const empty = { invoices: [], payables: [], payments: [], paymentsByInvoice: {} };
+    if (!companyDb) return empty;
 
     // ── SAP B1 via Service Layer ────────────────────────────────────────────
     if (erpType === "sap" && session && sapDocEntry) {
@@ -222,7 +243,60 @@ export function useContasPagarLinks({
         console.warn("[relations-map] falha ao buscar PurchaseInvoices:", e);
       }
 
-      const payables: ContaPagarLink[] = invoices.map((inv) => ({
+      // ── VendorPayments (Outgoing Payments): busca por CardCode das faturas
+      // e casa pelas PaymentInvoices[].DocEntry ∈ set de invoices ───────────
+      const payments: VendorPaymentLink[] = [];
+      const paymentsByInvoice: Record<number, VendorPaymentLink[]> = {};
+      const invoiceEntrySet = new Set(invoices.map((i) => i.DocEntry));
+      const cardCodes = Array.from(new Set(invoices.map((i) => i.CardCode).filter(Boolean)));
+      if (invoiceEntrySet.size > 0 && cardCodes.length > 0) {
+        try {
+          const cardFilter = cardCodes.map((c) => `CardCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
+          const vpFilter = encodeURIComponent(`Cancelled eq 'tNO' and (${cardFilter})`);
+          const vpEndpoint = `VendorPayments?$filter=${vpFilter}&$orderby=DocEntry desc&$top=200`;
+          const { data: vpData } = await sapQueryAll(session, vpEndpoint, undefined, false);
+          const vpRows = Array.isArray(vpData?.value) ? vpData.value : [];
+          for (const r of vpRows as any[]) {
+            const invLines = Array.isArray(r?.PaymentInvoices) ? r.PaymentInvoices : [];
+            const applied: Record<number, number> = {};
+            const invEntries: number[] = [];
+            for (const li of invLines) {
+              const de = Number(li?.DocEntry);
+              const it = String(li?.InvoiceType || "");
+              // it_PurchaseInvoice quita faturas de compra
+              if (it === "it_PurchaseInvoice" && invoiceEntrySet.has(de)) {
+                invEntries.push(de);
+                applied[de] = (applied[de] || 0) + (Number(li?.SumApplied) || 0);
+              }
+            }
+            if (invEntries.length === 0) continue;
+            const payment: VendorPaymentLink = {
+              DocEntry: Number(r?.DocEntry),
+              DocNum: Number(r?.DocNum),
+              DocDate: String(r?.DocDate || ""),
+              DocTotal:
+                Number(r?.BillOfExchangeAmount) ||
+                Number(r?.CashSum) ||
+                Number(r?.TransferSum) ||
+                Object.values(applied).reduce((a, b) => a + b, 0),
+              CardCode: String(r?.CardCode || ""),
+              CardName: String(r?.CardName || ""),
+              Remarks: r?.Remarks ?? null,
+              invoiceDocEntries: invEntries,
+              appliedByInvoice: applied,
+            };
+            payments.push(payment);
+            for (const de of invEntries) {
+              (paymentsByInvoice[de] ||= []).push(payment);
+            }
+          }
+        } catch (e) {
+          console.warn("[relations-map] falha ao buscar VendorPayments:", e);
+        }
+      }
+
+      // Payables = faturas em aberto + pagamentos (com data de pagamento)
+      const invoicePayables: ContaPagarLink[] = invoices.map((inv) => ({
         id: `sap:${inv.DocEntry}`,
         fornecedor: inv.CardName || inv.CardCode,
         numero_documento: String(inv.DocNum),
@@ -230,7 +304,7 @@ export function useContasPagarLinks({
         valor_pago: inv.PaidToDate,
         data_registro: inv.DocDate || null,
         data_vencimento: inv.DocDueDate,
-        data_pagamento: null, // SAP não expõe data do pagamento sem consultar VendorPayments
+        data_pagamento: null,
         status: inv.isFullyPaid
           ? "Pago"
           : inv.DocumentStatus === "bost_Close"
@@ -240,7 +314,26 @@ export function useContasPagarLinks({
         source: "sap",
       }));
 
-      return { invoices, payables };
+      const paymentPayables: ContaPagarLink[] = payments.map((p) => ({
+        id: `sap-vp:${p.DocEntry}`,
+        fornecedor: p.CardName || p.CardCode,
+        numero_documento: String(p.DocNum),
+        valor_documento: p.DocTotal,
+        valor_pago: p.DocTotal,
+        data_registro: p.DocDate || null,
+        data_vencimento: null,
+        data_pagamento: p.DocDate || null,
+        status: "Pago",
+        numero_pedido: sapDocNum ? String(sapDocNum) : null,
+        source: "sap",
+      }));
+
+      return {
+        invoices,
+        payables: [...invoicePayables, ...paymentPayables],
+        payments,
+        paymentsByInvoice,
+      };
     }
 
     // ── OMIE via omie-proxy ─────────────────────────────────────────────────
@@ -252,7 +345,6 @@ export function useContasPagarLinks({
 
         const filtered = all.filter((row: OmieContaPagar) => {
           if (poNum && row.numero_pedido && String(row.numero_pedido) === poNum) return true;
-          // fallback: casa por fornecedor + valor quando o pedido não foi propagado
           if (
             supplier &&
             row.codigo_cliente_fornecedor &&
@@ -280,14 +372,14 @@ export function useContasPagarLinks({
           };
         });
 
-        return { invoices: [], payables };
+        return { invoices: [], payables, payments: [], paymentsByInvoice: {} };
       } catch (e) {
         console.warn("[relations-map] falha ao buscar OMIE contas a pagar:", e);
-        return { invoices: [], payables: [] };
+        return empty;
       }
     }
 
-    return { invoices: [], payables: [] };
+    return empty;
   }, [erpType, session, sapDocEntry, sapDocNum, companyDb, supplierCode]);
 
   const cacheKey =
@@ -297,7 +389,12 @@ export function useContasPagarLinks({
         ? `relmap:ap:omie:${sapDocNum || ""}:${supplierCode || ""}`
         : null;
 
-  return useExternalCache<{ invoices: PurchaseInvoiceLink[]; payables: ContaPagarLink[] }>({
+  return useExternalCache<{
+    invoices: PurchaseInvoiceLink[];
+    payables: ContaPagarLink[];
+    payments: VendorPaymentLink[];
+    paymentsByInvoice: Record<number, VendorPaymentLink[]>;
+  }>({
     cacheKey,
     companyDb: companyDb ?? null,
     fetcher,
