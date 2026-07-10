@@ -88,22 +88,57 @@ async function resolveSettlementAccount(
   sb: ReturnType<typeof createClient>,
   companyDb: string,
   cardKey: string | null,
+  currency: string | null,
 ): Promise<SettlementAccount | null> {
-  if (cardKey) {
+  const cur = (currency || "").toUpperCase() || null;
+  const sel = "settlement_account_code, cost_center, project, currency";
+
+  // 1. Cartão específico + moeda exata
+  if (cardKey && cur) {
     const { data } = await sb
       .from("pagcorp_settlement_accounts")
-      .select("settlement_account_code, cost_center, project")
+      .select(sel)
       .eq("company_db", companyDb)
       .eq("card_identifier", cardKey)
+      .eq("currency", cur)
       .eq("enabled", true)
       .maybeSingle();
     if (data) return data as SettlementAccount;
   }
+
+  // 2. Fallback da empresa por moeda (PagCorp Real / PagCorp Dólar). Caso principal.
+  if (cur) {
+    const { data } = await sb
+      .from("pagcorp_settlement_accounts")
+      .select(sel)
+      .eq("company_db", companyDb)
+      .is("card_identifier", null)
+      .eq("currency", cur)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (data) return data as SettlementAccount;
+  }
+
+  // 3. Cartão específico sem moeda (retrocompatibilidade)
+  if (cardKey) {
+    const { data } = await sb
+      .from("pagcorp_settlement_accounts")
+      .select(sel)
+      .eq("company_db", companyDb)
+      .eq("card_identifier", cardKey)
+      .is("currency", null)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (data) return data as SettlementAccount;
+  }
+
+  // 4. Fallback global (sem moeda)
   const { data: fb } = await sb
     .from("pagcorp_settlement_accounts")
-    .select("settlement_account_code, cost_center, project")
+    .select(sel)
     .eq("company_db", companyDb)
     .is("card_identifier", null)
+    .is("currency", null)
     .eq("enabled", true)
     .maybeSingle();
   return (fb as SettlementAccount) || null;
