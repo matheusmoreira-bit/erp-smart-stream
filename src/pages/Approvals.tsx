@@ -608,7 +608,8 @@ function ApprovalDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="w-[95vw] max-w-2xl !max-h-[90vh] !overflow-hidden !p-0 !flex !flex-col !gap-0">
+        <DialogContent className="!p-0 !gap-0 !flex !flex-col w-screen h-[100dvh] max-w-none rounded-none border-0 sm:w-[95vw] sm:h-auto sm:!max-h-[90vh] sm:max-w-2xl sm:rounded-lg sm:border !overflow-hidden">
+
           <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -2586,34 +2587,37 @@ export default function ApprovalsPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 glow-primary">
-              <Activity className="w-5 h-5 text-primary" />
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 glow-primary shrink-0">
+              <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Aprovações Pendentes</h1>
-              <p className="text-xs text-muted-foreground">Acompanhamento de aprovações</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-foreground truncate">Aprovações</h1>
+              <p className="text-[10px] sm:text-xs text-muted-foreground truncate hidden sm:block">Acompanhamento de aprovações</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
+
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-foreground">{companyLabel}</p>
               <p className="text-xs text-muted-foreground">{session?.userName}</p>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
               <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
               Conectado
             </div>
+
             {lastUpdatedAt && (
               <span className="text-xs text-muted-foreground hidden md:inline">
                 Cache: {new Date(lastUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
               </span>
             )}
-            <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground" title="Recarregar">
+            <Button variant="ghost" size="icon" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground h-10 w-10 sm:h-9 sm:w-9" title="Recarregar" aria-label="Recarregar">
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </Button>
+            <div className="hidden sm:flex items-center gap-2 sm:gap-4">
             <Button
               variant="outline"
               size="sm"
@@ -2689,11 +2693,13 @@ export default function ApprovalsPage() {
             <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
               <LogOut className="w-4 h-4" />
             </Button>
+            </div>
           </div>
         </div>
+
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
         {/* Back + Title */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -2787,7 +2793,7 @@ export default function ApprovalsPage() {
                 })()}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-[420px] p-4 space-y-4">
+            <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">Filtros</p>
                 {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo) && (
