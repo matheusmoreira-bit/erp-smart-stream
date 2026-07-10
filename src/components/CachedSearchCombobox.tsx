@@ -23,6 +23,10 @@ interface CachedSearchComboboxProps {
   renderEmptyState?: (query: string) => ReactNode;
   /** Rodapé fixo abaixo da lista (contexto: "Buscando em Empresa X · N ativos"). */
   footerHint?: ReactNode;
+  /** Bloqueia a seleção de uma opção (ex.: fornecedor inativo). */
+  isOptionDisabled?: (opt: SapSearchOption) => boolean;
+  /** Texto exibido abaixo do nome quando a opção está desabilitada. */
+  getDisabledReason?: (opt: SapSearchOption) => string | null | undefined;
 }
 
 export function CachedSearchCombobox({
