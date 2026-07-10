@@ -574,6 +574,7 @@ Deno.serve(async (req) => {
                   settlement_completed_at: new Date().toISOString(),
                   settlement_locked_at: null,
                   settlement_retry_after: null,
+                })
                 .eq("id", row.id);
 
               await logIntegrationCall({
