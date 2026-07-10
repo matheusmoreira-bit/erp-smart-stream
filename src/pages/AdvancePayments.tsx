@@ -173,67 +173,70 @@ export default function AdvancePayments() {
               ref={(el) => { rowRefs.current[a.id] = el; }}
               className={`glass-card p-4 transition-shadow ${highlightId === a.id ? "ring-2 ring-primary shadow-lg" : ""}`}
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-foreground">{a.supplier_name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {a.supplier_card_code}
-                      {a.supplier_cnpj && ` · CNPJ ${a.supplier_cnpj}`}
-                    </span>
+                    <span className="font-semibold text-foreground break-words">{a.supplier_name}</span>
                     <Badge className={ADVANCE_STATUS_COLORS[a.status]}>{ADVANCE_STATUS_LABELS[a.status]}</Badge>
                   </div>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground mt-0.5 break-all">
+                    {a.supplier_card_code}
+                    {a.supplier_cnpj && ` · CNPJ ${a.supplier_cnpj}`}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-muted-foreground">
                     <span className="font-mono text-foreground">{fmtCurrency(a.amount, a.currency)}</span>
-                    <span>Vence: {fmtDate(a.due_date)}</span>
-                    <span>Solicitante: {a.requester_name || "—"}</span>
+                    <span className="text-xs">Vence: {fmtDate(a.due_date)}</span>
+                    <span className="text-xs">Solicitante: {a.requester_name || "—"}</span>
                     {(a.sap_doc_num || a.sap_doc_entry) && (
-                      <span className="text-success">SAP: #{a.sap_doc_num || a.sap_doc_entry}</span>
+                      <span className="text-xs text-success">SAP: #{a.sap_doc_num || a.sap_doc_entry}</span>
                     )}
                   </div>
-                  {a.remarks && <p className="text-xs text-muted-foreground mt-2">{a.remarks}</p>}
+                  {a.remarks && <p className="text-xs text-muted-foreground mt-2 break-words">{a.remarks}</p>}
                   {a.sap_integration_error && (
-                    <p className="text-xs text-destructive mt-2">Erro SAP: {a.sap_integration_error}</p>
+                    <p className="text-xs text-destructive mt-2 break-words">Erro SAP: {a.sap_integration_error}</p>
                   )}
                   {a.rejection_reason && (
-                    <p className="text-xs text-destructive mt-2">Rejeitado: {a.rejection_reason}</p>
+                    <p className="text-xs text-destructive mt-2 break-words">Rejeitado: {a.rejection_reason}</p>
                   )}
                   {a.attachments && a.attachments.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">{a.attachments.length} anexo(s)</p>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:shrink-0">
                   <Button
-                    size="sm"
+                    size="icon"
                     variant="ghost"
                     onClick={() => void copyDocLink(window.location.pathname, a.id)}
                     title="Copiar link direto"
+                    aria-label="Copiar link"
+                    className="h-10 w-10 sm:h-9 sm:w-9"
                   >
                     <Link2 className="w-4 h-4" />
                   </Button>
                   {a.status === "pending" && (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => handleApprove(a)} disabled={busyId === a.id}>
+                      <Button size="icon" variant="outline" onClick={() => handleApprove(a)} disabled={busyId === a.id} aria-label="Aprovar" className="h-10 w-10 sm:h-9 sm:w-9">
                         {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleReject(a)} disabled={busyId === a.id}>
+                      <Button size="icon" variant="outline" onClick={() => handleReject(a)} disabled={busyId === a.id} aria-label="Rejeitar" className="h-10 w-10 sm:h-9 sm:w-9">
                         <XCircle className="w-4 h-4" />
                       </Button>
                     </>
                   )}
                   {a.status === "failed" && (
-                    <Button size="sm" variant="outline" onClick={() => handleRetry(a)} disabled={busyId === a.id}>
+                    <Button size="icon" variant="outline" onClick={() => handleRetry(a)} disabled={busyId === a.id} aria-label="Reintegrar" className="h-10 w-10 sm:h-9 sm:w-9">
                       {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
                     </Button>
                   )}
                   {a.status === "draft" && (
-                    <Button size="sm" variant="outline" onClick={() => handleDelete(a)}>
+                    <Button size="icon" variant="outline" onClick={() => handleDelete(a)} aria-label="Excluir" className="h-10 w-10 sm:h-9 sm:w-9">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   )}
                 </div>
               </div>
+
             </div>
           ))}
         </div>
