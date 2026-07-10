@@ -184,9 +184,9 @@ export function SapLoginForm() {
               setCompanyDB(val);
               setUserName("");
               setPassword("");
-            }}>
+            }} disabled={companiesLoading}>
               <SelectTrigger className="bg-muted/30 border-border">
-                <SelectValue placeholder="Selecione a empresa" />
+                <SelectValue placeholder={companiesLoading ? "Carregando empresas..." : "Selecione a empresa"} />
               </SelectTrigger>
               <SelectContent>
                 {databases.map((db) => (
@@ -199,9 +199,23 @@ export function SapLoginForm() {
                     </div>
                   </SelectItem>
                 ))}
+                {!companiesLoading && databases.length === 0 && (
+                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                    Nenhuma empresa disponível
+                  </div>
+                )}
               </SelectContent>
             </Select>
+            {companiesError && (
+              <div className="flex items-center justify-between text-xs text-destructive">
+                <span>Falha ao carregar empresas.</span>
+                <button type="button" onClick={loadCompanies} className="underline hover:no-underline">
+                  Tentar novamente
+                </button>
+              </div>
+            )}
           </div>
+
 
           {/* ERP indicator */}
           {companyDB && (
