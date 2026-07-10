@@ -10,6 +10,11 @@ import { useSap } from "@/contexts/SapContext";
 import { useAdvancePayments, type CreateAdvanceInput, type AdvanceItem } from "@/hooks/useAdvancePayments";
 import { Loader2, Paperclip, X, Building2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  validateAttachments,
+  ALLOWED_ATTACHMENT_ACCEPT,
+  ALLOWED_ATTACHMENT_HINT,
+} from "@/lib/attachment-validation";
 
 interface Props {
   open: boolean;
