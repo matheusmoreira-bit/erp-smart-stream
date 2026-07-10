@@ -384,7 +384,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
               <RelationsMapFlow
                 expense={expense}
                 approverRows={approverRows}
-                nfLinks={nfLinks.data || []}
+                nfLinks={nfLinksWithPayments}
                 apPayables={apLinks.data?.payables || []}
                 enriched={enriched}
                 onNodeClick={(id) => {
