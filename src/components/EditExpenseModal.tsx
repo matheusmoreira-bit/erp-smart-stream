@@ -375,7 +375,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent ref={dialogContentRef} className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent ref={dialogContentRef} className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-2xl sm:max-h-[85vh] sm:rounded-lg sm:border">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-3 pr-6">
             <span>Editar {isSales ? "Pedido de Venda" : "Pedido de Compra"}</span>

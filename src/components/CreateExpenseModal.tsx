@@ -2043,8 +2043,9 @@ export function CreateExpenseModal({
     <Dialog open={open} onOpenChange={(v) => { if (!v) requestClose(); }}>
       <DialogContent
         ref={setDialogContainer}
-        className="max-w-5xl w-[95vw] max-h-[92vh] overflow-y-auto sm:p-8"
+        className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-[95vw] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] sm:rounded-lg sm:border sm:p-8"
       >
+
         <DialogHeader>
           <DialogTitle>{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
@@ -3829,7 +3830,7 @@ export function CreateExpenseModal({
         (grupo atual, deferido, cancelado ou com falha), mostra a extração
         completa; caso contrário, usa apenas o snapshot da QueueEntry. */}
     <Dialog open={!!detailsView} onOpenChange={(v) => { if (!v) setDetailsView(null); }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-3xl sm:max-h-[85vh] sm:rounded-lg sm:border">
         <DialogHeader>
           <DialogTitle>
             Detalhes: {detailsView?.entry.supplierLabel}
