@@ -23,6 +23,9 @@ export interface PagCorpTransaction {
   integrationLogId?: string;
   sapDocNum?: number | null;
   sapDocEntry?: number | null;
+  settlementStatus?: string | null;
+  settlementPaymentDocNum?: number | null;
+  settlementError?: string | null;
   isReversed?: boolean;
   isNondeductible?: boolean;
   nondeductibleAtExpense?: boolean;
