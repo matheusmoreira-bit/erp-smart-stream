@@ -1475,7 +1475,7 @@ export default function ApprovalRulesPage() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10 glow-primary">
-              <Activity className="w-5 h-5 text-primary" />
+              <img src={cactusLogo.url} alt="Logo" className="w-5 h-5 object-contain" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">Regras de Aprovação</h1>
