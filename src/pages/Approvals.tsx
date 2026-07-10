@@ -608,7 +608,8 @@ function ApprovalDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="w-[95vw] max-w-2xl !max-h-[90vh] !overflow-hidden !p-0 !flex !flex-col !gap-0">
+        <DialogContent className="!p-0 !gap-0 !flex !flex-col w-screen h-[100dvh] max-w-none rounded-none border-0 sm:w-[95vw] sm:h-auto sm:!max-h-[90vh] sm:max-w-2xl sm:rounded-lg sm:border !overflow-hidden">
+
           <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap">
