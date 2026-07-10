@@ -145,11 +145,13 @@ async function resolveSettlementAccount(
 }
 
 async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: number): Promise<
-  Array<{ DocEntry: number; DocNum: number; CardCode: string; DocTotal: number; PaidToDate: number; DocumentStatus: string; DocCurrency: string; DocDate: string; BPLId?: number }>
+  Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; PaidToDate: number; PaidToDateSys: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number }>
 > {
   // 1 PO → N NF de entrada: retornamos TODAS as PurchaseInvoices que apontam para o PO.
+  // Selecionamos também DocTotalSys / PaidToDateSys / DocRate para poder emitir a
+  // baixa em moeda LOCAL (padrão SAP para VendorPayments), replicando o manual.
   const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})` +
-    `&$select=DocEntry,DocNum,CardCode,DocTotal,PaidToDate,DocumentStatus,DocCurrency,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
+    `&$select=DocEntry,DocNum,CardCode,CardName,DocTotal,DocTotalSys,PaidToDate,PaidToDateSys,DocumentStatus,DocCurrency,DocRate,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
   const r = await fetch(q, { headers: { Cookie: cookie } });
   if (!r.ok) throw new Error(`Consulta PurchaseInvoices falhou ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = await r.json();
@@ -158,10 +160,14 @@ async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: numbe
     DocEntry: Number(inv.DocEntry),
     DocNum: Number(inv.DocNum),
     CardCode: String(inv.CardCode),
+    CardName: String(inv.CardName ?? ""),
     DocTotal: Number(inv.DocTotal),
+    DocTotalSys: Number(inv.DocTotalSys ?? inv.DocTotal ?? 0),
     PaidToDate: Number(inv.PaidToDate ?? 0),
+    PaidToDateSys: Number(inv.PaidToDateSys ?? 0),
     DocumentStatus: String(inv.DocumentStatus ?? ""),
     DocCurrency: String(inv.DocCurrency ?? ""),
+    DocRate: Number(inv.DocRate ?? 0),
     DocDate: String(inv.DocDate),
     BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
   }));
