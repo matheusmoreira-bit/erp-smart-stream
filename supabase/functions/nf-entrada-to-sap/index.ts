@@ -6,6 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 
 interface NfRow {
   id: string;
@@ -122,6 +123,7 @@ async function process(sb: ReturnType<typeof createClient>, row: NfRow): Promise
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,

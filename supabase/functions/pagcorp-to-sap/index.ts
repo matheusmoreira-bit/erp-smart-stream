@@ -12,6 +12,7 @@
 // }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -324,6 +325,7 @@ async function resolveCardMapping(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   let logId: string | null = null;
   let supabase: ReturnType<typeof createClient> | null = null;

@@ -9,6 +9,7 @@
 //       idempotent and only performs safe retries).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -62,6 +63,7 @@ function formatCurrency(v: number, currency: string): string {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

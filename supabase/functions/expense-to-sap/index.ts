@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 import { requireUserOrSapSession } from "../_shared/auth.ts";
 import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
+import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 
 
 const corsHeaders = {
@@ -648,6 +649,7 @@ async function buildApprovalReportPdf(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   // Bypass user auth when called internally (background retry job) with
   // the service role key. Cron / retry workers don't have a Cloud JWT or
