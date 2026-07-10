@@ -2693,8 +2693,10 @@ export default function ApprovalsPage() {
             <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
               <LogOut className="w-4 h-4" />
             </Button>
+            </div>
           </div>
         </div>
+
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
