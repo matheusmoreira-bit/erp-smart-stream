@@ -144,19 +144,33 @@ async function resolveSettlementAccount(
   return (fb as SettlementAccount) || null;
 }
 
-async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: number): Promise<
+async function findInvoicesForPO(
+  baseUrl: string,
+  cookie: string,
+  poEntry: number,
+  cardCode: string,
+): Promise<
   Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; PaidToDate: number; PaidToDateSys: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number }>
 > {
-  // 1 PO → N NF de entrada: retornamos TODAS as PurchaseInvoices que apontam para o PO.
-  // Selecionamos também DocTotalSys / PaidToDateSys / DocRate para poder emitir a
-  // baixa em moeda LOCAL (padrão SAP para VendorPayments), replicando o manual.
-  const q = `${baseUrl}/PurchaseInvoices?$filter=${encodeURIComponent(`DocumentLines/any(l: l/BaseType eq 22 and l/BaseEntry eq ${poEntry})`)}` +
-    `&$select=DocEntry,DocNum,CardCode,CardName,DocTotal,DocTotalSys,PaidToDate,PaidToDateSys,DocumentStatus,DocCurrency,DocRate,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
+  // SAP B1 SL v2 rejeita `DocumentLines/any()` no $filter ("Query string error -
+  // Invalid symbol"), então buscamos as PurchaseInvoices do fornecedor pelo
+  // CardCode e filtramos as linhas do cliente-lado por BaseType=22 (PO) e
+  // BaseEntry=poEntry. Um PO → N NFs.
+  if (!cardCode) return [];
+  const q = `${baseUrl}/PurchaseInvoices?$filter=${encodeURIComponent(
+    `CardCode eq '${cardCode.replace(/'/g, "''")}'`,
+  )}&$orderby=DocEntry desc&$top=100`;
   const r = await fetch(q, { headers: { Cookie: cookie } });
   if (!r.ok) throw new Error(`Consulta PurchaseInvoices falhou ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = await r.json();
   const arr = Array.isArray(j?.value) ? j.value : [];
-  return arr.map((inv: any) => ({
+  const matched = arr.filter((inv: any) =>
+    Array.isArray(inv?.DocumentLines) &&
+    inv.DocumentLines.some(
+      (l: any) => Number(l?.BaseEntry) === poEntry && Number(l?.BaseType) === 22,
+    ),
+  );
+  return matched.map((inv: any) => ({
     DocEntry: Number(inv.DocEntry),
     DocNum: Number(inv.DocNum),
     CardCode: String(inv.CardCode),
@@ -172,6 +186,7 @@ async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: numbe
     BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
   }));
 }
+
 
 /**
  * Consulta a PTAX (cotação de venda) do Banco Central para uma moeda em uma data.
