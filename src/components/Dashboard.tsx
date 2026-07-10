@@ -34,9 +34,9 @@ export function Dashboard({ embedded = false }: DashboardProps) {
 
   const content = (
     <div className={embedded ? "space-y-4 sm:space-y-8" : "max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-8"}>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <PeriodFilter value={period} onChange={setPeriod} />
-        <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground self-end sm:self-auto">
           <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? "animate-spin" : ""}`} /> Atualizar
         </Button>
       </div>
