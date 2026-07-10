@@ -2966,6 +2966,7 @@ export type Database = {
           company_db: string
           cost_center: string | null
           created_at: string
+          currency: string | null
           enabled: boolean
           id: string
           project: string | null
@@ -2977,6 +2978,7 @@ export type Database = {
           company_db: string
           cost_center?: string | null
           created_at?: string
+          currency?: string | null
           enabled?: boolean
           id?: string
           project?: string | null
@@ -2988,6 +2990,7 @@ export type Database = {
           company_db?: string
           cost_center?: string | null
           created_at?: string
+          currency?: string | null
           enabled?: boolean
           id?: string
           project?: string | null
