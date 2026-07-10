@@ -111,19 +111,23 @@ function usePaymentAnalytics(rows: PaymentAnalysisRow[]) {
     // ── Top fornecedores recorrentes ──
     const supplierMap = new Map<string, { count: number; total: number; name: string }>();
     for (const r of activeRows) {
-      const key = r.Cod_PN;
-      const prev = supplierMap.get(key) || { count: 0, total: 0, name: r.Nome_PN };
-      supplierMap.set(key, { count: prev.count + 1, total: prev.total + (r.Valor_Total_Pago || 0), name: r.Nome_PN });
+      const key = r.Cod_PN || "—";
+      const name = r.Nome_PN || "Desconhecido";
+      const prev = supplierMap.get(key) || { count: 0, total: 0, name };
+      supplierMap.set(key, { count: prev.count + 1, total: prev.total + (r.Valor_Total_Pago || 0), name });
     }
     const topSuppliers = Array.from(supplierMap.values())
       .sort((a, b) => b.total - a.total)
       .slice(0, 8)
-      .map((s) => ({
-        name: s.name.length > 25 ? s.name.substring(0, 22) + "..." : s.name,
-        fullName: s.name,
-        count: s.count,
-        total: s.total,
-      }));
+      .map((s) => {
+        const name = s.name || "Desconhecido";
+        return {
+          name: name.length > 25 ? name.substring(0, 22) + "..." : name,
+          fullName: name,
+          count: s.count,
+          total: s.total,
+        };
+      });
 
     // ── Status distribution ──
     const statusMap = new Map<string, { count: number; total: number }>();
