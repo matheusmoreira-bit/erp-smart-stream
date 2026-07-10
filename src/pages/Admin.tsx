@@ -610,19 +610,21 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Shield className="w-5 h-5 text-primary" />
+      {/* Header — mobile first */}
+      <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1 rounded-lg bg-[hsl(var(--cactus-amber))]/10 border border-[hsl(var(--cactus-amber))]/20 shrink-0">
+              <img src={cactusLogo.url} alt="Cactus" className="w-7 h-7 object-contain" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Backoffice</h1>
-              <p className="text-xs text-muted-foreground">Gerenciamento de empresas e credenciais</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-foreground leading-tight truncate">Backoffice</h1>
+              <p className="hidden sm:block text-xs text-muted-foreground truncate">Gerenciamento de empresas e credenciais</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Desktop actions */}
+          <div className="hidden md:flex items-center gap-2 shrink-0">
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <ArrowLeft className="w-4 h-4 mr-1" />
@@ -633,93 +635,71 @@ export default function Admin() {
               Sair
             </Button>
           </div>
+
+          {/* Mobile hamburger */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden shrink-0"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Abrir menu"
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* Desktop tabs */}
+        <div className="hidden md:block max-w-5xl mx-auto px-6">
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+            {[
+              { key: "companies", label: "Empresas", icon: Building2 },
+              { key: "permissions", label: "Permissões", icon: Users },
+              { key: "integrations", label: "Integrações", icon: Key },
+              { key: "audit", label: "Logs", icon: ScrollText },
+              { key: "admin_users", label: "Admins", icon: ShieldCheck },
+              { key: "tools", label: "Ferramentas", icon: Wrench },
+            ].map((t) => {
+              const Icon = t.icon;
+              const isActive = activeTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key as typeof activeTab)}
+                  className={cn(
+                    "relative px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5",
+                    isActive ? "text-[hsl(var(--cactus-amber))]" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  {t.label}
+                  {isActive && (
+                    <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[hsl(var(--cactus-amber))]" />
+                  )}
+                </button>
+              );
+            })}
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                onClick={() => navigate("/backoffice/audit-trail")}
+                className="px-3 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+              >
+                <FileCheck2 className="w-4 h-4" />
+                Audit Trail
+              </button>
+              <button
+                onClick={() => navigate("/backoffice/sap-users")}
+                className="px-3 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+              >
+                <Users className="w-4 h-4" />
+                Usuários SAP
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        {/* Tabs */}
-        <div className="flex items-center gap-1 mb-6 border-b border-border">
-          <button
-            onClick={() => setActiveTab("companies")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "companies"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Building2 className="w-4 h-4 inline mr-1.5" />
-            Empresas
-          </button>
-          <button
-            onClick={() => setActiveTab("permissions")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "permissions"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Users className="w-4 h-4 inline mr-1.5" />
-            Permissões
-          </button>
-          <button
-            onClick={() => setActiveTab("integrations")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "integrations"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Key className="w-4 h-4 inline mr-1.5" />
-            Integrações
-          </button>
-          <button
-            onClick={() => setActiveTab("audit")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "audit"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <ScrollText className="w-4 h-4 inline mr-1.5" />
-            Logs de Auditoria
-          </button>
-          <button
-            onClick={() => setActiveTab("admin_users")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "admin_users"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4 inline mr-1.5" />
-            Administradores
-          </button>
-          <button
-            onClick={() => setActiveTab("tools")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "tools"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <RefreshCw className="w-4 h-4 inline mr-1.5" />
-            Ferramentas
-          </button>
-          <button
-            onClick={() => navigate("/backoffice/audit-trail")}
-            className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Shield className="w-4 h-4 inline mr-1.5" />
-            Audit Trail
-          </button>
-          <button
-            onClick={() => navigate("/backoffice/sap-users")}
-            className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Users className="w-4 h-4 inline mr-1.5" />
-            Usuários SAP
-          </button>
-        </div>
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 md:pb-8">
+
 
         {activeTab === "companies" && (
           <>
