@@ -127,6 +127,7 @@ export function CachedSearchCombobox({
   };
 
   const handleSelect = (opt: SapSearchOption) => {
+    if (isOptionDisabled?.(opt)) return;
     onChange(opt);
     setQuery("");
     setIsOpen(false);
