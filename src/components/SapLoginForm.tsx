@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers, Eye, EyeOff } from "lucide-react";
@@ -42,12 +42,20 @@ function getErpBadge(erpType: string): string {
 export function SapLoginForm() {
   const { login, isLoading } = useSap();
   const navigate = useNavigate();
-  const { enabledNames } = useEnabledErpTypes();
+  const { enabledNames, isLoading: erpLoading } = useEnabledErpTypes();
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [companyDB, setCompanyDB] = useState("");
-  const [databases, setDatabases] = useState<CompanyOption[]>([]);
+  const [allCompanies, setAllCompanies] = useState<CompanyOption[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(true);
+  const [companiesError, setCompaniesError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Filter only when we know which ERPs are enabled; otherwise show all active companies
+  // so a slow/failing enabled_erp_types query never blocks the login list.
+  const databases = erpLoading || enabledNames.length === 0
+    ? allCompanies
+    : allCompanies.filter((d) => enabledNames.includes(d.erp_type));
 
   const selectedCompany = databases.find((d) => d.value === companyDB);
   const erpType = selectedCompany?.erp_type || "sap";
@@ -56,22 +64,33 @@ export function SapLoginForm() {
   const erpInfo = ERP_LABELS[erpType] || ERP_LABELS.sap;
   const ErpIcon = erpInfo.icon;
 
-  useEffect(() => {
-    supabase
-      .from("companies")
-      .select("company_db, display_name, erp_type")
-      .eq("is_active", true)
-      .order("display_name")
-      .then(({ data }) => {
-        const all = (data || []).map((c: any) => ({
+  const loadCompanies = useCallback(async () => {
+    setCompaniesLoading(true);
+    setCompaniesError(null);
+    try {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("company_db, display_name, erp_type")
+        .eq("is_active", true)
+        .order("display_name");
+      if (error) throw error;
+      setAllCompanies(
+        (data || []).map((c: any) => ({
           label: c.display_name,
           value: c.company_db,
           erp_type: c.erp_type || "sap",
-        }));
-        // Only show companies whose ERP type is enabled by admin
-        setDatabases(all.filter((d) => enabledNames.includes(d.erp_type)));
-      });
-  }, [enabledNames]);
+        })),
+      );
+    } catch (e) {
+      setCompaniesError(e instanceof Error ? e.message : "Falha ao carregar empresas");
+    } finally {
+      setCompaniesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCompanies();
+  }, [loadCompanies]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,9 +184,9 @@ export function SapLoginForm() {
               setCompanyDB(val);
               setUserName("");
               setPassword("");
-            }}>
+            }} disabled={companiesLoading}>
               <SelectTrigger className="bg-muted/30 border-border">
-                <SelectValue placeholder="Selecione a empresa" />
+                <SelectValue placeholder={companiesLoading ? "Carregando empresas..." : "Selecione a empresa"} />
               </SelectTrigger>
               <SelectContent>
                 {databases.map((db) => (
@@ -180,9 +199,23 @@ export function SapLoginForm() {
                     </div>
                   </SelectItem>
                 ))}
+                {!companiesLoading && databases.length === 0 && (
+                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                    Nenhuma empresa disponível
+                  </div>
+                )}
               </SelectContent>
             </Select>
+            {companiesError && (
+              <div className="flex items-center justify-between text-xs text-destructive">
+                <span>Falha ao carregar empresas.</span>
+                <button type="button" onClick={loadCompanies} className="underline hover:no-underline">
+                  Tentar novamente
+                </button>
+              </div>
+            )}
           </div>
+
 
           {/* ERP indicator */}
           {companyDB && (
