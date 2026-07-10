@@ -1185,15 +1185,27 @@ export default function PagCorp() {
                                 </span>
                               )}
                               {t.sapDocEntry != null && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-2 text-[11px] gap-1 text-primary"
-                                  onClick={() => setValidateDialog({ open: true, tx: t })}
-                                >
-                                  <CheckCircle className="w-3 h-3" />
-                                  Validar SAP
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-[11px] gap-1 text-primary"
+                                    onClick={() => setValidateDialog({ open: true, tx: t })}
+                                  >
+                                    <CheckCircle className="w-3 h-3" />
+                                    Validar SAP
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-[11px] gap-1 text-primary"
+                                    onClick={() => setRelationsDialog({ open: true, tx: t })}
+                                    title="Ver mapa de relações: PagCorp → PC → NF → Baixa"
+                                  >
+                                    <Network className="w-3 h-3" />
+                                    Mapa
+                                  </Button>
+                                </div>
                               )}
                               {(() => {
                                 const st = t.settlementStatus;
