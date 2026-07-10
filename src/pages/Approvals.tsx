@@ -2587,17 +2587,18 @@ export default function ApprovalsPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 glow-primary">
-              <Activity className="w-5 h-5 text-primary" />
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 glow-primary shrink-0">
+              <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Aprovações Pendentes</h1>
-              <p className="text-xs text-muted-foreground">Acompanhamento de aprovações</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-foreground truncate">Aprovações</h1>
+              <p className="text-[10px] sm:text-xs text-muted-foreground truncate hidden sm:block">Acompanhamento de aprovações</p>
             </div>
           </div>
+
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{companyLabel}</p>
