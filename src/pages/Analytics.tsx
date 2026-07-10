@@ -5,6 +5,7 @@ import { Dashboard } from "@/components/Dashboard";
 import { PaymentAnalysis } from "@/components/PaymentAnalysis";
 import { ReportAiChat } from "@/components/ReportAiChat";
 import { PendingApprovalsReport } from "@/components/PendingApprovalsReport";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Activity, ArrowLeft, LogOut, CreditCard, GitBranch, ClipboardCheck } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
