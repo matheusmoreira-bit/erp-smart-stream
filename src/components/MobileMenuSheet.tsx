@@ -102,7 +102,7 @@ export function MobileMenuSheet({ open, onOpenChange }: Props) {
   const { userModules, loading } = useModuleAccess();
   const { getLabel } = useCompanies(true);
   const { theme, setTheme } = useTheme();
-  const [changePwdOpen, setChangePwdOpen] = useState(false);
+  
 
   const companyLabel = getLabel(session?.companyDB || "");
 
