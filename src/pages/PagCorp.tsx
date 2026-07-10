@@ -1363,6 +1363,13 @@ export default function PagCorp() {
         expectedAmount={validateDialog.tx ? Number(validateDialog.tx.amount) : undefined}
         expectedCurrency={validateDialog.tx?.currency}
       />
+
+      <RelationsMap
+        open={relationsDialog.open}
+        onClose={() => setRelationsDialog({ open: false, tx: null })}
+        expense={buildRelationsExpense(relationsDialog.tx, session?.companyDB)}
+        title="Mapa de Relações — PagCorp"
+      />
     </div>
   );
 }
