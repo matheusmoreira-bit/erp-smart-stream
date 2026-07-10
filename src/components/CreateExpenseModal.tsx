@@ -2535,7 +2535,7 @@ export function CreateExpenseModal({
 
           {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa.
               Padrão visual: verde + check quando preenchido, âmbar + triângulo quando obrigatório vazio. */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
                 <span>Moeda *</span>
@@ -2685,7 +2685,7 @@ export function CreateExpenseModal({
           {/* Header-level defaults: cascade to all items, user can override per line */}
           <div className="space-y-2">
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Padrões para itens</p>
-            <div className="grid grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
               <CachedSearchCombobox
                 label="Centro de Custo (padrão p/ itens) *"
                 options={costCenterOptions}
@@ -2705,7 +2705,7 @@ export function CreateExpenseModal({
                 placeholder="Aplica a todos os itens…"
                 portalContainer={dialogContainer}
               />
-              <p className="col-span-2 text-[11px] text-muted-foreground">
+              <p className="sm:col-span-2 text-[11px] text-muted-foreground">
                 Definir aqui preenche todas as linhas. Você pode ajustar item a item abaixo — a
                 integração usa sempre o valor de cada linha.
               </p>
@@ -2761,7 +2761,7 @@ export function CreateExpenseModal({
                     suggestedQuery={!item.sapItem ? (item.searchHint || item.description || undefined) : undefined}
                     portalContainer={dialogContainer}
                   />
-                  <div className="grid grid-cols-12 gap-2">
+                  <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
                     <div className="col-span-6">
                       <label className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <span>Descrição *</span>
@@ -2795,7 +2795,7 @@ export function CreateExpenseModal({
                       <Input value={formatCurrency(item.line_total)} readOnly className="text-sm h-8 bg-muted/30 font-mono" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <CachedSearchCombobox
                       label="Centro de Custo (Dimensão)"
                       options={costCenterOptions}
