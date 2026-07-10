@@ -31,6 +31,7 @@ interface SettlementAccount {
   settlement_account_code: string;
   cost_center: string | null;
   project: string | null;
+  currency: string | null;
 }
 
 function buildBaseUrl(raw: string): string {
@@ -87,22 +88,57 @@ async function resolveSettlementAccount(
   sb: ReturnType<typeof createClient>,
   companyDb: string,
   cardKey: string | null,
+  currency: string | null,
 ): Promise<SettlementAccount | null> {
-  if (cardKey) {
+  const cur = (currency || "").toUpperCase() || null;
+  const sel = "settlement_account_code, cost_center, project, currency";
+
+  // 1. Cartão específico + moeda exata
+  if (cardKey && cur) {
     const { data } = await sb
       .from("pagcorp_settlement_accounts")
-      .select("settlement_account_code, cost_center, project")
+      .select(sel)
       .eq("company_db", companyDb)
       .eq("card_identifier", cardKey)
+      .eq("currency", cur)
       .eq("enabled", true)
       .maybeSingle();
     if (data) return data as SettlementAccount;
   }
+
+  // 2. Fallback da empresa por moeda (PagCorp Real / PagCorp Dólar). Caso principal.
+  if (cur) {
+    const { data } = await sb
+      .from("pagcorp_settlement_accounts")
+      .select(sel)
+      .eq("company_db", companyDb)
+      .is("card_identifier", null)
+      .eq("currency", cur)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (data) return data as SettlementAccount;
+  }
+
+  // 3. Cartão específico sem moeda (retrocompatibilidade)
+  if (cardKey) {
+    const { data } = await sb
+      .from("pagcorp_settlement_accounts")
+      .select(sel)
+      .eq("company_db", companyDb)
+      .eq("card_identifier", cardKey)
+      .is("currency", null)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (data) return data as SettlementAccount;
+  }
+
+  // 4. Fallback global (sem moeda)
   const { data: fb } = await sb
     .from("pagcorp_settlement_accounts")
-    .select("settlement_account_code, cost_center, project")
+    .select(sel)
     .eq("company_db", companyDb)
     .is("card_identifier", null)
+    .is("currency", null)
     .eq("enabled", true)
     .maybeSingle();
   return (fb as SettlementAccount) || null;
@@ -318,22 +354,10 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // 3. Resolve conta contábil de baixa
+              // 3. Card key + preparo (a conta contábil de baixa é resolvida
+              //    por NF pois depende da moeda da fatura: PagCorp Real (BRL) ×
+              //    PagCorp Dólar (USD)).
               const cardKey = extractCardKey(row.pagcorp_data);
-              const account = await resolveSettlementAccount(sb, companyDb, cardKey);
-              if (!account) {
-                await sb
-                  .from("pagcorp_integration_log")
-                  .update({
-                    settlement_status: "skipped",
-                    settlement_error: `Sem conta contábil de baixa cadastrada (empresa=${companyDb}, cartão=${cardKey ?? "fallback"})`,
-                    settlement_locked_at: null,
-                    settlement_attempted_at: new Date().toISOString(),
-                  })
-                  .eq("id", row.id);
-                results.push({ id: row.id, status: "skipped", error: "no_settlement_account" });
-                continue;
-              }
 
               // 4. Emite UM Pagamento de Fornecedor por NF, baixando a
               //    PurchaseInvoice em Contas a Pagar. Idempotente: se a NF já
@@ -344,9 +368,20 @@ Deno.serve(async (req) => {
               const invoiceEntries: number[] = [];
               const invoiceNums: number[] = [];
               const skippedAlreadyPaid: number[] = [];
+              const accountsUsed: string[] = [];
+              let firstMissingAccountMsg: string | null = null;
               for (const invoice of invoices) {
                 const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
                 const alreadyClosed = invoice.DocumentStatus === "bost_Close" || openAmount <= 0;
+
+                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invoice.DocCurrency || null);
+                if (!account) {
+                  if (!firstMissingAccountMsg) {
+                    firstMissingAccountMsg = `Sem conta contábil de baixa (empresa=${companyDb}, cartão=${cardKey ?? "fallback"}, moeda=${invoice.DocCurrency || "?"})`;
+                  }
+                  continue;
+                }
+                accountsUsed.push(account.settlement_account_code);
 
                 let paymentDocEntry: number | null = null;
                 let paymentDocNum: number | null = null;
@@ -402,9 +437,27 @@ Deno.serve(async (req) => {
                 }
               }
 
+              // Se nenhuma NF conseguiu conta contábil (ex.: faltou cadastrar
+              // a conta em USD), marca a linha como awaiting_settlement para
+              // reprocessar depois — não conta como erro terminal.
+              if (invoices.length > 0 && accountsUsed.length === 0 && firstMissingAccountMsg) {
+                await sb
+                  .from("pagcorp_integration_log")
+                  .update({
+                    settlement_status: "awaiting_settlement",
+                    settlement_error: firstMissingAccountMsg,
+                    settlement_locked_at: null,
+                    settlement_attempted_at: new Date().toISOString(),
+                  })
+                  .eq("id", row.id);
+                results.push({ id: row.id, status: "awaiting_settlement", error: "no_settlement_account" });
+                continue;
+              }
+
               const settlementNote: string[] = [];
               if (paymentEntries.length > 1) settlementNote.push(`${paymentEntries.length} pagamentos emitidos (docs: ${paymentNums.join(", ")})`);
               if (skippedAlreadyPaid.length > 0) settlementNote.push(`${skippedAlreadyPaid.length} NF(s) já quitadas`);
+              if (firstMissingAccountMsg) settlementNote.push(firstMissingAccountMsg);
 
               await sb
                 .from("pagcorp_integration_log")
@@ -429,7 +482,7 @@ Deno.serve(async (req) => {
                 status: "ok",
                 duration_ms: Date.now() - t0,
                 request_meta: { poEntry: row.sap_doc_entry, invoiceEntries },
-                response_meta: { paymentEntries, paymentNums, account: account.settlement_account_code, skippedAlreadyPaid },
+                response_meta: { paymentEntries, paymentNums, accountsUsed, skippedAlreadyPaid },
               });
               results.push({ id: row.id, status: "settled" });
             } catch (e) {
