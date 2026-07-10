@@ -449,11 +449,36 @@ function ApprovalDetailModal({
     () => segmentsForApprover(segments, currentUserName, currentUserEmail),
     [segments, currentUserName, currentUserEmail],
   );
-  // Aprovador comum (não admin, não super) só vê linhas dos segmentos que lhe cabem.
-  const restrictToMySegments = segmented && !isAdmin && !isSuperUser && mySegments.length > 0 && !showAllLines;
-  const visibleLines = restrictToMySegments
-    ? mySegments.flatMap((s) => s.lines)
-    : (doc?.documentLines || []);
+  // Documentos com Tipo de Rateio ≠ "Não" (folha/imposto/reembolso/viagens)
+  // são rateios sistêmicos; TODOS os aprovadores veem o documento completo.
+  const specialRateio = !!(doc?.rateioType && doc.rateioType !== "padrao");
+  // Aprovador comum (não admin, não super) só vê CLARAMENTE as linhas dos
+  // segmentos que lhe cabem; as demais aparecem borradas com aviso.
+  const restrictToMySegments =
+    segmented && !specialRateio && !isAdmin && !isSuperUser && mySegments.length > 0 && !showAllLines;
+  const visibleLines = doc?.documentLines || [];
+  // Mapeia CostingCode → segmento (para saber a qual aprovador cada linha
+  // pertence quando exibimos com blur).
+  const segmentByCC = useMemo(() => {
+    const m = new Map<string, ApprovalSegment>();
+    for (const s of segments) {
+      if (s.costCenter === "__all__") continue;
+      m.set(s.costCenter, s);
+    }
+    return m;
+  }, [segments]);
+  const myCCs = useMemo(
+    () => new Set(mySegments.map((s) => s.costCenter)),
+    [mySegments],
+  );
+  const isLineMine = useCallback(
+    (line: DocumentLine): boolean => {
+      if (!restrictToMySegments) return true;
+      const key = (line.CostingCode || "").trim() || "__no_cc__";
+      return myCCs.has(key);
+    },
+    [restrictToMySegments, myCCs],
+  );
   const visibleTotal = restrictToMySegments
     ? mySegments.reduce((s, seg) => s + (doc?.currency !== "BRL" ? seg.amountFC : seg.amount), 0)
     : (doc?.docTotal || 0);
