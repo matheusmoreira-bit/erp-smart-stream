@@ -3063,18 +3063,30 @@ export type Database = {
       }
       permission_group_modules: {
         Row: {
+          can_create: boolean
+          can_delete: boolean
+          can_edit: boolean
+          can_view: boolean
           created_at: string
           group_id: string
           id: string
           module_key: string
         }
         Insert: {
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_view?: boolean
           created_at?: string
           group_id: string
           id?: string
           module_key: string
         }
         Update: {
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_view?: boolean
           created_at?: string
           group_id?: string
           id?: string
