@@ -150,7 +150,7 @@ async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: numbe
   // 1 PO → N NF de entrada: retornamos TODAS as PurchaseInvoices que apontam para o PO.
   // Selecionamos também DocTotalSys / PaidToDateSys / DocRate para poder emitir a
   // baixa em moeda LOCAL (padrão SAP para VendorPayments), replicando o manual.
-  const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})` +
+  const q = `${baseUrl}/PurchaseInvoices?$filter=${encodeURIComponent(`DocumentLines/any(l: l/BaseType eq 22 and l/BaseEntry eq ${poEntry})`)}` +
     `&$select=DocEntry,DocNum,CardCode,CardName,DocTotal,DocTotalSys,PaidToDate,PaidToDateSys,DocumentStatus,DocCurrency,DocRate,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
   const r = await fetch(q, { headers: { Cookie: cookie } });
   if (!r.ok) throw new Error(`Consulta PurchaseInvoices falhou ${r.status}: ${(await r.text()).slice(0, 200)}`);
