@@ -759,10 +759,12 @@ export function CreateExpenseModal({
 
 
   const handleFiles = (newFiles: FileList | File[]) => {
-    const arr = Array.from(newFiles);
-    setFiles((prev) => [...prev, ...arr]);
-    if (aiEnabled && arr.length > 0) {
-      processWithAI([...files, ...arr]);
+    const { valid, errors } = validateAttachments(newFiles);
+    for (const msg of errors) toast.error(msg);
+    if (valid.length === 0) return;
+    setFiles((prev) => [...prev, ...valid]);
+    if (aiEnabled) {
+      processWithAI([...files, ...valid]);
     }
   };
 
