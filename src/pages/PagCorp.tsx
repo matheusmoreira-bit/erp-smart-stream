@@ -183,6 +183,47 @@ export default function PagCorp() {
 
   const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
 
+  // Dispara a baixa automática (Pagamento de Fornecedor no SAP) para uma
+  // transação já integrada. O watcher só emite baixa se o PC já estiver
+  // fechado (indicando NF de entrada lançada); do contrário retorna
+  // awaiting_invoice e o cron continua tentando periodicamente.
+  const handleAutoSettle = async (t: PagCorpTransaction) => {
+    if (!t.integrationLogId) {
+      toast.error("Log de integração não localizado para esta transação.");
+      return;
+    }
+    setSettling(t.id);
+    try {
+      const { invokeFn } = await import("@/lib/invoke-fn");
+      const { data, error } = await invokeFn<any>("pagcorp-settlement-watcher", {
+        body: { logId: t.integrationLogId, forceRetry: true },
+      });
+      if (error) throw error;
+      const result = Array.isArray(data?.results) ? data.results[0] : null;
+      const status = result?.status;
+      if (status === "settled") {
+        toast.success("Baixa automática emitida no SAP.");
+      } else if (status === "awaiting_invoice") {
+        toast.info("Ainda aguardando NF de entrada lançar o PC no SAP.");
+      } else if (status === "awaiting_settlement") {
+        toast.warning(result?.error === "ptax_missing"
+          ? "PTAX ainda não publicada — nova tentativa após a publicação do BCB."
+          : "Sem conta contábil de baixa configurada para este cartão/moeda.");
+      } else if (status === "error") {
+        toast.error(`Falha na baixa: ${result?.error || "erro desconhecido"}`);
+      } else if (data?.skipped) {
+        toast.info("Já existe uma baixa em andamento para esta transação.");
+      } else {
+        toast.message("Baixa automática enfileirada.");
+      }
+      await fetchTransactions(startDate, endDate, session?.companyDB);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao acionar baixa automática.");
+    } finally {
+      setSettling(null);
+    }
+  };
+
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
