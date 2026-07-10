@@ -116,30 +116,31 @@ export default function AdvancePayments() {
   return (
     <div className="min-h-screen bg-background">
       <PageTitle title="Adiantamentos a Fornecedor" />
-      <header className="border-b border-border px-6 py-4 sticky top-0 z-20 bg-background/95 backdrop-blur">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
+      <header className="border-b border-border px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-20 bg-background/95 backdrop-blur">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground shrink-0 h-10 w-10 flex items-center justify-center -ml-2" aria-label="Voltar">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">Adiantamentos a Fornecedor</h1>
-              <p className="text-xs text-muted-foreground">{session?.companyDB}</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-foreground truncate">Adiantamentos</h1>
+              <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{session?.companyDB}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={refresh}>
-              <RefreshCw className="w-4 h-4 mr-1" /> Atualizar
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="ghost" size="icon" onClick={refresh} className="h-10 w-10 sm:h-9 sm:w-9" aria-label="Atualizar">
+              <RefreshCw className="w-4 h-4" />
             </Button>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="w-4 h-4 mr-1" /> Novo
+            <Button size="sm" onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
+              <Plus className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Novo</span>
             </Button>
-            <ThemeToggle />
+            <div className="hidden sm:block"><ThemeToggle /></div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-6">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+
         <div className="flex items-center gap-2 mb-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
