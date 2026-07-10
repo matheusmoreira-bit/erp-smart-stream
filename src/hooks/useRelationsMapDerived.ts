@@ -16,6 +16,10 @@ export interface NfApLink {
   source: "sap" | "omie";
   linked_at: string;
   notes: string | null;
+  /** VendorPayment DocEntry quando a origem é um pagamento SAP */
+  payment_doc_entry?: number | null;
+  payment_doc_num?: number | null;
+  payment_date?: string | null;
 }
 
 export interface NfEntradaLink {
@@ -43,6 +47,20 @@ export interface PurchaseInvoiceLink {
   CardCode: string;
   CardName: string;
   isFullyPaid: boolean;
+}
+
+export interface VendorPaymentLink {
+  DocEntry: number;
+  DocNum: number;
+  DocDate: string;
+  DocTotal: number;
+  CardCode: string;
+  CardName: string;
+  Remarks: string | null;
+  /** DocEntries das PurchaseInvoices quitadas por este pagamento */
+  invoiceDocEntries: number[];
+  /** valor aplicado a cada InvoiceDocEntry */
+  appliedByInvoice: Record<number, number>;
 }
 
 export interface ContaPagarLink {
