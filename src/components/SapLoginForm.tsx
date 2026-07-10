@@ -104,7 +104,12 @@ export function SapLoginForm() {
       return;
     }
     try {
-      await login(userName, password, companyDB, erpType as ErpType);
+      // SAP B1 usernames are typically the local-part only (e.g. "marco.tulio"),
+      // not the full email. Strip the domain automatically so users can type either.
+      const sapUser = needsCredentials && userName.includes("@")
+        ? userName.split("@")[0].trim()
+        : userName.trim();
+      await login(sapUser, password, companyDB, erpType as ErpType);
       toast.success(`Conectado ao ${erpInfo.label}!`);
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error ?? "");
