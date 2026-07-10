@@ -47,11 +47,15 @@ import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { requestSupplierRegistration } from "@/lib/supplier-request-email";
-import { UserPlus } from "lucide-react";
+import { UserPlus, RefreshCw, Building2 } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
 import { saveDraft, deleteDraft } from "@/hooks/useDocumentDrafts";
 import { supabase } from "@/integrations/supabase/client";
+import { useMergedSupplierOptions, type CrossCompanyMatch, type EnrichedSupplierOption } from "@/hooks/useMergedSupplierOptions";
+import { useCompanies } from "@/hooks/useCompanies";
+import { onlyDigits } from "@/lib/supplier-search";
+import { SupplierEmptyState } from "@/components/SupplierEmptyState";
 import {
   hashFileContent,
   findExistingClaims,
@@ -169,21 +173,22 @@ export function CreateExpenseModal({
   const [draftHydrated, setDraftHydrated] = useState(false);
 
   // Cached SAP lists
-  const supplierMapRow = useCallback((row: any) => ({
-    code: row.CardCode,
-    name: row.CardName,
-    extra: row.FederalTaxID || undefined,
-    currency: row.Currency || "",
-    details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
-  } as SapSearchOption & { currency: string }), []);
-  const { options: supplierOptions, isLoading: suppliersLoading, reload: reloadSuppliers } = useSapCachedList({
-    cacheKey: isSales ? "customers_active_v2" : "suppliers_active_v2",
-    endpoint: "BusinessPartners",
-    params: isSales
-      ? { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer' and Frozen eq 'tNO'" }
-      : { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
-    mapRow: supplierMapRow,
+  // Fornecedor: hook enriquecido que faz merge com public.suppliers,
+  // inclui fornecedores locais não-sincronizados e permite lookup cross-company.
+  const {
+    options: supplierOptions,
+    isLoading: suppliersLoading,
+    reload: reloadSuppliers,
+    crossCompanyLookup,
+    activeCount: supplierActiveCount,
+  } = useMergedSupplierOptions({
+    companyDb: sapSession?.companyDB || null,
+    isSales,
   });
+  const { getLabel: getCompanyLabel } = useCompanies();
+  const currentCompanyLabel = sapSession?.companyDB
+    ? getCompanyLabel(sapSession.companyDB)
+    : "";
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
   const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
@@ -2440,6 +2445,58 @@ export function CreateExpenseModal({
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
               required
+              renderOptionBadge={(opt) => {
+                const eo = opt as EnrichedSupplierOption;
+                if (eo.frozen) {
+                  return (
+                    <span className="shrink-0 rounded-sm border border-muted-foreground/30 bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Inativo
+                    </span>
+                  );
+                }
+                if (eo.notSynced) {
+                  return (
+                    <span
+                      className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                      title={eo.syncStatus ? `Status: ${eo.syncStatus}` : "Não sincronizado com o SAP"}
+                    >
+                      Não sincronizado
+                    </span>
+                  );
+                }
+                return null;
+              }}
+              footerHint={
+                currentCompanyLabel ? (
+                  <span>
+                    Buscando em <strong className="text-foreground">{currentCompanyLabel}</strong>
+                    {" · "}
+                    <span className="tabular-nums">{supplierActiveCount}</span> {isSales ? "clientes" : "fornecedores"} ativos
+                  </span>
+                ) : null
+              }
+              renderEmptyState={(query) => (
+                <SupplierEmptyState
+                  query={query}
+                  bpLabel={bpLabel}
+                  currentCompanyLabel={currentCompanyLabel}
+                  onCreateNew={() => {
+                    // Pré-preenche o SupplierFormModal com o texto digitado.
+                    const digits = onlyDigits(query);
+                    const looksLikeCnpj = digits.length >= 11;
+                    setAiSupplierData({
+                      card_name: looksLikeCnpj ? undefined : query,
+                      federal_tax_id: looksLikeCnpj ? digits : undefined,
+                    } as SupplierFormPrefill);
+                    setShowSupplierForm(true);
+                  }}
+                  onRefresh={() => {
+                    reloadSuppliers();
+                    toast.success("Lista atualizada");
+                  }}
+                  crossCompanyLookup={crossCompanyLookup}
+                />
+              )}
             />
             {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
                 <div className="mt-2 flex min-w-0 flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 sm:flex-row sm:items-start">
