@@ -1276,6 +1276,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
       CostingCode: it.cost_center || "",
       Project: it.project || "",
     })),
+    rateioType: (e.rateio_type as string | null) || "padrao",
     __internalId: e.id,
   } as ApprovalDoc & { __internalId?: string };
 }
