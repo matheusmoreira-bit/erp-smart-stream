@@ -168,9 +168,47 @@ async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: numbe
 }
 
 /**
+ * Consulta a PTAX (cotação de venda) do Banco Central para uma moeda em uma data.
+ * O endpoint da BCB (Olinda) só retorna cotação em dias úteis; se a data cair
+ * em fim de semana / feriado, tentamos até 7 dias anteriores.
+ * Retorna null se não encontrar cotação — a chamada deve tratar (sem baixa).
+ */
+async function fetchPtax(currency: string, isoDate: string): Promise<{ rate: number; ptaxDate: string } | null> {
+  const cur = (currency || "").toUpperCase();
+  if (!cur || cur === "BRL") return null;
+  const base = new Date(`${isoDate}T12:00:00Z`);
+  for (let back = 0; back < 8; back++) {
+    const d = new Date(base.getTime() - back * 24 * 60 * 60 * 1000);
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const yyyy = d.getUTCFullYear();
+    const dataParam = `${mm}-${dd}-${yyyy}`;
+    const url =
+      `https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)` +
+      `?@moeda='${cur}'&@dataCotacao='${dataParam}'&$format=json&$select=cotacaoCompra,cotacaoVenda,dataHoraCotacao`;
+    try {
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const j = await r.json();
+      const row = Array.isArray(j?.value) && j.value.length > 0 ? j.value[0] : null;
+      const rate = row ? Number(row.cotacaoVenda) : NaN;
+      if (row && Number.isFinite(rate) && rate > 0) {
+        return { rate, ptaxDate: String(row.dataHoraCotacao || dataParam) };
+      }
+    } catch {
+      // tenta dia anterior
+    }
+  }
+  return null;
+}
+
+/**
  * Emite um Pagamento de Fornecedor (Outgoing Payment) que baixa a
  * PurchaseInvoice indicada. A contrapartida contábil é a `TransferAccount`
  * (GL configurada para o cartão PagCorp).
+ *
+ * Para faturas em moeda estrangeira (ex.: USD), o campo `DocRate` é
+ * preenchido com a PTAX de venda do BCB da data da fatura/compra.
  *
  * Retorna { docEntry, docNum } do pagamento criado.
  */
@@ -189,6 +227,7 @@ async function createVendorPayment(
     costCenter: string | null;
     project: string | null;
     bplId?: number;
+    docRate?: number | null;
   },
 ): Promise<{ docEntry: number; docNum: number }> {
   const body: Record<string, unknown> = {
@@ -211,6 +250,7 @@ async function createVendorPayment(
     ],
   };
   if (args.docCurrency) body.DocCurrency = args.docCurrency;
+  if (args.docRate && args.docRate > 0) body.DocRate = args.docRate;
   if (args.bplId != null) body.BPLID = args.bplId;
   if (args.costCenter) body.CostingCode = args.costCenter;
   if (args.project) body.ProjectCode = args.project;
@@ -387,6 +427,21 @@ Deno.serve(async (req) => {
                 let paymentDocNum: number | null = null;
 
                 if (!alreadyClosed) {
+                  // Moeda estrangeira → busca PTAX venda do BCB da data da fatura.
+                  // Sem PTAX disponível, adia a baixa (awaiting_settlement).
+                  const invCur = (invoice.DocCurrency || "").toUpperCase();
+                  let docRate: number | null = null;
+                  if (invCur && invCur !== "BRL") {
+                    const ptax = await fetchPtax(invCur, invoice.DocDate);
+                    if (!ptax) {
+                      if (!firstMissingAccountMsg) {
+                        firstMissingAccountMsg = `PTAX ${invCur} indisponível para ${invoice.DocDate}`;
+                      }
+                      continue;
+                    }
+                    docRate = ptax.rate;
+                  }
+
                   const payment = await createVendorPayment(baseUrl, cookie, {
                     invoiceEntry: invoice.DocEntry,
                     invoiceDocNum: invoice.DocNum,
@@ -399,6 +454,7 @@ Deno.serve(async (req) => {
                     costCenter: account.cost_center,
                     project: account.project,
                     bplId: invoice.BPLId,
+                    docRate,
                   });
                   paymentDocEntry = payment.docEntry;
                   paymentDocNum = payment.docNum;
