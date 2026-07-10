@@ -382,11 +382,12 @@ export function useContasPagarLinks({
     return empty;
   }, [erpType, session, sapDocEntry, sapDocNum, companyDb, supplierCode]);
 
+  // v2: inclui VendorPayments no payload — bump da chave invalida cache antigo.
   const cacheKey =
     erpType === "sap" && sapDocEntry
-      ? `relmap:ap:sap:${sapDocEntry}`
+      ? `relmap:ap:sap:v2:${sapDocEntry}`
       : erpType === "omie" && (sapDocNum || supplierCode)
-        ? `relmap:ap:omie:${sapDocNum || ""}:${supplierCode || ""}`
+        ? `relmap:ap:omie:v2:${sapDocNum || ""}:${supplierCode || ""}`
         : null;
 
   return useExternalCache<{
