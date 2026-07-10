@@ -3959,6 +3959,23 @@ export type Database = {
         Args: { _company_db?: string }
         Returns: string
       }
+      get_nf_entrada_cache_by_po: {
+        Args: { _company_db: string; _po_doc_entry: number }
+        Returns: {
+          cancelled: string
+          card_code: string
+          card_name: string
+          doc_currency: string
+          doc_date: string
+          doc_due_date: string
+          doc_entry: number
+          doc_num: number
+          doc_total: number
+          document_status: string
+          sap_update_date: string
+          series: number
+        }[]
+      }
       get_sap_sync_health: { Args: { _last_n?: number }; Returns: Json }
       has_role: {
         Args: {
