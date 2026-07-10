@@ -68,19 +68,22 @@ export default function AnalyticsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList>
-            <TabsTrigger value="fluxo" className="gap-1.5">
+          <TabsList className="w-full sm:w-auto justify-start overflow-x-auto scrollbar-none snap-x">
+            <TabsTrigger value="fluxo" className="gap-1.5 shrink-0 snap-start">
               <GitBranch className="w-4 h-4" />
-              Fluxo de Compras
+              <span className="hidden xs:inline sm:inline">Fluxo de Compras</span>
+              <span className="xs:hidden sm:hidden">Fluxo</span>
             </TabsTrigger>
-            <TabsTrigger value="aprovacoes" className="gap-1.5">
+            <TabsTrigger value="aprovacoes" className="gap-1.5 shrink-0 snap-start">
               <ClipboardCheck className="w-4 h-4" />
-              Pedidos em Aprovação
+              <span className="hidden sm:inline">Pedidos em Aprovação</span>
+              <span className="sm:hidden">Aprovações</span>
             </TabsTrigger>
             {hasPaymentsAccess && (
-              <TabsTrigger value="pagamentos" className="gap-1.5">
+              <TabsTrigger value="pagamentos" className="gap-1.5 shrink-0 snap-start">
                 <CreditCard className="w-4 h-4" />
-                Análise de Pagamentos
+                <span className="hidden sm:inline">Análise de Pagamentos</span>
+                <span className="sm:hidden">Pagamentos</span>
               </TabsTrigger>
             )}
           </TabsList>
