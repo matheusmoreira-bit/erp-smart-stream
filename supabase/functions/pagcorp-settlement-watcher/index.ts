@@ -31,6 +31,7 @@ interface SettlementAccount {
   settlement_account_code: string;
   cost_center: string | null;
   project: string | null;
+  currency: string | null;
 }
 
 function buildBaseUrl(raw: string): string {
