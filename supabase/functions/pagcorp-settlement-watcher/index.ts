@@ -410,6 +410,7 @@ Deno.serve(async (req) => {
               const skippedAlreadyPaid: number[] = [];
               const accountsUsed: string[] = [];
               let firstMissingAccountMsg: string | null = null;
+              let firstPtax: { rate: number; ptaxDate: string; source: string } | null = null;
               for (const invoice of invoices) {
                 const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
                 const alreadyClosed = invoice.DocumentStatus === "bost_Close" || openAmount <= 0;
@@ -440,6 +441,13 @@ Deno.serve(async (req) => {
                       continue;
                     }
                     docRate = ptax.rate;
+                    if (!firstPtax) {
+                      firstPtax = {
+                        rate: ptax.rate,
+                        ptaxDate: ptax.ptaxDate,
+                        source: `BCB Olinda PTAX venda (${invCur})`,
+                      };
+                    }
                   }
 
                   const payment = await createVendorPayment(baseUrl, cookie, {
@@ -523,6 +531,9 @@ Deno.serve(async (req) => {
                   settlement_payment_doc_num: paymentNums[0] ?? null,
                   settlement_invoice_doc_entry: invoiceEntries[0],
                   settlement_invoice_doc_num: invoiceNums[0],
+                  settlement_ptax_rate: firstPtax?.rate ?? null,
+                  settlement_ptax_date: firstPtax?.ptaxDate ? firstPtax.ptaxDate.slice(0, 10) : null,
+                  settlement_ptax_source: firstPtax?.source ?? null,
                   settlement_error: settlementNote.length ? settlementNote.join(" | ") : null,
                   settlement_attempts: (row.settlement_attempts || 0) + 1,
                   settlement_attempted_at: new Date().toISOString(),

@@ -2795,6 +2795,9 @@ export type Database = {
           settlement_locked_at: string | null
           settlement_payment_doc_entry: number | null
           settlement_payment_doc_num: number | null
+          settlement_ptax_date: string | null
+          settlement_ptax_rate: number | null
+          settlement_ptax_source: string | null
           settlement_status: string
           status: string
           updated_at: string
@@ -2822,6 +2825,9 @@ export type Database = {
           settlement_locked_at?: string | null
           settlement_payment_doc_entry?: number | null
           settlement_payment_doc_num?: number | null
+          settlement_ptax_date?: string | null
+          settlement_ptax_rate?: number | null
+          settlement_ptax_source?: string | null
           settlement_status?: string
           status?: string
           updated_at?: string
@@ -2849,6 +2855,9 @@ export type Database = {
           settlement_locked_at?: string | null
           settlement_payment_doc_entry?: number | null
           settlement_payment_doc_num?: number | null
+          settlement_ptax_date?: string | null
+          settlement_ptax_rate?: number | null
+          settlement_ptax_source?: string | null
           settlement_status?: string
           status?: string
           updated_at?: string
