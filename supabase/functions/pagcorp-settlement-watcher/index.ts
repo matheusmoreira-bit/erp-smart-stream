@@ -688,13 +688,13 @@ Deno.serve(async (req) => {
       if (rows.length < PAGE_SIZE) break;
     }
 
-    await releaseWatcherLock(sb, "pagcorp-settlement-watcher", "ok", `processed=${results.length}`);
+    await releaseWatcherLock(sb, lockName, "ok", `processed=${results.length}`);
     return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     const msg = (e as Error).message;
-    await releaseWatcherLock(sb, "pagcorp-settlement-watcher", "error", msg);
+    await releaseWatcherLock(sb, lockName, "error", msg);
     return new Response(JSON.stringify({ error: msg, results }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
