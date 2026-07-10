@@ -649,6 +649,7 @@ async function buildApprovalReportPdf(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   // Bypass user auth when called internally (background retry job) with
   // the service role key. Cron / retry workers don't have a Cloud JWT or

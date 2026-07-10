@@ -62,6 +62,7 @@ async function uploadAttachmentsToSap(baseUrl: string, cookies: string, files: {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   try {
     await requireUserOrSapSession(req);
