@@ -273,9 +273,10 @@ Deno.serve(async (req) => {
       logs = ((data || []) as LogRow[]).filter((l) => !fresh.has(l.id)).slice(0, BATCH_SIZE);
     }
 
+    const allowLiveFetch = !!body.logId; // apenas quando o usuário aciona uma linha específica
     let ok = 0, err = 0;
     for (const l of logs) {
-      const r = await resolveOne(sb, l);
+      const r = await resolveOne(sb, l, { allowLiveFetch });
       if (r.ok) ok++; else err++;
     }
     return new Response(JSON.stringify({ ok: true, processed: logs.length, resolved: ok, failed: err }),
