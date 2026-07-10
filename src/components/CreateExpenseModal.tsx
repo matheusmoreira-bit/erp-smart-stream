@@ -2334,7 +2334,7 @@ export function CreateExpenseModal({
               <input
                 ref={inputRef}
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,.xlsx,.xls,.xml"
+                accept={ALLOWED_ATTACHMENT_ACCEPT}
                 className="hidden"
                 multiple
                 onChange={(e) => e.target.files && handleFiles(e.target.files)}
