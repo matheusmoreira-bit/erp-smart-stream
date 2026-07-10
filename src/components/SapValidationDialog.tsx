@@ -64,32 +64,43 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
       const poEntry = Number(resolvedPo?.DocEntry || docEntry);
 
       // 2. Notas fiscais (PurchaseInvoices) que tenham linha vindas desse PC
+      // OBS: este SAP Service Layer não aceita `DocumentLines/any(...)` no $filter
+      // (retorna 400 "Invalid symbol"). Fazemos por CardCode e filtramos em JS.
       let foundInvoices: any[] = [];
-      try {
-        const { data: invData } = await sapQuery(session, "PurchaseInvoices", {
-          $filter: `DocumentLines/any(d: d/BaseType eq 22 and d/BaseEntry eq ${poEntry})`,
-          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,CardCode,CardName",
-          $top: 10,
-        }, false);
-        foundInvoices = (invData as any)?.value || [];
-        setInvoices(foundInvoices);
-      } catch (e) {
-        console.warn("PurchaseInvoices lookup failed:", e);
+      const cardCode = resolvedPo?.CardCode;
+      if (cardCode) {
+        try {
+          const { data: invData } = await sapQuery(session, "PurchaseInvoices", {
+            $filter: `CardCode eq '${String(cardCode).replace(/'/g, "''")}'`,
+            $orderby: "DocEntry desc",
+            $top: 50,
+          }, false);
+          const all = ((invData as any)?.value || []) as any[];
+          foundInvoices = all.filter((inv) =>
+            (inv.DocumentLines || []).some((l: any) => Number(l.BaseEntry) === poEntry && Number(l.BaseType) === 22),
+          );
+          setInvoices(foundInvoices);
+        } catch (e) {
+          console.warn("PurchaseInvoices lookup failed:", e);
+        }
       }
 
-      // 3. Pagamentos vinculados às NFs encontradas
-      const docEntries = foundInvoices.map((i) => i.DocEntry).filter((de) => de != null);
-      if (docEntries.length > 0) {
+      // 3. Pagamentos vinculados às NFs encontradas — mesma limitação do $filter/any.
+      const invoiceEntries = new Set(foundInvoices.map((i) => Number(i.DocEntry)).filter((n) => !isNaN(n)));
+      if (invoiceEntries.size > 0 && cardCode) {
         try {
-          const filter = docEntries
-            .map((de) => `PaymentInvoices/any(p: p/InvoiceType eq 'it_PurchaseInvoice' and p/DocEntry eq ${de})`)
-            .join(" or ");
           const { data: payData } = await sapQuery(session, "VendorPayments", {
-            $filter: filter,
-            $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName",
-            $top: 20,
+            $filter: `CardCode eq '${String(cardCode).replace(/'/g, "''")}'`,
+            $orderby: "DocEntry desc",
+            $top: 100,
           }, false);
-          setPayments((payData as any)?.value || []);
+          const allPays = ((payData as any)?.value || []) as any[];
+          const matched = allPays.filter((p) =>
+            (p.PaymentInvoices || []).some((pi: any) =>
+              pi.InvoiceType === "it_PurchaseInvoice" && invoiceEntries.has(Number(pi.DocEntry)),
+            ),
+          );
+          setPayments(matched);
         } catch (e) {
           console.warn("VendorPayments lookup failed:", e);
         }
