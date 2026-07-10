@@ -55,6 +55,11 @@ export default {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
+        "cactus-amber": {
+          DEFAULT: "hsl(var(--cactus-amber))",
+          foreground: "hsl(var(--cactus-amber-foreground))",
+        },
+        "cactus-green": "hsl(var(--cactus-green))",
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",

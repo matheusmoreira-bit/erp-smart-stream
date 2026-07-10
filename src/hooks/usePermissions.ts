@@ -2,12 +2,26 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 
+/* ────────────────────────────────────────────────────────────────────
+ * Types
+ * ─────────────────────────────────────────────────────────────────── */
+
+export interface ModulePerms {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+}
+
 export interface PermissionGroup {
   id: string;
   name: string;
   description: string | null;
   created_at: string;
+  /** module_keys the group has any access to (view=true) — kept for back-compat */
   modules: string[];
+  /** Full CRUD map keyed by module_key */
+  modulePerms: Record<string, ModulePerms>;
   erp_type: string | null;
   company_db: string | null;
 }
@@ -21,46 +35,65 @@ export interface UserAssignment {
   created_at: string;
 }
 
-// Unified module definitions — same for all ERP types / companies
-export const ALL_MODULES = [
-  { key: "analytics", label: "Analytics (Fluxo)" },
-  { key: "analytics_payments", label: "Analytics (Pagamentos)" },
+/* ────────────────────────────────────────────────────────────────────
+ * Module catalog
+ *
+ * MODULES → telas com sentido CRUD (ver / criar / editar / excluir).
+ * CAPABILITIES → flags transversais (view-only) que ligam funcionalidades
+ * específicas dentro das telas.
+ * ─────────────────────────────────────────────────────────────────── */
+
+export const MODULES = [
   { key: "expenses", label: "Compras" },
   { key: "sales", label: "Vendas" },
   { key: "approvals", label: "Aprovações — Pendentes" },
   { key: "approval_history", label: "Aprovações — Histórico" },
-  { key: "approvals_view_all", label: "Aprovações — Ver todas (somente leitura)" },
-  { key: "expenses_view_all", label: "Compras/Vendas — Ver todos os lançamentos" },
   { key: "approval_rules", label: "Regras de Aprovação" },
+  { key: "financial_review", label: "Adiantamentos" },
+  { key: "nf_entrada", label: "NF de Entrada" },
+  { key: "suppliers", label: "Fornecedores" },
+  { key: "items", label: "Itens" },
   { key: "pagcorp", label: "Cartões Corporativos" },
-  { key: "users", label: "Usuários" },
-  { key: "users_productivity", label: "Usuários — Produtividade" },
-  { key: "suppliers", label: "Fornecedores (leitura)" },
-  { key: "suppliers_write", label: "Fornecedores — Criar/Editar" },
-  { key: "items", label: "Itens (leitura)" },
-  { key: "items_write", label: "Itens — Criar/Editar" },
+  { key: "intercompany", label: "Plano de Contas & CC" },
   { key: "synapse", label: "Integrações — Automações" },
   { key: "credentials", label: "Integrações — Credenciais" },
-  { key: "audit_log", label: "Auditoria — Logs do Sistema" },
+  { key: "users", label: "Usuários" },
+] as const;
+
+/** Módulos view-only (dashboards / logs / notificações — sem CRUD). */
+export const VIEW_ONLY_MODULES = [
+  { key: "analytics", label: "Analytics (Fluxo)" },
+  { key: "analytics_payments", label: "Analytics (Pagamentos)" },
+  { key: "users_productivity", label: "Usuários — Produtividade" },
   { key: "notifications", label: "Notificações" },
   { key: "integration_history", label: "Integrações — Monitor" },
-  { key: "intercompany", label: "Plano de Contas & CC" },
-  { key: "financial_review", label: "Adiantamentos" },
+  { key: "audit_log", label: "Auditoria — Logs do Sistema" },
   { key: "fiscal_audit", label: "Auditoria — Fiscal" },
-  { key: "nf_entrada", label: "NF de Entrada" },
   { key: "audit_console", label: "Auditoria — SAP" },
 ] as const;
 
-// Legacy compat aliases
+/** Capabilities: flags explícitas, transversais às telas. */
+export const CAPABILITIES = [
+  { key: "expenses_view_all", label: "Ver todas as Compras/Vendas", hint: "Não fica limitado ao que o próprio usuário criou." },
+  { key: "approvals_view_all", label: "Ver todas as Aprovações", hint: "Enxerga pendências e histórico de todos, somente leitura." },
+  { key: "approvals_delegate", label: "Delegar aprovações", hint: "Pode delegar uma aprovação a outro usuário." },
+  { key: "approvals_transfer", label: "Transferir aprovações em massa", hint: "Ferramenta administrativa de transferência entre aprovadores." },
+  { key: "approvals_override", label: "Aprovar fora do fluxo", hint: "Aprova documentos mesmo sem ser o aprovador designado." },
+  { key: "suppliers_reactivate", label: "Reativar fornecedores inativos", hint: "Permite reativar fornecedor bloqueado no ERP." },
+  { key: "expenses_cancel", label: "Cancelar documentos", hint: "Cancela pedidos/lançamentos próprios ou de terceiros." },
+] as const;
+
+/** Unified list for legacy callers that iterate through all keys. */
+export const ALL_MODULES = [
+  ...MODULES,
+  ...VIEW_ONLY_MODULES,
+  ...CAPABILITIES,
+] as const;
+
+// Legacy alias
 export const SAP_MODULES = ALL_MODULES;
 
-// Default modules for users with no group assigned.
-// Regra: todo usuário é também aprovador e tem acesso ao fluxo operacional
-// (compras/vendas/adiantamentos/NF/fornecedores/itens em leitura). Grupos
-// específicos só são criados para módulos de backoffice (permissões,
-// credenciais, integrações, auditoria, cartões corporativos, etc.).
-// As telas em si já filtram o que cada pessoa pode ver (ex.: Aprovações só
-// lista documentos em que o usuário é aprovador/substituto).
+/** Default modules granted when a user has no assignment. */
 const DEFAULT_MODULES = [
   "expenses",
   "sales",
@@ -72,6 +105,20 @@ const DEFAULT_MODULES = [
   "nf_entrada",
   "notifications",
 ];
+
+const FULL_PERMS: ModulePerms = { view: true, create: true, edit: true, delete: true };
+const VIEW_ONLY_PERMS: ModulePerms = { view: true, create: false, edit: false, delete: false };
+
+function isViewOnlyKey(key: string): boolean {
+  return (
+    VIEW_ONLY_MODULES.some((m) => m.key === key) ||
+    CAPABILITIES.some((c) => c.key === key)
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * usePermissionGroups
+ * ─────────────────────────────────────────────────────────────────── */
 
 export function usePermissionGroups() {
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
@@ -94,12 +141,23 @@ export function usePermissionGroups() {
       modulesData = data || [];
     }
 
-    const mapped: PermissionGroup[] = (groupsData || []).map((g: any) => ({
-      ...g,
-      modules: modulesData
-        .filter((m: any) => m.group_id === g.id)
-        .map((m: any) => m.module_key),
-    }));
+    const mapped: PermissionGroup[] = (groupsData || []).map((g: any) => {
+      const rows = modulesData.filter((m: any) => m.group_id === g.id);
+      const modulePerms: Record<string, ModulePerms> = {};
+      for (const r of rows) {
+        modulePerms[r.module_key] = {
+          view:   r.can_view   ?? true,
+          create: r.can_create ?? true,
+          edit:   r.can_edit   ?? true,
+          delete: r.can_delete ?? true,
+        };
+      }
+      return {
+        ...g,
+        modules: rows.filter((r: any) => r.can_view ?? true).map((r: any) => r.module_key),
+        modulePerms,
+      };
+    });
 
     setGroups(mapped);
     setLoading(false);
@@ -107,7 +165,16 @@ export function usePermissionGroups() {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const saveGroup = async (name: string, description: string, modules: string[], id?: string) => {
+  /**
+   * Rich save: pass a full permissions map.
+   * Legacy signature (modules: string[]) still accepted — treated as full-CRUD.
+   */
+  const saveGroup = async (
+    name: string,
+    description: string,
+    perms: Record<string, ModulePerms> | string[],
+    id?: string,
+  ) => {
     if (id) {
       await supabase.from("permission_groups").update({ name, description }).eq("id", id);
     } else {
@@ -120,12 +187,30 @@ export function usePermissionGroups() {
       id = data.id;
     }
 
-    // Sync modules
+    // Normalize perms
+    let normalized: Record<string, ModulePerms>;
+    if (Array.isArray(perms)) {
+      normalized = {};
+      for (const k of perms) {
+        normalized[k] = isViewOnlyKey(k) ? VIEW_ONLY_PERMS : FULL_PERMS;
+      }
+    } else {
+      normalized = perms;
+    }
+
     await supabase.from("permission_group_modules").delete().eq("group_id", id!);
-    if (modules.length > 0) {
-      await supabase.from("permission_group_modules").insert(
-        modules.map((m) => ({ group_id: id!, module_key: m }))
-      );
+    const rows = Object.entries(normalized)
+      .filter(([, p]) => p.view || p.create || p.edit || p.delete)
+      .map(([module_key, p]) => ({
+        group_id: id!,
+        module_key,
+        can_view: p.view,
+        can_create: p.create,
+        can_edit: p.edit,
+        can_delete: p.delete,
+      }));
+    if (rows.length > 0) {
+      await supabase.from("permission_group_modules").insert(rows as any);
     }
     await fetch();
   };
@@ -139,34 +224,33 @@ export function usePermissionGroups() {
     const existing = groups.find((g) => g.name === "Usuário");
     if (existing) return existing;
 
-    const defaultModules = [
-      "expenses",
-      "sales",
-      "approvals",
-      "approval_history",
-      "suppliers",
-      "items",
-      "financial_review",
-      "nf_entrada",
-      "notifications",
-    ];
     const { data } = await supabase
       .from("permission_groups")
       .insert({ name: "Usuário", description: "Acesso padrão — fluxo operacional + aprovações" })
       .select()
       .single();
     if (data) {
-      await supabase.from("permission_group_modules").insert(
-        defaultModules.map((m) => ({ group_id: data.id, module_key: m }))
-      );
+      const rows = DEFAULT_MODULES.map((m) => ({
+        group_id: data.id,
+        module_key: m,
+        can_view: true,
+        can_create: !isViewOnlyKey(m),
+        can_edit: !isViewOnlyKey(m),
+        can_delete: !isViewOnlyKey(m),
+      }));
+      await supabase.from("permission_group_modules").insert(rows as any);
       await fetch();
-      return { ...data, modules: defaultModules } as PermissionGroup;
+      return { ...data, modules: DEFAULT_MODULES, modulePerms: {} } as PermissionGroup;
     }
     return null;
   };
 
   return { groups, loading, refresh: fetch, saveGroup, deleteGroup, ensureDefaultGroup };
 }
+
+/* ────────────────────────────────────────────────────────────────────
+ * useUserAssignments  (global — company-agnostic)
+ * ─────────────────────────────────────────────────────────────────── */
 
 export function useUserAssignments(_companyDb?: string) {
   const [assignments, setAssignments] = useState<UserAssignment[]>([]);
@@ -196,8 +280,7 @@ export function useUserAssignments(_companyDb?: string) {
 
   const assign = async (sap_email: string, group_id: string) => {
     const email = sap_email.toLowerCase();
-    // Global assignment: one group per user, independent of company.
-    // Remove any other group assignment for this user first.
+    // Global assignment — remove other groups for this user first.
     await supabase
       .from("user_group_assignments")
       .delete()
@@ -219,17 +302,32 @@ export function useUserAssignments(_companyDb?: string) {
   return { assignments, loading, refresh: fetch, assign, remove };
 }
 
-/**
- * Hook to check if the current SAP user has access to a specific module.
- */
-export function useModuleAccess(moduleKey?: string) {
+/* ────────────────────────────────────────────────────────────────────
+ * useModuleAccess
+ * ─────────────────────────────────────────────────────────────────── */
+
+export interface ModuleAccess {
+  hasAccess: boolean;
+  loading: boolean;
+  userModules: string[];
+  /** CRUD flags for the queried module. */
+  can: ModulePerms;
+  /** Full CRUD map (all modules the user has permissions on). */
+  perms: Record<string, ModulePerms>;
+  /** Convenience predicate for capability flags. */
+  hasCapability: (key: string) => boolean;
+}
+
+export function useModuleAccess(moduleKey?: string): ModuleAccess {
   const { session } = useSap();
   const [userModules, setUserModules] = useState<string[]>(DEFAULT_MODULES);
+  const [perms, setPerms] = useState<Record<string, ModulePerms>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!session?.userName) {
       setUserModules(DEFAULT_MODULES);
+      setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, isViewOnlyKey(k) ? VIEW_ONLY_PERMS : FULL_PERMS])));
       setLoading(false);
       return;
     }
@@ -237,18 +335,22 @@ export function useModuleAccess(moduleKey?: string) {
     const allKeys = ALL_MODULES.map((m) => m.key);
     const identifier = session.userName.toLowerCase();
 
-    // SAP superuser, OMIE company, or "manager" account → grant all modules
-    if (session.isSuperUser || session.erpType === "omie" || identifier === "manager") {
+    const grantAll = () => {
       setUserModules(allKeys);
+      setPerms(Object.fromEntries(allKeys.map((k) => [k, FULL_PERMS])));
       setLoading(false);
+    };
+
+    // SAP superuser, OMIE company, or "manager" account → grant all
+    if (session.isSuperUser || session.erpType === "omie" || identifier === "manager") {
+      grantAll();
       return;
     }
-    const companyDB = session.companyDB;
 
     (async () => {
       setLoading(true);
 
-      // Check if Supabase user is admin — if so, grant all modules (admin in all companies)
+      // Cloud admin?
       const { data: { session: authSession } } = await supabase.auth.getSession();
       if (authSession?.user) {
         const { data: roleData } = await supabase
@@ -257,53 +359,65 @@ export function useModuleAccess(moduleKey?: string) {
           .eq("user_id", authSession.user.id)
           .eq("role", "admin")
           .maybeSingle();
-        if (roleData) {
-          setUserModules(allKeys);
-          setLoading(false);
-          return;
-        }
+        if (roleData) { grantAll(); return; }
       }
 
-      // Also check if the SAP username matches a backoffice admin (by email/email prefix)
+      // SAP admin (matched by email/prefix)?
       const { data: isAdminBySap } = await supabase.rpc("is_sap_user_admin", {
         _sap_username: identifier,
       });
-      if (isAdminBySap) {
-        setUserModules(allKeys);
-        setLoading(false);
-        return;
-      }
+      if (isAdminBySap) { grantAll(); return; }
 
-      // Global assignments: one row per (sap_email, group_id), independent of company.
+      // Global assignments — one row per (sap_email, group_id).
       const { data: allAssignments } = await supabase
         .from("user_group_assignments")
         .select("group_id, sap_email");
 
-      const assignments = (allAssignments || []).filter((a: any) => {
+      const mine = (allAssignments || []).filter((a: any) => {
         const sapEmail = a.sap_email.toLowerCase();
         return sapEmail === identifier || sapEmail.startsWith(identifier + "@");
       });
 
-      if (!assignments || assignments.length === 0) {
+      if (!mine || mine.length === 0) {
         setUserModules(DEFAULT_MODULES);
+        setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, isViewOnlyKey(k) ? VIEW_ONLY_PERMS : FULL_PERMS])));
         setLoading(false);
         return;
       }
 
-      const groupIds = assignments.map((a: any) => a.group_id);
+      const groupIds = mine.map((a: any) => a.group_id);
 
       const { data: modules } = await supabase
         .from("permission_group_modules")
-        .select("module_key")
+        .select("module_key, can_view, can_create, can_edit, can_delete")
         .in("group_id", groupIds);
 
-      const keys = [...new Set((modules || []).map((m: any) => m.module_key))];
+      // Merge multiple groups via OR
+      const merged: Record<string, ModulePerms> = {};
+      for (const m of (modules || []) as any[]) {
+        const prev = merged[m.module_key] || { view: false, create: false, edit: false, delete: false };
+        merged[m.module_key] = {
+          view:   prev.view   || (m.can_view   ?? true),
+          create: prev.create || (m.can_create ?? true),
+          edit:   prev.edit   || (m.can_edit   ?? true),
+          delete: prev.delete || (m.can_delete ?? true),
+        };
+      }
+
+      const keys = Object.keys(merged).filter((k) => merged[k].view);
+      setPerms(merged);
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
       setLoading(false);
     })();
   }, [session?.userName, session?.companyDB, session?.isSuperUser, session?.erpType]);
 
-  const hasAccess = moduleKey ? userModules.includes(moduleKey) : true;
+  const can: ModulePerms = moduleKey
+    ? (perms[moduleKey] ?? { view: userModules.includes(moduleKey), create: false, edit: false, delete: false })
+    : { view: true, create: false, edit: false, delete: false };
 
-  return { hasAccess, loading, userModules };
+  const hasAccess = moduleKey ? (perms[moduleKey]?.view ?? userModules.includes(moduleKey)) : true;
+
+  const hasCapability = (key: string) => perms[key]?.view ?? userModules.includes(key);
+
+  return { hasAccess, loading, userModules, can, perms, hasCapability };
 }
