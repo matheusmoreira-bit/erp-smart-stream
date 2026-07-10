@@ -6,6 +6,42 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
+import { linkNfToAp } from "../_shared/link-nf-ap.ts";
+
+/**
+ * Consulta PurchaseInvoices no SAP que consumam o PC informado e registra
+ * o vínculo NF↔AP em `nf_entrada_contas_pagar`. Casamento é feito por
+ * BaseEntry do PC (1 PC → N NF → N AP), não por valor.
+ */
+async function linkPoInvoicesToNf(
+  sb: ReturnType<typeof createClient>,
+  baseUrl: string,
+  cookie: string,
+  args: { nfImportId: string; companyDb: string; poEntry: number },
+): Promise<number> {
+  const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${args.poEntry})` +
+    `&$select=DocEntry,DocNum,DocTotal,PaidToDate,DocCurrency&$orderby=DocEntry asc&$top=50`;
+  const r = await fetch(q, { headers: { Cookie: cookie } });
+  if (!r.ok) return 0;
+  const j = await r.json().catch(() => ({}));
+  const arr = Array.isArray(j?.value) ? j.value : [];
+  let linked = 0;
+  for (const inv of arr) {
+    const res = await linkNfToAp(sb, {
+      nfImportId: args.nfImportId,
+      source: "sap",
+      companyDb: args.companyDb,
+      apDocEntry: Number(inv.DocEntry),
+      apDocNum: Number(inv.DocNum),
+      apTotal: Number(inv.DocTotal),
+      apPaid: Number(inv.PaidToDate ?? 0),
+      apCurrency: inv.DocCurrency ? String(inv.DocCurrency) : null,
+      linkedBy: "nf-entrada-sap-watcher",
+    });
+    if (res.inserted) linked += 1;
+  }
+  return linked;
+}
 
 interface NfRow {
   id: string;
