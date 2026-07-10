@@ -119,6 +119,7 @@ export default function PagCorp() {
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
   const [cardFilter, setCardFilter] = useState<string>("all");
   const [validateDialog, setValidateDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
+  const [relationsDialog, setRelationsDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
   const [integrateDialog, setIntegrateDialog] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
