@@ -494,15 +494,28 @@ Deno.serve(async (req) => {
                     }
                   }
 
+                  // Cálculo dos valores em moeda LOCAL para replicar a baixa
+                  // manual do SAP:
+                  //  • TransferSum = valor FC × PTAX do pagamento (openAmount × docRate)
+                  //  • SumApplied  = valor FC × DocRate da NF (mantém consistência
+                  //    contábil do saldo aberto da NF; se DocRate da NF não veio,
+                  //    cai para o mesmo valor de TransferSum).
+                  //  Para BRL (docRate=null), tudo é o próprio openAmount.
+                  const paymentRate = docRate && docRate > 0 ? docRate : 1;
+                  const invoiceRate = invoice.DocRate && invoice.DocRate > 0 ? invoice.DocRate : paymentRate;
+                  const transferSumLocal = docRate ? +(openAmount * paymentRate).toFixed(2) : openAmount;
+                  const sumAppliedLocal = docRate ? +(openAmount * invoiceRate).toFixed(2) : openAmount;
+
                   const payment = await createVendorPayment(baseUrl, cookie, {
                     invoiceEntry: invoice.DocEntry,
                     invoiceDocNum: invoice.DocNum,
                     invoiceDate: invoice.DocDate,
                     cardCode: invoice.CardCode,
+                    cardName: invoice.CardName,
                     docCurrency: invoice.DocCurrency,
                     accountCode: account.settlement_account_code,
-                    amount: openAmount,
-                    memo: `Baixa PagCorp PC ${po.DocNum ?? row.sap_doc_num} NF ${invoice.DocNum}`,
+                    transferSumLocal,
+                    sumAppliedLocal,
                     costCenter: account.cost_center,
                     project: account.project,
                     bplId: invoice.BPLId,
