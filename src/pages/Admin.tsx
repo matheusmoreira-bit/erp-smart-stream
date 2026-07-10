@@ -887,6 +887,147 @@ export default function Admin() {
         )}
       </main>
 
+      {/* Mobile bottom nav */}
+      <nav
+        className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur-lg border-t border-border pb-[max(env(safe-area-inset-bottom),0.25rem)]"
+        aria-label="Navegação backoffice"
+      >
+        <ul className="grid grid-cols-5">
+          {[
+            { key: "companies", label: "Empresas", icon: Building2 },
+            { key: "permissions", label: "Permissões", icon: Users },
+            { key: "integrations", label: "Integr.", icon: Key },
+            { key: "admin_users", label: "Admins", icon: ShieldCheck },
+          ].map((t) => {
+            const Icon = t.icon;
+            const isActive = activeTab === t.key;
+            return (
+              <li key={t.key}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(t.key as typeof activeTab)}
+                  className={cn(
+                    "w-full flex flex-col items-center justify-center gap-0.5 py-2 px-1 min-h-14 relative active:opacity-70",
+                    isActive ? "text-[hsl(var(--cactus-amber))]" : "text-muted-foreground",
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[10px] font-medium leading-none">{t.label}</span>
+                  {isActive && (
+                    <span className="absolute top-0 inset-x-6 h-0.5 bg-[hsl(var(--cactus-amber))] rounded-b-full" />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+          <li>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="w-full flex flex-col items-center justify-center gap-0.5 py-2 px-1 min-h-14 text-muted-foreground active:opacity-70"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+              <span className="text-[10px] font-medium leading-none">Mais</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      {/* Mobile hamburger sheet */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-sm p-0 flex flex-col">
+          <SheetHeader className="px-4 pt-4 pb-3 border-b border-border text-left">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1 rounded-lg bg-[hsl(var(--cactus-amber))]/10 border border-[hsl(var(--cactus-amber))]/20">
+                <img src={cactusLogo.url} alt="Cactus" className="w-6 h-6 object-contain" />
+              </div>
+              <SheetTitle className="text-base">Backoffice</SheetTitle>
+            </div>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+            <div>
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-2">Seções</h4>
+              <ul className="space-y-0.5">
+                {[
+                  { key: "audit", label: "Logs de Auditoria", icon: ScrollText },
+                  { key: "tools", label: "Ferramentas", icon: Wrench },
+                ].map((t) => {
+                  const Icon = t.icon;
+                  return (
+                    <li key={t.key}>
+                      <button
+                        onClick={() => { setActiveTab(t.key as typeof activeTab); setMobileMenuOpen(false); }}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg-muted min-h-11",
+                          activeTab === t.key && "bg-muted",
+                        )}
+                      >
+                        <span className="p-2 rounded-md bg-card border border-border text-[hsl(var(--cactus-amber))]">
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <span className="text-sm font-medium">{t.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-2">Navegação</h4>
+              <ul className="space-y-0.5">
+                {[
+                  { path: "/backoffice/audit-trail", label: "Audit Trail", icon: FileCheck2 },
+                  { path: "/backoffice/sap-users", label: "Usuários SAP", icon: Users },
+                ].map((it) => {
+                  const Icon = it.icon;
+                  return (
+                    <li key={it.path}>
+                      <button
+                        onClick={() => { setMobileMenuOpen(false); navigate(it.path); }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg-muted min-h-11"
+                      >
+                        <span className="p-2 rounded-md bg-card border border-border text-[hsl(var(--cactus-green))]">
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <span className="text-sm font-medium">{it.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-border p-2 space-y-0.5 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted min-h-11 text-left"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
+              <span className="text-sm">Tema: {theme === "dark" ? "escuro" : "claro"}</span>
+            </button>
+            <button
+              onClick={() => { setMobileMenuOpen(false); navigate("/"); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted min-h-11 text-left"
+            >
+              <ArrowLeft className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm">Voltar ao app</span>
+            </button>
+            <button
+              onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-destructive/10 text-destructive min-h-11 text-left"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm font-medium">Sair</span>
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+
+
       {/* Company Dialog — Wizard */}
       <Dialog open={companyDialog} onOpenChange={setCompanyDialog}>
         <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
