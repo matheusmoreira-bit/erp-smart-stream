@@ -1105,7 +1105,7 @@ Deno.serve(async (req) => {
         if (unit === 0 && lineTotal !== 0 && qty !== 0) {
           unit = lineTotal / qty;
         }
-        const invoiceDesc = truncateSapText(it.description, 254);
+        const invoiceDesc = truncateSapText(it.description, 100);
         const lineCurrency = String((expense as any).currency || "").toUpperCase().trim();
         const line: Record<string, unknown> = {
           Quantity: qty,

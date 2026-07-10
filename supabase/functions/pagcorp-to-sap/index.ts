@@ -581,7 +581,7 @@ Deno.serve(async (req) => {
         isConsolidated
           ? `[#${tx.id}] ${tx.description || "PagCorp"}`
           : (tx.description || "PagCorp")
-      ).slice(0, 254);
+      ).slice(0, 100);
       const line: Record<string, unknown> = {
         ItemCode: finalItem,
         FreeText: lineFreeText,
