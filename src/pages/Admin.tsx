@@ -371,6 +371,8 @@ export default function Admin() {
 
   // Audit log
   const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions" | "admin_users" | "tools">("companies");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
   const auditCompanyDb = auditCompanyFilter === "all" ? undefined : auditCompanyFilter;
   const { entries: auditEntries, isLoading: auditLoading, refresh: auditRefresh } = useAuditLog(auditCompanyDb);
