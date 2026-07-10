@@ -428,19 +428,52 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   const removedNames: string[] = [];
   if (attachmentsChanged) {
     if (removeTargets.length > 0) {
-      const paths = removeTargets.map((r) => r.file_path).filter(Boolean);
-      if (paths.length > 0) {
-        // Best-effort: remove files from storage; DB delete é a fonte de verdade.
-        try { await admin.storage.from("expense-attachments").remove(paths); } catch { /* silent */ }
-      }
+      // Ordem importa para não deixar órfãos:
+      // 1) DELETE no banco primeiro (fonte da verdade, transacional).
+      // 2) Só então remove os objetos do storage.
+      // Se o passo (2) falhar, logamos com detalhes para reconciliação —
+      // mas o vínculo lógico já não existe mais.
       const { data: delAtt, error: delAttErr } = await admin
         .from("expense_attachments")
         .delete()
         .eq("expense_id", expenseId)
         .in("id", removeTargets.map((r) => r.id))
-        .select("file_name");
+        .select("id, file_name, file_path");
       if (delAttErr) return json(500, { error: `Falha ao remover anexos: ${delAttErr.message}` });
-      for (const r of (delAtt || []) as Array<{ file_name: string }>) removedNames.push(r.file_name);
+
+      const deletedRows = (delAtt || []) as Array<{ id: string; file_name: string; file_path: string }>;
+      for (const r of deletedRows) removedNames.push(r.file_name);
+
+      const paths = deletedRows.map((r) => r.file_path).filter(Boolean);
+      if (paths.length > 0) {
+        try {
+          const { data: removed, error: rmErr } = await admin.storage
+            .from("expense-attachments")
+            .remove(paths);
+          if (rmErr) {
+            console.error("[expense-mutation] storage.remove falhou (arquivos podem ficar órfãos)", {
+              expense_id: expenseId,
+              paths,
+              error: rmErr.message,
+            });
+          } else {
+            const removedPaths = new Set((removed || []).map((f: any) => f.name));
+            const missed = paths.filter((p) => !removedPaths.has(p));
+            if (missed.length > 0) {
+              console.warn("[expense-mutation] storage.remove: caminhos não confirmados", {
+                expense_id: expenseId,
+                missed,
+              });
+            }
+          }
+        } catch (e) {
+          console.error("[expense-mutation] storage.remove throw", {
+            expense_id: expenseId,
+            paths,
+            error: (e as Error).message,
+          });
+        }
+      }
     }
     if (addAttachments.length > 0) {
       const addRows = addAttachments.map((a) => ({
