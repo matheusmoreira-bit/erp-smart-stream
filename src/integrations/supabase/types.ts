@@ -2771,6 +2771,77 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_document_relations: {
+        Row: {
+          amount_matches: boolean | null
+          company_db: string | null
+          created_at: string
+          last_resolved_at: string | null
+          nf_doc_entries: number[]
+          nf_found: boolean
+          pagcorp_log_id: string
+          payment_doc_entries: number[]
+          payment_found: boolean
+          po_currency: string | null
+          po_doc_entry: number | null
+          po_doc_num: number | null
+          po_found: boolean
+          po_status: string | null
+          po_total: number | null
+          po_total_fc: number | null
+          resolve_error: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_matches?: boolean | null
+          company_db?: string | null
+          created_at?: string
+          last_resolved_at?: string | null
+          nf_doc_entries?: number[]
+          nf_found?: boolean
+          pagcorp_log_id: string
+          payment_doc_entries?: number[]
+          payment_found?: boolean
+          po_currency?: string | null
+          po_doc_entry?: number | null
+          po_doc_num?: number | null
+          po_found?: boolean
+          po_status?: string | null
+          po_total?: number | null
+          po_total_fc?: number | null
+          resolve_error?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_matches?: boolean | null
+          company_db?: string | null
+          created_at?: string
+          last_resolved_at?: string | null
+          nf_doc_entries?: number[]
+          nf_found?: boolean
+          pagcorp_log_id?: string
+          payment_doc_entries?: number[]
+          payment_found?: boolean
+          po_currency?: string | null
+          po_doc_entry?: number | null
+          po_doc_num?: number | null
+          po_found?: boolean
+          po_status?: string | null
+          po_total?: number | null
+          po_total_fc?: number | null
+          resolve_error?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagcorp_document_relations_pagcorp_log_id_fkey"
+            columns: ["pagcorp_log_id"]
+            isOneToOne: true
+            referencedRelation: "pagcorp_integration_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pagcorp_integration_log: {
         Row: {
           company_db: string | null
@@ -3274,6 +3345,222 @@ export type Database = {
         Relationships: []
       }
       sap_nf_entrada_sync_state: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          last_batch_count: number | null
+          last_doc_entry: number | null
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          last_update_date: string | null
+          total_synced: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          last_batch_count?: number | null
+          last_doc_entry?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          last_update_date?: string | null
+          total_synced?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          last_batch_count?: number | null
+          last_doc_entry?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          last_update_date?: string | null
+          total_synced?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_purchase_order_cache: {
+        Row: {
+          cancelled: string | null
+          card_code: string | null
+          card_name: string | null
+          company_db: string
+          created_at: string
+          doc_currency: string | null
+          doc_date: string | null
+          doc_due_date: string | null
+          doc_entry: number
+          doc_num: number | null
+          doc_total: number | null
+          doc_total_fc: number | null
+          document_status: string | null
+          id: string
+          raw_json: Json
+          sap_update_date: string | null
+          series: number | null
+          synced_at: string
+          updated_at: string
+        }
+        Insert: {
+          cancelled?: string | null
+          card_code?: string | null
+          card_name?: string | null
+          company_db: string
+          created_at?: string
+          doc_currency?: string | null
+          doc_date?: string | null
+          doc_due_date?: string | null
+          doc_entry: number
+          doc_num?: number | null
+          doc_total?: number | null
+          doc_total_fc?: number | null
+          document_status?: string | null
+          id?: string
+          raw_json?: Json
+          sap_update_date?: string | null
+          series?: number | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          cancelled?: string | null
+          card_code?: string | null
+          card_name?: string | null
+          company_db?: string
+          created_at?: string
+          doc_currency?: string | null
+          doc_date?: string | null
+          doc_due_date?: string | null
+          doc_entry?: number
+          doc_num?: number | null
+          doc_total?: number | null
+          doc_total_fc?: number | null
+          document_status?: string | null
+          id?: string
+          raw_json?: Json
+          sap_update_date?: string | null
+          series?: number | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_purchase_order_sync_state: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          last_batch_count: number | null
+          last_doc_entry: number | null
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          last_update_date: string | null
+          total_synced: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          last_batch_count?: number | null
+          last_doc_entry?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          last_update_date?: string | null
+          total_synced?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          last_batch_count?: number | null
+          last_doc_entry?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          last_update_date?: string | null
+          total_synced?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_vendor_payment_cache: {
+        Row: {
+          cancelled: string | null
+          card_code: string | null
+          card_name: string | null
+          company_db: string
+          created_at: string
+          doc_currency: string | null
+          doc_date: string | null
+          doc_entry: number
+          doc_num: number | null
+          doc_total: number | null
+          doc_total_fc: number | null
+          document_status: string | null
+          id: string
+          invoice_links: Json
+          raw_json: Json
+          sap_update_date: string | null
+          series: number | null
+          synced_at: string
+          updated_at: string
+        }
+        Insert: {
+          cancelled?: string | null
+          card_code?: string | null
+          card_name?: string | null
+          company_db: string
+          created_at?: string
+          doc_currency?: string | null
+          doc_date?: string | null
+          doc_entry: number
+          doc_num?: number | null
+          doc_total?: number | null
+          doc_total_fc?: number | null
+          document_status?: string | null
+          id?: string
+          invoice_links?: Json
+          raw_json?: Json
+          sap_update_date?: string | null
+          series?: number | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          cancelled?: string | null
+          card_code?: string | null
+          card_name?: string | null
+          company_db?: string
+          created_at?: string
+          doc_currency?: string | null
+          doc_date?: string | null
+          doc_entry?: number
+          doc_num?: number | null
+          doc_total?: number | null
+          doc_total_fc?: number | null
+          document_status?: string | null
+          id?: string
+          invoice_links?: Json
+          raw_json?: Json
+          sap_update_date?: string | null
+          series?: number | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_vendor_payment_sync_state: {
         Row: {
           company_db: string
           created_at: string
