@@ -11,7 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sapFetch } from "../_shared/sap-fetch.ts";
-import { authErrorResponse, requireUserOrSapSession } from "../_shared/auth.ts";
+import { AuthError, authErrorResponse, requireUserOrSapSession } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,7 +39,7 @@ interface CallerContext {
 async function assertManualAccess(req: Request, log: LogRow): Promise<void> {
   const caller = await requireUserOrSapSession(req) as CallerContext;
   if (caller.source === "sap_session" && caller.companyDB && log.company_db && caller.companyDB !== log.company_db) {
-    throw new Error("Acesso negado para a empresa deste documento.");
+    throw new AuthError("Acesso negado para a empresa deste documento.", 403);
   }
 }
 
