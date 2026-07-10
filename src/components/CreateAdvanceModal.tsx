@@ -153,7 +153,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-4xl sm:max-h-[90vh] sm:rounded-lg sm:border">
         <DialogHeader>
           <DialogTitle>Novo Adiantamento a Fornecedor</DialogTitle>
         </DialogHeader>
