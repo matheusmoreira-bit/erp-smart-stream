@@ -4,7 +4,8 @@ import { SapLoginForm } from "@/components/SapLoginForm";
 import { Dashboard } from "@/components/Dashboard";
 import { PaymentAnalysis } from "@/components/PaymentAnalysis";
 import { ReportAiChat } from "@/components/ReportAiChat";
-import { Activity, ArrowLeft, LogOut, CreditCard, GitBranch } from "lucide-react";
+import { PendingApprovalsReport } from "@/components/PendingApprovalsReport";
+import { Activity, ArrowLeft, LogOut, CreditCard, GitBranch, ClipboardCheck } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -71,6 +72,10 @@ export default function AnalyticsPage() {
               <GitBranch className="w-4 h-4" />
               Fluxo de Compras
             </TabsTrigger>
+            <TabsTrigger value="aprovacoes" className="gap-1.5">
+              <ClipboardCheck className="w-4 h-4" />
+              Pedidos em Aprovação
+            </TabsTrigger>
             {hasPaymentsAccess && (
               <TabsTrigger value="pagamentos" className="gap-1.5">
                 <CreditCard className="w-4 h-4" />
@@ -81,6 +86,10 @@ export default function AnalyticsPage() {
 
           <TabsContent value="fluxo" className="mt-6">
             <Dashboard embedded />
+          </TabsContent>
+
+          <TabsContent value="aprovacoes" className="mt-6">
+            <PendingApprovalsReport />
           </TabsContent>
 
           <TabsContent value="pagamentos" className="mt-6">
