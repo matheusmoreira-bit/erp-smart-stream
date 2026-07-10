@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
@@ -1360,7 +1361,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           {/* Col 1: identity */}
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2 rounded-lg bg-primary/10 glow-primary shrink-0" aria-hidden="true">
-              <Activity className="w-5 h-5 text-primary" />
+              <img src={cactusLogo.url} alt="Logo" className="w-5 h-5 object-contain" />
             </div>
             <div className="min-w-0">
               <h1 className="text-base sm:text-xl font-bold text-foreground truncate">{isSales ? "Vendas" : "Compras"}</h1>

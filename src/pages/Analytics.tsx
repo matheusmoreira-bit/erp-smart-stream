@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { useSap } from "@/contexts/SapContext";
 import { SapLoginForm } from "@/components/SapLoginForm";
 import { Dashboard } from "@/components/Dashboard";
@@ -40,7 +41,7 @@ export default function AnalyticsPage() {
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3 lg:items-center">
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2 rounded-lg bg-primary/10 glow-primary shrink-0">
-              <Activity className="w-5 h-5 text-primary" />
+              <img src={cactusLogo.url} alt="Logo" className="w-5 h-5 object-contain" />
             </div>
             <div className="min-w-0">
               <h1 className="text-base sm:text-xl font-bold text-foreground truncate">SAP B1 <span className="text-gradient">Analytics</span></h1>

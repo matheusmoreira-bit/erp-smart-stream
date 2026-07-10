@@ -1,4 +1,5 @@
 import { useState } from "react";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2, ArrowLeft, UserCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -135,7 +136,7 @@ export function Dashboard({ embedded = false }: DashboardProps) {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10 glow-primary">
-              <Activity className="w-5 h-5 text-primary" />
+              <img src={cactusLogo.url} alt="Logo" className="w-5 h-5 object-contain" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">SAP B1 <span className="text-gradient">Analytics</span></h1>
