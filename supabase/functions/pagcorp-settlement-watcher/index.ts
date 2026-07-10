@@ -525,20 +525,29 @@ Deno.serve(async (req) => {
                 }
               }
 
-              // Se nenhuma NF conseguiu conta contábil (ex.: faltou cadastrar
-              // a conta em USD), marca a linha como awaiting_settlement para
-              // reprocessar depois — não conta como erro terminal.
-              if (invoices.length > 0 && accountsUsed.length === 0 && firstMissingAccountMsg) {
+              // Se nenhuma NF conseguiu emitir baixa (falta de conta contábil ou
+              // PTAX ainda não publicada), marca como awaiting_settlement e agenda
+              // a próxima retentativa: para PTAX, só faz sentido tentar após ~13h BRT
+              // (16:30 UTC) do próximo dia útil; para conta faltante, mantemos o
+              // retry curto (5min) pois depende de configuração do usuário.
+              if (invoices.length > 0 && accountsUsed.length === 0 && (firstMissingAccountMsg || firstPtaxMissingMsg)) {
+                const isPtax = !firstMissingAccountMsg && !!firstPtaxMissingMsg;
+                const retryAfter = isPtax ? nextPtaxRetryAfter().toISOString() : null;
                 await sb
                   .from("pagcorp_integration_log")
                   .update({
                     settlement_status: "awaiting_settlement",
-                    settlement_error: firstMissingAccountMsg,
+                    settlement_error: firstMissingAccountMsg ?? firstPtaxMissingMsg,
                     settlement_locked_at: null,
+                    settlement_retry_after: retryAfter,
                     settlement_attempted_at: new Date().toISOString(),
                   })
                   .eq("id", row.id);
-                results.push({ id: row.id, status: "awaiting_settlement", error: "no_settlement_account" });
+                results.push({
+                  id: row.id,
+                  status: "awaiting_settlement",
+                  error: isPtax ? "ptax_missing" : "no_settlement_account",
+                });
                 continue;
               }
 
@@ -546,6 +555,7 @@ Deno.serve(async (req) => {
               if (paymentEntries.length > 1) settlementNote.push(`${paymentEntries.length} pagamentos emitidos (docs: ${paymentNums.join(", ")})`);
               if (skippedAlreadyPaid.length > 0) settlementNote.push(`${skippedAlreadyPaid.length} NF(s) já quitadas`);
               if (firstMissingAccountMsg) settlementNote.push(firstMissingAccountMsg);
+              if (firstPtaxMissingMsg) settlementNote.push(firstPtaxMissingMsg);
 
               await sb
                 .from("pagcorp_integration_log")
