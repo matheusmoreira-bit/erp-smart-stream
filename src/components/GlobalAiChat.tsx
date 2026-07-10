@@ -120,7 +120,7 @@ export function GlobalAiChat() {
         onClick={() => setOpen(true)}
         size="lg"
         aria-label="Assistente IA"
-        className="fixed bottom-6 right-6 z-40 rounded-full h-14 w-14 p-0 shadow-lg bg-gradient-to-br from-primary to-primary/70 hover:from-primary/90 hover:to-primary/60 glow-primary"
+        className="fixed bottom-6 right-6 md:bottom-6 bottom-20 z-40 rounded-full h-14 w-14 p-0 shadow-lg bg-gradient-to-br from-primary to-primary/70 hover:from-primary/90 hover:to-primary/60 glow-primary"
       >
         <Sparkles className="w-6 h-6" />
       </Button>
