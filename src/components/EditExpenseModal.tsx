@@ -582,6 +582,10 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                   ))}
                 </div>
 
+                <p className="text-[10px] text-muted-foreground">
+                  Formatos aceitos: {ALLOWED_ATTACHMENT_HINT}
+                </p>
+
                 {changed && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
                     Alterar anexos reinicia o fluxo de aprovação a partir do nível 1 com anotação no histórico.
