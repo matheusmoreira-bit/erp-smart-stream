@@ -212,7 +212,7 @@ export function PendingApprovalsReport() {
   const isLoading = sapLoading || sysLoading;
 
   const refresh = () => {
-    fetchApprovals({ force: true });
+    refreshSap();
     loadSystem();
   };
 
