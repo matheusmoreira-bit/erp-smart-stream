@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
         };
         if (l.item_code) {
           line.ItemCode = l.item_code;
-          if (l.description) line.FreeText = String(l.description).slice(0, 254);
+          if (l.description) line.FreeText = String(l.description).slice(0, 100);
         } else {
           line.LineType = "dDocument_Service";
           line.AccountCode = dpmAccount;
