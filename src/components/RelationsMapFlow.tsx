@@ -72,7 +72,7 @@ const TONE_STYLES: Record<NodeTone, string> = {
 interface PillData extends Record<string, unknown> {
   tone: NodeTone;
   icon?: React.ComponentType<{ className?: string }>;
-  title: string;
+  title?: string;
   subtitle?: string | null;
   extra?: string | null;
   meta?: string | null;
