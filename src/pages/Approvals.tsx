@@ -901,7 +901,7 @@ function ApprovalDetailModal({
                     Itens do Documento
                     {restrictToMySegments && (
                       <span className="ml-2 normal-case tracking-normal text-[10px] text-muted-foreground">
-                        (mostrando {visibleLines.length} de {doc.documentLines.length})
+                        (linhas de outros aprovadores estão borradas)
                       </span>
                     )}
                   </p>
@@ -920,16 +920,44 @@ function ApprovalDetailModal({
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleLines.map((line, i) => (
-                        <tr key={i} className="border-b border-border/50">
-                          <td className="py-2 px-3 font-mono text-muted-foreground">{line.ItemCode}</td>
-                          <td className="py-2 px-3 text-foreground">{line.Description}</td>
-                          <td className="py-2 px-3 text-right font-mono">{line.Quantity}</td>
-                          <td className="py-2 px-3 text-right font-mono">{formatCurrency(doc.currency !== "BRL" && line.PriceFC ? line.PriceFC : line.UnitPrice, doc.currency)}</td>
-                          <td className="py-2 px-3 text-right font-mono font-medium">{formatCurrency(doc.currency !== "BRL" && line.LineTotalFC ? line.LineTotalFC : line.LineTotal, doc.currency)}</td>
-                          <td className="py-2 px-3 text-muted-foreground">{line.Project || "—"}</td>
-                        </tr>
-                      ))}
+                      {visibleLines.map((line, i) => {
+                        const mine = isLineMine(line);
+                        const key = (line.CostingCode || "").trim() || "__no_cc__";
+                        const seg = segmentByCC.get(key);
+                        const otherApprover = !mine
+                          ? (seg?.approverNames?.[0] || seg?.approverEmails?.[0] || "outro aprovador")
+                          : null;
+                        return (
+                          <tr
+                            key={i}
+                            className={`border-b border-border/50 ${
+                              !mine ? "bg-muted/10" : ""
+                            }`}
+                            title={!mine ? `Linha da alçada de ${otherApprover}` : undefined}
+                          >
+                            <td className={`py-2 px-3 font-mono text-muted-foreground ${!mine ? "blur-sm select-none" : ""}`}>{line.ItemCode}</td>
+                            <td className="py-2 px-3 text-foreground">
+                              {!mine ? (
+                                <span className="flex items-center gap-2">
+                                  <span className="blur-sm select-none">{line.Description}</span>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] shrink-0 border-muted-foreground/40 text-muted-foreground font-normal"
+                                  >
+                                    Alçada de {otherApprover}
+                                  </Badge>
+                                </span>
+                              ) : (
+                                line.Description
+                              )}
+                            </td>
+                            <td className={`py-2 px-3 text-right font-mono ${!mine ? "blur-sm select-none" : ""}`}>{line.Quantity}</td>
+                            <td className={`py-2 px-3 text-right font-mono ${!mine ? "blur-sm select-none" : ""}`}>{formatCurrency(doc.currency !== "BRL" && line.PriceFC ? line.PriceFC : line.UnitPrice, doc.currency)}</td>
+                            <td className={`py-2 px-3 text-right font-mono font-medium ${!mine ? "blur-sm select-none" : ""}`}>{formatCurrency(doc.currency !== "BRL" && line.LineTotalFC ? line.LineTotalFC : line.LineTotal, doc.currency)}</td>
+                            <td className={`py-2 px-3 text-muted-foreground ${!mine ? "blur-sm select-none" : ""}`}>{line.Project || "—"}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
