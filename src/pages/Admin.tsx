@@ -862,11 +862,11 @@ export default function Admin() {
 
         {activeTab === "audit" && (
           <>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
                 <h2 className="text-lg font-semibold text-foreground">Logs de Auditoria</h2>
                 <Select value={auditCompanyFilter} onValueChange={setAuditCompanyFilter}>
-                  <SelectTrigger className="w-[240px] bg-card">
+                  <SelectTrigger className="w-full sm:w-[240px] bg-card">
                     <SelectValue placeholder="Empresa" />
                   </SelectTrigger>
                   <SelectContent>
@@ -877,11 +877,12 @@ export default function Admin() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="outline" size="sm" onClick={auditRefresh} disabled={auditLoading}>
+              <Button variant="outline" size="sm" onClick={auditRefresh} disabled={auditLoading} className="self-start sm:self-auto">
                 <RefreshCw className={`w-4 h-4 mr-2 ${auditLoading ? "animate-spin" : ""}`} />
                 Atualizar
               </Button>
             </div>
+
             <AuditLogTable entries={auditEntries} isLoading={auditLoading} showCompanyColumn={auditCompanyFilter === "all"} />
           </>
         )}
