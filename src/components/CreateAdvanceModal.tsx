@@ -10,6 +10,11 @@ import { useSap } from "@/contexts/SapContext";
 import { useAdvancePayments, type CreateAdvanceInput, type AdvanceItem } from "@/hooks/useAdvancePayments";
 import { Loader2, Paperclip, X, Building2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  validateAttachments,
+  ALLOWED_ATTACHMENT_ACCEPT,
+  ALLOWED_ATTACHMENT_HINT,
+} from "@/lib/attachment-validation";
 
 interface Props {
   open: boolean;
@@ -360,10 +365,21 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
               <input
                 type="file"
                 multiple
+                accept={ALLOWED_ATTACHMENT_ACCEPT}
                 className="hidden"
-                onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files || []);
+                  if (picked.length === 0) return;
+                  const { valid, errors } = validateAttachments(picked);
+                  for (const msg of errors) toast.error(msg);
+                  if (valid.length > 0) setFiles((prev) => [...prev, ...valid]);
+                  (e.target as HTMLInputElement).value = "";
+                }}
               />
             </label>
+            <p className="text-[10px] text-muted-foreground">
+              Formatos aceitos: {ALLOWED_ATTACHMENT_HINT}
+            </p>
             {files.length > 0 && (
               <ul className="text-xs text-muted-foreground space-y-1">
                 {files.map((f, i) => (

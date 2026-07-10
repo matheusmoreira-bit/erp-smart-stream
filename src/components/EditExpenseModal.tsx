@@ -24,6 +24,11 @@ import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
+import {
+  validateAttachments,
+  ALLOWED_ATTACHMENT_ACCEPT,
+  ALLOWED_ATTACHMENT_HINT,
+} from "@/lib/attachment-validation";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -501,10 +506,24 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                     ref={fileInputRef}
                     type="file"
                     multiple
+                    accept={ALLOWED_ATTACHMENT_ACCEPT}
                     className="hidden"
                     onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (files.length > 0) setNewFiles((prev) => [...prev, ...files]);
+                      const picked = Array.from(e.target.files || []);
+                      if (picked.length > 0) {
+                        const { valid, errors } = validateAttachments(picked);
+                        for (const msg of errors) toast.error(msg);
+                        if (valid.length > 0) {
+                          setNewFiles((prev) => [...prev, ...valid]);
+                          if (errors.length === 0) {
+                            toast.success(
+                              valid.length === 1
+                                ? "Anexo adicionado."
+                                : `${valid.length} anexos adicionados.`,
+                            );
+                          }
+                        }
+                      }
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                   />
@@ -562,6 +581,10 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                     </div>
                   ))}
                 </div>
+
+                <p className="text-[10px] text-muted-foreground">
+                  Formatos aceitos: {ALLOWED_ATTACHMENT_HINT}
+                </p>
 
                 {changed && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">

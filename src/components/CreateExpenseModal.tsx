@@ -73,6 +73,11 @@ import {
   clearAiResponseCache,
 } from "@/lib/ai-response-cache-persist";
 import { notifyFiscalMissingAttachment } from "@/lib/notify-fiscal-missing-attachment";
+import {
+  validateAttachments,
+  ALLOWED_ATTACHMENT_ACCEPT,
+  ALLOWED_ATTACHMENT_HINT,
+} from "@/lib/attachment-validation";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
@@ -754,10 +759,12 @@ export function CreateExpenseModal({
 
 
   const handleFiles = (newFiles: FileList | File[]) => {
-    const arr = Array.from(newFiles);
-    setFiles((prev) => [...prev, ...arr]);
-    if (aiEnabled && arr.length > 0) {
-      processWithAI([...files, ...arr]);
+    const { valid, errors } = validateAttachments(newFiles);
+    for (const msg of errors) toast.error(msg);
+    if (valid.length === 0) return;
+    setFiles((prev) => [...prev, ...valid]);
+    if (aiEnabled) {
+      processWithAI([...files, ...valid]);
     }
   };
 
@@ -2327,7 +2334,7 @@ export function CreateExpenseModal({
               <input
                 ref={inputRef}
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,.xlsx,.xls,.xml"
+                accept={ALLOWED_ATTACHMENT_ACCEPT}
                 className="hidden"
                 multiple
                 onChange={(e) => e.target.files && handleFiles(e.target.files)}
@@ -2343,7 +2350,7 @@ export function CreateExpenseModal({
                   <p className="text-sm text-muted-foreground">
                     Arraste seus arquivos ou <span className="text-primary font-medium">clique para selecionar</span>
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">PDF, Imagens, CSV, Excel, XML</p>
+                  <p className="text-xs text-muted-foreground mt-1">{ALLOWED_ATTACHMENT_HINT}</p>
                 </>
               )}
             </div>
