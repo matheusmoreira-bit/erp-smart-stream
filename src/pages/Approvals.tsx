@@ -501,29 +501,52 @@ function ApprovalDetailModal({
     if (!open) setRemarks("");
   }, [open]);
 
+  // Viewer state — usamos modal em vez de abrir pop-up (mobile bloqueia).
+  const [viewer, setViewer] = useState<{ name: string; url: string | null } | null>(null);
+  const viewerUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    return () => {
+      if (viewerUrlRef.current && viewerUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(viewerUrlRef.current);
+      }
+    };
+  }, []);
+  const openViewer = (name: string, url: string) => {
+    if (viewerUrlRef.current && viewerUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(viewerUrlRef.current);
+    }
+    viewerUrlRef.current = url;
+    setViewer({ name, url });
+  };
+  const closeViewer = () => {
+    if (viewerUrlRef.current && viewerUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(viewerUrlRef.current);
+      viewerUrlRef.current = null;
+    }
+    setViewer(null);
+  };
+
   const handleDownloadAttachment = async (name: string) => {
     if (!doc || !doc.attachmentEntry || !session || session.erpType !== "sap") {
       toast.error("Anexo indisponível");
       return;
     }
     setDownloadingName(name);
+    // Abre imediatamente o modal em estado de loading para não depender de pop-up.
+    setViewer({ name, url: null });
     try {
       const { blob } = await sapDownloadAttachment(session, doc.attachmentEntry, name);
       const url = URL.createObjectURL(blob);
-      const win = window.open(url, "_blank", "noopener,noreferrer");
-      if (!win) {
-        toast.error("Pop-up bloqueado. Permita pop-ups para visualizar o anexo.");
-      }
-      // Revoga a URL depois de um tempo para permitir o carregamento na nova aba
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-
+      openViewer(name, url);
     } catch (e) {
       console.error("Erro ao baixar anexo:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao baixar anexo");
+      setViewer(null);
     } finally {
       setDownloadingName(null);
     }
   };
+
 
 
   if (!doc) return null;
