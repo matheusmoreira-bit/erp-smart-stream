@@ -363,8 +363,8 @@ Deno.serve(async (req) => {
     console.warn("[nf-entrada-sap-watcher] link pass failed:", (e as Error).message);
   }
 
-  await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "ok", `processed=${results.length}`);
-  return new Response(JSON.stringify({ ok: true, results, processed: results.length }), {
+  await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "ok", `processed=${results.length} linked=${linkResults.length}`);
+  return new Response(JSON.stringify({ ok: true, results, linkResults, processed: results.length }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
