@@ -99,7 +99,11 @@ async function fetchAndCachePo(
 }
 
 
-async function resolveOne(sb: ReturnType<typeof createClient>, log: LogRow): Promise<{ ok: boolean; error?: string }> {
+async function resolveOne(
+  sb: ReturnType<typeof createClient>,
+  log: LogRow,
+  opts: { allowLiveFetch?: boolean } = {},
+): Promise<{ ok: boolean; error?: string }> {
   if (!log.company_db || !log.sap_doc_entry) {
     await sb.from("pagcorp_document_relations").upsert({
       pagcorp_log_id: log.id,
@@ -115,13 +119,27 @@ async function resolveOne(sb: ReturnType<typeof createClient>, log: LogRow): Pro
   }
 
   try {
-    // 1) PC no cache
-    const { data: po } = await sb
+    // 1) PC no cache — se não achar e o modo permitir, busca direto no SAP e cacheia.
+    let { data: po } = await sb
       .from("sap_purchase_order_cache")
       .select("doc_entry, doc_num, document_status, doc_total, doc_total_fc, doc_currency")
       .eq("company_db", log.company_db)
       .eq("doc_entry", log.sap_doc_entry)
       .maybeSingle();
+
+    if (!po && opts.allowLiveFetch) {
+      const fetched = await fetchAndCachePo(sb, log.company_db, log.sap_doc_entry);
+      if (fetched) {
+        const refetch = await sb
+          .from("sap_purchase_order_cache")
+          .select("doc_entry, doc_num, document_status, doc_total, doc_total_fc, doc_currency")
+          .eq("company_db", log.company_db)
+          .eq("doc_entry", log.sap_doc_entry)
+          .maybeSingle();
+        po = refetch.data;
+      }
+    }
+
 
     // 2) NFs no cache (base_po_doc_entry)
     const { data: nfs } = await sb
