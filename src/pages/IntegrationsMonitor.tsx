@@ -656,3 +656,36 @@ function RawBlock({ title, data }: { title: string; data: unknown }) {
     </details>
   );
 }
+
+function PtaxBlock({ raw }: { raw: Record<string, unknown> }) {
+  const rate = raw?.settlement_ptax_rate as number | null | undefined;
+  const date = raw?.settlement_ptax_date as string | null | undefined;
+  const source = raw?.settlement_ptax_source as string | null | undefined;
+  if (!rate && !date && !source) return null;
+  const rateFmt =
+    typeof rate === "number" && Number.isFinite(rate)
+      ? new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 6 }).format(rate)
+      : "—";
+  const dateFmt = date ? new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR") : "—";
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+      <h3 className="text-xs font-medium text-primary uppercase tracking-wide mb-2">
+        Cotação PTAX aplicada na baixa
+      </h3>
+      <div className="grid grid-cols-3 gap-3 text-sm">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-0.5">Cotação</div>
+          <div className="font-mono tabular-nums">R$ {rateFmt}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-0.5">Data da cotação</div>
+          <div>{dateFmt}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-0.5">Fonte</div>
+          <div className="text-xs">{source || "—"}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
