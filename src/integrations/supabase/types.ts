@@ -2793,6 +2793,8 @@ export type Database = {
           settlement_invoice_doc_num: number | null
           settlement_journal_entry: number | null
           settlement_locked_at: string | null
+          settlement_payment_doc_entry: number | null
+          settlement_payment_doc_num: number | null
           settlement_status: string
           status: string
           updated_at: string
@@ -2818,6 +2820,8 @@ export type Database = {
           settlement_invoice_doc_num?: number | null
           settlement_journal_entry?: number | null
           settlement_locked_at?: string | null
+          settlement_payment_doc_entry?: number | null
+          settlement_payment_doc_num?: number | null
           settlement_status?: string
           status?: string
           updated_at?: string
@@ -2843,6 +2847,8 @@ export type Database = {
           settlement_invoice_doc_num?: number | null
           settlement_journal_entry?: number | null
           settlement_locked_at?: string | null
+          settlement_payment_doc_entry?: number | null
+          settlement_payment_doc_num?: number | null
           settlement_status?: string
           status?: string
           updated_at?: string
