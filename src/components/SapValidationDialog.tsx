@@ -226,8 +226,9 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
                   // VendorPayments.DocTotal costuma vir 0 em baixas de reconciliação;
                   // o valor real está em PaymentInvoices[].SumApplied (local) / AppliedFC (moeda estrangeira),
                   // somando apenas os PIs que casam com as NFs deste PC.
+                  const invEntries = new Set(invoices.map((i: any) => Number(i.DocEntry)));
                   const pis = (p.PaymentInvoices || []).filter((pi: any) =>
-                    pi.InvoiceType === "it_PurchaseInvoice" && invoiceEntries.has(Number(pi.DocEntry))
+                    pi.InvoiceType === "it_PurchaseInvoice" && invEntries.has(Number(pi.DocEntry))
                   );
                   const applied = pis.reduce((sum: number, pi: any) =>
                     sum + Number((foreign ? (pi.AppliedFC ?? pi.SumApplied) : pi.SumApplied) ?? 0), 0);
