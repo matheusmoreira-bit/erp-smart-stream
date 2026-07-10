@@ -983,7 +983,6 @@ export default function Admin() {
               <ul className="space-y-0.5">
                 {[
                   { path: "/backoffice/audit-trail", label: "Audit Trail", icon: FileCheck2 },
-                  { path: "/backoffice/sap-users", label: "Usuários SAP", icon: Users },
                 ].map((it) => {
                   const Icon = it.icon;
                   return (
