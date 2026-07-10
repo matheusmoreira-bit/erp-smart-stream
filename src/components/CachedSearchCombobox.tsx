@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useState, useRef, useEffect, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
+import { filterAndRank } from "@/lib/supplier-search";
 
 interface CachedSearchComboboxProps {
   options: SapSearchOption[];
@@ -16,6 +17,12 @@ interface CachedSearchComboboxProps {
   portalContainer?: HTMLElement | null;
   /** Quando true e o campo estiver vazio, exibe destaque âmbar (obrigatório). */
   required?: boolean;
+  /** Renderiza um badge/hint por opção (ex.: "Inativo", "Não sincronizado"). */
+  renderOptionBadge?: (opt: SapSearchOption) => ReactNode;
+  /** Conteúdo customizado do empty state — recebe o termo pesquisado. Se retornar null, cai para o texto padrão. */
+  renderEmptyState?: (query: string) => ReactNode;
+  /** Rodapé fixo abaixo da lista (contexto: "Buscando em Empresa X · N ativos"). */
+  footerHint?: ReactNode;
 }
 
 export function CachedSearchCombobox({
@@ -29,6 +36,9 @@ export function CachedSearchCombobox({
   suggestedQuery,
   portalContainer,
   required = false,
+  renderOptionBadge,
+  renderEmptyState,
+  footerHint,
 }: CachedSearchComboboxProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
