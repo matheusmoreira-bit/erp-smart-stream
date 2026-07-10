@@ -20,6 +20,7 @@ import {
   FileText,
   ShieldOff,
   CheckCircle,
+  Network,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,7 @@ import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
 import { SapValidationDialog } from "@/components/SapValidationDialog";
+import { RelationsMap, type RelationsMapExpense } from "@/components/RelationsMap";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { useExpenses } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
@@ -82,6 +84,40 @@ function formatDate(dateStr: string) {
     return dateStr;
   }
 }
+// Traduz uma transação PagCorp para o formato consumido pelo `RelationsMap`.
+// Fluxo esperado nas etapas do mapa:
+//   rascunho          → transação PagCorp existe
+//   pendente_aprovacao → prestação de contas enviada (em análise)
+//   aprovado          → prestação de contas aprovada
+//   pc_lancado        → PC criado no SAP (t.integrated)
+//   nf_entrada        → NF de entrada vinculada (derivada pelo próprio mapa)
+//   pagamento         → VendorPayment emitido (settlementStatus === 'settled')
+function buildRelationsExpense(
+  t: PagCorpTransaction | null,
+  companyDb: string | null | undefined,
+): RelationsMapExpense | null {
+  if (!t) return null;
+  let status: string = "rascunho";
+  if (t.settlementStatus === "settled") status = "finalizado";
+  else if (t.integrated && t.sapDocEntry != null) status = "pc_lancado";
+  else if (t.hasAccountability && t.accountabilityApproved) status = "aprovado";
+  else if (t.hasAccountability) status = "pendente_aprovacao";
+  return {
+    id: `pagcorp:${t.id}`,
+    status,
+    company_db: companyDb ?? null,
+    sap_doc_entry: (t.sapDocEntry as number | null) ?? null,
+    sap_doc_num: (t.sapDocNum as number | null) ?? null,
+    total_amount: Number(t.amount) || 0,
+    currency: t.currency ?? null,
+    supplier_name: (t.cardName as string) || (t.accountName as string) || "PagCorp",
+    supplier_code: (t.accountCode as string) || null,
+    requester_name: ((t as any).employeeName as string) || ((t as any).userName as string) || null,
+    requester_email: ((t as any).employeeEmail as string) || ((t as any).userEmail as string) || null,
+    created_at: t.date || undefined,
+  };
+}
+
 
 export default function PagCorp() {
   const navigate = useNavigate();
@@ -117,6 +153,7 @@ export default function PagCorp() {
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
   const [cardFilter, setCardFilter] = useState<string>("all");
   const [validateDialog, setValidateDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
+  const [relationsDialog, setRelationsDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
   const [integrateDialog, setIntegrateDialog] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
@@ -1148,15 +1185,27 @@ export default function PagCorp() {
                                 </span>
                               )}
                               {t.sapDocEntry != null && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-2 text-[11px] gap-1 text-primary"
-                                  onClick={() => setValidateDialog({ open: true, tx: t })}
-                                >
-                                  <CheckCircle className="w-3 h-3" />
-                                  Validar SAP
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-[11px] gap-1 text-primary"
+                                    onClick={() => setValidateDialog({ open: true, tx: t })}
+                                  >
+                                    <CheckCircle className="w-3 h-3" />
+                                    Validar SAP
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-[11px] gap-1 text-primary"
+                                    onClick={() => setRelationsDialog({ open: true, tx: t })}
+                                    title="Ver mapa de relações: PagCorp → PC → NF → Baixa"
+                                  >
+                                    <Network className="w-3 h-3" />
+                                    Mapa
+                                  </Button>
+                                </div>
                               )}
                               {(() => {
                                 const st = t.settlementStatus;
@@ -1313,6 +1362,13 @@ export default function PagCorp() {
         docNum={(validateDialog.tx?.sapDocNum as number | null) ?? null}
         expectedAmount={validateDialog.tx ? Number(validateDialog.tx.amount) : undefined}
         expectedCurrency={validateDialog.tx?.currency}
+      />
+
+      <RelationsMap
+        open={relationsDialog.open}
+        onClose={() => setRelationsDialog({ open: false, tx: null })}
+        expense={buildRelationsExpense(relationsDialog.tx, session?.companyDB)}
+        title="Mapa de Relações — PagCorp"
       />
     </div>
   );
