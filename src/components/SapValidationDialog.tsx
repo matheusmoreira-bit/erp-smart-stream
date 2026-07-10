@@ -9,19 +9,41 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { sapQuery } from "@/lib/sap-client";
-import { useSap } from "@/contexts/SapContext";
+import { supabase } from "@/integrations/supabase/client";
+import { invokeFn } from "@/lib/invoke-fn";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** ID do pagcorp_integration_log (chave em pagcorp_document_relations). */
+  pagcorpLogId?: string | null;
+  /** Fallback: quando não existe relation, mostramos ao menos o cabeçalho. */
   docEntry: number | null;
   docNum: number | null;
   expectedAmount?: number;
   expectedCurrency?: string;
 }
 
-function formatCurrency(value: number, currency: string = "BRL") {
+interface RelationRow {
+  po_doc_entry: number | null;
+  po_doc_num: number | null;
+  po_status: string | null;
+  po_total: number | null;
+  po_total_fc: number | null;
+  po_currency: string | null;
+  nf_doc_entries: number[] | null;
+  payment_doc_entries: number[] | null;
+  po_found: boolean;
+  amount_matches: boolean | null;
+  last_resolved_at: string | null;
+  resolve_error: string | null;
+  company_db: string | null;
+}
+
+interface NfRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_currency: string | null; document_status: string | null }
+interface PayRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_total_fc: number | null; doc_currency: string | null; invoice_links: Array<{ docEntry?: number; invoiceType?: string; sumApplied?: number; appliedFC?: number }> }
+
+function formatCurrency(value: number, currency = "BRL") {
   const code = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
   try {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: code }).format(value);
@@ -30,103 +52,80 @@ function formatCurrency(value: number, currency: string = "BRL") {
   }
 }
 
-export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedAmount, expectedCurrency }: Props) {
-  const { session } = useSap();
+export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, docNum, expectedAmount, expectedCurrency }: Props) {
   const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [po, setPo] = useState<any>(null);
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
+  const [rel, setRel] = useState<RelationRow | null>(null);
+  const [nfs, setNfs] = useState<NfRow[]>([]);
+  const [pays, setPays] = useState<PayRow[]>([]);
 
   const load = async () => {
-    if (!session || !docEntry) return;
-    setLoading(true);
-    setError(null);
-    setPo(null); setInvoices([]); setPayments([]);
+    if (!pagcorpLogId) return;
+    setLoading(true); setError(null);
     try {
-      // 1. Pedido de Compra
-      const { data: poData } = await sapQuery(
-        session,
-        `PurchaseOrders(${docEntry})`,
-        { $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,CardCode,CardName" },
-        false,
-      );
-      let resolvedPo = poData as any;
-      if (!resolvedPo && docNum) {
-        const { data: byNumData } = await sapQuery(session, "PurchaseOrders", {
-          $filter: `DocNum eq ${docNum}`,
-          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,CardCode,CardName",
-          $top: 1,
-        }, false);
-        resolvedPo = (byNumData as any)?.value?.[0] || null;
-      }
-      setPo(resolvedPo);
-      const poEntry = Number(resolvedPo?.DocEntry || docEntry);
+      const { data: relData, error: relErr } = await supabase
+        .from("pagcorp_document_relations")
+        .select("po_doc_entry, po_doc_num, po_status, po_total, po_total_fc, po_currency, nf_doc_entries, payment_doc_entries, po_found, amount_matches, last_resolved_at, resolve_error, company_db")
+        .eq("pagcorp_log_id", pagcorpLogId)
+        .maybeSingle();
+      if (relErr) throw new Error(relErr.message);
+      const row = (relData as RelationRow | null) ?? null;
+      setRel(row);
 
-      // 2. Notas fiscais (PurchaseInvoices) que tenham linha vindas desse PC
-      // OBS: este SAP Service Layer não aceita `DocumentLines/any(...)` no $filter
-      // (retorna 400 "Invalid symbol"). Fazemos por CardCode e filtramos em JS.
-      let foundInvoices: any[] = [];
-      const cardCode = resolvedPo?.CardCode;
-      if (cardCode) {
-        try {
-          const { data: invData } = await sapQuery(session, "PurchaseInvoices", {
-            $filter: `CardCode eq '${String(cardCode).replace(/'/g, "''")}'`,
-            $orderby: "DocEntry desc",
-            $top: 50,
-          }, false);
-          const all = ((invData as any)?.value || []) as any[];
-          foundInvoices = all.filter((inv) =>
-            (inv.DocumentLines || []).some((l: any) => Number(l.BaseEntry) === poEntry && Number(l.BaseType) === 22),
-          );
-          setInvoices(foundInvoices);
-        } catch (e) {
-          console.warn("PurchaseInvoices lookup failed:", e);
+      if (row?.company_db) {
+        if ((row.nf_doc_entries || []).length > 0) {
+          const { data: nfData } = await supabase
+            .from("sap_nf_entrada_cache")
+            .select("doc_entry, doc_num, doc_date, doc_total, doc_currency, document_status")
+            .eq("company_db", row.company_db)
+            .in("doc_entry", row.nf_doc_entries as number[]);
+          setNfs((nfData || []) as NfRow[]);
+        } else {
+          setNfs([]);
         }
-      }
 
-      // 3. Pagamentos vinculados às NFs encontradas — mesma limitação do $filter/any.
-      const invoiceEntries = new Set(foundInvoices.map((i) => Number(i.DocEntry)).filter((n) => !isNaN(n)));
-      if (invoiceEntries.size > 0 && cardCode) {
-        try {
-          const { data: payData } = await sapQuery(session, "VendorPayments", {
-            $filter: `CardCode eq '${String(cardCode).replace(/'/g, "''")}'`,
-            $orderby: "DocEntry desc",
-            $top: 100,
-          }, false);
-          const allPays = ((payData as any)?.value || []) as any[];
-          const matched = allPays.filter((p) =>
-            (p.PaymentInvoices || []).some((pi: any) =>
-              pi.InvoiceType === "it_PurchaseInvoice" && invoiceEntries.has(Number(pi.DocEntry)),
-            ),
-          );
-          setPayments(matched);
-        } catch (e) {
-          console.warn("VendorPayments lookup failed:", e);
+        if ((row.payment_doc_entries || []).length > 0) {
+          const { data: payData } = await supabase
+            .from("sap_vendor_payment_cache")
+            .select("doc_entry, doc_num, doc_date, doc_total, doc_total_fc, doc_currency, invoice_links")
+            .eq("company_db", row.company_db)
+            .in("doc_entry", row.payment_doc_entries as number[]);
+          setPays((payData || []) as PayRow[]);
+        } else {
+          setPays([]);
         }
+      } else {
+        setNfs([]); setPays([]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao consultar SAP");
+      setError(e instanceof Error ? e.message : "Falha ao carregar relações");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (open && docEntry) {
-      void load();
+  const reresolve = async () => {
+    if (!pagcorpLogId) return;
+    setResolving(true); setError(null);
+    try {
+      await invokeFn("pagcorp-relations-resolver", { logId: pagcorpLogId });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao reconsultar");
+    } finally {
+      setResolving(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, docEntry]);
+  };
 
-  // SAP B1 Service Layer retorna DocTotal em moeda local (BRL) e DocTotalFc em moeda estrangeira.
-  // Se o PC estiver em moeda estrangeira (DocCurrency != BRL), o valor comparável é DocTotalFc.
-  const poCurrency = po?.DocCurrency || expectedCurrency || "BRL";
+  useEffect(() => {
+    if (open && pagcorpLogId) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pagcorpLogId]);
+
+  const poCurrency = rel?.po_currency || expectedCurrency || "BRL";
   const isForeign = poCurrency && poCurrency !== "BRL";
-  const poTotal = po ? Number((isForeign ? po.DocTotalFc : po.DocTotal) ?? 0) : null;
-  const amountOk = expectedAmount != null && poTotal != null
-    ? Math.abs(Number(poTotal) - Number(expectedAmount)) < 0.01
-    : null;
+  const poTotal = rel ? Number((isForeign ? rel.po_total_fc : rel.po_total) ?? 0) : null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -137,19 +136,34 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
             Validar lançamento no SAP
           </DialogTitle>
           <DialogDescription>
-            Pedido de Compra {docNum ? `#${docNum}` : ""} • DocEntry {docEntry ?? "—"}
+            Pedido de Compra {rel?.po_doc_num || docNum ? `#${rel?.po_doc_num ?? docNum}` : ""} • DocEntry {rel?.po_doc_entry ?? docEntry ?? "—"}
+            {rel?.last_resolved_at ? (
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Resolvido em {new Date(rel.last_resolved_at).toLocaleString("pt-BR")}
+              </span>
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {loading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" /> Consultando SAP…
+              <Loader2 className="w-4 h-4 animate-spin" /> Carregando relações…
             </div>
           )}
           {error && (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
+            </div>
+          )}
+          {!pagcorpLogId && !loading && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              Este documento ainda não possui histórico de integração PagCorp.
+            </div>
+          )}
+          {rel?.resolve_error && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+              Última resolução: {rel.resolve_error}
             </div>
           )}
 
@@ -158,28 +172,24 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
             <div className="flex items-center gap-2 mb-2">
               <FileText className="w-4 h-4 text-primary" />
               <span className="font-semibold text-sm">Pedido de Compra</span>
-              {po ? (
-                <Badge variant="outline" className="ml-auto">{po.DocumentStatus || "—"}</Badge>
-              ) : null}
+              {rel?.po_status ? <Badge variant="outline" className="ml-auto">{rel.po_status}</Badge> : null}
             </div>
-            {po ? (
+            {rel?.po_found ? (
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-muted-foreground">Fornecedor:</span> {po.CardName} ({po.CardCode})</div>
-                <div><span className="text-muted-foreground">Data:</span> {po.DocDate?.slice(0,10) || "—"}</div>
                 <div><span className="text-muted-foreground">Moeda:</span> {poCurrency}</div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-muted-foreground">Total:</span>
                   <span className="font-medium tabular-nums">{formatCurrency(Number(poTotal || 0), poCurrency)}</span>
-                  {amountOk === true && <CheckCircle2 className="w-3.5 h-3.5 text-success" />}
-                  {amountOk === false && <XCircle className="w-3.5 h-3.5 text-destructive" />}
+                  {rel.amount_matches === true && <CheckCircle2 className="w-3.5 h-3.5 text-success" />}
+                  {rel.amount_matches === false && <XCircle className="w-3.5 h-3.5 text-destructive" />}
                 </div>
               </div>
             ) : !loading ? (
-              <p className="text-xs text-muted-foreground">Pedido não encontrado no SAP.</p>
+              <p className="text-xs text-muted-foreground">Pedido ainda não encontrado no cache. Aguarde a próxima sincronização ou clique em Reconsultar.</p>
             ) : null}
-            {amountOk === false && expectedAmount != null && (
+            {rel?.amount_matches === false && expectedAmount != null && (
               <p className="text-xs text-destructive mt-1">
-                Valor divergente: esperado {formatCurrency(expectedAmount, expectedCurrency)} • SAP {formatCurrency(Number(poTotal), poCurrency)}
+                Valor divergente: esperado {formatCurrency(expectedAmount, expectedCurrency)} • SAP {formatCurrency(Number(poTotal || 0), poCurrency)}
               </p>
             )}
           </div>
@@ -189,19 +199,19 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
             <div className="flex items-center gap-2 mb-2">
               <Receipt className="w-4 h-4 text-primary" />
               <span className="font-semibold text-sm">Nota Fiscal de Entrada vinculada</span>
-              <Badge variant="outline" className="ml-auto">{invoices.length}</Badge>
+              <Badge variant="outline" className="ml-auto">{nfs.length}</Badge>
             </div>
-            {invoices.length === 0 ? (
+            {nfs.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nenhuma NF vinculada a este PC.</p>
             ) : (
               <ul className="space-y-1 text-xs">
-                {invoices.map((i) => {
-                  const cur = i.DocCurrency || poCurrency;
-                  const total = cur && cur !== "BRL" ? Number(i.DocTotalFc ?? 0) : Number(i.DocTotal ?? 0);
+                {nfs.map((i) => {
+                  const cur = i.doc_currency || poCurrency;
+                  const total = Number(i.doc_total ?? 0);
                   return (
-                    <li key={i.DocEntry} className="flex justify-between gap-2">
-                      <span>NF #{i.DocNum} • {i.DocDate?.slice(0,10)}</span>
-                      <span className="tabular-nums">{formatCurrency(total, cur)} • {i.DocumentStatus}</span>
+                    <li key={i.doc_entry} className="flex justify-between gap-2">
+                      <span>NF #{i.doc_num} • {i.doc_date?.slice(0, 10)}</span>
+                      <span className="tabular-nums">{formatCurrency(total, cur)} • {i.document_status}</span>
                     </li>
                   );
                 })}
@@ -214,29 +224,24 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
             <div className="flex items-center gap-2 mb-2">
               <Wallet className="w-4 h-4 text-primary" />
               <span className="font-semibold text-sm">Pagamentos</span>
-              <Badge variant="outline" className="ml-auto">{payments.length}</Badge>
+              <Badge variant="outline" className="ml-auto">{pays.length}</Badge>
             </div>
-            {payments.length === 0 ? (
+            {pays.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nenhum pagamento vinculado às NFs deste PC.</p>
             ) : (
               <ul className="space-y-1 text-xs">
-                {payments.map((p) => {
-                  const cur = p.DocCurrency || poCurrency;
+                {pays.map((p) => {
+                  const cur = p.doc_currency || poCurrency;
                   const foreign = cur && cur !== "BRL";
-                  // VendorPayments.DocTotal costuma vir 0 em baixas de reconciliação;
-                  // o valor real está em PaymentInvoices[].SumApplied (local) / AppliedFC (moeda estrangeira),
-                  // somando apenas os PIs que casam com as NFs deste PC.
-                  const invEntries = new Set(invoices.map((i: any) => Number(i.DocEntry)));
-                  const pis = (p.PaymentInvoices || []).filter((pi: any) =>
-                    pi.InvoiceType === "it_PurchaseInvoice" && invEntries.has(Number(pi.DocEntry))
-                  );
-                  const applied = pis.reduce((sum: number, pi: any) =>
-                    sum + Number((foreign ? (pi.AppliedFC ?? pi.SumApplied) : pi.SumApplied) ?? 0), 0);
-                  const fallback = foreign ? Number(p.DocTotalFc ?? 0) : Number(p.DocTotal ?? 0);
+                  const nfSet = new Set(nfs.map((i) => i.doc_entry));
+                  const applied = (p.invoice_links || [])
+                    .filter((pi) => (pi.invoiceType == null || pi.invoiceType === "it_PurchaseInvoice") && typeof pi.docEntry === "number" && nfSet.has(pi.docEntry))
+                    .reduce((s, pi) => s + Number((foreign ? (pi.appliedFC ?? pi.sumApplied) : pi.sumApplied) ?? 0), 0);
+                  const fallback = foreign ? Number(p.doc_total_fc ?? 0) : Number(p.doc_total ?? 0);
                   const total = applied || fallback;
                   return (
-                    <li key={p.DocEntry} className="flex justify-between gap-2">
-                      <span>Pgto #{p.DocNum} • {p.DocDate?.slice(0,10)}</span>
+                    <li key={p.doc_entry} className="flex justify-between gap-2">
+                      <span>Pgto #{p.doc_num} • {p.doc_date?.slice(0, 10)}</span>
                       <span className="tabular-nums">{formatCurrency(total, cur)}</span>
                     </li>
                   );
@@ -246,8 +251,8 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={load} disabled={loading} className="gap-2">
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Reconsultar
+            <Button variant="outline" size="sm" onClick={reresolve} disabled={loading || resolving || !pagcorpLogId} className="gap-2">
+              <RefreshCw className={`w-3.5 h-3.5 ${resolving ? "animate-spin" : ""}`} /> Reconsultar
             </Button>
             <Button size="sm" onClick={onClose}>Fechar</Button>
           </div>
