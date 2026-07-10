@@ -429,7 +429,7 @@ Deno.serve(async (req) => {
                 status: "ok",
                 duration_ms: Date.now() - t0,
                 request_meta: { poEntry: row.sap_doc_entry, invoiceEntries },
-                response_meta: { journalEntries: jeNumbers, account: account.settlement_account_code },
+                response_meta: { paymentEntries, paymentNums, account: account.settlement_account_code, skippedAlreadyPaid },
               });
               results.push({ id: row.id, status: "settled" });
             } catch (e) {
