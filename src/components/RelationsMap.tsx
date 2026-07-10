@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   CheckCircle2,
   XCircle,
   Clock,
-  ArrowRight,
   FileText,
   Send,
   ShieldCheck,
@@ -15,9 +16,7 @@ import {
   FileCheck2,
   Receipt,
   Wallet,
-  CircleCheck,
-  CircleDashed,
-  Circle,
+  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { STATUS_LABELS } from "@/hooks/useExpenses";
@@ -28,6 +27,7 @@ import {
   type ContaPagarLink,
 } from "@/hooks/useRelationsMapDerived";
 import { Loader2 } from "lucide-react";
+import { RelationsMapFlow } from "./RelationsMapFlow";
 
 type LogDecision =
   | "created"
@@ -102,7 +102,7 @@ const STAGE_DEFS: { key: StageKey; label: string; icon: React.ComponentType<{ cl
   { key: "pc_lancado", label: "PC no SAP", icon: FileCheck2 },
   { key: "nf_entrada", label: "NF Entrada", icon: Receipt },
   { key: "pagamento", label: "Pagamento", icon: Wallet },
-  { key: "finalizado", label: "Finalizado", icon: CircleCheck },
+  { key: "finalizado", label: "Finalizado", icon: CheckCircle2 },
 ];
 
 const ORDER: StageKey[] = STAGE_DEFS.map((s) => s.key);
@@ -138,6 +138,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const [sapHistory, setSapHistory] = useState<SapHistoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
+  const [enriched, setEnriched] = useState(false);
 
   const derivedInput = {
     expenseId: expense?.id || "",
@@ -336,334 +337,46 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
             </div>
           </DialogHeader>
 
-          <div className="space-y-8 mt-4">
-            {/* Fluxograma de etapas como cards */}
-            <section>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-                Fluxo do documento
-              </h3>
-              <div className="flex items-stretch gap-2 overflow-x-auto pb-2">
-                {stages.map((s, i) => {
-                  const Icon = s.icon;
-                  const clickable = s.hasDoc;
-                  const stateClasses =
-                    s.state === "current"
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                      : s.state === "done"
-                        ? "border-success/40 bg-success/5"
-                        : s.state === "skipped"
-                          ? "border-border bg-muted/20 opacity-50"
-                          : "border-dashed border-border bg-background";
-                  const iconClasses =
-                    s.state === "current"
-                      ? "text-primary"
-                      : s.state === "done"
-                        ? "text-success"
-                        : "text-muted-foreground";
-                  return (
-                    <div key={s.key} className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={!clickable}
-                        onClick={() => clickable && setDetailStage(s.key)}
-                        className={`min-w-[150px] rounded-xl border p-3 text-left transition-all ${stateClasses} ${
-                          clickable ? "hover:shadow-md hover:-translate-y-0.5 cursor-pointer" : "cursor-default"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <Icon className={`w-5 h-5 ${iconClasses}`} />
-                          {s.state === "done" && <CircleCheck className="w-4 h-4 text-success" />}
-                          {s.state === "current" && <Clock className="w-4 h-4 text-primary animate-pulse" />}
-                          {s.state === "pending" && <CircleDashed className="w-4 h-4 text-muted-foreground" />}
-                          {s.state === "skipped" && <Circle className="w-4 h-4 text-muted-foreground" />}
-                        </div>
-                        <div className={`text-sm font-medium ${s.state === "skipped" ? "line-through" : ""}`}>
-                          {s.label}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wider">
-                          {s.state === "current"
-                            ? "Atual"
-                            : s.state === "done"
-                              ? "Concluído"
-                              : s.state === "skipped"
-                                ? "Ignorado"
-                                : "Pendente"}
-                        </div>
-                      </button>
-                      {i < stages.length - 1 && (
-                        <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                      )}
-                    </div>
-                  );
-                })}
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs text-muted-foreground">
+                Arraste os nós, use scroll para dar zoom. Clique em uma etapa para ver detalhes.
               </div>
-              <p className="text-[11px] text-muted-foreground mt-2">
-                Clique em uma etapa para ver detalhes do documento.
-              </p>
-            </section>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Trilha de aprovações: atual + próximos */}
-              <section>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  Aprovadores
-                </h3>
-
-                {currentApproverRow && (
-                  <div className="mb-3 p-3 rounded-lg border-2 border-primary/40 bg-primary/5">
-                    <div className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-1">
-                      Aprovador atual
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
-                        {currentApproverRow.level_order}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{currentApproverRow.approver_name}</div>
-                        {currentApproverRow.approver_email && (
-                          <div className="text-xs text-muted-foreground truncate">{currentApproverRow.approver_email}</div>
-                        )}
-                      </div>
-                      <Badge className="gap-1">
-                        <Clock className="w-3 h-3" /> Aguardando
-                      </Badge>
-                    </div>
-                  </div>
-                )}
-
-                {nextApproverRows.length > 0 && (
-                  <>
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                      Próximos
-                    </div>
-                    <div className="space-y-1.5 mb-3">
-                      {nextApproverRows.map((lv) => (
-                        <div
-                          key={`${lv.level_order}-${lv.approver_name}`}
-                          className="flex items-center gap-3 p-2 rounded-lg border border-dashed border-border"
-                        >
-                          <div className="w-6 h-6 rounded-full bg-muted text-xs font-medium flex items-center justify-center">
-                            {lv.level_order}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm">{lv.approver_name}</div>
-                            {lv.approver_email && (
-                              <div className="text-xs text-muted-foreground truncate">{lv.approver_email}</div>
-                            )}
-                          </div>
-                          <Badge variant="outline" className="gap-1 text-muted-foreground text-xs">
-                            Próximo
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {approverRows.filter((r) => r.done || r.rejected).length > 0 && (
-                  <>
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                      Anteriores
-                    </div>
-                    <div className="space-y-1.5">
-                      {approverRows
-                        .filter((r) => r.done || r.rejected)
-                        .map((lv) => {
-                          const rejected = !!lv.rejected;
-                          return (
-                            <div
-                              key={`done-${lv.level_order}-${lv.approver_name}`}
-                              className={`flex items-center gap-3 p-2 rounded-lg border ${
-                                rejected
-                                  ? "border-destructive/30 bg-destructive/5"
-                                  : "border-success/30 bg-success/5"
-                              }`}
-                            >
-                              <div
-                                className={`w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center ${
-                                  rejected
-                                    ? "bg-destructive/20 text-destructive"
-                                    : "bg-success/20 text-success"
-                                }`}
-                              >
-                                {lv.level_order}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm">{lv.approver_name}</div>
-                                <div className="text-[11px] text-muted-foreground">
-                                  {rejected ? "Rejeitou" : "Aprovou"}
-                                  {lv.decidedAt ? ` · ${formatDateTime(lv.decidedAt)}` : ""}
-                                  {lv.stageName ? ` · ${lv.stageName}` : ""}
-                                </div>
-                                {lv.remarks && (
-                                  <div className="text-[11px] mt-1 bg-muted/40 rounded p-1.5">{lv.remarks}</div>
-                                )}
-                              </div>
-                              {rejected ? (
-                                <XCircle className="w-4 h-4 text-destructive" />
-                              ) : (
-                                <ShieldCheck className="w-4 h-4 text-success" />
-                              )}
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </>
-                )}
-
-                {approverRows.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum aprovador previsto (documento sem regra local e sem histórico SAP disponível).
-                  </p>
-                )}
-              </section>
-
-
-              {/* Trilha histórica */}
-              <section>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  Histórico de eventos
-                </h3>
-                {(() => {
-                  const sapEvents = sapHistory
-                    .filter((h) => (h.decision || "").toUpperCase() === "Y" || (h.decision || "").toUpperCase() === "N")
-                    .map((h) => ({
-                      id: `sap-${h.id}`,
-                      decision: ((h.decision || "").toUpperCase() === "N" ? "rejected" : "approved") as LogDecision,
-                      approver_name: h.approver_name,
-                      approver_email: h.approver_email,
-                      level_order: h.step,
-                      remarks: h.remarks,
-                      decided_at: h.decision_date || "",
-                      source: "SAP" as const,
-                      reconstructed: false,
-                    }));
-                  const localEvents = log.map((l) => ({
-                    ...l,
-                    source: "ERP Flow" as const,
-                    reconstructed: false,
-                  }));
-
-                  // Fallback: pedidos antigos podem não ter linhas em
-                  // `expense_approval_log`. Reconstruímos os principais
-                  // marcos a partir dos campos da própria despesa.
-                  const status = (expense.status || "").toLowerCase();
-                  const seen = new Set<LogDecision>();
-                  for (const ev of [...localEvents, ...sapEvents]) seen.add(ev.decision);
-
-                  const fallback: Array<typeof localEvents[number]> = [];
-                  const pushFallback = (
-                    decision: LogDecision,
-                    when: string | null | undefined,
-                    approver_name?: string | null,
-                    remarks?: string | null,
-                  ) => {
-                    if (!when || seen.has(decision)) return;
-                    seen.add(decision);
-                    fallback.push({
-                      id: `fallback-${decision}`,
-                      decision,
-                      approver_name: approver_name ?? null,
-                      approver_email: null,
-                      level_order: null,
-                      remarks: remarks ?? null,
-                      decided_at: when,
-                      source: "ERP Flow" as const,
-                      reconstructed: true,
-                    });
-                  };
-                  pushFallback(
-                    "created",
-                    expense.created_at,
-                    expense.requester_name || expense.requester_email || null,
-                  );
-                  const terminalByStatus: Record<string, LogDecision | undefined> = {
-                    aprovado: "approved",
-                    integrado: "approved",
-                    rejeitado: "rejected",
-                    cancelado: "cancelled",
-                  };
-                  const terminal = terminalByStatus[status];
-                  if (terminal) {
-                    pushFallback(
-                      terminal,
-                      expense.updated_at,
-                      terminal === "approved" ? expense.current_approver ?? null : null,
-                    );
-                  }
-                  if (expense.sap_doc_num || expense.sap_doc_entry) {
-                    pushFallback(
-                      "integrated",
-                      expense.sap_integration_last_attempt_at || expense.updated_at,
-                      null,
-                      expense.sap_doc_num ? `Nº SAP ${expense.sap_doc_num}` : null,
-                    );
-                  }
-                  if (expense.sap_integration_error) {
-                    pushFallback(
-                      "integration_failed",
-                      expense.sap_integration_last_attempt_at || expense.updated_at,
-                      null,
-                      expense.sap_integration_error,
-                    );
-                  }
-
-                  const events = [...localEvents, ...sapEvents, ...fallback].sort(
-                    (a, b) =>
-                      new Date(a.decided_at || 0).getTime() - new Date(b.decided_at || 0).getTime(),
-                  );
-                  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
-                  if (events.length === 0)
-                    return <p className="text-sm text-muted-foreground">Nenhum evento registrado ainda.</p>;
-                  return (
-                    <ol className="space-y-3 relative border-l border-border ml-2 pl-4">
-                      {events.map((row) => {
-                        const meta = DECISION_META[row.decision];
-                        const Icon = meta.icon;
-                        return (
-                          <li key={row.id} className="relative">
-                            <span className="absolute -left-[22px] top-0.5 w-4 h-4 rounded-full bg-background border border-border flex items-center justify-center">
-                              <Icon className={`w-3 h-3 ${meta.color}`} />
-                            </span>
-                            <div className="flex items-baseline justify-between gap-2">
-                              <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
-                                {meta.label}
-                                <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase tracking-wide">
-                                  {row.source}
-                                </Badge>
-                                {row.reconstructed && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[9px] px-1 py-0 uppercase tracking-wide text-muted-foreground"
-                                    title="Evento reconstruído a partir dos dados do pedido (anterior ao log detalhado)"
-                                  >
-                                    reconstruído
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground font-mono shrink-0">
-                                {formatDateTime(row.decided_at)}
-                              </div>
-                            </div>
-                            {row.approver_name && (
-                              <div className="text-xs text-muted-foreground">
-                                {row.approver_name}
-                                {row.approver_email ? ` · ${row.approver_email}` : ""}
-                                {row.level_order ? ` · nível ${row.level_order}` : ""}
-                              </div>
-                            )}
-                            {row.remarks && (
-                              <div className="text-xs bg-muted/40 rounded p-2 mt-1.5">{row.remarks}</div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  );
-                })()}
-
-              </section>
+              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer select-none">
+                <Sparkles className="w-3.5 h-3.5 text-cactus-amber" />
+                Enriquecer
+                <Switch checked={enriched} onCheckedChange={setEnriched} />
+              </label>
             </div>
+
+            {isLoading ? (
+              <div className="h-[65vh] flex items-center justify-center text-muted-foreground text-sm">
+                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Montando o mapa…
+              </div>
+            ) : (
+              <RelationsMapFlow
+                expense={expense}
+                approverRows={approverRows}
+                nfLinks={nfLinks.data || []}
+                apPayables={apLinks.data?.payables || []}
+                enriched={enriched}
+                onNodeClick={(id) => {
+                  if (id === "root") setDetailStage("pc_lancado");
+                  else if (id === "requester") setDetailStage("rascunho");
+                  else if (id === "status") setDetailStage("finalizado");
+                  else if (id.startsWith("app-")) setDetailStage("pendente_aprovacao");
+                  else if (id.startsWith("nf-ap-") || id.startsWith("orphan-ap-")) setDetailStage("pagamento");
+                  else if (id.startsWith("nf-")) setDetailStage("nf_entrada");
+                }}
+              />
+            )}
+
+            {(nfLinks.isLoading || apLinks.isLoading) && (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Buscando NFs e contas a pagar…
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
