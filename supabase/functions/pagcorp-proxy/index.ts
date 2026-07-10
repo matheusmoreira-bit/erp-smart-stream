@@ -311,7 +311,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const creds = await getCredentials(companyDb);
+    let creds: PagCorpCreds;
+    try {
+      creds = await getCredentials(companyDb);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("não configurado") || msg.includes("not configured")) {
+        // Empresa sem PagCorp configurado: não é erro de servidor — retornar vazio.
+        return new Response(
+          JSON.stringify({ items: [], startDate, endDate, notConfigured: true, message: msg }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      throw e;
+    }
     const apiToken = await getAuthToken(creds);
     const expenses = await fetchExpenses(apiToken, creds.api_base_url, creds.account_id, startDate, endDate);
 
