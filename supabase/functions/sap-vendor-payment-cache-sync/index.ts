@@ -78,7 +78,7 @@ function toIsoTimestamp(date?: string, time?: string): string | null {
 }
 
 const PAGE_SIZE = 100;
-const MAX_PAGES_PER_COMPANY = 5;
+const MAX_PAGES_PER_COMPANY = 40;
 const TIME_BUDGET_MS = 90_000;
 
 async function syncCompany(
