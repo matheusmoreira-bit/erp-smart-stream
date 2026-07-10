@@ -109,7 +109,7 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
     if (!pagcorpLogId) return;
     setResolving(true); setError(null);
     try {
-      await invokeFn("pagcorp-relations-resolver", { logId: pagcorpLogId });
+      await invokeFn("pagcorp-relations-resolver", { body: { logId: pagcorpLogId } });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao reconsultar");
