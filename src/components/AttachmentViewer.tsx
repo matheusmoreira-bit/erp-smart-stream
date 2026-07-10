@@ -54,7 +54,8 @@ export function AttachmentViewer({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] p-0 gap-0 flex flex-col">
+      <DialogContent className="p-0 gap-0 flex flex-col w-screen h-[100dvh] max-w-none rounded-none border-0 sm:w-[95vw] sm:h-[90vh] sm:max-w-5xl sm:rounded-lg sm:border">
+
         <DialogHeader className="px-4 sm:px-6 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <DialogTitle className="truncate text-base">{name}</DialogTitle>
