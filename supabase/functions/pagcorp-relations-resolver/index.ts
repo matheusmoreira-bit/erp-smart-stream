@@ -10,8 +10,13 @@
 //             daquela base.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { sapFetch } from "../_shared/sap-fetch.ts";
+import { authErrorResponse, requireUserOrSapSession } from "../_shared/auth.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db",
+};
 
 const STALE_MINUTES = 5;
 const BATCH_SIZE = 200;
@@ -21,6 +26,21 @@ interface LogRow {
   company_db: string | null;
   sap_doc_entry: number | null;
   pagcorp_data: Record<string, unknown> | null;
+}
+
+interface CallerContext {
+  id: string;
+  email: string | null;
+  companyDB?: string;
+  userName?: string;
+  source?: string;
+}
+
+async function assertManualAccess(req: Request, log: LogRow): Promise<void> {
+  const caller = await requireUserOrSapSession(req) as CallerContext;
+  if (caller.source === "sap_session" && caller.companyDB && log.company_db && caller.companyDB !== log.company_db) {
+    throw new Error("Acesso negado para a empresa deste documento.");
+  }
 }
 
 function buildBaseUrl(raw: string): string {
@@ -225,11 +245,51 @@ async function resolveOne(
   }
 }
 
+async function loadDetails(sb: ReturnType<typeof createClient>, logId: string) {
+  const { data: relData, error: relErr } = await sb
+    .from("pagcorp_document_relations")
+    .select("po_doc_entry, po_doc_num, po_status, po_total, po_total_fc, po_currency, nf_doc_entries, payment_doc_entries, po_found, amount_matches, last_resolved_at, resolve_error, company_db")
+    .eq("pagcorp_log_id", logId)
+    .maybeSingle();
+  if (relErr) throw new Error(relErr.message);
+
+  const relation = relData ?? null;
+  let nfs: unknown[] = [];
+  let pays: unknown[] = [];
+  const companyDb = (relation as { company_db?: string | null } | null)?.company_db;
+  const nfEntries = ((relation as { nf_doc_entries?: number[] | null } | null)?.nf_doc_entries || [])
+    .filter((n) => Number.isFinite(Number(n)));
+  const payEntries = ((relation as { payment_doc_entries?: number[] | null } | null)?.payment_doc_entries || [])
+    .filter((n) => Number.isFinite(Number(n)));
+
+  if (companyDb && nfEntries.length > 0) {
+    const { data, error } = await sb
+      .from("sap_nf_entrada_cache")
+      .select("doc_entry, doc_num, doc_date, doc_total, doc_currency, document_status")
+      .eq("company_db", companyDb)
+      .in("doc_entry", nfEntries);
+    if (error) throw new Error(`notas: ${error.message}`);
+    nfs = data || [];
+  }
+
+  if (companyDb && payEntries.length > 0) {
+    const { data, error } = await sb
+      .from("sap_vendor_payment_cache")
+      .select("doc_entry, doc_num, doc_date, doc_total, doc_total_fc, doc_currency, invoice_links")
+      .eq("company_db", companyDb)
+      .in("doc_entry", payEntries);
+    if (error) throw new Error(`pagamentos: ${error.message}`);
+    pays = data || [];
+  }
+
+  return { relation, nfs, pays };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  let body: { logId?: string; companyDb?: string } = {};
+  let body: { logId?: string; companyDb?: string; readOnly?: boolean; includeDetails?: boolean } = {};
   try { body = await req.json(); } catch { /* cron sem corpo */ }
 
   try {
@@ -243,7 +303,14 @@ Deno.serve(async (req) => {
         .limit(1);
       if (error) throw new Error(error.message);
       logs = (data || []) as LogRow[];
+      if (logs[0]) await assertManualAccess(req, logs[0]);
+      if (body.readOnly) {
+        const details = await loadDetails(sb, body.logId);
+        return new Response(JSON.stringify({ ok: true, processed: 0, ...details }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     } else if (body.companyDb) {
+      await requireUserOrSapSession(req);
       const { data, error } = await sb
         .from("pagcorp_integration_log")
         .select("id, company_db, sap_doc_entry, pagcorp_data")
@@ -279,9 +346,16 @@ Deno.serve(async (req) => {
       const r = await resolveOne(sb, l, { allowLiveFetch });
       if (r.ok) ok++; else err++;
     }
+    if (body.logId && body.includeDetails) {
+      const details = await loadDetails(sb, body.logId);
+      return new Response(JSON.stringify({ ok: true, processed: logs.length, resolved: ok, failed: err, ...details }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     return new Response(JSON.stringify({ ok: true, processed: logs.length, resolved: ok, failed: err }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
+    const authResp = authErrorResponse(e, corsHeaders);
+    if (authResp) return authResp;
     return new Response(JSON.stringify({ error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
