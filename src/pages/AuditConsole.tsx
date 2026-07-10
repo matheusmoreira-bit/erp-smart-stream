@@ -60,33 +60,63 @@ export default function AuditConsole() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div className="flex items-center gap-3">
+      <PageTitle title="Auditoria" />
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 sm:px-6 py-3 sm:py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Link
               to="/analytics"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground shrink-0"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Analytics
             </Link>
-            <span className="text-muted-foreground">/</span>
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-primary/10 p-2">
+            <Link
+              to="/analytics"
+              className="sm:hidden text-muted-foreground hover:text-foreground shrink-0"
+              aria-label="Voltar"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <span className="hidden sm:inline text-muted-foreground">/</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="rounded-lg bg-primary/10 p-2 shrink-0">
                 <Activity className="h-4 w-4 text-primary" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-foreground">Auditoria SAP</h1>
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-bold text-foreground truncate">Auditoria SAP</h1>
+                <p className="text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground truncate">
                   {getLabel(session.companyDB || "")}
                 </p>
               </div>
             </div>
           </div>
         </div>
+        {/* Mobile sub-nav pills */}
+        <nav className="md:hidden -mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto scrollbar-none px-4 snap-x">
+          {subNav.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `flex shrink-0 snap-start items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isActive
+                      ? "bg-primary/15 text-primary border border-primary/30"
+                      : "text-muted-foreground bg-muted/40 border border-transparent"
+                  }`
+                }
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {item.label}
+              </NavLink>
+            );
+          })}
+        </nav>
       </header>
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-6 py-6">
+      <div className="mx-auto flex max-w-7xl gap-6 px-4 sm:px-6 py-4 sm:py-6">
         <aside className="hidden w-56 shrink-0 md:block">
           <nav className="space-y-1">
             {subNav.map((item) => {
