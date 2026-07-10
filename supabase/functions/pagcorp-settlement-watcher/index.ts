@@ -1,8 +1,12 @@
 // Edge function: pagcorp-settlement-watcher
 //
 // Fluxo: PagCorp → PO no SAP → NF de Entrada fecha o PO → **este watcher**
-// gera um Journal Entry debitando o fornecedor e creditando a conta contábil
-// do cartão PagCorp (baixa automática).
+// emite um Pagamento de Fornecedor (VendorPayments) que baixa a
+// PurchaseInvoice em Contas a Pagar, tendo como conta de saída a GL do
+// cartão PagCorp cadastrada em `pagcorp_settlement_accounts`.
+//
+// (Antes de jul/2026 esta baixa era feita via JournalEntry avulso; foi
+// substituída para que o AP realmente feche no SAP em vez de ficar em aberto.)
 //
 // Cron: a cada 5 minutos. Lê `pagcorp_integration_log` com status='success'
 // e settlement_status ∈ (pending|awaiting_invoice|awaiting_settlement|error retryable).
