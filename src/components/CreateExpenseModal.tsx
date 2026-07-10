@@ -2043,32 +2043,32 @@ export function CreateExpenseModal({
     <Dialog open={open} onOpenChange={(v) => { if (!v) requestClose(); }}>
       <DialogContent
         ref={setDialogContainer}
-        className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-[95vw] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] sm:rounded-lg sm:border sm:p-8"
+        className="w-[100dvw] h-[100dvh] max-w-[100dvw] rounded-none border-0 overflow-x-hidden overflow-y-auto px-3 py-4 sm:w-[95vw] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] sm:rounded-lg sm:border sm:p-8"
       >
 
-        <DialogHeader>
-          <DialogTitle>{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="text-base sm:text-lg">{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
 
         {/* Barra de progresso do fluxo: classificação IA, salvamento e fila
             de despesas encadeadas (deferredGroups da regra de fornecedores
             diferentes). Fica sempre visível para o usuário saber o estado. */}
         {(isProcessing || isCreating || deferredGroups.length > 0 || justCancelled) && (
-          <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-            <div className="flex items-start justify-between gap-3">
+          <div className="mt-3 max-w-full rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2 overflow-hidden">
+            <div className="flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex-1 space-y-2 min-w-0">
                 {isProcessing && (
-                  <div className="flex items-center gap-2 text-sm text-primary">
+                  <div className="flex min-w-0 items-center gap-2 text-sm text-primary">
                     <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    <span>
+                    <span className="min-w-0 break-words">
                       Classificando {files.length} anexo(s) com IA — identificando fornecedor, itens e tipo do documento…
                     </span>
                   </div>
                 )}
                 {isCreating && (
-                  <div className="flex items-center gap-2 text-sm text-primary">
+                  <div className="flex min-w-0 items-center gap-2 text-sm text-primary">
                     <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    <span>
+                    <span className="min-w-0 break-words">
                       Salvando {isSales ? "pedido de venda" : "despesa"}
                       {files.length > 0 ? ` e enviando ${files.length} anexo(s)` : ""}…
                     </span>
@@ -2175,7 +2175,7 @@ export function CreateExpenseModal({
                   </div>
                 )}
               </div>
-              <div className="flex flex-col gap-1 shrink-0">
+              <div className="flex shrink-0 flex-col gap-1 sm:items-end">
                 {/* Botão de cancelar: aparece quando há IA em andamento ou fila
                     de fornecedores adiados. Não interfere no salvamento em curso
                     (isCreating), pois cancelar uma gravação parcial seria pior. */}
@@ -2274,7 +2274,7 @@ export function CreateExpenseModal({
           </div>
         )}
 
-        <div className="space-y-4 mt-2">
+        <div className="mt-2 max-w-full space-y-4 overflow-x-hidden">
 
           {origin === "pagcorp" && mappingInfo && (
             <PagCorpCardMappingBanner
@@ -2285,13 +2285,13 @@ export function CreateExpenseModal({
             />
           )}
           {/* AI Toggle */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
-            <div className="flex items-center gap-2">
+          <div className="flex max-w-full flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
               <Brain className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-foreground">Processar com IA</span>
-              <span className="text-xs text-muted-foreground">(preenche campos automaticamente)</span>
+              <span className="min-w-0 text-sm font-medium text-foreground">Processar com IA</span>
+              <span className="hidden text-xs text-muted-foreground sm:inline">(preenche campos automaticamente)</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center justify-between gap-2 sm:justify-end">
               {/* Limpa o cache de respostas da IA (memória + localStorage)
                   para forçar novas chamadas na próxima extração. Útil quando
                   a IA errou e você reeditou um documento com o mesmo conteúdo,
@@ -2313,8 +2313,8 @@ export function CreateExpenseModal({
                 }}
                 title="Limpar cache de respostas da IA (memória + navegador)"
               >
-                <Trash2 className="w-3.5 h-3.5 mr-1" />
-                Limpar cache IA
+                  <Trash2 className="w-3.5 h-3.5 sm:mr-1" />
+                  <span className="hidden sm:inline">Limpar cache IA</span>
               </Button>
               <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
             </div>
@@ -2328,7 +2328,7 @@ export function CreateExpenseModal({
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               onClick={() => inputRef.current?.click()}
-              className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+              className={`relative max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
                 isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
               }`}
             >
@@ -2361,7 +2361,7 @@ export function CreateExpenseModal({
                 {files.map((file, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 cursor-pointer hover:bg-primary/10"
+                    className="flex min-w-0 items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-2 cursor-pointer hover:bg-primary/10"
                     onClick={(e) => {
                       e.stopPropagation();
                       const url = URL.createObjectURL(file);
@@ -2380,7 +2380,7 @@ export function CreateExpenseModal({
                   >
                     <FileSpreadsheet className="w-4 h-4 text-primary shrink-0" />
                     <span className="text-xs text-foreground truncate flex-1 underline decoration-dotted">{file.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                    <span className="hidden text-[10px] text-muted-foreground sm:inline">{(file.size / 1024).toFixed(0)} KB</span>
                     <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-muted-foreground hover:text-foreground">
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -2390,7 +2390,7 @@ export function CreateExpenseModal({
             )}
 
             {aiConfidence !== null && (
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                 <Sparkles className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs text-muted-foreground">
                   IA preencheu os campos com {Math.round(aiConfidence * 100)}% de confiança
@@ -2422,7 +2422,7 @@ export function CreateExpenseModal({
           )}
 
           {/* ==================== CABEÇALHO ==================== */}
-          <section className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-4 shadow-sm">
+          <section className="max-w-full overflow-hidden rounded-xl border border-border/60 bg-card/40 p-3 space-y-4 shadow-sm sm:p-4">
             <div className="flex items-center gap-2 -mb-1">
               <div className="h-4 w-1 rounded-full bg-primary/70" />
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cabeçalho</h3>
@@ -2442,7 +2442,7 @@ export function CreateExpenseModal({
               required
             />
             {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
-              <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <div className="mt-2 flex min-w-0 flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 sm:flex-row sm:items-start">
                 <span className="text-amber-600 dark:text-amber-400 text-sm">⚠️</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-foreground">
@@ -2494,7 +2494,7 @@ export function CreateExpenseModal({
                       toast.error(err instanceof Error ? err.message : "Falha ao enviar solicitação");
                     }
                   }}
-                  className="gap-1.5 text-xs h-7 shrink-0"
+                  className="h-8 w-full gap-1.5 text-xs sm:h-7 sm:w-auto sm:shrink-0"
                 >
                   <UserPlus className="w-3.5 h-3.5" /> Solicitar cadastro
                 </Button>
@@ -2685,7 +2685,7 @@ export function CreateExpenseModal({
           {/* Header-level defaults: cascade to all items, user can override per line */}
           <div className="space-y-2">
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Padrões para itens</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+            <div className="grid max-w-full min-w-0 grid-cols-1 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-2.5 sm:grid-cols-2 sm:p-3">
               <CachedSearchCombobox
                 label="Centro de Custo (padrão p/ itens) *"
                 options={costCenterOptions}
@@ -2714,19 +2714,19 @@ export function CreateExpenseModal({
           </section>
 
           {/* ==================== CORPO / ITENS ==================== */}
-          <section className="rounded-xl border border-border/60 bg-card/40 p-4 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+          <section className="max-w-full overflow-hidden rounded-xl border border-border/60 bg-card/40 p-3 space-y-3 shadow-sm sm:p-4">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <div className="h-4 w-1 rounded-full bg-primary/70" />
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens / Linhas</h3>
               </div>
-              <Button variant="ghost" size="sm" onClick={addItem} className="gap-1 text-xs h-7">
-                <Plus className="w-3 h-3" /> Adicionar Item
+              <Button variant="ghost" size="sm" onClick={addItem} className="h-7 shrink-0 gap-1 px-2 text-xs">
+                <Plus className="w-3 h-3" /> <span className="hidden min-[380px]:inline">Adicionar Item</span><span className="min-[380px]:hidden">Adicionar</span>
               </Button>
             </div>
             <div className="space-y-3">
               {items.map((item, i) => (
-                <div key={i} className="border border-border/50 rounded-lg p-3 space-y-2 bg-muted/10">
+                <div key={i} className="max-w-full overflow-hidden rounded-lg border border-border/50 bg-muted/10 p-2.5 space-y-2 sm:p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium text-muted-foreground uppercase">Item {i + 1}</span>
                     <Button variant="ghost" size="icon" onClick={() => removeItem(i)} disabled={items.length <= 1} className="h-6 w-6 text-muted-foreground hover:text-destructive">
@@ -2761,8 +2761,8 @@ export function CreateExpenseModal({
                     suggestedQuery={!item.sapItem ? (item.searchHint || item.description || undefined) : undefined}
                     portalContainer={dialogContainer}
                   />
-                  <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
-                    <div className="col-span-6">
+                  <div className="grid min-w-0 grid-cols-1 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-12">
+                    <div className="min-w-0 min-[380px]:col-span-3 sm:col-span-6">
                       <label className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <span>Descrição *</span>
                         {(item.description || "").trim() ? (
@@ -2782,20 +2782,20 @@ export function CreateExpenseModal({
                         }`}
                       />
                     </div>
-                    <div className="col-span-2">
+                    <div className="min-w-0">
                       <label className="text-[10px] text-muted-foreground">Qtd</label>
                       <Input type="number" value={item.quantity} onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)} className="text-sm h-8" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="min-w-0">
                       <label className="text-[10px] text-muted-foreground">Preço Unit.</label>
                       <Input type="number" value={item.unit_price} onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)} className="text-sm h-8" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="min-w-0">
                       <label className="text-[10px] text-muted-foreground">Total</label>
-                      <Input value={formatCurrency(item.line_total)} readOnly className="text-sm h-8 bg-muted/30 font-mono" />
+                      <Input value={formatCurrency(item.line_total)} readOnly className="h-8 min-w-0 px-2 text-sm bg-muted/30 font-mono" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                     <CachedSearchCombobox
                       label="Centro de Custo (Dimensão)"
                       options={costCenterOptions}
@@ -2840,26 +2840,28 @@ export function CreateExpenseModal({
                 </div>
               ))}
             </div>
-            <div className="flex justify-end mt-3">
-              <p className="text-sm font-medium text-foreground">
-                Total: <span className="text-lg font-bold font-mono">{formatCurrency(total, currency || "BRL")}</span>
+            <div className="mt-3 flex min-w-0 justify-end">
+              <p className="min-w-0 text-right text-sm font-medium text-foreground">
+                Total: <span className="font-mono text-base font-bold sm:text-lg">{formatCurrency(total, currency || "BRL")}</span>
               </p>
             </div>
           </section>
 
-          <div className="border-t border-border pt-4 flex justify-end gap-3">
-            <Button variant="outline" onClick={requestClose} disabled={isCreating}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="gap-1.5">
+          <div className="sticky bottom-0 -mx-3 flex justify-end gap-2 border-t border-border bg-background/95 px-3 py-3 backdrop-blur sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pt-4 sm:backdrop-blur-0">
+            <Button variant="outline" onClick={requestClose} disabled={isCreating} className="shrink-0 px-3">Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="min-w-0 flex-1 gap-1.5 px-3 sm:flex-none">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              {isCreating
-                ? "Salvando…"
-                : isProcessing
-                  ? "Aguardando IA…"
-                  : deferredGroups.length > 0
-                    ? `${isSales ? "Criar Pedido" : "Criar Despesa"} (1 de ${deferredGroups.length + 1})`
-                    : isSales
-                      ? "Criar Pedido de Venda"
-                      : "Criar Despesa"}
+              <span className="truncate">
+                {isCreating
+                  ? "Salvando…"
+                  : isProcessing
+                    ? "Aguardando IA…"
+                    : deferredGroups.length > 0
+                      ? `${isSales ? "Criar Pedido" : "Criar Despesa"} (1 de ${deferredGroups.length + 1})`
+                      : isSales
+                        ? "Criar Pedido de Venda"
+                        : "Criar Despesa"}
+              </span>
             </Button>
           </div>
         </div>
