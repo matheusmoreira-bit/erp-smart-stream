@@ -431,6 +431,7 @@ Deno.serve(async (req) => {
               const skippedAlreadyPaid: number[] = [];
               const accountsUsed: string[] = [];
               let firstMissingAccountMsg: string | null = null;
+              let firstPtaxMissingMsg: string | null = null;
               let firstPtax: { rate: number; ptaxDate: string; source: string } | null = null;
               for (const invoice of invoices) {
                 const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
@@ -456,9 +457,11 @@ Deno.serve(async (req) => {
                   if (invCur && invCur !== "BRL") {
                     const ptax = await fetchPtax(invCur, invoice.DocDate);
                     if (!ptax) {
-                      if (!firstMissingAccountMsg) {
-                        firstMissingAccountMsg = `PTAX ${invCur} indisponível para ${invoice.DocDate}`;
+                      if (!firstPtaxMissingMsg) {
+                        firstPtaxMissingMsg = `PTAX ${invCur} indisponível para ${invoice.DocDate}`;
                       }
+                      // remove desta iteração da contagem de "contas usadas" — nada foi pago
+                      accountsUsed.pop();
                       continue;
                     }
                     docRate = ptax.rate;
