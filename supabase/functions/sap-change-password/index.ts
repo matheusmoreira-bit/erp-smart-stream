@@ -161,9 +161,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    // Regular SAP users can only change their own password. Cloud admins may change any user.
-    const isCloudAdmin = (caller as { source?: string }).source === "cloud_admin";
-    if (!isCloudAdmin && callerUserCode && userCode.toLowerCase() !== callerUserCode.toLowerCase()) {
+    // Regular SAP users can only change their own password.
+    // Cloud admins and SAP admins may change any user's password.
+    const callerSource = (caller as { source?: string }).source;
+    const isAdmin = callerSource === "cloud_admin" || callerSource === "sap_admin";
+    if (!isAdmin && callerUserCode && userCode.toLowerCase() !== callerUserCode.toLowerCase()) {
       return new Response(JSON.stringify({ error: "Só é permitido alterar a própria senha" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
