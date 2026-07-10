@@ -203,6 +203,25 @@ async function fetchPtax(currency: string, isoDate: string): Promise<{ rate: num
 }
 
 /**
+ * Próximo horário elegível para tentar novamente uma baixa que ficou parada por
+ * ausência de PTAX. O BCB publica a PTAX de fechamento por volta das 13h BRT
+ * (16:00 UTC) em dias úteis. Retornamos o próximo slot 16:30 UTC futuro, pulando
+ * fins de semana. Isso evita retentativas a cada 5 min sem chance real de sucesso.
+ */
+function nextPtaxRetryAfter(from: Date = new Date()): Date {
+  const d = new Date(from.getTime());
+  // Hoje 16:30 UTC
+  const candidate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 16, 30, 0));
+  if (candidate.getTime() <= from.getTime()) {
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+  }
+  // Se cair no fim de semana, pula para segunda
+  while (candidate.getUTCDay() === 0 || candidate.getUTCDay() === 6) {
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+  }
+  return candidate;
+
+/**
  * Emite um Pagamento de Fornecedor (Outgoing Payment) que baixa a
  * PurchaseInvoice indicada. A contrapartida contábil é a `TransferAccount`
  * (GL configurada para o cartão PagCorp).
