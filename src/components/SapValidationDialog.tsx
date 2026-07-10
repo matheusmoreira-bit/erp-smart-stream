@@ -49,34 +49,46 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
         session,
         `PurchaseOrders(${docEntry})`,
         { $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName" },
+        false,
       );
-      setPo(poData);
+      let resolvedPo = poData as any;
+      if (!resolvedPo && docNum) {
+        const { data: byNumData } = await sapQuery(session, "PurchaseOrders", {
+          $filter: `DocNum eq ${docNum}`,
+          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName",
+          $top: 1,
+        }, false);
+        resolvedPo = (byNumData as any)?.value?.[0] || null;
+      }
+      setPo(resolvedPo);
+      const poEntry = Number(resolvedPo?.DocEntry || docEntry);
 
       // 2. Notas fiscais (PurchaseInvoices) que tenham linha vindas desse PC
+      let foundInvoices: any[] = [];
       try {
         const { data: invData } = await sapQuery(session, "PurchaseInvoices", {
-          $filter: `DocumentLines/any(d: d/BaseEntry eq ${docEntry} and d/BaseType eq 22)`,
+          $filter: `DocumentLines/any(d: d/BaseType eq 22 and d/BaseEntry eq ${poEntry})`,
           $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName",
           $top: 10,
-        });
-        setInvoices((invData as any)?.value || []);
+        }, false);
+        foundInvoices = (invData as any)?.value || [];
+        setInvoices(foundInvoices);
       } catch (e) {
         console.warn("PurchaseInvoices lookup failed:", e);
       }
 
       // 3. Pagamentos vinculados às NFs encontradas
-      const invs = (invoices && invoices.length ? invoices : []) as any[];
-      const docEntries = invs.map((i) => i.DocEntry);
+      const docEntries = foundInvoices.map((i) => i.DocEntry).filter((de) => de != null);
       if (docEntries.length > 0) {
         try {
           const filter = docEntries
-            .map((de) => `PaymentInvoices/any(p: p/DocEntry eq ${de})`)
+            .map((de) => `PaymentInvoices/any(p: p/InvoiceType eq 'it_PurchaseInvoice' and p/DocEntry eq ${de})`)
             .join(" or ");
           const { data: payData } = await sapQuery(session, "VendorPayments", {
             $filter: filter,
             $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,CardCode,CardName",
             $top: 20,
-          });
+          }, false);
           setPayments((payData as any)?.value || []);
         } catch (e) {
           console.warn("VendorPayments lookup failed:", e);
