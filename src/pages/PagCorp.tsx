@@ -54,6 +54,7 @@ import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
 import { SapValidationDialog } from "@/components/SapValidationDialog";
+import { RelationsMap, type RelationsMapExpense } from "@/components/RelationsMap";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
 import { useExpenses } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
