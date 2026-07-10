@@ -102,7 +102,7 @@ const STAGE_DEFS: { key: StageKey; label: string; icon: React.ComponentType<{ cl
   { key: "pc_lancado", label: "PC no SAP", icon: FileCheck2 },
   { key: "nf_entrada", label: "NF Entrada", icon: Receipt },
   { key: "pagamento", label: "Pagamento", icon: Wallet },
-  { key: "finalizado", label: "Finalizado", icon: CircleCheck },
+  { key: "finalizado", label: "Finalizado", icon: CheckCircle2 },
 ];
 
 const ORDER: StageKey[] = STAGE_DEFS.map((s) => s.key);
