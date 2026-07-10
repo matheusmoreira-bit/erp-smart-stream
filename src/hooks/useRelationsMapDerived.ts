@@ -243,6 +243,41 @@ export function useContasPagarLinks({
         console.warn("[relations-map] falha ao buscar PurchaseInvoices:", e);
       }
 
+      // Algumas NFs lançadas no SAP não preservam a linha base do PC no Service Layer,
+      // então o filtro por DocumentLines/BaseEntry pode voltar vazio. Usa o cache de
+      // NFs por PC como fallback para descobrir os DocEntries que devem ser casados
+      // contra VendorPayments[].PaymentInvoices[].DocEntry.
+      try {
+        const { data: cache, error: cacheErr } = await (supabase as any).rpc(
+          "get_nf_entrada_cache_by_po",
+          { _company_db: companyDb, _po_doc_entry: sapDocEntry },
+        );
+        if (!cacheErr && Array.isArray(cache)) {
+          const existing = new Set(invoices.map((i) => i.DocEntry));
+          const cachedInvoices = cache
+            .filter((r: any) => r?.cancelled !== "tYES" && Number.isFinite(Number(r?.doc_entry)))
+            .filter((r: any) => !existing.has(Number(r.doc_entry)))
+            .map((r: any) => {
+              const total = Number(r?.doc_total) || 0;
+              return {
+                DocEntry: Number(r?.doc_entry),
+                DocNum: Number(r?.doc_num),
+                DocDate: String(r?.doc_date || ""),
+                DocDueDate: null,
+                DocTotal: total,
+                PaidToDate: 0,
+                DocumentStatus: String(r?.document_status || ""),
+                CardCode: String(r?.card_code || supplierCode || ""),
+                CardName: String(r?.card_name || ""),
+                isFullyPaid: false,
+              } as PurchaseInvoiceLink;
+            });
+          invoices = [...invoices, ...cachedInvoices];
+        }
+      } catch (e) {
+        console.warn("[relations-map] falha ao buscar cache de NFs para AP:", e);
+      }
+
       // ── VendorPayments (Outgoing Payments): busca por CardCode das faturas
       // e casa pelas PaymentInvoices[].DocEntry ∈ set de invoices ───────────
       const payments: VendorPaymentLink[] = [];
@@ -382,10 +417,10 @@ export function useContasPagarLinks({
     return empty;
   }, [erpType, session, sapDocEntry, sapDocNum, companyDb, supplierCode]);
 
-  // v2: inclui VendorPayments no payload — bump da chave invalida cache antigo.
+  // v3: usa cache de NFs por PC como fallback para casar VendorPayments.
   const cacheKey =
     erpType === "sap" && sapDocEntry
-      ? `relmap:ap:sap:v2:${sapDocEntry}`
+      ? `relmap:ap:sap:v3:${sapDocEntry}`
       : erpType === "omie" && (sapDocNum || supplierCode)
         ? `relmap:ap:omie:v2:${sapDocNum || ""}:${supplierCode || ""}`
         : null;
