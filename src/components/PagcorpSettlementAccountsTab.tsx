@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { usePagcorpSettlementAccounts, type PagcorpSettlementAccount } from "@/hooks/usePagcorpSettlementAccounts";
 
@@ -14,6 +14,19 @@ interface Props {
 }
 
 type Draft = Partial<PagcorpSettlementAccount> & { _key: string };
+
+const CURRENCY_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "BRL", label: "PagCorp Real (BRL)" },
+  { value: "USD", label: "PagCorp Dólar (USD)" },
+  { value: "__any", label: "Qualquer moeda" },
+];
+
+function currencyLabel(cur: string | null | undefined) {
+  if (!cur) return "Qualquer moeda";
+  if (cur === "BRL") return "PagCorp Real (BRL)";
+  if (cur === "USD") return "PagCorp Dólar (USD)";
+  return cur;
+}
 
 export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
   const { items, loading, upsert, remove } = usePagcorpSettlementAccounts(companyDb || undefined);
@@ -41,6 +54,7 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
         id: (row as PagcorpSettlementAccount).id,
         company_db: companyDb,
         card_identifier: row.card_identifier ?? null,
+        currency: row.currency ?? null,
         settlement_account_code: row.settlement_account_code,
         cost_center: row.cost_center ?? null,
         project: row.project ?? null,
@@ -60,15 +74,16 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            Conta contábil do cartão PagCorp usada na baixa automática (Journal Entry) após a NF de entrada ser lançada.
+            Contas contábeis do PagCorp usadas na baixa automática (pagamento de fornecedor) após a NF de entrada ser lançada.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Deixe o campo <strong>Cartão</strong> em branco para definir o <Badge variant="secondary">Fallback</Badge> da empresa.
+            Cadastre uma linha para <strong>PagCorp Real (BRL)</strong> e outra para <strong>PagCorp Dólar (USD)</strong> por empresa.
+            Deixe <strong>Cartão</strong> vazio para valer como fallback da moeda.
           </p>
         </div>
         <Button
           size="sm"
-          onClick={() => setDraft({ _key: `new-${Date.now()}`, company_db: companyDb, enabled: true })}
+          onClick={() => setDraft({ _key: `new-${Date.now()}`, company_db: companyDb, enabled: true, currency: "BRL" })}
           disabled={!!draft}
         >
           <Plus className="w-4 h-4 mr-1" /> Novo
@@ -84,6 +99,7 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-56">Moeda</TableHead>
                 <TableHead>Cartão</TableHead>
                 <TableHead>Conta contábil</TableHead>
                 <TableHead>Centro de Custo</TableHead>
@@ -101,12 +117,11 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
                   onSave={() => save(draft)}
                   onCancel={() => setDraft(null)}
                   saving={savingId === "new"}
-                  isNew
                 />
               )}
               {rows.length === 0 && !draft ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
                     Nenhuma conta de baixa cadastrada.
                   </TableCell>
                 </TableRow>
@@ -137,33 +152,50 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
   );
 }
 
+function CurrencySelect({ value, onChange }: { value: string | null | undefined; onChange: (v: string | null) => void }) {
+  const selValue = value ?? "__any";
+  return (
+    <Select value={selValue} onValueChange={(v) => onChange(v === "__any" ? null : v)}>
+      <SelectTrigger className="h-9">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {CURRENCY_OPTIONS.map((o) => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function EditableRow({
   row,
   onChange,
   onSave,
   onCancel,
   saving,
-  isNew,
 }: {
   row: Draft;
   onChange: (r: Draft) => void;
   onSave: () => void;
   onCancel: () => void;
   saving: boolean;
-  isNew?: boolean;
 }) {
   return (
     <TableRow>
       <TableCell>
+        <CurrencySelect value={row.currency ?? null} onChange={(v) => onChange({ ...row, currency: v })} />
+      </TableCell>
+      <TableCell>
         <Input
-          placeholder="Últimos 4 dígitos ou ID (vazio = fallback)"
+          placeholder="Últimos 4 dígitos (vazio = fallback)"
           value={row.card_identifier ?? ""}
           onChange={(e) => onChange({ ...row, card_identifier: e.target.value || null })}
         />
       </TableCell>
       <TableCell>
         <Input
-          placeholder="Ex.: 2.1.03.001"
+          placeholder="Ex.: 1.1.03.001"
           value={row.settlement_account_code ?? ""}
           onChange={(e) => onChange({ ...row, settlement_account_code: e.target.value })}
         />
@@ -210,6 +242,7 @@ function EditableExistingRow({
   const dirty =
     local.settlement_account_code !== row.settlement_account_code ||
     (local.card_identifier || null) !== (row.card_identifier || null) ||
+    (local.currency || null) !== (row.currency || null) ||
     (local.cost_center || null) !== (row.cost_center || null) ||
     (local.project || null) !== (row.project || null) ||
     local.enabled !== row.enabled;
@@ -217,10 +250,14 @@ function EditableExistingRow({
   return (
     <TableRow>
       <TableCell>
+        <CurrencySelect value={local.currency} onChange={(v) => setLocal({ ...local, currency: v })} />
+        {!local.currency && <div className="mt-1"><Badge variant="outline">Sem moeda definida</Badge></div>}
+      </TableCell>
+      <TableCell>
         {row.card_identifier ? (
           <Input value={local.card_identifier ?? ""} onChange={(e) => setLocal({ ...local, card_identifier: e.target.value || null })} />
         ) : (
-          <Badge variant="secondary">Fallback</Badge>
+          <Badge variant="secondary">Fallback da moeda</Badge>
         )}
       </TableCell>
       <TableCell>
@@ -246,3 +283,6 @@ function EditableExistingRow({
     </TableRow>
   );
 }
+
+// Re-export helper for potential future use elsewhere.
+export { currencyLabel };
