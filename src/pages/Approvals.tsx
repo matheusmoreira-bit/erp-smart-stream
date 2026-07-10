@@ -1033,6 +1033,7 @@ function ApprovalDetailModal({
                       key={att.id}
                       type="button"
                       onClick={async () => {
+                        setViewer({ name: att.file_name, url: null });
                         try {
                           const { sapFunctionFetch } = await import("@/lib/auth-fetch");
                           const res = await sapFunctionFetch("expense-attachment-storage", {
@@ -1042,14 +1043,15 @@ function ApprovalDetailModal({
                           });
                           const data = await res.json().catch(() => null);
                           if (!res.ok || !data?.signed_url) throw new Error(data?.error || "URL indisponível");
-                          window.open(data.signed_url, "_blank", "noopener,noreferrer");
+                          openViewer(att.file_name, data.signed_url as string);
                         } catch (e) {
                           console.error("Erro ao abrir anexo:", e);
                           toast.error("Não foi possível abrir o anexo");
+                          setViewer(null);
                         }
                       }}
                       className="w-full text-left text-xs bg-muted/20 hover:bg-muted/40 px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
-                      title="Abrir anexo em nova aba"
+                      title="Visualizar anexo"
                     >
                       <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" />
                       <span className="truncate text-foreground underline decoration-dotted flex-1">{att.file_name}</span>
