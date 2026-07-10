@@ -290,6 +290,7 @@ Deno.serve(async (req) => {
     const cutoffLockIso = new Date(Date.now() - LOCK_TTL_MIN * 60_000).toISOString();
     let offset = 0;
 
+    const nowIso = new Date().toISOString();
     while (Date.now() - startedAt < TIME_BUDGET_MS) {
       const { data: rows, error } = await sb
         .from("pagcorp_integration_log")
@@ -299,6 +300,7 @@ Deno.serve(async (req) => {
         .not("company_db", "is", null)
         .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "error"])
         .or(`settlement_locked_at.is.null,settlement_locked_at.lt.${cutoffLockIso}`)
+        .or(`settlement_retry_after.is.null,settlement_retry_after.lt.${nowIso}`)
         .order("created_at", { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);
       if (error) throw new Error(error.message);
