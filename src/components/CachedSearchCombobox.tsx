@@ -43,6 +43,8 @@ export function CachedSearchCombobox({
   renderOptionBadge,
   renderEmptyState,
   footerHint,
+  isOptionDisabled,
+  getDisabledReason,
 }: CachedSearchComboboxProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
