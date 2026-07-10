@@ -427,6 +427,21 @@ Deno.serve(async (req) => {
                 let paymentDocNum: number | null = null;
 
                 if (!alreadyClosed) {
+                  // Moeda estrangeira → busca PTAX venda do BCB da data da fatura.
+                  // Sem PTAX disponível, adia a baixa (awaiting_settlement).
+                  const invCur = (invoice.DocCurrency || "").toUpperCase();
+                  let docRate: number | null = null;
+                  if (invCur && invCur !== "BRL") {
+                    const ptax = await fetchPtax(invCur, invoice.DocDate);
+                    if (!ptax) {
+                      if (!firstMissingAccountMsg) {
+                        firstMissingAccountMsg = `PTAX ${invCur} indisponível para ${invoice.DocDate}`;
+                      }
+                      continue;
+                    }
+                    docRate = ptax.rate;
+                  }
+
                   const payment = await createVendorPayment(baseUrl, cookie, {
                     invoiceEntry: invoice.DocEntry,
                     invoiceDocNum: invoice.DocNum,
@@ -439,6 +454,7 @@ Deno.serve(async (req) => {
                     costCenter: account.cost_center,
                     project: account.project,
                     bplId: invoice.BPLId,
+                    docRate,
                   });
                   paymentDocEntry = payment.docEntry;
                   paymentDocNum = payment.docNum;
