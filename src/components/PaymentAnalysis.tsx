@@ -537,7 +537,7 @@ export function PaymentAnalysis() {
           placeholder="Buscar por nº pagamento, fornecedor, solicitante..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
+          className="w-full sm:max-w-sm"
         />
         <div className="glass-card overflow-auto max-h-[600px]">
           <Table>
