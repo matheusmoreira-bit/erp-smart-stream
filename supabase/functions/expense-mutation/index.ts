@@ -459,23 +459,47 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   if (shouldResubmit || (attachmentsChanged && status === "pendente_aprovacao")) {
-    const parts: string[] = [];
+    // Motivo(s) que dispararam o reinício do fluxo — o log serve como
+    // trilha de auditoria, então listamos TODOS os gatilhos aplicáveis.
+    const reasons: string[] = [];
+    if (rateioChanged) reasons.push("tipo de rateio alterado");
+    if (editableForFix) reasons.push("correção após erro de integração SAP");
+    if (attachmentsChanged) reasons.push("anexos alterados");
+    if (reasons.length === 0) reasons.push("edição do documento");
+
+    // Detalhes completos das mudanças de anexos: contagem + nomes.
+    const attachmentDetails: string[] = [];
     if (attachmentsChanged) {
-      if (addedNames.length > 0) parts.push(`anexos adicionados: ${addedNames.join(", ")}`);
-      if (removedNames.length > 0) parts.push(`anexos removidos: ${removedNames.join(", ")}`);
+      if (addedNames.length > 0) {
+        attachmentDetails.push(
+          `+${addedNames.length} anexo(s) adicionado(s): ${addedNames.join(", ")}`,
+        );
+      }
+      if (removedNames.length > 0) {
+        attachmentDetails.push(
+          `-${removedNames.length} anexo(s) removido(s): ${removedNames.join(", ")}`,
+        );
+      }
     }
-    const attachmentNote = parts.length > 0 ? ` — ${parts.join("; ")}` : "";
+
+    const attachmentNote = attachmentDetails.length > 0
+      ? ` Detalhes de anexos: ${attachmentDetails.join("; ")}.`
+      : "";
+    const reasonNote = `Motivo: ${reasons.join(" + ")}.`;
+    const routingNote = resubmitFallbackUsed
+      ? `Solicitante coincide com aprovador(es); direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
+      : `Fluxo de aprovação reiniciado a partir do nível ${resubmittedLevel}.`;
+
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "submitted",
       approver_name: caller.identity,
       approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
       level_order: resubmittedLevel,
-      remarks: resubmitFallbackUsed
-        ? `Reenviado após edição${attachmentNote} — solicitante coincide com aprovador(es); direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
-        : `Reenviado após edição${attachmentNote} — fluxo de aprovação reiniciado a partir do nível ${resubmittedLevel}.`,
+      remarks: `Reenviado após edição. ${reasonNote} ${routingNote}${attachmentNote}`.trim(),
     } as any);
   }
+
 
   await admin.rpc("insert_audit_log", {
     p_action: "update_expense",
