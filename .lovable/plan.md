@@ -1,100 +1,77 @@
-## Objetivo
-Reformar as telas de Permissões do backoffice com pegada "menu iOS", tornar as ações explícitas por módulo (ver / criar / editar / excluir) e por capacidades transversais (ver tudo, delegar, etc.), garantir que a atribuição do usuário vale para todas as empresas (já vale — reforçar UI/copy), e consolidar os grupos "Aprovador" e "Usuário" em um único grupo "Usuário".
+# Sync interno de PC + NF + Contas a Pagar e resolver de relações
 
-## Premissa a confirmar
-"O grupo Aprovador e Usuario são identicos, migre todos para o grupo usuário e remova o grupo usuario" — interpretando como: **mesclar `Aprovador` no `Usuário` e apagar o grupo `Aprovador`**. Se for o contrário (manter `Aprovador` e apagar `Usuário`), me avise antes de aprovar.
+Hoje a validação PagCorp e o cálculo de relações batem no SAP Service Layer em tempo real (SapValidationDialog, pagcorp-settlement-watcher, RelationsMap). Isso é lento, cria carga no SL e falha em ambientes que barram `DocumentLines/any()`.
 
-## Modelo de dados
+A proposta é espelhar os três documentos no banco de forma incremental e resolver as relações internamente. A UI passa a ler apenas o Postgres.
 
-Hoje `permission_group_modules` guarda apenas `(group_id, module_key)` — booleano de acesso. Vamos passar para granularidade por ação:
+## O que já existe
+- `sap_nf_entrada_cache` + `sap_nf_entrada_sync_state` + função `sap-nf-entrada-sync` (NF de entrada incremental, com `base_po_doc_entry` já extraído). Mantido como está.
 
-```text
-permission_group_modules
-  group_id        uuid
-  module_key      text
-  can_view        bool  default true
-  can_create      bool  default false
-  can_edit        bool  default false
-  can_delete      bool  default false
-  PK (group_id, module_key)
-```
-
-Backfill: toda linha existente vira `can_view=true, can_create=true, can_edit=true, can_delete=true` (comportamento atual = acesso total ao módulo, sem regressão).
-
-Módulos que não têm sentido de CRUD (ex.: `analytics`, `audit_log`, `notifications`) exibem só o toggle "Acessar"; os demais exibem os 4 checkboxes.
-
-## Capacidades explícitas (flags transversais no grupo)
-
-Ficam como "módulos" especiais de permissão (linhas em `permission_group_modules` com `module_key` dedicado). Já existem `approvals_view_all`, `expenses_view_all`. Adicionar/renomear na constante `ALL_MODULES` como categoria "Capacidades":
-
-- `docs_view_all` — Ver todos os documentos (não só os próprios)
-- `approvals_view_all` — Ver todas as aprovações
-- `approvals_delegate` — Delegar aprovações
-- `approvals_transfer` — Transferir aprovações em massa
-- `approvals_override` — Aprovar fora do fluxo (admin-like)
-- `suppliers_reactivate` — Reativar fornecedor inativo
-- `expenses_cancel` — Cancelar documento próprio/de terceiros
-
-(Lista final ajusto conforme o que o app já checa; sem inventar capacidades que nenhum lugar consome.)
-
-## UI — "menu iOS"
-
-Substituir a tela atual (duas seções empilhadas com tabela) por navegação em drill-in:
+## Novas tabelas (migration)
 
 ```text
-┌ Permissões ────────────────────┐
-│  Grupos                     >  │  ← lista rolável, cada linha com chevron
-│  Usuários                   >  │
-└────────────────────────────────┘
+sap_purchase_order_cache
+  company_db, doc_entry (PK composto), doc_num, series,
+  card_code, card_name, doc_date, doc_due_date, doc_total, doc_total_fc,
+  doc_currency, document_status, cancelled, sap_update_date, raw_json, synced_at
+
+sap_purchase_order_sync_state
+  company_db (PK), last_update_date, last_doc_entry, last_run_at,
+  last_status, last_error, last_batch_count, total_synced
+
+sap_vendor_payment_cache
+  company_db, doc_entry (PK composto), doc_num, series, card_code, card_name,
+  doc_date, doc_total, doc_total_fc, doc_currency, document_status, cancelled,
+  invoice_links jsonb  -- [{docEntry, invoiceType, sumApplied, appliedFC}]
+  sap_update_date, raw_json, synced_at
+
+sap_vendor_payment_sync_state (mesmo shape do NF sync_state)
+
+pagcorp_document_relations
+  pagcorp_log_id uuid PK (FK -> pagcorp_integration_log.id)
+  company_db, po_doc_entry, po_doc_num, po_status, po_total, po_currency,
+  nf_doc_entries int[], payment_doc_entries int[],
+  po_found bool, nf_found bool, payment_found bool,
+  amount_matches bool, last_resolved_at timestamptz, resolve_error text
 ```
 
-- **Lista de grupos**: cartões estilo iOS (fundo `card`, bordas arredondadas 2xl, separadores 1px, tap-target ≥ 44px). Cada linha mostra nome + contagem de módulos + chevron. Botão "+" no header abre criador.
-- **Detalhe do grupo**: header com back, nome editável, descrição, e uma "settings-list" agrupada:
-  - Seção "Capacidades" (as flags transversais) — cada linha com Switch.
-  - Seção "Módulos" — cada módulo é uma linha expansível; ao expandir revela 4 toggles (Ver, Criar, Editar, Excluir). Um toggle mestre "Acesso" na linha desliga tudo.
-- **Lista de usuários**: search sticky no topo, cada item mostra nome/email e o grupo atual como badge âmbar; toque abre um action sheet (`Sheet` do shadcn, bottom) com a lista de grupos para escolher — sem `Select` inline, muito mais mobile-first.
-- **Mensagem global**: banner curto reforçando que a atribuição vale para **todas as empresas** (independente do ERP).
+Todas com RLS + GRANTs (admin read; service_role full).
 
-Paleta segue o padrão do backoffice já ajustado (âmbar Cactus como destaque, verde para confirmação, preto/branco base).
+## Novas edge functions
 
-## Migração de dados
+1. **`sap-po-cache-sync`** — clone do `sap-nf-entrada-sync` para `PurchaseOrders`. Sync incremental por `UpdateDate + DocEntry`, paginado, com `watcher-lock`. Ignora bases `SBO_TESTE_*`. Login exclusivo com `Apiuser` (mesma regra do `sap-sl-cache-refresh`).
 
-1. Adicionar colunas `can_view/can_create/can_edit/can_delete` em `permission_group_modules` com defaults `true` para preservar comportamento.
-2. Encontrar grupo `Aprovador` (case-insensitive). Para cada `user_group_assignments` que aponta pra ele:
-   - Reatribuir ao grupo `Usuário` (upsert em `(sap_email, group_id)`).
-3. Copiar módulos de `Aprovador` para `Usuário` (união, sem sobrescrever flags mais permissivas).
-4. `DELETE FROM permission_groups WHERE lower(name)='aprovador'`.
+2. **`sap-vendor-payment-cache-sync`** — análogo para `VendorPayments`. Extrai `PaymentInvoices` para `invoice_links` (para poder cruzar com NFs sem re-consultar o SAP).
 
-Migração idempotente (guardas `IF NOT EXISTS`, `ON CONFLICT DO NOTHING`).
+3. **`pagcorp-relations-resolver`** — lê `pagcorp_integration_log` com `sap_doc_entry not null` por empresa; para cada log:
+   - localiza PC em `sap_purchase_order_cache`
+   - localiza NFs em `sap_nf_entrada_cache` onde `base_po_doc_entry = po`
+   - localiza pagamentos em `sap_vendor_payment_cache` cujo `invoice_links` contenha uma das NFs
+   - grava/atualiza `pagcorp_document_relations` (upsert por `pagcorp_log_id`).
+  
+   Suporta modo cron (todos os logs stale) e manual (`{ logId }` ou `{ companyDb }`).
 
-## Consumo no app
+## Cron (via supabase--insert, não migration)
 
-- `usePermissions.ts`: `useModuleAccess` passa a expor `{ hasAccess, can: { view, create, edit, delete }, capabilities: Set<string> }`. `hasAccess` continua = `can.view` para compat.
-- `ALL_MODULES`: reorganizar em duas listas `MODULES` (com CRUD) e `CAPABILITIES` (flags booleanas).
-- Callers atuais (`useModuleAccess("expenses")` etc.) continuam funcionando sem mudança porque `hasAccess = can.view`. Ações destrutivas (delete button em Expenses, Suppliers) passam a checar `can.delete` — vou aplicar só nos lugares mais críticos nesta iteração; o resto fica como TODO explícito para não estourar o escopo.
+- `sap-po-cache-sync` a cada 5 min
+- `sap-vendor-payment-cache-sync` a cada 5 min
+- `pagcorp-relations-resolver` a cada 5 min (defasado 1 min do sync de NF já existente)
 
-## Escopo desta entrega
+## UI
 
-Feito:
-- Migração SQL (colunas + merge Aprovador→Usuário).
-- Novo `PermissionManager` com layout iOS drill-in.
-- Hook atualizado + tipos.
-- Aplicar `can.delete/edit/create` em 2-3 pontos críticos como referência (Expenses row actions, Suppliers row actions).
+- `SapValidationDialog` deixa de chamar `sapQuery`. Passa a receber `pagcorpLogId` e ler diretamente `pagcorp_document_relations` + os três `sap_*_cache`. Mostra `last_resolved_at` e um botão “Reconsultar” que invoca `pagcorp-relations-resolver` com `{ logId }`.
+- `PagCorp.tsx`: o card de transação exibe os campos vindos do cache (PC/NF/Pagamento) sem chamar SAP.
+- `pagcorp-settlement-watcher`: quando precisar procurar a NF de um PO, primeiro tenta `sap_nf_entrada_cache` por `base_po_doc_entry`; só cai no SAP se cache não tiver ainda.
+- `RelationsMap` continua funcionando; agora derivado de `pagcorp_document_relations` (já é consumido via hook que só precisa dos doc_entries).
 
-Fora do escopo (fica para próxima rodada, listado para você saber):
-- Aplicar `can.*` em todas as ~40 telas.
-- Renomear `expenses_view_all` → `docs_view_all` globalmente (mantido como alias por ora).
+## Ordem de entrega
+1. Migration das 4 tabelas + GRANTs + RLS.
+2. Edge functions `sap-po-cache-sync`, `sap-vendor-payment-cache-sync`, `pagcorp-relations-resolver`.
+3. Cron para as três.
+4. Refatorar `SapValidationDialog` e o watcher de baixa.
+5. Ajustes menores no `PagCorp.tsx`/`RelationsMap` para consumir a nova tabela.
 
-## Arquivos que devem mudar
-
-- `supabase/migrations/<novo>.sql` — schema + backfill + merge de grupos.
-- `src/hooks/usePermissions.ts` — novo shape, novas constantes.
-- `src/components/PermissionManager.tsx` — reescrito, drill-in.
-- (Novo) `src/components/permissions/GroupsList.tsx`, `GroupDetail.tsx`, `UsersList.tsx`, `AssignSheet.tsx`.
-- `src/integrations/supabase/types.ts` — regenerado após migração.
-- 2-3 telas que passam a checar `can.delete/edit` como prova de conceito.
-
-## Perguntas rápidas
-1. Confirma o merge **Aprovador → Usuário** (apaga `Aprovador`)?
-2. Ok manter compat: quem hoje só tem "acesso" no módulo ganha CRUD completo automaticamente (para não perder capacidade de uma hora pra outra)?
-3. Ok aplicar as checagens granulares em 2-3 pontos agora e o resto virar TODO, ou você quer eu propagar `can.delete/edit` em todas as telas nesta mesma entrega (aumenta bastante o tamanho)?
+## Observações técnicas
+- Só sincroniza empresas cuja `system_credentials.username = 'Apiuser'` (mesma trava do sap-sl-cache-refresh).
+- Todas as queries de UI passam a filtrar por `company_db = session.companyDB` (regra já registrada em memória).
+- Trabalho é pesado; nada removemos ainda. Cache e resolver rodam em paralelo à consulta live e, quando estabilizarem, cortamos o fallback.

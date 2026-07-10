@@ -1358,6 +1358,7 @@ export default function PagCorp() {
       <SapValidationDialog
         open={validateDialog.open}
         onClose={() => setValidateDialog({ open: false, tx: null })}
+        pagcorpLogId={validateDialog.tx?.integrationLogId ?? null}
         docEntry={(validateDialog.tx?.sapDocEntry as number | null) ?? null}
         docNum={(validateDialog.tx?.sapDocNum as number | null) ?? null}
         expectedAmount={validateDialog.tx ? Number(validateDialog.tx.amount) : undefined}
