@@ -1,8 +1,12 @@
 // Edge function: pagcorp-settlement-watcher
 //
 // Fluxo: PagCorp → PO no SAP → NF de Entrada fecha o PO → **este watcher**
-// gera um Journal Entry debitando o fornecedor e creditando a conta contábil
-// do cartão PagCorp (baixa automática).
+// emite um Pagamento de Fornecedor (VendorPayments) que baixa a
+// PurchaseInvoice em Contas a Pagar, tendo como conta de saída a GL do
+// cartão PagCorp cadastrada em `pagcorp_settlement_accounts`.
+//
+// (Antes de jul/2026 esta baixa era feita via JournalEntry avulso; foi
+// substituída para que o AP realmente feche no SAP em vez de ficar em aberto.)
 //
 // Cron: a cada 5 minutos. Lê `pagcorp_integration_log` com status='success'
 // e settlement_status ∈ (pending|awaiting_invoice|awaiting_settlement|error retryable).
@@ -105,11 +109,11 @@ async function resolveSettlementAccount(
 }
 
 async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: number): Promise<
-  Array<{ DocEntry: number; DocNum: number; CardCode: string; DocTotal: number; DocDate: string; BPLId?: number }>
+  Array<{ DocEntry: number; DocNum: number; CardCode: string; DocTotal: number; PaidToDate: number; DocumentStatus: string; DocCurrency: string; DocDate: string; BPLId?: number }>
 > {
   // 1 PO → N NF de entrada: retornamos TODAS as PurchaseInvoices que apontam para o PO.
   const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})` +
-    `&$select=DocEntry,DocNum,CardCode,DocTotal,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
+    `&$select=DocEntry,DocNum,CardCode,DocTotal,PaidToDate,DocumentStatus,DocCurrency,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
   const r = await fetch(q, { headers: { Cookie: cookie } });
   if (!r.ok) throw new Error(`Consulta PurchaseInvoices falhou ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = await r.json();
@@ -119,64 +123,73 @@ async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: numbe
     DocNum: Number(inv.DocNum),
     CardCode: String(inv.CardCode),
     DocTotal: Number(inv.DocTotal),
+    PaidToDate: Number(inv.PaidToDate ?? 0),
+    DocumentStatus: String(inv.DocumentStatus ?? ""),
+    DocCurrency: String(inv.DocCurrency ?? ""),
     DocDate: String(inv.DocDate),
     BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
   }));
 }
 
-async function createJournalEntry(
+/**
+ * Emite um Pagamento de Fornecedor (Outgoing Payment) que baixa a
+ * PurchaseInvoice indicada. A contrapartida contábil é a `TransferAccount`
+ * (GL configurada para o cartão PagCorp).
+ *
+ * Retorna { docEntry, docNum } do pagamento criado.
+ */
+async function createVendorPayment(
   baseUrl: string,
   cookie: string,
   args: {
-    refDate: string;
-    memo: string;
-    ref1: string;
-    ref2: string;
+    invoiceEntry: number;
+    invoiceDocNum: number;
+    invoiceDate: string;
     cardCode: string;
+    docCurrency: string;
     accountCode: string;
     amount: number;
+    memo: string;
     costCenter: string | null;
     project: string | null;
     bplId?: number;
   },
-): Promise<number> {
-  const line1: Record<string, unknown> = {
-    ShortName: args.cardCode,
-    Debit: args.amount,
-    Credit: 0,
-    ContraAccount: args.accountCode,
+): Promise<{ docEntry: number; docNum: number }> {
+  const body: Record<string, unknown> = {
+    DocType: "rSupplier",
+    CardCode: args.cardCode,
+    DocDate: args.invoiceDate,
+    TaxDate: args.invoiceDate,
+    DueDate: args.invoiceDate,
+    Remarks: args.memo.slice(0, 254),
+    JournalRemarks: args.memo.slice(0, 50),
+    TransferAccount: args.accountCode,
+    TransferSum: args.amount,
+    TransferDate: args.invoiceDate,
+    PaymentInvoices: [
+      {
+        DocEntry: args.invoiceEntry,
+        InvoiceType: "it_PurchaseInvoice",
+        SumApplied: args.amount,
+      },
+    ],
   };
-  const line2: Record<string, unknown> = {
-    AccountCode: args.accountCode,
-    Debit: 0,
-    Credit: args.amount,
-    ContraAccount: args.cardCode,
-  };
-  if (args.costCenter) line2.CostingCode = args.costCenter;
-  if (args.project) line2.ProjectCode = args.project;
-  if (args.bplId != null) {
-    line1.BPLID = args.bplId;
-    line2.BPLID = args.bplId;
-  }
+  if (args.docCurrency) body.DocCurrency = args.docCurrency;
+  if (args.bplId != null) body.BPLID = args.bplId;
+  if (args.costCenter) body.CostingCode = args.costCenter;
+  if (args.project) body.ProjectCode = args.project;
 
-  const body = {
-    ReferenceDate: args.refDate,
-    DueDate: args.refDate,
-    TaxDate: args.refDate,
-    Memo: args.memo.slice(0, 50),
-    Reference: args.ref1.slice(0, 27),
-    Reference2: args.ref2.slice(0, 27),
-    JournalEntryLines: [line1, line2],
-  };
-
-  const r = await fetch(`${baseUrl}/JournalEntries`, {
+  const r = await fetch(`${baseUrl}/VendorPayments`, {
     method: "POST",
     headers: { Cookie: cookie, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`JournalEntries falhou ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  if (!r.ok) throw new Error(`VendorPayments falhou ${r.status}: ${(await r.text()).slice(0, 300)}`);
   const j = await r.json();
-  return Number(j.JournalEntryNumber ?? j.Number ?? j.DocEntry);
+  return {
+    docEntry: Number(j.DocEntry),
+    docNum: Number(j.DocNum ?? j.DocEntry),
+  };
 }
 
 Deno.serve(async (req) => {
@@ -322,34 +335,54 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // 4. Cria um Journal Entry POR NF e vincula à NF de entrada correspondente
-              const jeNumbers: number[] = [];
+              // 4. Emite UM Pagamento de Fornecedor por NF, baixando a
+              //    PurchaseInvoice em Contas a Pagar. Idempotente: se a NF já
+              //    estiver totalmente paga (bost_Close ou PaidToDate >= DocTotal),
+              //    apenas registra o vínculo e não emite pagamento duplicado.
+              const paymentEntries: number[] = [];
+              const paymentNums: number[] = [];
               const invoiceEntries: number[] = [];
               const invoiceNums: number[] = [];
+              const skippedAlreadyPaid: number[] = [];
               for (const invoice of invoices) {
-                const jeNumber = await createJournalEntry(baseUrl, cookie, {
-                  refDate: invoice.DocDate,
-                  memo: `Baixa PagCorp PC ${po.DocNum ?? row.sap_doc_num} NF ${invoice.DocNum}`,
-                  ref1: String(po.DocNum ?? row.sap_doc_num ?? row.sap_doc_entry),
-                  ref2: String(invoice.DocNum),
-                  cardCode: invoice.CardCode,
-                  accountCode: account.settlement_account_code,
-                  amount: invoice.DocTotal,
-                  costCenter: account.cost_center,
-                  project: account.project,
-                  bplId: invoice.BPLId,
-                });
-                jeNumbers.push(jeNumber);
+                const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
+                const alreadyClosed = invoice.DocumentStatus === "bost_Close" || openAmount <= 0;
+
+                let paymentDocEntry: number | null = null;
+                let paymentDocNum: number | null = null;
+
+                if (!alreadyClosed) {
+                  const payment = await createVendorPayment(baseUrl, cookie, {
+                    invoiceEntry: invoice.DocEntry,
+                    invoiceDocNum: invoice.DocNum,
+                    invoiceDate: invoice.DocDate,
+                    cardCode: invoice.CardCode,
+                    docCurrency: invoice.DocCurrency,
+                    accountCode: account.settlement_account_code,
+                    amount: openAmount,
+                    memo: `Baixa PagCorp PC ${po.DocNum ?? row.sap_doc_num} NF ${invoice.DocNum}`,
+                    costCenter: account.cost_center,
+                    project: account.project,
+                    bplId: invoice.BPLId,
+                  });
+                  paymentDocEntry = payment.docEntry;
+                  paymentDocNum = payment.docNum;
+                  paymentEntries.push(payment.docEntry);
+                  paymentNums.push(payment.docNum);
+                } else {
+                  skippedAlreadyPaid.push(invoice.DocEntry);
+                }
+
                 invoiceEntries.push(invoice.DocEntry);
                 invoiceNums.push(invoice.DocNum);
 
-                // Vincula NF ↔ Conta a Pagar (PurchaseInvoice) na tabela de rastreamento
+                // Vincula NF ↔ Conta a Pagar (PurchaseInvoice) por PC (BaseEntry),
+                // não por valor exato. Uma NF que consuma este PC é o vínculo.
                 const { data: nfRow } = await sb
                   .from("nf_entrada_imports")
                   .select("id")
                   .eq("sap_company_db", companyDb)
                   .eq("sap_matched_po_doc_entry", String(row.sap_doc_entry))
-                  .eq("valor_total", invoice.DocTotal)
                   .maybeSingle();
                 if (nfRow?.id) {
                   await linkNfToAp(sb, {
@@ -359,20 +392,29 @@ Deno.serve(async (req) => {
                     apDocEntry: invoice.DocEntry,
                     apDocNum: invoice.DocNum,
                     apTotal: invoice.DocTotal,
+                    apPaid: (invoice.PaidToDate || 0) + (paymentDocEntry ? openAmount : 0),
+                    apCurrency: invoice.DocCurrency || null,
                     linkedBy: "pagcorp-settlement-watcher",
-                    notes: `JE ${jeNumber} gerado em ${invoice.DocDate}`,
+                    notes: paymentDocEntry
+                      ? `Pagamento ${paymentDocNum} emitido em ${invoice.DocDate}`
+                      : `NF já quitada no SAP (${invoice.DocumentStatus})`,
                   });
                 }
               }
+
+              const settlementNote: string[] = [];
+              if (paymentEntries.length > 1) settlementNote.push(`${paymentEntries.length} pagamentos emitidos (docs: ${paymentNums.join(", ")})`);
+              if (skippedAlreadyPaid.length > 0) settlementNote.push(`${skippedAlreadyPaid.length} NF(s) já quitadas`);
 
               await sb
                 .from("pagcorp_integration_log")
                 .update({
                   settlement_status: "settled",
-                  settlement_journal_entry: jeNumbers[0],
+                  settlement_payment_doc_entry: paymentEntries[0] ?? null,
+                  settlement_payment_doc_num: paymentNums[0] ?? null,
                   settlement_invoice_doc_entry: invoiceEntries[0],
                   settlement_invoice_doc_num: invoiceNums[0],
-                  settlement_error: jeNumbers.length > 1 ? `${jeNumbers.length} baixas emitidas (JEs: ${jeNumbers.join(", ")})` : null,
+                  settlement_error: settlementNote.length ? settlementNote.join(" | ") : null,
                   settlement_attempts: (row.settlement_attempts || 0) + 1,
                   settlement_attempted_at: new Date().toISOString(),
                   settlement_completed_at: new Date().toISOString(),
@@ -387,7 +429,7 @@ Deno.serve(async (req) => {
                 status: "ok",
                 duration_ms: Date.now() - t0,
                 request_meta: { poEntry: row.sap_doc_entry, invoiceEntries },
-                response_meta: { journalEntries: jeNumbers, account: account.settlement_account_code },
+                response_meta: { paymentEntries, paymentNums, account: account.settlement_account_code, skippedAlreadyPaid },
               });
               results.push({ id: row.id, status: "settled" });
             } catch (e) {

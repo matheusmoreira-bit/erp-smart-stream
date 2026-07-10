@@ -6,6 +6,42 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
+import { linkNfToAp } from "../_shared/link-nf-ap.ts";
+
+/**
+ * Consulta PurchaseInvoices no SAP que consumam o PC informado e registra
+ * o vínculo NF↔AP em `nf_entrada_contas_pagar`. Casamento é feito por
+ * BaseEntry do PC (1 PC → N NF → N AP), não por valor.
+ */
+async function linkPoInvoicesToNf(
+  sb: ReturnType<typeof createClient>,
+  baseUrl: string,
+  cookie: string,
+  args: { nfImportId: string; companyDb: string; poEntry: number },
+): Promise<number> {
+  const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${args.poEntry})` +
+    `&$select=DocEntry,DocNum,DocTotal,PaidToDate,DocCurrency&$orderby=DocEntry asc&$top=50`;
+  const r = await fetch(q, { headers: { Cookie: cookie } });
+  if (!r.ok) return 0;
+  const j = await r.json().catch(() => ({}));
+  const arr = Array.isArray(j?.value) ? j.value : [];
+  let linked = 0;
+  for (const inv of arr) {
+    const res = await linkNfToAp(sb, {
+      nfImportId: args.nfImportId,
+      source: "sap",
+      companyDb: args.companyDb,
+      apDocEntry: Number(inv.DocEntry),
+      apDocNum: Number(inv.DocNum),
+      apTotal: Number(inv.DocTotal),
+      apPaid: Number(inv.PaidToDate ?? 0),
+      apCurrency: inv.DocCurrency ? String(inv.DocCurrency) : null,
+      linkedBy: "nf-entrada-sap-watcher",
+    });
+    if (res.inserted) linked += 1;
+  }
+  return linked;
+}
 
 interface NfRow {
   id: string;
@@ -268,8 +304,67 @@ Deno.serve(async (req) => {
     if (rows.length < PAGE_SIZE) break; // última página
   }
 
-  await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "ok", `processed=${results.length}`);
-  return new Response(JSON.stringify({ ok: true, results, processed: results.length }), {
+  // Segunda passada: para NFs já `completed` que ainda não têm vínculo com
+  // Contas a Pagar (settlement_ap_count = 0), tenta localizar as
+  // PurchaseInvoices efetivas do PC e registrar o vínculo. Isso desacopla o
+  // linking do sucesso da baixa automática (antes só rodava no settlement).
+  const linkResults: Array<{ id: string; linked: number; error?: string }> = [];
+  try {
+    const { data: pending } = await sb
+      .from("nf_entrada_imports")
+      .select("id, sap_company_db, sap_matched_po_doc_entry, settlement_ap_count")
+      .eq("status", "completed")
+      .not("sap_matched_po_doc_entry", "is", null)
+      .or("settlement_ap_count.is.null,settlement_ap_count.eq.0")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    const byCompanyLink = new Map<string, Array<{ id: string; poEntry: number }>>();
+    for (const p of (pending || []) as Array<{ id: string; sap_company_db: string | null; sap_matched_po_doc_entry: string | null }>) {
+      if (!p.sap_company_db || !p.sap_matched_po_doc_entry) continue;
+      if (isTestCompanyDb(p.sap_company_db)) continue;
+      const poEntry = Number(p.sap_matched_po_doc_entry);
+      if (!Number.isFinite(poEntry)) continue;
+      const arr = byCompanyLink.get(p.sap_company_db) || [];
+      arr.push({ id: p.id, poEntry });
+      byCompanyLink.set(p.sap_company_db, arr);
+    }
+
+    for (const [companyDb, list] of byCompanyLink) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) break;
+      let cookie = "";
+      let baseUrl = "";
+      try {
+        const creds = await loadCreds(sb, companyDb);
+        baseUrl = buildBaseUrl(creds.service_layer_url);
+        cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+      } catch (e) {
+        for (const item of list) linkResults.push({ id: item.id, linked: 0, error: (e as Error).message });
+        continue;
+      }
+      try {
+        for (const item of list) {
+          try {
+            const linked = await linkPoInvoicesToNf(sb, baseUrl, cookie, {
+              nfImportId: item.id,
+              companyDb,
+              poEntry: item.poEntry,
+            });
+            linkResults.push({ id: item.id, linked });
+          } catch (e) {
+            linkResults.push({ id: item.id, linked: 0, error: (e as Error).message });
+          }
+        }
+      } finally {
+        await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.warn("[nf-entrada-sap-watcher] link pass failed:", (e as Error).message);
+  }
+
+  await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "ok", `processed=${results.length} linked=${linkResults.length}`);
+  return new Response(JSON.stringify({ ok: true, results, linkResults, processed: results.length }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
