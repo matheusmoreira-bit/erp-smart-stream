@@ -243,55 +243,115 @@ export function useContasPagarLinks({
         console.warn("[relations-map] falha ao buscar PurchaseInvoices:", e);
       }
 
+      // Algumas NFs lançadas no SAP não preservam a linha base do PC no Service Layer,
+      // então o filtro por DocumentLines/BaseEntry pode voltar vazio. Usa o cache de
+      // NFs por PC como fallback para descobrir os DocEntries que devem ser casados
+      // contra VendorPayments[].PaymentInvoices[].DocEntry.
+      try {
+        const { data: cache, error: cacheErr } = await (supabase as any).rpc(
+          "get_nf_entrada_cache_by_po",
+          { _company_db: companyDb, _po_doc_entry: sapDocEntry },
+        );
+        if (!cacheErr && Array.isArray(cache)) {
+          const existing = new Set(invoices.map((i) => i.DocEntry));
+          const cachedInvoices = cache
+            .filter((r: any) => r?.cancelled !== "tYES" && Number.isFinite(Number(r?.doc_entry)))
+            .filter((r: any) => !existing.has(Number(r.doc_entry)))
+            .map((r: any) => {
+              const total = Number(r?.doc_total) || 0;
+              return {
+                DocEntry: Number(r?.doc_entry),
+                DocNum: Number(r?.doc_num),
+                DocDate: String(r?.doc_date || ""),
+                DocDueDate: null,
+                DocTotal: total,
+                PaidToDate: 0,
+                DocumentStatus: String(r?.document_status || ""),
+                CardCode: String(r?.card_code || supplierCode || ""),
+                CardName: String(r?.card_name || ""),
+                isFullyPaid: false,
+              } as PurchaseInvoiceLink;
+            });
+          invoices = [...invoices, ...cachedInvoices];
+        }
+      } catch (e) {
+        console.warn("[relations-map] falha ao buscar cache de NFs para AP:", e);
+      }
+
       // ── VendorPayments (Outgoing Payments): busca por CardCode das faturas
       // e casa pelas PaymentInvoices[].DocEntry ∈ set de invoices ───────────
       const payments: VendorPaymentLink[] = [];
       const paymentsByInvoice: Record<number, VendorPaymentLink[]> = {};
       const invoiceEntrySet = new Set(invoices.map((i) => i.DocEntry));
       const cardCodes = Array.from(new Set(invoices.map((i) => i.CardCode).filter(Boolean)));
-      if (invoiceEntrySet.size > 0 && cardCodes.length > 0) {
-        try {
-          const cardFilter = cardCodes.map((c) => `CardCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
-          const vpFilter = encodeURIComponent(`Cancelled eq 'tNO' and (${cardFilter})`);
-          const vpEndpoint = `VendorPayments?$filter=${vpFilter}&$orderby=DocEntry desc&$top=200`;
-          const { data: vpData } = await sapQueryAll(session, vpEndpoint, undefined, false);
-          const vpRows = Array.isArray(vpData?.value) ? vpData.value : [];
-          for (const r of vpRows as any[]) {
-            const invLines = Array.isArray(r?.PaymentInvoices) ? r.PaymentInvoices : [];
-            const applied: Record<number, number> = {};
-            const invEntries: number[] = [];
-            for (const li of invLines) {
-              const de = Number(li?.DocEntry);
-              const it = String(li?.InvoiceType || "");
-              // it_PurchaseInvoice quita faturas de compra
-              if (it === "it_PurchaseInvoice" && invoiceEntrySet.has(de)) {
-                invEntries.push(de);
-                applied[de] = (applied[de] || 0) + (Number(li?.SumApplied) || 0);
-              }
-            }
-            if (invEntries.length === 0) continue;
-            const payment: VendorPaymentLink = {
-              DocEntry: Number(r?.DocEntry),
-              DocNum: Number(r?.DocNum),
-              DocDate: String(r?.DocDate || ""),
-              DocTotal:
-                Number(r?.BillOfExchangeAmount) ||
-                Number(r?.CashSum) ||
-                Number(r?.TransferSum) ||
-                Object.values(applied).reduce((a, b) => a + b, 0),
-              CardCode: String(r?.CardCode || ""),
-              CardName: String(r?.CardName || ""),
-              Remarks: r?.Remarks ?? null,
-              invoiceDocEntries: invEntries,
-              appliedByInvoice: applied,
-            };
-            payments.push(payment);
-            for (const de of invEntries) {
-              (paymentsByInvoice[de] ||= []).push(payment);
+      const seenPaymentEntries = new Set<number>();
+      const registerPaymentRows = (vpRows: any[]) => {
+        for (const r of vpRows) {
+          const paymentDocEntry = Number(r?.DocEntry);
+          if (!Number.isFinite(paymentDocEntry) || seenPaymentEntries.has(paymentDocEntry)) continue;
+          const invLines = Array.isArray(r?.PaymentInvoices) ? r.PaymentInvoices : [];
+          const applied: Record<number, number> = {};
+          const invEntries: number[] = [];
+          for (const li of invLines) {
+            const de = Number(li?.DocEntry);
+            const it = String(li?.InvoiceType || "");
+            // it_PurchaseInvoice quita faturas de compra
+            if (it === "it_PurchaseInvoice" && invoiceEntrySet.has(de)) {
+              invEntries.push(de);
+              applied[de] = (applied[de] || 0) + (Number(li?.SumApplied) || 0);
             }
           }
-        } catch (e) {
-          console.warn("[relations-map] falha ao buscar VendorPayments:", e);
+          if (invEntries.length === 0) continue;
+          seenPaymentEntries.add(paymentDocEntry);
+          const payment: VendorPaymentLink = {
+            DocEntry: paymentDocEntry,
+            DocNum: Number(r?.DocNum),
+            DocDate: String(r?.DocDate || ""),
+            DocTotal:
+              Number(r?.BillOfExchangeAmount) ||
+              Number(r?.CashSum) ||
+              Number(r?.TransferSum) ||
+              Object.values(applied).reduce((a, b) => a + b, 0),
+            CardCode: String(r?.CardCode || ""),
+            CardName: String(r?.CardName || ""),
+            Remarks: r?.Remarks ?? null,
+            invoiceDocEntries: invEntries,
+            appliedByInvoice: applied,
+          };
+          payments.push(payment);
+          for (const de of invEntries) {
+            (paymentsByInvoice[de] ||= []).push(payment);
+          }
+        }
+      };
+      if (invoiceEntrySet.size > 0) {
+        // Primeiro tenta o vínculo exato: VendorPayments -> PaymentInvoices -> DocEntry da NF.
+        // Esse é o modelo observado no SAP (ex.: AP DocEntry 3100 paga NF DocEntry 6370).
+        for (const invoiceDocEntry of Array.from(invoiceEntrySet).slice(0, 20)) {
+          try {
+            const vpByInvoiceFilter = encodeURIComponent(
+              `Cancelled eq 'tNO' and PaymentInvoices/any(i: i/DocEntry eq ${invoiceDocEntry} and i/InvoiceType eq 'it_PurchaseInvoice')`,
+            );
+            const vpByInvoiceEndpoint = `VendorPayments?$filter=${vpByInvoiceFilter}&$orderby=DocEntry desc`;
+            const { data: vpByInvoiceData } = await sapQueryAll(session, vpByInvoiceEndpoint, undefined, false);
+            registerPaymentRows(Array.isArray(vpByInvoiceData?.value) ? vpByInvoiceData.value : []);
+          } catch (e) {
+            console.warn(`[relations-map] falha ao buscar VendorPayments da NF ${invoiceDocEntry}:`, e);
+          }
+        }
+
+        // Fallback: algumas versões do Service Layer não aceitam filtro any() em PaymentInvoices.
+        // Busca os pagamentos recentes do fornecedor e filtra localmente pelas linhas da NF.
+        if (cardCodes.length > 0) {
+          try {
+            const cardFilter = cardCodes.map((c) => `CardCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
+            const vpFilter = encodeURIComponent(`Cancelled eq 'tNO' and (${cardFilter})`);
+            const vpEndpoint = `VendorPayments?$filter=${vpFilter}&$orderby=DocEntry desc&$top=500`;
+            const { data: vpData } = await sapQueryAll(session, vpEndpoint, undefined, false);
+            registerPaymentRows(Array.isArray(vpData?.value) ? vpData.value : []);
+          } catch (e) {
+            console.warn("[relations-map] falha ao buscar VendorPayments:", e);
+          }
         }
       }
 
@@ -382,10 +442,10 @@ export function useContasPagarLinks({
     return empty;
   }, [erpType, session, sapDocEntry, sapDocNum, companyDb, supplierCode]);
 
-  // v2: inclui VendorPayments no payload — bump da chave invalida cache antigo.
+  // v4: consulta VendorPayments diretamente por PaymentInvoices/DocEntry da NF.
   const cacheKey =
     erpType === "sap" && sapDocEntry
-      ? `relmap:ap:sap:v2:${sapDocEntry}`
+      ? `relmap:ap:sap:v4:${sapDocEntry}`
       : erpType === "omie" && (sapDocNum || supplierCode)
         ? `relmap:ap:omie:v2:${sapDocNum || ""}:${supplierCode || ""}`
         : null;
