@@ -725,43 +725,69 @@ export default function Admin() {
                     transition={{ delay: i * 0.05 }}
                     className="glass-card overflow-hidden"
                   >
-                    {/* Company row */}
-                    <div className="flex items-center gap-4 p-4">
-                      <div className="p-2 rounded-lg bg-muted">
-                        <Building2 className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-foreground">{c.display_name}</p>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                            {ERP_TYPE_LABELS[c.erp_type]?.label || c.erp_type}
-                          </Badge>
+                    {/* Company row — mobile-first */}
+                    <div className="p-3 sm:p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-muted shrink-0">
+                          <Building2 className="w-5 h-5 text-muted-foreground" />
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono">
-                          {c.company_db}
-                          {c.is_foreign && c.foreign_name ? ` · ${c.foreign_name}` : ""}
-                          {!c.is_foreign && c.legal_name ? ` · ${c.legal_name}` : ""}
-                          {!c.is_foreign && c.tax_id ? ` · ${c.tax_id}` : ""}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-foreground truncate max-w-[60vw] sm:max-w-none">{c.display_name}</p>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                              {ERP_TYPE_LABELS[c.erp_type]?.label || c.erp_type}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] px-1.5 py-0 shrink-0 border-transparent",
+                                c.is_active
+                                  ? "bg-[hsl(var(--cactus-green))]/15 text-[hsl(var(--cactus-green))]"
+                                  : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {c.is_active ? "Ativa" : "Inativa"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">
+                            {c.company_db}
+                            {c.is_foreign && c.foreign_name ? ` · ${c.foreign_name}` : ""}
+                            {!c.is_foreign && c.legal_name ? ` · ${c.legal_name}` : ""}
+                            {!c.is_foreign && c.tax_id ? ` · ${c.tax_id}` : ""}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0"
+                          onClick={() => toggleExpand(c.company_db)}
+                          aria-label={expandedCompany === c.company_db ? "Recolher" : "Expandir"}
+                        >
+                          {expandedCompany === c.company_db ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                        </Button>
                       </div>
-                      <Badge variant={c.is_active ? "default" : "secondary"}>
-                        {c.is_active ? "Ativa" : "Inativa"}
-                      </Badge>
-                      <Switch checked={c.is_active} onCheckedChange={() => toggleActive(c)} />
-                      <Button variant="ghost" size="icon" onClick={() => openEditCompany(c)}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteCompany(c)}>
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => toggleExpand(c.company_db)}>
-                        {expandedCompany === c.company_db ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                      </Button>
+
+                      {/* Actions row — separated to avoid overflow on mobile */}
+                      <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-border/50">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                          <Switch checked={c.is_active} onCheckedChange={() => toggleActive(c)} />
+                          <span>{c.is_active ? "Ativa" : "Desativada"}</span>
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditCompany(c)} aria-label="Editar">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteCompany(c)} aria-label="Excluir">
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
+
 
                     {/* Credentials panel — system cards */}
                     {expandedCompany === c.company_db && (
