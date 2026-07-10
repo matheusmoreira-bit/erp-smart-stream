@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal } from "lucide-react";
 import {
   Building2,
   Plus,
@@ -24,9 +24,12 @@ import {
   RefreshCw,
   Users,
   ShieldCheck,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "next-themes";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -38,6 +41,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +56,8 @@ import IntegrationsTab from "@/components/IntegrationsTab";
 import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import TransferApprovalsTool from "@/components/TransferApprovalsTool";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
