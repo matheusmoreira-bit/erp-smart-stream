@@ -2001,7 +2001,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       {/* Modal de filtros avançados */}
       <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-3xl sm:max-h-[90vh] sm:rounded-lg sm:border">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <SlidersHorizontal className="w-4 h-4 text-primary" /> Filtros avançados
