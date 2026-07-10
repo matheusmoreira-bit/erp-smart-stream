@@ -3830,7 +3830,7 @@ export function CreateExpenseModal({
         (grupo atual, deferido, cancelado ou com falha), mostra a extração
         completa; caso contrário, usa apenas o snapshot da QueueEntry. */}
     <Dialog open={!!detailsView} onOpenChange={(v) => { if (!v) setDetailsView(null); }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-3xl sm:max-h-[85vh] sm:rounded-lg sm:border">
         <DialogHeader>
           <DialogTitle>
             Detalhes: {detailsView?.entry.supplierLabel}
