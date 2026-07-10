@@ -354,22 +354,10 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // 3. Resolve conta contábil de baixa
+              // 3. Card key + preparo (a conta contábil de baixa é resolvida
+              //    por NF pois depende da moeda da fatura: PagCorp Real (BRL) ×
+              //    PagCorp Dólar (USD)).
               const cardKey = extractCardKey(row.pagcorp_data);
-              const account = await resolveSettlementAccount(sb, companyDb, cardKey);
-              if (!account) {
-                await sb
-                  .from("pagcorp_integration_log")
-                  .update({
-                    settlement_status: "skipped",
-                    settlement_error: `Sem conta contábil de baixa cadastrada (empresa=${companyDb}, cartão=${cardKey ?? "fallback"})`,
-                    settlement_locked_at: null,
-                    settlement_attempted_at: new Date().toISOString(),
-                  })
-                  .eq("id", row.id);
-                results.push({ id: row.id, status: "skipped", error: "no_settlement_account" });
-                continue;
-              }
 
               // 4. Emite UM Pagamento de Fornecedor por NF, baixando a
               //    PurchaseInvoice em Contas a Pagar. Idempotente: se a NF já
@@ -380,9 +368,20 @@ Deno.serve(async (req) => {
               const invoiceEntries: number[] = [];
               const invoiceNums: number[] = [];
               const skippedAlreadyPaid: number[] = [];
+              const accountsUsed: string[] = [];
+              let firstMissingAccountMsg: string | null = null;
               for (const invoice of invoices) {
                 const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
                 const alreadyClosed = invoice.DocumentStatus === "bost_Close" || openAmount <= 0;
+
+                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invoice.DocCurrency || null);
+                if (!account) {
+                  if (!firstMissingAccountMsg) {
+                    firstMissingAccountMsg = `Sem conta contábil de baixa (empresa=${companyDb}, cartão=${cardKey ?? "fallback"}, moeda=${invoice.DocCurrency || "?"})`;
+                  }
+                  continue;
+                }
+                accountsUsed.push(account.settlement_account_code);
 
                 let paymentDocEntry: number | null = null;
                 let paymentDocNum: number | null = null;
