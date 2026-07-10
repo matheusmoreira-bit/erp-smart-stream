@@ -55,6 +55,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMergedSupplierOptions, type CrossCompanyMatch, type EnrichedSupplierOption } from "@/hooks/useMergedSupplierOptions";
 import { useCompanies } from "@/hooks/useCompanies";
 import { onlyDigits } from "@/lib/supplier-search";
+import { SupplierEmptyState } from "@/components/SupplierEmptyState";
 import {
   hashFileContent,
   findExistingClaims,
