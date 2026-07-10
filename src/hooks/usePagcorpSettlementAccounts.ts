@@ -5,6 +5,7 @@ export interface PagcorpSettlementAccount {
   id: string;
   company_db: string;
   card_identifier: string | null;
+  currency: string | null;
   settlement_account_code: string;
   cost_center: string | null;
   project: string | null;
@@ -25,6 +26,7 @@ export function usePagcorpSettlementAccounts(companyDb?: string | null) {
       .from("pagcorp_settlement_accounts")
       .select("*")
       .order("company_db", { ascending: true })
+      .order("currency", { ascending: true, nullsFirst: true })
       .order("card_identifier", { ascending: true, nullsFirst: true });
     if (companyDb) q = q.eq("company_db", companyDb);
     const { data, error: err } = await q;
@@ -39,6 +41,7 @@ export function usePagcorpSettlementAccounts(companyDb?: string | null) {
     const payload = {
       company_db: row.company_db,
       card_identifier: row.card_identifier ?? null,
+      currency: row.currency ? row.currency.toUpperCase() : null,
       settlement_account_code: row.settlement_account_code,
       cost_center: row.cost_center ?? null,
       project: row.project ?? null,
