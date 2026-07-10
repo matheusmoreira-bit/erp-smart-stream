@@ -2444,6 +2444,58 @@ export function CreateExpenseModal({
               suggestedQuery={suggestedSupplierName}
               portalContainer={dialogContainer}
               required
+              renderOptionBadge={(opt) => {
+                const eo = opt as EnrichedSupplierOption;
+                if (eo.frozen) {
+                  return (
+                    <span className="shrink-0 rounded-sm border border-muted-foreground/30 bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Inativo
+                    </span>
+                  );
+                }
+                if (eo.notSynced) {
+                  return (
+                    <span
+                      className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                      title={eo.syncStatus ? `Status: ${eo.syncStatus}` : "Não sincronizado com o SAP"}
+                    >
+                      Não sincronizado
+                    </span>
+                  );
+                }
+                return null;
+              }}
+              footerHint={
+                currentCompanyLabel ? (
+                  <span>
+                    Buscando em <strong className="text-foreground">{currentCompanyLabel}</strong>
+                    {" · "}
+                    <span className="tabular-nums">{supplierActiveCount}</span> {isSales ? "clientes" : "fornecedores"} ativos
+                  </span>
+                ) : null
+              }
+              renderEmptyState={(query) => (
+                <SupplierEmptyState
+                  query={query}
+                  bpLabel={bpLabel}
+                  currentCompanyLabel={currentCompanyLabel}
+                  onCreateNew={() => {
+                    // Pré-preenche o SupplierFormModal com o texto digitado.
+                    const digits = onlyDigits(query);
+                    const looksLikeCnpj = digits.length >= 11;
+                    setAiSupplierData({
+                      card_name: looksLikeCnpj ? undefined : query,
+                      federal_tax_id: looksLikeCnpj ? digits : undefined,
+                    } as SupplierFormPrefill);
+                    setShowSupplierForm(true);
+                  }}
+                  onRefresh={() => {
+                    reloadSuppliers();
+                    toast.success("Lista atualizada");
+                  }}
+                  crossCompanyLookup={crossCompanyLookup}
+                />
+              )}
             />
             {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
                 <div className="mt-2 flex min-w-0 flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 sm:flex-row sm:items-start">
