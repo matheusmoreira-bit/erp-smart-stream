@@ -94,7 +94,12 @@ export default function AnalyticsPage() {
           </TabsContent>
 
           <TabsContent value="pagamentos" className="mt-6">
-            <PaymentAnalysis />
+            <ErrorBoundary
+              fallbackTitle="Erro ao carregar Análise de Pagamentos"
+              fallbackMessage="Alguns registros vieram com dados incompletos. Tente atualizar ou selecionar outro período."
+            >
+              <PaymentAnalysis />
+            </ErrorBoundary>
           </TabsContent>
         </Tabs>
       </main>
