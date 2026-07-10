@@ -172,21 +172,22 @@ export function CreateExpenseModal({
   const [draftHydrated, setDraftHydrated] = useState(false);
 
   // Cached SAP lists
-  const supplierMapRow = useCallback((row: any) => ({
-    code: row.CardCode,
-    name: row.CardName,
-    extra: row.FederalTaxID || undefined,
-    currency: row.Currency || "",
-    details: { fantasyName: row.AliasName || undefined, taxId: row.FederalTaxID || undefined },
-  } as SapSearchOption & { currency: string }), []);
-  const { options: supplierOptions, isLoading: suppliersLoading, reload: reloadSuppliers } = useSapCachedList({
-    cacheKey: isSales ? "customers_active_v2" : "suppliers_active_v2",
-    endpoint: "BusinessPartners",
-    params: isSales
-      ? { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cCustomer' and Frozen eq 'tNO'" }
-      : { $select: "CardCode,CardName,AliasName,FederalTaxID,Currency", $filter: "CardType eq 'cSupplier' and Frozen eq 'tNO'" },
-    mapRow: supplierMapRow,
+  // Fornecedor: hook enriquecido que faz merge com public.suppliers,
+  // inclui fornecedores locais não-sincronizados e permite lookup cross-company.
+  const {
+    options: supplierOptions,
+    isLoading: suppliersLoading,
+    reload: reloadSuppliers,
+    crossCompanyLookup,
+    activeCount: supplierActiveCount,
+  } = useMergedSupplierOptions({
+    companyDb: sapSession?.companyDB || null,
+    isSales,
   });
+  const { getLabel: getCompanyLabel } = useCompanies();
+  const currentCompanyLabel = sapSession?.companyDB
+    ? getCompanyLabel(sapSession.companyDB)
+    : "";
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
   const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
