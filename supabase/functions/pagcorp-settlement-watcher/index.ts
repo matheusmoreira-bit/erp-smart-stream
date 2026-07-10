@@ -109,11 +109,11 @@ async function resolveSettlementAccount(
 }
 
 async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: number): Promise<
-  Array<{ DocEntry: number; DocNum: number; CardCode: string; DocTotal: number; DocDate: string; BPLId?: number }>
+  Array<{ DocEntry: number; DocNum: number; CardCode: string; DocTotal: number; PaidToDate: number; DocumentStatus: string; DocCurrency: string; DocDate: string; BPLId?: number }>
 > {
   // 1 PO → N NF de entrada: retornamos TODAS as PurchaseInvoices que apontam para o PO.
   const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})` +
-    `&$select=DocEntry,DocNum,CardCode,DocTotal,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
+    `&$select=DocEntry,DocNum,CardCode,DocTotal,PaidToDate,DocumentStatus,DocCurrency,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
   const r = await fetch(q, { headers: { Cookie: cookie } });
   if (!r.ok) throw new Error(`Consulta PurchaseInvoices falhou ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = await r.json();
@@ -123,64 +123,73 @@ async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: numbe
     DocNum: Number(inv.DocNum),
     CardCode: String(inv.CardCode),
     DocTotal: Number(inv.DocTotal),
+    PaidToDate: Number(inv.PaidToDate ?? 0),
+    DocumentStatus: String(inv.DocumentStatus ?? ""),
+    DocCurrency: String(inv.DocCurrency ?? ""),
     DocDate: String(inv.DocDate),
     BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
   }));
 }
 
-async function createJournalEntry(
+/**
+ * Emite um Pagamento de Fornecedor (Outgoing Payment) que baixa a
+ * PurchaseInvoice indicada. A contrapartida contábil é a `TransferAccount`
+ * (GL configurada para o cartão PagCorp).
+ *
+ * Retorna { docEntry, docNum } do pagamento criado.
+ */
+async function createVendorPayment(
   baseUrl: string,
   cookie: string,
   args: {
-    refDate: string;
-    memo: string;
-    ref1: string;
-    ref2: string;
+    invoiceEntry: number;
+    invoiceDocNum: number;
+    invoiceDate: string;
     cardCode: string;
+    docCurrency: string;
     accountCode: string;
     amount: number;
+    memo: string;
     costCenter: string | null;
     project: string | null;
     bplId?: number;
   },
-): Promise<number> {
-  const line1: Record<string, unknown> = {
-    ShortName: args.cardCode,
-    Debit: args.amount,
-    Credit: 0,
-    ContraAccount: args.accountCode,
+): Promise<{ docEntry: number; docNum: number }> {
+  const body: Record<string, unknown> = {
+    DocType: "rSupplier",
+    CardCode: args.cardCode,
+    DocDate: args.invoiceDate,
+    TaxDate: args.invoiceDate,
+    DueDate: args.invoiceDate,
+    Remarks: args.memo.slice(0, 254),
+    JournalRemarks: args.memo.slice(0, 50),
+    TransferAccount: args.accountCode,
+    TransferSum: args.amount,
+    TransferDate: args.invoiceDate,
+    PaymentInvoices: [
+      {
+        DocEntry: args.invoiceEntry,
+        InvoiceType: "it_PurchaseInvoice",
+        SumApplied: args.amount,
+      },
+    ],
   };
-  const line2: Record<string, unknown> = {
-    AccountCode: args.accountCode,
-    Debit: 0,
-    Credit: args.amount,
-    ContraAccount: args.cardCode,
-  };
-  if (args.costCenter) line2.CostingCode = args.costCenter;
-  if (args.project) line2.ProjectCode = args.project;
-  if (args.bplId != null) {
-    line1.BPLID = args.bplId;
-    line2.BPLID = args.bplId;
-  }
+  if (args.docCurrency) body.DocCurrency = args.docCurrency;
+  if (args.bplId != null) body.BPLID = args.bplId;
+  if (args.costCenter) body.CostingCode = args.costCenter;
+  if (args.project) body.ProjectCode = args.project;
 
-  const body = {
-    ReferenceDate: args.refDate,
-    DueDate: args.refDate,
-    TaxDate: args.refDate,
-    Memo: args.memo.slice(0, 50),
-    Reference: args.ref1.slice(0, 27),
-    Reference2: args.ref2.slice(0, 27),
-    JournalEntryLines: [line1, line2],
-  };
-
-  const r = await fetch(`${baseUrl}/JournalEntries`, {
+  const r = await fetch(`${baseUrl}/VendorPayments`, {
     method: "POST",
     headers: { Cookie: cookie, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`JournalEntries falhou ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  if (!r.ok) throw new Error(`VendorPayments falhou ${r.status}: ${(await r.text()).slice(0, 300)}`);
   const j = await r.json();
-  return Number(j.JournalEntryNumber ?? j.Number ?? j.DocEntry);
+  return {
+    docEntry: Number(j.DocEntry),
+    docNum: Number(j.DocNum ?? j.DocEntry),
+  };
 }
 
 Deno.serve(async (req) => {
