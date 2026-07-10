@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal } from "lucide-react";
 import {
   Building2,
   Plus,
@@ -24,9 +24,12 @@ import {
   RefreshCw,
   Users,
   ShieldCheck,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "next-themes";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -38,6 +41,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +56,8 @@ import IntegrationsTab from "@/components/IntegrationsTab";
 import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import TransferApprovalsTool from "@/components/TransferApprovalsTool";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -365,6 +371,8 @@ export default function Admin() {
 
   // Audit log
   const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions" | "admin_users" | "tools">("companies");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
   const auditCompanyDb = auditCompanyFilter === "all" ? undefined : auditCompanyFilter;
   const { entries: auditEntries, isLoading: auditLoading, refresh: auditRefresh } = useAuditLog(auditCompanyDb);
@@ -602,19 +610,21 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Shield className="w-5 h-5 text-primary" />
+      {/* Header — mobile first */}
+      <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1 rounded-lg bg-[hsl(var(--cactus-amber))]/10 border border-[hsl(var(--cactus-amber))]/20 shrink-0">
+              <img src={cactusLogo.url} alt="Cactus" className="w-7 h-7 object-contain" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Backoffice</h1>
-              <p className="text-xs text-muted-foreground">Gerenciamento de empresas e credenciais</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-foreground leading-tight truncate">Backoffice</h1>
+              <p className="hidden sm:block text-xs text-muted-foreground truncate">Gerenciamento de empresas e credenciais</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Desktop actions */}
+          <div className="hidden md:flex items-center gap-2 shrink-0">
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <ArrowLeft className="w-4 h-4 mr-1" />
@@ -625,93 +635,71 @@ export default function Admin() {
               Sair
             </Button>
           </div>
+
+          {/* Mobile hamburger */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden shrink-0"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Abrir menu"
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* Desktop tabs */}
+        <div className="hidden md:block max-w-5xl mx-auto px-6">
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+            {[
+              { key: "companies", label: "Empresas", icon: Building2 },
+              { key: "permissions", label: "Permissões", icon: Users },
+              { key: "integrations", label: "Integrações", icon: Key },
+              { key: "audit", label: "Logs", icon: ScrollText },
+              { key: "admin_users", label: "Admins", icon: ShieldCheck },
+              { key: "tools", label: "Ferramentas", icon: Wrench },
+            ].map((t) => {
+              const Icon = t.icon;
+              const isActive = activeTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key as typeof activeTab)}
+                  className={cn(
+                    "relative px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5",
+                    isActive ? "text-[hsl(var(--cactus-amber))]" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  {t.label}
+                  {isActive && (
+                    <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[hsl(var(--cactus-amber))]" />
+                  )}
+                </button>
+              );
+            })}
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                onClick={() => navigate("/backoffice/audit-trail")}
+                className="px-3 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+              >
+                <FileCheck2 className="w-4 h-4" />
+                Audit Trail
+              </button>
+              <button
+                onClick={() => navigate("/backoffice/sap-users")}
+                className="px-3 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+              >
+                <Users className="w-4 h-4" />
+                Usuários SAP
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        {/* Tabs */}
-        <div className="flex items-center gap-1 mb-6 border-b border-border">
-          <button
-            onClick={() => setActiveTab("companies")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "companies"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Building2 className="w-4 h-4 inline mr-1.5" />
-            Empresas
-          </button>
-          <button
-            onClick={() => setActiveTab("permissions")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "permissions"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Users className="w-4 h-4 inline mr-1.5" />
-            Permissões
-          </button>
-          <button
-            onClick={() => setActiveTab("integrations")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "integrations"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Key className="w-4 h-4 inline mr-1.5" />
-            Integrações
-          </button>
-          <button
-            onClick={() => setActiveTab("audit")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "audit"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <ScrollText className="w-4 h-4 inline mr-1.5" />
-            Logs de Auditoria
-          </button>
-          <button
-            onClick={() => setActiveTab("admin_users")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "admin_users"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4 inline mr-1.5" />
-            Administradores
-          </button>
-          <button
-            onClick={() => setActiveTab("tools")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "tools"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <RefreshCw className="w-4 h-4 inline mr-1.5" />
-            Ferramentas
-          </button>
-          <button
-            onClick={() => navigate("/backoffice/audit-trail")}
-            className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Shield className="w-4 h-4 inline mr-1.5" />
-            Audit Trail
-          </button>
-          <button
-            onClick={() => navigate("/backoffice/sap-users")}
-            className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Users className="w-4 h-4 inline mr-1.5" />
-            Usuários SAP
-          </button>
-        </div>
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 md:pb-8">
+
 
         {activeTab === "companies" && (
           <>
@@ -737,43 +725,69 @@ export default function Admin() {
                     transition={{ delay: i * 0.05 }}
                     className="glass-card overflow-hidden"
                   >
-                    {/* Company row */}
-                    <div className="flex items-center gap-4 p-4">
-                      <div className="p-2 rounded-lg bg-muted">
-                        <Building2 className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-foreground">{c.display_name}</p>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                            {ERP_TYPE_LABELS[c.erp_type]?.label || c.erp_type}
-                          </Badge>
+                    {/* Company row — mobile-first */}
+                    <div className="p-3 sm:p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-muted shrink-0">
+                          <Building2 className="w-5 h-5 text-muted-foreground" />
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono">
-                          {c.company_db}
-                          {c.is_foreign && c.foreign_name ? ` · ${c.foreign_name}` : ""}
-                          {!c.is_foreign && c.legal_name ? ` · ${c.legal_name}` : ""}
-                          {!c.is_foreign && c.tax_id ? ` · ${c.tax_id}` : ""}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-foreground truncate max-w-[60vw] sm:max-w-none">{c.display_name}</p>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                              {ERP_TYPE_LABELS[c.erp_type]?.label || c.erp_type}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] px-1.5 py-0 shrink-0 border-transparent",
+                                c.is_active
+                                  ? "bg-[hsl(var(--cactus-green))]/15 text-[hsl(var(--cactus-green))]"
+                                  : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {c.is_active ? "Ativa" : "Inativa"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">
+                            {c.company_db}
+                            {c.is_foreign && c.foreign_name ? ` · ${c.foreign_name}` : ""}
+                            {!c.is_foreign && c.legal_name ? ` · ${c.legal_name}` : ""}
+                            {!c.is_foreign && c.tax_id ? ` · ${c.tax_id}` : ""}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0"
+                          onClick={() => toggleExpand(c.company_db)}
+                          aria-label={expandedCompany === c.company_db ? "Recolher" : "Expandir"}
+                        >
+                          {expandedCompany === c.company_db ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                        </Button>
                       </div>
-                      <Badge variant={c.is_active ? "default" : "secondary"}>
-                        {c.is_active ? "Ativa" : "Inativa"}
-                      </Badge>
-                      <Switch checked={c.is_active} onCheckedChange={() => toggleActive(c)} />
-                      <Button variant="ghost" size="icon" onClick={() => openEditCompany(c)}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteCompany(c)}>
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => toggleExpand(c.company_db)}>
-                        {expandedCompany === c.company_db ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                      </Button>
+
+                      {/* Actions row — separated to avoid overflow on mobile */}
+                      <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-border/50">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                          <Switch checked={c.is_active} onCheckedChange={() => toggleActive(c)} />
+                          <span>{c.is_active ? "Ativa" : "Desativada"}</span>
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditCompany(c)} aria-label="Editar">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteCompany(c)} aria-label="Excluir">
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
+
 
                     {/* Credentials panel — system cards */}
                     {expandedCompany === c.company_db && (
@@ -848,11 +862,11 @@ export default function Admin() {
 
         {activeTab === "audit" && (
           <>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
                 <h2 className="text-lg font-semibold text-foreground">Logs de Auditoria</h2>
                 <Select value={auditCompanyFilter} onValueChange={setAuditCompanyFilter}>
-                  <SelectTrigger className="w-[240px] bg-card">
+                  <SelectTrigger className="w-full sm:w-[240px] bg-card">
                     <SelectValue placeholder="Empresa" />
                   </SelectTrigger>
                   <SelectContent>
@@ -863,15 +877,157 @@ export default function Admin() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="outline" size="sm" onClick={auditRefresh} disabled={auditLoading}>
+              <Button variant="outline" size="sm" onClick={auditRefresh} disabled={auditLoading} className="self-start sm:self-auto">
                 <RefreshCw className={`w-4 h-4 mr-2 ${auditLoading ? "animate-spin" : ""}`} />
                 Atualizar
               </Button>
             </div>
+
             <AuditLogTable entries={auditEntries} isLoading={auditLoading} showCompanyColumn={auditCompanyFilter === "all"} />
           </>
         )}
       </main>
+
+      {/* Mobile bottom nav */}
+      <nav
+        className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur-lg border-t border-border pb-[max(env(safe-area-inset-bottom),0.25rem)]"
+        aria-label="Navegação backoffice"
+      >
+        <ul className="grid grid-cols-5">
+          {[
+            { key: "companies", label: "Empresas", icon: Building2 },
+            { key: "permissions", label: "Permissões", icon: Users },
+            { key: "integrations", label: "Integr.", icon: Key },
+            { key: "admin_users", label: "Admins", icon: ShieldCheck },
+          ].map((t) => {
+            const Icon = t.icon;
+            const isActive = activeTab === t.key;
+            return (
+              <li key={t.key}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(t.key as typeof activeTab)}
+                  className={cn(
+                    "w-full flex flex-col items-center justify-center gap-0.5 py-2 px-1 min-h-14 relative active:opacity-70",
+                    isActive ? "text-[hsl(var(--cactus-amber))]" : "text-muted-foreground",
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[10px] font-medium leading-none">{t.label}</span>
+                  {isActive && (
+                    <span className="absolute top-0 inset-x-6 h-0.5 bg-[hsl(var(--cactus-amber))] rounded-b-full" />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+          <li>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="w-full flex flex-col items-center justify-center gap-0.5 py-2 px-1 min-h-14 text-muted-foreground active:opacity-70"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+              <span className="text-[10px] font-medium leading-none">Mais</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      {/* Mobile hamburger sheet */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-sm p-0 flex flex-col">
+          <SheetHeader className="px-4 pt-4 pb-3 border-b border-border text-left">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1 rounded-lg bg-[hsl(var(--cactus-amber))]/10 border border-[hsl(var(--cactus-amber))]/20">
+                <img src={cactusLogo.url} alt="Cactus" className="w-6 h-6 object-contain" />
+              </div>
+              <SheetTitle className="text-base">Backoffice</SheetTitle>
+            </div>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+            <div>
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-2">Seções</h4>
+              <ul className="space-y-0.5">
+                {[
+                  { key: "audit", label: "Logs de Auditoria", icon: ScrollText },
+                  { key: "tools", label: "Ferramentas", icon: Wrench },
+                ].map((t) => {
+                  const Icon = t.icon;
+                  return (
+                    <li key={t.key}>
+                      <button
+                        onClick={() => { setActiveTab(t.key as typeof activeTab); setMobileMenuOpen(false); }}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg-muted min-h-11",
+                          activeTab === t.key && "bg-muted",
+                        )}
+                      >
+                        <span className="p-2 rounded-md bg-card border border-border text-[hsl(var(--cactus-amber))]">
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <span className="text-sm font-medium">{t.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-2">Navegação</h4>
+              <ul className="space-y-0.5">
+                {[
+                  { path: "/backoffice/audit-trail", label: "Audit Trail", icon: FileCheck2 },
+                  { path: "/backoffice/sap-users", label: "Usuários SAP", icon: Users },
+                ].map((it) => {
+                  const Icon = it.icon;
+                  return (
+                    <li key={it.path}>
+                      <button
+                        onClick={() => { setMobileMenuOpen(false); navigate(it.path); }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg-muted min-h-11"
+                      >
+                        <span className="p-2 rounded-md bg-card border border-border text-[hsl(var(--cactus-green))]">
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <span className="text-sm font-medium">{it.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-border p-2 space-y-0.5 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted min-h-11 text-left"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
+              <span className="text-sm">Tema: {theme === "dark" ? "escuro" : "claro"}</span>
+            </button>
+            <button
+              onClick={() => { setMobileMenuOpen(false); navigate("/"); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted min-h-11 text-left"
+            >
+              <ArrowLeft className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm">Voltar ao app</span>
+            </button>
+            <button
+              onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-destructive/10 text-destructive min-h-11 text-left"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm font-medium">Sair</span>
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+
 
       {/* Company Dialog — Wizard */}
       <Dialog open={companyDialog} onOpenChange={setCompanyDialog}>

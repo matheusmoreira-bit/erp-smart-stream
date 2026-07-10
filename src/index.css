@@ -53,6 +53,11 @@
     --sidebar-accent-foreground: 220 16% 30%;
     --sidebar-border: 214 20% 88%;
     --sidebar-ring: 174 72% 40%;
+
+    /* Backoffice brand tokens */
+    --cactus-amber: 38 92% 52%;
+    --cactus-amber-foreground: 0 0% 8%;
+    --cactus-green: 152 60% 42%;
   }
 
   .dark {
@@ -103,6 +108,10 @@
     --sidebar-accent-foreground: 210 20% 85%;
     --sidebar-border: 220 14% 18%;
     --sidebar-ring: 174 72% 50%;
+
+    --cactus-amber: 38 96% 58%;
+    --cactus-amber-foreground: 0 0% 8%;
+    --cactus-green: 152 60% 50%;
   }
 }
 
