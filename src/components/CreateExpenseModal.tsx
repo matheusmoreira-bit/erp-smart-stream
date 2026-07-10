@@ -2350,7 +2350,7 @@ export function CreateExpenseModal({
                   <p className="text-sm text-muted-foreground">
                     Arraste seus arquivos ou <span className="text-primary font-medium">clique para selecionar</span>
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">PDF, Imagens, CSV, Excel, XML</p>
+                  <p className="text-xs text-muted-foreground mt-1">{ALLOWED_ATTACHMENT_HINT}</p>
                 </>
               )}
             </div>
