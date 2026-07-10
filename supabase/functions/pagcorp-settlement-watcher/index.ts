@@ -203,6 +203,28 @@ async function fetchPtax(currency: string, isoDate: string): Promise<{ rate: num
 }
 
 /**
+ * Próximo horário elegível para tentar novamente uma baixa que ficou parada por
+ * ausência de PTAX. O BCB publica a PTAX de fechamento por volta das 13h BRT
+ * (16:00 UTC) em dias úteis. Retornamos o próximo slot 16:30 UTC futuro, pulando
+ * fins de semana. Isso evita retentativas a cada 5 min sem chance real de sucesso.
+ */
+function nextPtaxRetryAfter(from: Date = new Date()): Date {
+  const d = new Date(from.getTime());
+  // Hoje 16:30 UTC
+  const candidate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 16, 30, 0));
+  if (candidate.getTime() <= from.getTime()) {
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+  }
+  // Se cair no fim de semana, pula para segunda
+  while (candidate.getUTCDay() === 0 || candidate.getUTCDay() === 6) {
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+  }
+  return candidate;
+}
+
+
+
+/**
  * Emite um Pagamento de Fornecedor (Outgoing Payment) que baixa a
  * PurchaseInvoice indicada. A contrapartida contábil é a `TransferAccount`
  * (GL configurada para o cartão PagCorp).
@@ -290,6 +312,7 @@ Deno.serve(async (req) => {
     const cutoffLockIso = new Date(Date.now() - LOCK_TTL_MIN * 60_000).toISOString();
     let offset = 0;
 
+    const nowIso = new Date().toISOString();
     while (Date.now() - startedAt < TIME_BUDGET_MS) {
       const { data: rows, error } = await sb
         .from("pagcorp_integration_log")
@@ -299,6 +322,7 @@ Deno.serve(async (req) => {
         .not("company_db", "is", null)
         .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "error"])
         .or(`settlement_locked_at.is.null,settlement_locked_at.lt.${cutoffLockIso}`)
+        .or(`settlement_retry_after.is.null,settlement_retry_after.lt.${nowIso}`)
         .order("created_at", { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);
       if (error) throw new Error(error.message);
@@ -410,6 +434,7 @@ Deno.serve(async (req) => {
               const skippedAlreadyPaid: number[] = [];
               const accountsUsed: string[] = [];
               let firstMissingAccountMsg: string | null = null;
+              let firstPtaxMissingMsg: string | null = null;
               let firstPtax: { rate: number; ptaxDate: string; source: string } | null = null;
               for (const invoice of invoices) {
                 const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
@@ -435,9 +460,11 @@ Deno.serve(async (req) => {
                   if (invCur && invCur !== "BRL") {
                     const ptax = await fetchPtax(invCur, invoice.DocDate);
                     if (!ptax) {
-                      if (!firstMissingAccountMsg) {
-                        firstMissingAccountMsg = `PTAX ${invCur} indisponível para ${invoice.DocDate}`;
+                      if (!firstPtaxMissingMsg) {
+                        firstPtaxMissingMsg = `PTAX ${invCur} indisponível para ${invoice.DocDate}`;
                       }
+                      // remove desta iteração da contagem de "contas usadas" — nada foi pago
+                      accountsUsed.pop();
                       continue;
                     }
                     docRate = ptax.rate;
@@ -501,20 +528,29 @@ Deno.serve(async (req) => {
                 }
               }
 
-              // Se nenhuma NF conseguiu conta contábil (ex.: faltou cadastrar
-              // a conta em USD), marca a linha como awaiting_settlement para
-              // reprocessar depois — não conta como erro terminal.
-              if (invoices.length > 0 && accountsUsed.length === 0 && firstMissingAccountMsg) {
+              // Se nenhuma NF conseguiu emitir baixa (falta de conta contábil ou
+              // PTAX ainda não publicada), marca como awaiting_settlement e agenda
+              // a próxima retentativa: para PTAX, só faz sentido tentar após ~13h BRT
+              // (16:30 UTC) do próximo dia útil; para conta faltante, mantemos o
+              // retry curto (5min) pois depende de configuração do usuário.
+              if (invoices.length > 0 && accountsUsed.length === 0 && (firstMissingAccountMsg || firstPtaxMissingMsg)) {
+                const isPtax = !firstMissingAccountMsg && !!firstPtaxMissingMsg;
+                const retryAfter = isPtax ? nextPtaxRetryAfter().toISOString() : null;
                 await sb
                   .from("pagcorp_integration_log")
                   .update({
                     settlement_status: "awaiting_settlement",
-                    settlement_error: firstMissingAccountMsg,
+                    settlement_error: firstMissingAccountMsg ?? firstPtaxMissingMsg,
                     settlement_locked_at: null,
+                    settlement_retry_after: retryAfter,
                     settlement_attempted_at: new Date().toISOString(),
                   })
                   .eq("id", row.id);
-                results.push({ id: row.id, status: "awaiting_settlement", error: "no_settlement_account" });
+                results.push({
+                  id: row.id,
+                  status: "awaiting_settlement",
+                  error: isPtax ? "ptax_missing" : "no_settlement_account",
+                });
                 continue;
               }
 
@@ -522,6 +558,7 @@ Deno.serve(async (req) => {
               if (paymentEntries.length > 1) settlementNote.push(`${paymentEntries.length} pagamentos emitidos (docs: ${paymentNums.join(", ")})`);
               if (skippedAlreadyPaid.length > 0) settlementNote.push(`${skippedAlreadyPaid.length} NF(s) já quitadas`);
               if (firstMissingAccountMsg) settlementNote.push(firstMissingAccountMsg);
+              if (firstPtaxMissingMsg) settlementNote.push(firstPtaxMissingMsg);
 
               await sb
                 .from("pagcorp_integration_log")
@@ -539,6 +576,7 @@ Deno.serve(async (req) => {
                   settlement_attempted_at: new Date().toISOString(),
                   settlement_completed_at: new Date().toISOString(),
                   settlement_locked_at: null,
+                  settlement_retry_after: null,
                 })
                 .eq("id", row.id);
 
