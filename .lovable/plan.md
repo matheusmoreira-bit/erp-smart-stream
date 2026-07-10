@@ -1,52 +1,100 @@
-## Diagnóstico
+## Objetivo
+Reformar as telas de Permissões do backoffice com pegada "menu iOS", tornar as ações explícitas por módulo (ver / criar / editar / excluir) e por capacidades transversais (ver tudo, delegar, etc.), garantir que a atribuição do usuário vale para todas as empresas (já vale — reforçar UI/copy), e consolidar os grupos "Aprovador" e "Usuário" em um único grupo "Usuário".
 
-O combobox de fornecedor no modal "Nova Compra" mostra apenas o que vem do endpoint `BusinessPartners` do SAP daquela empresa, com filtro `CardType eq 'cSupplier' and Frozen eq 'tNO'`, cacheado em `sap_cache` por 5 minutos.
+## Premissa a confirmar
+"O grupo Aprovador e Usuario são identicos, migre todos para o grupo usuário e remova o grupo usuario" — interpretando como: **mesclar `Aprovador` no `Usuário` e apagar o grupo `Aprovador`**. Se for o contrário (manter `Aprovador` e apagar `Usuário`), me avise antes de aprovar.
 
-Isso deixa quatro tipos de fornecedor invisíveis, mesmo estando "cadastrados no ERP":
+## Modelo de dados
 
-1. **Cadastrados mas com falha de sync no SAP** (`suppliers.sap_sync_status` em `error`, `pending` ou `skipped`). Existem em `public.suppliers` mas nunca chegaram ao BP do SAP → não aparecem.
-2. **Cadastrados em outra empresa** (company_db diferente da sessão atual). Usuário troca de empresa no menu, mas não é avisado.
-3. **Congelados no SAP** (`Frozen='tYES'`) por engano.
-4. **Digitação divergente**: acento, espaço extra, ordem de palavras. O filtro atual é `String.includes` cru, sem normalização.
+Hoje `permission_group_modules` guarda apenas `(group_id, module_key)` — booleano de acesso. Vamos passar para granularidade por ação:
 
-Além disso, o "Nenhum resultado" é um beco sem saída — não oferece nem criar na hora nem diagnosticar.
+```text
+permission_group_modules
+  group_id        uuid
+  module_key      text
+  can_view        bool  default true
+  can_create      bool  default false
+  can_edit        bool  default false
+  can_delete      bool  default false
+  PK (group_id, module_key)
+```
 
-## O que mudar
+Backfill: toda linha existente vira `can_view=true, can_create=true, can_edit=true, can_delete=true` (comportamento atual = acesso total ao módulo, sem regressão).
 
-### 1. Unir SAP + tabela local no combobox (resolve #1)
-No `CreateExpenseModal`, além da lista vinda do `useSapCachedList`, buscar `public.suppliers` da empresa atual e fazer merge por `card_code`/CNPJ. Fornecedores locais sem contraparte no SAP aparecem com badge âmbar "Não sincronizado — clique para reenviar", e ao selecionar dispara o retry de sync antes de continuar. Isso mata a classe #1 sem esperar SAP.
+Módulos que não têm sentido de CRUD (ex.: `analytics`, `audit_log`, `notifications`) exibem só o toggle "Acessar"; os demais exibem os 4 checkboxes.
 
-### 2. Empty state acionável (resolve #4 e reduz #1)
-Quando o filtro retornar 0, o dropdown passa a mostrar três ações contextuais:
-- **"Cadastrar novo fornecedor «{texto}»"** — abre o `SupplierFormModal` já pré-preenchido com o texto digitado (nome ou CNPJ, se só dígitos).
-- **"Encontrei em outra empresa"** — se o texto casar em `public.suppliers` de outro `company_db`, listar as ocorrências ("Também existe em Anagaming SA como CardCode C000123"). Só informa, não seleciona.
-- **"Atualizar lista do SAP"** — força `reloadSuppliers()` e mostra o novo total.
+## Capacidades explícitas (flags transversais no grupo)
 
-### 3. Alerta de contexto de empresa (resolve #2)
-Abaixo do campo Fornecedor, uma linha discreta: "Buscando em **Open Gaming SA** · 312 fornecedores ativos". Quando o total é 0 ou anormalmente baixo, o texto vira aviso âmbar "Cache pode estar vazio — atualizar". Isso ancora o usuário no `company_db` correto sem exigir que ele saiba dessa distinção.
+Ficam como "módulos" especiais de permissão (linhas em `permission_group_modules` com `module_key` dedicado). Já existem `approvals_view_all`, `expenses_view_all`. Adicionar/renomear na constante `ALL_MODULES` como categoria "Capacidades":
 
-### 4. Incluir Frozen com marcação (resolve #3)
-Trocar o filtro SAP de `Frozen eq 'tNO'` para trazer todos e marcar frozen com badge "Inativo — reativar?". Ao selecionar um inativo, botão "Reativar no SAP" (usa a mesma rota que a tela de Fornecedores já tem) antes de prosseguir com o pedido.
+- `docs_view_all` — Ver todos os documentos (não só os próprios)
+- `approvals_view_all` — Ver todas as aprovações
+- `approvals_delegate` — Delegar aprovações
+- `approvals_transfer` — Transferir aprovações em massa
+- `approvals_override` — Aprovar fora do fluxo (admin-like)
+- `suppliers_reactivate` — Reativar fornecedor inativo
+- `expenses_cancel` — Cancelar documento próprio/de terceiros
 
-### 5. Filtro tolerante (resolve #4)
-No `CachedSearchCombobox`, normalizar antes de comparar:
-- lowercase + `.normalize("NFD").replace(/\p{Diacritic}/gu, "")` (remove acento)
-- colapsar espaços; matching por todas as palavras (AND), não substring único
-- ranking: prefixo do nome > CNPJ > substring > match parcial de palavras
+(Lista final ajusto conforme o que o app já checa; sem inventar capacidades que nenhum lugar consome.)
 
-Isso resolve casos como digitar "acucar uniao" e encontrar "AÇÚCAR UNIÃO LTDA".
+## UI — "menu iOS"
 
-### 6. Invalidação em tempo real entre usuários (opcional, resolve latência residual)
-Assinar `postgres_changes` em `public.suppliers` filtrado por `company_db` da sessão. Ao chegar INSERT/UPDATE, chamar `invalidateSapCache(["suppliers_active_v2", …])`. Hoje só invalida quem cadastrou; com isso, outros usuários com o modal já aberto veem o novo fornecedor sem reabrir.
+Substituir a tela atual (duas seções empilhadas com tabela) por navegação em drill-in:
 
-## Detalhes técnicos
+```text
+┌ Permissões ────────────────────┐
+│  Grupos                     >  │  ← lista rolável, cada linha com chevron
+│  Usuários                   >  │
+└────────────────────────────────┘
+```
 
-- Arquivos afetados: `src/components/CreateExpenseModal.tsx`, `src/components/CachedSearchCombobox.tsx`, `src/hooks/useSapCachedList.ts` (nova prop `showFrozen`), `src/hooks/useSuppliers.ts` (expor busca cross-company leve), possivelmente um novo `src/components/SupplierPickerFooter.tsx` para o empty state acionável.
-- Sem migração — usa tabelas existentes (`suppliers`, `sap_cache`).
-- O empty state acionável deve reusar o `SupplierFormModal` já existente para não bifurcar o fluxo de cadastro.
-- A busca cross-company (#2) fica em `public.suppliers` (Supabase), não vasculha SAP de outras bases — barato e respeita RLS.
-- Realtime (#6) só liga se `useSap().session?.companyDB` existir; fecha o canal ao desmontar.
+- **Lista de grupos**: cartões estilo iOS (fundo `card`, bordas arredondadas 2xl, separadores 1px, tap-target ≥ 44px). Cada linha mostra nome + contagem de módulos + chevron. Botão "+" no header abre criador.
+- **Detalhe do grupo**: header com back, nome editável, descrição, e uma "settings-list" agrupada:
+  - Seção "Capacidades" (as flags transversais) — cada linha com Switch.
+  - Seção "Módulos" — cada módulo é uma linha expansível; ao expandir revela 4 toggles (Ver, Criar, Editar, Excluir). Um toggle mestre "Acesso" na linha desliga tudo.
+- **Lista de usuários**: search sticky no topo, cada item mostra nome/email e o grupo atual como badge âmbar; toque abre um action sheet (`Sheet` do shadcn, bottom) com a lista de grupos para escolher — sem `Select` inline, muito mais mobile-first.
+- **Mensagem global**: banner curto reforçando que a atribuição vale para **todas as empresas** (independente do ERP).
 
-## Pergunta antes de começar
+Paleta segue o padrão do backoffice já ajustado (âmbar Cactus como destaque, verde para confirmação, preto/branco base).
 
-Quer que eu implemente **todos os seis** itens de uma vez, ou prefere fatiar? Se fatiar, a maior dor pelo que descrevem soa ser o **#1 (fornecedor com sync SAP falho)** + **#2 (empresa errada)** + **#5 (tolerância de digitação)**. Faço só esses três primeiro (baixo risco, sem migração, resolve ~80% dos casos) e depois volto para os demais — ou vamos em tudo?
+## Migração de dados
+
+1. Adicionar colunas `can_view/can_create/can_edit/can_delete` em `permission_group_modules` com defaults `true` para preservar comportamento.
+2. Encontrar grupo `Aprovador` (case-insensitive). Para cada `user_group_assignments` que aponta pra ele:
+   - Reatribuir ao grupo `Usuário` (upsert em `(sap_email, group_id)`).
+3. Copiar módulos de `Aprovador` para `Usuário` (união, sem sobrescrever flags mais permissivas).
+4. `DELETE FROM permission_groups WHERE lower(name)='aprovador'`.
+
+Migração idempotente (guardas `IF NOT EXISTS`, `ON CONFLICT DO NOTHING`).
+
+## Consumo no app
+
+- `usePermissions.ts`: `useModuleAccess` passa a expor `{ hasAccess, can: { view, create, edit, delete }, capabilities: Set<string> }`. `hasAccess` continua = `can.view` para compat.
+- `ALL_MODULES`: reorganizar em duas listas `MODULES` (com CRUD) e `CAPABILITIES` (flags booleanas).
+- Callers atuais (`useModuleAccess("expenses")` etc.) continuam funcionando sem mudança porque `hasAccess = can.view`. Ações destrutivas (delete button em Expenses, Suppliers) passam a checar `can.delete` — vou aplicar só nos lugares mais críticos nesta iteração; o resto fica como TODO explícito para não estourar o escopo.
+
+## Escopo desta entrega
+
+Feito:
+- Migração SQL (colunas + merge Aprovador→Usuário).
+- Novo `PermissionManager` com layout iOS drill-in.
+- Hook atualizado + tipos.
+- Aplicar `can.delete/edit/create` em 2-3 pontos críticos como referência (Expenses row actions, Suppliers row actions).
+
+Fora do escopo (fica para próxima rodada, listado para você saber):
+- Aplicar `can.*` em todas as ~40 telas.
+- Renomear `expenses_view_all` → `docs_view_all` globalmente (mantido como alias por ora).
+
+## Arquivos que devem mudar
+
+- `supabase/migrations/<novo>.sql` — schema + backfill + merge de grupos.
+- `src/hooks/usePermissions.ts` — novo shape, novas constantes.
+- `src/components/PermissionManager.tsx` — reescrito, drill-in.
+- (Novo) `src/components/permissions/GroupsList.tsx`, `GroupDetail.tsx`, `UsersList.tsx`, `AssignSheet.tsx`.
+- `src/integrations/supabase/types.ts` — regenerado após migração.
+- 2-3 telas que passam a checar `can.delete/edit` como prova de conceito.
+
+## Perguntas rápidas
+1. Confirma o merge **Aprovador → Usuário** (apaga `Aprovador`)?
+2. Ok manter compat: quem hoje só tem "acesso" no módulo ganha CRUD completo automaticamente (para não perder capacidade de uma hora pra outra)?
+3. Ok aplicar as checagens granulares em 2-3 pontos agora e o resto virar TODO, ou você quer eu propagar `can.delete/edit` em todas as telas nesta mesma entrega (aumenta bastante o tamanho)?
