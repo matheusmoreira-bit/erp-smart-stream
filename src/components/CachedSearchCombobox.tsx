@@ -222,45 +222,59 @@ export function CachedSearchCombobox({
         <div
           ref={dropdownRef}
           style={{ ...dropdownStyle, pointerEvents: "auto" }}
-          className="z-[9999] max-h-56 max-w-[calc(100dvw-1rem)] overflow-y-auto overflow-x-hidden rounded-md border border-border bg-popover shadow-md"
+          className="z-[9999] max-w-[calc(100dvw-1rem)] rounded-md border border-border bg-popover shadow-md"
         >
-          {filtered.map((opt) => {
-            const hasColumns = !!(opt.details?.fantasyName || opt.details?.taxId);
-            return (
-              <button
-                key={opt.code}
-                type="button"
-                onPointerDownCapture={(e) => handleOptionPointerDown(e, opt)}
-                onMouseDown={(e) => handleOptionMouseDown(e, opt)}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSelect(opt);
-                }}
-                className="w-full min-w-0 text-left px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-              >
-                {hasColumns ? (
-                  <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[80px_minmax(0,1fr)_minmax(0,1fr)_120px]">
-                    <span className="text-xs font-mono text-muted-foreground truncate">{opt.code}</span>
-                    <span className="font-medium text-foreground truncate" title={opt.name}>{opt.name}</span>
-                    <span className="hidden text-xs text-muted-foreground truncate sm:block" title={opt.details?.fantasyName || ""}>
-                      {opt.details?.fantasyName || "—"}
-                    </span>
-                    <span className="hidden text-xs text-muted-foreground tabular-nums truncate text-right sm:block" title={opt.details?.taxId || ""}>
-                      {opt.details?.taxId || "—"}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate font-medium text-foreground">{opt.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
-                    </span>
-                  </div>
-                )}
-              </button>
-            );
-          })}
+          <div className="max-h-56 overflow-y-auto overflow-x-hidden">
+            {filtered.map((opt) => {
+              const hasColumns = !!(opt.details?.fantasyName || opt.details?.taxId);
+              const badge = renderOptionBadge?.(opt);
+              return (
+                <button
+                  key={opt.code}
+                  type="button"
+                  onPointerDownCapture={(e) => handleOptionPointerDown(e, opt)}
+                  onMouseDown={(e) => handleOptionMouseDown(e, opt)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSelect(opt);
+                  }}
+                  className="w-full min-w-0 text-left px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
+                  {hasColumns ? (
+                    <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[80px_minmax(0,1fr)_minmax(0,1fr)_120px]">
+                      <span className="text-xs font-mono text-muted-foreground truncate">{opt.code}</span>
+                      <span className="font-medium text-foreground truncate flex items-center gap-1.5" title={opt.name}>
+                        <span className="truncate">{opt.name}</span>
+                        {badge}
+                      </span>
+                      <span className="hidden text-xs text-muted-foreground truncate sm:block" title={opt.details?.fantasyName || ""}>
+                        {opt.details?.fantasyName || "—"}
+                      </span>
+                      <span className="hidden text-xs text-muted-foreground tabular-nums truncate text-right sm:block" title={opt.details?.taxId || ""}>
+                        {opt.details?.taxId || "—"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium text-foreground flex items-center gap-1.5">
+                        <span className="truncate">{opt.name}</span>
+                        {badge}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
+                      </span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {footerHint && (
+            <div className="border-t border-border/60 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+              {footerHint}
+            </div>
+          )}
         </div>,
         portalContainer || document.body,
       )}
@@ -269,10 +283,26 @@ export function CachedSearchCombobox({
         <div
           ref={dropdownRef}
           style={{ ...dropdownStyle, pointerEvents: "auto" }}
-          className="z-[9999] max-w-[calc(100dvw-1rem)] rounded-md border border-border bg-popover p-3 text-center text-sm text-muted-foreground shadow-md"
+          className="z-[9999] max-w-[calc(100dvw-1rem)] rounded-md border border-border bg-popover shadow-md"
         >
-          Nenhum resultado encontrado
+          {renderEmptyState ? (
+            <div className="p-2">{renderEmptyState(query)}</div>
+          ) : (
+            <div className="p-3 text-center text-sm text-muted-foreground">
+              Nenhum resultado encontrado
+            </div>
+          )}
+          {footerHint && (
+            <div className="border-t border-border/60 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+              {footerHint}
+            </div>
+          )}
         </div>,
+        portalContainer || document.body,
+      )}
+    </>
+  );
+}
         portalContainer || document.body,
       )}
     </>
