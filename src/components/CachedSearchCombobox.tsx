@@ -189,7 +189,8 @@ export function CachedSearchCombobox({
             onKeyDown={(e) => {
               if (e.key === "Enter" && isOpen && filtered.length > 0) {
                 e.preventDefault();
-                handleSelect(filtered[0]);
+                const firstSelectable = filtered.find((o) => !isOptionDisabled?.(o));
+                if (firstSelectable) handleSelect(firstSelectable);
               }
               if (e.key === "Escape") setIsOpen(false);
             }}
