@@ -138,6 +138,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const [sapHistory, setSapHistory] = useState<SapHistoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
+  const [enriched, setEnriched] = useState(false);
 
   const derivedInput = {
     expenseId: expense?.id || "",
