@@ -191,13 +191,6 @@ export function MobileMenuSheet({ open, onOpenChange }: Props) {
             <span className="text-sm font-medium">Sair</span>
           </button>
         </div>
-        {/* Hidden trigger: open password dialog imperatively */}
-        {changePwdOpen && (
-          <ChangePasswordDialog
-            controlledOpen={changePwdOpen}
-            onOpenChange={setChangePwdOpen}
-          />
-        )}
       </SheetContent>
     </Sheet>
   );
