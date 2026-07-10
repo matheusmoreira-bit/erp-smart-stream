@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { useSap } from "@/contexts/SapContext";
 import { SapLoginForm } from "@/components/SapLoginForm";
 import { Dashboard } from "@/components/Dashboard";

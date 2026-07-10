@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { motion } from "framer-motion";
 import {
   Clock,

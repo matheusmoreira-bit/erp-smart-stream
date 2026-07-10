@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";

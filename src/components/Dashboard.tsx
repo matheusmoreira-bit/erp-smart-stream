@@ -1,4 +1,5 @@
 import { useState } from "react";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Activity, Clock, FileCheck, Package, AlertTriangle, LogOut, RefreshCw, Loader2, ArrowLeft, UserCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
