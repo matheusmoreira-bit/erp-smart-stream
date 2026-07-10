@@ -167,5 +167,24 @@
     box-shadow: inset 0 -1px 0 0 hsl(var(--border));
   }
 
+  /* Mobile: prevent iOS zoom on focused inputs (needs >=16px) */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+
+    /* Reserve space at the bottom for the fixed mobile bottom nav.
+       Applies to any <main> so route pages don't need to opt in individually. */
+    main {
+      padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    }
+
+    /* Hide horizontal scrollbars on tab strips */
+    .scrollbar-none::-webkit-scrollbar { display: none; }
+    .scrollbar-none { scrollbar-width: none; }
+  }
 }
+
 
