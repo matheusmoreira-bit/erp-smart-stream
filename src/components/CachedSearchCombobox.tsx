@@ -174,10 +174,10 @@ export function CachedSearchCombobox({
 
   return (
     <>
-      <div ref={containerRef} className="relative">
+      <div ref={containerRef} className="relative min-w-0 max-w-full">
         {label && <label className="mb-1 block text-xs text-muted-foreground">{label}</label>}
 
-        <div ref={inputWrapperRef} className="relative">
+        <div ref={inputWrapperRef} className="relative min-w-0 max-w-full">
           {value ? (
             <CheckCircle2 className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-green-500" />
           ) : required ? (
@@ -203,7 +203,7 @@ export function CachedSearchCombobox({
               if (!value) setIsOpen(true);
             }}
             placeholder={isLoading ? "Carregando..." : placeholder}
-            className={`h-9 pl-8 pr-8 text-sm ${
+            className={`h-9 min-w-0 truncate pl-8 pr-8 text-sm ${
               value
                 ? "border-green-500/50 bg-green-500/5"
                 : required
@@ -235,7 +235,7 @@ export function CachedSearchCombobox({
         <div
           ref={dropdownRef}
           style={{ ...dropdownStyle, pointerEvents: "auto" }}
-          className="z-[9999] max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-md"
+          className="z-[9999] max-h-56 max-w-[calc(100dvw-1rem)] overflow-y-auto overflow-x-hidden rounded-md border border-border bg-popover shadow-md"
         >
           {filtered.map((opt) => {
             const hasColumns = !!(opt.details?.fantasyName || opt.details?.taxId);
@@ -250,21 +250,21 @@ export function CachedSearchCombobox({
                   e.stopPropagation();
                   handleSelect(opt);
                 }}
-                className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                className="w-full min-w-0 text-left px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 {hasColumns ? (
-                  <div className="grid grid-cols-[80px_1fr_1fr_120px] gap-2 items-center">
+                  <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[80px_minmax(0,1fr)_minmax(0,1fr)_120px]">
                     <span className="text-xs font-mono text-muted-foreground truncate">{opt.code}</span>
                     <span className="font-medium text-foreground truncate" title={opt.name}>{opt.name}</span>
-                    <span className="text-xs text-muted-foreground truncate" title={opt.details?.fantasyName || ""}>
+                    <span className="hidden text-xs text-muted-foreground truncate sm:block" title={opt.details?.fantasyName || ""}>
                       {opt.details?.fantasyName || "—"}
                     </span>
-                    <span className="text-xs text-muted-foreground tabular-nums truncate text-right" title={opt.details?.taxId || ""}>
+                    <span className="hidden text-xs text-muted-foreground tabular-nums truncate text-right sm:block" title={opt.details?.taxId || ""}>
                       {opt.details?.taxId || "—"}
                     </span>
                   </div>
                 ) : (
-                  <div className="flex flex-col">
+                  <div className="flex min-w-0 flex-col">
                     <span className="truncate font-medium text-foreground">{opt.name}</span>
                     <span className="text-xs text-muted-foreground">
                       {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
@@ -282,7 +282,7 @@ export function CachedSearchCombobox({
         <div
           ref={dropdownRef}
           style={{ ...dropdownStyle, pointerEvents: "auto" }}
-          className="z-[9999] rounded-md border border-border bg-popover p-3 text-center text-sm text-muted-foreground shadow-md"
+          className="z-[9999] max-w-[calc(100dvw-1rem)] rounded-md border border-border bg-popover p-3 text-center text-sm text-muted-foreground shadow-md"
         >
           Nenhum resultado encontrado
         </div>,
