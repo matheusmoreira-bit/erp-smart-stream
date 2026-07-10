@@ -2449,7 +2449,7 @@ export function CreateExpenseModal({
                 const eo = opt as EnrichedSupplierOption;
                 if (eo.frozen) {
                   return (
-                    <span className="shrink-0 rounded-sm border border-muted-foreground/30 bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="shrink-0 rounded-sm border border-muted-foreground/40 bg-muted/70 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                       Inativo
                     </span>
                   );
@@ -2466,6 +2466,12 @@ export function CreateExpenseModal({
                 }
                 return null;
               }}
+              isOptionDisabled={(opt) => !!(opt as EnrichedSupplierOption).frozen}
+              getDisabledReason={(opt) =>
+                (opt as EnrichedSupplierOption).frozen
+                  ? `${bpLabel} inativo no SAP — não pode ser utilizado. Solicite ao administrador a reativação.`
+                  : null
+              }
               footerHint={
                 currentCompanyLabel ? (
                   <span>
