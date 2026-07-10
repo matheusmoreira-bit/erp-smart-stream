@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 interface CompanyOption {
   label: string;
