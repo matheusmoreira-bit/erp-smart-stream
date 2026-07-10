@@ -1309,6 +1309,13 @@ function ApprovalDetailModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AttachmentViewer
+        open={!!viewer}
+        onClose={closeViewer}
+        name={viewer?.name || ""}
+        url={viewer?.url ?? null}
+        loading={!!viewer && !viewer.url}
+      />
     </>
   );
 }
