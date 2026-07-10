@@ -236,18 +236,34 @@ export function CachedSearchCombobox({
             {filtered.map((opt) => {
               const hasColumns = !!(opt.details?.fantasyName || opt.details?.taxId);
               const badge = renderOptionBadge?.(opt);
+              const disabled = !!isOptionDisabled?.(opt);
+              const disabledReason = disabled ? getDisabledReason?.(opt) : null;
               return (
                 <button
                   key={opt.code}
                   type="button"
-                  onPointerDownCapture={(e) => handleOptionPointerDown(e, opt)}
-                  onMouseDown={(e) => handleOptionMouseDown(e, opt)}
+                  disabled={disabled}
+                  aria-disabled={disabled}
+                  title={disabled && disabledReason ? disabledReason : undefined}
+                  onPointerDownCapture={(e) => {
+                    if (disabled) { e.preventDefault(); e.stopPropagation(); return; }
+                    handleOptionPointerDown(e, opt);
+                  }}
+                  onMouseDown={(e) => {
+                    if (disabled) { e.preventDefault(); e.stopPropagation(); return; }
+                    handleOptionMouseDown(e, opt);
+                  }}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (disabled) return;
                     handleSelect(opt);
                   }}
-                  className="w-full min-w-0 text-left px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                  className={`w-full min-w-0 text-left px-3 py-2 text-sm transition-colors ${
+                    disabled
+                      ? "cursor-not-allowed opacity-60"
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
                 >
                   {hasColumns ? (
                     <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[80px_minmax(0,1fr)_minmax(0,1fr)_120px]">
@@ -272,6 +288,11 @@ export function CachedSearchCombobox({
                       <span className="text-xs text-muted-foreground">
                         {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
                       </span>
+                    </div>
+                  )}
+                  {disabled && disabledReason && (
+                    <div className="mt-0.5 text-[11px] text-muted-foreground italic">
+                      {disabledReason}
                     </div>
                   )}
                 </button>
