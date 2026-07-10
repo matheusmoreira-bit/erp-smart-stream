@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 interface CompanyOption {
   label: string;
@@ -162,7 +163,7 @@ export function SapLoginForm() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex p-3 rounded-2xl bg-primary/10 glow-primary mb-4">
-            <Activity className="w-8 h-8 text-primary" />
+            <img src={cactusLogo.url} alt="Logo" className="w-8 h-8 object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">
             ERP <span className="text-gradient">Analytics</span>
