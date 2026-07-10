@@ -71,6 +71,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageTitle } from "@/components/PageTitle";
 import { InternalApprovalHistory } from "@/components/InternalApprovalHistory";
+import { AttachmentViewer } from "@/components/AttachmentViewer";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const code = /^[A-Z]{3}$/.test((currency || "").toUpperCase()) ? currency.toUpperCase() : "BRL";
@@ -501,29 +502,52 @@ function ApprovalDetailModal({
     if (!open) setRemarks("");
   }, [open]);
 
+  // Viewer state — usamos modal em vez de abrir pop-up (mobile bloqueia).
+  const [viewer, setViewer] = useState<{ name: string; url: string | null } | null>(null);
+  const viewerUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    return () => {
+      if (viewerUrlRef.current && viewerUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(viewerUrlRef.current);
+      }
+    };
+  }, []);
+  const openViewer = (name: string, url: string) => {
+    if (viewerUrlRef.current && viewerUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(viewerUrlRef.current);
+    }
+    viewerUrlRef.current = url;
+    setViewer({ name, url });
+  };
+  const closeViewer = () => {
+    if (viewerUrlRef.current && viewerUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(viewerUrlRef.current);
+      viewerUrlRef.current = null;
+    }
+    setViewer(null);
+  };
+
   const handleDownloadAttachment = async (name: string) => {
     if (!doc || !doc.attachmentEntry || !session || session.erpType !== "sap") {
       toast.error("Anexo indisponível");
       return;
     }
     setDownloadingName(name);
+    // Abre imediatamente o modal em estado de loading para não depender de pop-up.
+    setViewer({ name, url: null });
     try {
       const { blob } = await sapDownloadAttachment(session, doc.attachmentEntry, name);
       const url = URL.createObjectURL(blob);
-      const win = window.open(url, "_blank", "noopener,noreferrer");
-      if (!win) {
-        toast.error("Pop-up bloqueado. Permita pop-ups para visualizar o anexo.");
-      }
-      // Revoga a URL depois de um tempo para permitir o carregamento na nova aba
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-
+      openViewer(name, url);
     } catch (e) {
       console.error("Erro ao baixar anexo:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao baixar anexo");
+      setViewer(null);
     } finally {
       setDownloadingName(null);
     }
   };
+
 
 
   if (!doc) return null;
@@ -1010,6 +1034,7 @@ function ApprovalDetailModal({
                       key={att.id}
                       type="button"
                       onClick={async () => {
+                        setViewer({ name: att.file_name, url: null });
                         try {
                           const { sapFunctionFetch } = await import("@/lib/auth-fetch");
                           const res = await sapFunctionFetch("expense-attachment-storage", {
@@ -1019,14 +1044,15 @@ function ApprovalDetailModal({
                           });
                           const data = await res.json().catch(() => null);
                           if (!res.ok || !data?.signed_url) throw new Error(data?.error || "URL indisponível");
-                          window.open(data.signed_url, "_blank", "noopener,noreferrer");
+                          openViewer(att.file_name, data.signed_url as string);
                         } catch (e) {
                           console.error("Erro ao abrir anexo:", e);
                           toast.error("Não foi possível abrir o anexo");
+                          setViewer(null);
                         }
                       }}
                       className="w-full text-left text-xs bg-muted/20 hover:bg-muted/40 px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
-                      title="Abrir anexo em nova aba"
+                      title="Visualizar anexo"
                     >
                       <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" />
                       <span className="truncate text-foreground underline decoration-dotted flex-1">{att.file_name}</span>
@@ -1283,6 +1309,13 @@ function ApprovalDetailModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AttachmentViewer
+        open={!!viewer}
+        onClose={closeViewer}
+        name={viewer?.name || ""}
+        url={viewer?.url ?? null}
+        loading={!!viewer && !viewer.url}
+      />
     </>
   );
 }
