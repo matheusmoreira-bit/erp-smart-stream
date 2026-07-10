@@ -2788,7 +2788,7 @@ export default function ApprovalsPage() {
                 })()}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-[420px] p-4 space-y-4">
+            <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">Filtros</p>
                 {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo) && (
