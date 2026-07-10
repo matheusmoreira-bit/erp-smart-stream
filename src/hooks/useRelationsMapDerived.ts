@@ -79,34 +79,85 @@ export function useNfEntradaLinks({
     const { data, error } = await supabase
       .from("nf_entrada_imports")
       .select(
-        "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,created_at,updated_at",
+        "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,created_at,updated_at,sap_matched_doc_entry",
       )
       .eq("sap_matched_po_doc_entry", String(sapDocEntry))
       .eq("sap_company_db", companyDb)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    const nfs = (data || []) as Omit<NfEntradaLink, "ap_links">[];
+    const importRows = (data || []) as Array<
+      Omit<NfEntradaLink, "ap_links"> & { sap_matched_doc_entry: number | null }
+    >;
+
+    // Também busca NFs lançadas manualmente no SAP (não passaram pelo ERP Flow),
+    // via função security-definer no cache de NF de entrada.
+    let cacheRows: Array<{
+      doc_entry: number;
+      doc_num: number | null;
+      series: number | null;
+      card_code: string | null;
+      card_name: string | null;
+      doc_date: string | null;
+      doc_total: number | null;
+      document_status: string | null;
+      cancelled: string | null;
+      sap_update_date: string | null;
+    }> = [];
+    try {
+      const { data: cache, error: cacheErr } = await (supabase as any).rpc(
+        "get_nf_entrada_cache_by_po",
+        { _company_db: companyDb, _po_doc_entry: sapDocEntry },
+      );
+      if (!cacheErr && Array.isArray(cache)) cacheRows = cache as typeof cacheRows;
+    } catch (e) {
+      console.warn("[relations-map] falha ao ler NF cache do SAP:", e);
+    }
+
+    // dedup: se o mesmo doc_entry já existe em importRows (via sap_matched_doc_entry),
+    // não duplica com uma versão vinda do cache.
+    const matchedDocEntries = new Set(
+      importRows.map((r) => r.sap_matched_doc_entry).filter((v): v is number => v != null),
+    );
+    const cacheOnly: Omit<NfEntradaLink, "ap_links">[] = cacheRows
+      .filter((r) => !matchedDocEntries.has(r.doc_entry) && r.cancelled !== "tYES")
+      .map((r) => ({
+        id: `sap-cache:${r.doc_entry}`,
+        chave_acesso: `SAP#${r.doc_entry}`,
+        numero_nf: r.doc_num != null ? String(r.doc_num) : null,
+        serie: r.series != null ? String(r.series) : null,
+        nome_fornecedor: r.card_name || r.card_code,
+        valor_total: r.doc_total,
+        status: r.document_status === "bost_Close" ? "sap_close" : "sap_open",
+        sap_invoice_draft_id: String(r.doc_entry),
+        created_at: r.sap_update_date || r.doc_date || new Date().toISOString(),
+        updated_at: r.sap_update_date || r.doc_date || new Date().toISOString(),
+      }));
+
+    const nfs: Omit<NfEntradaLink, "ap_links">[] = [...importRows, ...cacheOnly];
     if (nfs.length === 0) return [];
 
-    // Busca contas a pagar vinculadas (N por NF) — tabela de rastreabilidade
-    const ids = nfs.map((n) => n.id);
-    const { data: linksData } = await (supabase as any)
-      .from("nf_entrada_contas_pagar")
-      .select("nf_import_id, ap_doc_entry, ap_doc_num, ap_total, ap_paid, source, linked_at, notes")
-      .in("nf_import_id", ids);
+    // Busca contas a pagar vinculadas (N por NF) — tabela de rastreabilidade.
+    // Só existe para NFs vindas de nf_entrada_imports (as do cache SAP não têm nf_import_id).
+    const ids = importRows.map((n) => n.id);
     const byNf = new Map<string, NfApLink[]>();
-    for (const row of (linksData || []) as Array<NfApLink & { nf_import_id: string }>) {
-      const arr = byNf.get(row.nf_import_id) || [];
-      arr.push({
-        ap_doc_entry: row.ap_doc_entry,
-        ap_doc_num: row.ap_doc_num,
-        ap_total: row.ap_total,
-        ap_paid: row.ap_paid,
-        source: row.source,
-        linked_at: row.linked_at,
-        notes: row.notes,
-      });
-      byNf.set(row.nf_import_id, arr);
+    if (ids.length > 0) {
+      const { data: linksData } = await (supabase as any)
+        .from("nf_entrada_contas_pagar")
+        .select("nf_import_id, ap_doc_entry, ap_doc_num, ap_total, ap_paid, source, linked_at, notes")
+        .in("nf_import_id", ids);
+      for (const row of (linksData || []) as Array<NfApLink & { nf_import_id: string }>) {
+        const arr = byNf.get(row.nf_import_id) || [];
+        arr.push({
+          ap_doc_entry: row.ap_doc_entry,
+          ap_doc_num: row.ap_doc_num,
+          ap_total: row.ap_total,
+          ap_paid: row.ap_paid,
+          source: row.source,
+          linked_at: row.linked_at,
+          notes: row.notes,
+        });
+        byNf.set(row.nf_import_id, arr);
+      }
     }
     return nfs.map((n) => ({ ...n, ap_links: byNf.get(n.id) || [] })) as NfEntradaLink[];
   }, [sapDocEntry, companyDb]);
