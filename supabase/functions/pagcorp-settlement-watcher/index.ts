@@ -312,7 +312,26 @@ Deno.serve(async (req) => {
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  const gotLock = await tryWatcherLock(sb, "pagcorp-settlement-watcher", 10);
+  // Suporte a disparo manual de um único log (baixa automática pela UI):
+  //   POST { logId: string, forceRetry?: true }
+  // Ignora locks/backoff e processa apenas aquela linha. Chamadas sem body
+  // permanecem sendo o fluxo do cron (varredura de várias linhas).
+  let manualLogId: string | null = null;
+  let manualForceRetry = false;
+  if (req.method === "POST") {
+    try {
+      const body = await req.json().catch(() => ({}));
+      if (body && typeof body.logId === "string" && body.logId.length > 0) {
+        manualLogId = body.logId;
+        manualForceRetry = body.forceRetry !== false;
+      }
+    } catch { /* ignore */ }
+  }
+
+  const lockName = manualLogId
+    ? `pagcorp-settlement-watcher:${manualLogId}`
+    : "pagcorp-settlement-watcher";
+  const gotLock = await tryWatcherLock(sb, lockName, 10);
   if (!gotLock) {
     return new Response(JSON.stringify({ ok: true, skipped: "another_run_in_progress" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -326,24 +345,40 @@ Deno.serve(async (req) => {
   const results: Array<{ id: string; status: string; error?: string }> = [];
 
   try {
+    // Se for retentativa manual, limpa gates de backoff da linha alvo antes
+    // do select para garantir que ela seja pega neste run.
+    if (manualLogId && manualForceRetry) {
+      await sb
+        .from("pagcorp_integration_log")
+        .update({ settlement_retry_after: null, settlement_locked_at: null })
+        .eq("id", manualLogId);
+    }
+
     const cutoffLockIso = new Date(Date.now() - LOCK_TTL_MIN * 60_000).toISOString();
     let offset = 0;
 
     const nowIso = new Date().toISOString();
     while (Date.now() - startedAt < TIME_BUDGET_MS) {
-      const { data: rows, error } = await sb
+      let q = sb
         .from("pagcorp_integration_log")
         .select("id, company_db, sap_doc_entry, sap_doc_num, pagcorp_data, settlement_status, settlement_attempts")
         .eq("status", "success")
         .not("sap_doc_entry", "is", null)
-        .not("company_db", "is", null)
-        .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "error"])
-        .or(`settlement_locked_at.is.null,settlement_locked_at.lt.${cutoffLockIso}`)
-        .or(`settlement_retry_after.is.null,settlement_retry_after.lt.${nowIso}`)
+        .not("company_db", "is", null);
+      if (manualLogId) {
+        q = q.eq("id", manualLogId);
+      } else {
+        q = q
+          .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "error"])
+          .or(`settlement_locked_at.is.null,settlement_locked_at.lt.${cutoffLockIso}`)
+          .or(`settlement_retry_after.is.null,settlement_retry_after.lt.${nowIso}`);
+      }
+      const { data: rows, error } = await q
         .order("created_at", { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);
       if (error) throw new Error(error.message);
       if (!rows || rows.length === 0) break;
+
 
       // agrupar por company_db para reaproveitar sessão SAP
       const byCompany = new Map<string, PagcorpLogRow[]>();
@@ -653,13 +688,13 @@ Deno.serve(async (req) => {
       if (rows.length < PAGE_SIZE) break;
     }
 
-    await releaseWatcherLock(sb, "pagcorp-settlement-watcher", "ok", `processed=${results.length}`);
+    await releaseWatcherLock(sb, lockName, "ok", `processed=${results.length}`);
     return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     const msg = (e as Error).message;
-    await releaseWatcherLock(sb, "pagcorp-settlement-watcher", "error", msg);
+    await releaseWatcherLock(sb, lockName, "error", msg);
     return new Response(JSON.stringify({ error: msg, results }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -23,6 +23,9 @@ export interface PagCorpTransaction {
   integrationLogId?: string;
   sapDocNum?: number | null;
   sapDocEntry?: number | null;
+  settlementStatus?: string | null;
+  settlementPaymentDocNum?: number | null;
+  settlementError?: string | null;
   isReversed?: boolean;
   isNondeductible?: boolean;
   nondeductibleAtExpense?: boolean;
@@ -145,17 +148,20 @@ export function usePagCorp() {
       if (expenseIds.length > 0 && companyDb) {
         const { data: logs } = await supabase
           .from("pagcorp_integration_log")
-          .select("pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry")
+          .select("pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry, settlement_status, settlement_payment_doc_num, settlement_error")
           .in("pagcorp_expense_id", expenseIds)
           .eq("status", "success")
           .eq("company_db", companyDb);
 
-        const integratedMap = new Map<number, { id: string; docNum: number | null; docEntry: number | null }>();
+        const integratedMap = new Map<number, { id: string; docNum: number | null; docEntry: number | null; settlementStatus: string | null; settlementPaymentDocNum: number | null; settlementError: string | null }>();
         (logs || []).forEach((log: any) => {
           integratedMap.set(log.pagcorp_expense_id, {
             id: log.id,
             docNum: log.sap_doc_num ?? null,
             docEntry: log.sap_doc_entry ?? null,
+            settlementStatus: log.settlement_status ?? null,
+            settlementPaymentDocNum: log.settlement_payment_doc_num ?? null,
+            settlementError: log.settlement_error ?? null,
           });
         });
 
@@ -166,6 +172,9 @@ export function usePagCorp() {
             t.integrationLogId = hit.id;
             t.sapDocNum = hit.docNum;
             t.sapDocEntry = hit.docEntry;
+            t.settlementStatus = hit.settlementStatus;
+            t.settlementPaymentDocNum = hit.settlementPaymentDocNum;
+            t.settlementError = hit.settlementError;
           }
         });
       }
