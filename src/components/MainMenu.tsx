@@ -238,10 +238,10 @@ function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: num
     <motion.button
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1 }}
+      transition={{ delay: Math.min(index * 0.05, 0.3) }}
       onClick={() => hasAccess && navigate(mod.path)}
       disabled={!hasAccess}
-      className={`glass-card p-6 text-left transition-all group relative overflow-hidden ${
+      className={`glass-card p-4 sm:p-6 text-left transition-all group relative overflow-hidden active:scale-[0.98] ${
         hasAccess
           ? "hover:border-primary/40 cursor-pointer hover:scale-[1.02]"
           : "opacity-50 cursor-not-allowed"
@@ -251,18 +251,18 @@ function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: num
       <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
 
       <div className="relative z-10">
-        <div className="flex items-start justify-between mb-4">
-          <div className={`p-3 rounded-xl bg-card border border-border ${mod.color}`}>
-            <Icon className="w-6 h-6" />
+        <div className="flex items-start justify-between mb-3 sm:mb-4">
+          <div className={`p-2.5 sm:p-3 rounded-xl bg-card border border-border ${mod.color}`}>
+            <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           {hasAccess ? (
-            <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           ) : (
             <Lock className="w-4 h-4 text-muted-foreground" />
           )}
         </div>
-        <h3 className="text-lg font-bold text-foreground mb-2">{mod.title}</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">{mod.description}</p>
+        <h3 className="text-base sm:text-lg font-bold text-foreground mb-1 sm:mb-2">{mod.title}</h3>
+        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-3 sm:line-clamp-none">{mod.description}</p>
       </div>
     </motion.button>
   );
@@ -280,18 +280,25 @@ export function MainMenu() {
     <div className="min-h-screen bg-background flex flex-col">
       <PageTitle title="Painel" />
       {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 rounded-lg bg-primary/10 glow-primary">
+      <header className="border-b border-border px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 rounded-lg bg-primary/10 glow-primary flex-shrink-0">
               <img src={cactusLogo.url} alt="Logo" className="w-6 h-6 object-contain" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">ERP <span className="text-gradient">Flow</span></h1>
-              <p className="text-xs text-muted-foreground">Painel de gestão</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-foreground truncate">
+                ERP <span className="text-gradient">Flow</span>
+              </h1>
+              <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                <span className="sm:hidden">{companyLabel}</span>
+                <span className="hidden sm:inline">Painel de gestão</span>
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+
+          {/* Desktop actions */}
+          <div className="hidden md:flex items-center gap-4">
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{companyLabel}</p>
               <p className="text-xs text-muted-foreground">{session?.userName}</p>
@@ -314,18 +321,23 @@ export function MainMenu() {
               Sair
             </button>
           </div>
+
+          {/* Mobile actions: only notification bell (menu is on bottom nav) */}
+          <div className="flex md:hidden items-center gap-1">
+            <NotificationBell />
+          </div>
         </div>
       </header>
 
       {/* Content */}
-      <main className="flex-1 px-6 py-12">
+      <main className="flex-1 px-4 sm:px-6 py-6 sm:py-12 pb-24 md:pb-12">
         <div className="max-w-5xl mx-auto w-full">
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-foreground">Módulos</h2>
-            <p className="text-muted-foreground mt-2">Selecione um módulo para começar</p>
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-6 sm:mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Módulos</h2>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">Selecione um módulo para começar</p>
           </motion.div>
 
-          <div className="space-y-12">
+          <div className="space-y-8 sm:space-y-12">
             {moduleGroups.map((group) => {
               const groupModules = group.keys
                 .map((k) => modules[k])
@@ -336,10 +348,10 @@ export function MainMenu() {
               if (visible.length === 0) return null;
               return (
                 <section key={group.title}>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 px-1">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 sm:mb-4 px-1">
                     {group.title}
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
                     {visible.map((mod, i) => (
                       <ModuleCardItem
                         key={`${group.title}-${mod.title}`}
