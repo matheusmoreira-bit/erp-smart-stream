@@ -49,7 +49,7 @@ function fmtCompact(v: number) {
 
 export function PendingApprovalsReport() {
   const { session } = useSap();
-  const { approvals, isLoading: sapLoading, fetchApprovals } = useApprovals();
+  const { approvals, isLoading: sapLoading, refresh: refreshSap } = useApprovals();
   const [systemItems, setSystemItems] = useState<PendingItem[]>([]);
   const [sysLoading, setSysLoading] = useState(true);
 
