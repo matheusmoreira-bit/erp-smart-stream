@@ -48,14 +48,14 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
       const { data: poData } = await sapQuery(
         session,
         `PurchaseOrders(${docEntry})`,
-        { $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName" },
+        { $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,CardCode,CardName" },
         false,
       );
       let resolvedPo = poData as any;
       if (!resolvedPo && docNum) {
         const { data: byNumData } = await sapQuery(session, "PurchaseOrders", {
           $filter: `DocNum eq ${docNum}`,
-          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName",
+          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,CardCode,CardName",
           $top: 1,
         }, false);
         resolvedPo = (byNumData as any)?.value?.[0] || null;
@@ -68,7 +68,7 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
       try {
         const { data: invData } = await sapQuery(session, "PurchaseInvoices", {
           $filter: `DocumentLines/any(d: d/BaseType eq 22 and d/BaseEntry eq ${poEntry})`,
-          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,DocumentStatus,CardCode,CardName",
+          $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,CardCode,CardName",
           $top: 10,
         }, false);
         foundInvoices = (invData as any)?.value || [];
@@ -86,7 +86,7 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
             .join(" or ");
           const { data: payData } = await sapQuery(session, "VendorPayments", {
             $filter: filter,
-            $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFC,DocCurrency,CardCode,CardName",
+            $select: "DocEntry,DocNum,DocDate,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName",
             $top: 20,
           }, false);
           setPayments((payData as any)?.value || []);
@@ -108,11 +108,11 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, docEntry]);
 
-  // SAP B1 Service Layer retorna DocTotal em moeda local (BRL) e DocTotalFC em moeda estrangeira.
-  // Se o PC estiver em moeda estrangeira (DocCurrency != BRL), o valor comparável é DocTotalFC.
+  // SAP B1 Service Layer retorna DocTotal em moeda local (BRL) e DocTotalFc em moeda estrangeira.
+  // Se o PC estiver em moeda estrangeira (DocCurrency != BRL), o valor comparável é DocTotalFc.
   const poCurrency = po?.DocCurrency || expectedCurrency || "BRL";
   const isForeign = poCurrency && poCurrency !== "BRL";
-  const poTotal = po ? Number((isForeign ? po.DocTotalFC : po.DocTotal) ?? 0) : null;
+  const poTotal = po ? Number((isForeign ? po.DocTotalFc : po.DocTotal) ?? 0) : null;
   const amountOk = expectedAmount != null && poTotal != null
     ? Math.abs(Number(poTotal) - Number(expectedAmount)) < 0.01
     : null;
@@ -186,7 +186,7 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
               <ul className="space-y-1 text-xs">
                 {invoices.map((i) => {
                   const cur = i.DocCurrency || poCurrency;
-                  const total = cur && cur !== "BRL" ? Number(i.DocTotalFC ?? 0) : Number(i.DocTotal ?? 0);
+                  const total = cur && cur !== "BRL" ? Number(i.DocTotalFc ?? 0) : Number(i.DocTotal ?? 0);
                   return (
                     <li key={i.DocEntry} className="flex justify-between gap-2">
                       <span>NF #{i.DocNum} • {i.DocDate?.slice(0,10)}</span>
@@ -211,7 +211,7 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
               <ul className="space-y-1 text-xs">
                 {payments.map((p) => {
                   const cur = p.DocCurrency || poCurrency;
-                  const total = cur && cur !== "BRL" ? Number(p.DocTotalFC ?? 0) : Number(p.DocTotal ?? 0);
+                  const total = cur && cur !== "BRL" ? Number(p.DocTotalFc ?? 0) : Number(p.DocTotal ?? 0);
                   return (
                     <li key={p.DocEntry} className="flex justify-between gap-2">
                       <span>Pgto #{p.DocNum} • {p.DocDate?.slice(0,10)}</span>
