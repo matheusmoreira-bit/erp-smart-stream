@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   CheckCircle2,
   XCircle,
   Clock,
-  ArrowRight,
   FileText,
   Send,
   ShieldCheck,
@@ -15,9 +16,7 @@ import {
   FileCheck2,
   Receipt,
   Wallet,
-  CircleCheck,
-  CircleDashed,
-  Circle,
+  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { STATUS_LABELS } from "@/hooks/useExpenses";
@@ -28,6 +27,7 @@ import {
   type ContaPagarLink,
 } from "@/hooks/useRelationsMapDerived";
 import { Loader2 } from "lucide-react";
+import { RelationsMapFlow } from "./RelationsMapFlow";
 
 type LogDecision =
   | "created"
