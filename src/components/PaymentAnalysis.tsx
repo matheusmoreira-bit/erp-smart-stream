@@ -286,17 +286,17 @@ export function PaymentAnalysis() {
 
   return (
     <Tabs defaultValue="dashboard" className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <TabsList>
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="tabela">Tabela</TabsTrigger>
           </TabsList>
           <PeriodFilter value={period} onChange={setPeriod} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-between sm:justify-end">
           <span className="text-xs text-muted-foreground">{rows.length} registros</span>
-          <Button variant="ghost" size="sm" onClick={refresh}>
+          <Button variant="ghost" size="icon" onClick={refresh} aria-label="Atualizar">
             <RefreshCw className="w-4 h-4" />
           </Button>
         </div>
