@@ -32,6 +32,8 @@ export interface ApprovalDoc {
   internalAttachments?: Array<{ id: string; file_name: string; file_path: string; file_size?: number }>;
   /** Nome/e-mail do aprovador original antes de uma delegação. */
   delegatedFrom?: string;
+  /** Tipo de rateio (aplicável a despesas internas). "padrao" = Não. */
+  rateioType?: string;
 }
 
 export interface DocumentLine {
