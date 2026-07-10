@@ -220,6 +220,9 @@ function nextPtaxRetryAfter(from: Date = new Date()): Date {
     candidate.setUTCDate(candidate.getUTCDate() + 1);
   }
   return candidate;
+}
+
+
 
 /**
  * Emite um Pagamento de Fornecedor (Outgoing Payment) que baixa a
