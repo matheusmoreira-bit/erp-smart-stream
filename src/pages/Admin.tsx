@@ -952,6 +952,8 @@ export default function Admin() {
               <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-2">Seções</h4>
               <ul className="space-y-0.5">
                 {[
+                  { key: "integrations", label: "Integrações", icon: Key },
+                  { key: "admin_users", label: "Admins", icon: ShieldCheck },
                   { key: "audit", label: "Logs de Auditoria", icon: ScrollText },
                   { key: "tools", label: "Ferramentas", icon: Wrench },
                 ].map((t) => {
