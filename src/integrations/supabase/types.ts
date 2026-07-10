@@ -2798,6 +2798,7 @@ export type Database = {
           settlement_ptax_date: string | null
           settlement_ptax_rate: number | null
           settlement_ptax_source: string | null
+          settlement_retry_after: string | null
           settlement_status: string
           status: string
           updated_at: string
@@ -2828,6 +2829,7 @@ export type Database = {
           settlement_ptax_date?: string | null
           settlement_ptax_rate?: number | null
           settlement_ptax_source?: string | null
+          settlement_retry_after?: string | null
           settlement_status?: string
           status?: string
           updated_at?: string
@@ -2858,6 +2860,7 @@ export type Database = {
           settlement_ptax_date?: string | null
           settlement_ptax_rate?: number | null
           settlement_ptax_source?: string | null
+          settlement_retry_after?: string | null
           settlement_status?: string
           status?: string
           updated_at?: string
