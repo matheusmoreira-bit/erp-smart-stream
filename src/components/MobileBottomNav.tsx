@@ -22,17 +22,9 @@ export function MobileBottomNav() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const { userModules } = useModuleAccess();
+  const { unreadCount } = useNotifications();
 
-  // Only show when user is authenticated
   const hasSession = !!session?.userName;
-
-  let unreadCount = 0;
-  try {
-    const n = useNotifications();
-    unreadCount = n.unreadCount ?? 0;
-  } catch {
-    unreadCount = 0;
-  }
 
   if (!hasSession) return null;
 
