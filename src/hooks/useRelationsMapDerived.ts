@@ -256,7 +256,7 @@ export function useContasPagarLinks({
           const vpEndpoint = `VendorPayments?$filter=${vpFilter}&$orderby=DocEntry desc&$top=200`;
           const { data: vpData } = await sapQueryAll(session, vpEndpoint, undefined, false);
           const vpRows = Array.isArray(vpData?.value) ? vpData.value : [];
-          for (const r of vpRows) {
+          for (const r of vpRows as any[]) {
             const invLines = Array.isArray(r?.PaymentInvoices) ? r.PaymentInvoices : [];
             const applied: Record<number, number> = {};
             const invEntries: number[] = [];
