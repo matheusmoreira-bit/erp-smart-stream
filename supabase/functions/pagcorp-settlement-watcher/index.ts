@@ -437,9 +437,27 @@ Deno.serve(async (req) => {
                 }
               }
 
+              // Se nenhuma NF conseguiu conta contábil (ex.: faltou cadastrar
+              // a conta em USD), marca a linha como awaiting_settlement para
+              // reprocessar depois — não conta como erro terminal.
+              if (invoices.length > 0 && accountsUsed.length === 0 && firstMissingAccountMsg) {
+                await sb
+                  .from("pagcorp_integration_log")
+                  .update({
+                    settlement_status: "awaiting_settlement",
+                    settlement_error: firstMissingAccountMsg,
+                    settlement_locked_at: null,
+                    settlement_attempted_at: new Date().toISOString(),
+                  })
+                  .eq("id", row.id);
+                results.push({ id: row.id, status: "awaiting_settlement", error: "no_settlement_account" });
+                continue;
+              }
+
               const settlementNote: string[] = [];
               if (paymentEntries.length > 1) settlementNote.push(`${paymentEntries.length} pagamentos emitidos (docs: ${paymentNums.join(", ")})`);
               if (skippedAlreadyPaid.length > 0) settlementNote.push(`${skippedAlreadyPaid.length} NF(s) já quitadas`);
+              if (firstMissingAccountMsg) settlementNote.push(firstMissingAccountMsg);
 
               await sb
                 .from("pagcorp_integration_log")
@@ -464,7 +482,7 @@ Deno.serve(async (req) => {
                 status: "ok",
                 duration_ms: Date.now() - t0,
                 request_meta: { poEntry: row.sap_doc_entry, invoiceEntries },
-                response_meta: { paymentEntries, paymentNums, account: account.settlement_account_code, skippedAlreadyPaid },
+                response_meta: { paymentEntries, paymentNums, accountsUsed, skippedAlreadyPaid },
               });
               results.push({ id: row.id, status: "settled" });
             } catch (e) {
