@@ -210,7 +210,7 @@ function ExpenseDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto p-4 sm:w-auto sm:h-auto sm:max-w-2xl sm:max-h-[85vh] sm:rounded-lg sm:border sm:p-6">
           <DialogHeader className="space-y-2">
             <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-6">
               <span className="text-foreground font-semibold">Despesa</span>
