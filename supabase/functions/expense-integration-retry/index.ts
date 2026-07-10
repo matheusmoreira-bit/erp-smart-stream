@@ -9,6 +9,7 @@
 //       idempotent and only performs safe retries).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
