@@ -222,7 +222,18 @@ export function SapValidationDialog({ open, onClose, docEntry, docNum, expectedA
               <ul className="space-y-1 text-xs">
                 {payments.map((p) => {
                   const cur = p.DocCurrency || poCurrency;
-                  const total = cur && cur !== "BRL" ? Number(p.DocTotalFc ?? 0) : Number(p.DocTotal ?? 0);
+                  const foreign = cur && cur !== "BRL";
+                  // VendorPayments.DocTotal costuma vir 0 em baixas de reconciliação;
+                  // o valor real está em PaymentInvoices[].SumApplied (local) / AppliedFC (moeda estrangeira),
+                  // somando apenas os PIs que casam com as NFs deste PC.
+                  const invEntries = new Set(invoices.map((i: any) => Number(i.DocEntry)));
+                  const pis = (p.PaymentInvoices || []).filter((pi: any) =>
+                    pi.InvoiceType === "it_PurchaseInvoice" && invEntries.has(Number(pi.DocEntry))
+                  );
+                  const applied = pis.reduce((sum: number, pi: any) =>
+                    sum + Number((foreign ? (pi.AppliedFC ?? pi.SumApplied) : pi.SumApplied) ?? 0), 0);
+                  const fallback = foreign ? Number(p.DocTotalFc ?? 0) : Number(p.DocTotal ?? 0);
+                  const total = applied || fallback;
                   return (
                     <li key={p.DocEntry} className="flex justify-between gap-2">
                       <span>Pgto #{p.DocNum} • {p.DocDate?.slice(0,10)}</span>
