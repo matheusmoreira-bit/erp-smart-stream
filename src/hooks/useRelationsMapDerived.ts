@@ -111,10 +111,12 @@ export function useNfEntradaLinks({
       console.warn("[relations-map] falha ao ler NF cache do SAP:", e);
     }
 
-    // dedup: se o mesmo doc_entry já existe em importRows (via sap_matched_doc_entry),
-    // não duplica com uma versão vinda do cache.
+    // dedup: se o mesmo doc_entry já foi registrado como draft/invoice em importRows
+    // (via sap_invoice_draft_id), não duplica com uma versão vinda do cache.
     const matchedDocEntries = new Set(
-      importRows.map((r) => r.sap_matched_doc_entry).filter((v): v is number => v != null),
+      importRows
+        .map((r) => (r.sap_invoice_draft_id ? Number(r.sap_invoice_draft_id) : null))
+        .filter((v): v is number => v != null && Number.isFinite(v)),
     );
     const cacheOnly: Omit<NfEntradaLink, "ap_links">[] = cacheRows
       .filter((r) => !matchedDocEntries.has(r.doc_entry) && r.cancelled !== "tYES")
