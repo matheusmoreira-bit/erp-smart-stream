@@ -162,7 +162,7 @@ export function SapLoginForm() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex p-3 rounded-2xl bg-primary/10 glow-primary mb-4">
-            <Activity className="w-8 h-8 text-primary" />
+            <img src={cactusLogo.url} alt="Logo" className="w-8 h-8 object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">
             ERP <span className="text-gradient">Analytics</span>
