@@ -9,8 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
-import { invokeFn } from "@/lib/invoke-fn";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 interface Props {
   open: boolean;
@@ -43,6 +42,13 @@ interface RelationRow {
 interface NfRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_currency: string | null; document_status: string | null }
 interface PayRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_total_fc: number | null; doc_currency: string | null; invoice_links: Array<{ docEntry?: number; invoiceType?: string; sumApplied?: number; appliedFC?: number }> }
 
+interface RelationDetailsResponse {
+  relation: RelationRow | null;
+  nfs?: NfRow[];
+  pays?: PayRow[];
+  error?: string;
+}
+
 function formatCurrency(value: number, currency = "BRL") {
   const code = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
   try {
@@ -64,40 +70,16 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
     if (!pagcorpLogId) return;
     setLoading(true); setError(null);
     try {
-      const { data: relData, error: relErr } = await supabase
-        .from("pagcorp_document_relations")
-        .select("po_doc_entry, po_doc_num, po_status, po_total, po_total_fc, po_currency, nf_doc_entries, payment_doc_entries, po_found, amount_matches, last_resolved_at, resolve_error, company_db")
-        .eq("pagcorp_log_id", pagcorpLogId)
-        .maybeSingle();
-      if (relErr) throw new Error(relErr.message);
-      const row = (relData as RelationRow | null) ?? null;
-      setRel(row);
-
-      if (row?.company_db) {
-        if ((row.nf_doc_entries || []).length > 0) {
-          const { data: nfData } = await supabase
-            .from("sap_nf_entrada_cache")
-            .select("doc_entry, doc_num, doc_date, doc_total, doc_currency, document_status")
-            .eq("company_db", row.company_db)
-            .in("doc_entry", row.nf_doc_entries as number[]);
-          setNfs((nfData || []) as NfRow[]);
-        } else {
-          setNfs([]);
-        }
-
-        if ((row.payment_doc_entries || []).length > 0) {
-          const { data: payData } = await supabase
-            .from("sap_vendor_payment_cache")
-            .select("doc_entry, doc_num, doc_date, doc_total, doc_total_fc, doc_currency, invoice_links")
-            .eq("company_db", row.company_db)
-            .in("doc_entry", row.payment_doc_entries as number[]);
-          setPays((payData || []) as PayRow[]);
-        } else {
-          setPays([]);
-        }
-      } else {
-        setNfs([]); setPays([]);
-      }
+      const res = await sapFunctionFetch("pagcorp-relations-resolver", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logId: pagcorpLogId, readOnly: true }),
+      });
+      const data = await res.json().catch(() => ({})) as RelationDetailsResponse;
+      if (!res.ok) throw new Error(data.error || `Falha ao carregar relações (${res.status})`);
+      setRel(data.relation ?? null);
+      setNfs(data.nfs || []);
+      setPays(data.pays || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao carregar relações");
     } finally {
@@ -109,8 +91,16 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
     if (!pagcorpLogId) return;
     setResolving(true); setError(null);
     try {
-      await invokeFn("pagcorp-relations-resolver", { body: { logId: pagcorpLogId } });
-      await load();
+      const res = await sapFunctionFetch("pagcorp-relations-resolver", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logId: pagcorpLogId, includeDetails: true }),
+      });
+      const data = await res.json().catch(() => ({})) as RelationDetailsResponse;
+      if (!res.ok) throw new Error(data.error || `Falha ao reconsultar (${res.status})`);
+      setRel(data.relation ?? null);
+      setNfs(data.nfs || []);
+      setPays(data.pays || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao reconsultar");
     } finally {
