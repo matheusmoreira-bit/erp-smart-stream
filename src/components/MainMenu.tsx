@@ -2,6 +2,7 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { PageTitle } from "@/components/PageTitle";
+import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import {
   BarChart3,
   ShoppingCart,
