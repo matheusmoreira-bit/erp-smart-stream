@@ -145,11 +145,13 @@ async function resolveSettlementAccount(
 }
 
 async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: number): Promise<
-  Array<{ DocEntry: number; DocNum: number; CardCode: string; DocTotal: number; PaidToDate: number; DocumentStatus: string; DocCurrency: string; DocDate: string; BPLId?: number }>
+  Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; PaidToDate: number; PaidToDateSys: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number }>
 > {
   // 1 PO → N NF de entrada: retornamos TODAS as PurchaseInvoices que apontam para o PO.
+  // Selecionamos também DocTotalSys / PaidToDateSys / DocRate para poder emitir a
+  // baixa em moeda LOCAL (padrão SAP para VendorPayments), replicando o manual.
   const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})` +
-    `&$select=DocEntry,DocNum,CardCode,DocTotal,PaidToDate,DocumentStatus,DocCurrency,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
+    `&$select=DocEntry,DocNum,CardCode,CardName,DocTotal,DocTotalSys,PaidToDate,PaidToDateSys,DocumentStatus,DocCurrency,DocRate,DocDate,BPL_IDAssignedToInvoice&$orderby=DocEntry asc&$top=50`;
   const r = await fetch(q, { headers: { Cookie: cookie } });
   if (!r.ok) throw new Error(`Consulta PurchaseInvoices falhou ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = await r.json();
@@ -158,10 +160,14 @@ async function findInvoicesForPO(baseUrl: string, cookie: string, poEntry: numbe
     DocEntry: Number(inv.DocEntry),
     DocNum: Number(inv.DocNum),
     CardCode: String(inv.CardCode),
+    CardName: String(inv.CardName ?? ""),
     DocTotal: Number(inv.DocTotal),
+    DocTotalSys: Number(inv.DocTotalSys ?? inv.DocTotal ?? 0),
     PaidToDate: Number(inv.PaidToDate ?? 0),
+    PaidToDateSys: Number(inv.PaidToDateSys ?? 0),
     DocumentStatus: String(inv.DocumentStatus ?? ""),
     DocCurrency: String(inv.DocCurrency ?? ""),
+    DocRate: Number(inv.DocRate ?? 0),
     DocDate: String(inv.DocDate),
     BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
   }));
@@ -242,32 +248,43 @@ async function createVendorPayment(
     invoiceDocNum: number;
     invoiceDate: string;
     cardCode: string;
+    cardName: string;
     docCurrency: string;
     accountCode: string;
-    amount: number;
-    memo: string;
+    /** Valor da baixa em moeda LOCAL (BRL). Vira TransferSum. */
+    transferSumLocal: number;
+    /** SumApplied em moeda LOCAL calculado pela DocRate da NF. */
+    sumAppliedLocal: number;
     costCenter: string | null;
     project: string | null;
     bplId?: number;
+    /** DocRate do pagamento (PTAX do dia da NF). Só para FC. */
     docRate?: number | null;
   },
 ): Promise<{ docEntry: number; docNum: number }> {
+  // Formato do JournalRemarks e Reference1 replicam a baixa manual feita no SAP:
+  //   JournalRemarks: "PAGAMENTO REF. CP Nº {DocNum} - {CardCode} - {CardName}"
+  //   Reference1: {DocNum da NF de entrada sendo baixada}
+  //   Remarks: null (SAP preenche automaticamente com o padrão da série)
+  const journalRemarks =
+    `PAGAMENTO REF. CP Nº ${args.invoiceDocNum} - ${args.cardCode} - ${args.cardName}`.slice(0, 50);
+
   const body: Record<string, unknown> = {
     DocType: "rSupplier",
     CardCode: args.cardCode,
     DocDate: args.invoiceDate,
     TaxDate: args.invoiceDate,
     DueDate: args.invoiceDate,
-    Remarks: args.memo.slice(0, 254),
-    JournalRemarks: args.memo.slice(0, 50),
+    JournalRemarks: journalRemarks,
+    Reference1: String(args.invoiceDocNum),
     TransferAccount: args.accountCode,
-    TransferSum: args.amount,
+    TransferSum: args.transferSumLocal,
     TransferDate: args.invoiceDate,
     PaymentInvoices: [
       {
         DocEntry: args.invoiceEntry,
         InvoiceType: "it_PurchaseInvoice",
-        SumApplied: args.amount,
+        SumApplied: args.sumAppliedLocal,
       },
     ],
   };
@@ -477,15 +494,28 @@ Deno.serve(async (req) => {
                     }
                   }
 
+                  // Cálculo dos valores em moeda LOCAL para replicar a baixa
+                  // manual do SAP:
+                  //  • TransferSum = valor FC × PTAX do pagamento (openAmount × docRate)
+                  //  • SumApplied  = valor FC × DocRate da NF (mantém consistência
+                  //    contábil do saldo aberto da NF; se DocRate da NF não veio,
+                  //    cai para o mesmo valor de TransferSum).
+                  //  Para BRL (docRate=null), tudo é o próprio openAmount.
+                  const paymentRate = docRate && docRate > 0 ? docRate : 1;
+                  const invoiceRate = invoice.DocRate && invoice.DocRate > 0 ? invoice.DocRate : paymentRate;
+                  const transferSumLocal = docRate ? +(openAmount * paymentRate).toFixed(2) : openAmount;
+                  const sumAppliedLocal = docRate ? +(openAmount * invoiceRate).toFixed(2) : openAmount;
+
                   const payment = await createVendorPayment(baseUrl, cookie, {
                     invoiceEntry: invoice.DocEntry,
                     invoiceDocNum: invoice.DocNum,
                     invoiceDate: invoice.DocDate,
                     cardCode: invoice.CardCode,
+                    cardName: invoice.CardName,
                     docCurrency: invoice.DocCurrency,
                     accountCode: account.settlement_account_code,
-                    amount: openAmount,
-                    memo: `Baixa PagCorp PC ${po.DocNum ?? row.sap_doc_num} NF ${invoice.DocNum}`,
+                    transferSumLocal,
+                    sumAppliedLocal,
                     costCenter: account.cost_center,
                     project: account.project,
                     bplId: invoice.BPLId,
