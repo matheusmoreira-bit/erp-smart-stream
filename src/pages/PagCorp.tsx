@@ -127,6 +127,7 @@ export default function PagCorp() {
     tx: PagCorpTransaction | null;
   }>({ open: false, tx: null });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
+  const [settling, setSettling] = useState<string | number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [batchQueue, setBatchQueue] = useState<PagCorpTransaction[]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
