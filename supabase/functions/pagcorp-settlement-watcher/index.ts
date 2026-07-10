@@ -470,7 +470,7 @@ Deno.serve(async (req) => {
               }
 
               // 2. Localiza TODAS as NFs que apontam para o PO (1 PO → N NF)
-              const invoices = await findInvoicesForPO(baseUrl, cookie, row.sap_doc_entry);
+              const invoices = await findInvoicesForPO(baseUrl, cookie, row.sap_doc_entry, String(po.CardCode ?? ""));
               if (invoices.length === 0) {
                 await sb
                   .from("pagcorp_integration_log")
