@@ -895,10 +895,10 @@ export default function Admin() {
       >
         <ul className="grid grid-cols-5">
           {[
-            { key: "companies", label: "Empresas", icon: Building2 },
-            { key: "permissions", label: "Permissões", icon: Users },
-            { key: "integrations", label: "Integr.", icon: Key },
-            { key: "admin_users", label: "Admins", icon: ShieldCheck },
+            { key: "companies", label: "Empresas", icon: Building2, action: () => setActiveTab("companies") },
+            { key: "permissions", label: "Permissões", icon: Users, action: () => setActiveTab("permissions") },
+            { key: "sap_users", label: "Usuários SAP", icon: ShieldCheck, action: () => navigate("/backoffice/sap-users") },
+            { key: "audit", label: "Logs", icon: ScrollText, action: () => setActiveTab("audit") },
           ].map((t) => {
             const Icon = t.icon;
             const isActive = activeTab === t.key;
@@ -906,7 +906,7 @@ export default function Admin() {
               <li key={t.key}>
                 <button
                   type="button"
-                  onClick={() => setActiveTab(t.key as typeof activeTab)}
+                  onClick={t.action}
                   className={cn(
                     "w-full flex flex-col items-center justify-center gap-0.5 py-2 px-1 min-h-14 relative active:opacity-70",
                     isActive ? "text-[hsl(var(--cactus-amber))]" : "text-muted-foreground",
@@ -932,6 +932,7 @@ export default function Admin() {
             </button>
           </li>
         </ul>
+
       </nav>
 
       {/* Mobile hamburger sheet */}
