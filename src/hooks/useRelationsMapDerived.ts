@@ -79,15 +79,13 @@ export function useNfEntradaLinks({
     const { data, error } = await supabase
       .from("nf_entrada_imports")
       .select(
-        "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,created_at,updated_at,sap_matched_doc_entry",
+        "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,created_at,updated_at",
       )
       .eq("sap_matched_po_doc_entry", String(sapDocEntry))
       .eq("sap_company_db", companyDb)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    const importRows = (data || []) as Array<
-      Omit<NfEntradaLink, "ap_links"> & { sap_matched_doc_entry: number | null }
-    >;
+    const importRows = (data || []) as Omit<NfEntradaLink, "ap_links">[];
 
     // Também busca NFs lançadas manualmente no SAP (não passaram pelo ERP Flow),
     // via função security-definer no cache de NF de entrada.
