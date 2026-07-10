@@ -303,8 +303,4 @@ export function CachedSearchCombobox({
     </>
   );
 }
-        portalContainer || document.body,
-      )}
-    </>
-  );
-}
+
