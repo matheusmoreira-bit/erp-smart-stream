@@ -2070,6 +2070,33 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_pause: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          key: string
+          paused_until: string
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          key: string
+          paused_until: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          key?: string
+          paused_until?: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       item_base: {
         Row: {
           codigo_servico: string | null
