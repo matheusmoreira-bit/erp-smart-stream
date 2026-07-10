@@ -450,7 +450,7 @@ Deno.serve(async (req) => {
             try {
               // 1. PO precisa estar fechado (indica que a NF já foi lançada)
               const poR = await fetch(
-                `${baseUrl}/PurchaseOrders(${row.sap_doc_entry})?$select=DocEntry,DocNum,DocumentStatus`,
+                `${baseUrl}/PurchaseOrders(${row.sap_doc_entry})?$select=DocEntry,DocNum,DocumentStatus,CardCode`,
                 { headers: { Cookie: cookie } },
               );
               if (!poR.ok) throw new Error(`Consulta PO falhou ${poR.status}`);
