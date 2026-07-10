@@ -324,7 +324,7 @@ export function useContasPagarLinks({
           }
         }
       };
-      if (invoiceEntrySet.size > 0 && cardCodes.length > 0) {
+      if (invoiceEntrySet.size > 0) {
         // Primeiro tenta o vínculo exato: VendorPayments -> PaymentInvoices -> DocEntry da NF.
         // Esse é o modelo observado no SAP (ex.: AP DocEntry 3100 paga NF DocEntry 6370).
         for (const invoiceDocEntry of Array.from(invoiceEntrySet).slice(0, 20)) {
@@ -342,14 +342,16 @@ export function useContasPagarLinks({
 
         // Fallback: algumas versões do Service Layer não aceitam filtro any() em PaymentInvoices.
         // Busca os pagamentos recentes do fornecedor e filtra localmente pelas linhas da NF.
-        try {
-          const cardFilter = cardCodes.map((c) => `CardCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
-          const vpFilter = encodeURIComponent(`Cancelled eq 'tNO' and (${cardFilter})`);
-          const vpEndpoint = `VendorPayments?$filter=${vpFilter}&$orderby=DocEntry desc&$top=500`;
-          const { data: vpData } = await sapQueryAll(session, vpEndpoint, undefined, false);
-          registerPaymentRows(Array.isArray(vpData?.value) ? vpData.value : []);
-        } catch (e) {
-          console.warn("[relations-map] falha ao buscar VendorPayments:", e);
+        if (cardCodes.length > 0) {
+          try {
+            const cardFilter = cardCodes.map((c) => `CardCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
+            const vpFilter = encodeURIComponent(`Cancelled eq 'tNO' and (${cardFilter})`);
+            const vpEndpoint = `VendorPayments?$filter=${vpFilter}&$orderby=DocEntry desc&$top=500`;
+            const { data: vpData } = await sapQueryAll(session, vpEndpoint, undefined, false);
+            registerPaymentRows(Array.isArray(vpData?.value) ? vpData.value : []);
+          } catch (e) {
+            console.warn("[relations-map] falha ao buscar VendorPayments:", e);
+          }
         }
       }
 
