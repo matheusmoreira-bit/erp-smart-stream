@@ -248,32 +248,43 @@ async function createVendorPayment(
     invoiceDocNum: number;
     invoiceDate: string;
     cardCode: string;
+    cardName: string;
     docCurrency: string;
     accountCode: string;
-    amount: number;
-    memo: string;
+    /** Valor da baixa em moeda LOCAL (BRL). Vira TransferSum. */
+    transferSumLocal: number;
+    /** SumApplied em moeda LOCAL calculado pela DocRate da NF. */
+    sumAppliedLocal: number;
     costCenter: string | null;
     project: string | null;
     bplId?: number;
+    /** DocRate do pagamento (PTAX do dia da NF). Só para FC. */
     docRate?: number | null;
   },
 ): Promise<{ docEntry: number; docNum: number }> {
+  // Formato do JournalRemarks e Reference1 replicam a baixa manual feita no SAP:
+  //   JournalRemarks: "PAGAMENTO REF. CP Nº {DocNum} - {CardCode} - {CardName}"
+  //   Reference1: {DocNum da NF de entrada sendo baixada}
+  //   Remarks: null (SAP preenche automaticamente com o padrão da série)
+  const journalRemarks =
+    `PAGAMENTO REF. CP Nº ${args.invoiceDocNum} - ${args.cardCode} - ${args.cardName}`.slice(0, 50);
+
   const body: Record<string, unknown> = {
     DocType: "rSupplier",
     CardCode: args.cardCode,
     DocDate: args.invoiceDate,
     TaxDate: args.invoiceDate,
     DueDate: args.invoiceDate,
-    Remarks: args.memo.slice(0, 254),
-    JournalRemarks: args.memo.slice(0, 50),
+    JournalRemarks: journalRemarks,
+    Reference1: String(args.invoiceDocNum),
     TransferAccount: args.accountCode,
-    TransferSum: args.amount,
+    TransferSum: args.transferSumLocal,
     TransferDate: args.invoiceDate,
     PaymentInvoices: [
       {
         DocEntry: args.invoiceEntry,
         InvoiceType: "it_PurchaseInvoice",
-        SumApplied: args.amount,
+        SumApplied: args.sumAppliedLocal,
       },
     ],
   };
