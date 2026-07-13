@@ -4,7 +4,7 @@
 // requisição exigindo um JWT válido OU os headers de sessão SAP.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { requireUserOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
