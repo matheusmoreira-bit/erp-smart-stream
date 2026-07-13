@@ -178,15 +178,24 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
-      <DialogTrigger asChild>
-        <button className="text-xs text-muted-foreground hover:text-foreground transition-colors" title="Alterar senha">
-          <KeyRound className="w-4 h-4" />
-        </button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <button className="text-xs text-muted-foreground hover:text-foreground transition-colors" title="Alterar senha">
+            <KeyRound className="w-4 h-4" />
+          </button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Alterar Senha</DialogTitle>
         </DialogHeader>
+
+        {warningMessage && !summary && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+            <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+            <div>{warningMessage}</div>
+          </div>
+        )}
 
         {summary ? (
           <div className="space-y-3 mt-2">
