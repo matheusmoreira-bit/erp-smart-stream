@@ -315,8 +315,42 @@ async function loadDetails(sb: ReturnType<typeof createClient>, logId: string) {
     pays = data || [];
   }
 
+  // Fallback: quando o pagamento já foi emitido pelo watcher mas o
+  // sap_vendor_payment_cache ainda não sincronizou, complementamos com o que
+  // o próprio pagcorp_integration_log registrou (mesmo PC no SAP). Isso evita
+  // o modal "Validar SAP" mostrar 0 pagamentos logo após a baixa.
+  const relPoEntry = (relation as { po_doc_entry?: number | null } | null)?.po_doc_entry ?? null;
+  if (companyDb && relPoEntry != null) {
+    const { data: siblingLogs } = await sb
+      .from("pagcorp_integration_log")
+      .select("settlement_payment_doc_entry, settlement_payment_doc_num, settlement_completed_at, settlement_invoice_doc_entry")
+      .eq("company_db", companyDb)
+      .eq("sap_doc_entry", relPoEntry)
+      .not("settlement_payment_doc_entry", "is", null);
+    const existing = new Set((pays as Array<{ doc_entry: number }>).map((p) => p.doc_entry));
+    const nfSet = new Set(nfEntries.map((n) => Number(n)));
+    for (const s of (siblingLogs || []) as Array<{ settlement_payment_doc_entry: number | null; settlement_payment_doc_num: number | null; settlement_completed_at: string | null; settlement_invoice_doc_entry: number | null }>) {
+      const entry = s.settlement_payment_doc_entry;
+      if (entry == null || existing.has(entry)) continue;
+      existing.add(entry);
+      const invEntry = s.settlement_invoice_doc_entry;
+      (pays as unknown[]).push({
+        doc_entry: entry,
+        doc_num: s.settlement_payment_doc_num,
+        doc_date: s.settlement_completed_at,
+        doc_total: null,
+        doc_total_fc: null,
+        doc_currency: null,
+        invoice_links: invEntry != null && nfSet.has(invEntry)
+          ? [{ docEntry: invEntry, invoiceType: "it_PurchaseInvoice" }]
+          : [],
+      });
+    }
+  }
+
   return { relation, nfs, pays };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
