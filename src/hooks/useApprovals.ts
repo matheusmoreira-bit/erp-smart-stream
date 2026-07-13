@@ -544,6 +544,12 @@ const SERVICE_LAYER_ONLY_DBS = new Set<string>([
   "tst_cactus_providers",
 ]);
 
+// Mapa: companyDB (Service Layer) -> schema HANA real onde a view VW_APROVACOES_DETALHADAS
+// está publicada. Usado quando o nome do schema no HANA difere do companyDB (ex.: Open Gaming).
+const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
+  open_gaming_sa: "OPENGAMING",
+};
+
 async function readApprovalsCache(session: SapSession): Promise<{ docs: ApprovalDoc[]; updatedAt: string } | null> {
   const data = await sapReadApprovalsCache<ApprovalDoc[]>(session);
   if (!data.data || !data.updatedAt) return null;
@@ -574,9 +580,12 @@ export function useApprovals() {
     // Fonte padrão: webhook n8n (middleware HANA). Passamos DB/View/SessionId
     // via querystring para que o n8n consulte a VW_APROVACOES_DETALHADAS do
     // schema correto (ANA Gaming, Cactus, etc).
+    const hanaSchema = HANA_SCHEMA_OVERRIDES[companyDb] || companyDb;
     const url = new URL(PENDING_APPROVALS_WEBHOOK_URL);
     url.searchParams.set("SessionId", session.sessionId || "");
-    url.searchParams.set("DB", companyDb);
+    url.searchParams.set("DB", hanaSchema);
+    url.searchParams.set("Schema", hanaSchema);
+    url.searchParams.set("CompanyDB", companyDb);
     url.searchParams.set("View", "VW_APROVACOES_DETALHADAS");
     url.searchParams.set("_t", String(Date.now()));
 
@@ -591,7 +600,7 @@ export function useApprovals() {
       | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
       | { schema?: string; data?: HanaApprovalViewRow[] };
     const groups = Array.isArray(payload) ? payload : [payload];
-    const expected = companyDb.toUpperCase();
+    const expected = hanaSchema.toUpperCase();
     const rows: HanaApprovalViewRow[] = [];
     for (const group of groups) {
       if (!group?.data) continue;
