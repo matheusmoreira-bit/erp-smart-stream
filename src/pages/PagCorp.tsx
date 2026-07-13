@@ -267,6 +267,20 @@ export default function PagCorp() {
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
+    // Exibe somente compras reais — estornos, cancelamentos e outras classificações
+    // administrativas (recarga, tarifa, ajuste etc.) são ocultados.
+    const ALLOWED_CLASSIFICATIONS = new Set([
+      "compra nacional",
+      "compra internacional",
+      "compra internacional - saldo dolar utilizado",
+    ]);
+    list = list.filter((t) => {
+      const raw = (t as { eventClassification?: string }).eventClassification;
+      if (!raw) return true; // sem classificação: mantém (dados legados)
+      const norm = String(raw).replace(/\s+/g, " ").trim().toLowerCase();
+      return ALLOWED_CLASSIFICATIONS.has(norm);
+    });
+
     // Nondeductible visibility: off = hide nondeductible cards
     if (!showNondeductible) {
       list = list.filter((t) => !t.isNondeductible);
