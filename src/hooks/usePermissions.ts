@@ -394,7 +394,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
       if (!mine || mine.length === 0) {
         setUserModules(DEFAULT_MODULES);
-        setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, isViewOnlyKey(k) ? VIEW_ONLY_PERMS : FULL_PERMS])));
+        setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
         setLoading(false);
         return;
       }
