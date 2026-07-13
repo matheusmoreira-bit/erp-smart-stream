@@ -38,7 +38,7 @@ interface CallerContext {
 }
 
 async function assertManualAccess(req: Request, log: LogRow): Promise<void> {
-  const caller = await requireUserOrSapSession(req) as CallerContext;
+  const caller = await requireUserOrSapSessionHeaders(req) as CallerContext;
   if (caller.source === "sap_session" && caller.companyDB && log.company_db && caller.companyDB !== log.company_db) {
     throw new AuthError("Acesso negado para a empresa deste documento.", 403);
   }
@@ -343,7 +343,7 @@ Deno.serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     } else if (body.companyDb) {
-      await requireUserOrSapSession(req);
+      await requireUserOrSapSessionHeaders(req);
       const { data, error } = await sb
         .from("pagcorp_integration_log")
         .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
