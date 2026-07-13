@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { AuthError, requireAdminOrSapAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { AuthError, requireAdminOrSapAdmin, requireAdminOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
