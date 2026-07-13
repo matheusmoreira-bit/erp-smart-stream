@@ -77,6 +77,18 @@ export function SapProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
+      // Se sobrou uma sessão Supabase Auth de um login anterior (ex.: super-admin
+      // que fechou a aba sem logout), e o novo usuário SAP é diferente, encerra
+      // a sessão antiga antes de prosseguir. Isso impede herdar isAdmin/roles
+      // ("Ver todas as aprovações", etc.) do usuário anterior.
+      try {
+        const { data: { session: prev } } = await supabase.auth.getSession();
+        const prevLocal = (prev?.user?.email || "").split("@")[0].trim().toLowerCase();
+        const newLocal = (userName || "").split("@")[0].trim().toLowerCase();
+        if (prev && prevLocal && newLocal && prevLocal !== newLocal) {
+          await supabase.auth.signOut();
+        }
+      } catch { /* ignore */ }
       if (erpType === "sap") {
         const sapSess = await sapLogin(userName, password, companyDB);
         setSession({
@@ -158,6 +170,10 @@ export function SapProvider({ children }: { children: ReactNode }) {
     }
     clearClientCache();
     setSession(null);
+    // Also sign out any lingering Supabase Auth session — otherwise the next
+    // user to log in via SAP inherits the previous user's Supabase identity
+    // (isAdmin, role-scoped permissions, "Ver todas as aprovações", etc.).
+    try { await supabase.auth.signOut(); } catch { /* ignore */ }
   }, [session]);
 
   // Listen for SAP Service Layer session-expired events emitted by sap-client.
@@ -168,6 +184,9 @@ export function SapProvider({ children }: { children: ReactNode }) {
       clearClientCache();
       setSession(null);
       setError("Sua sessão expirou. Faça login novamente.");
+      // Same reasoning as logout(): drop the Supabase Auth session so a fresh
+      // SAP login can't inherit stale admin/role state.
+      void supabase.auth.signOut().catch(() => {});
     };
     window.addEventListener("erp:session-expired", handler);
     return () => window.removeEventListener("erp:session-expired", handler);
