@@ -558,6 +558,53 @@ Deno.serve(async (req) => {
                 settlementStatus: row.settlement_status,
                 attempts: row.settlement_attempts,
               });
+              // 0. Consolidação por PC: se qualquer transação irmã (mesmo
+              //    company_db + sap_doc_entry) já foi liquidada — mesmo que
+              //    sem número de pagamento (NFs já quitadas externamente) —
+              //    esta linha herda os identificadores e é marcada como
+              //    settled também, evitando "Reprocessar baixa" em rows que
+              //    ficaram em erro por login/PTAX enquanto a irmã concluía.
+              {
+                const { data: sibling } = await sb
+                  .from("pagcorp_integration_log")
+                  .select("settlement_payment_doc_entry, settlement_payment_doc_num, settlement_invoice_doc_entry, settlement_invoice_doc_num")
+                  .eq("company_db", companyDb)
+                  .eq("sap_doc_entry", row.sap_doc_entry)
+                  .eq("settlement_status", "settled")
+                  .neq("id", row.id)
+                  .order("settlement_completed_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (sibling) {
+                  const s = sibling as {
+                    settlement_payment_doc_entry: number | null;
+                    settlement_payment_doc_num: number | null;
+                    settlement_invoice_doc_entry: number | null;
+                    settlement_invoice_doc_num: number | null;
+                  };
+                  await sb
+                    .from("pagcorp_integration_log")
+                    .update({
+                      settlement_status: "settled",
+                      settlement_payment_doc_entry: s.settlement_payment_doc_entry,
+                      settlement_payment_doc_num: s.settlement_payment_doc_num,
+                      settlement_invoice_doc_entry: s.settlement_invoice_doc_entry,
+                      settlement_invoice_doc_num: s.settlement_invoice_doc_num,
+                      settlement_error: s.settlement_payment_doc_num
+                        ? `Baixa consolidada com transação irmã (pagamento ${s.settlement_payment_doc_num})`
+                        : "Baixa consolidada com transação irmã (NF já quitada)",
+                      settlement_attempts: (row.settlement_attempts || 0) + 1,
+                      settlement_attempted_at: new Date().toISOString(),
+                      settlement_completed_at: new Date().toISOString(),
+                      settlement_locked_at: null,
+                      settlement_retry_after: null,
+                    })
+                    .eq("id", row.id);
+                  results.push({ id: row.id, status: "settled", inherited: true });
+                  continue;
+                }
+              }
+
               // 1. PO precisa estar fechado (indica que a NF já foi lançada)
               const poR = await fetch(
                 `${baseUrl}/PurchaseOrders(${row.sap_doc_entry})?$select=DocEntry,DocNum,DocumentStatus,CardCode`,
