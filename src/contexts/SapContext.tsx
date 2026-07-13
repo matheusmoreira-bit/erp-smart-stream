@@ -158,6 +158,10 @@ export function SapProvider({ children }: { children: ReactNode }) {
     }
     clearClientCache();
     setSession(null);
+    // Also sign out any lingering Supabase Auth session — otherwise the next
+    // user to log in via SAP inherits the previous user's Supabase identity
+    // (isAdmin, role-scoped permissions, "Ver todas as aprovações", etc.).
+    try { await supabase.auth.signOut(); } catch { /* ignore */ }
   }, [session]);
 
   // Listen for SAP Service Layer session-expired events emitted by sap-client.
@@ -168,6 +172,9 @@ export function SapProvider({ children }: { children: ReactNode }) {
       clearClientCache();
       setSession(null);
       setError("Sua sessão expirou. Faça login novamente.");
+      // Same reasoning as logout(): drop the Supabase Auth session so a fresh
+      // SAP login can't inherit stale admin/role state.
+      void supabase.auth.signOut().catch(() => {});
     };
     window.addEventListener("erp:session-expired", handler);
     return () => window.removeEventListener("erp:session-expired", handler);
