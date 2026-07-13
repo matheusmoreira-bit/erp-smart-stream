@@ -248,7 +248,7 @@ export default function PagCorp() {
       } else if (status === "awaiting_settlement") {
         toast.warning(result?.error === "ptax_missing"
           ? "PTAX ainda não publicada — nova tentativa após a publicação do BCB."
-          : "Sem conta contábil de baixa configurada para este cartão/moeda.");
+          : "Sem conta contábil de baixa cadastrada para a classificação do evento desta transação.");
       } else if (status === "error") {
         toast.error(`Falha na baixa: ${result?.error || "erro desconhecido"}`);
       } else if (data?.skipped) {
