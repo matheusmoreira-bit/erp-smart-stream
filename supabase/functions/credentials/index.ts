@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     let companyDb = url.searchParams.get("company_db");
     const includeKeys = url.searchParams.get("keys");
     const metadataOnlyGet = req.method === "GET" && !includeKeys;
-    const caller = metadataOnlyGet ? await requireAdminOrSapSession(req) : await requireAdminOrSapAdmin(req);
+    const caller = metadataOnlyGet ? await requireAdminOrSapSessionHeaders(req) : await requireAdminOrSapAdmin(req);
     const callerCompanyDb = typeof (caller as { companyDB?: unknown }).companyDB === "string"
       ? (caller as { companyDB: string }).companyDB
       : null;
