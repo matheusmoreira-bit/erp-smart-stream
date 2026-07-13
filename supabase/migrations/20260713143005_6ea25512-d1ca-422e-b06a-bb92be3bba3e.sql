@@ -1,0 +1,3 @@
+CREATE POLICY "Authenticated can insert pagcorp_settlement_accounts" ON public.pagcorp_settlement_accounts FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Authenticated can update pagcorp_settlement_accounts" ON public.pagcorp_settlement_accounts FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Authenticated can delete pagcorp_settlement_accounts" ON public.pagcorp_settlement_accounts FOR DELETE TO authenticated USING (true);
