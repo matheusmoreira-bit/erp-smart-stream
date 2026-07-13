@@ -612,20 +612,8 @@ export function useApprovals() {
       .map(mapHanaApproval)
       .filter((doc) => doc.approvalRequestId > 0);
 
-    // Fallback: mescla aprovações vindas do Service Layer que não apareceram
-    // na VW_APROVACOES_DETALHADAS (ex.: usuário/etapa não mapeados no JOIN da view).
-    // Deduplica por approvalRequestId — a view tem precedência quando existir.
-    try {
-      const seen = new Set(hanaDocs.map((d) => d.approvalRequestId));
-      const slDocs = await fetchApprovalsViaServiceLayer(session as SapSession, seen);
-      if (slDocs.length) {
-        console.info(`[approvals] fallback SL adicionou ${slDocs.length} pendência(s) ausente(s) na view HANA`);
-        return [...hanaDocs, ...slDocs];
-      }
-    } catch (e) {
-      console.warn("[approvals] fallback Service Layer falhou:", e);
-    }
     return hanaDocs;
+
   }, [session]);
 
 
