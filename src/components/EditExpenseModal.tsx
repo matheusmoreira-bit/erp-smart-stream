@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { RelationsMap } from "@/components/RelationsMap";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { DecimalInput } from "@/components/DecimalInput";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
