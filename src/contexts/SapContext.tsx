@@ -77,6 +77,18 @@ export function SapProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
+      // Se sobrou uma sessão Supabase Auth de um login anterior (ex.: super-admin
+      // que fechou a aba sem logout), e o novo usuário SAP é diferente, encerra
+      // a sessão antiga antes de prosseguir. Isso impede herdar isAdmin/roles
+      // ("Ver todas as aprovações", etc.) do usuário anterior.
+      try {
+        const { data: { session: prev } } = await supabase.auth.getSession();
+        const prevLocal = (prev?.user?.email || "").split("@")[0].trim().toLowerCase();
+        const newLocal = (userName || "").split("@")[0].trim().toLowerCase();
+        if (prev && prevLocal && newLocal && prevLocal !== newLocal) {
+          await supabase.auth.signOut();
+        }
+      } catch { /* ignore */ }
       if (erpType === "sap") {
         const sapSess = await sapLogin(userName, password, companyDB);
         setSession({
