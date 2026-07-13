@@ -203,10 +203,11 @@ async function resolveOne(
     );
     if (po && Number.isFinite(expected)) {
       const cur = (po as { doc_currency?: string | null }).doc_currency || "BRL";
+      const isLocal = !cur || cur === "BRL" || cur === "R$";
       const t = Number(
-        cur && cur !== "BRL"
-          ? (po as { doc_total_fc?: number }).doc_total_fc ?? 0
-          : (po as { doc_total?: number }).doc_total ?? 0,
+        isLocal
+          ? (po as { doc_total?: number }).doc_total ?? 0
+          : (po as { doc_total_fc?: number }).doc_total_fc ?? 0,
       );
       amountMatches = Math.abs(t - expected) < 0.01;
     }
