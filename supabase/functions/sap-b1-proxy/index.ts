@@ -218,44 +218,36 @@ Deno.serve(async (req) => {
       if (!loginResp.ok) {
         const errorText = await loginResp.text();
         console.error("SAP Login error:", loginResp.status, errorText);
-        let errorMsg = "Falha no login SAP B1";
+        let rawMsg = "";
         let sapCode: number | undefined;
         try {
           const parsed = JSON.parse(errorText);
-          errorMsg = parsed?.error?.message?.value || errorMsg;
+          rawMsg = parsed?.error?.message?.value || "";
           sapCode = parsed?.error?.code;
         } catch { /* ignore */ }
 
-        // Build a safe payload echo (mask the password) to help diagnose login issues.
-        const passwordLength = typeof credentials.Password === "string" ? credentials.Password.length : 0;
-        const safePayload = {
-          selectedCompany: companyDB || credentials.CompanyDB,
-          effectiveCompanyDB,
-          UserName: credentials.UserName,
-          Password: passwordLength > 0 ? `***(${passwordLength} chars)` : "(vazio)",
-          baseUrl: SAP_BASE_URL,
-        };
+        const lower = (rawMsg || errorText || "").toLowerCase();
+        let friendly = "Não foi possível entrar. Verifique seus dados e tente novamente.";
 
-        // SAP -306 ("Fail to NONE-SSO login from SLD") means the SLD rejected the
-        // username/password attempt. Most common causes: wrong CompanyDB casing,
-        // wrong credentials, or the SAP user is configured as SSO-only.
-        if (sapCode === -306 || /NONE-SSO/i.test(errorMsg)) {
-          errorMsg =
-            "SAP rejeitou o login (código -306). Verifique: " +
-            "1) o Banco de Dados ERP configurado (case-sensitive); " +
-            "2) usuário e senha; " +
-            "3) se o usuário SAP não está configurado apenas para SSO.";
+        if (
+          sapCode === -304 ||
+          lower.includes("user name or password") ||
+          lower.includes("invalid username or password") ||
+          lower.includes("invalid credentials")
+        ) {
+          friendly = "Usuário ou senha incorretos.";
+        } else if (sapCode === -131 || lower.includes("locked") || lower.includes("disabled")) {
+          friendly = "Usuário bloqueado ou desativado no SAP. Procure o administrador.";
+        } else if (sapCode === -306 || /none-sso/i.test(rawMsg)) {
+          friendly = "Este usuário SAP é apenas SSO ou a empresa está mal configurada. Procure o administrador.";
+        } else if (loginResp.status === 503 || loginResp.status === 502 || loginResp.status === 504) {
+          friendly = "Servidor SAP indisponível no momento. Tente novamente em instantes.";
+        } else if (loginResp.status >= 500) {
+          friendly = "Erro no servidor SAP. Tente novamente em instantes.";
         }
 
-        const detailedError =
-          `${errorMsg}\n\nPayload enviado:\n` +
-          `• Empresa selecionada: ${safePayload.selectedCompany}\n` +
-          `• CompanyDB efetivo: ${safePayload.effectiveCompanyDB}\n` +
-          `• UserName: ${safePayload.UserName}\n` +
-          `• Password: ${safePayload.Password}\n` +
-          `• URL: ${safePayload.baseUrl}/Login`;
-
-        return new Response(JSON.stringify({ error: detailedError, sapCode, payload: safePayload }), {
+        // Log completo apenas no servidor; usuário só vê a mensagem amigável.
+        return new Response(JSON.stringify({ error: friendly, sapCode }), {
           status: loginResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
