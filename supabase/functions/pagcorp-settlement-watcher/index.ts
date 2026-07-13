@@ -147,25 +147,28 @@ async function resolveSettlementAccount(
   _currency: string | null,
   eventClassification: string | null,
 ): Promise<SettlementAccount | null> {
-  // Regra única: a conta de baixa é decidida exclusivamente pela
-  // classificação do evento retornada pelo PagCorp. Cartão e moeda
-  // não participam mais do resolver — a mesma conta serve para qualquer
-  // cartão daquela classificação.
-  if (!eventClassification) return null;
-
+  // Regra: a conta de baixa é decidida pela classificação do evento
+  // retornada pelo PagCorp. Cartão e moeda não participam mais.
+  // Se não houver classificação no payload OU se nenhuma linha específica
+  // bater, cai para a linha "fallback" (event_classification IS NULL)
+  // cadastrada pelo usuário — se existir.
   const sel = "settlement_account_code, cost_center, project, currency, event_classification";
   const { data } = await sb
     .from("pagcorp_settlement_accounts")
     .select(sel)
     .eq("company_db", companyDb)
-    .not("event_classification", "is", null)
     .eq("enabled", true);
 
-  const target = normalizeClassification(eventClassification);
-  const match = (data as SettlementAccount[] | null)?.find(
-    (r) => normalizeClassification(r.event_classification) === target,
-  );
-  return match || null;
+  const rows = (data as SettlementAccount[] | null) || [];
+  if (eventClassification) {
+    const target = normalizeClassification(eventClassification);
+    const exact = rows.find(
+      (r) => r.event_classification && normalizeClassification(r.event_classification) === target,
+    );
+    if (exact) return exact;
+  }
+  // Fallback: linha sem classificação específica.
+  return rows.find((r) => !r.event_classification) || null;
 }
 
 async function findInvoicesForPO(
