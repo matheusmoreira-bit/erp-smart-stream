@@ -633,7 +633,9 @@ Deno.serve(async (req) => {
                 const account = await resolveSettlementAccount(sb, companyDb, cardKey, invoice.DocCurrency || null, eventClass);
                 if (!account) {
                   if (!firstMissingAccountMsg) {
-                    firstMissingAccountMsg = `Sem conta contábil de baixa (empresa=${companyDb}, classificação=${eventClass ?? "?"}, moeda=${invoice.DocCurrency || "?"})`;
+                    firstMissingAccountMsg = eventClass
+                      ? `Sem conta contábil de baixa cadastrada para a classificação "${eventClass}" (empresa=${companyDb}).`
+                      : `Transação sem classificação de evento — reintegre a despesa para atualizar o cadastro (empresa=${companyDb}).`;
                   }
                   continue;
                 }
