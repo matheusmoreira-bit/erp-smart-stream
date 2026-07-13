@@ -56,6 +56,17 @@ export function useAuth() {
       }
     );
 
+    const hydrateAdmin = async (userId: string) => {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      setIsAdmin(!!data);
+      setLoading(false);
+    };
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session && !tokenHasSub(session.access_token)) {
         // Token is corrupt (missing `sub`) — try a non-destructive refresh
@@ -65,18 +76,25 @@ export function useAuth() {
           if (!error && data.session && tokenHasSub(data.session.access_token)) {
             setSession(data.session);
             setUser(data.session.user ?? null);
+            hydrateAdmin(data.session.user.id);
             return;
           }
         } catch { /* ignore */ }
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
+        setIsAdmin(false);
         setLoading(false);
         return;
       }
       setSession(session);
       setUser(session?.user ?? null);
-      if (!session) setLoading(false);
+      if (session?.user) {
+        hydrateAdmin(session.user.id);
+      } else {
+        setIsAdmin(false);
+        setLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();
