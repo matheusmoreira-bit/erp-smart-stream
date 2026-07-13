@@ -763,20 +763,47 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              const settlementNote: string[] = [];
-              if (paymentEntries.length > 1) settlementNote.push(`${paymentEntries.length} pagamentos emitidos (docs: ${paymentNums.join(", ")})`);
-              if (skippedAlreadyPaid.length > 0) settlementNote.push(`${skippedAlreadyPaid.length} NF(s) já quitadas`);
-              if (firstMissingAccountMsg) settlementNote.push(firstMissingAccountMsg);
-              if (firstPtaxMissingMsg) settlementNote.push(firstPtaxMissingMsg);
+              // Se nenhum pagamento novo foi emitido nesta rodada (todas as NFs já
+              // estavam quitadas — típico quando várias transações do PagCorp caem
+              // no mesmo PC e a primeira já disparou a baixa), herda os números da
+              // baixa da linha irmã (mesmo company_db + sap_doc_entry) que já foi
+              // liquidada. Sem isso, esta linha ficaria "settled" mas sem
+              // settlement_payment_doc_num, o que a UI interpreta como "Reprocessar
+              // baixa" em vez de "Baixa #<num>".
+              let inheritedPaymentEntry: number | null = null;
+              let inheritedPaymentNum: number | null = null;
+              let inheritedInvoiceEntry: number | null = null;
+              let inheritedInvoiceNum: number | null = null;
+              if (paymentEntries.length === 0) {
+                const { data: sibling } = await sb
+                  .from("pagcorp_integration_log")
+                  .select("settlement_payment_doc_entry, settlement_payment_doc_num, settlement_invoice_doc_entry, settlement_invoice_doc_num")
+                  .eq("company_db", companyDb)
+                  .eq("sap_doc_entry", row.sap_doc_entry)
+                  .not("settlement_payment_doc_num", "is", null)
+                  .neq("id", row.id)
+                  .order("settlement_completed_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (sibling) {
+                  inheritedPaymentEntry = (sibling as { settlement_payment_doc_entry: number | null }).settlement_payment_doc_entry ?? null;
+                  inheritedPaymentNum = (sibling as { settlement_payment_doc_num: number | null }).settlement_payment_doc_num ?? null;
+                  inheritedInvoiceEntry = (sibling as { settlement_invoice_doc_entry: number | null }).settlement_invoice_doc_entry ?? null;
+                  inheritedInvoiceNum = (sibling as { settlement_invoice_doc_num: number | null }).settlement_invoice_doc_num ?? null;
+                  if (inheritedPaymentNum) {
+                    settlementNote.push(`Baixa consolidada com transação irmã (pagamento ${inheritedPaymentNum})`);
+                  }
+                }
+              }
 
               await sb
                 .from("pagcorp_integration_log")
                 .update({
                   settlement_status: "settled",
-                  settlement_payment_doc_entry: paymentEntries[0] ?? null,
-                  settlement_payment_doc_num: paymentNums[0] ?? null,
-                  settlement_invoice_doc_entry: invoiceEntries[0],
-                  settlement_invoice_doc_num: invoiceNums[0],
+                  settlement_payment_doc_entry: paymentEntries[0] ?? inheritedPaymentEntry,
+                  settlement_payment_doc_num: paymentNums[0] ?? inheritedPaymentNum,
+                  settlement_invoice_doc_entry: invoiceEntries[0] ?? inheritedInvoiceEntry,
+                  settlement_invoice_doc_num: invoiceNums[0] ?? inheritedInvoiceNum,
                   settlement_ptax_rate: firstPtax?.rate ?? null,
                   settlement_ptax_date: firstPtax?.ptaxDate ? firstPtax.ptaxDate.slice(0, 10) : null,
                   settlement_ptax_source: firstPtax?.source ?? null,
