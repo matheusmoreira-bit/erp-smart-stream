@@ -106,6 +106,15 @@ const DEFAULT_MODULES = [
   "notifications",
 ];
 
+/**
+ * Modules that, by default (no group assignment), should be read-only.
+ * Users only get write access on these via an explicit group.
+ */
+const DEFAULT_READ_ONLY_MODULES = new Set<string>([
+  "suppliers",
+  "items",
+]);
+
 const FULL_PERMS: ModulePerms = { view: true, create: true, edit: true, delete: true };
 const VIEW_ONLY_PERMS: ModulePerms = { view: true, create: false, edit: false, delete: false };
 
@@ -114,6 +123,11 @@ function isViewOnlyKey(key: string): boolean {
     VIEW_ONLY_MODULES.some((m) => m.key === key) ||
     CAPABILITIES.some((c) => c.key === key)
   );
+}
+
+function defaultPermsFor(key: string): ModulePerms {
+  if (isViewOnlyKey(key) || DEFAULT_READ_ONLY_MODULES.has(key)) return VIEW_ONLY_PERMS;
+  return FULL_PERMS;
 }
 
 /* ────────────────────────────────────────────────────────────────────
