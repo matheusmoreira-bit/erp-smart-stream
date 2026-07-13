@@ -84,6 +84,19 @@ export default function PagCorpMapping() {
     },
     mapRow: (r: any) => ({ code: r.ItemCode, name: r.ItemName, extra: "" }),
   });
+  const accountCache = useSapCachedList({
+    cacheKey: "chart_of_accounts_active",
+    endpoint: "ChartOfAccounts",
+    params: {
+      $filter: "ActiveAccount eq 'tYES'",
+      $select: "Code,Name,FormatCode",
+    },
+    mapRow: (r: any) => ({
+      code: r.FormatCode || r.Code,
+      name: r.Name || "",
+      extra: r.FormatCode && r.Code && r.FormatCode !== r.Code ? r.Code : "",
+    }),
+  });
 
   /* ── PagCorp account suggestions ── */
   const { transactions: recentTransactions, fetchTransactions } = usePagCorp();
@@ -415,7 +428,12 @@ export default function PagCorpMapping() {
             </TabsList>
 
             <TabsContent value="settlement" className="space-y-4">
-              <PagcorpSettlementAccountsTab companyDb={companyDB} />
+              <PagcorpSettlementAccountsTab
+                companyDb={companyDB}
+                accountCache={accountCache}
+                costCenterCache={costCenterCache}
+                projectCache={projectCache}
+              />
             </TabsContent>
 
 

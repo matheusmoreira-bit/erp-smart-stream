@@ -1,16 +1,26 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { usePagcorpSettlementAccounts, type PagcorpSettlementAccount } from "@/hooks/usePagcorpSettlementAccounts";
+
+interface CacheLike {
+  options: SapSearchOption[];
+  isLoading: boolean;
+}
 
 interface Props {
   companyDb: string;
+  accountCache?: CacheLike;
+  costCenterCache?: CacheLike;
+  projectCache?: CacheLike;
 }
 
 type Draft = Partial<PagcorpSettlementAccount> & { _key: string };
@@ -21,14 +31,19 @@ const CURRENCY_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "__any", label: "Qualquer moeda" },
 ];
 
-function currencyLabel(cur: string | null | undefined) {
-  if (!cur) return "Qualquer moeda";
-  if (cur === "BRL") return "PagCorp Real (BRL)";
-  if (cur === "USD") return "PagCorp Dólar (USD)";
-  return cur;
+const EMPTY_CACHE: CacheLike = { options: [], isLoading: false };
+
+function findOption(options: SapSearchOption[], code: string | null | undefined): SapSearchOption | null {
+  if (!code) return null;
+  return options.find((o) => o.code === code) || { code, name: code, extra: "" };
 }
 
-export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
+export function PagcorpSettlementAccountsTab({
+  companyDb,
+  accountCache = EMPTY_CACHE,
+  costCenterCache = EMPTY_CACHE,
+  projectCache = EMPTY_CACHE,
+}: Props) {
   const { items, loading, upsert, remove } = usePagcorpSettlementAccounts(companyDb || undefined);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -71,22 +86,23 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">
             Contas contábeis do PagCorp usadas na baixa automática (pagamento de fornecedor) após a NF de entrada ser lançada.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Cadastre uma linha para <strong>PagCorp Real (BRL)</strong> e outra para <strong>PagCorp Dólar (USD)</strong> por empresa.
-            Deixe <strong>Cartão</strong> vazio para valer como fallback da moeda.
+            Deixe <strong>Cartão</strong> vazio para valer como fallback da moeda. Empresa atual: <strong>{companyDb}</strong>
           </p>
         </div>
         <Button
           size="sm"
           onClick={() => setDraft({ _key: `new-${Date.now()}`, company_db: companyDb, enabled: true, currency: "BRL" })}
           disabled={!!draft}
+          className="gap-2 shrink-0"
         >
-          <Plus className="w-4 h-4 mr-1" /> Novo
+          <Plus className="w-4 h-4" /> Nova conta
         </Button>
       </div>
 
@@ -95,16 +111,16 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
           <Loader2 className="w-4 h-4 animate-spin" /> Carregando…
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-56">Moeda</TableHead>
-                <TableHead>Cartão</TableHead>
+                <TableHead className="w-52">Moeda</TableHead>
+                <TableHead className="w-44">Cartão</TableHead>
                 <TableHead>Conta contábil</TableHead>
                 <TableHead>Centro de Custo</TableHead>
                 <TableHead>Projeto</TableHead>
-                <TableHead className="w-24">Ativo</TableHead>
+                <TableHead className="w-20">Ativo</TableHead>
                 <TableHead className="w-32 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -117,12 +133,16 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
                   onSave={() => save(draft)}
                   onCancel={() => setDraft(null)}
                   saving={savingId === "new"}
+                  accountCache={accountCache}
+                  costCenterCache={costCenterCache}
+                  projectCache={projectCache}
                 />
               )}
               {rows.length === 0 && !draft ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
-                    Nenhuma conta de baixa cadastrada.
+                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-10">
+                    Nenhuma conta contábil de baixa cadastrada.<br />
+                    <span className="text-xs">Clique em <strong>Nova conta</strong> para começar.</span>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -141,6 +161,9 @@ export function PagcorpSettlementAccountsTab({ companyDb }: Props) {
                         toast.error((e as Error).message);
                       }
                     }}
+                    accountCache={accountCache}
+                    costCenterCache={costCenterCache}
+                    projectCache={projectCache}
                   />
                 ))
               )}
@@ -168,18 +191,59 @@ function CurrencySelect({ value, onChange }: { value: string | null | undefined;
   );
 }
 
+function AccountPicker({
+  value,
+  onChange,
+  cache,
+  placeholder,
+  required,
+}: {
+  value: string | null | undefined;
+  onChange: (code: string) => void;
+  cache: CacheLike;
+  placeholder: string;
+  required?: boolean;
+}) {
+  // Fallback: se a cache está vazia (não veio do parent), usa Input livre.
+  if (!cache.options.length && !cache.isLoading) {
+    return (
+      <Input
+        placeholder={placeholder}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+  return (
+    <CachedSearchCombobox
+      options={cache.options}
+      isLoading={cache.isLoading}
+      value={findOption(cache.options, value ?? "")}
+      onChange={(opt) => onChange(opt?.code || "")}
+      placeholder={placeholder}
+      required={required}
+    />
+  );
+}
+
 function EditableRow({
   row,
   onChange,
   onSave,
   onCancel,
   saving,
+  accountCache,
+  costCenterCache,
+  projectCache,
 }: {
   row: Draft;
   onChange: (r: Draft) => void;
   onSave: () => void;
   onCancel: () => void;
   saving: boolean;
+  accountCache: CacheLike;
+  costCenterCache: CacheLike;
+  projectCache: CacheLike;
 }) {
   return (
     <TableRow>
@@ -194,24 +258,28 @@ function EditableRow({
         />
       </TableCell>
       <TableCell>
-        <Input
-          placeholder="Ex.: 1.1.03.001"
-          value={row.settlement_account_code ?? ""}
-          onChange={(e) => onChange({ ...row, settlement_account_code: e.target.value })}
+        <AccountPicker
+          value={row.settlement_account_code}
+          onChange={(v) => onChange({ ...row, settlement_account_code: v })}
+          cache={accountCache}
+          placeholder="Selecione a conta contábil…"
+          required
         />
       </TableCell>
       <TableCell>
-        <Input
+        <AccountPicker
+          value={row.cost_center}
+          onChange={(v) => onChange({ ...row, cost_center: v || null })}
+          cache={costCenterCache}
           placeholder="Opcional"
-          value={row.cost_center ?? ""}
-          onChange={(e) => onChange({ ...row, cost_center: e.target.value || null })}
         />
       </TableCell>
       <TableCell>
-        <Input
+        <AccountPicker
+          value={row.project}
+          onChange={(v) => onChange({ ...row, project: v || null })}
+          cache={projectCache}
           placeholder="Opcional"
-          value={row.project ?? ""}
-          onChange={(e) => onChange({ ...row, project: e.target.value || null })}
         />
       </TableCell>
       <TableCell>
@@ -232,11 +300,17 @@ function EditableExistingRow({
   saving,
   onSave,
   onDelete,
+  accountCache,
+  costCenterCache,
+  projectCache,
 }: {
   row: PagcorpSettlementAccount;
   saving: boolean;
   onSave: (r: PagcorpSettlementAccount) => void;
   onDelete: () => void;
+  accountCache: CacheLike;
+  costCenterCache: CacheLike;
+  projectCache: CacheLike;
 }) {
   const [local, setLocal] = useState<PagcorpSettlementAccount>(row);
   const dirty =
@@ -255,19 +329,38 @@ function EditableExistingRow({
       </TableCell>
       <TableCell>
         {row.card_identifier ? (
-          <Input value={local.card_identifier ?? ""} onChange={(e) => setLocal({ ...local, card_identifier: e.target.value || null })} />
+          <Input
+            value={local.card_identifier ?? ""}
+            onChange={(e) => setLocal({ ...local, card_identifier: e.target.value || null })}
+          />
         ) : (
           <Badge variant="secondary">Fallback da moeda</Badge>
         )}
       </TableCell>
       <TableCell>
-        <Input value={local.settlement_account_code} onChange={(e) => setLocal({ ...local, settlement_account_code: e.target.value })} />
+        <AccountPicker
+          value={local.settlement_account_code}
+          onChange={(v) => setLocal({ ...local, settlement_account_code: v })}
+          cache={accountCache}
+          placeholder="Selecione a conta contábil…"
+          required
+        />
       </TableCell>
       <TableCell>
-        <Input value={local.cost_center ?? ""} onChange={(e) => setLocal({ ...local, cost_center: e.target.value || null })} />
+        <AccountPicker
+          value={local.cost_center}
+          onChange={(v) => setLocal({ ...local, cost_center: v || null })}
+          cache={costCenterCache}
+          placeholder="Opcional"
+        />
       </TableCell>
       <TableCell>
-        <Input value={local.project ?? ""} onChange={(e) => setLocal({ ...local, project: e.target.value || null })} />
+        <AccountPicker
+          value={local.project}
+          onChange={(v) => setLocal({ ...local, project: v || null })}
+          cache={projectCache}
+          placeholder="Opcional"
+        />
       </TableCell>
       <TableCell>
         <Switch checked={local.enabled} onCheckedChange={(v) => setLocal({ ...local, enabled: v })} />
@@ -283,6 +376,3 @@ function EditableExistingRow({
     </TableRow>
   );
 }
-
-// Re-export helper for potential future use elsewhere.
-export { currencyLabel };
