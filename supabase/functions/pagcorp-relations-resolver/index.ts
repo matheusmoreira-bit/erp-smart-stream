@@ -11,7 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sapFetch } from "../_shared/sap-fetch.ts";
-import { AuthError, authErrorResponse, requireUserOrSapSession } from "../_shared/auth.ts";
+import { AuthError, authErrorResponse, requireUserOrSapSessionHeaders } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
