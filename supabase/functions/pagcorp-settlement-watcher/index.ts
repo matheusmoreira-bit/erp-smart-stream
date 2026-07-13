@@ -439,7 +439,13 @@ Deno.serve(async (req) => {
       safeLog(requestId, "manual_retry_reset", { manualLogId });
       await sb
         .from("pagcorp_integration_log")
-        .update({ settlement_retry_after: null, settlement_locked_at: null })
+        .update({
+          settlement_retry_after: null,
+          settlement_locked_at: null,
+          settlement_attempts: 0,
+          settlement_error: null,
+          settlement_status: "pending",
+        })
         .eq("id", manualLogId);
     }
 
