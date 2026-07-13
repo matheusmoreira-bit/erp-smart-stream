@@ -763,6 +763,12 @@ Deno.serve(async (req) => {
                 continue;
               }
 
+              const settlementNote: string[] = [];
+              if (paymentEntries.length > 1) settlementNote.push(`${paymentEntries.length} pagamentos emitidos (docs: ${paymentNums.join(", ")})`);
+              if (skippedAlreadyPaid.length > 0) settlementNote.push(`${skippedAlreadyPaid.length} NF(s) já quitadas`);
+              if (firstMissingAccountMsg) settlementNote.push(firstMissingAccountMsg);
+              if (firstPtaxMissingMsg) settlementNote.push(firstPtaxMissingMsg);
+
               // Se nenhum pagamento novo foi emitido nesta rodada (todas as NFs já
               // estavam quitadas — típico quando várias transações do PagCorp caem
               // no mesmo PC e a primeira já disparou a baixa), herda os números da
