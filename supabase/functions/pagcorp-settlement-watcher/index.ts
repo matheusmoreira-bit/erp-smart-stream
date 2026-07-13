@@ -488,7 +488,9 @@ Deno.serve(async (req) => {
           continue;
         }
         // Backoff exponencial simples para linhas em erro
-        if (r.settlement_status === "error" && r.settlement_attempts >= 10) {
+        // No cron: pula linhas em erro que já esgotaram tentativas.
+        // Em retentativa manual, ignora esse guard — o usuário decidiu tentar de novo.
+        if (!manualLogId && r.settlement_status === "error" && r.settlement_attempts >= 10) {
           results.push({ id: r.id, status: "skipped", error: "max_attempts" });
           continue;
         }
