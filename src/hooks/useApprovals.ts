@@ -583,6 +583,12 @@ export function useApprovals() {
     const url = new URL(PENDING_APPROVALS_WEBHOOK_URL);
     url.searchParams.set("SessionId", session.sessionId || "");
     url.searchParams.set("DB", companyDb);
+    const hanaSchema = HANA_SCHEMA_OVERRIDES[companyDb] || companyDb;
+    const url = new URL(PENDING_APPROVALS_WEBHOOK_URL);
+    url.searchParams.set("SessionId", session.sessionId || "");
+    url.searchParams.set("DB", hanaSchema);
+    url.searchParams.set("Schema", hanaSchema);
+    url.searchParams.set("CompanyDB", companyDb);
     url.searchParams.set("View", "VW_APROVACOES_DETALHADAS");
     url.searchParams.set("_t", String(Date.now()));
 
@@ -597,7 +603,7 @@ export function useApprovals() {
       | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
       | { schema?: string; data?: HanaApprovalViewRow[] };
     const groups = Array.isArray(payload) ? payload : [payload];
-    const expected = companyDb.toUpperCase();
+    const expected = hanaSchema.toUpperCase();
     const rows: HanaApprovalViewRow[] = [];
     for (const group of groups) {
       if (!group?.data) continue;
