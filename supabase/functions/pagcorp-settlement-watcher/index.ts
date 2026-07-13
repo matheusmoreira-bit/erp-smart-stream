@@ -68,6 +68,7 @@ interface SettlementAccount {
   cost_center: string | null;
   project: string | null;
   currency: string | null;
+  event_classification: string | null;
 }
 
 function buildBaseUrl(raw: string): string {
