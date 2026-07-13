@@ -3051,6 +3051,7 @@ export type Database = {
           created_at: string
           currency: string | null
           enabled: boolean
+          event_classification: string | null
           id: string
           project: string | null
           settlement_account_code: string
@@ -3063,6 +3064,7 @@ export type Database = {
           created_at?: string
           currency?: string | null
           enabled?: boolean
+          event_classification?: string | null
           id?: string
           project?: string | null
           settlement_account_code: string
@@ -3075,6 +3077,7 @@ export type Database = {
           created_at?: string
           currency?: string | null
           enabled?: boolean
+          event_classification?: string | null
           id?: string
           project?: string | null
           settlement_account_code?: string
