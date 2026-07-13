@@ -6,6 +6,7 @@ export interface PagcorpSettlementAccount {
   company_db: string;
   card_identifier: string | null;
   currency: string | null;
+  event_classification: string | null;
   settlement_account_code: string;
   cost_center: string | null;
   project: string | null;
