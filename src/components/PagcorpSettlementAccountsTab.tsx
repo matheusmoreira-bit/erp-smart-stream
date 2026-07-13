@@ -28,11 +28,13 @@ type Draft = Partial<PagcorpSettlementAccount> & { _key: string };
 /**
  * Classificações de evento retornadas pela API do PagCorp para as quais
  * mapeamos uma conta contábil de baixa distinta.
+ *   • "Compra Nacional"                                   → Conta Real (BRL)
  *   • "Compra Internacional"                              → Conta Real (BRL)
  *   • "Compra Internacional  - Saldo Dolar Utilizado"     → Conta Dólar (USD)
  * O valor "__any" corresponde ao fallback (qualquer evento).
  */
 const EVENT_CLASSIFICATION_OPTIONS: Array<{ value: string; label: string; currency: string | null }> = [
+  { value: "Compra Nacional", label: "Compra Nacional (Conta Real)", currency: "BRL" },
   { value: "Compra Internacional", label: "Compra Internacional (Conta Real)", currency: "BRL" },
   { value: "Compra Internacional  - Saldo Dolar Utilizado", label: "Compra Internacional – Saldo Dólar Utilizado (Conta Dólar)", currency: "USD" },
   { value: "__any", label: "Qualquer classificação (fallback)", currency: null },
