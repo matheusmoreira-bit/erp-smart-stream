@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { DecimalInput } from "@/components/DecimalInput";
 import { sapQuery } from "@/lib/sap-client";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
@@ -2847,11 +2848,11 @@ export function CreateExpenseModal({
                     </div>
                     <div className="min-w-0">
                       <label className="text-[10px] text-muted-foreground">Qtd</label>
-                      <Input type="number" value={item.quantity} onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)} className="text-sm h-8" />
+                      <DecimalInput value={item.quantity} onChange={(v) => updateItem(i, "quantity", v)} className="text-sm h-8" />
                     </div>
                     <div className="min-w-0">
                       <label className="text-[10px] text-muted-foreground">Preço Unit.</label>
-                      <Input type="number" value={item.unit_price} onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)} className="text-sm h-8" />
+                      <DecimalInput value={item.unit_price} onChange={(v) => updateItem(i, "unit_price", v)} className="text-sm h-8" />
                     </div>
                     <div className="min-w-0">
                       <label className="text-[10px] text-muted-foreground">Total</label>

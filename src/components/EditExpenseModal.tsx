@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { RelationsMap } from "@/components/RelationsMap";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { DecimalInput } from "@/components/DecimalInput";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
@@ -669,19 +670,17 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                       </div>
                       <div className="col-span-2">
                         <ValidLabel filled={qtyFilled}>Qtd</ValidLabel>
-                        <Input
-                          type="number"
+                        <DecimalInput
                           value={item.quantity}
-                          onChange={(e) => updateItem(i, "quantity", parseFloat(e.target.value) || 0)}
+                          onChange={(v) => updateItem(i, "quantity", v)}
                           className={`text-sm h-8 ${fieldClass(qtyFilled)}`}
                         />
                       </div>
                       <div className="col-span-2">
                         <ValidLabel filled={priceFilled}>Preço Unit.</ValidLabel>
-                        <Input
-                          type="number"
+                        <DecimalInput
                           value={item.unit_price}
-                          onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
+                          onChange={(v) => updateItem(i, "unit_price", v)}
                           className={`text-sm h-8 ${fieldClass(priceFilled)}`}
                         />
                       </div>

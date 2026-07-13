@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { DecimalInput } from "@/components/DecimalInput";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { supabase } from "@/integrations/supabase/client";
@@ -468,23 +469,17 @@ export function EditNfEntradaDialog({ item, open, onOpenChange, onSaved }: Props
                     </div>
                     <div className="col-span-2">
                       <label className="text-[10px] text-muted-foreground">Qtd</label>
-                      <Input
-                        type="number"
+                      <DecimalInput
                         value={line.quantity}
-                        onChange={(e) =>
-                          updateItem(i, "quantity", parseFloat(e.target.value) || 0)
-                        }
+                        onChange={(v) => updateItem(i, "quantity", v)}
                         className="text-sm h-8"
                       />
                     </div>
                     <div className="col-span-2">
                       <label className="text-[10px] text-muted-foreground">Preço Unit.</label>
-                      <Input
-                        type="number"
+                      <DecimalInput
                         value={line.unit_price}
-                        onChange={(e) =>
-                          updateItem(i, "unit_price", parseFloat(e.target.value) || 0)
-                        }
+                        onChange={(v) => updateItem(i, "unit_price", v)}
                         className="text-sm h-8"
                       />
                     </div>
