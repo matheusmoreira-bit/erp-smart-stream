@@ -194,6 +194,8 @@ export interface Expense {
   doc_date?: string;
   due_date?: string;
   rateio_type?: string | null;
+  approval_rule_id?: string | null;
+  current_level_order?: number | null;
   created_at: string;
   updated_at: string;
   items?: ExpenseItem[];
