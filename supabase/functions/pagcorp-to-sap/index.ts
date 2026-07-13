@@ -450,6 +450,7 @@ Deno.serve(async (req) => {
             cardId: transaction.cardId,
             cardName: transaction.cardName,
             cardLastDigits: transaction.cardLastDigits,
+            eventClassification: (transaction as any).eventClassification || null,
             hasAccountability: transaction.hasAccountability,
             accountabilityApproved: transaction.accountabilityApproved,
             receipts: transaction.receipts,
