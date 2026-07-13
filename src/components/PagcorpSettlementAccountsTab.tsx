@@ -25,10 +25,17 @@ interface Props {
 
 type Draft = Partial<PagcorpSettlementAccount> & { _key: string };
 
-const CURRENCY_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "BRL", label: "PagCorp Real (BRL)" },
-  { value: "USD", label: "PagCorp Dólar (USD)" },
-  { value: "__any", label: "Qualquer moeda" },
+/**
+ * Classificações de evento retornadas pela API do PagCorp para as quais
+ * mapeamos uma conta contábil de baixa distinta.
+ *   • "Compra Internacional"                              → Conta Real (BRL)
+ *   • "Compra Internacional  - Saldo Dolar Utilizado"     → Conta Dólar (USD)
+ * O valor "__any" corresponde ao fallback (qualquer evento).
+ */
+const EVENT_CLASSIFICATION_OPTIONS: Array<{ value: string; label: string; currency: string | null }> = [
+  { value: "Compra Internacional", label: "Compra Internacional (Conta Real)", currency: "BRL" },
+  { value: "Compra Internacional  - Saldo Dolar Utilizado", label: "Compra Internacional – Saldo Dólar Utilizado (Conta Dólar)", currency: "USD" },
+  { value: "__any", label: "Qualquer classificação (fallback)", currency: null },
 ];
 
 const EMPTY_CACHE: CacheLike = { options: [], isLoading: false };
@@ -56,9 +63,7 @@ export function PagcorpSettlementAccountsTab({
     );
   }
 
-  // A conta de baixa é sempre por moeda (independe do cartão) → oculta linhas legadas
-  // com card_identifier específico? Não — o watcher ainda usa como fallback. Mantemos
-  // apenas as linhas "fallback da moeda" (card_identifier IS NULL) na UI.
+  // A conta de baixa independe do cartão — mostra só linhas sem card_identifier.
   const rows = items.filter((r) => !r.card_identifier);
 
   async function save(row: PagcorpSettlementAccount | Draft) {
@@ -68,11 +73,16 @@ export function PagcorpSettlementAccountsTab({
     }
     setSavingId((row as PagcorpSettlementAccount).id ?? "new");
     try {
+      // Deriva a moeda a partir da classificação (mantém compat. com watcher).
+      const classification = row.event_classification ?? null;
+      const derivedCurrency =
+        EVENT_CLASSIFICATION_OPTIONS.find((o) => o.value === classification)?.currency ?? row.currency ?? null;
       await upsert({
         id: (row as PagcorpSettlementAccount).id,
         company_db: companyDb,
-        card_identifier: null, // sempre por moeda, independe do cartão
-        currency: row.currency ?? null,
+        card_identifier: null,
+        currency: derivedCurrency,
+        event_classification: classification,
         settlement_account_code: row.settlement_account_code,
         cost_center: row.cost_center ?? null,
         project: row.project ?? null,
@@ -95,13 +105,26 @@ export function PagcorpSettlementAccountsTab({
             Contas contábeis do PagCorp usadas na baixa automática (pagamento de fornecedor) após a NF de entrada ser lançada.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Cadastre uma linha para <strong>PagCorp Real (BRL)</strong> e outra para <strong>PagCorp Dólar (USD)</strong> por empresa.
-            A conta de baixa <strong>independe do cartão</strong> — vale para toda a moeda. Empresa atual: <strong>{companyDb}</strong>
+            A conta é escolhida pela <strong>classificação do evento</strong> retornada pelo PagCorp:
+            <br />
+            • <code>Compra Internacional</code> → <strong>Conta Real</strong>
+            <br />
+            • <code>Compra Internacional&nbsp;&nbsp;- Saldo Dolar Utilizado</code> → <strong>Conta Dólar</strong>
+            <br />
+            Empresa atual: <strong>{companyDb}</strong>
           </p>
         </div>
         <Button
           size="sm"
-          onClick={() => setDraft({ _key: `new-${Date.now()}`, company_db: companyDb, enabled: true, currency: "BRL" })}
+          onClick={() =>
+            setDraft({
+              _key: `new-${Date.now()}`,
+              company_db: companyDb,
+              enabled: true,
+              event_classification: "Compra Internacional",
+              currency: "BRL",
+            })
+          }
           disabled={!!draft}
           className="gap-2 shrink-0"
         >
@@ -118,7 +141,7 @@ export function PagcorpSettlementAccountsTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-56">Moeda</TableHead>
+                <TableHead className="w-80">Classificação do Evento</TableHead>
                 <TableHead>Conta contábil</TableHead>
                 <TableHead>Centro de Custo</TableHead>
                 <TableHead>Projeto</TableHead>
@@ -177,7 +200,13 @@ export function PagcorpSettlementAccountsTab({
   );
 }
 
-function CurrencySelect({ value, onChange }: { value: string | null | undefined; onChange: (v: string | null) => void }) {
+function EventClassificationSelect({
+  value,
+  onChange,
+}: {
+  value: string | null | undefined;
+  onChange: (v: string | null) => void;
+}) {
   const selValue = value ?? "__any";
   return (
     <Select value={selValue} onValueChange={(v) => onChange(v === "__any" ? null : v)}>
@@ -185,7 +214,7 @@ function CurrencySelect({ value, onChange }: { value: string | null | undefined;
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {CURRENCY_OPTIONS.map((o) => (
+        {EVENT_CLASSIFICATION_OPTIONS.map((o) => (
           <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
         ))}
       </SelectContent>
@@ -249,7 +278,10 @@ function EditableRow({
   return (
     <TableRow>
       <TableCell>
-        <CurrencySelect value={row.currency ?? null} onChange={(v) => onChange({ ...row, currency: v })} />
+        <EventClassificationSelect
+          value={row.event_classification ?? null}
+          onChange={(v) => onChange({ ...row, event_classification: v })}
+        />
       </TableCell>
       <TableCell>
         <AccountPicker
@@ -309,7 +341,7 @@ function EditableExistingRow({
   const [local, setLocal] = useState<PagcorpSettlementAccount>(row);
   const dirty =
     local.settlement_account_code !== row.settlement_account_code ||
-    (local.currency || null) !== (row.currency || null) ||
+    (local.event_classification || null) !== (row.event_classification || null) ||
     (local.cost_center || null) !== (row.cost_center || null) ||
     (local.project || null) !== (row.project || null) ||
     local.enabled !== row.enabled;
@@ -317,8 +349,16 @@ function EditableExistingRow({
   return (
     <TableRow>
       <TableCell>
-        <CurrencySelect value={local.currency} onChange={(v) => setLocal({ ...local, currency: v })} />
-        {!local.currency && <div className="mt-1"><Badge variant="outline">Sem moeda definida</Badge></div>}
+        <EventClassificationSelect
+          value={local.event_classification}
+          onChange={(v) => setLocal({ ...local, event_classification: v })}
+        />
+        {!local.event_classification && !local.currency && (
+          <div className="mt-1"><Badge variant="outline">Fallback (qualquer evento)</Badge></div>
+        )}
+        {!local.event_classification && local.currency && (
+          <div className="mt-1"><Badge variant="outline">Legado: moeda {local.currency}</Badge></div>
+        )}
       </TableCell>
       <TableCell>
         <AccountPicker
