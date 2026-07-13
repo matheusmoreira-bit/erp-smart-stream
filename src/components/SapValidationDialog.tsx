@@ -222,7 +222,7 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
               <ul className="space-y-1 text-xs">
                 {pays.map((p) => {
                   const cur = p.doc_currency || poCurrency;
-                  const foreign = cur && cur !== "BRL";
+                  const foreign = !!cur && cur !== "BRL" && cur !== "R$";
                   const nfSet = new Set(nfs.map((i) => i.doc_entry));
                   const applied = (p.invoice_links || [])
                     .filter((pi) => (pi.invoiceType == null || pi.invoiceType === "it_PurchaseInvoice") && typeof pi.docEntry === "number" && nfSet.has(pi.docEntry))
