@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { AuthError, requireAdminOrSapAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { AuthError, requireAdminOrSapAdmin, requireAdminOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     let companyDb = url.searchParams.get("company_db");
     const includeKeys = url.searchParams.get("keys");
     const metadataOnlyGet = req.method === "GET" && !includeKeys;
-    const caller = metadataOnlyGet ? await requireAdminOrSapSession(req) : await requireAdminOrSapAdmin(req);
+    const caller = metadataOnlyGet ? await requireAdminOrSapSessionHeaders(req) : await requireAdminOrSapAdmin(req);
     const callerCompanyDb = typeof (caller as { companyDB?: unknown }).companyDB === "string"
       ? (caller as { companyDB: string }).companyDB
       : null;
