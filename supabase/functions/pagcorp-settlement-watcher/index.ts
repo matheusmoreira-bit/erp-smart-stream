@@ -439,7 +439,13 @@ Deno.serve(async (req) => {
       safeLog(requestId, "manual_retry_reset", { manualLogId });
       await sb
         .from("pagcorp_integration_log")
-        .update({ settlement_retry_after: null, settlement_locked_at: null })
+        .update({
+          settlement_retry_after: null,
+          settlement_locked_at: null,
+          settlement_attempts: 0,
+          settlement_error: null,
+          settlement_status: "pending",
+        })
         .eq("id", manualLogId);
     }
 
@@ -482,7 +488,9 @@ Deno.serve(async (req) => {
           continue;
         }
         // Backoff exponencial simples para linhas em erro
-        if (r.settlement_status === "error" && r.settlement_attempts >= 10) {
+        // No cron: pula linhas em erro que já esgotaram tentativas.
+        // Em retentativa manual, ignora esse guard — o usuário decidiu tentar de novo.
+        if (!manualLogId && r.settlement_status === "error" && r.settlement_attempts >= 10) {
           results.push({ id: r.id, status: "skipped", error: "max_attempts" });
           continue;
         }
