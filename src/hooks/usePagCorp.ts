@@ -76,8 +76,22 @@ export function usePagCorp() {
 
 
       const result = await res.json();
+      // Dedupe por expenseId: a API do PagCorp tem retornado a mesma transação repetida.
+      // Mantemos a primeira ocorrência por (id ?? expenseId).
+      const rawItems: any[] = Array.isArray(result.items) ? result.items : [];
+      const dedupedRaw: any[] = [];
+      const seenExpenseIds = new Set<string | number>();
+      for (const it of rawItems) {
+        const key = it?.id ?? it?.expenseId;
+        if (key != null) {
+          if (seenExpenseIds.has(key)) continue;
+          seenExpenseIds.add(key);
+        }
+        dedupedRaw.push(it);
+      }
+
       const seenIds = new Set<string | number>();
-      const items: PagCorpTransaction[] = (result.items || []).map((item: any, index: number) => {
+      const items: PagCorpTransaction[] = dedupedRaw.map((item: any, index: number) => {
         const receipts = item.receipts || [];
         const hasAccountability = receipts.length > 0;
         // Uma prestação está aprovada quando o statusId do próprio expense é 3
