@@ -1851,10 +1851,28 @@ export default function ApprovalsPage() {
   const { rules } = useApprovalRules();
 
 
-  // Merge SAP approvals with internal pending expenses
+  // Merge SAP approvals with internal pending expenses.
+  // Enriquece o `approverEmail` do doc interno olhando o nível atual da regra —
+  // isso torna a filtragem robusta a variações de acento/caixa no
+  // `current_approver` (ex.: "Paula Mourão" vs. userName SAP "paula.mourao").
+  const rulesById = useMemo(() => {
+    const map = new Map<string, typeof rules[number]>();
+    for (const r of rules || []) map.set(r.id, r);
+    return map;
+  }, [rules]);
+
   const internalPending = (expenses || [])
     .filter((e) => e.status === "pendente_aprovacao")
-    .map(mapInternalExpense);
+    .map((e) => {
+      const doc = mapInternalExpense(e);
+      if (!doc.approverEmail && e.approval_rule_id) {
+        const rule = rulesById.get(e.approval_rule_id);
+        const level = rule?.levels?.find((l: any) => l.level_order === e.current_level_order)
+                    ?? rule?.levels?.[0];
+        if (level?.approver_email) doc.approverEmail = level.approver_email;
+      }
+      return doc;
+    });
 
   // Deduplica por chave única — evita mostrar o mesmo lançamento duas vezes
   // quando o usuário é aprovador principal E substituto ativo do aprovador
