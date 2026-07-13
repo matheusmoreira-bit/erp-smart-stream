@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { parseSapError } from "@/lib/sap-error";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
