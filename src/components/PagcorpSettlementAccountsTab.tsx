@@ -56,7 +56,10 @@ export function PagcorpSettlementAccountsTab({
     );
   }
 
-  const rows = [...items];
+  // A conta de baixa é sempre por moeda (independe do cartão) → oculta linhas legadas
+  // com card_identifier específico? Não — o watcher ainda usa como fallback. Mantemos
+  // apenas as linhas "fallback da moeda" (card_identifier IS NULL) na UI.
+  const rows = items.filter((r) => !r.card_identifier);
 
   async function save(row: PagcorpSettlementAccount | Draft) {
     if (!row.settlement_account_code) {
@@ -68,7 +71,7 @@ export function PagcorpSettlementAccountsTab({
       await upsert({
         id: (row as PagcorpSettlementAccount).id,
         company_db: companyDb,
-        card_identifier: row.card_identifier ?? null,
+        card_identifier: null, // sempre por moeda, independe do cartão
         currency: row.currency ?? null,
         settlement_account_code: row.settlement_account_code,
         cost_center: row.cost_center ?? null,
@@ -93,7 +96,7 @@ export function PagcorpSettlementAccountsTab({
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Cadastre uma linha para <strong>PagCorp Real (BRL)</strong> e outra para <strong>PagCorp Dólar (USD)</strong> por empresa.
-            Deixe <strong>Cartão</strong> vazio para valer como fallback da moeda. Empresa atual: <strong>{companyDb}</strong>
+            A conta de baixa <strong>independe do cartão</strong> — vale para toda a moeda. Empresa atual: <strong>{companyDb}</strong>
           </p>
         </div>
         <Button
@@ -115,8 +118,7 @@ export function PagcorpSettlementAccountsTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-52">Moeda</TableHead>
-                <TableHead className="w-44">Cartão</TableHead>
+                <TableHead className="w-56">Moeda</TableHead>
                 <TableHead>Conta contábil</TableHead>
                 <TableHead>Centro de Custo</TableHead>
                 <TableHead>Projeto</TableHead>
@@ -140,7 +142,7 @@ export function PagcorpSettlementAccountsTab({
               )}
               {rows.length === 0 && !draft ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-10">
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-10">
                     Nenhuma conta contábil de baixa cadastrada.<br />
                     <span className="text-xs">Clique em <strong>Nova conta</strong> para começar.</span>
                   </TableCell>
@@ -204,7 +206,6 @@ function AccountPicker({
   placeholder: string;
   required?: boolean;
 }) {
-  // Fallback: se a cache está vazia (não veio do parent), usa Input livre.
   if (!cache.options.length && !cache.isLoading) {
     return (
       <Input
@@ -249,13 +250,6 @@ function EditableRow({
     <TableRow>
       <TableCell>
         <CurrencySelect value={row.currency ?? null} onChange={(v) => onChange({ ...row, currency: v })} />
-      </TableCell>
-      <TableCell>
-        <Input
-          placeholder="Últimos 4 dígitos (vazio = fallback)"
-          value={row.card_identifier ?? ""}
-          onChange={(e) => onChange({ ...row, card_identifier: e.target.value || null })}
-        />
       </TableCell>
       <TableCell>
         <AccountPicker
@@ -315,7 +309,6 @@ function EditableExistingRow({
   const [local, setLocal] = useState<PagcorpSettlementAccount>(row);
   const dirty =
     local.settlement_account_code !== row.settlement_account_code ||
-    (local.card_identifier || null) !== (row.card_identifier || null) ||
     (local.currency || null) !== (row.currency || null) ||
     (local.cost_center || null) !== (row.cost_center || null) ||
     (local.project || null) !== (row.project || null) ||
@@ -326,16 +319,6 @@ function EditableExistingRow({
       <TableCell>
         <CurrencySelect value={local.currency} onChange={(v) => setLocal({ ...local, currency: v })} />
         {!local.currency && <div className="mt-1"><Badge variant="outline">Sem moeda definida</Badge></div>}
-      </TableCell>
-      <TableCell>
-        {row.card_identifier ? (
-          <Input
-            value={local.card_identifier ?? ""}
-            onChange={(e) => setLocal({ ...local, card_identifier: e.target.value || null })}
-          />
-        ) : (
-          <Badge variant="secondary">Fallback da moeda</Badge>
-        )}
       </TableCell>
       <TableCell>
         <AccountPicker
