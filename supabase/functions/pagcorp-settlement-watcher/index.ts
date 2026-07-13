@@ -178,18 +178,21 @@ async function resolveSettlementAccount(
     if (data) return data as SettlementAccount;
   }
 
-  // 3. Fallback por moeda (BRL/USD) — sem classificação e sem cartão.
+  // 3. Fallback por moeda — quando não temos classificação no payload
+  //    (transações antigas persistidas antes de armazenarmos eventClassification),
+  //    aceita qualquer linha habilitada daquela moeda para a empresa.
   if (cur) {
     const { data } = await sb
       .from("pagcorp_settlement_accounts")
       .select(sel)
       .eq("company_db", companyDb)
       .is("card_identifier", null)
-      .is("event_classification", null)
       .eq("currency", cur)
       .eq("enabled", true)
-      .maybeSingle();
-    if (data) return data as SettlementAccount;
+      .order("event_classification", { ascending: true, nullsFirst: true })
+      .limit(1);
+    const row = (data as SettlementAccount[] | null)?.[0];
+    if (row) return row;
   }
 
   // 4. Cartão específico sem moeda (retrocompat).
@@ -200,23 +203,25 @@ async function resolveSettlementAccount(
       .eq("company_db", companyDb)
       .eq("card_identifier", cardKey)
       .is("currency", null)
-      .is("event_classification", null)
       .eq("enabled", true)
-      .maybeSingle();
-    if (data) return data as SettlementAccount;
+      .order("event_classification", { ascending: true, nullsFirst: true })
+      .limit(1);
+    const row = (data as SettlementAccount[] | null)?.[0];
+    if (row) return row;
   }
 
-  // 5. Fallback global.
+  // 5. Fallback global — qualquer linha habilitada da empresa.
   const { data: fb } = await sb
     .from("pagcorp_settlement_accounts")
     .select(sel)
     .eq("company_db", companyDb)
     .is("card_identifier", null)
     .is("currency", null)
-    .is("event_classification", null)
     .eq("enabled", true)
-    .maybeSingle();
-  return (fb as SettlementAccount) || null;
+    .order("event_classification", { ascending: true, nullsFirst: true })
+    .limit(1);
+  const row = (fb as SettlementAccount[] | null)?.[0];
+  return row || null;
 }
 
 async function findInvoicesForPO(
