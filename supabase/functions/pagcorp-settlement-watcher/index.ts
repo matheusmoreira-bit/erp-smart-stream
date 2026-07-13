@@ -333,6 +333,15 @@ Deno.serve(async (req) => {
   // permanecem sendo o fluxo do cron (varredura de várias linhas).
   let manualLogId: string | null = null;
   let manualForceRetry = false;
+  // Sessão SAP do usuário (quando a UI dispara "Reprocessar baixa"). Usada
+  // como fallback caso as credenciais salvas em system_credentials estejam
+  // bloqueadas por SSO ("Fail to NONE-SSO login from SLD").
+  const userSapSession = req.headers.get("x-sap-session") || "";
+  const userSapRoute = req.headers.get("x-sap-route") || "";
+  const userSapCompanyDb = req.headers.get("x-company-db") || "";
+  const userSapCookie = userSapSession
+    ? `B1SESSION=${userSapSession}${userSapRoute ? `; ROUTEID=${userSapRoute}` : ""}`
+    : "";
   if (req.method === "POST") {
     try {
       const body = await req.json().catch(() => ({}));
@@ -425,7 +434,15 @@ Deno.serve(async (req) => {
         try {
           const creds = await loadCreds(sb, companyDb);
           baseUrl = buildBaseUrl(creds.service_layer_url);
-          cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+          // Se a chamada veio da UI (manual) e o usuário tem sessão SAP
+          // válida na MESMA companyDb, reaproveita a sessão do usuário —
+          // evita "Fail to NONE-SSO login from SLD" quando o usuário técnico
+          // salvo em system_credentials está com SSO obrigatório.
+          if (manualLogId && userSapCookie && userSapCompanyDb === companyDb) {
+            cookie = userSapCookie;
+          } else {
+            cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+          }
         } catch (e) {
           const msg = (e as Error).message;
           for (const r of list) {
