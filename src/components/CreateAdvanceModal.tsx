@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { DecimalInput } from "@/components/DecimalInput";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useSap } from "@/contexts/SapContext";
@@ -283,22 +284,18 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
                   <div className="grid grid-cols-3 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Quantidade</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                      <DecimalInput
                         value={l.quantity}
-                        onChange={(e) => updateLine(i, { quantity: Number(e.target.value) })}
+                        onChange={(value) => updateLine(i, { quantity: value })}
+                        maxDecimals={4}
                       />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Valor unitário</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                      <DecimalInput
                         value={l.unit_price}
-                        onChange={(e) => updateLine(i, { unit_price: Number(e.target.value) })}
+                        onChange={(value) => updateLine(i, { unit_price: value })}
+                        maxDecimals={4}
                       />
                     </div>
                     <div className="space-y-1">
