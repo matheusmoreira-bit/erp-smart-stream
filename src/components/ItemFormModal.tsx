@@ -162,8 +162,30 @@ export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
     }
   };
 
+  const allowed = editing ? canEdit : canCreate;
+
+  if (open && !allowed) {
+    return (
+      <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Acesso negado</DialogTitle>
+            <DialogDescription>
+              Seu grupo de permissões não permite {editing ? "editar" : "cadastrar"} itens.
+              Consulte um administrador.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={onClose}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? "Editar Item" : "Novo Item"}</DialogTitle>
