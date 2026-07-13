@@ -648,11 +648,12 @@ Deno.serve(async (req) => {
                 let paymentDocNum: number | null = null;
 
                 if (!alreadyClosed) {
-                  // Moeda estrangeira → busca PTAX venda do BCB da data da fatura.
-                  // Sem PTAX disponível, adia a baixa (awaiting_settlement).
+                  // PTAX só se aplica a pagamentos em USD (dólar). Compras em
+                  // BRL (real) — ou qualquer outra moeda que não seja USD —
+                  // são baixadas pelo valor local (openAmount), sem conversão.
                   const invCur = (invoice.DocCurrency || "").toUpperCase();
                   let docRate: number | null = null;
-                  if (invCur && invCur !== "BRL") {
+                  if (invCur === "USD") {
                     const ptax = await fetchPtax(invCur, invoice.DocDate);
                     if (!ptax) {
                       if (!firstPtaxMissingMsg) {
