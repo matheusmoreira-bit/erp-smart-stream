@@ -434,7 +434,15 @@ Deno.serve(async (req) => {
         try {
           const creds = await loadCreds(sb, companyDb);
           baseUrl = buildBaseUrl(creds.service_layer_url);
-          cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+          // Se a chamada veio da UI (manual) e o usuário tem sessão SAP
+          // válida na MESMA companyDb, reaproveita a sessão do usuário —
+          // evita "Fail to NONE-SSO login from SLD" quando o usuário técnico
+          // salvo em system_credentials está com SSO obrigatório.
+          if (manualLogId && userSapCookie && userSapCompanyDb === companyDb) {
+            cookie = userSapCookie;
+          } else {
+            cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+          }
         } catch (e) {
           const msg = (e as Error).message;
           for (const r of list) {
