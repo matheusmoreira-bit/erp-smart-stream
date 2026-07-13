@@ -1393,8 +1393,12 @@ function tokensMatch(aTok: string, uTok: string): boolean {
 }
 
 
+function stripDiacritics(value: string): string {
+  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
 function normalizeIdentity(value?: string | null): string {
-  return (value || "").toLowerCase().trim();
+  return stripDiacritics((value || "").toLowerCase().trim());
 }
 
 function identityPrefix(value?: string | null): string {
