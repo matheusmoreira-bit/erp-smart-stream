@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireUserOrSapSession(req);
+    await requireUserOrSapSessionHeaders(req);
   } catch (err) {
     const authResp = authErrorResponse(err, corsHeaders);
     if (authResp) return authResp;
