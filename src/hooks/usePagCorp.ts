@@ -80,7 +80,13 @@ export function usePagCorp() {
       const items: PagCorpTransaction[] = (result.items || []).map((item: any, index: number) => {
         const receipts = item.receipts || [];
         const hasAccountability = receipts.length > 0;
-        const accountabilityApproved = receipts.some((r: any) => r.statusId === 3);
+        // Uma prestação está aprovada quando o statusId do próprio expense é 3
+        // (Aprovado) OU quando qualquer recibo/anexo já foi aprovado (statusId=3).
+        // Antes olhávamos apenas os receipts, e alguns expenses aprovados vinham
+        // sem receipt marcado como 3 — mantendo o card em "Em análise".
+        const accountabilityApproved =
+          Number(item.statusId) === 3 ||
+          receipts.some((r: any) => Number(r.statusId) === 3);
 
         // Resolve a STABLE + UNIQUE id. Spread item LAST would otherwise let an
         // undefined item.id overwrite our computed id, and duplicate ids would
