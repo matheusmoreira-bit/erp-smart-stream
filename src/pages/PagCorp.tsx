@@ -1212,63 +1212,89 @@ export default function PagCorp() {
                                   PC #{t.sapDocNum}
                                 </span>
                               )}
-                              {t.sapDocEntry != null && (
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 px-2 text-[11px] gap-1 text-primary"
-                                    onClick={() => setValidateDialog({ open: true, tx: t })}
-                                  >
-                                    <CheckCircle className="w-3 h-3" />
-                                    Validar SAP
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 px-2 text-[11px] gap-1 text-primary"
-                                    onClick={() => setRelationsDialog({ open: true, tx: t })}
-                                    title="Ver mapa de relações: PagCorp → PC → NF → Baixa"
-                                  >
-                                    <Network className="w-3 h-3" />
-                                    Mapa
-                                  </Button>
-                                </div>
-                              )}
                               {(() => {
                                 const st = t.settlementStatus;
-                                if (st === "settled") {
-                                  return (
-                                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1" title="Pagamento de fornecedor emitido no SAP">
-                                      <CheckCircle2 className="w-3 h-3" />
-                                      Baixa {t.settlementPaymentDocNum ? `#${t.settlementPaymentDocNum}` : "OK"}
-                                    </span>
-                                  );
-                                }
-                                if (t.sapDocEntry == null) return null;
                                 const isRunning = settling === t.id;
-                                const label = st === "awaiting_invoice"
-                                  ? "Aguardando NF"
-                                  : st === "awaiting_settlement"
-                                    ? "Tentar baixa"
-                                    : st === "error"
-                                      ? "Reprocessar baixa"
-                                      : "Baixa automática";
-                                return (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 px-2 text-[11px] gap-1"
-                                    disabled={isRunning}
-                                    onClick={() => handleAutoSettle(t)}
-                                    title={t.settlementError || "Emite o Pagamento de Fornecedor no SAP quando a NF já estiver lançada."}
+                                const settled = st === "settled";
+                                const settlementLabel = settled
+                                  ? `Baixa ${t.settlementPaymentDocNum ? `#${t.settlementPaymentDocNum}` : "OK"}`
+                                  : st === "awaiting_invoice"
+                                    ? "Aguardando NF"
+                                    : st === "awaiting_settlement"
+                                      ? "Tentar baixa"
+                                      : st === "error"
+                                        ? "Reprocessar baixa"
+                                        : "Baixa automática";
+
+                                // Inline settlement status hint (kept visible under badge)
+                                const statusHint = settled ? (
+                                  <span
+                                    className="text-[11px] text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1"
+                                    title="Pagamento de fornecedor emitido no SAP"
                                   >
-                                    {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                    {label}
-                                  </Button>
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    {settlementLabel}
+                                  </span>
+                                ) : null;
+
+                                if (t.sapDocEntry == null) {
+                                  return statusHint;
+                                }
+
+                                return (
+                                  <>
+                                    {statusHint}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-7 px-2 text-[11px] gap-1"
+                                          disabled={isRunning}
+                                        >
+                                          {isRunning ? (
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                          ) : (
+                                            <MoreHorizontal className="w-3.5 h-3.5" />
+                                          )}
+                                          Ações
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-56">
+                                        <DropdownMenuLabel className="text-xs">
+                                          Transação PagCorp
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => setValidateDialog({ open: true, tx: t })}>
+                                          <CheckCircle className="w-4 h-4 mr-2 text-primary" />
+                                          Validar SAP
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => setRelationsDialog({ open: true, tx: t })}
+                                        >
+                                          <Network className="w-4 h-4 mr-2 text-primary" />
+                                          Mapa de relações
+                                        </DropdownMenuItem>
+                                        {!settled && (
+                                          <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              disabled={isRunning}
+                                              onClick={() => handleAutoSettle(t)}
+                                              title={t.settlementError || undefined}
+                                            >
+                                              <Sparkles className="w-4 h-4 mr-2" />
+                                              {settlementLabel}
+                                            </DropdownMenuItem>
+                                          </>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </>
                                 );
                               })()}
                             </div>
+
                           ) : t.isReversed ? (
                             <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
                               <XCircle className="w-3 h-3" /> Sem integração
