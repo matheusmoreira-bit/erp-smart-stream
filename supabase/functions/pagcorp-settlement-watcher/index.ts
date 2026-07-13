@@ -12,10 +12,46 @@
 // e settlement_status ∈ (pending|awaiting_invoice|awaiting_settlement|error retryable).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { logIntegrationCall } from "../_shared/integration-log.ts";
 import { linkNfToAp } from "../_shared/link-nf-ap.ts";
+
+const sapCorsHeaders = {
+  ...baseCorsHeaders,
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db",
+  "Access-Control-Expose-Headers": "x-request-id",
+};
+
+function responseHeaders(requestId: string, contentType = "application/json") {
+  return {
+    ...sapCorsHeaders,
+    "x-request-id": requestId,
+    ...(contentType ? { "Content-Type": contentType } : {}),
+  };
+}
+
+function safeLog(requestId: string, event: string, details: Record<string, unknown> = {}) {
+  console.info(`[pagcorp-settlement-watcher:${requestId}] ${event}`, JSON.stringify(details));
+}
+
+function safeWarn(requestId: string, event: string, details: Record<string, unknown> = {}) {
+  console.warn(`[pagcorp-settlement-watcher:${requestId}] ${event}`, JSON.stringify(details));
+}
+
+function safeError(requestId: string, event: string, details: Record<string, unknown> = {}) {
+  console.error(`[pagcorp-settlement-watcher:${requestId}] ${event}`, JSON.stringify(details));
+}
+
+function hostFromUrl(raw: string): string | null {
+  try {
+    return new URL(raw).host;
+  } catch {
+    return null;
+  }
+}
 
 interface PagcorpLogRow {
   id: string;
@@ -323,7 +359,17 @@ async function createVendorPayment(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const requestId = crypto.randomUUID();
+
+  if (req.method === "OPTIONS") {
+    safeLog(requestId, "cors_preflight", {
+      origin: req.headers.get("origin"),
+      requestMethod: req.headers.get("access-control-request-method"),
+      requestHeaders: req.headers.get("access-control-request-headers"),
+      allowedHeaders: sapCorsHeaders["Access-Control-Allow-Headers"],
+    });
+    return new Response("ok", { headers: responseHeaders(requestId, "text/plain") });
+  }
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -339,6 +385,7 @@ Deno.serve(async (req) => {
   const userSapSession = req.headers.get("x-sap-session") || "";
   const userSapRoute = req.headers.get("x-sap-route") || "";
   const userSapCompanyDb = req.headers.get("x-company-db") || "";
+  const userSapUser = req.headers.get("x-sap-user") || "";
   const userSapCookie = userSapSession
     ? `B1SESSION=${userSapSession}${userSapRoute ? `; ROUTEID=${userSapRoute}` : ""}`
     : "";
@@ -352,13 +399,30 @@ Deno.serve(async (req) => {
     } catch { /* ignore */ }
   }
 
+  safeLog(requestId, "request_received", {
+    method: req.method,
+    origin: req.headers.get("origin"),
+    contentType: req.headers.get("content-type"),
+    hasAuthorization: Boolean(req.headers.get("authorization")),
+    hasApiKey: Boolean(req.headers.get("apikey")),
+    hasSapSession: Boolean(userSapSession),
+    sapSessionLength: userSapSession.length || 0,
+    hasSapRoute: Boolean(userSapRoute),
+    sapRoute: userSapRoute || null,
+    sapUser: userSapUser || null,
+    sapCompanyDb: userSapCompanyDb || null,
+    manualLogId,
+    manualForceRetry,
+  });
+
   const lockName = manualLogId
     ? `pagcorp-settlement-watcher:${manualLogId}`
     : "pagcorp-settlement-watcher";
   const gotLock = await tryWatcherLock(sb, lockName, 10);
   if (!gotLock) {
+    safeWarn(requestId, "lock_skipped", { lockName, manualLogId });
     return new Response(JSON.stringify({ ok: true, skipped: "another_run_in_progress" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: responseHeaders(requestId),
     });
   }
 
@@ -372,6 +436,7 @@ Deno.serve(async (req) => {
     // Se for retentativa manual, limpa gates de backoff da linha alvo antes
     // do select para garantir que ela seja pega neste run.
     if (manualLogId && manualForceRetry) {
+      safeLog(requestId, "manual_retry_reset", { manualLogId });
       await sb
         .from("pagcorp_integration_log")
         .update({ settlement_retry_after: null, settlement_locked_at: null })
@@ -401,6 +466,11 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);
       if (error) throw new Error(error.message);
+      safeLog(requestId, "rows_selected", {
+        manualLogId,
+        offset,
+        count: rows?.length || 0,
+      });
       if (!rows || rows.length === 0) break;
 
 
@@ -440,11 +510,27 @@ Deno.serve(async (req) => {
           // salvo em system_credentials está com SSO obrigatório.
           if (manualLogId && userSapCookie && userSapCompanyDb === companyDb) {
             cookie = userSapCookie;
+            safeLog(requestId, "sap_session_strategy", {
+              companyDb,
+              strategy: "user_sap_session",
+              sapHost: hostFromUrl(baseUrl),
+              hasUserSapCookie: true,
+              userSapCompanyDb,
+            });
           } else {
+            safeLog(requestId, "sap_session_strategy", {
+              companyDb,
+              strategy: "stored_credentials_login",
+              sapHost: hostFromUrl(baseUrl),
+              hasUserSapCookie: Boolean(userSapCookie),
+              userSapCompanyDb: userSapCompanyDb || null,
+              userSapCompanyMatches: userSapCompanyDb === companyDb,
+            });
             cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
           }
         } catch (e) {
           const msg = (e as Error).message;
+          safeError(requestId, "sap_session_error", { companyDb, error: msg });
           for (const r of list) {
             await sb
               .from("pagcorp_integration_log")
@@ -465,6 +551,14 @@ Deno.serve(async (req) => {
           for (const row of list) {
             const t0 = Date.now();
             try {
+              safeLog(requestId, "row_start", {
+                id: row.id,
+                companyDb,
+                poEntry: row.sap_doc_entry,
+                poNum: row.sap_doc_num,
+                settlementStatus: row.settlement_status,
+                attempts: row.settlement_attempts,
+              });
               // 1. PO precisa estar fechado (indica que a NF já foi lançada)
               const poR = await fetch(
                 `${baseUrl}/PurchaseOrders(${row.sap_doc_entry})?$select=DocEntry,DocNum,DocumentStatus,CardCode`,
@@ -472,6 +566,13 @@ Deno.serve(async (req) => {
               );
               if (!poR.ok) throw new Error(`Consulta PO falhou ${poR.status}`);
               const po = await poR.json();
+              safeLog(requestId, "po_fetch_result", {
+                id: row.id,
+                poEntry: row.sap_doc_entry,
+                httpStatus: poR.status,
+                documentStatus: po.DocumentStatus,
+                hasCardCode: Boolean(po.CardCode),
+              });
               if (po.DocumentStatus !== "bost_Close") {
                 await sb
                   .from("pagcorp_integration_log")
@@ -488,6 +589,13 @@ Deno.serve(async (req) => {
 
               // 2. Localiza TODAS as NFs que apontam para o PO (1 PO → N NF)
               const invoices = await findInvoicesForPO(baseUrl, cookie, row.sap_doc_entry, String(po.CardCode ?? ""));
+              safeLog(requestId, "invoices_found", {
+                id: row.id,
+                poEntry: row.sap_doc_entry,
+                count: invoices.length,
+                invoiceEntries: invoices.map((invoice) => invoice.DocEntry),
+                invoiceStatuses: invoices.map((invoice) => invoice.DocumentStatus),
+              });
               if (invoices.length === 0) {
                 await sb
                   .from("pagcorp_integration_log")
@@ -686,9 +794,24 @@ Deno.serve(async (req) => {
                 request_meta: { poEntry: row.sap_doc_entry, invoiceEntries },
                 response_meta: { paymentEntries, paymentNums, accountsUsed, skippedAlreadyPaid },
               });
+              safeLog(requestId, "row_success", {
+                id: row.id,
+                status: "settled",
+                durationMs: Date.now() - t0,
+                paymentEntries,
+                invoiceEntries,
+                skippedAlreadyPaid,
+              });
               results.push({ id: row.id, status: "settled" });
             } catch (e) {
               const msg = (e as Error).message;
+              safeError(requestId, "row_error", {
+                id: row.id,
+                companyDb,
+                poEntry: row.sap_doc_entry,
+                durationMs: Date.now() - t0,
+                error: msg,
+              });
               await sb
                 .from("pagcorp_integration_log")
                 .update({
@@ -721,15 +844,17 @@ Deno.serve(async (req) => {
     }
 
     await releaseWatcherLock(sb, lockName, "ok", `processed=${results.length}`);
+    safeLog(requestId, "request_completed", { processed: results.length, results });
     return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: responseHeaders(requestId),
     });
   } catch (e) {
     const msg = (e as Error).message;
+    safeError(requestId, "request_failed", { error: msg, results });
     await releaseWatcherLock(sb, lockName, "error", msg);
     return new Response(JSON.stringify({ error: msg, results }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: responseHeaders(requestId),
     });
   }
 });
