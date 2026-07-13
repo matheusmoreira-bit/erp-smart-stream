@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { KeyRound, Loader2, CheckCircle2, AlertCircle, MinusCircle } from "lucide-react";
+import { KeyRound, Loader2, CheckCircle2, AlertCircle, MinusCircle, ShieldAlert } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { sapAction, sapQuery } from "@/lib/sap-client";
 import {
@@ -20,9 +20,22 @@ interface CompanyOption {
   display_name: string;
 }
 
-export function ChangePasswordDialog() {
+interface ChangePasswordDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+  warningMessage?: ReactNode;
+}
+
+export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger, warningMessage }: ChangePasswordDialogProps = {}) {
   const { session } = useSap();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp! : openState;
+  const setOpen = (v: boolean) => {
+    if (!isControlled) setOpenState(v);
+    onOpenChange?.(v);
+  };
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
