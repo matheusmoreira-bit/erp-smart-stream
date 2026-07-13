@@ -657,10 +657,12 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // 3. Card key + preparo (a conta contábil de baixa é resolvida
-              //    por NF pois depende da moeda da fatura: PagCorp Real (BRL) ×
-              //    PagCorp Dólar (USD)).
+              // 3. Card key + classificação do evento (primária) + moeda (fallback).
+              //    A conta contábil é resolvida por NF: prioriza o mapeamento por
+              //    `eventClassification` retornado pela API do PagCorp; se não
+              //    houver, cai para moeda (BRL/USD) ou fallback global.
               const cardKey = extractCardKey(row.pagcorp_data);
+              const eventClass = extractEventClassification(row.pagcorp_data);
 
               // 4. Emite UM Pagamento de Fornecedor por NF, baixando a
               //    PurchaseInvoice em Contas a Pagar. Idempotente: se a NF já
@@ -679,10 +681,10 @@ Deno.serve(async (req) => {
                 const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
                 const alreadyClosed = invoice.DocumentStatus === "bost_Close" || openAmount <= 0;
 
-                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invoice.DocCurrency || null);
+                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invoice.DocCurrency || null, eventClass);
                 if (!account) {
                   if (!firstMissingAccountMsg) {
-                    firstMissingAccountMsg = `Sem conta contábil de baixa (empresa=${companyDb}, cartão=${cardKey ?? "fallback"}, moeda=${invoice.DocCurrency || "?"})`;
+                    firstMissingAccountMsg = `Sem conta contábil de baixa (empresa=${companyDb}, classificação=${eventClass ?? "?"}, moeda=${invoice.DocCurrency || "?"})`;
                   }
                   continue;
                 }
