@@ -1,0 +1,2 @@
+ALTER TABLE public.pagcorp_settlement_accounts ADD COLUMN IF NOT EXISTS event_classification text;
+CREATE INDEX IF NOT EXISTS idx_pagcorp_settlement_accounts_event_class ON public.pagcorp_settlement_accounts (company_db, event_classification) WHERE event_classification IS NOT NULL;

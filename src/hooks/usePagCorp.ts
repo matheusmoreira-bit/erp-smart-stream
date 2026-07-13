@@ -13,6 +13,7 @@ export interface PagCorpTransaction {
   cardId?: string | number;
   cardName?: string;
   cardLastDigits?: string;
+  eventClassification?: string;
   status?: string;
   hasAccountability?: boolean;
   accountabilityApproved?: boolean;

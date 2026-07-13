@@ -68,6 +68,7 @@ interface SettlementAccount {
   cost_center: string | null;
   project: string | null;
   currency: string | null;
+  event_classification: string | null;
 }
 
 function buildBaseUrl(raw: string): string {
@@ -120,16 +121,51 @@ function extractCardKey(payload: Record<string, unknown> | null): string | null 
   return name || null;
 }
 
+function extractEventClassification(payload: Record<string, unknown> | null): string | null {
+  if (!payload) return null;
+  const raw =
+    (payload.eventClassification as string | undefined) ??
+    (payload.event_classification as string | undefined) ??
+    ((payload.transaction as Record<string, unknown> | undefined)?.eventClassification as string | undefined) ??
+    null;
+  return raw ? String(raw) : null;
+}
+
+/**
+ * Normaliza classificação p/ comparação (colapsa espaços múltiplos, trim, lowercase).
+ * O PagCorp devolve "Compra Internacional  - Saldo Dolar Utilizado" com 2 espaços;
+ * a normalização evita quebrar o match se alguém cadastrar com 1 espaço.
+ */
+function normalizeClassification(v: string | null | undefined): string {
+  return (v || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 async function resolveSettlementAccount(
   sb: ReturnType<typeof createClient>,
   companyDb: string,
   cardKey: string | null,
   currency: string | null,
+  eventClassification: string | null,
 ): Promise<SettlementAccount | null> {
   const cur = (currency || "").toUpperCase() || null;
-  const sel = "settlement_account_code, cost_center, project, currency";
+  const sel = "settlement_account_code, cost_center, project, currency, event_classification";
 
-  // 1. Cartão específico + moeda exata
+  // 1. Match por classificação do evento (fonte primária de decisão).
+  if (eventClassification) {
+    const { data } = await sb
+      .from("pagcorp_settlement_accounts")
+      .select(sel)
+      .eq("company_db", companyDb)
+      .not("event_classification", "is", null)
+      .eq("enabled", true);
+    const target = normalizeClassification(eventClassification);
+    const match = (data as SettlementAccount[] | null)?.find(
+      (r) => normalizeClassification(r.event_classification) === target,
+    );
+    if (match) return match;
+  }
+
+  // 2. Cartão específico + moeda exata (legado).
   if (cardKey && cur) {
     const { data } = await sb
       .from("pagcorp_settlement_accounts")
@@ -142,20 +178,21 @@ async function resolveSettlementAccount(
     if (data) return data as SettlementAccount;
   }
 
-  // 2. Fallback da empresa por moeda (PagCorp Real / PagCorp Dólar). Caso principal.
+  // 3. Fallback por moeda (BRL/USD) — sem classificação e sem cartão.
   if (cur) {
     const { data } = await sb
       .from("pagcorp_settlement_accounts")
       .select(sel)
       .eq("company_db", companyDb)
       .is("card_identifier", null)
+      .is("event_classification", null)
       .eq("currency", cur)
       .eq("enabled", true)
       .maybeSingle();
     if (data) return data as SettlementAccount;
   }
 
-  // 3. Cartão específico sem moeda (retrocompatibilidade)
+  // 4. Cartão específico sem moeda (retrocompat).
   if (cardKey) {
     const { data } = await sb
       .from("pagcorp_settlement_accounts")
@@ -163,18 +200,20 @@ async function resolveSettlementAccount(
       .eq("company_db", companyDb)
       .eq("card_identifier", cardKey)
       .is("currency", null)
+      .is("event_classification", null)
       .eq("enabled", true)
       .maybeSingle();
     if (data) return data as SettlementAccount;
   }
 
-  // 4. Fallback global (sem moeda)
+  // 5. Fallback global.
   const { data: fb } = await sb
     .from("pagcorp_settlement_accounts")
     .select(sel)
     .eq("company_db", companyDb)
     .is("card_identifier", null)
     .is("currency", null)
+    .is("event_classification", null)
     .eq("enabled", true)
     .maybeSingle();
   return (fb as SettlementAccount) || null;
@@ -618,10 +657,12 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // 3. Card key + preparo (a conta contábil de baixa é resolvida
-              //    por NF pois depende da moeda da fatura: PagCorp Real (BRL) ×
-              //    PagCorp Dólar (USD)).
+              // 3. Card key + classificação do evento (primária) + moeda (fallback).
+              //    A conta contábil é resolvida por NF: prioriza o mapeamento por
+              //    `eventClassification` retornado pela API do PagCorp; se não
+              //    houver, cai para moeda (BRL/USD) ou fallback global.
               const cardKey = extractCardKey(row.pagcorp_data);
+              const eventClass = extractEventClassification(row.pagcorp_data);
 
               // 4. Emite UM Pagamento de Fornecedor por NF, baixando a
               //    PurchaseInvoice em Contas a Pagar. Idempotente: se a NF já
@@ -640,10 +681,10 @@ Deno.serve(async (req) => {
                 const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
                 const alreadyClosed = invoice.DocumentStatus === "bost_Close" || openAmount <= 0;
 
-                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invoice.DocCurrency || null);
+                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invoice.DocCurrency || null, eventClass);
                 if (!account) {
                   if (!firstMissingAccountMsg) {
-                    firstMissingAccountMsg = `Sem conta contábil de baixa (empresa=${companyDb}, cartão=${cardKey ?? "fallback"}, moeda=${invoice.DocCurrency || "?"})`;
+                    firstMissingAccountMsg = `Sem conta contábil de baixa (empresa=${companyDb}, classificação=${eventClass ?? "?"}, moeda=${invoice.DocCurrency || "?"})`;
                   }
                   continue;
                 }

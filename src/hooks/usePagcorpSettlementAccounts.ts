@@ -6,6 +6,7 @@ export interface PagcorpSettlementAccount {
   company_db: string;
   card_identifier: string | null;
   currency: string | null;
+  event_classification: string | null;
   settlement_account_code: string;
   cost_center: string | null;
   project: string | null;
@@ -42,6 +43,7 @@ export function usePagcorpSettlementAccounts(companyDb?: string | null) {
       company_db: row.company_db,
       card_identifier: row.card_identifier ?? null,
       currency: row.currency ? row.currency.toUpperCase() : null,
+      event_classification: row.event_classification ?? null,
       settlement_account_code: row.settlement_account_code,
       cost_center: row.cost_center ?? null,
       project: row.project ?? null,
