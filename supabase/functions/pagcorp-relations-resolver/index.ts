@@ -11,7 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sapFetch } from "../_shared/sap-fetch.ts";
-import { AuthError, authErrorResponse, requireUserOrSapSession } from "../_shared/auth.ts";
+import { AuthError, authErrorResponse, requireUserOrSapSessionHeaders } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,7 +38,7 @@ interface CallerContext {
 }
 
 async function assertManualAccess(req: Request, log: LogRow): Promise<void> {
-  const caller = await requireUserOrSapSession(req) as CallerContext;
+  const caller = await requireUserOrSapSessionHeaders(req) as CallerContext;
   if (caller.source === "sap_session" && caller.companyDB && log.company_db && caller.companyDB !== log.company_db) {
     throw new AuthError("Acesso negado para a empresa deste documento.", 403);
   }
@@ -343,7 +343,7 @@ Deno.serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     } else if (body.companyDb) {
-      await requireUserOrSapSession(req);
+      await requireUserOrSapSessionHeaders(req);
       const { data, error } = await sb
         .from("pagcorp_integration_log")
         .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
