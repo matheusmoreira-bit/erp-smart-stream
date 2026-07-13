@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { DecimalInput } from "@/components/DecimalInput";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { supabase } from "@/integrations/supabase/client";
