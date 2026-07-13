@@ -1203,15 +1203,6 @@ export default function PagCorp() {
                         <TableCell className="text-center">
                           {t.integrated ? (
                             <div className="flex flex-col items-center gap-1">
-                              <Badge variant="secondary" className="bg-success/20 text-success border-success/30 font-semibold text-xs">
-                                <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Integrado
-                              </Badge>
-                              {t.sapDocNum != null && (
-                                <span className="text-[11px] font-mono text-muted-foreground" title="Número do Pedido de Compra no SAP">
-                                  PC #{t.sapDocNum}
-                                </span>
-                              )}
                               {(() => {
                                 const st = t.settlementStatus;
                                 const isRunning = settling === t.id;
@@ -1226,58 +1217,68 @@ export default function PagCorp() {
                                         ? "Reprocessar baixa"
                                         : "Baixa automática";
 
-                                // Inline settlement status hint (kept visible under badge)
-                                const statusHint = settled ? (
-                                  <span
-                                    className="text-[11px] text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1"
-                                    title="Pagamento de fornecedor emitido no SAP"
-                                  >
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    {settlementLabel}
-                                  </span>
-                                ) : null;
-
-                                if (t.sapDocEntry == null) {
-                                  return statusHint;
-                                }
-
                                 return (
-                                  <>
-                                    {statusHint}
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-7 px-2 text-[11px] gap-1"
-                                          disabled={isRunning}
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 px-2 text-[11px] gap-1"
+                                        disabled={isRunning}
+                                      >
+                                        {isRunning ? (
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <CheckCircle2 className="w-3 h-3 text-success" />
+                                        )}
+                                        Integrado
+                                        <MoreHorizontal className="w-3.5 h-3.5 ml-0.5 opacity-70" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-64">
+                                      <DropdownMenuLabel className="text-xs">
+                                        Transação PagCorp
+                                      </DropdownMenuLabel>
+                                      <DropdownMenuSeparator />
+
+                                      {/* Read-only status rows */}
+                                      {t.sapDocNum != null && (
+                                        <div className="px-2 py-1.5 text-[11px] flex items-center justify-between gap-2">
+                                          <span className="text-muted-foreground">Pedido de Compra</span>
+                                          <span className="font-mono font-medium text-foreground">
+                                            PC #{t.sapDocNum}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div className="px-2 py-1.5 text-[11px] flex items-center justify-between gap-2">
+                                        <span className="text-muted-foreground">Baixa</span>
+                                        <span
+                                          className={
+                                            settled
+                                              ? "font-medium text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1"
+                                              : "font-medium text-muted-foreground inline-flex items-center gap-1"
+                                          }
+                                          title={t.settlementError || undefined}
                                         >
-                                          {isRunning ? (
-                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                          ) : (
-                                            <MoreHorizontal className="w-3.5 h-3.5" />
-                                          )}
-                                          Ações
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="w-56">
-                                        <DropdownMenuLabel className="text-xs">
-                                          Transação PagCorp
-                                        </DropdownMenuLabel>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem onClick={() => setValidateDialog({ open: true, tx: t })}>
-                                          <CheckCircle className="w-4 h-4 mr-2 text-primary" />
-                                          Validar SAP
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          onClick={() => setRelationsDialog({ open: true, tx: t })}
-                                        >
-                                          <Network className="w-4 h-4 mr-2 text-primary" />
-                                          Mapa de relações
-                                        </DropdownMenuItem>
-                                        {!settled && (
-                                          <>
-                                            <DropdownMenuSeparator />
+                                          {settled && <CheckCircle2 className="w-3 h-3" />}
+                                          {settlementLabel}
+                                        </span>
+                                      </div>
+
+                                      {t.sapDocEntry != null && (
+                                        <>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem onClick={() => setValidateDialog({ open: true, tx: t })}>
+                                            <CheckCircle className="w-4 h-4 mr-2 text-primary" />
+                                            Validar SAP
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => setRelationsDialog({ open: true, tx: t })}
+                                          >
+                                            <Network className="w-4 h-4 mr-2 text-primary" />
+                                            Mapa de relações
+                                          </DropdownMenuItem>
+                                          {!settled && (
                                             <DropdownMenuItem
                                               disabled={isRunning}
                                               onClick={() => handleAutoSettle(t)}
@@ -1286,14 +1287,16 @@ export default function PagCorp() {
                                               <Sparkles className="w-4 h-4 mr-2" />
                                               {settlementLabel}
                                             </DropdownMenuItem>
-                                          </>
-                                        )}
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </>
+                                          )}
+                                        </>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 );
                               })()}
                             </div>
+
+
 
                           ) : t.isReversed ? (
                             <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
