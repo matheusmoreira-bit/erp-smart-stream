@@ -129,6 +129,7 @@ const App = () => (
             <MobileBottomNav />
           </BrowserRouter>
           <TestCompanyBanner />
+          <DefaultPasswordWarning />
           <GlobalAiChat />
         </SapProvider>
       </TooltipProvider>
