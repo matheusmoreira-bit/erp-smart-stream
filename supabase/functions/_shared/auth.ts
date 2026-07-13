@@ -271,6 +271,32 @@ export async function requireUserOrSapSession(req: Request) {
   }
 }
 
+/**
+ * Lightweight variant of requireUserOrSapSession: accepts SAP session
+ * headers without probing SAP. Safe for endpoints that only read/write
+ * non-sensitive metadata scoped by company_db (no credential values, no
+ * PII). Avoids 401s when the SAP session has expired on the server side.
+ */
+export async function requireUserOrSapSessionHeaders(req: Request) {
+  try {
+    return await requireUser(req);
+  } catch (err) {
+    const sapSession = req.headers.get("x-sap-session")?.trim();
+    const sapUser = req.headers.get("x-sap-user")?.trim();
+    const companyDB = req.headers.get("x-company-db")?.trim();
+    if (sapSession && sapUser && companyDB) {
+      return {
+        id: `sap:${companyDB}:${sapUser}`,
+        email: sapUser,
+        companyDB,
+        userName: sapUser,
+        source: "sap_headers" as const,
+      };
+    }
+    throw err;
+  }
+}
+
 export function authErrorResponse(err: unknown, corsHeaders: Record<string, string>) {
   if (err instanceof AuthError) {
     return new Response(JSON.stringify({ error: err.message }), {
