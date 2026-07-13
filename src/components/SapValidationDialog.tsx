@@ -114,7 +114,7 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
   }, [open, pagcorpLogId]);
 
   const poCurrency = rel?.po_currency || expectedCurrency || "BRL";
-  const isForeign = poCurrency && poCurrency !== "BRL";
+  const isForeign = !!poCurrency && poCurrency !== "BRL" && poCurrency !== "R$";
   const poTotal = rel ? Number((isForeign ? rel.po_total_fc : rel.po_total) ?? 0) : null;
 
   return (
