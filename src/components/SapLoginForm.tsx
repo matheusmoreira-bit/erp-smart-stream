@@ -110,6 +110,10 @@ export function SapLoginForm() {
         ? userName.split("@")[0].trim()
         : userName.trim();
       await login(sapUser, password, companyDB, erpType as ErpType);
+      // Alerta se o usuário logou com a senha padrão em uma base de produção
+      if (needsCredentials && password === "Sap@2025" && !companyDB.toUpperCase().startsWith("TST")) {
+        try { sessionStorage.setItem("erp:default-password-warning", "1"); } catch { /* noop */ }
+      }
       toast.success(`Conectado ao ${erpInfo.label}!`);
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error ?? "");
