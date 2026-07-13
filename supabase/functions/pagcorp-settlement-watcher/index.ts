@@ -333,6 +333,15 @@ Deno.serve(async (req) => {
   // permanecem sendo o fluxo do cron (varredura de várias linhas).
   let manualLogId: string | null = null;
   let manualForceRetry = false;
+  // Sessão SAP do usuário (quando a UI dispara "Reprocessar baixa"). Usada
+  // como fallback caso as credenciais salvas em system_credentials estejam
+  // bloqueadas por SSO ("Fail to NONE-SSO login from SLD").
+  const userSapSession = req.headers.get("x-sap-session") || "";
+  const userSapRoute = req.headers.get("x-sap-route") || "";
+  const userSapCompanyDb = req.headers.get("x-company-db") || "";
+  const userSapCookie = userSapSession
+    ? `B1SESSION=${userSapSession}${userSapRoute ? `; ROUTEID=${userSapRoute}` : ""}`
+    : "";
   if (req.method === "POST") {
     try {
       const body = await req.json().catch(() => ({}));
