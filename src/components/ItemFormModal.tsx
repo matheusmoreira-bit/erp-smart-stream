@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { parseSapError } from "@/lib/sap-error";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
@@ -81,6 +82,9 @@ function BoolSelect({
 
 export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
   const { session } = useSap();
+  const { can: itemPerms } = useModuleAccess("items");
+  const canCreate = itemPerms.create;
+  const canEdit = itemPerms.edit;
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ItemInput>(defaultForm());
@@ -158,8 +162,30 @@ export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
     }
   };
 
+  const allowed = editing ? canEdit : canCreate;
+
+  if (open && !allowed) {
+    return (
+      <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Acesso negado</DialogTitle>
+            <DialogDescription>
+              Seu grupo de permissões não permite {editing ? "editar" : "cadastrar"} itens.
+              Consulte um administrador.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={onClose}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? "Editar Item" : "Novo Item"}</DialogTitle>

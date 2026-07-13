@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { parseSapError } from "@/lib/sap-error";
 import {
   type Supplier,
@@ -91,6 +92,9 @@ interface Props {
 
 export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, source = "manual" }: Props) {
   const { session } = useSap();
+  const { can: supplierPerms } = useModuleAccess("suppliers");
+  const canCreate = supplierPerms.create;
+  const canEdit = supplierPerms.edit;
   const [submitting, setSubmitting] = useState(false);
   const [loadingCode, setLoadingCode] = useState(false);
   const [cardCode, setCardCode] = useState<string>("");
@@ -313,6 +317,27 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
     }
   };
 
+  const allowed = editing ? canEdit : canCreate;
+
+  if (open && !allowed) {
+    return (
+      <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Acesso negado</DialogTitle>
+            <DialogDescription>
+              Seu grupo de permissões não permite {editing ? "editar" : "cadastrar"} fornecedores.
+              Consulte um administrador para solicitar o cadastro.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={onClose}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !submitting && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -327,6 +352,7 @@ export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, so
               : "O fornecedor será criado no SAP B1 e armazenado localmente."}
           </DialogDescription>
         </DialogHeader>
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
           <div className="md:col-span-2 grid grid-cols-3 gap-4">
