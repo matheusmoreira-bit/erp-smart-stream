@@ -143,85 +143,29 @@ function normalizeClassification(v: string | null | undefined): string {
 async function resolveSettlementAccount(
   sb: ReturnType<typeof createClient>,
   companyDb: string,
-  cardKey: string | null,
-  currency: string | null,
+  _cardKey: string | null,
+  _currency: string | null,
   eventClassification: string | null,
 ): Promise<SettlementAccount | null> {
-  const cur = (currency || "").toUpperCase() || null;
+  // Regra única: a conta de baixa é decidida exclusivamente pela
+  // classificação do evento retornada pelo PagCorp. Cartão e moeda
+  // não participam mais do resolver — a mesma conta serve para qualquer
+  // cartão daquela classificação.
+  if (!eventClassification) return null;
+
   const sel = "settlement_account_code, cost_center, project, currency, event_classification";
-
-  // 1. Match por classificação do evento (fonte primária de decisão).
-  if (eventClassification) {
-    const { data } = await sb
-      .from("pagcorp_settlement_accounts")
-      .select(sel)
-      .eq("company_db", companyDb)
-      .not("event_classification", "is", null)
-      .eq("enabled", true);
-    const target = normalizeClassification(eventClassification);
-    const match = (data as SettlementAccount[] | null)?.find(
-      (r) => normalizeClassification(r.event_classification) === target,
-    );
-    if (match) return match;
-  }
-
-  // 2. Cartão específico + moeda exata (legado).
-  if (cardKey && cur) {
-    const { data } = await sb
-      .from("pagcorp_settlement_accounts")
-      .select(sel)
-      .eq("company_db", companyDb)
-      .eq("card_identifier", cardKey)
-      .eq("currency", cur)
-      .eq("enabled", true)
-      .maybeSingle();
-    if (data) return data as SettlementAccount;
-  }
-
-  // 3. Fallback por moeda — quando não temos classificação no payload
-  //    (transações antigas persistidas antes de armazenarmos eventClassification),
-  //    aceita qualquer linha habilitada daquela moeda para a empresa.
-  if (cur) {
-    const { data } = await sb
-      .from("pagcorp_settlement_accounts")
-      .select(sel)
-      .eq("company_db", companyDb)
-      .is("card_identifier", null)
-      .eq("currency", cur)
-      .eq("enabled", true)
-      .order("event_classification", { ascending: true, nullsFirst: true })
-      .limit(1);
-    const row = (data as SettlementAccount[] | null)?.[0];
-    if (row) return row;
-  }
-
-  // 4. Cartão específico sem moeda (retrocompat).
-  if (cardKey) {
-    const { data } = await sb
-      .from("pagcorp_settlement_accounts")
-      .select(sel)
-      .eq("company_db", companyDb)
-      .eq("card_identifier", cardKey)
-      .is("currency", null)
-      .eq("enabled", true)
-      .order("event_classification", { ascending: true, nullsFirst: true })
-      .limit(1);
-    const row = (data as SettlementAccount[] | null)?.[0];
-    if (row) return row;
-  }
-
-  // 5. Fallback global — qualquer linha habilitada da empresa.
-  const { data: fb } = await sb
+  const { data } = await sb
     .from("pagcorp_settlement_accounts")
     .select(sel)
     .eq("company_db", companyDb)
-    .is("card_identifier", null)
-    .is("currency", null)
-    .eq("enabled", true)
-    .order("event_classification", { ascending: true, nullsFirst: true })
-    .limit(1);
-  const row = (fb as SettlementAccount[] | null)?.[0];
-  return row || null;
+    .not("event_classification", "is", null)
+    .eq("enabled", true);
+
+  const target = normalizeClassification(eventClassification);
+  const match = (data as SettlementAccount[] | null)?.find(
+    (r) => normalizeClassification(r.event_classification) === target,
+  );
+  return match || null;
 }
 
 async function findInvoicesForPO(
