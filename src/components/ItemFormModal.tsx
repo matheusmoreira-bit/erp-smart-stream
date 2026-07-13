@@ -82,6 +82,9 @@ function BoolSelect({
 
 export function ItemFormModal({ open, editing, onClose, onSaved }: Props) {
   const { session } = useSap();
+  const { can: itemPerms } = useModuleAccess("items");
+  const canCreate = itemPerms.create;
+  const canEdit = itemPerms.edit;
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ItemInput>(defaultForm());
