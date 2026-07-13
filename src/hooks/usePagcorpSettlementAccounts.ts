@@ -43,6 +43,7 @@ export function usePagcorpSettlementAccounts(companyDb?: string | null) {
       company_db: row.company_db,
       card_identifier: row.card_identifier ?? null,
       currency: row.currency ? row.currency.toUpperCase() : null,
+      event_classification: row.event_classification ?? null,
       settlement_account_code: row.settlement_account_code,
       cost_center: row.cost_center ?? null,
       project: row.project ?? null,
