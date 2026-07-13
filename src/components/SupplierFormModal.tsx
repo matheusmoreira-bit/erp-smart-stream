@@ -92,6 +92,9 @@ interface Props {
 
 export function SupplierFormModal({ open, onClose, onSaved, editing, prefill, source = "manual" }: Props) {
   const { session } = useSap();
+  const { can: supplierPerms } = useModuleAccess("suppliers");
+  const canCreate = supplierPerms.create;
+  const canEdit = supplierPerms.edit;
   const [submitting, setSubmitting] = useState(false);
   const [loadingCode, setLoadingCode] = useState(false);
   const [cardCode, setCardCode] = useState<string>("");
