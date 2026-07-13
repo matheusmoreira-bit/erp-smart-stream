@@ -196,6 +196,32 @@ export async function requireAdminOrSapSession(req: Request) {
 }
 
 /**
+ * Lightweight variant: accepts a caller that declared SAP session headers
+ * without probing SAP. Only safe for endpoints that return non-sensitive
+ * metadata (no credential values, no PII). Falls back to Cloud admin auth.
+ */
+export async function requireAdminOrSapSessionHeaders(req: Request) {
+  try {
+    const user = await requireAdmin(req);
+    return { ...user, source: "cloud_admin" as const };
+  } catch (err) {
+    const sapSession = req.headers.get("x-sap-session")?.trim();
+    const sapUser = req.headers.get("x-sap-user")?.trim();
+    const companyDB = req.headers.get("x-company-db")?.trim();
+    if (sapSession && sapUser && companyDB) {
+      return {
+        id: `sap:${companyDB}:${sapUser}`,
+        email: sapUser,
+        companyDB,
+        userName: sapUser,
+        source: "sap_headers" as const,
+      };
+    }
+    throw err;
+  }
+}
+
+/**
  * Validate that the caller has a valid SAP B1 session (any user). Used by
  * ERP-facing edge functions where the user may not have a Lovable Cloud
  * account at all (e.g. PagCorp listing).
