@@ -23,6 +23,7 @@ const BATCH_SIZE = 200;
 
 interface LogRow {
   id: string;
+  pagcorp_expense_id: number | null;
   company_db: string | null;
   sap_doc_entry: number | null;
   pagcorp_data: Record<string, unknown> | null;
@@ -193,14 +194,45 @@ async function resolveOne(
         .map((p: { doc_entry: number }) => p.doc_entry);
     }
 
-    // 4) Comparação de valor com o PagCorp (quando possível)
-    let amountMatches: boolean | null = null;
-    const expected = Number(
-      (log.pagcorp_data as { amount?: number; totalAmount?: number; total?: number } | null)?.amount ??
-      (log.pagcorp_data as { totalAmount?: number } | null)?.totalAmount ??
-      (log.pagcorp_data as { total?: number } | null)?.total ??
+    const amountFromPagCorpData = (data: Record<string, unknown> | null | undefined): number => Number(
+      (data as { amount?: number; totalAmount?: number; total?: number } | null)?.amount ??
+      (data as { totalAmount?: number } | null)?.totalAmount ??
+      (data as { total?: number } | null)?.total ??
       NaN,
     );
+
+    const consolidatedIds = Array.from(new Set(
+      ((log.pagcorp_data as { consolidatedWith?: unknown[] } | null)?.consolidatedWith || [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id)),
+    ));
+    if (log.pagcorp_expense_id != null && consolidatedIds.length > 0 && !consolidatedIds.includes(Number(log.pagcorp_expense_id))) {
+      consolidatedIds.push(Number(log.pagcorp_expense_id));
+    }
+
+    let expected = amountFromPagCorpData(log.pagcorp_data);
+    if (consolidatedIds.length > 1) {
+      const { data: consolidatedLogs, error: consolidatedErr } = await sb
+        .from("pagcorp_integration_log")
+        .select("pagcorp_expense_id, pagcorp_data")
+        .eq("company_db", log.company_db)
+        .eq("sap_doc_entry", log.sap_doc_entry)
+        .in("pagcorp_expense_id", consolidatedIds);
+      if (consolidatedErr) throw new Error(`consolidação: ${consolidatedErr.message}`);
+
+      const amountsByExpense = new Map<number, number>();
+      for (const row of (consolidatedLogs || []) as Array<{ pagcorp_expense_id: number | null; pagcorp_data: Record<string, unknown> | null }>) {
+        if (row.pagcorp_expense_id == null) continue;
+        const amount = amountFromPagCorpData(row.pagcorp_data);
+        if (Number.isFinite(amount)) amountsByExpense.set(Number(row.pagcorp_expense_id), amount);
+      }
+      if (amountsByExpense.size > 1) {
+        expected = Array.from(amountsByExpense.values()).reduce((sum, amount) => sum + amount, 0);
+      }
+    }
+
+    // 4) Comparação de valor com o PagCorp (quando possível)
+    let amountMatches: boolean | null = null;
     if (po && Number.isFinite(expected)) {
       const cur = (po as { doc_currency?: string | null }).doc_currency || "BRL";
       const isLocal = !cur || cur === "BRL" || cur === "R$";
@@ -299,7 +331,7 @@ Deno.serve(async (req) => {
     if (body.logId) {
       const { data, error } = await sb
         .from("pagcorp_integration_log")
-        .select("id, company_db, sap_doc_entry, pagcorp_data")
+          .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
         .eq("id", body.logId)
         .limit(1);
       if (error) throw new Error(error.message);
@@ -314,7 +346,7 @@ Deno.serve(async (req) => {
       await requireUserOrSapSession(req);
       const { data, error } = await sb
         .from("pagcorp_integration_log")
-        .select("id, company_db, sap_doc_entry, pagcorp_data")
+        .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
         .eq("company_db", body.companyDb)
         .not("sap_doc_entry", "is", null)
         .limit(BATCH_SIZE);
@@ -333,7 +365,7 @@ Deno.serve(async (req) => {
       const fresh = new Set((recent || []).map((r: { pagcorp_log_id: string }) => r.pagcorp_log_id));
       const { data, error } = await sb
         .from("pagcorp_integration_log")
-        .select("id, company_db, sap_doc_entry, pagcorp_data")
+        .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
         .not("sap_doc_entry", "is", null)
         .order("updated_at", { ascending: false })
         .limit(BATCH_SIZE * 3);
