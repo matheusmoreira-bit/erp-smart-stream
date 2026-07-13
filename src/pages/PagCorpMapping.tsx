@@ -428,7 +428,12 @@ export default function PagCorpMapping() {
             </TabsList>
 
             <TabsContent value="settlement" className="space-y-4">
-              <PagcorpSettlementAccountsTab companyDb={companyDB} />
+              <PagcorpSettlementAccountsTab
+                companyDb={companyDB}
+                accountCache={accountCache}
+                costCenterCache={costCenterCache}
+                projectCache={projectCache}
+              />
             </TabsContent>
 
 
