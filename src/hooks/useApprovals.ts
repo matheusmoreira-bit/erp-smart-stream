@@ -544,6 +544,12 @@ const SERVICE_LAYER_ONLY_DBS = new Set<string>([
   "tst_cactus_providers",
 ]);
 
+// Mapa: companyDB (Service Layer) -> schema HANA real onde a view VW_APROVACOES_DETALHADAS
+// está publicada. Usado quando o nome do schema no HANA difere do companyDB (ex.: Open Gaming).
+const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
+  open_gaming_sa: "OPENGAMING",
+};
+
 async function readApprovalsCache(session: SapSession): Promise<{ docs: ApprovalDoc[]; updatedAt: string } | null> {
   const data = await sapReadApprovalsCache<ApprovalDoc[]>(session);
   if (!data.data || !data.updatedAt) return null;
