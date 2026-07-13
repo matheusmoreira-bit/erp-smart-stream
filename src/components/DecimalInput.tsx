@@ -24,8 +24,11 @@ export const DecimalInput = forwardRef<HTMLInputElement, DecimalInputProps>(
     );
 
     // Sincroniza quando o valor numérico externo muda (ex.: reset de formulário,
-    // cálculo automático) e não corresponde ao texto atual.
+    // cálculo automático) e não corresponde ao texto atual. Enquanto o usuário
+    // digita um decimal incompleto ("0," / "1."), preservamos o texto bruto para
+    // não deixar Safari/React normalizar o campo para "0".
     useEffect(() => {
+      if (isIncompleteDecimal(text)) return;
       const parsed = parseDecimal(text);
       if (parsed !== value) {
         setText(
@@ -59,11 +62,14 @@ export const DecimalInput = forwardRef<HTMLInputElement, DecimalInputProps>(
         normalized = normalized.slice(0, sepIdx + 1 + maxDecimals);
       }
       setText(normalized);
-      onChange(parseDecimal(normalized));
+      if (!isIncompleteDecimal(normalized)) {
+        onChange(parseDecimal(normalized));
+      }
     };
 
     return (
       <Input
+        {...rest}
         ref={ref}
         type="text"
         inputMode="decimal"
@@ -79,12 +85,15 @@ export const DecimalInput = forwardRef<HTMLInputElement, DecimalInputProps>(
           }
           onBlur?.(e);
         }}
-        {...rest}
       />
     );
   },
 );
 DecimalInput.displayName = "DecimalInput";
+
+function isIncompleteDecimal(s: string): boolean {
+  return s === "-" || s === "," || s === "." || s === "-," || s === "-." || /[,.]$/.test(s);
+}
 
 function parseDecimal(s: string): number {
   if (!s) return 0;
