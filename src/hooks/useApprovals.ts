@@ -580,9 +580,6 @@ export function useApprovals() {
     // Fonte padrão: webhook n8n (middleware HANA). Passamos DB/View/SessionId
     // via querystring para que o n8n consulte a VW_APROVACOES_DETALHADAS do
     // schema correto (ANA Gaming, Cactus, etc).
-    const url = new URL(PENDING_APPROVALS_WEBHOOK_URL);
-    url.searchParams.set("SessionId", session.sessionId || "");
-    url.searchParams.set("DB", companyDb);
     const hanaSchema = HANA_SCHEMA_OVERRIDES[companyDb] || companyDb;
     const url = new URL(PENDING_APPROVALS_WEBHOOK_URL);
     url.searchParams.set("SessionId", session.sessionId || "");
