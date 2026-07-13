@@ -713,7 +713,9 @@ export default function PagCorp() {
           cardName: item.cardName || item.card_name || "",
           cardLastDigits: item.cardLastDigits || item.lastDigits || "",
           hasAccountability: (item.receipts || []).length > 0,
-          accountabilityApproved: (item.receipts || []).some((r: any) => r.statusId === 3),
+          accountabilityApproved:
+            Number((item as { statusId?: unknown }).statusId) === 3 ||
+            (item.receipts || []).some((r: any) => Number(r.statusId) === 3),
           attachments: item.attachments || [],
           receipts: item.receipts || [],
           integrated: false,
