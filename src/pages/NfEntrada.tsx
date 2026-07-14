@@ -214,9 +214,13 @@ export default function NfEntrada() {
               ))}
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground ml-auto">
-            {filtered.length} de {items.length}
-          </span>
+          <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500/60" />
+              Com Pedido de Compra vinculado
+            </span>
+            <span>{filtered.length} de {items.length}</span>
+          </div>
         </div>
 
         {error && (
@@ -251,10 +255,14 @@ export default function NfEntrada() {
                 const s = STATUS_LABELS[it.status];
                 const isOpen = expandedId === it.id;
                 const toggle = () => setExpandedId(isOpen ? null : it.id);
+                const hasPoLink = !!it.sap_matched_po_doc_entry;
+                const rowClass = hasPoLink
+                  ? "cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border-l-4 border-l-emerald-500"
+                  : "cursor-pointer hover:bg-muted/40 border-l-4 border-l-transparent";
                 return (
                   <Fragment key={it.id}>
                     <TableRow
-                      className="cursor-pointer hover:bg-muted/40"
+                      className={rowClass}
                       onClick={toggle}
                       data-state={isOpen ? "selected" : undefined}
                     >
@@ -264,7 +272,17 @@ export default function NfEntrada() {
                         />
                       </TableCell>
                       <TableCell className="font-mono text-xs">
-                        <div>{it.numero_nf || "—"}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span>{it.numero_nf || "—"}</span>
+                          {hasPoLink && (
+                            <span
+                              title={`Vinculada ao ${it.sap_matched_po_is_draft ? "esboço" : "PC"} ${it.sap_matched_po_doc_entry} do SAP`}
+                              className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 text-[9px] font-sans font-medium"
+                            >
+                              <Link2 className="w-2.5 h-2.5" /> PC
+                            </span>
+                          )}
+                        </div>
                         {it.serie && <div className="text-[10px] text-muted-foreground">série {it.serie}</div>}
                       </TableCell>
                       <TableCell className="max-w-[260px]">
@@ -278,31 +296,48 @@ export default function NfEntrada() {
                       <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">
-                          <Button variant="ghost" size="icon" title="Ver XML"
+                          <Button variant="ghost" size="icon"
+                            title="Abrir XML da NF em nova aba"
+                            aria-label="Abrir XML da NF em nova aba"
                             disabled={busyId === it.id} onClick={() => openFile(it.id, "xml")}>
                             <FileCode2 className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="Ver PDF"
+                          <Button variant="ghost" size="icon"
+                            title="Abrir DANFE (PDF) em nova aba"
+                            aria-label="Abrir DANFE (PDF) em nova aba"
                             disabled={busyId === it.id} onClick={() => openFile(it.id, "pdf")}>
                             <FileText className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="Histórico" onClick={() => setDetail(it)}>
+                          <Button variant="ghost" size="icon"
+                            title="Ver histórico e linha do tempo desta NF"
+                            aria-label="Ver histórico desta NF"
+                            onClick={() => setDetail(it)}>
                             <History className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="Refazer vínculo SAP (sem duplicar)"
+                          <Button variant="ghost" size="icon"
+                            title={hasPoLink
+                              ? "Refazer o vínculo com o Pedido de Compra no SAP (não duplica)"
+                              : "Buscar Pedido de Compra correspondente no SAP e vincular"}
+                            aria-label="Vincular NF ao Pedido de Compra no SAP"
                             disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
                             onClick={() => handleRematch(it.id)}>
                             <Link2 className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="Reprocessar"
+                          <Button variant="ghost" size="icon"
+                            title="Reprocessar integração da NF com o SAP"
+                            aria-label="Reprocessar integração com o SAP"
                             disabled={busyId === it.id} onClick={() => handleReprocess(it.id)}>
                             <RotateCw className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="Editar"
+                          <Button variant="ghost" size="icon"
+                            title="Editar dados da NF (fornecedor, valor, empresa SAP)"
+                            aria-label="Editar dados da NF"
                             onClick={() => setEditItem(it)}>
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="Cancelar"
+                          <Button variant="ghost" size="icon"
+                            title="Cancelar fluxo desta NF (não desfaz documentos já criados no SAP)"
+                            aria-label="Cancelar fluxo desta NF"
                             disabled={busyId === it.id || it.status === "cancelled" || it.status === "completed"}
                             onClick={() => handleCancel(it.id)}>
                             <XCircle className="w-4 h-4" />
