@@ -217,18 +217,37 @@ Deno.serve(async (req) => {
   }
 
   const startedAt = Date.now();
-  const results: Array<{ companyDb: string; synced: number; skipped?: string; error?: string }> = [];
+  const results: Array<{ companyDb: string; synced: number; skipped?: string; error?: string; mode?: string }> = [];
+
+  // Parse opções via query string ou body
+  let backfill = false;
+  let fromDate: string | undefined;
+  let onlyCompany: string | undefined;
+  try {
+    const url = new URL(req.url);
+    if (url.searchParams.get("backfill") === "1" || url.searchParams.get("mode") === "backfill") backfill = true;
+    fromDate = url.searchParams.get("from_date") || undefined;
+    onlyCompany = url.searchParams.get("company_db") || undefined;
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      if (body?.backfill) backfill = true;
+      if (body?.from_date) fromDate = body.from_date;
+      if (body?.company_db) onlyCompany = body.company_db;
+    }
+  } catch { /* ignore */ }
+
   try {
     const { data: creds, error } = await sb
       .from("system_credentials")
       .select("company_db")
       .eq("system_name", "sap");
     if (error) throw new Error(error.message);
-    const companyDbs = Array.from(new Set((creds || []).map((c: { company_db: string }) => c.company_db).filter(Boolean)));
+    let companyDbs = Array.from(new Set((creds || []).map((c: { company_db: string }) => c.company_db).filter(Boolean)));
+    if (onlyCompany) companyDbs = companyDbs.filter((c) => c === onlyCompany);
 
     for (const companyDb of companyDbs) {
       if (Date.now() - startedAt > TIME_BUDGET_MS) { results.push({ companyDb, synced: 0, skipped: "time_budget_exceeded" }); continue; }
-      try { results.push(await syncCompany(sb, companyDb)); }
+      try { results.push(await syncCompany(sb, companyDb, { backfill, fromDate, onlyCompany })); }
       catch (e) { results.push({ companyDb, synced: 0, error: (e as Error).message }); }
     }
 
