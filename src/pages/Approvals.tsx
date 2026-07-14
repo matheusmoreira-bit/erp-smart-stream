@@ -238,7 +238,7 @@ function ApprovalCard({
         )}
         {primaryProject && (
           <div className="flex items-center gap-2 text-muted-foreground min-w-0">
-            <Briefcase className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+            <Briefcase className="w-3.5 h-3.5 text-primary/70 shrink-0" />
             <span className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">Projeto</span>
             {primaryProject.multi && (
               <span className="text-[10px] font-semibold uppercase tracking-wider bg-sky-500/15 text-sky-600 border border-sky-500/30 rounded-full px-1.5 py-0.5 shrink-0">
