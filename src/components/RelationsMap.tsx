@@ -28,6 +28,7 @@ import {
 } from "@/hooks/useRelationsMapDerived";
 import { Loader2 } from "lucide-react";
 import { RelationsMapFlow } from "./RelationsMapFlow";
+import { isPendingApproval } from "@/lib/approval-authz";
 
 type LogDecision =
   | "created"
