@@ -160,84 +160,108 @@ const DocCardNode = memo(function DocCardNode({ data }: NodeProps) {
   const t = TONE_STYLES[d.tone];
   const badge = stateBadge(d.state);
   const isCurrent = d.state === "current";
+  const statusTone = TONE_STYLES[d.statusTone ?? d.tone];
   return (
-    <div
-      className={[
-        "rounded-xl border-2 shadow-sm bg-background/60 backdrop-blur-sm transition-all",
-        t.border,
-        t.bg,
-        "hover:shadow-lg hover:-translate-y-0.5",
-        isCurrent ? "ring-2 ring-cactus-amber/50 ring-offset-1 ring-offset-background" : "",
-        d.state === "pending" ? "opacity-70" : "",
-      ].join(" ")}
-      style={{ width: CARD_WIDTH }}
-    >
-      {d.hasTarget !== false && (
-        <Handle type="target" position={Position.Left} className="!bg-transparent !border-0 !w-2 !h-2" />
-      )}
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className={[
+              "rounded-xl border-2 shadow-sm bg-background/60 backdrop-blur-sm transition-all",
+              t.border,
+              t.bg,
+              "hover:shadow-lg hover:-translate-y-0.5",
+              isCurrent ? "ring-2 ring-cactus-amber/50 ring-offset-1 ring-offset-background" : "",
+              d.state === "pending" ? "opacity-70" : "",
+            ].join(" ")}
+            style={{ width: CARD_WIDTH }}
+          >
+            {d.hasTarget !== false && (
+              <Handle type="target" position={Position.Left} className="!bg-transparent !border-0 !w-2 !h-2" />
+            )}
 
-      <div className="px-3 py-2.5">
-        <div className="flex items-start gap-2">
-          <div className={`shrink-0 mt-0.5 ${t.accent}`}>
-            <Icon className="w-4 h-4" />
+            <div className="px-3 py-2.5">
+              <div className="flex items-start gap-2">
+                <div className={`shrink-0 mt-0.5 ${t.accent}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-tight">
+                    {d.kind}
+                  </div>
+                  <div className="text-sm font-semibold leading-tight truncate">{d.identifier}</div>
+                </div>
+                {badge && (
+                  <badge.icon className={`w-4 h-4 shrink-0 ${badge.cls}`} />
+                )}
+              </div>
+
+              {(d.amount !== undefined && d.amount !== null) && (
+                <div className="mt-1.5 font-mono text-sm font-semibold">
+                  {formatCurrency(d.amount, d.currency)}
+                </div>
+              )}
+
+              {d.extra && (
+                <div className="mt-0.5 text-[11px] text-muted-foreground truncate">{d.extra}</div>
+              )}
+
+              <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                <div className="min-w-0 truncate">
+                  {d.who ? d.who : ""}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {!!d.attachmentsCount && d.attachmentsCount > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-foreground/70">
+                      <Paperclip className="w-3 h-3" />
+                      {d.attachmentsCount}
+                    </span>
+                  )}
+                  {d.when && <span className="font-mono">{formatDateShort(d.when)}</span>}
+                </div>
+              </div>
+
+              {d.status && (
+                <div className="mt-1.5">
+                  <span
+                    className={[
+                      "inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded",
+                      "border",
+                      statusTone.border,
+                      statusTone.bg,
+                      statusTone.accent,
+                    ].join(" ")}
+                  >
+                    {d.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {d.hasSource !== false && (
+              <Handle type="source" position={Position.Right} className="!bg-transparent !border-0 !w-2 !h-2" />
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-tight">
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs">
+          <div className="space-y-1 text-xs">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
               {d.kind}
             </div>
-            <div className="text-sm font-semibold leading-tight truncate">{d.identifier}</div>
-          </div>
-          {badge && (
-            <badge.icon className={`w-4 h-4 shrink-0 ${badge.cls}`} />
-          )}
-        </div>
-
-        {(d.amount !== undefined && d.amount !== null) && (
-          <div className="mt-1.5 font-mono text-sm font-semibold">
-            {formatCurrency(d.amount, d.currency)}
-          </div>
-        )}
-
-        {d.extra && (
-          <div className="mt-0.5 text-[11px] text-muted-foreground truncate">{d.extra}</div>
-        )}
-
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
-          <div className="min-w-0 truncate">
-            {d.who ? d.who : ""}
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {!!d.attachmentsCount && d.attachmentsCount > 0 && (
-              <span className="inline-flex items-center gap-0.5 text-foreground/70">
-                <Paperclip className="w-3 h-3" />
-                {d.attachmentsCount}
-              </span>
+            <div className="font-semibold text-sm">{d.identifier}</div>
+            {(d.amount !== undefined && d.amount !== null) && (
+              <div className="font-mono">{formatCurrency(d.amount, d.currency)}</div>
             )}
-            {d.when && <span className="font-mono">{formatDateShort(d.when)}</span>}
+            {d.status && (
+              <div>
+                <span className="text-muted-foreground">Status: </span>
+                <span className="font-medium">{d.status.replace(/_/g, " ")}</span>
+              </div>
+            )}
           </div>
-        </div>
-
-        {d.status && (
-          <div className="mt-1.5">
-            <span
-              className={[
-                "inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded",
-                "border",
-                TONE_STYLES[d.statusTone ?? d.tone].border,
-                TONE_STYLES[d.statusTone ?? d.tone].bg,
-                TONE_STYLES[d.statusTone ?? d.tone].accent,
-              ].join(" ")}
-            >
-              {d.status.replace(/_/g, " ")}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {d.hasSource !== false && (
-        <Handle type="source" position={Position.Right} className="!bg-transparent !border-0 !w-2 !h-2" />
-      )}
-    </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 });
 
