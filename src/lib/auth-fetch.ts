@@ -100,6 +100,7 @@ function readSapHeaders(): Record<string, string> {
       "x-sap-route": s.routeId || "",
       "x-sap-user": s.userName,
       "x-company-db": s.companyDB,
+      ...(s.sapAuthToken ? { "x-sap-auth-token": s.sapAuthToken } : {}),
     };
   } catch {
     return {};
