@@ -1077,7 +1077,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
 
 
   const approveExpense = useCallback(
-    async (expenseId: string, remarks?: string, idempotencyKey?: string) => {
+    async (expenseId: string, remarks?: string, idempotencyKey?: string, opts?: { skipRefresh?: boolean }) => {
       const actor = session?.userName || "";
 
       // Server-side authorization: the edge function verifies that the caller
@@ -1104,12 +1104,15 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       const finalized: boolean = !!payload.finalized;
       const nextApproverName: string | null = payload.nextApproverName || null;
       const exp3 = payload.expense || {};
+      const refreshIfNeeded = async () => {
+        if (!opts?.skipRefresh) await fetchExpenses();
+      };
 
       if (!finalized) {
         // Notify next approver ASAP (unchanged UX) — skip on replay to
         // avoid double-notifying the next approver.
         if (!replayed && nextApproverName && nextApproverName !== "Administrador") {
-          await createNotification({
+          void createNotification({
             user_identifier: nextApproverName,
             title: "Nova aprovação pendente",
             body: `${exp3.requester_name || "Solicitante"} · ${exp3.supplier_name || ""} (${exp3.currency || "BRL"} ${Number(exp3.total_amount || 0).toFixed(2)}) aguarda sua aprovação (nível ${payload.currentLevel || ""}).`,
@@ -1117,9 +1120,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             company_db: exp3.company_db || undefined,
             link: `/approvals`,
             metadata: { expense_id: expenseId, level: payload.currentLevel },
-          });
+          }).catch(() => {});
         }
-        await fetchExpenses();
+        await refreshIfNeeded();
         return { replayed };
       }
 
@@ -1127,7 +1130,8 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // Em caso de replay (retry idempotente), pulamos a notificação para
       // não duplicá-la, mas ainda garantimos o refresh da lista.
       if (!replayed) {
-        try {
+        void (async () => {
+          try {
           const reqId = exp3.requester_email || exp3.requester_name;
           if (reqId) {
             await createNotification({
@@ -1140,9 +1144,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
               metadata: { expense_id: expenseId },
             });
           }
-        } catch { /* silent */ }
+          } catch { /* silent */ }
 
-        if (session?.erpType === "sap") {
+          if (session?.erpType === "sap") {
           // Defesa contra race: mesmo que o servidor tenha respondido
           // finalized=true, revalidamos o status ANTES de invocar o SAP.
           // Se ainda não estiver "aprovado" (propagação/leitura em réplica),
@@ -1172,8 +1176,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             await logExpenseDecision(expenseId, "integration_failed", {
               remarks: "Aprovação registrada, mas status não propagou para 'aprovado' a tempo — integração SAP não disparada automaticamente.",
             });
-            await fetchExpenses();
-            return { replayed };
+            return;
           }
 
           // Se o documento veio do ERP (origem ERP OU já existe no SAP com
@@ -1187,8 +1190,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
                 ? "Documento já existente no ERP — nenhum novo pedido de compra criado."
                 : "Documento originado no ERP — apenas a decisão de aprovação foi registrada.",
             });
-            await fetchExpenses();
-            return { replayed };
+            return;
           }
 
 
@@ -1213,10 +1215,11 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             // NÃO relançamos: aprovação está registrada e o documento
             // seguirá para reintegração assíncrona / manual.
           }
-        }
+          }
+        })().catch((e) => console.warn("[approval] Pós-aprovação em background falhou:", e));
       }
 
-      await fetchExpenses();
+      await refreshIfNeeded();
       return { replayed };
     },
     [fetchExpenses, session]
@@ -1252,7 +1255,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
   );
 
   const rejectExpense = useCallback(
-    async (expenseId: string, remarks?: string, idempotencyKey?: string) => {
+    async (expenseId: string, remarks?: string, idempotencyKey?: string, opts?: { skipRefresh?: boolean }) => {
       // Same server-side authorization as approveExpense — never flip the
       // status directly from the client.
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -1269,7 +1272,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         const base = payload?.error || `Falha ao rejeitar (HTTP ${resp.status})`;
         throw new Error(`${base}${stage}${rid}`);
       }
-      await fetchExpenses();
+      if (!opts?.skipRefresh) await fetchExpenses();
       return { replayed: !!payload.replayed };
     },
     [fetchExpenses, session]
