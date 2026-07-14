@@ -518,7 +518,7 @@ async function fetchApprovalsViaServiceLayer(
       approverEmail: approver?.eMail || "",
       currentStage: stageName !== "—" ? stageName : templateName,
       status: "pending",
-      docDate: r.CreationDate || draft.DocDate || "",
+      docDate: r.CreationDate || "",
       dueDate: draft.DocDueDate || "",
       remarks: r.RemarksFromOriginator || draft.Comments || "",
       approvalModel: templateName !== "—" ? templateName : "",
