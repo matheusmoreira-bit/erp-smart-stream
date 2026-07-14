@@ -5,7 +5,7 @@ graph TB
     end
 
     subgraph Lovable["Lovable Cloud"]
-        AUTH[Supabase Auth<br/>JWT + RBAC]
+        AUTH[Auth (JWT)<br/>RBAC user_roles]
         DB[(Postgres<br/>RLS + user_roles)]
         STG[Storage Buckets<br/>nf-entrada / expense / audit]
         EDGE[Edge Functions Deno<br/>~68 funções]
