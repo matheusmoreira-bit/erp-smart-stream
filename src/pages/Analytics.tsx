@@ -88,6 +88,11 @@ export default function AnalyticsPage() {
                 <span className="sm:hidden">Pagamentos</span>
               </TabsTrigger>
             )}
+            <TabsTrigger value="roi" className="gap-1.5 shrink-0 snap-start">
+              <TrendingUp className="w-4 h-4" />
+              <span className="hidden sm:inline">ROI ERP Flow vs SAP</span>
+              <span className="sm:hidden">ROI</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="fluxo" className="mt-6">
@@ -104,6 +109,12 @@ export default function AnalyticsPage() {
               fallbackMessage="Alguns registros vieram com dados incompletos. Tente atualizar ou selecionar outro período."
             >
               <PaymentAnalysis />
+            </ErrorBoundary>
+          </TabsContent>
+
+          <TabsContent value="roi" className="mt-6">
+            <ErrorBoundary fallbackTitle="Erro ao carregar ROI">
+              <RoiAnalysis mode="company" />
             </ErrorBoundary>
           </TabsContent>
         </Tabs>
