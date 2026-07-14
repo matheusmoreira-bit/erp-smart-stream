@@ -89,18 +89,20 @@ export async function publicFunctionFetch(
  * when there's no Lovable Cloud session. Injects SAP session headers when
  * available so the server can validate via SAP Service Layer.
  */
-function readSapHeaders(): Record<string, string> {
+function readSapHeaders(path?: string): Record<string, string> {
   try {
     const raw = sessionStorage.getItem("erp_session_v1");
     if (!raw) return {};
     const s = JSON.parse(raw);
     if (s?.erpType !== "sap" || !s.sessionId || !s.userName || !s.companyDB) return {};
+    const functionName = String(path || "").split("/").filter(Boolean).pop() || "";
+    const includeSignedToken = functionName === "expense-approval-action";
     return {
       "x-sap-session": s.sessionId,
       "x-sap-route": s.routeId || "",
       "x-sap-user": s.userName,
       "x-company-db": s.companyDB,
-      ...(s.sapAuthToken ? { "x-sap-auth-token": s.sapAuthToken } : {}),
+      ...(includeSignedToken && s.sapAuthToken ? { "x-sap-auth-token": s.sapAuthToken } : {}),
     };
   } catch {
     return {};
@@ -122,7 +124,7 @@ export async function sapFunctionFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const sapHeaders = readSapHeaders();
+  const sapHeaders = readSapHeaders(path);
   const hasSapSession = !!sapHeaders["x-sap-session"];
   const erpType = getCurrentErpType();
   // Only gate on SAP session when the active ERP is SAP. For other ERPs
