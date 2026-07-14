@@ -421,7 +421,8 @@ export default function IntegrationsMonitor() {
                   <TableHead>Status</TableHead>
                   <TableHead>Estágios SAP</TableHead>
                   <TableHead>SAP Doc</TableHead>
-                  <TableHead className="w-[160px]">Última tentativa</TableHead>
+                  <TableHead className="w-[150px]">Integrado em</TableHead>
+                  <TableHead className="w-[150px]">Último polling</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
