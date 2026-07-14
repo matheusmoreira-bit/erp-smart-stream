@@ -125,5 +125,5 @@ export function useCredentials() {
     [credentialsFetch]
   );
 
-  return { credentials, isLoading, error, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials, fetchCredentialValues };
+  return { credentials, isLoading, error, lastFetchOk, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials, fetchCredentialValues };
 }
