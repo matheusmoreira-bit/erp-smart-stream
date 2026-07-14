@@ -383,15 +383,12 @@ Deno.serve(async (req) => {
       stageLog("auth_sap", "warn", { requestId, phase: "is_sap_user_admin", error: (e as Error).message });
     }
     if (!isSuperUser && sapValidated.userName.toLowerCase() === "manager") isSuperUser = true;
-    if (!isSuperUser) {
-      isSuperUser = await isSapSuperuser(
-        admin, sapValidated.companyDB, sapSessionHeader, sapRouteHeader, sapValidated.userName,
-      );
-    }
+    // NOTE: expensive SAP `Users` fetch is deferred — see lazy check below.
     stageLog("auth_sap", "info", {
       requestId, sapUser: sapValidated.userName, companyDB: sapValidated.companyDB, isSuperUser,
     });
   }
+
 
   if (!callerIdentity && !isCloudAdmin) {
     stageLog("auth_none", "warn", { requestId });
@@ -466,7 +463,6 @@ Deno.serve(async (req) => {
   const overrideApprover = ((exp as any).current_approver as string | null) || null;
   const overrideIsEmail = !!overrideApprover && overrideApprover.includes("@");
 
-  const isOverride = isCloudAdmin || isSuperUser;
   // Casa contra QUALQUER linha do nível atual (paralelo). Se houver override
   // (delegação), o nome/email do override toma precedência.
   const isMatch = !!callerIdentity && (
@@ -480,6 +476,21 @@ Deno.serve(async (req) => {
           isDesignatedApprover(callerIdentity, row.approver_name, row.approver_email),
         )
   );
+
+  // Lazy SAP superuser check — só faz a chamada cara ao SAP quando o
+  // caller NÃO é o aprovador designado e ainda não sabemos que é admin.
+  // Isso economiza ~5s em cada aprovação do fluxo normal.
+  if (!isCloudAdmin && !isSuperUser && !isMatch && sapValidated) {
+    isSuperUser = await isSapSuperuser(
+      admin, sapValidated.companyDB, sapSessionHeader, sapRouteHeader, sapValidated.userName,
+    );
+    stageLog("auth_sap", "info", {
+      requestId, phase: "lazy_superuser_check", isSuperUser,
+    });
+  }
+
+  const isOverride = isCloudAdmin || isSuperUser;
+
 
   // Compat: para os blocos que rodam depois (logs, substitutos), continuamos
   // expondo um "designatedName/Email" — usamos a primeira linha do nível.
