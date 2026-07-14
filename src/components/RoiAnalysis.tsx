@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { TemporalAnalysis } from "@/components/TemporalAnalysis";
+import { DailyTimeSpentChart } from "@/components/DailyTimeSpentChart";
 
 interface Props {
   mode: "company" | "consolidated";
