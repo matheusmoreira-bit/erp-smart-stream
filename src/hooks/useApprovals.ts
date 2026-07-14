@@ -673,6 +673,20 @@ export function useApprovals() {
     return () => clearInterval(id);
   }, [session, fetchApprovals]);
 
+  // Optimistic removal — retira o documento da lista local e reescreve o
+  // cache persistente sem esperar o SAP replicar. Reduz drasticamente o
+  // tempo percebido após aprovar/rejeitar.
+  const removeLocal = useCallback((approvalRequestId: number) => {
+    setApprovals((prev) => {
+      const next = prev.filter((d) => d.approvalRequestId !== approvalRequestId);
+      if (next.length !== prev.length && session && session.erpType === "sap") {
+        writeApprovalsCache(session as SapSession, next).catch(() => {});
+        setLastUpdatedAt(new Date().toISOString());
+      }
+      return next;
+    });
+  }, [session]);
+
   return {
     approvals,
     isLoading,
@@ -681,5 +695,6 @@ export function useApprovals() {
     lastUpdatedAt,
     refresh: () => fetchApprovals({ force: true }),
     refreshCache: () => fetchApprovals({ force: true }),
+    removeLocal,
   };
 }
