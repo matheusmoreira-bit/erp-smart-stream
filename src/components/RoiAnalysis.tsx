@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { TemporalAnalysis } from "@/components/TemporalAnalysis";
+import { DailyTimeSpentChart } from "@/components/DailyTimeSpentChart";
 
 interface Props {
   mode: "company" | "consolidated";
@@ -289,6 +290,14 @@ export function RoiAnalysis({ mode }: Props) {
               </div>
             </div>
           </div>
+
+          {/* Tempo gasto no lançamento por dia (desde 01/06/2025) */}
+          <DailyTimeSpentChart
+            companyDb={mode === "company" ? companyDb : undefined}
+            consolidated={mode === "consolidated"}
+            tempoLancarFlowMin={activeParams?.tempo_lancar_flow_min ?? 3}
+            tempoLancarSapMin={activeParams?.tempo_lancar_sap_min ?? 15}
+          />
 
           {/* Análise Temporal — SAP nativo vs ERP Flow + ciclo do documento */}
           <TemporalAnalysis
