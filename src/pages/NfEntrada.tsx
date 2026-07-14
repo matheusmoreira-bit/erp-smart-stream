@@ -302,8 +302,7 @@ export default function NfEntrada() {
                       <TableCell className="text-xs">{formatDate(it.data_emissao)}</TableCell>
                       <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1 justify-end">
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+
                         <div className="flex justify-end">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
