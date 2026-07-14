@@ -1181,6 +1181,66 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_trail_archive: {
+        Row: {
+          actor_email: string | null
+          actor_id: string | null
+          actor_role: string | null
+          app_context: Json | null
+          archived_at: string
+          changed_cols: string[] | null
+          id: number
+          new_data: Json | null
+          old_data: Json | null
+          op: string
+          prev_hash: string | null
+          row_hash: string | null
+          row_pk: Json | null
+          schema_name: string
+          session_jwt_sub: string | null
+          table_name: string
+          ts: string
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_role?: string | null
+          app_context?: Json | null
+          archived_at?: string
+          changed_cols?: string[] | null
+          id: number
+          new_data?: Json | null
+          old_data?: Json | null
+          op: string
+          prev_hash?: string | null
+          row_hash?: string | null
+          row_pk?: Json | null
+          schema_name: string
+          session_jwt_sub?: string | null
+          table_name: string
+          ts: string
+        }
+        Update: {
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_role?: string | null
+          app_context?: Json | null
+          archived_at?: string
+          changed_cols?: string[] | null
+          id?: number
+          new_data?: Json | null
+          old_data?: Json | null
+          op?: string
+          prev_hash?: string | null
+          row_hash?: string | null
+          row_pk?: Json | null
+          schema_name?: string
+          session_jwt_sub?: string | null
+          table_name?: string
+          ts?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           company_db: string
@@ -4152,7 +4212,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      audit_trail_all: {
+        Row: {
+          actor_email: string | null
+          actor_id: string | null
+          actor_role: string | null
+          app_context: Json | null
+          archived: boolean | null
+          changed_cols: string[] | null
+          id: number | null
+          new_data: Json | null
+          old_data: Json | null
+          op: string | null
+          prev_hash: string | null
+          row_hash: string | null
+          row_pk: Json | null
+          schema_name: string | null
+          session_jwt_sub: string | null
+          table_name: string | null
+          ts: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       _audit_canonicalize: { Args: { _data: Json }; Returns: string }
@@ -4165,6 +4246,13 @@ export type Database = {
           id: string
           official_email: string
           official_name: string
+        }[]
+      }
+      archive_audit_trail: {
+        Args: { _batch_limit?: number; _keep_months?: number }
+        Returns: {
+          archived_count: number
+          cutoff: string
         }[]
       }
       can_access_audit_console: {
