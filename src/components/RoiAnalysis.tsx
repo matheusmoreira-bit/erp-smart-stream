@@ -289,6 +289,14 @@ export function RoiAnalysis({ mode }: Props) {
               </div>
             </div>
           </div>
+
+          {/* Análise Temporal — SAP nativo vs ERP Flow + ciclo do documento */}
+          <TemporalAnalysis
+            companyDb={mode === "company" ? companyDb : undefined}
+            from={dateFilter.from}
+            to={dateFilter.to}
+            consolidated={mode === "consolidated"}
+          />
         </>
       )}
 
