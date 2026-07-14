@@ -276,10 +276,19 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
 
   const approverRows: ChainRow[] = useMemo(() => {
     if (!expense) return [];
+    // Regra global: só existe "aprovador atual" enquanto o documento está
+    // efetivamente pendente. Se o documento foi aprovado/integrado, todos
+    // os níveis de todas as ramificações são considerados concluídos.
+    const stillPending = isPendingApproval(expense.status);
+    const isRejectedDoc = expense.status === "rejeitado" || expense.status === "cancelado";
+    const isFinalized = !stillPending && !isRejectedDoc; // aprovado/integrado
+
     if (levels.length > 0) {
       return levels.map((lv) => {
-        const done = approvedNames.has(lv.approver_name.toLowerCase());
+        const doneByLog = approvedNames.has(lv.approver_name.toLowerCase());
+        const done = doneByLog || isFinalized;
         const isCurrent =
+          stillPending &&
           !done &&
           !!expense.current_approver &&
           expense.current_approver.toLowerCase() === lv.approver_name.toLowerCase();
@@ -295,8 +304,9 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
       .filter((r) => (r.approver_name || r.approver_email))
       .map((r, i) => {
         const dec = (r.decision || "").toUpperCase();
-        const approved = dec === "Y" || dec === "APPROVED";
+        const approvedByDecision = dec === "Y" || dec === "APPROVED";
         const rejected = dec === "N" || dec === "REJECTED";
+        const approved = approvedByDecision || (isFinalized && !rejected);
         return {
           level_order: r.step ?? i + 1,
           approver_name: r.approver_name || r.approver_email || "—",
@@ -310,29 +320,32 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
           source: "sap" as const,
         };
       });
-    // Se há aprovador atual conhecido mas ele não aparece na lista SAP, adiciona
-    if (
-      expense.current_approver &&
-      !rows.some(
-        (r) => r.approver_name.toLowerCase() === expense.current_approver!.toLowerCase() && !r.done && !r.rejected,
-      )
-    ) {
-      const maxStep = rows.reduce((m, r) => Math.max(m, r.level_order), 0);
-      rows.push({
-        level_order: maxStep + 1,
-        approver_name: expense.current_approver,
-        approver_email: null,
-        done: false,
-        isCurrent: true,
-        source: "sap",
-      });
-    } else {
-      // marca o primeiro sem decisão como atual
-      const firstPending = rows.find((r) => !r.done && !r.rejected);
-      if (firstPending) firstPending.isCurrent = true;
+    // Só há "aprovador atual" enquanto o doc está pendente.
+    if (stillPending) {
+      if (
+        expense.current_approver &&
+        !rows.some(
+          (r) => r.approver_name.toLowerCase() === expense.current_approver!.toLowerCase() && !r.done && !r.rejected,
+        )
+      ) {
+        const maxStep = rows.reduce((m, r) => Math.max(m, r.level_order), 0);
+        rows.push({
+          level_order: maxStep + 1,
+          approver_name: expense.current_approver,
+          approver_email: null,
+          done: false,
+          isCurrent: true,
+          source: "sap",
+        });
+      } else {
+        // marca o primeiro sem decisão como atual
+        const firstPending = rows.find((r) => !r.done && !r.rejected);
+        if (firstPending) firstPending.isCurrent = true;
+      }
     }
     return rows;
   }, [levels, approvedNames, expense, sapHistory]);
+
 
   const currentApproverRow = approverRows.find((r) => r.isCurrent);
   const nextApproverRows = approverRows.filter((r) => !r.done && !r.rejected && !r.isCurrent);
