@@ -149,6 +149,7 @@ Deno.serve(async (req) => {
       );
       await sb.from("expenses").update({
         sap_integration_last_attempt_at: new Date().toISOString(),
+        sap_status_last_check_at: new Date().toISOString(),
         sap_integration_error: msg.slice(0, 500),
         sap_sync_state: "sync_error",
         sap_sync_attempts: attempts,
