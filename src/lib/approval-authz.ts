@@ -3,6 +3,20 @@
 // dependency-free so we can exercise the delegation flow in unit/E2E tests
 // without spinning up the edge function.
 
+/**
+ * Retorna `true` somente se o documento ainda está aguardando decisões de
+ * aprovação. É a única fonte de verdade para exibir "Aprovador atual" ou
+ * marcar um nível como "atual" em qualquer tela.
+ *
+ * Regra do negócio: se o documento foi aprovado em todos os níveis de todas
+ * as ramificações (rateios), o status deixa de ser "atual" e passa a ser
+ * "aprovado" — mesmo que `current_approver` ainda tenha um valor herdado.
+ */
+export function isPendingApproval(status?: string | null): boolean {
+  return String(status || "").toLowerCase() === "pendente_aprovacao";
+}
+
+
 export function normalize(s: unknown): string {
   return String(s ?? "").toLowerCase().trim();
 }
