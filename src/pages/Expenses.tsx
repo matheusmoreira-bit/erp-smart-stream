@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { getErpShortLabel } from "@/lib/erp-labels";
+import { isPendingApproval } from "@/lib/approval-authz";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
