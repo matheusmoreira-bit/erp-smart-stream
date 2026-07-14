@@ -977,3 +977,38 @@ await logIntegrationCall(supabase, {
 ---
 
 **Fim do handover.** Para dúvidas, começar por §11 (runbooks) e depois §5 / §6 conforme o domínio afetado.
+
+---
+
+## Anexo A — Diagramas Técnicos
+
+Fontes Mermaid em `docs/diagramas/*.mmd` e renderizações PNG em `docs/diagramas/*.png`.
+Para regenerar: `bunx @mermaid-js/mermaid-cli -i <arquivo>.mmd -o <arquivo>.png -b white -w 1600`.
+
+### A.1 Arquitetura Geral
+Camadas Cliente / Lovable Cloud / Sistemas Externos, mostrando fluxos HTTPS+JWT, PostgREST, invocações de Edge Functions, storage buckets, filas `pg_cron`/`pgmq` e integrações externas (SAP B1, Omie, PagCorp, Google Drive, Synapse, IdP).
+
+![Arquitetura](diagramas/01-arquitetura.png)
+
+Fonte: [`docs/diagramas/01-arquitetura.mmd`](diagramas/01-arquitetura.mmd)
+
+### A.2 Fluxo do Usuário
+Jornada do usuário: autenticação → Profile Completion Gate → Hub principal → módulos operacionais (Approvals, Expenses, NF Entrada, PagCorp, Audit, Integrations) e ramo Admin. Cada trilha termina em persistência (`audit_log`) e disparo de notificações.
+
+![Fluxo do Usuário](diagramas/02-fluxo-usuario.png)
+
+Fonte: [`docs/diagramas/02-fluxo-usuario.mmd`](diagramas/02-fluxo-usuario.mmd)
+
+### A.3 Sequência — Validação SAP B1
+Sequência detalhada do login e aprovação via Service Layer: SPA → `SapContext` → Edge Function `sap-proxy` → `system_credentials` (RLS) → SAP B1 Service Layer, com registro em `approval_history` e `audit_log`. Erros são normalizados por `sap-error.ts`.
+
+![Sequência SAP B1](diagramas/03-sequencia-sap-b1.png)
+
+Fonte: [`docs/diagramas/03-sequencia-sap-b1.mmd`](diagramas/03-sequencia-sap-b1.mmd)
+
+### A.4 Geração do Resumo de Tempos (Dashboard)
+Pipeline de `useSapDashboard`: coleta das views `VW_ANALISE_PAGAMENTOS_DETALHADO` e `VW_TODAS_APROVACOES` (ou Omie contas a pagar), cache local por `company_db`, cálculo por etapa (`daysBetween` → remoção de outliers IQR → média), montagem de `FlowStages`, validações de SLA e geração de `Insights`, terminando nos componentes do Dashboard.
+
+![Resumo de Tempos](diagramas/04-resumo-tempos.png)
+
+Fonte: [`docs/diagramas/04-resumo-tempos.mmd`](diagramas/04-resumo-tempos.mmd)
