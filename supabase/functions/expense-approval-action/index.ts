@@ -383,15 +383,12 @@ Deno.serve(async (req) => {
       stageLog("auth_sap", "warn", { requestId, phase: "is_sap_user_admin", error: (e as Error).message });
     }
     if (!isSuperUser && sapValidated.userName.toLowerCase() === "manager") isSuperUser = true;
-    if (!isSuperUser) {
-      isSuperUser = await isSapSuperuser(
-        admin, sapValidated.companyDB, sapSessionHeader, sapRouteHeader, sapValidated.userName,
-      );
-    }
+    // NOTE: expensive SAP `Users` fetch is deferred — see lazy check below.
     stageLog("auth_sap", "info", {
       requestId, sapUser: sapValidated.userName, companyDB: sapValidated.companyDB, isSuperUser,
     });
   }
+
 
   if (!callerIdentity && !isCloudAdmin) {
     stageLog("auth_none", "warn", { requestId });
