@@ -79,7 +79,14 @@ function toIsoTimestamp(date?: string, time?: string): string | null {
 
 const PAGE_SIZE = 100;
 const MAX_PAGES_PER_COMPANY = 40;
+const MAX_PAGES_BACKFILL = 200;
 const TIME_BUDGET_MS = 90_000;
+
+interface SyncOpts {
+  backfill?: boolean;
+  fromDate?: string; // YYYY-MM-DD
+  onlyCompany?: string;
+}
 
 async function syncCompany(
   sb: ReturnType<typeof createClient>,
