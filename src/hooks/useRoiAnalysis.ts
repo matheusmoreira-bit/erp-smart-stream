@@ -83,6 +83,14 @@ interface ApprovalRow {
   doc_entry: number | null;
 }
 
+interface PoCacheRow {
+  company_db: string;
+  doc_entry: number;
+  doc_date: string | null;
+  doc_due_date: string | null;
+  doc_total: number | null;
+}
+
 interface Company {
   company_db: string;
   display_name: string;
@@ -94,6 +102,7 @@ export function useRoiAnalysis(opts: Options) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
+  const [pos, setPos] = useState<PoCacheRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +112,8 @@ export function useRoiAnalysis(opts: Options) {
     try {
       const fromIso = from?.toISOString();
       const toIso = to?.toISOString();
+      const fromDate = fromIso?.slice(0, 10);
+      const toDate = toIso?.slice(0, 10);
 
       const paramsQ = supabase.from("roi_parameters").select("*");
       const companiesQ = supabase.from("companies").select("company_db, display_name");
@@ -114,32 +125,42 @@ export function useRoiAnalysis(opts: Options) {
       let approvalsQ = supabase
         .from("approval_history")
         .select("company_db, decision, decision_date, approver_email, doc_entry")
-        .limit(50000);
+        .limit(60000);
+      // Cache SAP de pedidos de compra (fonte histórica completa)
+      let posQ = supabase
+        .from("sap_purchase_order_cache")
+        .select("company_db, doc_entry, doc_date, doc_due_date, doc_total")
+        .limit(60000);
 
       if (!consolidated && companyDb) {
         expensesQ = expensesQ.eq("company_db", companyDb);
         approvalsQ = approvalsQ.eq("company_db", companyDb);
+        posQ = posQ.eq("company_db", companyDb);
       }
       if (fromIso) {
         expensesQ = expensesQ.gte("created_at", fromIso);
         approvalsQ = approvalsQ.gte("decision_date", fromIso);
       }
+      if (fromDate) posQ = posQ.gte("doc_date", fromDate);
       if (toIso) {
         expensesQ = expensesQ.lte("created_at", toIso);
         approvalsQ = approvalsQ.lte("decision_date", toIso);
       }
+      if (toDate) posQ = posQ.lte("doc_date", toDate);
 
-      const [pr, cr, er, ar] = await Promise.all([paramsQ, companiesQ, expensesQ, approvalsQ]);
+      const [pr, cr, er, ar, por] = await Promise.all([paramsQ, companiesQ, expensesQ, approvalsQ, posQ]);
 
       if (pr.error) throw pr.error;
       if (cr.error) throw cr.error;
       if (er.error) throw er.error;
       if (ar.error) throw ar.error;
+      if (por.error) throw por.error;
 
       setParams((pr.data || []) as RoiParameters[]);
       setCompanies((cr.data || []) as Company[]);
       setExpenses((er.data || []) as ExpenseRow[]);
       setApprovals((ar.data || []) as ApprovalRow[]);
+      setPos((por.data || []) as PoCacheRow[]);
     } catch (e: any) {
       console.error("useRoiAnalysis load error", e);
       setError(e?.message || "Falha ao carregar dados de ROI");
@@ -165,30 +186,77 @@ export function useRoiAnalysis(opts: Options) {
       }
     }
 
-    // Agrupa por company_db (a partir de expenses e approvals)
-    const byCompany = new Map<string, ExpenseRow[]>();
+    // Index de expenses por (company_db, sap_doc_entry) para juntar com cache SAP
+    const expenseByPo = new Map<string, ExpenseRow>();
+    for (const e of expenses) {
+      if (e.company_db && e.sap_doc_entry) {
+        expenseByPo.set(`${e.company_db}::${e.sap_doc_entry}`, e);
+      }
+    }
+
+    // Docs unificados por (company_db, doc_entry): união (cache SAP ∪ expenses)
+    type UnifiedDoc = {
+      company_db: string;
+      doc_entry: number | null;
+      due_date: string | null;
+      total_amount: number;
+      created_at: string | null;
+      requester_email: string | null;
+      source: "cache" | "expense" | "both";
+    };
+    const unifiedByCompany = new Map<string, UnifiedDoc[]>();
+    const seenKeys = new Set<string>();
+
+    for (const po of pos) {
+      if (!po.company_db) continue;
+      const key = `${po.company_db}::${po.doc_entry}`;
+      const exp = expenseByPo.get(key);
+      const arr = unifiedByCompany.get(po.company_db) || [];
+      arr.push({
+        company_db: po.company_db,
+        doc_entry: po.doc_entry,
+        due_date: exp?.due_date || po.doc_due_date,
+        total_amount: Number(exp?.total_amount || po.doc_total || 0),
+        created_at: exp?.created_at || (po.doc_date ? `${po.doc_date}T00:00:00Z` : null),
+        requester_email: exp?.requester_email || null,
+        source: exp ? "both" : "cache",
+      });
+      unifiedByCompany.set(po.company_db, arr);
+      seenKeys.add(key);
+    }
+    // Expenses sem PO no cache (ainda contam como documentos do Flow)
     for (const e of expenses) {
       if (!e.company_db) continue;
-      const arr = byCompany.get(e.company_db) || [];
-      arr.push(e);
-      byCompany.set(e.company_db, arr);
+      const key = e.sap_doc_entry ? `${e.company_db}::${e.sap_doc_entry}` : `exp::${e.id}`;
+      if (seenKeys.has(key)) continue;
+      const arr = unifiedByCompany.get(e.company_db) || [];
+      arr.push({
+        company_db: e.company_db,
+        doc_entry: e.sap_doc_entry,
+        due_date: e.due_date,
+        total_amount: Number(e.total_amount || 0),
+        created_at: e.created_at,
+        requester_email: e.requester_email,
+        source: "expense",
+      });
+      unifiedByCompany.set(e.company_db, arr);
     }
-    // Garante empresas que só têm aprovações (sem docs no ERP Flow)
+    // Empresas que só têm aprovações
     for (const a of approvals) {
-      if (a.company_db && !byCompany.has(a.company_db)) {
-        byCompany.set(a.company_db, []);
+      if (a.company_db && !unifiedByCompany.has(a.company_db)) {
+        unifiedByCompany.set(a.company_db, []);
       }
     }
 
     const companiesToProcess = consolidated
-      ? Array.from(byCompany.keys())
+      ? Array.from(unifiedByCompany.keys())
       : companyDb
         ? [companyDb]
-        : Array.from(byCompany.keys()); // fallback: sem companyDb, mostra todas visíveis
+        : Array.from(unifiedByCompany.keys());
 
     return companiesToProcess.map((db) => {
       const p = pickParams(params, db);
-      const docs = byCompany.get(db) || [];
+      const docs = unifiedByCompany.get(db) || [];
       const companyApprovals = approvals.filter((a) => a.company_db === db && a.decision === "Y");
 
       const solicitantes = new Set<string>();
@@ -200,14 +268,14 @@ export function useRoiAnalysis(opts: Options) {
       let valorTotal = 0;
       let prejuizo = 0;
 
-      for (const e of docs) {
-        if (e.requester_email) solicitantes.add(e.requester_email.toLowerCase());
-        valorTotal += Number(e.total_amount || 0);
+      for (const d of docs) {
+        if (d.requester_email) solicitantes.add(d.requester_email.toLowerCase());
+        valorTotal += d.total_amount;
 
         // antecedência: created_at → due_date
-        if (e.due_date) {
-          const created = new Date(e.created_at);
-          const due = new Date(e.due_date);
+        if (d.due_date && d.created_at) {
+          const created = new Date(d.created_at);
+          const due = new Date(d.due_date);
           const dias = daysBetween(created, due);
           if (Number.isFinite(dias)) {
             sumAntecedencia += dias;
@@ -215,18 +283,17 @@ export function useRoiAnalysis(opts: Options) {
           }
         }
 
-        // atraso: approvedAt > due_date
-        if (e.sap_doc_entry && e.due_date) {
-          const approvedRow = approvedIdx.get(`${db}::${e.sap_doc_entry}`);
+        // atraso: approvedAt > due_date (via approval_history + doc_entry)
+        if (d.doc_entry && d.due_date) {
+          const approvedRow = approvedIdx.get(`${db}::${d.doc_entry}`);
           if (approvedRow?.decision_date) {
             const approved = new Date(approvedRow.decision_date);
-            const due = new Date(e.due_date);
+            const due = new Date(d.due_date);
             const atraso = daysBetween(due, approved);
             if (atraso > 0) {
               sumAtraso += atraso;
               countAtrasados++;
-              const val = Number(e.total_amount || 0);
-              prejuizo += val * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
+              prejuizo += d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
             }
           }
         }
@@ -293,7 +360,7 @@ export function useRoiAnalysis(opts: Options) {
         economia_percent: economiaPercent,
       };
     });
-  }, [params, expenses, approvals, companyDb, consolidated, companies, from?.getTime(), to?.getTime()]);
+  }, [params, expenses, approvals, pos, companyDb, consolidated, companies, from?.getTime(), to?.getTime()]);
 
   const totals = useMemo(() => {
     if (!metricsByCompany.length) return null;
