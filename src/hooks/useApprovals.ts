@@ -115,7 +115,7 @@ function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
     approverEmail: row["Email do aprovador"] || "",
     currentStage: row["Modelo de aprovação"] || "—",
     status: "pending",
-    docDate: row["Data de criação"] || row["Data do documento"] || "",
+    docDate: row["Data de criação"] || "",
     dueDate: row["Data de vencimento"] || "",
     remarks: row.Observações || "",
     approvalModel: row["Modelo de aprovação"] || "",
