@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   MarkerType,
   type Node,
   type Edge,
@@ -70,12 +69,12 @@ function formatDateShort(iso?: string | null) {
 
 /* ────────────────────────────── Layout constants ────────────────────────────── */
 
-const COL_WIDTH = 300;         // horizontal spacing between columns (center-to-center)
+const COL_WIDTH = 320;         // horizontal spacing between columns (center-to-center)
 const CARD_WIDTH = 240;
-const CARD_SPACING = 28;       // vertical gap between stacked cards
-const CARD_ROW_H = 118;        // approx card height + gap
+const CARD_SPACING = 40;       // vertical gap between stacked cards
+const CARD_ROW_H = 180;        // approx card height + gap
 const HEADER_Y = 24;
-const FIRST_CARD_Y = 100;
+const FIRST_CARD_Y = 110;
 
 /* ────────────────────────────── Tones ────────────────────────────── */
 
@@ -684,16 +683,6 @@ export function RelationsMapFlow(props: Props) {
         defaultEdgeOptions={{ type: "smoothstep" }}
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} className="opacity-40" />
-        <MiniMap
-          pannable
-          zoomable
-          className="!bg-background/80 !border !border-border rounded-md"
-          nodeColor={(n) => {
-            const t = (n.data as { tone?: NodeTone } | undefined)?.tone;
-            if (!t) return "hsl(var(--muted-foreground))";
-            return TONE_STYLES[t].edge;
-          }}
-        />
         <Controls
           position="bottom-left"
           className="!bg-background !border !border-border rounded-md [&>button]:!bg-background [&>button]:!border-border [&>button]:!text-foreground"
