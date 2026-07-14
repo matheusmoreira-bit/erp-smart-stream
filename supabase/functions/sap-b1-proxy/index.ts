@@ -309,6 +309,53 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ISSUE SIGNED SAP AUTH TOKEN
+    // One-time validation for sessions that were created before this token
+    // existed. After issued, approval functions can authenticate locally via
+    // HMAC instead of probing SAP on every click.
+    if (action === "issueSapAuthToken") {
+      const userName = typeof reqBody.userName === "string" ? reqBody.userName.trim() : "";
+      if (!sessionId || !companyDB || !userName) {
+        return new Response(JSON.stringify({ error: "sessionId, companyDB e userName são obrigatórios" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
+      const escapedUser = userName.replace(/'/g, "''");
+      let probe = await fetchWithTimeout(
+        `${SAP_BASE_URL}/Users('${encodeURIComponent(escapedUser)}')?$select=UserCode`,
+        { headers: { Cookie: cookies } },
+        10_000,
+      );
+      if (probe.status === 401) {
+        return new Response(JSON.stringify({ error: "Sessão SAP expirada", sapStatus: 401 }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!probe.ok && probe.status !== 403 && probe.status !== 404) {
+        await probe.body?.cancel().catch(() => {});
+        probe = await fetchWithTimeout(`${SAP_BASE_URL}/`, { headers: { Cookie: cookies } }, 10_000);
+        if (probe.status === 401) {
+          return new Response(JSON.stringify({ error: "Sessão SAP expirada", sapStatus: 401 }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (!probe.ok) {
+          return new Response(JSON.stringify({ error: "Não foi possível validar a sessão SAP", sapStatus: probe.status }), {
+            status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+      await probe.body?.cancel().catch(() => {});
+
+      const expiresAt = Date.now() + 30 * 60 * 1000;
+      const sapAuthToken = await signSapAuthToken({ companyDB, userName, sessionId, expiresAt });
+      return new Response(JSON.stringify({ sapAuthToken, expiresAt }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // QUERY
     if (action === "query") {
       if (!sessionId || !endpoint) {
