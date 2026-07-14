@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { sapLogin, sapLogout, type SapSession, clearClientCache } from "@/lib/sap-client";
+import { sapLogin, sapLogout, ensureSapAuthToken, type SapSession, clearClientCache } from "@/lib/sap-client";
 
 export type ErpType = "sap" | "omie" | "s4hana_cloud" | "s4hana_cloud_private" | "s4hana_onprem" | "totvs_protheus" | "totvs_rm" | "totvs_datasul" | "netsuite";
 
@@ -212,6 +212,28 @@ export function SapProvider({ children }: { children: ReactNode }) {
     }, ms);
     return () => window.clearTimeout(t);
   }, [session?.expiresAt]);
+
+  useEffect(() => {
+    if (session?.erpType !== "sap" || !session.sessionId || session.sapAuthToken) return;
+    let cancelled = false;
+    void ensureSapAuthToken({
+      sessionId: session.sessionId,
+      routeId: session.routeId || "",
+      companyDB: session.companyDB,
+      userName: session.userName,
+      isSuperUser: !!session.isSuperUser,
+      erpType: "sap",
+      expiresAt: session.expiresAt,
+    }).then((token) => {
+      if (cancelled || !token) return;
+      setSession((prev) => (
+        prev?.erpType === "sap" && prev.sessionId === session.sessionId
+          ? { ...prev, sapAuthToken: token }
+          : prev
+      ));
+    });
+    return () => { cancelled = true; };
+  }, [session?.erpType, session?.sessionId, session?.sapAuthToken, session?.routeId, session?.companyDB, session?.userName, session?.isSuperUser, session?.expiresAt, setSession]);
 
   return (
     <ErpContext.Provider value={{ session, isLoading, error, login, logout }}>
