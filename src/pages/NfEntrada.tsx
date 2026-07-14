@@ -1,7 +1,14 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil } from "lucide-react";
+import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -295,56 +302,61 @@ export default function NfEntrada() {
                       <TableCell className="text-xs">{formatDate(it.data_emissao)}</TableCell>
                       <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1 justify-end">
-                          <Button variant="ghost" size="icon"
-                            title="Abrir XML da NF em nova aba"
-                            aria-label="Abrir XML da NF em nova aba"
-                            disabled={busyId === it.id} onClick={() => openFile(it.id, "xml")}>
-                            <FileCode2 className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon"
-                            title="Abrir DANFE (PDF) em nova aba"
-                            aria-label="Abrir DANFE (PDF) em nova aba"
-                            disabled={busyId === it.id} onClick={() => openFile(it.id, "pdf")}>
-                            <FileText className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon"
-                            title="Ver histórico e linha do tempo desta NF"
-                            aria-label="Ver histórico desta NF"
-                            onClick={() => setDetail(it)}>
-                            <History className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon"
-                            title={hasPoLink
-                              ? "Refazer o vínculo com o Pedido de Compra no SAP (não duplica)"
-                              : "Buscar Pedido de Compra correspondente no SAP e vincular"}
-                            aria-label="Vincular NF ao Pedido de Compra no SAP"
-                            disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
-                            onClick={() => handleRematch(it.id)}>
-                            <Link2 className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon"
-                            title="Reprocessar integração da NF com o SAP"
-                            aria-label="Reprocessar integração com o SAP"
-                            disabled={busyId === it.id} onClick={() => handleReprocess(it.id)}>
-                            <RotateCw className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon"
-                            title="Editar dados da NF (fornecedor, valor, empresa SAP)"
-                            aria-label="Editar dados da NF"
-                            onClick={() => setEditItem(it)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon"
-                            title="Cancelar fluxo desta NF (não desfaz documentos já criados no SAP)"
-                            aria-label="Cancelar fluxo desta NF"
-                            disabled={busyId === it.id || it.status === "cancelled" || it.status === "completed"}
-                            onClick={() => handleCancel(it.id)}>
-                            <XCircle className="w-4 h-4" />
-                          </Button>
+
+                        <div className="flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" aria-label="Ações da NF" disabled={busyId === it.id}>
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuItem onClick={() => openFile(it.id, "xml")} disabled={busyId === it.id}>
+                                <FileCode2 className="w-4 h-4 mr-2" />
+                                Abrir XML
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openFile(it.id, "pdf")} disabled={busyId === it.id}>
+                                <FileText className="w-4 h-4 mr-2" />
+                                Abrir DANFE (PDF)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setDetail(it)}>
+                                <History className="w-4 h-4 mr-2" />
+                                Ver histórico
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleRematch(it.id)}
+                                disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
+                              >
+                                <Link2 className="w-4 h-4 mr-2" />
+                                {hasPoLink ? "Refazer vínculo com PC" : "Vincular ao Pedido de Compra"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleReprocess(it.id)}
+                                disabled={busyId === it.id}
+                              >
+                                <RotateCw className="w-4 h-4 mr-2" />
+                                Reprocessar integração
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setEditItem(it)}>
+                                <Pencil className="w-4 h-4 mr-2" />
+                                Editar dados
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleCancel(it.id)}
+                                disabled={busyId === it.id || it.status === "cancelled" || it.status === "completed"}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <XCircle className="w-4 h-4 mr-2" />
+                                Cancelar fluxo
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
+
                     {isOpen && (
                       <TableRow key={`${it.id}-details`} className="bg-muted/20 hover:bg-muted/20">
                         <TableCell />
