@@ -70,12 +70,12 @@ function formatDateShort(iso?: string | null) {
 
 /* ────────────────────────────── Layout constants ────────────────────────────── */
 
-const COL_WIDTH = 300;         // horizontal spacing between columns (center-to-center)
+const COL_WIDTH = 320;         // horizontal spacing between columns (center-to-center)
 const CARD_WIDTH = 240;
-const CARD_SPACING = 28;       // vertical gap between stacked cards
-const CARD_ROW_H = 118;        // approx card height + gap
+const CARD_SPACING = 40;       // vertical gap between stacked cards
+const CARD_ROW_H = 180;        // approx card height + gap
 const HEADER_Y = 24;
-const FIRST_CARD_Y = 100;
+const FIRST_CARD_Y = 110;
 
 /* ────────────────────────────── Tones ────────────────────────────── */
 
