@@ -285,10 +285,11 @@ Deno.serve(async (req) => {
 
     const { data: companies, error: cErr } = await sb
       .from("companies")
-      .select("company_db, display_name, erp_type, is_active")
+      .select("company_db, display_name, erp_type, is_active, is_test")
       .eq("is_active", true).eq("erp_type", "sap")
-      .in("company_db", TARGET_COMPANIES);
+      .eq("is_test", false);
     if (cErr) throw cErr;
+
 
     const dbs = (companies || []).map((c) => c.company_db);
     const { data: credRows } = await sb
