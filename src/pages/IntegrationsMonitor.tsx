@@ -57,6 +57,7 @@ interface UnifiedIntegration {
   id: string;
   source: Source;
   created_at: string;
+  last_check_at?: string | null;
   company_db: string | null;
   external_ref: string;       // expense id slice / pagcorp expense id
   description: string;        // supplier_name / pagcorp description
