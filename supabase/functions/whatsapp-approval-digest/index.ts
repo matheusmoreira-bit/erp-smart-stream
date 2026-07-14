@@ -1,5 +1,5 @@
 // Envia um digest consolidado (a cada 4h) das aprovações pendentes por aprovador,
-// via WhatsApp. Restrito às empresas configuradas em TARGET_COMPANIES.
+// via WhatsApp. Processa todas as empresas SAP ativas (não-teste).
 // Inclui empresa, link do erp-flow e a descrição de cada pendência.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
