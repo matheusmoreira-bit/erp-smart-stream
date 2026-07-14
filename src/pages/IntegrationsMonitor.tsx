@@ -482,6 +482,11 @@ export default function IntegrationsMonitor() {
                     <TableCell className="text-xs text-muted-foreground">
                       {formatDate(it.created_at)}
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {it.source === "expense"
+                        ? (it.last_check_at ? formatDate(it.last_check_at) : "—")
+                        : "—"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
