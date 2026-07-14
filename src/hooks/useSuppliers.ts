@@ -267,12 +267,17 @@ export async function createSupplier(
     }
   }
 
+  // Se o SAP rejeitou a criação, NÃO persistimos o CardCode "reservado" —
+  // ele pode já existir no SAP para outro BP e gerar divergência silenciosa
+  // caso uma despesa futura seja lançada com esse código.
+  const persistedCardCode = sapStatus === "synced" ? cardCode : null;
+
   const { data: resp, error } = await supabase.functions.invoke("supplier-sync", {
     body: {
       action: "insert",
       row: {
         ...input,
-        card_code: cardCode,
+        card_code: persistedCardCode,
         sap_sync_status: sapStatus,
         sap_sync_error: sapError,
         sap_last_synced_at: syncedAt,

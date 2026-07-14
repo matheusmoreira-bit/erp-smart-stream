@@ -920,6 +920,50 @@ Deno.serve(async (req) => {
     }
     const sap = { baseUrl: sapBaseUrl, cookies: sapCookies };
 
+    // 2.5 SAFETY CHECK — o CardCode existente em SAP deve pertencer ao MESMO
+    // fornecedor (mesmo CNPJ) esperado pelo ERP Flow. Se o cache local
+    // "reservou" um CardCode que na verdade já existia em SAP para outro BP
+    // (ex.: erro de criação com "Assign business partner to at least one branch"),
+    // criar o PO com esse CardCode gera divergência silenciosa. Aborta.
+    if (!expense.sap_doc_entry && expense.supplier_code) {
+      const onlyDigits = (v: unknown) => String(v ?? "").replace(/\D+/g, "");
+      const { data: localSup } = await supabase
+        .from("suppliers")
+        .select("id, card_code, card_name, federal_tax_id, sap_sync_status, sap_sync_error")
+        .eq("company_db", expense.company_db)
+        .eq("card_code", expense.supplier_code)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const expectedTaxId = onlyDigits(localSup?.federal_tax_id);
+      if (expectedTaxId) {
+        const bpResp = await fetch(
+          `${sap.baseUrl}/BusinessPartners('${encodeURIComponent(expense.supplier_code)}')?$select=CardCode,CardName,FederalTaxID`,
+          { headers: { Cookie: sap.cookies } },
+        );
+        if (bpResp.ok) {
+          const bp = await bpResp.json().catch(() => ({} as any));
+          const sapTaxId = onlyDigits(bp?.FederalTaxID);
+          if (sapTaxId && sapTaxId !== expectedTaxId) {
+            const msg =
+              `CardCode ${expense.supplier_code} no SAP pertence a "${bp?.CardName || "?"}"` +
+              ` (CNPJ ${bp?.FederalTaxID || "?"}), mas o fornecedor esperado é` +
+              ` "${localSup?.card_name || expense.supplier_name || "?"}"` +
+              ` (CNPJ ${localSup?.federal_tax_id || "?"}). Cadastro divergente — recadastre o fornecedor no SAP.`;
+            if (localSup?.id) {
+              await supabase.from("suppliers").update({
+                sap_sync_status: "error",
+                sap_sync_error: msg.slice(0, 500),
+                card_code: null,
+              }).eq("id", localSup.id);
+            }
+            await persistStatus({ sap_integration_error: msg });
+            throw new Error(msg);
+          }
+        }
+      }
+    }
+
     if (expense.sap_doc_entry) {
       const existingAttachmentEntry = Number(expense.sap_attachment_entry || 0);
       if (existingAttachmentEntry > 0) {
