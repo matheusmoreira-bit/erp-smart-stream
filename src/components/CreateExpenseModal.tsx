@@ -2669,10 +2669,9 @@ export function CreateExpenseModal({
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
                 )}
               </label>
-              <Input
-                type="date"
+              <DateInputBR
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(v) => setDueDate(v)}
                 className={`text-sm h-9 ${
                   dueDate
                     ? "bg-green-500/5 border-green-500/50"
