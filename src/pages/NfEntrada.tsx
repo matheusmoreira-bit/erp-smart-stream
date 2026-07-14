@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, MoreHorizontal, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ import {
 import { PageTitle } from "@/components/PageTitle";
 import { EditNfEntradaDialog } from "@/components/EditNfEntradaDialog";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
+import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
 const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending_expense: { label: "Pendente despesa", variant: "outline" },
@@ -163,6 +164,49 @@ export default function NfEntrada() {
       toast({ title: "Fluxo cancelado" });
     } catch (e) {
       toast({ title: "Falha ao cancelar", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleCreatePurchaseOrder(it: NfEntradaImport) {
+    setBusyId(it.id);
+    try {
+      const files: File[] = [];
+      // Baixa o PDF (DANFE/DANFSE) e anexa ao pedido de compra. XML também
+      // vai como anexo quando disponível — a IA usa qualquer um dos dois.
+      const kinds: Array<"pdf" | "xml"> = ["pdf", "xml"];
+      for (const kind of kinds) {
+        try {
+          const url = await fetchNfFile(it.id, kind);
+          const resp = await fetch(url);
+          if (!resp.ok) continue;
+          const blob = await resp.blob();
+          const baseName = it.chave_acesso || it.numero_nf || it.id;
+          const ext = kind === "pdf" ? "pdf" : "xml";
+          const mime = kind === "pdf" ? "application/pdf" : "application/xml";
+          files.push(new File([blob], `NF-${baseName}.${ext}`, { type: blob.type || mime }));
+        } catch (err) {
+          // Ignora falha por tipo individual (ex.: 404 para PDF em NF-e).
+          console.warn(`[nf-entrada] falha ao baixar ${kind}:`, (err as Error).message);
+        }
+      }
+      if (files.length === 0) {
+        toast({
+          title: "Nenhum arquivo disponível",
+          description: "Não foi possível baixar o PDF ou XML desta NF para anexar ao pedido.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setPendingPurchaseFiles(files);
+      toast({
+        title: "Abrindo Nova Compra",
+        description: `${files.length} anexo(s) da NF prontos para o pedido.`,
+      });
+      navigate("/compras");
+    } catch (e) {
+      toast({ title: "Falha ao lançar pedido", description: (e as Error).message, variant: "destructive" });
     } finally {
       setBusyId(null);
     }
@@ -324,6 +368,15 @@ export default function NfEntrada() {
                                 Ver histórico
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
+                              {!hasPoLink && !it.expense_id && it.status !== "cancelled" && it.status !== "completed" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleCreatePurchaseOrder(it)}
+                                  disabled={busyId === it.id}
+                                >
+                                  <ShoppingCart className="w-4 h-4 mr-2" />
+                                  Lançar pedido de Compras
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={() => handleRematch(it.id)}
                                 disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}

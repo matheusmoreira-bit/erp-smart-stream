@@ -88,6 +88,7 @@ import { CreateExpenseModal, type ExpenseDraftHydration } from "@/components/Cre
 import { EditExpenseModal } from "@/components/EditExpenseModal";
 import { DraftsPopover } from "@/components/DraftsPopover";
 import { useDocumentDrafts } from "@/hooks/useDocumentDrafts";
+import { consumePendingPurchaseFiles } from "@/lib/pending-purchase-files";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { useCompanies } from "@/hooks/useCompanies";
 import { usePersistedState } from "@/hooks/usePersistedState";
@@ -855,7 +856,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const { refresh: refreshDrafts } = useDocumentDrafts(mode, session?.companyDB);
+
+  // Se navegamos para cá com arquivos pré-anexados (ex.: PDF da NF de entrada),
+  // consome do store e abre o modal de nova compra automaticamente.
+  useEffect(() => {
+    if (mode !== "purchase") return;
+    const files = consumePendingPurchaseFiles();
+    if (files && files.length > 0) {
+      setPendingFiles(files);
+      setShowCreate(true);
+    }
+  }, [mode]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -2011,12 +2024,14 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       <CreateExpenseModal
         open={showCreate}
-        onClose={() => { setShowCreate(false); setPendingDraft(null); void refreshDrafts(); }}
+        onClose={() => { setShowCreate(false); setPendingDraft(null); setPendingFiles(null); void refreshDrafts(); }}
         onCreate={handleCreate}
         sapSession={session}
         mode={mode}
         initialDraft={pendingDraft}
+        initialFiles={pendingFiles}
         onDraftConsumed={() => setPendingDraft(null)}
+        onInitialFilesConsumed={() => setPendingFiles(null)}
         onDraftSaved={() => { void refreshDrafts(); }}
       />
 
