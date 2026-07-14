@@ -684,16 +684,6 @@ export function RelationsMapFlow(props: Props) {
         defaultEdgeOptions={{ type: "smoothstep" }}
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} className="opacity-40" />
-        <MiniMap
-          pannable
-          zoomable
-          className="!bg-background/80 !border !border-border rounded-md"
-          nodeColor={(n) => {
-            const t = (n.data as { tone?: NodeTone } | undefined)?.tone;
-            if (!t) return "hsl(var(--muted-foreground))";
-            return TONE_STYLES[t].edge;
-          }}
-        />
         <Controls
           position="bottom-left"
           className="!bg-background !border !border-border rounded-md [&>button]:!bg-background [&>button]:!border-border [&>button]:!text-foreground"
