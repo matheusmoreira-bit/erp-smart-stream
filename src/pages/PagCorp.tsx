@@ -133,7 +133,7 @@ export default function PagCorp() {
   const { session, logout } = useSap();
   const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated } = usePagCorp();
   const { createExpense } = useExpenses();
-  const { credentials, fetchCredentials } = useCredentials();
+  const { credentials, isLoading: credsLoading, lastFetchOk: credsFetchOk, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
 
   useEffect(() => {
@@ -143,11 +143,31 @@ export default function PagCorp() {
 
   const hasSapCredentials = credentials.some((c) => c.system_name === "sap" && c.company_db === session?.companyDB);
 
-  const checkSapCredentials = (): boolean => {
-    if (!hasSapCredentials) {
+  const checkSapCredentials = async (): Promise<boolean> => {
+    // Se ainda estamos carregando OU o último GET /credentials falhou, NÃO
+    // podemos afirmar "credencial não cadastrada" — tentamos revalidar antes
+    // de bloquear o usuário (evita falso alarme por erro transiente de rede,
+    // cold start da function ou 401 durante refresh do token Lovable).
+    if (!credsFetchOk || credsLoading) {
+      if (session?.companyDB) {
+        await fetchCredentials(session.companyDB, "sap");
+      }
+    }
+    // Reavalia após a possível revalidação.
+    const stillMissing = !credentials.some(
+      (c) => c.system_name === "sap" && c.company_db === session?.companyDB,
+    );
+    if (stillMissing && credsFetchOk) {
       toast.error("Credencial SAP B1 não cadastrada", {
         description: "Configure as credenciais do SAP Business One na tela de Credenciais antes de integrar.",
         action: { label: "Configurar", onClick: () => navigate("/integracoes/credenciais") },
+      });
+      return false;
+    }
+    if (stillMissing) {
+      // Não conseguimos confirmar — mostra erro neutro em vez de acusar cadastro faltando.
+      toast.error("Não foi possível verificar as credenciais SAP agora", {
+        description: "Tente novamente em instantes. Se persistir, verifique sua conexão.",
       });
       return false;
     }
