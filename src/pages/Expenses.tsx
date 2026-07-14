@@ -2024,12 +2024,14 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
       <CreateExpenseModal
         open={showCreate}
-        onClose={() => { setShowCreate(false); setPendingDraft(null); void refreshDrafts(); }}
+        onClose={() => { setShowCreate(false); setPendingDraft(null); setPendingFiles(null); void refreshDrafts(); }}
         onCreate={handleCreate}
         sapSession={session}
         mode={mode}
         initialDraft={pendingDraft}
+        initialFiles={pendingFiles}
         onDraftConsumed={() => setPendingDraft(null)}
+        onInitialFilesConsumed={() => setPendingFiles(null)}
         onDraftSaved={() => { void refreshDrafts(); }}
       />
 
