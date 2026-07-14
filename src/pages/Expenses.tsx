@@ -97,6 +97,11 @@ function formatCurrency(value: number, currency: string = "BRL") {
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "—";
+  // Datas "YYYY-MM-DD" (sem hora) devem ser formatadas SEM criar Date, senão
+  // new Date() interpreta como UTC midnight e em fusos negativos o dia recua
+  // (ex.: 2026-07-17 -> 16/07 em America/Sao_Paulo).
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
   try {
     return new Intl.DateTimeFormat("pt-BR").format(new Date(dateStr));
   } catch {
