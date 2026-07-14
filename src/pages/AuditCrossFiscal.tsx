@@ -1,14 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, PlayCircle, ExternalLink, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useCompanies } from "@/hooks/useCompanies";
+import { useSap } from "@/contexts/SapContext";
 import { useAuditCrossFiscal, type CenarioCruzamento, type CruzamentoRow } from "@/hooks/useAuditCrossFiscal";
 
 const CENARIO_LABEL: Record<CenarioCruzamento, string> = {
