@@ -230,6 +230,7 @@ export default function IntegrationsMonitor() {
             id: e.id,
             source: "expense",
             created_at: e.sap_integration_last_attempt_at || e.created_at,
+            last_check_at: e.sap_status_last_check_at || e.sap_integration_last_attempt_at || null,
             company_db: e.company_db,
             external_ref: e.id.slice(0, 8),
             description: e.supplier_name || "—",
