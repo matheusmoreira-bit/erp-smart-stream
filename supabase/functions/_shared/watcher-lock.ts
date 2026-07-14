@@ -37,5 +37,5 @@ export async function releaseWatcherLock(
 /** Verifica se um company_db é base de teste (deve ser ignorada por watchers). */
 export function isTestCompanyDb(db: string | null | undefined): boolean {
   if (!db) return false;
-  return /^SBO_TESTE_/i.test(db);
+  return /^(SBO_TESTE_|TST[_-]?)/i.test(db);
 }
