@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    participant U as Usuário
+    participant FE as SPA (React)
+    participant SC as SapContext
+    participant EF as Edge Function<br/>sap-proxy
+    participant CRED as system_credentials<br/>(Postgres)
+    participant SL as SAP B1<br/>Service Layer
+    participant DB as Postgres<br/>(cache + audit)
+
+    U->>FE: Login SAP (empresa + usuário + senha)
+    FE->>EF: invoke sap-login
+    EF->>CRED: SELECT credenciais (RLS)
+    EF->>SL: POST /Login {CompanyDB, UserName, Password}
+    SL-->>EF: SessionId + Cookie B1SESSION
+    EF->>DB: audit_log(action=sap_login)
+    EF-->>FE: session {companyDB, sessionId}
+    FE->>SC: setSession()
+
+    U->>FE: Aprovar documento
+    FE->>EF: invoke sap-approve {docEntry, session}
+    EF->>SL: GET /DraftDocuments(docEntry)<br/>Cookie: B1SESSION
+    SL-->>EF: draft payload
+    EF->>SL: PATCH /Drafts(docEntry) {Approved:true}
+    SL-->>EF: 204 No Content
+    EF->>DB: INSERT approval_history + audit_log
+    EF-->>FE: ok
+    FE-->>U: Toast sucesso
+
+    Note over EF,SL: Erros → sap-error.ts normaliza<br/>e retorna código traduzido

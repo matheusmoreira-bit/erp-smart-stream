@@ -1,0 +1,47 @@
+flowchart LR
+    subgraph Fontes["Fontes de Dados"]
+        VPay[(VW_ANALISE_<br/>PAGAMENTOS_<br/>DETALHADO)]
+        VAppr[(VW_TODAS_<br/>APROVACOES)]
+        OMIE[(Omie<br/>Contas a Pagar)]
+    end
+
+    subgraph Cache["Cache Local"]
+        LC[external-cache<br/>IndexedDB por company_db]
+    end
+
+    subgraph Hook["useSapDashboard"]
+        Fetch[sapQueryView / omieListar]
+        Map[mapOmieToViewRows]
+        Filter[filterRowsByDate]
+        Days[daysBetween<br/>por etapa]
+        IQR[removeOutliers<br/>Q1-1.5·IQR / Q3+1.5·IQR]
+        Avg[avg médio<br/>por etapa]
+        Stages[buildStages<br/>6 etapas do fluxo]
+        Val[buildValidations<br/>regras de SLA]
+        Ins[generateInsights<br/>gargalos / atrasos]
+    end
+
+    subgraph UI["Dashboard"]
+        FT[FlowTimeline]
+        MC[MetricCards]
+        IP[InsightsPanel]
+        VT[ValidationTable]
+    end
+
+    VPay --> Fetch
+    VAppr --> Fetch
+    OMIE --> Map --> Fetch
+    Fetch --> LC
+    LC --> Filter
+    Fetch --> Filter
+    Filter --> Days --> IQR --> Avg --> Stages
+    Filter --> Val
+    Stages --> Ins
+    Val --> Ins
+    Stages --> FT
+    Stages --> MC
+    Val --> VT
+    Ins --> IP
+
+    classDef src fill:#0b3d2e,color:#fff
+    class VPay,VAppr,OMIE src
