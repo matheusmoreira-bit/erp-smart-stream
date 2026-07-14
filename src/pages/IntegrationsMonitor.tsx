@@ -520,7 +520,12 @@ export default function IntegrationsMonitor() {
                 <Field label="Descrição">{selected.description}</Field>
                 <Field label="Valor">{formatCurrency(selected.amount, selected.currency || "BRL")}</Field>
                 <Field label="Iniciado por">{selected.initiated_by || "—"}</Field>
-                <Field label="Última tentativa">{formatDate(selected.created_at)}</Field>
+                <Field label="Integrado em">{formatDate(selected.created_at)}</Field>
+                {selected.source === "expense" && (
+                  <Field label="Último polling">
+                    {selected.last_check_at ? formatDate(selected.last_check_at) : "—"}
+                  </Field>
+                )}
                 <Field label="SAP DocEntry">{selected.sap_doc_entry ?? "—"}</Field>
                 <Field label="SAP DocNum">{selected.sap_doc_num ?? "—"}</Field>
               </div>
