@@ -2401,28 +2401,35 @@ export default function ApprovalsPage() {
               : (action === "approve" ? "Aprovação realizada com sucesso!" : "Documento rejeitado."),
           );
 
-          const { logAuditAction } = await import("@/hooks/useAuditLog");
-          await logAuditAction({
-            action: action === "approve" ? "approve" : "reject",
-            entity_type: "approval_request",
-            entity_id: String(code),
-            actor_email: session.userName,
-            company_db: session.companyDB,
-            details: {
-              docNum: doc?.docNum,
-              docType: doc?.docTypeName,
-              cardName: doc?.cardName,
-              docTotal: doc?.docTotal,
-              currency: doc?.currency,
-              approver: doc?.currentApprover,
-              isSuperUser,
-              remarks,
-              substitutedForName: onBehalfOf?.name ?? null,
-              substitutedForEmail: onBehalfOf?.email ?? null,
-              actedAsSubstitute: !!onBehalfOf,
-              actingRole,
-            },
-          });
+          // Audit log em background — não bloqueia o fechamento do modal.
+          void (async () => {
+            try {
+              const { logAuditAction } = await import("@/hooks/useAuditLog");
+              await logAuditAction({
+                action: action === "approve" ? "approve" : "reject",
+                entity_type: "approval_request",
+                entity_id: String(code),
+                actor_email: session.userName,
+                company_db: session.companyDB,
+                details: {
+                  docNum: doc?.docNum,
+                  docType: doc?.docTypeName,
+                  cardName: doc?.cardName,
+                  docTotal: doc?.docTotal,
+                  currency: doc?.currency,
+                  approver: doc?.currentApprover,
+                  isSuperUser,
+                  remarks,
+                  substitutedForName: onBehalfOf?.name ?? null,
+                  substitutedForEmail: onBehalfOf?.email ?? null,
+                  actedAsSubstitute: !!onBehalfOf,
+                  actingRole,
+                },
+              });
+            } catch (auditErr) {
+              console.warn("Audit log falhou (não bloqueante):", auditErr);
+            }
+          })();
         }
       } catch (mutationErr) {
         console.error("Approval action error:", mutationErr);
