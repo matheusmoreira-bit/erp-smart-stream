@@ -214,9 +214,13 @@ export default function NfEntrada() {
               ))}
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground ml-auto">
-            {filtered.length} de {items.length}
-          </span>
+          <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500/60" />
+              Com Pedido de Compra vinculado
+            </span>
+            <span>{filtered.length} de {items.length}</span>
+          </div>
         </div>
 
         {error && (
