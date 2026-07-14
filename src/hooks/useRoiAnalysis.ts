@@ -1,0 +1,322 @@
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+export interface RoiParameters {
+  id: string;
+  company_db: string | null;
+  salario_aprovador: number;
+  salario_solicitante: number;
+  tempo_lancar_sap_min: number;
+  tempo_aprovar_sap_min: number;
+  tempo_lancar_flow_min: number;
+  tempo_aprovar_flow_min: number;
+  custo_licenca_aprovador_sap: number;
+  custo_licenca_solicitante_sap: number;
+  custo_licenca_flow: number;
+  multa_percent: number;
+  juros_mes_percent: number;
+  horas_mes: number;
+}
+
+export interface RoiCompanyMetrics {
+  company_db: string;
+  display_name: string;
+  n_docs: number;
+  n_approvals: number;
+  n_aprovadores: number;
+  n_solicitantes: number;
+  antecedencia_media_dias: number | null;
+  atraso_medio_dias: number | null;
+  docs_atrasados: number;
+  valor_total_docs: number;
+  prejuizo_atraso: number;
+  // Tempos operacionais (horas / período)
+  horas_sap: number;
+  horas_flow: number;
+  // Custos (R$ / período)
+  custo_tempo_sap: number;
+  custo_tempo_flow: number;
+  custo_licencas_sap_mes: number;
+  custo_licencas_flow_mes: number;
+  // Totais
+  custo_total_sap: number;
+  custo_total_flow: number;
+  economia_periodo: number;
+  economia_percent: number;
+}
+
+interface Options {
+  companyDb?: string;
+  from?: Date;
+  to?: Date;
+  /** true = agrega TODAS empresas (back-office) */
+  consolidated?: boolean;
+}
+
+function daysBetween(a: Date, b: Date) {
+  return (b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24);
+}
+
+function pickParams(all: RoiParameters[], companyDb: string): RoiParameters {
+  const perCompany = all.find((p) => p.company_db === companyDb);
+  const global = all.find((p) => p.company_db === null);
+  return (perCompany || global) as RoiParameters;
+}
+
+interface ExpenseRow {
+  id: string;
+  company_db: string | null;
+  requester_email: string | null;
+  created_at: string;
+  doc_date: string | null;
+  due_date: string | null;
+  total_amount: number | null;
+  sap_doc_entry: number | null;
+  status: string | null;
+}
+
+interface ApprovalRow {
+  company_db: string;
+  decision: string | null;
+  decision_date: string | null;
+  approver_email: string | null;
+  doc_entry: number | null;
+}
+
+interface Company {
+  company_db: string;
+  display_name: string;
+}
+
+export function useRoiAnalysis(opts: Options) {
+  const { companyDb, from, to, consolidated } = opts;
+  const [params, setParams] = useState<RoiParameters[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const fromIso = from?.toISOString();
+      const toIso = to?.toISOString();
+
+      const paramsQ = supabase.from("roi_parameters").select("*");
+      const companiesQ = supabase.from("companies").select("company_db, display_name");
+
+      let expensesQ = supabase
+        .from("expenses")
+        .select("id, company_db, requester_email, created_at, doc_date, due_date, total_amount, sap_doc_entry, status")
+        .limit(20000);
+      let approvalsQ = supabase
+        .from("approval_history")
+        .select("company_db, decision, decision_date, approver_email, doc_entry")
+        .limit(50000);
+
+      if (!consolidated && companyDb) {
+        expensesQ = expensesQ.eq("company_db", companyDb);
+        approvalsQ = approvalsQ.eq("company_db", companyDb);
+      }
+      if (fromIso) {
+        expensesQ = expensesQ.gte("created_at", fromIso);
+        approvalsQ = approvalsQ.gte("decision_date", fromIso);
+      }
+      if (toIso) {
+        expensesQ = expensesQ.lte("created_at", toIso);
+        approvalsQ = approvalsQ.lte("decision_date", toIso);
+      }
+
+      const [pr, cr, er, ar] = await Promise.all([paramsQ, companiesQ, expensesQ, approvalsQ]);
+
+      if (pr.error) throw pr.error;
+      if (cr.error) throw cr.error;
+      if (er.error) throw er.error;
+      if (ar.error) throw ar.error;
+
+      setParams((pr.data || []) as RoiParameters[]);
+      setCompanies((cr.data || []) as Company[]);
+      setExpenses((er.data || []) as ExpenseRow[]);
+      setApprovals((ar.data || []) as ApprovalRow[]);
+    } catch (e: any) {
+      console.error("useRoiAnalysis load error", e);
+      setError(e?.message || "Falha ao carregar dados de ROI");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyDb, from?.getTime(), to?.getTime(), consolidated]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const metricsByCompany = useMemo<RoiCompanyMetrics[]>(() => {
+    if (!params.length) return [];
+    const periodDays = from && to ? Math.max(1, daysBetween(from, to)) : 30;
+
+    // Agrupa aprovações finais (Y) por company+doc_entry
+    const approvedIdx = new Map<string, ApprovalRow>();
+    for (const a of approvals) {
+      if (a.decision !== "Y" || !a.doc_entry) continue;
+      const key = `${a.company_db}::${a.doc_entry}`;
+      const prev = approvedIdx.get(key);
+      if (!prev || (a.decision_date && prev.decision_date && a.decision_date > prev.decision_date)) {
+        approvedIdx.set(key, a);
+      }
+    }
+
+    // Agrupa por company_db
+    const byCompany = new Map<string, ExpenseRow[]>();
+    for (const e of expenses) {
+      if (!e.company_db) continue;
+      const arr = byCompany.get(e.company_db) || [];
+      arr.push(e);
+      byCompany.set(e.company_db, arr);
+    }
+
+    const companiesToProcess = consolidated
+      ? Array.from(byCompany.keys())
+      : companyDb
+        ? [companyDb]
+        : [];
+
+    return companiesToProcess.map((db) => {
+      const p = pickParams(params, db);
+      const docs = byCompany.get(db) || [];
+      const companyApprovals = approvals.filter((a) => a.company_db === db && a.decision === "Y");
+
+      const solicitantes = new Set<string>();
+      const aprovadores = new Set<string>();
+      let sumAntecedencia = 0;
+      let countAntecedencia = 0;
+      let sumAtraso = 0;
+      let countAtrasados = 0;
+      let valorTotal = 0;
+      let prejuizo = 0;
+
+      for (const e of docs) {
+        if (e.requester_email) solicitantes.add(e.requester_email.toLowerCase());
+        valorTotal += Number(e.total_amount || 0);
+
+        // antecedência: created_at → due_date
+        if (e.due_date) {
+          const created = new Date(e.created_at);
+          const due = new Date(e.due_date);
+          const dias = daysBetween(created, due);
+          if (Number.isFinite(dias)) {
+            sumAntecedencia += dias;
+            countAntecedencia++;
+          }
+        }
+
+        // atraso: approvedAt > due_date
+        if (e.sap_doc_entry && e.due_date) {
+          const approvedRow = approvedIdx.get(`${db}::${e.sap_doc_entry}`);
+          if (approvedRow?.decision_date) {
+            const approved = new Date(approvedRow.decision_date);
+            const due = new Date(e.due_date);
+            const atraso = daysBetween(due, approved);
+            if (atraso > 0) {
+              sumAtraso += atraso;
+              countAtrasados++;
+              const val = Number(e.total_amount || 0);
+              prejuizo += val * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
+            }
+          }
+        }
+      }
+
+      for (const a of companyApprovals) {
+        if (a.approver_email) aprovadores.add(a.approver_email.toLowerCase());
+      }
+
+      const nDocs = docs.length;
+      const nApprovals = companyApprovals.length;
+      const nAprovadores = aprovadores.size;
+      const nSolicitantes = solicitantes.size;
+
+      // Tempo total operacional (min → horas) no período
+      const minSap = nDocs * p.tempo_lancar_sap_min + nApprovals * p.tempo_aprovar_sap_min;
+      const minFlow = nDocs * p.tempo_lancar_flow_min + nApprovals * p.tempo_aprovar_flow_min;
+      const horasSap = minSap / 60;
+      const horasFlow = minFlow / 60;
+
+      // Custos de tempo (R$)
+      const custoHoraAprov = p.salario_aprovador / p.horas_mes;
+      const custoHoraSolic = p.salario_solicitante / p.horas_mes;
+      const custoTempoSap =
+        (nDocs * p.tempo_lancar_sap_min / 60) * custoHoraSolic +
+        (nApprovals * p.tempo_aprovar_sap_min / 60) * custoHoraAprov;
+      const custoTempoFlow =
+        (nDocs * p.tempo_lancar_flow_min / 60) * custoHoraSolic +
+        (nApprovals * p.tempo_aprovar_flow_min / 60) * custoHoraAprov;
+
+      // Licenças pro-rata ao período (mensais)
+      const proRata = periodDays / 30;
+      const licencasSap = (nAprovadores * p.custo_licenca_aprovador_sap + nSolicitantes * p.custo_licenca_solicitante_sap) * proRata;
+      const licencasFlow = (nAprovadores + nSolicitantes) * p.custo_licenca_flow * proRata;
+
+      const custoTotalSap = custoTempoSap + licencasSap + prejuizo;
+      const custoTotalFlow = custoTempoFlow + licencasFlow + prejuizo; // prejuízo já materializado nos dois cenários base
+      const economia = custoTotalSap - custoTotalFlow;
+      const economiaPercent = custoTotalSap > 0 ? (economia / custoTotalSap) * 100 : 0;
+
+      const company = companies.find((c) => c.company_db === db);
+
+      return {
+        company_db: db,
+        display_name: company?.display_name || db,
+        n_docs: nDocs,
+        n_approvals: nApprovals,
+        n_aprovadores: nAprovadores,
+        n_solicitantes: nSolicitantes,
+        antecedencia_media_dias: countAntecedencia > 0 ? sumAntecedencia / countAntecedencia : null,
+        atraso_medio_dias: countAtrasados > 0 ? sumAtraso / countAtrasados : null,
+        docs_atrasados: countAtrasados,
+        valor_total_docs: valorTotal,
+        prejuizo_atraso: prejuizo,
+        horas_sap: horasSap,
+        horas_flow: horasFlow,
+        custo_tempo_sap: custoTempoSap,
+        custo_tempo_flow: custoTempoFlow,
+        custo_licencas_sap_mes: licencasSap,
+        custo_licencas_flow_mes: licencasFlow,
+        custo_total_sap: custoTotalSap,
+        custo_total_flow: custoTotalFlow,
+        economia_periodo: economia,
+        economia_percent: economiaPercent,
+      };
+    });
+  }, [params, expenses, approvals, companyDb, consolidated, companies, from?.getTime(), to?.getTime()]);
+
+  const totals = useMemo(() => {
+    if (!metricsByCompany.length) return null;
+    const sum = (k: keyof RoiCompanyMetrics) =>
+      metricsByCompany.reduce((s, m) => s + (Number(m[k]) || 0), 0);
+    const totalSap = sum("custo_total_sap");
+    const totalFlow = sum("custo_total_flow");
+    return {
+      n_docs: sum("n_docs"),
+      n_approvals: sum("n_approvals"),
+      horas_sap: sum("horas_sap"),
+      horas_flow: sum("horas_flow"),
+      custo_tempo_sap: sum("custo_tempo_sap"),
+      custo_tempo_flow: sum("custo_tempo_flow"),
+      custo_licencas_sap: sum("custo_licencas_sap_mes"),
+      custo_licencas_flow: sum("custo_licencas_flow_mes"),
+      prejuizo_atraso: sum("prejuizo_atraso"),
+      custo_total_sap: totalSap,
+      custo_total_flow: totalFlow,
+      economia_periodo: totalSap - totalFlow,
+      economia_percent: totalSap > 0 ? ((totalSap - totalFlow) / totalSap) * 100 : 0,
+    };
+  }, [metricsByCompany]);
+
+  const activeParams = useMemo(() => {
+    if (!params.length) return null;
+    if (companyDb) return pickParams(params, companyDb);
+    return params.find((p) => p.company_db === null) || params[0];
+  }, [params, companyDb]);
+
+  return { metricsByCompany, totals, params, activeParams, loading, error, refresh: load };
+}
