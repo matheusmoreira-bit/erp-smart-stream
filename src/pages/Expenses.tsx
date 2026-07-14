@@ -772,6 +772,18 @@ function ExpenseCard({
           <Building2 className="w-3.5 h-3.5 text-primary/70" />
           <span className="truncate">{expense.supplier_name}</span>
         </div>
+        {primaryProject && (
+          <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+            <Briefcase className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+            <span className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">Projeto</span>
+            {multiProject && (
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-sky-500/15 text-sky-600 border border-sky-500/30 rounded-full px-1.5 py-0.5 shrink-0">
+                Múltiplos
+              </span>
+            )}
+            <span className="text-foreground font-medium truncate">{primaryProject}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="w-3.5 h-3.5 text-primary/70" />
           <span>Solicitante: <span className="text-foreground font-medium">{expense.requester_name}</span></span>
