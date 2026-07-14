@@ -1,5 +1,5 @@
 // Envia um digest consolidado (a cada 4h) das aprovações pendentes por aprovador,
-// via WhatsApp. Restrito às empresas configuradas em TARGET_COMPANIES.
+// via WhatsApp. Processa todas as empresas SAP ativas (não-teste).
 // Inclui empresa, link do erp-flow e a descrição de cada pendência.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -18,8 +18,6 @@ const HANA_VIEWS_URL =
   Deno.env.get("HANA_VIEWS_URL") ||
   "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
-// Digest só é enviado para estas empresas.
-const TARGET_COMPANIES = ["open_gaming_sa"];
 // Janela para dedupe do digest.
 const DIGEST_WINDOW_HOURS = 4;
 // Marcador usado em approval_request_id para diferenciar digest de alertas por doc.
@@ -287,10 +285,11 @@ Deno.serve(async (req) => {
 
     const { data: companies, error: cErr } = await sb
       .from("companies")
-      .select("company_db, display_name, erp_type, is_active")
+      .select("company_db, display_name, erp_type, is_active, is_test")
       .eq("is_active", true).eq("erp_type", "sap")
-      .in("company_db", TARGET_COMPANIES);
+      .eq("is_test", false);
     if (cErr) throw cErr;
+
 
     const dbs = (companies || []).map((c) => c.company_db);
     const { data: credRows } = await sb
