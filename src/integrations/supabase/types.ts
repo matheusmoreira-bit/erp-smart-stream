@@ -1241,6 +1241,155 @@ export type Database = {
         }
         Relationships: []
       }
+      auditoria_cruzamento_config: {
+        Row: {
+          empresa_id: string
+          janela_dias: number
+          tolerancia_valor_abs: number
+          tolerancia_valor_pct: number
+          updated_at: string
+          updated_by: string | null
+          usar_raiz_cnpj_fallback: boolean
+        }
+        Insert: {
+          empresa_id: string
+          janela_dias?: number
+          tolerancia_valor_abs?: number
+          tolerancia_valor_pct?: number
+          updated_at?: string
+          updated_by?: string | null
+          usar_raiz_cnpj_fallback?: boolean
+        }
+        Update: {
+          empresa_id?: string
+          janela_dias?: number
+          tolerancia_valor_abs?: number
+          tolerancia_valor_pct?: number
+          updated_at?: string
+          updated_by?: string | null
+          usar_raiz_cnpj_fallback?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auditoria_cruzamento_config_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      auditoria_cruzamento_fiscal: {
+        Row: {
+          atualizado_em: string
+          candidatos_ambiguos: Json | null
+          cenario: string
+          cnpj_fornecedor: string
+          company_db: string
+          conta_paga_data_baixa: string | null
+          conta_paga_forma_pagamento: string | null
+          conta_paga_id_externo: string | null
+          conta_paga_link_origem: string | null
+          conta_paga_valor: number | null
+          criado_em: string
+          diferenca_dias: number | null
+          diferenca_valor: number | null
+          empresa_id: string
+          erp_origem: string | null
+          id: string
+          nota_chave_acesso: string | null
+          nota_data_emissao: string | null
+          nota_mastertax_id: string | null
+          nota_numero: string | null
+          nota_valor: number | null
+          observacao_usuario: string | null
+          periodo_fim: string
+          periodo_inicio: string
+          razao_social_fornecedor: string | null
+          revisado_em: string | null
+          revisado_por: string | null
+          score_confianca: number | null
+          status_match: string
+        }
+        Insert: {
+          atualizado_em?: string
+          candidatos_ambiguos?: Json | null
+          cenario: string
+          cnpj_fornecedor: string
+          company_db: string
+          conta_paga_data_baixa?: string | null
+          conta_paga_forma_pagamento?: string | null
+          conta_paga_id_externo?: string | null
+          conta_paga_link_origem?: string | null
+          conta_paga_valor?: number | null
+          criado_em?: string
+          diferenca_dias?: number | null
+          diferenca_valor?: number | null
+          empresa_id: string
+          erp_origem?: string | null
+          id?: string
+          nota_chave_acesso?: string | null
+          nota_data_emissao?: string | null
+          nota_mastertax_id?: string | null
+          nota_numero?: string | null
+          nota_valor?: number | null
+          observacao_usuario?: string | null
+          periodo_fim: string
+          periodo_inicio: string
+          razao_social_fornecedor?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
+          score_confianca?: number | null
+          status_match?: string
+        }
+        Update: {
+          atualizado_em?: string
+          candidatos_ambiguos?: Json | null
+          cenario?: string
+          cnpj_fornecedor?: string
+          company_db?: string
+          conta_paga_data_baixa?: string | null
+          conta_paga_forma_pagamento?: string | null
+          conta_paga_id_externo?: string | null
+          conta_paga_link_origem?: string | null
+          conta_paga_valor?: number | null
+          criado_em?: string
+          diferenca_dias?: number | null
+          diferenca_valor?: number | null
+          empresa_id?: string
+          erp_origem?: string | null
+          id?: string
+          nota_chave_acesso?: string | null
+          nota_data_emissao?: string | null
+          nota_mastertax_id?: string | null
+          nota_numero?: string | null
+          nota_valor?: number | null
+          observacao_usuario?: string | null
+          periodo_fim?: string
+          periodo_inicio?: string
+          razao_social_fornecedor?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
+          score_confianca?: number | null
+          status_match?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auditoria_cruzamento_fiscal_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_cruzamento_fiscal_nota_mastertax_id_fkey"
+            columns: ["nota_mastertax_id"]
+            isOneToOne: false
+            referencedRelation: "nf_entrada_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           company_db: string
