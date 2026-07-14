@@ -121,6 +121,12 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // Ignorar bases de teste — não devem gerar alertas nem tentativas automáticas.
+    if (isTestCompanyDb(exp.company_db)) {
+      results.push({ id: exp.id, ok: false, error: "base de teste — ignorado" });
+      continue;
+    }
+
     // Chamada interna ao expense-to-sap com service role.
     let ok = false;
     let errMsg = "";
