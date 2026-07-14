@@ -166,7 +166,7 @@ async function syncCompany(
         document_status: inv.DocumentStatus ?? null,
         cancelled: inv.Cancelled ?? null,
         base_po_doc_entry: extractBasePo(inv),
-        raw_json: inv as unknown as Record<string, unknown>,
+        // raw_json intentionally omitted: campo não é lido em lugar nenhum e inflava a tabela.
         sap_update_date: toIsoTimestamp(inv.UpdateDate, inv.UpdateTime),
         synced_at: new Date().toISOString(),
       }));
