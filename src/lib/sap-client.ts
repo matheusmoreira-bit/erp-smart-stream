@@ -27,6 +27,7 @@ export interface SapSession {
   isSuperUser: boolean;
   erpType?: string;
   expiresAt?: number;
+  sapAuthToken?: string;
 }
 
 // Client-side response cache
@@ -214,6 +215,7 @@ export async function sapLogin(userName: string, password: string, companyDB: st
     userName,
     isSuperUser: false,
     expiresAt: Date.now() + timeoutMin * 60 * 1000,
+    sapAuthToken: typeof result.sapAuthToken === "string" ? result.sapAuthToken : undefined,
   };
 
   // Check if user is SAP SuperUser
