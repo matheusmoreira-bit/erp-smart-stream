@@ -10,6 +10,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,6 +118,12 @@ Deno.serve(async (req) => {
     const origin = String((exp as any).origin || "").toLowerCase();
     if (["sap", "erp", "sap_erp", "erp_flow"].includes(origin)) {
       results.push({ id: exp.id, ok: false, error: "originado no ERP — ignorado" });
+      continue;
+    }
+
+    // Ignorar bases de teste — não devem gerar alertas nem tentativas automáticas.
+    if (isTestCompanyDb(exp.company_db)) {
+      results.push({ id: exp.id, ok: false, error: "base de teste — ignorado" });
       continue;
     }
 
