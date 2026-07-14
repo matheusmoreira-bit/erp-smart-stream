@@ -427,7 +427,7 @@ export default function PagCorp() {
     return map;
   }, [filteredTransactions]);
 
-  const openIntegrateDialog = (t: PagCorpTransaction, type: "generic" | "accountability") => {
+  const openIntegrateDialog = async (t: PagCorpTransaction, type: "generic" | "accountability") => {
     if (!(await checkSapCredentials())) return;
     if (type === "accountability") {
       setAccountabilityModal({ open: true, tx: t });
@@ -470,7 +470,7 @@ export default function PagCorp() {
     }
   };
 
-  const startBatch = () => {
+  const startBatch = async () => {
     if (!(await checkSapCredentials())) return;
     const queue = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (queue.length === 0) {
@@ -491,7 +491,7 @@ export default function PagCorp() {
    *  - ≥2 selected, all sem prestação → consolidar em 1 PC
    *  - ≥2 selected, mixed/com prestação → percorrer em lote (uma por uma)
    */
-  const handleIntegrateBatchUnified = () => {
+  const handleIntegrateBatchUnified = async () => {
     if (!(await checkSapCredentials())) return;
     const selected = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (selected.length === 0) {
@@ -600,7 +600,7 @@ export default function PagCorp() {
   };
 
 
-  const openConsolidateDialog = () => {
+  const openConsolidateDialog = async () => {
     if (!(await checkSapCredentials())) return;
     const list = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (list.length < 2) {
