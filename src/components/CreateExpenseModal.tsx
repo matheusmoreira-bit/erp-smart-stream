@@ -126,8 +126,10 @@ export function CreateExpenseModal({
   skipRules = false,
   mode = "purchase",
   initialDraft,
+  initialFiles,
   onDraftSaved,
   onDraftConsumed,
+  onInitialFilesConsumed,
   lowAiConfidenceThreshold = 0.75,
 }: {
   open: boolean;
@@ -140,8 +142,12 @@ export function CreateExpenseModal({
   skipRules?: boolean;
   mode?: ExpenseMode;
   initialDraft?: ExpenseDraftHydration | null;
+  /** Arquivos pré-anexados (ex.: PDF da NF de entrada). Injetados apenas
+   *  uma vez ao abrir o modal; disparam IA se `aiEnabled` estiver ligado. */
+  initialFiles?: File[] | null;
   onDraftSaved?: (id: string | null) => void;
   onDraftConsumed?: () => void;
+  onInitialFilesConsumed?: () => void;
   /** Limite (0–1) abaixo do qual a confiança média da IA por grupo é
    *  destacada visualmente como "provavelmente precisa de revisão". */
   lowAiConfidenceThreshold?: number;
