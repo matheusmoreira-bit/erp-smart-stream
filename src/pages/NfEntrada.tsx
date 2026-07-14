@@ -346,69 +346,41 @@ export default function NfEntrada() {
                       <TableCell className="text-xs">{formatDate(it.data_emissao)}</TableCell>
                       <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-
                         <div className="flex justify-end">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" aria-label="Ações da NF" disabled={busyId === it.id}>
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                              <DropdownMenuItem onClick={() => openFile(it.id, "xml")} disabled={busyId === it.id}>
-                                <FileCode2 className="w-4 h-4 mr-2" />
-                                Abrir XML
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openFile(it.id, "pdf")} disabled={busyId === it.id}>
-                                <FileText className="w-4 h-4 mr-2" />
-                                Abrir DANFE (PDF)
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDetail(it)}>
-                                <History className="w-4 h-4 mr-2" />
-                                Ver histórico
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {!hasPoLink && !it.expense_id && it.status !== "cancelled" && it.status !== "completed" && (
-                                <DropdownMenuItem
-                                  onClick={() => handleCreatePurchaseOrder(it)}
-                                  disabled={busyId === it.id}
-                                >
-                                  <ShoppingCart className="w-4 h-4 mr-2" />
-                                  Lançar pedido de Compras
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem
-                                onClick={() => handleRematch(it.id)}
-                                disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
-                              >
-                                <Link2 className="w-4 h-4 mr-2" />
-                                {hasPoLink ? "Refazer vínculo com PC" : "Vincular ao Pedido de Compra"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleReprocess(it.id)}
-                                disabled={busyId === it.id}
-                              >
-                                <RotateCw className="w-4 h-4 mr-2" />
-                                Reprocessar integração
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setEditItem(it)}>
-                                <Pencil className="w-4 h-4 mr-2" />
-                                Editar dados
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleCancel(it.id)}
-                                disabled={busyId === it.id || it.status === "cancelled" || it.status === "completed"}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <XCircle className="w-4 h-4 mr-2" />
-                                Cancelar fluxo
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <RowActionsMenu
+                            triggerLabel="Ações da NF"
+                            disabled={busyId === it.id}
+                            actions={[
+                              { key: "xml", label: "Abrir XML", icon: FileCode2,
+                                onSelect: () => openFile(it.id, "xml"), disabled: busyId === it.id },
+                              { key: "pdf", label: "Abrir DANFE (PDF)", icon: FileText,
+                                onSelect: () => openFile(it.id, "pdf"), disabled: busyId === it.id },
+                              { key: "history", label: "Ver histórico", icon: History,
+                                onSelect: () => setDetail(it) },
+                              { key: "create-po", label: "Lançar pedido de Compras", icon: ShoppingCart,
+                                separatorBefore: true,
+                                hidden: hasPoLink || !!it.expense_id || it.status === "cancelled" || it.status === "completed",
+                                onSelect: () => handleCreatePurchaseOrder(it),
+                                disabled: busyId === it.id },
+                              { key: "rematch",
+                                label: hasPoLink ? "Refazer vínculo com PC" : "Vincular ao Pedido de Compra",
+                                icon: Link2,
+                                onSelect: () => handleRematch(it.id),
+                                disabled: busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed" },
+                              { key: "reprocess", label: "Reprocessar integração", icon: RotateCw,
+                                onSelect: () => handleReprocess(it.id), disabled: busyId === it.id },
+                              { key: "edit", label: "Editar dados", icon: Pencil,
+                                onSelect: () => setEditItem(it) },
+                              { key: "cancel", label: "Cancelar fluxo", icon: XCircle,
+                                separatorBefore: true, destructive: true,
+                                onSelect: () => handleCancel(it.id),
+                                disabled: busyId === it.id || it.status === "cancelled" || it.status === "completed" },
+                            ]}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
+
 
                     {isOpen && (
                       <TableRow key={`${it.id}-details`} className="bg-muted/20 hover:bg-muted/20">
