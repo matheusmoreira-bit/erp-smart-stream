@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     // ('finalizado' e 'cancelado' são terminais e não precisam de polling contínuo).
     let query = sb
       .from("expenses")
-      .select("id, company_db, sap_doc_entry, status, supplier_name, sap_sync_attempts")
+      .select("id, company_db, sap_doc_entry, status, supplier_name, sap_sync_attempts, sap_purchase_order_status")
       .not("sap_doc_entry", "is", null)
       .not("status", "in", "(finalizado,cancelado,rascunho)")
       .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
