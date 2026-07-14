@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { DecimalInput } from "@/components/DecimalInput";
+import { DateInputBR } from "@/components/DateInputBR";
 import { sapQuery } from "@/lib/sap-client";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
