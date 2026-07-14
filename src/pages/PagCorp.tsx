@@ -368,7 +368,7 @@ export default function PagCorp() {
 
   const integrateAllNondeductible = async () => {
     if (!session?.companyDB) return;
-    if (!checkSapCredentials()) return;
+    if (!(await checkSapCredentials())) return;
     // If the user has selected nondeductible rows, integrate just those; else all pending
     const selectedNd = nondeductiblePending.filter((t) => selectedIds.has(t.id));
     const targets = selectedNd.length > 0 ? selectedNd : nondeductiblePending;
@@ -428,7 +428,7 @@ export default function PagCorp() {
   }, [filteredTransactions]);
 
   const openIntegrateDialog = (t: PagCorpTransaction, type: "generic" | "accountability") => {
-    if (!checkSapCredentials()) return;
+    if (!(await checkSapCredentials())) return;
     if (type === "accountability") {
       setAccountabilityModal({ open: true, tx: t });
     } else {
@@ -471,7 +471,7 @@ export default function PagCorp() {
   };
 
   const startBatch = () => {
-    if (!checkSapCredentials()) return;
+    if (!(await checkSapCredentials())) return;
     const queue = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (queue.length === 0) {
       toast.info("Selecione ao menos uma transação");
@@ -492,7 +492,7 @@ export default function PagCorp() {
    *  - ≥2 selected, mixed/com prestação → percorrer em lote (uma por uma)
    */
   const handleIntegrateBatchUnified = () => {
-    if (!checkSapCredentials()) return;
+    if (!(await checkSapCredentials())) return;
     const selected = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (selected.length === 0) {
       toast.info("Selecione ao menos uma transação");
@@ -601,7 +601,7 @@ export default function PagCorp() {
 
 
   const openConsolidateDialog = () => {
-    if (!checkSapCredentials()) return;
+    if (!(await checkSapCredentials())) return;
     const list = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (list.length < 2) {
       toast.info("Selecione 2 ou mais transações para consolidar");
