@@ -152,7 +152,8 @@ async function callProxy(body: Record<string, unknown>): Promise<any> {
     }
 
     // Server responded — try to parse body
-    let data: { sapStatus?: number; warning?: string; error?: string } | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data: any = null;
     try {
       data = await resp.json();
     } catch {
