@@ -961,6 +961,7 @@ export default function Admin() {
                   { key: "admin_users", label: "Admins", icon: ShieldCheck },
                   { key: "audit", label: "Logs de Auditoria", icon: ScrollText },
                   { key: "tools", label: "Ferramentas", icon: Wrench },
+                  { key: "roi", label: "ROI Consolidado", icon: TrendingUp },
                 ].map((t) => {
                   const Icon = t.icon;
                   return (
