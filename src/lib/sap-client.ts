@@ -1,7 +1,23 @@
 import { supabase } from "@/integrations/supabase/client";
 import { publicFunctionFetch } from "@/lib/auth-fetch";
+import { toast } from "sonner";
 
 const FUNCTION_URL = "sap-b1-proxy";
+
+// Timeout & retry configuration for SAP calls.
+const REQUEST_TIMEOUT_MS = 45_000; // hard cap per attempt
+const SLOW_WARNING_MS = 8_000;     // show "SAP está lento" toast after this
+const MAX_RETRIES = 2;             // total attempts = MAX_RETRIES + 1
+const BACKOFF_BASE_MS = 600;       // 600ms, 1800ms (+jitter)
+
+// Actions that are safe to retry automatically (idempotent reads).
+const RETRIABLE_ACTIONS = new Set([
+  "query",
+  "queryAll",
+  "queryView",
+  "downloadAttachment",
+  "readApprovalsCache",
+]);
 
 export interface SapSession {
   sessionId: string;
@@ -42,6 +58,13 @@ export class SapSessionExpiredError extends Error {
   }
 }
 
+export class SapTimeoutError extends Error {
+  constructor(message = "SAP demorou demais para responder. Tente novamente em instantes.") {
+    super(message);
+    this.name = "SapTimeoutError";
+  }
+}
+
 function looksLikeSessionExpired(payload: { sapStatus?: number; warning?: string; error?: string } | null | undefined): boolean {
   if (!payload) return false;
   if (payload.sapStatus === 401) return true;
@@ -56,27 +79,117 @@ function notifySessionExpired() {
   }
 }
 
-async function callProxy(body: Record<string, unknown>) {
-  const resp = await publicFunctionFetch(FUNCTION_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const data = await resp.json();
-
-  // Skip expiry detection on the login action itself — wrong creds shouldn't trigger a global logout
-  const action = typeof body?.action === "string" ? body.action : "";
-  if (action !== "login" && looksLikeSessionExpired(data)) {
-    notifySessionExpired();
-    throw new SapSessionExpiredError();
-  }
-
-  if (!resp.ok || data?.error) {
-    throw new Error(data?.error || `Erro HTTP ${resp.status}`);
-  }
-  return data;
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
+
+function isTransientHttpStatus(status: number | undefined): boolean {
+  if (!status) return false;
+  return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599);
+}
+
+async function doFetchWithTimeout(body: Record<string, unknown>, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await publicFunctionFetch(FUNCTION_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callProxy(body: Record<string, unknown>): Promise<any> {
+  const action = typeof body?.action === "string" ? body.action : "";
+  const canRetry = RETRIABLE_ACTIONS.has(action);
+  const maxAttempts = canRetry ? MAX_RETRIES + 1 : 1;
+
+  let slowToastId: string | number | undefined;
+  const scheduleSlowToast = () => {
+    if (typeof window === "undefined") return undefined;
+    return setTimeout(() => {
+      slowToastId = toast.loading("O SAP está lento agora — aguardando resposta…", {
+        duration: Infinity,
+      });
+    }, SLOW_WARNING_MS);
+  };
+  const dismissSlowToast = (timerId: ReturnType<typeof setTimeout> | undefined) => {
+    if (timerId) clearTimeout(timerId);
+    if (slowToastId !== undefined) {
+      toast.dismiss(slowToastId);
+      slowToastId = undefined;
+    }
+  };
+
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const slowTimer = scheduleSlowToast();
+    let resp: Response;
+    try {
+      resp = await doFetchWithTimeout(body, REQUEST_TIMEOUT_MS);
+    } catch (err) {
+      dismissSlowToast(slowTimer);
+      const aborted = err instanceof DOMException && err.name === "AbortError";
+      lastError = aborted ? new SapTimeoutError() : err;
+      if (attempt < maxAttempts && canRetry) {
+        const wait = BACKOFF_BASE_MS * Math.pow(3, attempt - 1) + Math.floor(Math.random() * 300);
+        toast.message(
+          aborted
+            ? `SAP não respondeu a tempo. Tentando novamente (${attempt + 1}/${maxAttempts})…`
+            : `Falha de rede ao chamar SAP. Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+        );
+        await sleep(wait);
+        continue;
+      }
+      if (aborted) throw lastError;
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+
+    // Server responded — try to parse body
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data: any = null;
+    try {
+      data = await resp.json();
+    } catch {
+      data = null;
+    }
+    dismissSlowToast(slowTimer);
+
+    // Skip expiry detection on the login action itself — wrong creds shouldn't trigger a global logout
+    if (action !== "login" && looksLikeSessionExpired(data)) {
+      notifySessionExpired();
+      throw new SapSessionExpiredError();
+    }
+
+    const httpErr = !resp.ok;
+    const bodyErr = !!data?.error;
+    if (httpErr || bodyErr) {
+      const transient = isTransientHttpStatus(resp.status) || isTransientHttpStatus(data?.sapStatus);
+      const message = data?.error || `Erro HTTP ${resp.status}`;
+      lastError = new Error(message);
+      if (transient && canRetry && attempt < maxAttempts) {
+        const wait = BACKOFF_BASE_MS * Math.pow(3, attempt - 1) + Math.floor(Math.random() * 300);
+        toast.message(
+          `SAP retornou erro temporário (${resp.status}). Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+        );
+        await sleep(wait);
+        continue;
+      }
+      throw lastError;
+    }
+
+    return data;
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Falha ao chamar o SAP após múltiplas tentativas.");
+}
+
 
 async function hasLovableSession(): Promise<boolean> {
   const { data: { session } } = await supabase.auth.getSession();
