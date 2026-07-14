@@ -2431,37 +2431,35 @@ export default function ApprovalsPage() {
         throw mutationErr instanceof Error ? mutationErr : new Error(message);
       }
 
-      // Fecha o modal imediatamente após o registro da decisão — o refresh
-      // acontece em segundo plano. Assim o usuário não fica olhando para o
-      // modal enquanto a lista é atualizada (SAP pode demorar alguns segundos
-      // para replicar a decisão).
+      // Fecha o modal e libera a UI imediatamente — o refresh da lista roda
+      // em segundo plano para não travar o usuário enquanto o SAP replica
+      // a decisão (que costuma levar alguns segundos).
       setSelectedDoc(null);
-
-      // ===== Fase 2: refresh da lista =====
-      // A ação já foi registrada com sucesso. Se o refresh falhar, apenas
-      // avisamos com um toast — o modal já foi fechado.
-      setActionPhase("refreshing");
-      try {
-        if (internalDoc) {
-          await refreshExpenses();
-        } else {
-          await refreshCache();
-          // Dispara sync do histórico em background para trazer a decisão
-          // recém-registrada no SAP para a aba "Histórico".
-          try {
-            const { sapFunctionFetch } = await import("@/lib/auth-fetch");
-            void sapFunctionFetch("approval-history-sync", { method: "POST" }).catch(() => {});
-          } catch { /* best-effort */ }
-        }
-      } catch (refreshErr) {
-        console.error("Refresh após ação falhou:", refreshErr);
-        const detail = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
-        toast.error(
-          `A ação foi registrada, mas não conseguimos atualizar a lista: ${detail}`,
-        );
-      }
-    } finally {
       setActionPhase("idle");
+
+      // ===== Fase 2: refresh da lista (background, não aguardado) =====
+      void (async () => {
+        try {
+          if (internalDoc) {
+            await refreshExpenses();
+          } else {
+            await refreshCache();
+            try {
+              const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+              void sapFunctionFetch("approval-history-sync", { method: "POST" }).catch(() => {});
+            } catch { /* best-effort */ }
+          }
+        } catch (refreshErr) {
+          console.error("Refresh após ação falhou:", refreshErr);
+          const detail = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+          toast.error(
+            `A ação foi registrada, mas não conseguimos atualizar a lista: ${detail}`,
+          );
+        }
+      })();
+    } catch (err) {
+      setActionPhase("idle");
+      throw err;
     }
   };
 
