@@ -83,6 +83,14 @@ interface ApprovalRow {
   doc_entry: number | null;
 }
 
+interface PoCacheRow {
+  company_db: string;
+  doc_entry: number;
+  doc_date: string | null;
+  doc_due_date: string | null;
+  doc_total: number | null;
+}
+
 interface Company {
   company_db: string;
   display_name: string;
@@ -94,6 +102,7 @@ export function useRoiAnalysis(opts: Options) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
+  const [pos, setPos] = useState<PoCacheRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +112,8 @@ export function useRoiAnalysis(opts: Options) {
     try {
       const fromIso = from?.toISOString();
       const toIso = to?.toISOString();
+      const fromDate = fromIso?.slice(0, 10);
+      const toDate = toIso?.slice(0, 10);
 
       const paramsQ = supabase.from("roi_parameters").select("*");
       const companiesQ = supabase.from("companies").select("company_db, display_name");
@@ -114,32 +125,42 @@ export function useRoiAnalysis(opts: Options) {
       let approvalsQ = supabase
         .from("approval_history")
         .select("company_db, decision, decision_date, approver_email, doc_entry")
-        .limit(50000);
+        .limit(60000);
+      // Cache SAP de pedidos de compra (fonte histórica completa)
+      let posQ = supabase
+        .from("sap_purchase_order_cache")
+        .select("company_db, doc_entry, doc_date, doc_due_date, doc_total")
+        .limit(60000);
 
       if (!consolidated && companyDb) {
         expensesQ = expensesQ.eq("company_db", companyDb);
         approvalsQ = approvalsQ.eq("company_db", companyDb);
+        posQ = posQ.eq("company_db", companyDb);
       }
       if (fromIso) {
         expensesQ = expensesQ.gte("created_at", fromIso);
         approvalsQ = approvalsQ.gte("decision_date", fromIso);
       }
+      if (fromDate) posQ = posQ.gte("doc_date", fromDate);
       if (toIso) {
         expensesQ = expensesQ.lte("created_at", toIso);
         approvalsQ = approvalsQ.lte("decision_date", toIso);
       }
+      if (toDate) posQ = posQ.lte("doc_date", toDate);
 
-      const [pr, cr, er, ar] = await Promise.all([paramsQ, companiesQ, expensesQ, approvalsQ]);
+      const [pr, cr, er, ar, por] = await Promise.all([paramsQ, companiesQ, expensesQ, approvalsQ, posQ]);
 
       if (pr.error) throw pr.error;
       if (cr.error) throw cr.error;
       if (er.error) throw er.error;
       if (ar.error) throw ar.error;
+      if (por.error) throw por.error;
 
       setParams((pr.data || []) as RoiParameters[]);
       setCompanies((cr.data || []) as Company[]);
       setExpenses((er.data || []) as ExpenseRow[]);
       setApprovals((ar.data || []) as ApprovalRow[]);
+      setPos((por.data || []) as PoCacheRow[]);
     } catch (e: any) {
       console.error("useRoiAnalysis load error", e);
       setError(e?.message || "Falha ao carregar dados de ROI");
