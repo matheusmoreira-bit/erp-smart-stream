@@ -1814,11 +1814,15 @@ export default function ApprovalsPage() {
   const { session, logout } = useSap();
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
-  const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache } = useApprovals();
-  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense, isLoading: isLoadingPurchase } = useExpenses("purchase");
-  const { expenses: salesExpenses, refresh: refreshSales, isLoading: isLoadingSales } = useExpenses("sales");
+  const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache, removeLocal: removeApprovalLocal } = useApprovals();
+  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense, isLoading: isLoadingPurchase, removeLocal: removePurchaseLocal } = useExpenses("purchase");
+  const { expenses: salesExpenses, refresh: refreshSales, isLoading: isLoadingSales, removeLocal: removeSalesLocal } = useExpenses("sales");
   const expenses = [...purchaseExpenses, ...salesExpenses];
   const refreshExpenses = () => Promise.all([refreshPurchase(), refreshSales()]);
+  const removeExpenseLocal = (internalId: string) => {
+    removePurchaseLocal(internalId);
+    removeSalesLocal(internalId);
+  };
   const { getLabel } = useCompanies(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
@@ -2438,30 +2442,41 @@ export default function ApprovalsPage() {
         throw mutationErr instanceof Error ? mutationErr : new Error(message);
       }
 
-      // Fecha o modal e libera a UI imediatamente — o refresh da lista roda
-      // em segundo plano para não travar o usuário enquanto o SAP replica
-      // a decisão (que costuma levar alguns segundos).
+      // Remoção otimista: tira o documento da lista imediatamente e reescreve
+      // o cache local. A UI atualiza na hora sem esperar o SAP replicar.
+      if (internalDoc) {
+        removeExpenseLocal(internalDoc);
+      } else {
+        removeApprovalLocal(code);
+      }
+
+      // Fecha o modal e libera a UI imediatamente.
       setSelectedDoc(null);
       setActionPhase("idle");
 
-      // ===== Fase 2: refresh da lista (background, não aguardado) =====
+      // ===== Fase 2: reconciliação em background =====
+      // Só atualiza a lista realmente afetada (interna OU SAP), com um
+      // pequeno atraso para dar tempo do SAP processar a decisão. Se falhar,
+      // o cache local otimista já mantém a UI consistente até o próximo ciclo.
       void (async () => {
         try {
+          await new Promise((r) => setTimeout(r, 1500));
           if (internalDoc) {
-            await refreshExpenses();
+            if ((selectedDoc as any)?.docType === "sales") {
+              await refreshSales();
+            } else {
+              await refreshPurchase();
+            }
           } else {
-            await refreshCache();
+            // Dispara sync do histórico em paralelo — não bloqueia o refresh.
             try {
               const { sapFunctionFetch } = await import("@/lib/auth-fetch");
               void sapFunctionFetch("approval-history-sync", { method: "POST" }).catch(() => {});
             } catch { /* best-effort */ }
+            await refreshCache();
           }
         } catch (refreshErr) {
-          console.error("Refresh após ação falhou:", refreshErr);
-          const detail = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
-          toast.error(
-            `A ação foi registrada, mas não conseguimos atualizar a lista: ${detail}`,
-          );
+          console.warn("Reconciliação em background falhou (UI já atualizada):", refreshErr);
         }
       })();
     } catch (err) {
