@@ -731,7 +731,7 @@ export async function exportExpenseDetailPdf(
           { label: bpLabel, value: expense.supplier_name + (expense.supplier_code ? ` (${expense.supplier_code})` : "") },
           { label: "Solicitante", value: `${expense.requester_name}${expense.requester_email ? ` <${expense.requester_email}>` : ""}` },
           { label: "Moeda", value: expense.currency || "—" },
-          { label: "Aprovador atual", value: expense.current_approver || "—" },
+          { label: "Aprovador atual", value: (String(expense.status || "").toLowerCase() === "pendente_aprovacao" ? (expense.current_approver || "—") : "—") },
           { label: "Data do documento", value: formatDate(expense.doc_date) },
           { label: "Vencimento", value: formatDate(expense.due_date) },
           { label: "C. Custo padrão", value: expense.cost_center || "—" },
