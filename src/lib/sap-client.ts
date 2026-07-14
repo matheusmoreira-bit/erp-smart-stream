@@ -184,7 +184,7 @@ async function callProxy(body: Record<string, unknown>): Promise<any> {
       throw lastError;
     }
 
-    return data as Record<string, unknown>;
+    return data;
   }
 
   throw lastError instanceof Error ? lastError : new Error("Falha ao chamar o SAP após múltiplas tentativas.");
