@@ -2351,8 +2351,8 @@ export default function ApprovalsPage() {
       try {
         if (internalDoc) {
           const result = action === "approve"
-            ? await approveExpense(internalDoc, remarks, opts?.idempotencyKey)
-            : await rejectExpense(internalDoc, remarks, opts?.idempotencyKey);
+            ? await approveExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true })
+            : await rejectExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true });
           // Retry idempotente: o servidor detectou a mesma Idempotency-Key
           // e reentregou a resposta original — avisamos o usuário para que
           // ele saiba que a ação NÃO foi processada duas vezes.
