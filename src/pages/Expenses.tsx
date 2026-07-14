@@ -856,7 +856,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const { refresh: refreshDrafts } = useDocumentDrafts(mode, session?.companyDB);
+
+  // Se navegamos para cá com arquivos pré-anexados (ex.: PDF da NF de entrada),
+  // consome do store e abre o modal de nova compra automaticamente.
+  useEffect(() => {
+    if (mode !== "purchase") return;
+    const files = consumePendingPurchaseFiles();
+    if (files && files.length > 0) {
+      setPendingFiles(files);
+      setShowCreate(true);
+    }
+  }, [mode]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
