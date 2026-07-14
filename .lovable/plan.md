@@ -1,77 +1,121 @@
-# Sync interno de PC + NF + Contas a Pagar e resolver de relações
+# Redesign do Mapa de Relações — Timeline Horizontal
 
-Hoje a validação PagCorp e o cálculo de relações batem no SAP Service Layer em tempo real (SapValidationDialog, pagcorp-settlement-watcher, RelationsMap). Isso é lento, cria carga no SL e falha em ambientes que barram `DocumentLines/any()`.
+Transformar o grafo atual (nós dispersos com ligações em várias direções) em uma **timeline horizontal por estágios**, mantendo toda a lógica de dados existente. Somente a camada de renderização muda.
 
-A proposta é espelhar os três documentos no banco de forma incremental e resolver as relações internamente. A UI passa a ler apenas o Postgres.
+## Escopo
 
-## O que já existe
-- `sap_nf_entrada_cache` + `sap_nf_entrada_sync_state` + função `sap-nf-entrada-sync` (NF de entrada incremental, com `base_po_doc_entry` já extraído). Mantido como está.
+Alterar **apenas** o componente de visualização:
+- `src/components/RelationsMapFlow.tsx` — novo layout em colunas (será reescrito)
+- `src/components/RelationsMap.tsx` — pequenos ajustes: passar `flowType`, legenda, handler do painel lateral
 
-## Novas tabelas (migration)
+**Não alterar**: hooks (`useRelationsMapDerived`, etc.), edge functions, queries SAP/PagCorp, nem outros componentes.
+
+## Layout
+
+Canvas horizontal com React Flow (mantém pan/zoom/controles/minimap já existentes).
+
+Colunas fixas (estágios), da esquerda para a direita:
+
+**Fluxo de compras** (padrão, quando `flowType="compras"`):
 
 ```text
-sap_purchase_order_cache
-  company_db, doc_entry (PK composto), doc_num, series,
-  card_code, card_name, doc_date, doc_due_date, doc_total, doc_total_fc,
-  doc_currency, document_status, cancelled, sap_update_date, raw_json, synced_at
-
-sap_purchase_order_sync_state
-  company_db (PK), last_update_date, last_doc_entry, last_run_at,
-  last_status, last_error, last_batch_count, total_synced
-
-sap_vendor_payment_cache
-  company_db, doc_entry (PK composto), doc_num, series, card_code, card_name,
-  doc_date, doc_total, doc_total_fc, doc_currency, document_status, cancelled,
-  invoice_links jsonb  -- [{docEntry, invoiceType, sumApplied, appliedFC}]
-  sap_update_date, raw_json, synced_at
-
-sap_vendor_payment_sync_state (mesmo shape do NF sync_state)
-
-pagcorp_document_relations
-  pagcorp_log_id uuid PK (FK -> pagcorp_integration_log.id)
-  company_db, po_doc_entry, po_doc_num, po_status, po_total, po_currency,
-  nf_doc_entries int[], payment_doc_entries int[],
-  po_found bool, nf_found bool, payment_found bool,
-  amount_matches bool, last_resolved_at timestamptz, resolve_error text
+[Pedido de Compra] → [Aprovação] → [PC no SAP] → [NF de Entrada] → [Contas a Pagar]
 ```
 
-Todas com RLS + GRANTs (admin read; service_role full).
+**Fluxo PagCorp** (`flowType="pagcorp"` — detectado quando o expense vem de despesa PagCorp; por ora expõe prop opcional, default `compras`):
 
-## Novas edge functions
+```text
+[Despesa PagCorp] → [PC no SAP] → [NF de Entrada] → [Baixa Contas a Pagar]
+```
 
-1. **`sap-po-cache-sync`** — clone do `sap-nf-entrada-sync` para `PurchaseOrders`. Sync incremental por `UpdateDate + DocEntry`, paginado, com `watcher-lock`. Ignora bases `SBO_TESTE_*`. Login exclusivo com `Apiuser` (mesma regra do `sap-sl-cache-refresh`).
+Cada coluna:
+- Cabeçalho fixo no topo com ícone + nome do estágio + contador de nós
+- Nós empilhados verticalmente quando há ramificação (1-N)
+- Largura fixa (~260px), altura dinâmica
+- Fundo levemente diferenciado (faixa vertical translúcida) para separar as colunas
 
-2. **`sap-vendor-payment-cache-sync`** — análogo para `VendorPayments`. Extrai `PaymentInvoices` para `invoice_links` (para poder cruzar com NFs sem re-consultar o SAP).
+Edges:
+- `type: "smoothstep"` com curva horizontal (saem sempre da direita → entram na esquerda)
+- Ligações 1-N formam leque a partir do mesmo `sourceHandle`
+- Ligações pendentes/não confirmadas: `strokeDasharray` (tracejado)
+- Cor da edge segue o tom do nó de origem
 
-3. **`pagcorp-relations-resolver`** — lê `pagcorp_integration_log` com `sap_doc_entry not null` por empresa; para cada log:
-   - localiza PC em `sap_purchase_order_cache`
-   - localiza NFs em `sap_nf_entrada_cache` onde `base_po_doc_entry = po`
-   - localiza pagamentos em `sap_vendor_payment_cache` cujo `invoice_links` contenha uma das NFs
-   - grava/atualiza `pagcorp_document_relations` (upsert por `pagcorp_log_id`).
-  
-   Suporta modo cron (todos os logs stale) e manual (`{ logId }` ou `{ companyDb }`).
+## Card (nó) — conteúdo compacto
 
-## Cron (via supabase--insert, não migration)
+Cada card mostra:
+- Ícone + tipo (Pedido, PC SAP, NF, Contas a Pagar, Aprovação)
+- Número/identificador (`SAP #7350`, `NF 10147/9`, `AP Doc #123`)
+- Valor formatado
+- Badge de status (finalizado, em aberto, pendente, rejeitado)
+- Quem lançou (nome curto)
+- Data de criação/lançamento
+- Indicador de anexos (`📎 N`) — só quando houver
 
-- `sap-po-cache-sync` a cada 5 min
-- `sap-vendor-payment-cache-sync` a cada 5 min
-- `pagcorp-relations-resolver` a cada 5 min (defasado 1 min do sync de NF já existente)
+Cores por tipo (mantém paleta existente):
+- Pedido/PC SAP → âmbar (`cactus-amber`)
+- Aprovação → azul (`primary`)
+- NF Entrada → verde (`cactus-green`)
+- Contas a Pagar → violeta
 
-## UI
+Estados visuais:
+- `current` → borda mais forte + anel pulsante sutil
+- `done` → check no canto
+- `rejected` → borda destrutiva + X
+- `pending` → opacidade reduzida
 
-- `SapValidationDialog` deixa de chamar `sapQuery`. Passa a receber `pagcorpLogId` e ler diretamente `pagcorp_document_relations` + os três `sap_*_cache`. Mostra `last_resolved_at` e um botão “Reconsultar” que invoca `pagcorp-relations-resolver` com `{ logId }`.
-- `PagCorp.tsx`: o card de transação exibe os campos vindos do cache (PC/NF/Pagamento) sem chamar SAP.
-- `pagcorp-settlement-watcher`: quando precisar procurar a NF de um PO, primeiro tenta `sap_nf_entrada_cache` por `base_po_doc_entry`; só cai no SAP se cache não tiver ainda.
-- `RelationsMap` continua funcionando; agora derivado de `pagcorp_document_relations` (já é consumido via hook que só precisa dos doc_entries).
+## Painel de detalhes lateral
 
-## Ordem de entrega
-1. Migration das 4 tabelas + GRANTs + RLS.
-2. Edge functions `sap-po-cache-sync`, `sap-vendor-payment-cache-sync`, `pagcorp-relations-resolver`.
-3. Cron para as três.
-4. Refatorar `SapValidationDialog` e o watcher de baixa.
-5. Ajustes menores no `PagCorp.tsx`/`RelationsMap` para consumir a nova tabela.
+Ao clicar num card, abrir **Sheet lateral direito** (não modal center), mostrando:
+- Todos os campos do card, expandidos
+- Lista de anexos (nome, tipo, link — reusa `AttachmentViewer`)
+- Relação: "Gerado a partir de: X" / "Gerou: Y, Z"
+- Histórico de mudanças de status (quando disponível — reusa dados já carregados: `log`, `sapHistory`)
 
-## Observações técnicas
-- Só sincroniza empresas cuja `system_credentials.username = 'Apiuser'` (mesma trava do sap-sl-cache-refresh).
-- Todas as queries de UI passam a filtrar por `company_db = session.companyDB` (regra já registrada em memória).
-- Trabalho é pesado; nada removemos ainda. Cache e resolver rodam em paralelo à consulta live e, quando estabilizarem, cortamos o fallback.
+O `StageDetailDialog` atual em `RelationsMap.tsx` é adaptado para receber um `nodeId` específico em vez de apenas o `stageKey`, permitindo mostrar detalhes de um nó específico (ex.: uma NF entre várias).
+
+## Legenda
+
+Barra fina fixa no topo do canvas (abaixo do toggle "Enriquecer") com chips coloridos: `● Pedido/PC ● Aprovação ● NF ● Contas a Pagar`.
+
+## Estrutura de dados interna
+
+Novo builder `buildTimelineGraph()` dentro de `RelationsMapFlow.tsx`, montando:
+
+```ts
+type StageColumn = {
+  key: "pedido" | "aprovacao" | "pc_sap" | "nf_entrada" | "contas_pagar" | "despesa_pagcorp";
+  label: string;
+  x: number; // posição X fixa da coluna
+  nodes: TimelineNode[];
+};
+```
+
+Depois converte para `Node[]` + `Edge[]` do React Flow, calculando Y de cada nó (centraliza verticalmente dentro da coluna, com espaçamento fixo).
+
+Edges construídas explicitamente a partir das relações já derivadas:
+- Pedido → Aprovação (1-N nos aprovadores)
+- Aprovação (último aprovador) → PC SAP
+- PC SAP → NFs (`nfLinks`)
+- Cada NF → seus `ap_links`
+- Contas a Pagar órfãs → linha direta do PC SAP
+
+## Responsividade
+
+- Canvas em `w-full h-[65vh]` (mantido)
+- Em telas estreitas, `fitView` faz zoom-out; usuário pode dar pan/zoom
+- Colunas mantêm largura fixa → scroll horizontal natural do canvas
+
+## Detalhes técnicos
+
+- Continua usando `@xyflow/react` (já instalado)
+- Novos tipos de nó: `stageHeader` (cabeçalho da coluna), `docCard` (nó unificado com variantes de tom)
+- `nodesDraggable={false}` nos cabeçalhos, `true` nos cards
+- Handles somente `left` (target) e `right` (source) — remove os `top`/`bottom` do RootNode
+- Legenda como componente HTML sobreposto ao canvas (position absolute)
+
+## Não escopo (não fazer)
+
+- Alterar hooks de dados
+- Alterar edge functions
+- Alterar outras telas
+- Detectar automaticamente `flowType` — receber via prop com default `"compras"`; a detecção PagCorp fica para etapa futura
