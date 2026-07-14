@@ -1,14 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, PlayCircle, ExternalLink, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useCompanies } from "@/hooks/useCompanies";
+import { useSap } from "@/contexts/SapContext";
 import { useAuditCrossFiscal, type CenarioCruzamento, type CruzamentoRow } from "@/hooks/useAuditCrossFiscal";
 
 const CENARIO_LABEL: Record<CenarioCruzamento, string> = {
@@ -56,22 +56,28 @@ function toCsv(rows: CruzamentoRow[]): string {
 export default function AuditCrossFiscal() {
   const { toast } = useToast();
   const { companies } = useCompanies();
-  const activeCompanies = useMemo(() => (companies || []).filter((c: any) => c.is_active), [companies]);
+  const { session } = useSap();
+  const loggedCompanyDb = session?.companyDB || "";
+
+  const loggedCompany = useMemo(
+    () => (companies || []).find((c: any) => c.company_db === loggedCompanyDb),
+    [companies, loggedCompanyDb],
+  );
+  const empresaId = loggedCompany?.id || "";
+  const erp = (loggedCompany?.erp_type || session?.erpType || "").toLowerCase();
 
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
   const lastOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-  const [empresaId, setEmpresaId] = useState<string>("");
   const [inicio, setInicio] = useState<string>(firstOfMonth);
   const [fim, setFim] = useState<string>(lastOfMonth);
-  const [erp, setErp] = useState<string>("all");
   const [aba, setAba] = useState<CenarioCruzamento>("conciliado");
   const [running, setRunning] = useState(false);
 
   const { rows, loading, error, refresh, runCross, updateRow } = useAuditCrossFiscal({
     empresa_id: empresaId || undefined,
-    erp_origem: erp !== "all" ? erp : undefined,
+    erp_origem: erp || undefined,
     periodo_inicio: inicio || undefined,
     periodo_fim: fim || undefined,
   });
@@ -88,7 +94,7 @@ export default function AuditCrossFiscal() {
   const rowsAba = useMemo(() => rows.filter((r) => r.cenario === aba), [rows, aba]);
 
   async function handleRun() {
-    if (!empresaId) return toast({ title: "Selecione uma empresa", variant: "destructive" });
+    if (!empresaId) return toast({ title: "Empresa logada não identificada", variant: "destructive" });
     setRunning(true);
     try {
       const res = await runCross(empresaId, inicio, fim);
@@ -119,22 +125,19 @@ export default function AuditCrossFiscal() {
       <div>
         <h2 className="text-xl font-bold">Cruzamento Fiscal × Pagamentos</h2>
         <p className="text-sm text-muted-foreground">
-          Compara notas capturadas pelo MasterTax com contas pagas no ERP da empresa. Funciona para qualquer ERP registrado.
+          Compara notas capturadas pelo MasterTax com contas pagas no ERP da empresa logada.
         </p>
       </div>
 
       {/* Filtros */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
         <div>
-          <Label>Empresa</Label>
-          <Select value={empresaId} onValueChange={setEmpresaId}>
-            <SelectTrigger><SelectValue placeholder="Selecione…" /></SelectTrigger>
-            <SelectContent>
-              {activeCompanies.map((c: any) => (
-                <SelectItem key={c.id} value={c.id}>{c.display_name} ({(c.erp_type || "").toUpperCase()})</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label>Empresa (logada)</Label>
+          <Input value={loggedCompany?.display_name || loggedCompanyDb || "—"} readOnly disabled />
+        </div>
+        <div>
+          <Label>ERP</Label>
+          <Input value={erp ? erp.toUpperCase() : "—"} readOnly disabled />
         </div>
         <div>
           <Label>Início</Label>
@@ -143,18 +146,6 @@ export default function AuditCrossFiscal() {
         <div>
           <Label>Fim</Label>
           <Input type="date" value={fim} onChange={(e) => setFim(e.target.value)} />
-        </div>
-        <div>
-          <Label>ERP</Label>
-          <Select value={erp} onValueChange={setErp}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="omie">Omie</SelectItem>
-              <SelectItem value="sap_b1">SAP B1</SelectItem>
-              <SelectItem value="sap">SAP</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
         <div className="flex gap-2">
           <Button onClick={handleRun} disabled={running || !empresaId}>
@@ -165,9 +156,9 @@ export default function AuditCrossFiscal() {
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 text-destructive text-sm px-3 py-2">
-          {error}
+      {!empresaId && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-600 text-sm px-3 py-2">
+          Não foi possível identificar a empresa da sessão atual ({loggedCompanyDb || "sem companyDB"}). Faça login novamente na empresa desejada.
         </div>
       )}
 
