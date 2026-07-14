@@ -1,0 +1,2 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS sap_status_last_check_at timestamptz;
+CREATE INDEX IF NOT EXISTS expenses_sap_status_last_check_at_idx ON public.expenses (sap_status_last_check_at DESC NULLS LAST);

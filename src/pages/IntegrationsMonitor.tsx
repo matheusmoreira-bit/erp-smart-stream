@@ -57,6 +57,7 @@ interface UnifiedIntegration {
   id: string;
   source: Source;
   created_at: string;
+  last_check_at?: string | null;
   company_db: string | null;
   external_ref: string;       // expense id slice / pagcorp expense id
   description: string;        // supplier_name / pagcorp description
@@ -187,7 +188,7 @@ export default function IntegrationsMonitor() {
         let expenseQuery = supabase
           .from("expenses")
           .select(
-            "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_last_attempt_at, origin",
+            "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_last_attempt_at, sap_status_last_check_at, origin",
           )
           .order("sap_integration_last_attempt_at", { ascending: false, nullsFirst: false })
           .limit(500);
@@ -229,6 +230,7 @@ export default function IntegrationsMonitor() {
             id: e.id,
             source: "expense",
             created_at: e.sap_integration_last_attempt_at || e.created_at,
+            last_check_at: e.sap_status_last_check_at || e.sap_integration_last_attempt_at || null,
             company_db: e.company_db,
             external_ref: e.id.slice(0, 8),
             description: e.supplier_name || "—",
@@ -419,7 +421,8 @@ export default function IntegrationsMonitor() {
                   <TableHead>Status</TableHead>
                   <TableHead>Estágios SAP</TableHead>
                   <TableHead>SAP Doc</TableHead>
-                  <TableHead className="w-[160px]">Última tentativa</TableHead>
+                  <TableHead className="w-[150px]">Integrado em</TableHead>
+                  <TableHead className="w-[150px]">Último polling</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -479,6 +482,11 @@ export default function IntegrationsMonitor() {
                     <TableCell className="text-xs text-muted-foreground">
                       {formatDate(it.created_at)}
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {it.source === "expense"
+                        ? (it.last_check_at ? formatDate(it.last_check_at) : "—")
+                        : "—"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -512,7 +520,12 @@ export default function IntegrationsMonitor() {
                 <Field label="Descrição">{selected.description}</Field>
                 <Field label="Valor">{formatCurrency(selected.amount, selected.currency || "BRL")}</Field>
                 <Field label="Iniciado por">{selected.initiated_by || "—"}</Field>
-                <Field label="Última tentativa">{formatDate(selected.created_at)}</Field>
+                <Field label="Integrado em">{formatDate(selected.created_at)}</Field>
+                {selected.source === "expense" && (
+                  <Field label="Último polling">
+                    {selected.last_check_at ? formatDate(selected.last_check_at) : "—"}
+                  </Field>
+                )}
                 <Field label="SAP DocEntry">{selected.sap_doc_entry ?? "—"}</Field>
                 <Field label="SAP DocNum">{selected.sap_doc_num ?? "—"}</Field>
               </div>
