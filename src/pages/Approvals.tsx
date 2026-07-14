@@ -2246,7 +2246,8 @@ export default function ApprovalsPage() {
       a.cardName.toLowerCase().includes(q) ||
       a.requester.toLowerCase().includes(q) ||
       a.currentApprover.toLowerCase().includes(q) ||
-      a.docTypeName.toLowerCase().includes(q)
+      a.docTypeName.toLowerCase().includes(q) ||
+      (a.documentLines || []).some((l) => (l.Project || "").toLowerCase().includes(q))
     );
   });
 
