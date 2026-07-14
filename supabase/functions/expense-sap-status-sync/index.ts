@@ -15,6 +15,7 @@ interface ExpenseRow {
   status: string;
   supplier_name: string;
   sap_sync_attempts?: number | null;
+  sap_purchase_order_status?: string | null;
 }
 
 // Backoff exponencial: 1, 2, 4, 8, 16, 32, 60min (cap 60), depois desiste (deixa em sync_error).
