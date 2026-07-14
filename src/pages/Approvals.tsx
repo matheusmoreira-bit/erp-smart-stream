@@ -83,18 +83,46 @@ function formatCurrency(value: number, currency: string = "BRL") {
   }
 }
 
+function parseDateFlexible(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const s = String(dateStr).trim();
+  // DD/MM/YYYY ou DD-MM-YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (dmy) {
+    const d = parseInt(dmy[1], 10);
+    const m = parseInt(dmy[2], 10);
+    let y = parseInt(dmy[3], 10);
+    if (y < 100) y += 2000;
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    if (dt.getUTCDate() !== d || dt.getUTCMonth() !== m - 1) return null;
+    return dt;
+  }
+  // ISO YYYY-MM-DD (força UTC pra evitar shift de timezone)
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/);
+  if (iso) {
+    const y = +iso[1], m = +iso[2], d = +iso[3];
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  const dt = new Date(s);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
 function formatDate(dateStr: string) {
   if (!dateStr) return "—";
-  try {
-    return new Intl.DateTimeFormat("pt-BR").format(new Date(dateStr));
-  } catch {
-    return dateStr;
-  }
+  const dt = parseDateFlexible(dateStr);
+  if (!dt) return "—";
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(dt);
 }
 
 function isOverdue(dueDate: string): boolean {
   if (!dueDate) return false;
-  return new Date(dueDate) < new Date();
+  const dt = parseDateFlexible(dueDate);
+  if (!dt) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return dt < today;
 }
 
 function ApprovalCard({
