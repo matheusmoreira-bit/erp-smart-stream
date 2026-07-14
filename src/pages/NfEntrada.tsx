@@ -169,6 +169,49 @@ export default function NfEntrada() {
     }
   }
 
+  async function handleCreatePurchaseOrder(it: NfEntradaImport) {
+    setBusyId(it.id);
+    try {
+      const files: File[] = [];
+      // Baixa o PDF (DANFE/DANFSE) e anexa ao pedido de compra. XML também
+      // vai como anexo quando disponível — a IA usa qualquer um dos dois.
+      const kinds: Array<"pdf" | "xml"> = ["pdf", "xml"];
+      for (const kind of kinds) {
+        try {
+          const url = await fetchNfFile(it.id, kind);
+          const resp = await fetch(url);
+          if (!resp.ok) continue;
+          const blob = await resp.blob();
+          const baseName = it.chave_acesso || it.numero_nf || it.id;
+          const ext = kind === "pdf" ? "pdf" : "xml";
+          const mime = kind === "pdf" ? "application/pdf" : "application/xml";
+          files.push(new File([blob], `NF-${baseName}.${ext}`, { type: blob.type || mime }));
+        } catch (err) {
+          // Ignora falha por tipo individual (ex.: 404 para PDF em NF-e).
+          console.warn(`[nf-entrada] falha ao baixar ${kind}:`, (err as Error).message);
+        }
+      }
+      if (files.length === 0) {
+        toast({
+          title: "Nenhum arquivo disponível",
+          description: "Não foi possível baixar o PDF ou XML desta NF para anexar ao pedido.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setPendingPurchaseFiles(files);
+      toast({
+        title: "Abrindo Nova Compra",
+        description: `${files.length} anexo(s) da NF prontos para o pedido.`,
+      });
+      navigate("/compras");
+    } catch (e) {
+      toast({ title: "Falha ao lançar pedido", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handlePullNow() {
     try {
       await pullNow();
