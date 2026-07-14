@@ -1,0 +1,30 @@
+flowchart TD
+    Start([Usuário acessa /]) --> Login{Autenticado?}
+    Login -->|Não| SignIn[/AdminLogin<br/>Lovable Cloud Auth/]
+    SignIn --> ProfileGate{Perfil completo?}
+    Login -->|Sim| ProfileGate
+    ProfileGate -->|Não| Profile[Profile Completion Gate]
+    Profile --> Hub
+    ProfileGate -->|Sim| Hub[Index / Hub Principal]
+
+    Hub --> Approvals[ApprovalsHub]
+    Hub --> Expenses[Expenses]
+    Hub --> NF[NF Entrada]
+    Hub --> PagCorp[PagCorp]
+    Hub --> Audit[AuditHub]
+    Hub --> Integr[IntegrationsHub]
+    Hub --> Admin{Admin?}
+    Admin -->|Sim| AdminPanel[Admin / Users / Credentials]
+
+    Approvals --> Decide[Aprovar / Rejeitar]
+    Decide --> SapVal[Validação SAP B1]
+    SapVal --> Persist[(Postgres + audit_log)]
+    Persist --> Notify[Notificações<br/>Email / WhatsApp]
+
+    Expenses --> UploadDoc[Upload NF / Boleto]
+    UploadDoc --> AIExtract[Edge Function<br/>extração via AI Gateway]
+    AIExtract --> Persist
+
+    NF --> Import[Importar XML]
+    Import --> CrossFiscal[Cross-fiscal ERP]
+    CrossFiscal --> Persist

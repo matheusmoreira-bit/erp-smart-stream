@@ -1,0 +1,39 @@
+graph TB
+    subgraph Cliente["Cliente (Browser)"]
+        UI[React 18 + Vite SPA]
+        SW[Service Worker / Cache]
+    end
+
+    subgraph Lovable["Lovable Cloud"]
+        AUTH[Auth (JWT)<br/>RBAC user_roles]
+        DB[(Postgres<br/>RLS + user_roles)]
+        STG[Storage Buckets<br/>nf-entrada / expense / audit]
+        EDGE[Edge Functions Deno<br/>~68 funções]
+        CRON[pg_cron + pgmq<br/>filas e jobs]
+        AIGW[Lovable AI Gateway]
+    end
+
+    subgraph Externos["Sistemas Externos"]
+        SAP[SAP Business One<br/>Service Layer]
+        OMIE[Omie API]
+        PAGC[PagCorp API<br/>HMAC + AES]
+        GDRIVE[Google Drive]
+        SYN[Synapse]
+        IDP[Azure AD / IdP]
+    end
+
+    UI -->|HTTPS + JWT| AUTH
+    UI -->|PostgREST| DB
+    UI -->|invoke| EDGE
+    UI --> STG
+    EDGE --> DB
+    EDGE --> STG
+    EDGE --> AIGW
+    EDGE -->|Service Layer| SAP
+    EDGE --> OMIE
+    EDGE --> PAGC
+    EDGE --> GDRIVE
+    EDGE --> SYN
+    EDGE --> IDP
+    CRON --> EDGE
+    DB -.trigger.-> CRON
