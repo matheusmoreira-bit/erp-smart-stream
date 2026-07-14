@@ -360,7 +360,7 @@ export function useRoiAnalysis(opts: Options) {
         economia_percent: economiaPercent,
       };
     });
-  }, [params, expenses, approvals, companyDb, consolidated, companies, from?.getTime(), to?.getTime()]);
+  }, [params, expenses, approvals, pos, companyDb, consolidated, companies, from?.getTime(), to?.getTime()]);
 
   const totals = useMemo(() => {
     if (!metricsByCompany.length) return null;
