@@ -1,121 +1,53 @@
-# Redesign do Mapa de Relações — Timeline Horizontal
+## Objetivo
+Validar se o fluxo MasterTax → ERP Flow está de fato vinculando **NFs de entrada ao Pedido de Compra (PC) correspondente** no SAP, usando a base `TST - ANA Gaming` (SBO_TESTE_20260318_ANAGAMING) como referência. Vínculo alvo: **cabeçalho NF ↔ PO** (`nf_entrada_imports.sap_matched_po_doc_entry`).
 
-Transformar o grafo atual (nós dispersos com ligações em várias direções) em uma **timeline horizontal por estágios**, mantendo toda a lógica de dados existente. Somente a camada de renderização muda.
+## Diagnóstico já levantado
 
-## Escopo
+- **31 NFs importadas** do MasterTax em TST - ANA Gaming; apenas **6 amarraram a um PC** (`sap_matched_po_is_draft = true` em todas — ou seja, esboços).
+- **25 NFs ficaram sem match** e permanecem em `awaiting_erpflow_approval`. Fornecedores predominantes: escritórios de advocacia e consultorias (Pinheiro Neto, Bichara, RSM, Sofist, Cappra…) — perfil típico de serviço pago sem PC prévio no SAP.
+- **4 NFs estão com `sap_company_db = NULL`** — bug de ingestão (pull não gravou a base de destino).
+- Cache local `sap_purchase_order_cache` não tem linhas para `SBO_TESTE_%` porque `sap-po-cache-sync` chama `isTestCompanyDb()` e pula bases teste. Isso **não afeta o match** — `mastertax-pull` e `nf-entrada-rematch` consultam o Service Layer ao vivo — mas afeta relatórios e o Mapa de Relações.
+- Watcher `nf-entrada-sap-watcher` rodou às 17:10:04 UTC de hoje com `processed=6 linked=0` — ou seja: nada foi promovido no ciclo atual.
 
-Alterar **apenas** o componente de visualização:
-- `src/components/RelationsMapFlow.tsx` — novo layout em colunas (será reescrito)
-- `src/components/RelationsMap.tsx` — pequenos ajustes: passar `flowType`, legenda, handler do painel lateral
+## Escopo da validação (sem alterar lógica)
 
-**Não alterar**: hooks (`useRelationsMapDerived`, etc.), edge functions, queries SAP/PagCorp, nem outros componentes.
+1. **Categorizar as 25 NFs sem match** rodando um "rematch em lote" contra o SAP ao vivo e classificando o retorno em três causas:
+   - `fornecedor não localizado` (CNPJ não bate em `BusinessPartners.FederalTaxID` e nome não contém match).
+   - `PC não localizado` (fornecedor achado mas sem `PurchaseOrders` aberto nem `Drafts oPurchaseOrders`).
+   - `PC candidato existe mas valor divergente` (há PC/Draft aberto mas `DocTotal` diferente do `valor_total` da NF — investigar tolerância).
+2. **Reprocessar as 4 NFs com `sap_company_db` NULL** localmente: identificar se o pull perdeu a base ou se o CNPJ não bate a nenhuma empresa cadastrada em `system_credentials`; anotar o motivo no `nf_entrada_logs`.
+3. **Confirmar os 6 vínculos existentes**: para cada `sap_matched_po_doc_entry`, ler no SAP se o `Draft`/PO ainda está `Open`, se CardCode confere e se o `DocTotal` bate — validar que o vínculo continua íntegro (não foi cancelado no ERP).
+4. **Amarrar o resultado à cardinalidade N NF ↔ 1 PC**: para cada PC vinculado, contar quantas NFs apontam para ele e conferir consistência com `settlement_ap_count` / `nf_entrada_contas_pagar`.
 
-## Layout
+## Entregável
 
-Canvas horizontal com React Flow (mantém pan/zoom/controles/minimap já existentes).
-
-Colunas fixas (estágios), da esquerda para a direita:
-
-**Fluxo de compras** (padrão, quando `flowType="compras"`):
+Um relatório único no chat com:
 
 ```text
-[Pedido de Compra] → [Aprovação] → [PC no SAP] → [NF de Entrada] → [Contas a Pagar]
+Base: SBO_TESTE_20260318_ANAGAMING (TST - ANA Gaming)
+Total NFs:                31
+Com PC vinculado:         6   (drafts abertos)
+  └ íntegros hoje:        X / 6
+Sem PC:                  25
+  ├ fornecedor no SAP não localizado:  A
+  ├ fornecedor OK, sem PC aberto:      B
+  └ fornecedor OK, PC com valor ≠ NF:  C
+Sap_company_db nulo:      4  (motivos consolidados)
 ```
+Mais uma tabela por NF (número, fornecedor, valor, causa) para ação subsequente.
 
-**Fluxo PagCorp** (`flowType="pagcorp"` — detectado quando o expense vem de despesa PagCorp; por ora expõe prop opcional, default `compras`):
+## Como executar (build phase)
 
-```text
-[Despesa PagCorp] → [PC no SAP] → [NF de Entrada] → [Baixa Contas a Pagar]
-```
+- Adicionar um script one-shot em `/tmp` que:
+  1. Lê as 25 NFs sem match.
+  2. Chama a edge function `nf-entrada-rematch` para cada uma (ela já consulta `BusinessPartners`, `PurchaseOrders` e `Drafts` no SAP), coleta a resposta e classifica.
+  3. Para as 4 NFs com `sap_company_db` NULL, consulta `system_credentials` pelo CNPJ do destinatário (se disponível no XML original em storage) e loga o resultado.
+  4. Salva o CSV consolidado em `/mnt/documents/nf-entrada-anagaming-validacao.csv` e imprime o resumo.
+- Sem migrações. Sem edição de código de produção. Apenas leitura + a chamada existente ao rematch.
 
-Cada coluna:
-- Cabeçalho fixo no topo com ícone + nome do estágio + contador de nós
-- Nós empilhados verticalmente quando há ramificação (1-N)
-- Largura fixa (~260px), altura dinâmica
-- Fundo levemente diferenciado (faixa vertical translúcida) para separar as colunas
+## Próximos passos (fora deste plano, dependem do resultado)
 
-Edges:
-- `type: "smoothstep"` com curva horizontal (saem sempre da direita → entram na esquerda)
-- Ligações 1-N formam leque a partir do mesmo `sourceHandle`
-- Ligações pendentes/não confirmadas: `strokeDasharray` (tracejado)
-- Cor da edge segue o tom do nó de origem
-
-## Card (nó) — conteúdo compacto
-
-Cada card mostra:
-- Ícone + tipo (Pedido, PC SAP, NF, Contas a Pagar, Aprovação)
-- Número/identificador (`SAP #7350`, `NF 10147/9`, `AP Doc #123`)
-- Valor formatado
-- Badge de status (finalizado, em aberto, pendente, rejeitado)
-- Quem lançou (nome curto)
-- Data de criação/lançamento
-- Indicador de anexos (`📎 N`) — só quando houver
-
-Cores por tipo (mantém paleta existente):
-- Pedido/PC SAP → âmbar (`cactus-amber`)
-- Aprovação → azul (`primary`)
-- NF Entrada → verde (`cactus-green`)
-- Contas a Pagar → violeta
-
-Estados visuais:
-- `current` → borda mais forte + anel pulsante sutil
-- `done` → check no canto
-- `rejected` → borda destrutiva + X
-- `pending` → opacidade reduzida
-
-## Painel de detalhes lateral
-
-Ao clicar num card, abrir **Sheet lateral direito** (não modal center), mostrando:
-- Todos os campos do card, expandidos
-- Lista de anexos (nome, tipo, link — reusa `AttachmentViewer`)
-- Relação: "Gerado a partir de: X" / "Gerou: Y, Z"
-- Histórico de mudanças de status (quando disponível — reusa dados já carregados: `log`, `sapHistory`)
-
-O `StageDetailDialog` atual em `RelationsMap.tsx` é adaptado para receber um `nodeId` específico em vez de apenas o `stageKey`, permitindo mostrar detalhes de um nó específico (ex.: uma NF entre várias).
-
-## Legenda
-
-Barra fina fixa no topo do canvas (abaixo do toggle "Enriquecer") com chips coloridos: `● Pedido/PC ● Aprovação ● NF ● Contas a Pagar`.
-
-## Estrutura de dados interna
-
-Novo builder `buildTimelineGraph()` dentro de `RelationsMapFlow.tsx`, montando:
-
-```ts
-type StageColumn = {
-  key: "pedido" | "aprovacao" | "pc_sap" | "nf_entrada" | "contas_pagar" | "despesa_pagcorp";
-  label: string;
-  x: number; // posição X fixa da coluna
-  nodes: TimelineNode[];
-};
-```
-
-Depois converte para `Node[]` + `Edge[]` do React Flow, calculando Y de cada nó (centraliza verticalmente dentro da coluna, com espaçamento fixo).
-
-Edges construídas explicitamente a partir das relações já derivadas:
-- Pedido → Aprovação (1-N nos aprovadores)
-- Aprovação (último aprovador) → PC SAP
-- PC SAP → NFs (`nfLinks`)
-- Cada NF → seus `ap_links`
-- Contas a Pagar órfãs → linha direta do PC SAP
-
-## Responsividade
-
-- Canvas em `w-full h-[65vh]` (mantido)
-- Em telas estreitas, `fitView` faz zoom-out; usuário pode dar pan/zoom
-- Colunas mantêm largura fixa → scroll horizontal natural do canvas
-
-## Detalhes técnicos
-
-- Continua usando `@xyflow/react` (já instalado)
-- Novos tipos de nó: `stageHeader` (cabeçalho da coluna), `docCard` (nó unificado com variantes de tom)
-- `nodesDraggable={false}` nos cabeçalhos, `true` nos cards
-- Handles somente `left` (target) e `right` (source) — remove os `top`/`bottom` do RootNode
-- Legenda como componente HTML sobreposto ao canvas (position absolute)
-
-## Não escopo (não fazer)
-
-- Alterar hooks de dados
-- Alterar edge functions
-- Alterar outras telas
-- Detectar automaticamente `flowType` — receber via prop com default `"compras"`; a detecção PagCorp fica para etapa futura
+- Se dominar a categoria "fornecedor OK, sem PC aberto" → definir política: criar rascunho de PC automático a partir da NF, ou marcar como "sem PC" e seguir para NF direta.
+- Se dominar "valor divergente" → decidir tolerância (%) e revisitar `findExistingPo` no `mastertax-pull` (hoje exige `DocTotal` exato; o `rematch` já é mais tolerante).
+- Se as 4 NFs com base nula forem recorrentes → corrigir o roteador de empresa em `mastertax-pull`.
+- Popular `sap_purchase_order_cache` também para bases teste (ou marcar SBO_TESTE_20260318_ANAGAMING como não-teste) para o Mapa de Relações ficar completo.
