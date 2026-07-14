@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type { NfEntradaLink, ContaPagarLink } from "@/hooks/useRelationsMapDerived";
 import type { RelationsMapExpense } from "./RelationsMap";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type ChainRow = {
   level_order: number;
