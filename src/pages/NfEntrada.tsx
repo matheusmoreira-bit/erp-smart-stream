@@ -368,6 +368,15 @@ export default function NfEntrada() {
                                 Ver histórico
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
+                              {!hasPoLink && !it.expense_id && it.status !== "cancelled" && it.status !== "completed" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleCreatePurchaseOrder(it)}
+                                  disabled={busyId === it.id}
+                                >
+                                  <ShoppingCart className="w-4 h-4 mr-2" />
+                                  Lançar pedido de Compras
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={() => handleRematch(it.id)}
                                 disabled={busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed"}
