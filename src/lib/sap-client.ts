@@ -103,7 +103,8 @@ async function doFetchWithTimeout(body: Record<string, unknown>, timeoutMs: numb
   }
 }
 
-async function callProxy(body: Record<string, unknown>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callProxy(body: Record<string, unknown>): Promise<any> {
   const action = typeof body?.action === "string" ? body.action : "";
   const canRetry = RETRIABLE_ACTIONS.has(action);
   const maxAttempts = canRetry ? MAX_RETRIES + 1 : 1;
