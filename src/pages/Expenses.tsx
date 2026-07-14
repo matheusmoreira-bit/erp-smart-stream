@@ -1134,7 +1134,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       e.requester_name.toLowerCase().includes(q) ||
       (e.remarks || "").toLowerCase().includes(q) ||
       (e.supplier_code || "").toLowerCase().includes(q) ||
-      (e.sap_doc_num?.toString() || "").includes(q)
+      (e.sap_doc_num?.toString() || "").includes(q) ||
+      (e.project || "").toLowerCase().includes(q) ||
+      (e.items || []).some((it) => (it.project || "").toLowerCase().includes(q))
     );
   };
 
