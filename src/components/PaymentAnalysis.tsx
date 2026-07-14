@@ -415,7 +415,7 @@ export function PaymentAnalysis() {
                     outerRadius={105}
                     paddingAngle={4}
                     cornerRadius={6}
-                    label={({ range, count }) => `${range}: ${count}`}
+                    label={(props: any) => `${props.range}: ${props.count}`}
                     labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }}
                     stroke="hsl(var(--background))"
                     strokeWidth={2}
@@ -466,7 +466,7 @@ export function PaymentAnalysis() {
                     outerRadius={105}
                     paddingAngle={4}
                     cornerRadius={6}
-                    label={({ name, count }) => `${name}: ${count}`}
+                    label={(props: any) => `${props.name}: ${props.count}`}
                     labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }}
                     stroke="hsl(var(--background))"
                     strokeWidth={2}

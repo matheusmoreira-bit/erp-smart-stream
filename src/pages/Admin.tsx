@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp } from "lucide-react";
+import { RoiAnalysis } from "@/components/RoiAnalysis";
 import {
   Building2,
   Plus,
@@ -370,7 +371,7 @@ export default function Admin() {
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   // Audit log
-  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions" | "admin_users" | "tools">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions" | "admin_users" | "tools" | "roi">("companies");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
@@ -658,6 +659,7 @@ export default function Admin() {
               { key: "audit", label: "Logs", icon: ScrollText },
               { key: "admin_users", label: "Admins", icon: ShieldCheck },
               { key: "tools", label: "Ferramentas", icon: Wrench },
+              { key: "roi", label: "ROI Consolidado", icon: TrendingUp },
             ].map((t) => {
               const Icon = t.icon;
               const isActive = activeTab === t.key;
@@ -860,6 +862,9 @@ export default function Admin() {
 
         {activeTab === "tools" && <TransferApprovalsTool />}
 
+        {activeTab === "roi" && <RoiAnalysis mode="consolidated" />}
+
+
         {activeTab === "audit" && (
           <>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
@@ -956,6 +961,7 @@ export default function Admin() {
                   { key: "admin_users", label: "Admins", icon: ShieldCheck },
                   { key: "audit", label: "Logs de Auditoria", icon: ScrollText },
                   { key: "tools", label: "Ferramentas", icon: Wrench },
+                  { key: "roi", label: "ROI Consolidado", icon: TrendingUp },
                 ].map((t) => {
                   const Icon = t.icon;
                   return (

@@ -3460,6 +3460,63 @@ export type Database = {
         }
         Relationships: []
       }
+      roi_parameters: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          custo_licenca_aprovador_sap: number
+          custo_licenca_flow: number
+          custo_licenca_solicitante_sap: number
+          horas_mes: number
+          id: string
+          juros_mes_percent: number
+          multa_percent: number
+          salario_aprovador: number
+          salario_solicitante: number
+          tempo_aprovar_flow_min: number
+          tempo_aprovar_sap_min: number
+          tempo_lancar_flow_min: number
+          tempo_lancar_sap_min: number
+          updated_at: string
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          custo_licenca_aprovador_sap?: number
+          custo_licenca_flow?: number
+          custo_licenca_solicitante_sap?: number
+          horas_mes?: number
+          id?: string
+          juros_mes_percent?: number
+          multa_percent?: number
+          salario_aprovador?: number
+          salario_solicitante?: number
+          tempo_aprovar_flow_min?: number
+          tempo_aprovar_sap_min?: number
+          tempo_lancar_flow_min?: number
+          tempo_lancar_sap_min?: number
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          custo_licenca_aprovador_sap?: number
+          custo_licenca_flow?: number
+          custo_licenca_solicitante_sap?: number
+          horas_mes?: number
+          id?: string
+          juros_mes_percent?: number
+          multa_percent?: number
+          salario_aprovador?: number
+          salario_solicitante?: number
+          tempo_aprovar_flow_min?: number
+          tempo_aprovar_sap_min?: number
+          tempo_lancar_flow_min?: number
+          tempo_lancar_sap_min?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sap_cache: {
         Row: {
           cache_key: string
