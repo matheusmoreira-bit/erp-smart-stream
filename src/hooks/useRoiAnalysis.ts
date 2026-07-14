@@ -165,7 +165,7 @@ export function useRoiAnalysis(opts: Options) {
       }
     }
 
-    // Agrupa por company_db
+    // Agrupa por company_db (a partir de expenses e approvals)
     const byCompany = new Map<string, ExpenseRow[]>();
     for (const e of expenses) {
       if (!e.company_db) continue;
@@ -173,12 +173,18 @@ export function useRoiAnalysis(opts: Options) {
       arr.push(e);
       byCompany.set(e.company_db, arr);
     }
+    // Garante empresas que só têm aprovações (sem docs no ERP Flow)
+    for (const a of approvals) {
+      if (a.company_db && !byCompany.has(a.company_db)) {
+        byCompany.set(a.company_db, []);
+      }
+    }
 
     const companiesToProcess = consolidated
       ? Array.from(byCompany.keys())
       : companyDb
         ? [companyDb]
-        : [];
+        : Array.from(byCompany.keys()); // fallback: sem companyDb, mostra todas visíveis
 
     return companiesToProcess.map((db) => {
       const p = pickParams(params, db);
