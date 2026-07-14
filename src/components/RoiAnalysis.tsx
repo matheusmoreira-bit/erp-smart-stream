@@ -34,8 +34,8 @@ export function RoiAnalysis({ mode }: Props) {
   const [paramsOpen, setParamsOpen] = useState(false);
 
   const dateFilter = period.preset === "all"
-    ? {}
-    : { from: period.range.from, to: period.range.to };
+    ? { from: undefined as Date | undefined, to: undefined as Date | undefined }
+    : { from: period.range.from || undefined, to: period.range.to || undefined };
 
   const companyDb = mode === "company" ? session?.companyDB : undefined;
   const { metricsByCompany, totals, activeParams, params, loading, error, refresh } = useRoiAnalysis({
