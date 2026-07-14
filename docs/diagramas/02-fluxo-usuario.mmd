@@ -1,6 +1,6 @@
 flowchart TD
     Start([Usuário acessa /]) --> Login{Autenticado?}
-    Login -->|Não| SignIn[/AdminLogin<br/>Supabase Auth/]
+    Login -->|Não| SignIn[/AdminLogin<br/>Lovable Cloud Auth/]
     SignIn --> ProfileGate{Perfil completo?}
     Login -->|Sim| ProfileGate
     ProfileGate -->|Não| Profile[Profile Completion Gate]
