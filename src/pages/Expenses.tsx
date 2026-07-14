@@ -331,7 +331,7 @@ function ExpenseDetailModal({
                   )}
                 </div>
               </div>
-              {expense.current_approver && (
+              {expense.current_approver && isPendingApproval(expense.status) && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Aprovador Atual</p>
                   <p className="text-foreground font-medium">{expense.current_approver}</p>
