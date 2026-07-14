@@ -866,7 +866,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Compra";
   const emptyLabel = isSales ? "Nenhum pedido de venda encontrado" : "Nenhuma compra encontrada";
   const emptyCta = isSales ? "Criar primeiro pedido" : "Criar primeira compra";
-  const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
+  const searchPlaceholder = isSales ? "Buscar por cliente, solicitante, projeto..." : "Buscar por fornecedor, solicitante, projeto...";
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { hasAccess: canViewAllExpenses } = useModuleAccess("expenses_view_all");
