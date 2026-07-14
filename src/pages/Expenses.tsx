@@ -714,6 +714,13 @@ function ExpenseCard({
 }) {
   const erpLbl = erpLabel || "ERP";
   const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? ` · ${erpLbl}` : "";
+  const projectCodes = Array.from(new Set(
+    [expense.project, ...(expense.items || []).map((it) => it.project)]
+      .map((p) => (p || "").trim())
+      .filter((p) => p.length > 0),
+  ));
+  const primaryProject = projectCodes[0];
+  const multiProject = projectCodes.length > 1;
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
