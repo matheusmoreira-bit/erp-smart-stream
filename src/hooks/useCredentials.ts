@@ -13,6 +13,12 @@ export function useCredentials() {
   const [credentials, setCredentials] = useState<CredentialMeta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // `lastFetchOk` só vira true depois de um GET bem-sucedido. Enquanto ele for
+  // false, `credentials = []` NÃO significa "não cadastrado" — significa "ainda
+  // não sei" (carregando ou última leitura falhou). Isso evita o falso alarme
+  // "Credencial não cadastrada" quando o fetch sofre um erro transiente
+  // (cold start da function, 401 durante refresh do token, timeout de rede).
+  const [lastFetchOk, setLastFetchOk] = useState(false);
 
   const credentialsFetch = useCallback((path: string, options: RequestInit = {}) => {
     return sapFunctionFetch(path, options);
@@ -30,8 +36,13 @@ export function useCredentials() {
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json();
       setCredentials(data.credentials || []);
+      setLastFetchOk(true);
     } catch (e) {
+      // Erro de leitura NÃO deve zerar o estado — o cadastro no banco continua
+      // válido; apenas não conseguimos confirmar agora. Mantém a última lista
+      // conhecida e marca lastFetchOk=false para os chamadores diferenciarem.
       setError(e instanceof Error ? e.message : "Erro ao buscar credenciais");
+      setLastFetchOk(false);
     } finally {
       setIsLoading(false);
     }
@@ -114,5 +125,5 @@ export function useCredentials() {
     [credentialsFetch]
   );
 
-  return { credentials, isLoading, error, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials, fetchCredentialValues };
+  return { credentials, isLoading, error, lastFetchOk, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials, fetchCredentialValues };
 }

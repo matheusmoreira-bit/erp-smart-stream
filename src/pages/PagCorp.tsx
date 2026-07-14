@@ -133,7 +133,7 @@ export default function PagCorp() {
   const { session, logout } = useSap();
   const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated } = usePagCorp();
   const { createExpense } = useExpenses();
-  const { credentials, fetchCredentials } = useCredentials();
+  const { credentials, isLoading: credsLoading, lastFetchOk: credsFetchOk, fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
 
   useEffect(() => {
@@ -143,11 +143,31 @@ export default function PagCorp() {
 
   const hasSapCredentials = credentials.some((c) => c.system_name === "sap" && c.company_db === session?.companyDB);
 
-  const checkSapCredentials = (): boolean => {
-    if (!hasSapCredentials) {
+  const checkSapCredentials = async (): Promise<boolean> => {
+    // Se ainda estamos carregando OU o último GET /credentials falhou, NÃO
+    // podemos afirmar "credencial não cadastrada" — tentamos revalidar antes
+    // de bloquear o usuário (evita falso alarme por erro transiente de rede,
+    // cold start da function ou 401 durante refresh do token Lovable).
+    if (!credsFetchOk || credsLoading) {
+      if (session?.companyDB) {
+        await fetchCredentials(session.companyDB, "sap");
+      }
+    }
+    // Reavalia após a possível revalidação.
+    const stillMissing = !credentials.some(
+      (c) => c.system_name === "sap" && c.company_db === session?.companyDB,
+    );
+    if (stillMissing && credsFetchOk) {
       toast.error("Credencial SAP B1 não cadastrada", {
         description: "Configure as credenciais do SAP Business One na tela de Credenciais antes de integrar.",
         action: { label: "Configurar", onClick: () => navigate("/integracoes/credenciais") },
+      });
+      return false;
+    }
+    if (stillMissing) {
+      // Não conseguimos confirmar — mostra erro neutro em vez de acusar cadastro faltando.
+      toast.error("Não foi possível verificar as credenciais SAP agora", {
+        description: "Tente novamente em instantes. Se persistir, verifique sua conexão.",
       });
       return false;
     }
@@ -348,7 +368,7 @@ export default function PagCorp() {
 
   const integrateAllNondeductible = async () => {
     if (!session?.companyDB) return;
-    if (!checkSapCredentials()) return;
+    if (!(await checkSapCredentials())) return;
     // If the user has selected nondeductible rows, integrate just those; else all pending
     const selectedNd = nondeductiblePending.filter((t) => selectedIds.has(t.id));
     const targets = selectedNd.length > 0 ? selectedNd : nondeductiblePending;
@@ -407,8 +427,8 @@ export default function PagCorp() {
     return map;
   }, [filteredTransactions]);
 
-  const openIntegrateDialog = (t: PagCorpTransaction, type: "generic" | "accountability") => {
-    if (!checkSapCredentials()) return;
+  const openIntegrateDialog = async (t: PagCorpTransaction, type: "generic" | "accountability") => {
+    if (!(await checkSapCredentials())) return;
     if (type === "accountability") {
       setAccountabilityModal({ open: true, tx: t });
     } else {
@@ -450,8 +470,8 @@ export default function PagCorp() {
     }
   };
 
-  const startBatch = () => {
-    if (!checkSapCredentials()) return;
+  const startBatch = async () => {
+    if (!(await checkSapCredentials())) return;
     const queue = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (queue.length === 0) {
       toast.info("Selecione ao menos uma transação");
@@ -471,8 +491,8 @@ export default function PagCorp() {
    *  - ≥2 selected, all sem prestação → consolidar em 1 PC
    *  - ≥2 selected, mixed/com prestação → percorrer em lote (uma por uma)
    */
-  const handleIntegrateBatchUnified = () => {
-    if (!checkSapCredentials()) return;
+  const handleIntegrateBatchUnified = async () => {
+    if (!(await checkSapCredentials())) return;
     const selected = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (selected.length === 0) {
       toast.info("Selecione ao menos uma transação");
@@ -580,8 +600,8 @@ export default function PagCorp() {
   };
 
 
-  const openConsolidateDialog = () => {
-    if (!checkSapCredentials()) return;
+  const openConsolidateDialog = async () => {
+    if (!(await checkSapCredentials())) return;
     const list = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (list.length < 2) {
       toast.info("Selecione 2 ou mais transações para consolidar");
