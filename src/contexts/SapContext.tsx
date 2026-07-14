@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { sapLogin, sapLogout, type SapSession, clearClientCache } from "@/lib/sap-client";
+import { sapLogin, sapLogout, ensureSapAuthToken, type SapSession, clearClientCache } from "@/lib/sap-client";
 
 export type ErpType = "sap" | "omie" | "s4hana_cloud" | "s4hana_cloud_private" | "s4hana_onprem" | "totvs_protheus" | "totvs_rm" | "totvs_datasul" | "netsuite";
 
@@ -11,6 +11,7 @@ export interface ErpSession {
   // SAP-specific
   sessionId?: string;
   routeId?: string;
+  sapAuthToken?: string;
   isSuperUser?: boolean;
   // Expiry timestamp (ms epoch). User session is capped at 30min
   // to mirror SAP Service Layer's SessionTimeout. After that, any
@@ -97,6 +98,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           userName,
           sessionId: sapSess.sessionId,
           routeId: sapSess.routeId,
+          sapAuthToken: sapSess.sapAuthToken,
           isSuperUser: sapSess.isSuperUser,
           expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
         });
@@ -211,6 +213,28 @@ export function SapProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [session?.expiresAt]);
 
+  useEffect(() => {
+    if (session?.erpType !== "sap" || !session.sessionId || session.sapAuthToken) return;
+    let cancelled = false;
+    void ensureSapAuthToken({
+      sessionId: session.sessionId,
+      routeId: session.routeId || "",
+      companyDB: session.companyDB,
+      userName: session.userName,
+      isSuperUser: !!session.isSuperUser,
+      erpType: "sap",
+      expiresAt: session.expiresAt,
+    }).then((token) => {
+      if (cancelled || !token) return;
+      setSession((prev) => (
+        prev?.erpType === "sap" && prev.sessionId === session.sessionId
+          ? { ...prev, sapAuthToken: token }
+          : prev
+      ));
+    });
+    return () => { cancelled = true; };
+  }, [session?.erpType, session?.sessionId, session?.sapAuthToken, session?.routeId, session?.companyDB, session?.userName, session?.isSuperUser, session?.expiresAt, setSession]);
+
   return (
     <ErpContext.Provider value={{ session, isLoading, error, login, logout }}>
       {children}
@@ -229,6 +253,7 @@ export function useSap() {
       return {
         sessionId: ctx.session.sessionId,
         routeId: ctx.session.routeId || "",
+        sapAuthToken: ctx.session.sapAuthToken,
         companyDB: ctx.session.companyDB,
         userName: ctx.session.userName,
         isSuperUser: ctx.session.isSuperUser || false,

@@ -10,6 +10,7 @@ const corsHeaders = {
 const DEFAULT_SAP_BASE_URL = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
 const HANA_VIEWS_URL = Deno.env.get("HANA_VIEWS_URL") || "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 const APPROVALS_CACHE_KEY = "approvals:detailed";
+const encoder = new TextEncoder();
 
 // In-memory cache with TTL
 const cache = new Map<string, { data: unknown; expiry: number }>();
@@ -27,6 +28,37 @@ function getCached(key: string): unknown | null {
 
 function setCache(key: string, data: unknown) {
   cache.set(key, { data, expiry: Date.now() + CACHE_TTL });
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))));
+}
+
+async function signSapAuthToken(params: { companyDB: string; userName: string; sessionId: string; expiresAt: number }) {
+  const secret = Deno.env.get("SAP_MIDDLEWARE_SECRET") || "";
+  if (!secret) return null;
+  const payload = {
+    companyDB: params.companyDB,
+    userName: params.userName,
+    sidHash: await sha256Base64Url(params.sessionId),
+    exp: Math.floor(params.expiresAt / 1000),
+  };
+  const payloadPart = base64Url(encoder.encode(JSON.stringify(payload)));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(payloadPart)));
+  return `${payloadPart}.${base64Url(signature)}`;
 }
 
 async function requireAuth(req: Request) {
@@ -257,11 +289,69 @@ Deno.serve(async (req) => {
       const sessionMatch = setCookie.match(/B1SESSION=([^;]+)/);
       const routeMatch = setCookie.match(/ROUTEID=([^;]+)/);
 
+      const sessionId = sessionMatch?.[1] || loginData.SessionId;
+      const sessionTimeout = Number(loginData.SessionTimeout || 30);
+      const expiresAt = Date.now() + Math.min(Math.max(sessionTimeout || 30, 1), 30) * 60 * 1000;
+      const sapAuthToken = await signSapAuthToken({
+        companyDB: companyDB || credentials.CompanyDB,
+        userName: credentials.UserName,
+        sessionId,
+        expiresAt,
+      });
+
       return new Response(JSON.stringify({
-        sessionId: sessionMatch?.[1] || loginData.SessionId,
+        sessionId,
         routeId: routeMatch?.[1] || "",
         sessionTimeout: loginData.SessionTimeout,
+        sapAuthToken,
       }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ISSUE SIGNED SAP AUTH TOKEN
+    // One-time validation for sessions that were created before this token
+    // existed. After issued, approval functions can authenticate locally via
+    // HMAC instead of probing SAP on every click.
+    if (action === "issueSapAuthToken") {
+      const userName = typeof reqBody.userName === "string" ? reqBody.userName.trim() : "";
+      if (!sessionId || !companyDB || !userName) {
+        return new Response(JSON.stringify({ error: "sessionId, companyDB e userName são obrigatórios" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
+      const escapedUser = userName.replace(/'/g, "''");
+      let probe = await fetchWithTimeout(
+        `${SAP_BASE_URL}/Users('${encodeURIComponent(escapedUser)}')?$select=UserCode`,
+        { headers: { Cookie: cookies } },
+        10_000,
+      );
+      if (probe.status === 401) {
+        return new Response(JSON.stringify({ error: "Sessão SAP expirada", sapStatus: 401 }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!probe.ok && probe.status !== 403 && probe.status !== 404) {
+        await probe.body?.cancel().catch(() => {});
+        probe = await fetchWithTimeout(`${SAP_BASE_URL}/`, { headers: { Cookie: cookies } }, 10_000);
+        if (probe.status === 401) {
+          return new Response(JSON.stringify({ error: "Sessão SAP expirada", sapStatus: 401 }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (!probe.ok) {
+          return new Response(JSON.stringify({ error: "Não foi possível validar a sessão SAP", sapStatus: probe.status }), {
+            status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+      await probe.body?.cancel().catch(() => {});
+
+      const expiresAt = Date.now() + 30 * 60 * 1000;
+      const sapAuthToken = await signSapAuthToken({ companyDB, userName, sessionId, expiresAt });
+      return new Response(JSON.stringify({ sapAuthToken, expiresAt }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

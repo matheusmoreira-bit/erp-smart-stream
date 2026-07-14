@@ -27,6 +27,7 @@ export interface SapSession {
   isSuperUser: boolean;
   erpType?: string;
   expiresAt?: number;
+  sapAuthToken?: string;
 }
 
 // Client-side response cache
@@ -214,6 +215,7 @@ export async function sapLogin(userName: string, password: string, companyDB: st
     userName,
     isSuperUser: false,
     expiresAt: Date.now() + timeoutMin * 60 * 1000,
+    sapAuthToken: typeof result.sapAuthToken === "string" ? result.sapAuthToken : undefined,
   };
 
   // Check if user is SAP SuperUser
@@ -234,6 +236,24 @@ export async function sapLogin(userName: string, password: string, companyDB: st
   }
 
   return session;
+}
+
+export async function ensureSapAuthToken(session: SapSession): Promise<string | null> {
+  if (session.sapAuthToken) return session.sapAuthToken;
+  if (!session.sessionId || !session.companyDB || !session.userName) return null;
+  try {
+    const result = await callProxy({
+      action: "issueSapAuthToken",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      companyDB: session.companyDB,
+      userName: session.userName,
+    });
+    return typeof result.sapAuthToken === "string" ? result.sapAuthToken : null;
+  } catch (e) {
+    console.warn("Could not issue SAP auth token:", e);
+    return null;
+  }
 }
 
 export async function sapLogout(session: SapSession): Promise<void> {

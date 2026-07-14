@@ -8,6 +8,107 @@ export class AuthError extends Error {
   }
 }
 
+type SapSessionValidation = {
+  id: string;
+  email: string;
+  companyDB: string;
+  userName: string;
+  source: "sap_session";
+};
+
+const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 60_000;
+const sapSessionValidationCache = new Map<string, { expiresAt: number; value: SapSessionValidation }>();
+const encoder = new TextEncoder();
+
+function getSapSessionValidationCacheKey(companyDB: string, sapUser: string, sapSession: string, routeId: string) {
+  return `${companyDB}:${sapUser}:${sapSession}:${routeId}`;
+}
+
+function pruneSapSessionValidationCache() {
+  if (sapSessionValidationCache.size <= 500) return;
+  const now = Date.now();
+  for (const [key, entry] of sapSessionValidationCache) {
+    if (entry.expiresAt <= now) sapSessionValidationCache.delete(key);
+  }
+}
+
+function tokenPayloadHasSub(token: string): boolean {
+  try {
+    const rawPayload = token.split(".")[1] || "";
+    const base64 = rawPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(base64));
+    return typeof payload?.sub === "string" && payload.sub.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function base64UrlDecodeToBytes(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  const bytes = new Uint8Array(digest);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+async function verifySapAuthToken(
+  token: string,
+  sapSession: string,
+  sapUser: string,
+  companyDB: string,
+): Promise<SapSessionValidation | null> {
+  const secret = Deno.env.get("SAP_MIDDLEWARE_SECRET") || "";
+  if (!secret || !token) return null;
+  const [payloadPart, signaturePart] = token.split(".");
+  if (!payloadPart || !signaturePart || token.split(".").length !== 2) return null;
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const expected = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(payloadPart)));
+  const received = base64UrlDecodeToBytes(signaturePart);
+  if (!timingSafeEqual(expected, received)) return null;
+
+  const payloadBytes = base64UrlDecodeToBytes(payloadPart);
+  const payload = JSON.parse(new TextDecoder().decode(payloadBytes)) as {
+    companyDB?: string;
+    userName?: string;
+    sidHash?: string;
+    exp?: number;
+  };
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!payload.exp || payload.exp <= nowSeconds) return null;
+  if (payload.companyDB !== companyDB || payload.userName !== sapUser) return null;
+  if (payload.sidHash !== await sha256Base64Url(sapSession)) return null;
+
+  return {
+    id: `sap:${companyDB}:${sapUser}`,
+    email: sapUser,
+    companyDB,
+    userName: sapUser,
+    source: "sap_session",
+  };
+}
+
 /**
  * Require an authenticated Supabase user. Throws AuthError on failure.
  *
@@ -26,6 +127,13 @@ export async function requireUser(req: Request) {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
   const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
   if (!token || token === anonKey || token === publishableKey) {
+    throw new AuthError("Não autenticado", 401);
+  }
+
+  // The web app may call SAP-session endpoints with the public key as bearer
+  // when no Cloud user is signed in. That token has no user `sub`; reject it
+  // locally instead of spending ~1s on getClaims/getUser calls that will fail.
+  if (!tokenPayloadHasSub(token)) {
     throw new AuthError("Não autenticado", 401);
   }
 
@@ -233,6 +341,26 @@ export async function validateSapSession(req: Request) {
   const companyDB = req.headers.get("x-company-db")?.trim();
   if (!sapSession || !sapUser || !companyDB) return null;
 
+  const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
+  const cached = sapSessionValidationCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  try {
+    const signed = await verifySapAuthToken(req.headers.get("x-sap-auth-token")?.trim() || "", sapSession, sapUser, companyDB);
+    if (signed) {
+      sapSessionValidationCache.set(cacheKey, {
+        expiresAt: Date.now() + SAP_SESSION_VALIDATION_CACHE_TTL_MS,
+        value: signed,
+      });
+      pruneSapSessionValidationCache();
+      return signed;
+    }
+  } catch (e) {
+    console.warn("[validateSapSession] signed token validation failed; falling back to SAP probe", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -249,16 +377,34 @@ export async function validateSapSession(req: Request) {
     headers: { Cookie: cookie },
   });
   // 401 = bad session. 403/404 = session is fine, permission/lookup issue.
-  if (resp.status === 401) return null;
+  if (resp.status === 401) {
+    sapSessionValidationCache.delete(cacheKey);
+    return null;
+  }
   if (!resp.ok && resp.status !== 403 && resp.status !== 404) {
     // Fallback: service-document root requires only a valid session.
     await resp.body?.cancel().catch(() => {});
     resp = await fetch(`${baseUrl}/`, { headers: { Cookie: cookie } });
-    if (resp.status === 401) return null;
+    if (resp.status === 401) {
+      sapSessionValidationCache.delete(cacheKey);
+      return null;
+    }
     if (!resp.ok) return null;
   }
   await resp.body?.cancel().catch(() => {});
-  return { id: `sap:${companyDB}:${sapUser}`, email: sapUser, companyDB, userName: sapUser, source: "sap_session" as const };
+  const value: SapSessionValidation = {
+    id: `sap:${companyDB}:${sapUser}`,
+    email: sapUser,
+    companyDB,
+    userName: sapUser,
+    source: "sap_session",
+  };
+  sapSessionValidationCache.set(cacheKey, {
+    expiresAt: Date.now() + SAP_SESSION_VALIDATION_CACHE_TTL_MS,
+    value,
+  });
+  pruneSapSessionValidationCache();
+  return value;
 }
 
 export async function requireUserOrSapSession(req: Request) {
