@@ -26,6 +26,7 @@ import {
 import { PageTitle } from "@/components/PageTitle";
 import { EditNfEntradaDialog } from "@/components/EditNfEntradaDialog";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
+import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
 const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending_expense: { label: "Pendente despesa", variant: "outline" },
