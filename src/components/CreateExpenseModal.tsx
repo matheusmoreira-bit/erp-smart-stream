@@ -2650,10 +2650,9 @@ export function CreateExpenseModal({
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
                 )}
               </label>
-              <Input
-                type="date"
+              <DateInputBR
                 value={docDate}
-                onChange={(e) => setDocDate(e.target.value)}
+                onChange={(v) => setDocDate(v)}
                 className={`text-sm h-9 ${
                   docDate
                     ? "bg-green-500/5 border-green-500/50"
