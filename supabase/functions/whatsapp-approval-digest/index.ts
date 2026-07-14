@@ -18,8 +18,6 @@ const HANA_VIEWS_URL =
   Deno.env.get("HANA_VIEWS_URL") ||
   "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
-// Digest só é enviado para estas empresas.
-const TARGET_COMPANIES = ["open_gaming_sa"];
 // Janela para dedupe do digest.
 const DIGEST_WINDOW_HOURS = 4;
 // Marcador usado em approval_request_id para diferenciar digest de alertas por doc.
