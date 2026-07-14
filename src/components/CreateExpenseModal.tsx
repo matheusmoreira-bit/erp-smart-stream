@@ -770,6 +770,28 @@ export function CreateExpenseModal({
     }
   }, [pendingPrefill]);
 
+  // Injeta arquivos pré-anexados (ex.: PDF da NF de entrada) uma única vez
+  // por sessão do modal. Dispara IA automaticamente se estiver habilitada.
+  const initialFilesConsumedRef = useRef(false);
+  useEffect(() => {
+    if (!open) { initialFilesConsumedRef.current = false; return; }
+    if (initialFilesConsumedRef.current) return;
+    if (!initialFiles || initialFiles.length === 0) return;
+    const { valid, errors } = validateAttachments(initialFiles);
+    for (const msg of errors) toast.error(msg);
+    if (valid.length > 0) {
+      setFiles((prev) => [...prev, ...valid]);
+      if (aiEnabled) {
+        processWithAI([...valid]);
+      }
+    }
+    initialFilesConsumedRef.current = true;
+    onInitialFilesConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialFiles]);
+
+
+
 
   const handleFiles = (newFiles: FileList | File[]) => {
     const { valid, errors } = validateAttachments(newFiles);
