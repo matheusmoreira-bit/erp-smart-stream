@@ -22,6 +22,7 @@ import {
 import { RelationsMap } from "@/components/RelationsMap";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { DecimalInput } from "@/components/DecimalInput";
+import { DateInputBR } from "@/components/DateInputBR";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
@@ -426,10 +427,9 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
                 )}
               </label>
-              <Input
-                type="date"
+              <DateInputBR
                 value={docDate}
-                onChange={(e) => setDocDate(e.target.value)}
+                onChange={(v) => setDocDate(v)}
                 className={`text-sm h-9 ${fieldClass(!!docDate)}`}
               />
             </div>
@@ -442,10 +442,9 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
                 )}
               </label>
-              <Input
-                type="date"
+              <DateInputBR
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(v) => setDueDate(v)}
                 className={`text-sm h-9 ${fieldClass(!!dueDate)}`}
               />
             </div>

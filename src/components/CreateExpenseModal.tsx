@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { DecimalInput } from "@/components/DecimalInput";
+import { DateInputBR } from "@/components/DateInputBR";
 import { sapQuery } from "@/lib/sap-client";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
@@ -2649,10 +2650,9 @@ export function CreateExpenseModal({
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
                 )}
               </label>
-              <Input
-                type="date"
+              <DateInputBR
                 value={docDate}
-                onChange={(e) => setDocDate(e.target.value)}
+                onChange={(v) => setDocDate(v)}
                 className={`text-sm h-9 ${
                   docDate
                     ? "bg-green-500/5 border-green-500/50"
@@ -2669,10 +2669,9 @@ export function CreateExpenseModal({
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
                 )}
               </label>
-              <Input
-                type="date"
+              <DateInputBR
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(v) => setDueDate(v)}
                 className={`text-sm h-9 ${
                   dueDate
                     ? "bg-green-500/5 border-green-500/50"
