@@ -31,6 +31,17 @@ function pruneSapSessionValidationCache() {
   }
 }
 
+function tokenPayloadHasSub(token: string): boolean {
+  try {
+    const rawPayload = token.split(".")[1] || "";
+    const base64 = rawPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(base64));
+    return typeof payload?.sub === "string" && payload.sub.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Require an authenticated Supabase user. Throws AuthError on failure.
  *
@@ -49,6 +60,13 @@ export async function requireUser(req: Request) {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
   const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
   if (!token || token === anonKey || token === publishableKey) {
+    throw new AuthError("Não autenticado", 401);
+  }
+
+  // The web app may call SAP-session endpoints with the public key as bearer
+  // when no Cloud user is signed in. That token has no user `sub`; reject it
+  // locally instead of spending ~1s on getClaims/getUser calls that will fail.
+  if (!tokenPayloadHasSub(token)) {
     throw new AuthError("Não autenticado", 401);
   }
 
