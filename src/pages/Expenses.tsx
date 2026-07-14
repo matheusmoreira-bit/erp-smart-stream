@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { getErpShortLabel } from "@/lib/erp-labels";
+import { isPendingApproval } from "@/lib/approval-authz";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -330,7 +331,7 @@ function ExpenseDetailModal({
                   )}
                 </div>
               </div>
-              {expense.current_approver && (
+              {expense.current_approver && isPendingApproval(expense.status) && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Aprovador Atual</p>
                   <p className="text-foreground font-medium">{expense.current_approver}</p>
@@ -1463,7 +1464,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   { header: "Fornecedor/Cliente", cell: (r: typeof filtered[number]) => r.exp.supplier_name },
                   { header: "Status", cell: (r: typeof filtered[number]) => STATUS_LABELS[r.exp.status] || r.exp.status },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => r.exp.requester_name || "—" },
-                  { header: "Aprovador atual", cell: (r: typeof filtered[number]) => r.exp.current_approver || "—" },
+                  { header: "Aprovador atual", cell: (r: typeof filtered[number]) => (isPendingApproval(r.exp.status) ? (r.exp.current_approver || "—") : "—") },
                   { header: "Data doc.", cell: (r: typeof filtered[number]) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Vencimento", cell: (r: typeof filtered[number]) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
