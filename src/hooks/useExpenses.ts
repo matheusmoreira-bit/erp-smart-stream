@@ -1280,11 +1280,18 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     fetchExpenses();
   }, [fetchExpenses]);
 
+  // Optimistic removal — remove um documento localmente sem esperar refresh
+  // do backend. Usado após aprovar/rejeitar para atualizar a UI na hora.
+  const removeLocal = useCallback((expenseId: string) => {
+    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+  }, []);
+
   return {
     expenses,
     isLoading,
     error,
     refresh: fetchExpenses,
+    removeLocal,
     createExpense,
     updateExpense,
     submitForApproval,
