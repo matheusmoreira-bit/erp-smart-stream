@@ -37,6 +37,7 @@ import {
   ArrowDown,
   LayoutGrid,
   List,
+  Briefcase,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { getErpShortLabel } from "@/lib/erp-labels";
@@ -713,6 +714,13 @@ function ExpenseCard({
 }) {
   const erpLbl = erpLabel || "ERP";
   const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? ` · ${erpLbl}` : "";
+  const projectCodes = Array.from(new Set(
+    [expense.project, ...(expense.items || []).map((it) => it.project)]
+      .map((p) => (p || "").trim())
+      .filter((p) => p.length > 0),
+  ));
+  const primaryProject = projectCodes[0];
+  const multiProject = projectCodes.length > 1;
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -764,6 +772,18 @@ function ExpenseCard({
           <Building2 className="w-3.5 h-3.5 text-primary/70" />
           <span className="truncate">{expense.supplier_name}</span>
         </div>
+        {primaryProject && (
+          <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+            <Briefcase className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+            <span className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">Projeto</span>
+            {multiProject && (
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-sky-500/15 text-sky-600 border border-sky-500/30 rounded-full px-1.5 py-0.5 shrink-0">
+                Múltiplos
+              </span>
+            )}
+            <span className="text-foreground font-medium truncate">{primaryProject}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="w-3.5 h-3.5 text-primary/70" />
           <span>Solicitante: <span className="text-foreground font-medium">{expense.requester_name}</span></span>
@@ -846,7 +866,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Compra";
   const emptyLabel = isSales ? "Nenhum pedido de venda encontrado" : "Nenhuma compra encontrada";
   const emptyCta = isSales ? "Criar primeiro pedido" : "Criar primeira compra";
-  const searchPlaceholder = isSales ? "Buscar por cliente, solicitante..." : "Buscar por fornecedor, solicitante...";
+  const searchPlaceholder = isSales ? "Buscar por cliente, solicitante, projeto..." : "Buscar por fornecedor, solicitante, projeto...";
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { hasAccess: canViewAllExpenses } = useModuleAccess("expenses_view_all");
@@ -1114,7 +1134,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       e.requester_name.toLowerCase().includes(q) ||
       (e.remarks || "").toLowerCase().includes(q) ||
       (e.supplier_code || "").toLowerCase().includes(q) ||
-      (e.sap_doc_num?.toString() || "").includes(q)
+      (e.sap_doc_num?.toString() || "").includes(q) ||
+      (e.project || "").toLowerCase().includes(q) ||
+      (e.items || []).some((it) => (it.project || "").toLowerCase().includes(q))
     );
   };
 

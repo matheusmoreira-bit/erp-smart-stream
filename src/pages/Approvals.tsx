@@ -30,7 +30,7 @@ import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/h
 import { useLazyList } from "@/hooks/useLazyList";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2, Undo2 } from "lucide-react";
+import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2, Undo2, Briefcase } from "lucide-react";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
 import { useSap } from "@/contexts/SapContext";
@@ -162,6 +162,17 @@ function ApprovalCard({
           return code ? { code, amount: doc.docTotal, percent: 100 } : null;
         })();
 
+  // Projeto "principal" para exibir no card (agora determinante das regras de aprovação)
+  const primaryProject = (() => {
+    const codes = Array.from(new Set(
+      (doc.documentLines || [])
+        .map((l) => (l.Project || "").trim())
+        .filter((c) => c.length > 0),
+    ));
+    if (codes.length === 0) return null;
+    return { code: codes[0], multi: codes.length > 1 };
+  })();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -223,6 +234,18 @@ function ApprovalCard({
               </span>
             )}
             <span className="text-foreground font-medium truncate">{formatCostCenter(primaryCC.code)}</span>
+          </div>
+        )}
+        {primaryProject && (
+          <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+            <Briefcase className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+            <span className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">Projeto</span>
+            {primaryProject.multi && (
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-sky-500/15 text-sky-600 border border-sky-500/30 rounded-full px-1.5 py-0.5 shrink-0">
+                Múltiplos
+              </span>
+            )}
+            <span className="text-foreground font-medium truncate">{primaryProject.code}</span>
           </div>
         )}
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -2223,7 +2246,8 @@ export default function ApprovalsPage() {
       a.cardName.toLowerCase().includes(q) ||
       a.requester.toLowerCase().includes(q) ||
       a.currentApprover.toLowerCase().includes(q) ||
-      a.docTypeName.toLowerCase().includes(q)
+      a.docTypeName.toLowerCase().includes(q) ||
+      (a.documentLines || []).some((l) => (l.Project || "").toLowerCase().includes(q))
     );
   });
 
@@ -2831,7 +2855,7 @@ export default function ApprovalsPage() {
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nº, fornecedor, aprovador..."
+              placeholder="Buscar por nº, fornecedor, aprovador, projeto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-muted/30 border-border"
