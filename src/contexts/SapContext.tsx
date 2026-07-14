@@ -11,6 +11,7 @@ export interface ErpSession {
   // SAP-specific
   sessionId?: string;
   routeId?: string;
+  sapAuthToken?: string;
   isSuperUser?: boolean;
   // Expiry timestamp (ms epoch). User session is capped at 30min
   // to mirror SAP Service Layer's SessionTimeout. After that, any
@@ -97,6 +98,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
           userName,
           sessionId: sapSess.sessionId,
           routeId: sapSess.routeId,
+          sapAuthToken: sapSess.sapAuthToken,
           isSuperUser: sapSess.isSuperUser,
           expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
         });
@@ -229,6 +231,7 @@ export function useSap() {
       return {
         sessionId: ctx.session.sessionId,
         routeId: ctx.session.routeId || "",
+        sapAuthToken: ctx.session.sapAuthToken,
         companyDB: ctx.session.companyDB,
         userName: ctx.session.userName,
         isSuperUser: ctx.session.isSuperUser || false,
