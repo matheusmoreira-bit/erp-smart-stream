@@ -1,53 +1,109 @@
+
 ## Objetivo
-Validar se o fluxo MasterTax → ERP Flow está de fato vinculando **NFs de entrada ao Pedido de Compra (PC) correspondente** no SAP, usando a base `TST - ANA Gaming` (SBO_TESTE_20260318_ANAGAMING) como referência. Vínculo alvo: **cabeçalho NF ↔ PO** (`nf_entrada_imports.sap_matched_po_doc_entry`).
 
-## Diagnóstico já levantado
+Estender o módulo de auditoria existente com uma análise **Cruzamento Fiscal × Pagamentos** que:
 
-- **31 NFs importadas** do MasterTax em TST - ANA Gaming; apenas **6 amarraram a um PC** (`sap_matched_po_is_draft = true` em todas — ou seja, esboços).
-- **25 NFs ficaram sem match** e permanecem em `awaiting_erpflow_approval`. Fornecedores predominantes: escritórios de advocacia e consultorias (Pinheiro Neto, Bichara, RSM, Sofist, Cappra…) — perfil típico de serviço pago sem PC prévio no SAP.
-- **4 NFs estão com `sap_company_db = NULL`** — bug de ingestão (pull não gravou a base de destino).
-- Cache local `sap_purchase_order_cache` não tem linhas para `SBO_TESTE_%` porque `sap-po-cache-sync` chama `isTestCompanyDb()` e pula bases teste. Isso **não afeta o match** — `mastertax-pull` e `nf-entrada-rematch` consultam o Service Layer ao vivo — mas afeta relatórios e o Mapa de Relações.
-- Watcher `nf-entrada-sap-watcher` rodou às 17:10:04 UTC de hoje com `processed=6 linked=0` — ou seja: nada foi promovido no ciclo atual.
+1. compara notas capturadas pelo MasterTax com **contas a pagar baixadas no ERP** da empresa;
+2. gera três cenários — **pago sem nota**, **nota sem pagamento**, **conciliado**;
+3. funciona para qualquer ERP através de **adapters**, com Omie implementado de ponta a ponta e SAP B1 com a estrutura pronta.
 
-## Escopo da validação (sem alterar lógica)
+Não altera o fluxo já existente que casa **nota × Pedido de Compra** (usado para preparar o lançamento automático de NF de Entrada). São propósitos diferentes e ficam separados no dado final.
 
-1. **Categorizar as 25 NFs sem match** rodando um "rematch em lote" contra o SAP ao vivo e classificando o retorno em três causas:
-   - `fornecedor não localizado` (CNPJ não bate em `BusinessPartners.FederalTaxID` e nome não contém match).
-   - `PC não localizado` (fornecedor achado mas sem `PurchaseOrders` aberto nem `Drafts oPurchaseOrders`).
-   - `PC candidato existe mas valor divergente` (há PC/Draft aberto mas `DocTotal` diferente do `valor_total` da NF — investigar tolerância).
-2. **Reprocessar as 4 NFs com `sap_company_db` NULL** localmente: identificar se o pull perdeu a base ou se o CNPJ não bate a nenhuma empresa cadastrada em `system_credentials`; anotar o motivo no `nf_entrada_logs`.
-3. **Confirmar os 6 vínculos existentes**: para cada `sap_matched_po_doc_entry`, ler no SAP se o `Draft`/PO ainda está `Open`, se CardCode confere e se o `DocTotal` bate — validar que o vínculo continua íntegro (não foi cancelado no ERP).
-4. **Amarrar o resultado à cardinalidade N NF ↔ 1 PC**: para cada PC vinculado, contar quantas NFs apontam para ele e conferir consistência com `settlement_ap_count` / `nf_entrada_contas_pagar`.
+## Arquitetura
+
+```text
+MasterTax (notas)          ERP (pagamentos)
+      │                          │
+      │                    ┌─────┴──────┐
+      │                    │  Adapter   │  (Omie, SAP B1, futuros)
+      │                    │  por ERP   │
+      │                    └─────┬──────┘
+      │                          │  ContaPagaERP[]  (modelo normalizado)
+      ▼                          ▼
+        Motor de Cruzamento (agnóstico)
+                 │
+                 ▼
+    auditoria_cruzamento_fiscal (3 cenários)
+                 │
+                 ▼
+        UI dentro do módulo de Auditoria
+```
+
+O motor de cruzamento **não conhece o ERP**: recebe duas listas já normalizadas.
+
+### Contrato do adapter
+
+`getContasPagas(periodoInicio, periodoFim, companyDb) → ContaPagaERP[]`
+
+`ContaPagaERP` = `{ erp_origem, empresa_id, id_externo, cnpj_fornecedor, razao_social_fornecedor, valor_pago, data_baixa, forma_pagamento?, referencia?, link_origem? }`.
+
+Registro central em `supabase/functions/_shared/erp-adapters/index.ts` com um mapa `{ omie, sap_b1 }` — novo ERP = novo arquivo + nova entrada no mapa.
+
+## Passos de implementação
+
+### 1. Reaproveitamento antes de escrever novo código
+
+- Ler `mastertax-pull` e `nf-entrada-rematch` para extrair a **normalização de CNPJ** e as **tolerâncias já calibradas** (valor/data). Publicar como helpers em `supabase/functions/_shared/fiscal-match.ts` (`normalizeCnpj`, `matchWithinTolerance`, `sameCnpjRoot`).
+- Para o adapter Omie: reusar a camada já existente em `src/lib/omie-client.ts` e a edge `omie-proxy` — não abrir uma nova rota de API.
+- Para o adapter SAP B1: reusar `supabase/functions/sap-b1-proxy` e a montagem de sessão do Service Layer usada no `nf-entrada-rematch` (Login/Logout, cookie B1SESSION). **Diferente do fluxo de PC**, o adapter consulta `Invoices` de fornecedor com pagamentos aplicados (via `IncomingPayments`/`VendorPayments` conforme disponibilidade), retornando **baixa financeira**, não PO. Deixar a implementação parcial + TODO documentado se não for possível fechar nesta entrega.
+
+### 2. Schema (migração única)
+
+Tabela `auditoria_cruzamento_fiscal` com os campos do prompt + índices por `(empresa_id, cenario, criado_em)` e `(cnpj_fornecedor, nota_data_emissao)`. Unique parcial `(nota_mastertax_id, conta_paga_id_externo)` para idempotência do reprocessamento.
+
+Tabela `auditoria_cruzamento_config` (por empresa, opcional):
+- `tolerancia_valor_abs`, `tolerancia_valor_pct`, `janela_dias`, `usar_raiz_cnpj_fallback`.
+Fallback global via constantes se a empresa não tiver config.
+
+RLS: `admin` OR `can_access_audit_console(empresa.company_db)` para SELECT; escrita só via edge function (service_role). GRANTs conforme padrão do projeto.
+
+### 3. Motor de cruzamento
+
+Edge function `audit-cross-fiscal-run`:
+1. Recebe `{ empresa_id, periodo_inicio, periodo_fim }`.
+2. Lê `companies` para descobrir `erp_origem` da empresa.
+3. Busca notas MasterTax do período (`nf_entrada_imports` + storage), filtradas pelo CNPJ da empresa.
+4. Chama `adapter.getContasPagas(...)` via mapa de adapters.
+5. Para cada nota: procura candidatos por CNPJ (com fallback opcional de raiz), valor (tolerância) e data (janela). 0 → `nota_sem_pagamento`, 1 → `conciliado/automatico`, 2+ → `ambiguo`.
+6. Contas não consumidas → `pago_sem_nota`.
+7. Upsert idempotente em `auditoria_cruzamento_fiscal`, gravando `diferenca_valor`, `diferenca_dias`, `erp_origem`, `link_origem`.
+
+Job diário via `pg_cron` chamando a função por empresa ativa.
+
+### 4. UI
+
+Nova rota `/auditoria/cruzamento-fiscal` dentro do hub de auditoria (`AuditHub`):
+- Filtros: período, empresa, ERP de origem, cenário.
+- 3 cards: contador + soma R$ por cenário.
+- 3 abas/tabelas (uma por cenário) com colunas: fornecedor, CNPJ, valor nota, valor pago, diferença, dias, ERP (badge), ações.
+- Badge de ERP (`Omie`, `SAP B1`) ao lado de cada linha; link externo quando `link_origem` existir.
+- Casos `ambiguo`: painel de revisão manual (escolher qual conta paga é a certa → passa a `confirmado_manual`).
+- Botão "Reprocessar período" (chama a edge function).
+- Export CSV/Excel com coluna `ERP`.
+
+### 5. Configuração
+
+Aba dentro da mesma tela: editar tolerâncias e janela por empresa (grava em `auditoria_cruzamento_config`).
+
+Mapeamento **empresa → ERP** já existe no cadastro `companies` (campo de tipo de ERP). Se faltar campo explícito, adicionar `erp_type` em `companies` na mesma migração.
+
+## Fora do escopo
+
+- Não altera a integração de captura MasterTax.
+- Não altera o fluxo nota × Pedido de Compra (rematch SAP).
+- SAP B1 pode entrar como adapter parcial + TODOs se o mapeamento de pagamentos precisar de refinamento com base em dados reais — nesse caso, a UI já mostra a empresa mas rotula "aguardando pagamentos SAP" e o adapter Omie continua funcional.
 
 ## Entregável
 
-Um relatório único no chat com:
+- 1 migração (tabelas + RLS + GRANTs + índices).
+- Helpers `_shared/fiscal-match.ts` e `_shared/erp-adapters/{index,omie,sap_b1}.ts`.
+- Edge function `audit-cross-fiscal-run` + cron diária.
+- Página React + hook `useAuditCrossFiscal`.
+- Item de menu dentro do AuditHub.
 
-```text
-Base: SBO_TESTE_20260318_ANAGAMING (TST - ANA Gaming)
-Total NFs:                31
-Com PC vinculado:         6   (drafts abertos)
-  └ íntegros hoje:        X / 6
-Sem PC:                  25
-  ├ fornecedor no SAP não localizado:  A
-  ├ fornecedor OK, sem PC aberto:      B
-  └ fornecedor OK, PC com valor ≠ NF:  C
-Sap_company_db nulo:      4  (motivos consolidados)
-```
-Mais uma tabela por NF (número, fornecedor, valor, causa) para ação subsequente.
+## Detalhes técnicos
 
-## Como executar (build phase)
-
-- Adicionar um script one-shot em `/tmp` que:
-  1. Lê as 25 NFs sem match.
-  2. Chama a edge function `nf-entrada-rematch` para cada uma (ela já consulta `BusinessPartners`, `PurchaseOrders` e `Drafts` no SAP), coleta a resposta e classifica.
-  3. Para as 4 NFs com `sap_company_db` NULL, consulta `system_credentials` pelo CNPJ do destinatário (se disponível no XML original em storage) e loga o resultado.
-  4. Salva o CSV consolidado em `/mnt/documents/nf-entrada-anagaming-validacao.csv` e imprime o resumo.
-- Sem migrações. Sem edição de código de produção. Apenas leitura + a chamada existente ao rematch.
-
-## Próximos passos (fora deste plano, dependem do resultado)
-
-- Se dominar a categoria "fornecedor OK, sem PC aberto" → definir política: criar rascunho de PC automático a partir da NF, ou marcar como "sem PC" e seguir para NF direta.
-- Se dominar "valor divergente" → decidir tolerância (%) e revisitar `findExistingPo` no `mastertax-pull` (hoje exige `DocTotal` exato; o `rematch` já é mais tolerante).
-- Se as 4 NFs com base nula forem recorrentes → corrigir o roteador de empresa em `mastertax-pull`.
-- Popular `sap_purchase_order_cache` também para bases teste (ou marcar SBO_TESTE_20260318_ANAGAMING como não-teste) para o Mapa de Relações ficar completo.
+- Idempotência: o upsert usa `(empresa_id, nota_mastertax_id, conta_paga_id_externo)` — reprocessar o mesmo período atualiza status, nunca duplica.
+- `link_origem`: Omie = URL do módulo Contas a Pagar com o `nCodTitulo`; SAP B1 = deep link do Web Client quando conhecido, senão vazio.
+- Segurança: adapter só recebe `companyDb` já validado; nunca aceita SQL do cliente; toda credencial vem de `system_credentials`.
+- Testes unitários do motor com listas mockadas dos dois lados (validação de tolerâncias e ambiguidade).
