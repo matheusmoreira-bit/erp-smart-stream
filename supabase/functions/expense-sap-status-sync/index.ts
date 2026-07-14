@@ -187,14 +187,17 @@ Deno.serve(async (req) => {
 
             if (r.status === 404) {
               // 404 é resposta válida do SAP — não é falha de sincronia; zera contadores.
-              await sb.from("expenses").update({
+              const changed404 = row.sap_purchase_order_status !== "not_found";
+              const patch404: Record<string, unknown> = {
                 sap_purchase_order_status: "not_found",
-                sap_integration_last_attempt_at: now,
+                sap_status_last_check_at: now,
                 sap_integration_error: null,
                 sap_sync_state: "ok",
                 sap_sync_attempts: 0,
                 sap_sync_next_retry_at: null,
-              }).eq("id", row.id);
+              };
+              if (changed404) patch404.sap_integration_last_attempt_at = now;
+              await sb.from("expenses").update(patch404).eq("id", row.id);
               results.push({ id: row.id, docEntry, poStatus: "not_found" });
               continue;
             }
@@ -207,7 +210,7 @@ Deno.serve(async (req) => {
 
             const patch: Record<string, unknown> = {
               sap_purchase_order_status: poStatus,
-              sap_integration_last_attempt_at: now,
+              sap_status_last_check_at: now,
               sap_integration_error: null,
               // Sucesso: limpa estado de erro e reseta backoff.
               sap_sync_state: "ok",
@@ -223,6 +226,13 @@ Deno.serve(async (req) => {
               patch.status = "nf_entrada";
               newExpenseStatus = "nf_entrada";
             }
+
+            // Só marca "última tentativa" quando algo realmente mudou.
+            const poStatusChanged = row.sap_purchase_order_status !== poStatus;
+            if (poStatusChanged || newExpenseStatus) {
+              patch.sap_integration_last_attempt_at = now;
+            }
+
 
             await sb.from("expenses").update(patch).eq("id", row.id);
             results.push({ id: row.id, docEntry, poStatus, expenseStatus: newExpenseStatus });
