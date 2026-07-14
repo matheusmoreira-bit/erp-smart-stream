@@ -17,6 +17,7 @@ import {
   Settings2, Building2, ArrowRight,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { TemporalAnalysis } from "@/components/TemporalAnalysis";
 
 interface Props {
   mode: "company" | "consolidated";
