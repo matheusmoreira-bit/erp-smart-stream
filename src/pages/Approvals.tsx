@@ -162,6 +162,17 @@ function ApprovalCard({
           return code ? { code, amount: doc.docTotal, percent: 100 } : null;
         })();
 
+  // Projeto "principal" para exibir no card (agora determinante das regras de aprovação)
+  const primaryProject = (() => {
+    const codes = Array.from(new Set(
+      (doc.documentLines || [])
+        .map((l) => (l.Project || "").trim())
+        .filter((c) => c.length > 0),
+    ));
+    if (codes.length === 0) return null;
+    return { code: codes[0], multi: codes.length > 1 };
+  })();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
