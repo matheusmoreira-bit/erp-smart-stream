@@ -18,6 +18,7 @@ type SapSessionValidation = {
 
 const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 60_000;
 const sapSessionValidationCache = new Map<string, { expiresAt: number; value: SapSessionValidation }>();
+const encoder = new TextEncoder();
 
 function getSapSessionValidationCacheKey(companyDB: string, sapUser: string, sapSession: string, routeId: string) {
   return `${companyDB}:${sapUser}:${sapSession}:${routeId}`;
@@ -40,6 +41,72 @@ function tokenPayloadHasSub(token: string): boolean {
   } catch {
     return false;
   }
+}
+
+function base64UrlDecodeToBytes(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  const bytes = new Uint8Array(digest);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+async function verifySapAuthToken(
+  token: string,
+  sapSession: string,
+  sapUser: string,
+  companyDB: string,
+): Promise<SapSessionValidation | null> {
+  const secret = Deno.env.get("SAP_MIDDLEWARE_SECRET") || "";
+  if (!secret || !token) return null;
+  const [payloadPart, signaturePart] = token.split(".");
+  if (!payloadPart || !signaturePart || token.split(".").length !== 2) return null;
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const expected = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(payloadPart)));
+  const received = base64UrlDecodeToBytes(signaturePart);
+  if (!timingSafeEqual(expected, received)) return null;
+
+  const payloadBytes = base64UrlDecodeToBytes(payloadPart);
+  const payload = JSON.parse(new TextDecoder().decode(payloadBytes)) as {
+    companyDB?: string;
+    userName?: string;
+    sidHash?: string;
+    exp?: number;
+  };
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!payload.exp || payload.exp <= nowSeconds) return null;
+  if (payload.companyDB !== companyDB || payload.userName !== sapUser) return null;
+  if (payload.sidHash !== await sha256Base64Url(sapSession)) return null;
+
+  return {
+    id: `sap:${companyDB}:${sapUser}`,
+    email: sapUser,
+    companyDB,
+    userName: sapUser,
+    source: "sap_session",
+  };
 }
 
 /**
@@ -277,6 +344,22 @@ export async function validateSapSession(req: Request) {
   const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
   const cached = sapSessionValidationCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  try {
+    const signed = await verifySapAuthToken(req.headers.get("x-sap-auth-token")?.trim() || "", sapSession, sapUser, companyDB);
+    if (signed) {
+      sapSessionValidationCache.set(cacheKey, {
+        expiresAt: Date.now() + SAP_SESSION_VALIDATION_CACHE_TTL_MS,
+        value: signed,
+      });
+      pruneSapSessionValidationCache();
+      return signed;
+    }
+  } catch (e) {
+    console.warn("[validateSapSession] signed token validation failed; falling back to SAP probe", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
