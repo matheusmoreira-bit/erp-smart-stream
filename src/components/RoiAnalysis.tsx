@@ -17,6 +17,7 @@ import {
   Settings2, Building2, ArrowRight,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { TemporalAnalysis } from "@/components/TemporalAnalysis";
 
 interface Props {
   mode: "company" | "consolidated";
@@ -288,6 +289,14 @@ export function RoiAnalysis({ mode }: Props) {
               </div>
             </div>
           </div>
+
+          {/* Análise Temporal — SAP nativo vs ERP Flow + ciclo do documento */}
+          <TemporalAnalysis
+            companyDb={mode === "company" ? companyDb : undefined}
+            from={dateFilter.from}
+            to={dateFilter.to}
+            consolidated={mode === "consolidated"}
+          />
         </>
       )}
 
