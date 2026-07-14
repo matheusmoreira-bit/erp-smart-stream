@@ -1923,6 +1923,10 @@ export default function ApprovalsPage() {
   useEffect(() => {
     const id = readDocParam();
     if (!id || selectedDoc) return;
+    // Se já abrimos um documento nesta sessão de página, o `?doc=` remanescente
+    // é apenas o rastro da URL sendo limpa após fechar o modal (ex.: pós-
+    // aprovação otimista, onde o item some da lista). Não mostrar erro nesse caso.
+    if (hadSelectedDocRef.current) { setDocParam(null); return; }
     const keyOf = (d: ApprovalDoc) => {
       const internalId = (d as unknown as { __internalId?: string }).__internalId;
       return internalId ? `internal:${internalId}` : `sap:${d.approvalRequestId}`;
