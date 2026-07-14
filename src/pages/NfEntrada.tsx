@@ -1,7 +1,14 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil } from "lucide-react";
+import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
