@@ -79,12 +79,20 @@ function toIsoTimestamp(date?: string, time?: string): string | null {
 
 const PAGE_SIZE = 100;
 const MAX_PAGES_PER_COMPANY = 40;
+const MAX_PAGES_BACKFILL = 200;
 const TIME_BUDGET_MS = 90_000;
+
+interface SyncOpts {
+  backfill?: boolean;
+  fromDate?: string; // YYYY-MM-DD
+  onlyCompany?: string;
+}
 
 async function syncCompany(
   sb: ReturnType<typeof createClient>,
   companyDb: string,
-): Promise<{ companyDb: string; synced: number; skipped?: string; error?: string }> {
+  opts: SyncOpts = {},
+): Promise<{ companyDb: string; synced: number; skipped?: string; error?: string; mode?: string }> {
   if (isTestCompanyDb(companyDb)) return { companyDb, synced: 0, skipped: "test_base" };
   const creds = await loadCreds(sb, companyDb);
   if (!creds) return { companyDb, synced: 0, skipped: "no_credentials_or_not_apiuser" };
@@ -103,20 +111,28 @@ async function syncCompany(
     .eq("company_db", companyDb)
     .maybeSingle();
 
-  const lastUpdate: string | null = (stateRow as { last_update_date?: string | null } | null)?.last_update_date ?? null;
-  const lastDocEntry: number = (stateRow as { last_doc_entry?: number | null } | null)?.last_doc_entry ?? 0;
+  const lastUpdate: string | null = opts.backfill ? null : ((stateRow as { last_update_date?: string | null } | null)?.last_update_date ?? null);
+  const lastDocEntry: number = opts.backfill ? 0 : ((stateRow as { last_doc_entry?: number | null } | null)?.last_doc_entry ?? 0);
   const totalPrev: number = Number((stateRow as { total_synced?: number | null } | null)?.total_synced ?? 0);
 
   let totalSynced = 0;
   let cursorUpdate = lastUpdate;
   let cursorEntry = lastDocEntry;
   let lastError: string | null = null;
+  const maxPages = opts.backfill ? MAX_PAGES_BACKFILL : MAX_PAGES_PER_COMPANY;
+  const startedAt = Date.now();
 
   try {
-    for (let page = 0; page < MAX_PAGES_PER_COMPANY; page++) {
+    for (let page = 0; page < maxPages; page++) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) { lastError = "time_budget_exceeded"; break; }
       const filterParts: string[] = [];
-      if (cursorUpdate) filterParts.push(`UpdateDate ge '${cursorUpdate.slice(0, 10)}'`);
-      if (cursorEntry) filterParts.push(`DocEntry gt ${cursorEntry}`);
+      if (opts.backfill) {
+        if (opts.fromDate) filterParts.push(`DocDate ge '${opts.fromDate}'`);
+        if (cursorEntry) filterParts.push(`DocEntry gt ${cursorEntry}`);
+      } else {
+        if (cursorUpdate) filterParts.push(`UpdateDate ge '${cursorUpdate.slice(0, 10)}'`);
+        if (cursorEntry) filterParts.push(`DocEntry gt ${cursorEntry}`);
+      }
       const filter = filterParts.length ? `&$filter=${encodeURIComponent(filterParts.join(" and "))}` : "";
       const select = "$select=DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime";
       const url = `${baseUrl}/PurchaseOrders?${select}&$orderby=DocEntry asc&$top=${PAGE_SIZE}${filter}`;
@@ -157,25 +173,37 @@ async function syncCompany(
       totalSynced += rows.length;
       const last = items[items.length - 1];
       cursorEntry = last.DocEntry;
-      if (last.UpdateDate) cursorUpdate = toIsoTimestamp(last.UpdateDate, last.UpdateTime);
+      if (!opts.backfill && last.UpdateDate) cursorUpdate = toIsoTimestamp(last.UpdateDate, last.UpdateTime);
       if (items.length < PAGE_SIZE) break;
     }
   } finally {
     await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
   }
 
-  await sb.from("sap_purchase_order_sync_state").upsert({
-    company_db: companyDb,
-    last_update_date: cursorUpdate,
-    last_doc_entry: cursorEntry,
-    last_run_at: new Date().toISOString(),
-    last_status: lastError ? "error" : "ok",
-    last_error: lastError,
-    last_batch_count: totalSynced,
-    total_synced: totalPrev + totalSynced,
-  }, { onConflict: "company_db" });
+  // Em backfill não sobrescrevemos o cursor incremental (last_update_date/last_doc_entry)
+  if (!opts.backfill) {
+    await sb.from("sap_purchase_order_sync_state").upsert({
+      company_db: companyDb,
+      last_update_date: cursorUpdate,
+      last_doc_entry: cursorEntry,
+      last_run_at: new Date().toISOString(),
+      last_status: lastError ? "error" : "ok",
+      last_error: lastError,
+      last_batch_count: totalSynced,
+      total_synced: totalPrev + totalSynced,
+    }, { onConflict: "company_db" });
+  } else {
+    await sb.from("sap_purchase_order_sync_state").upsert({
+      company_db: companyDb,
+      last_run_at: new Date().toISOString(),
+      last_status: lastError ? "error" : "ok",
+      last_error: lastError ? `backfill: ${lastError}` : null,
+      last_batch_count: totalSynced,
+      total_synced: totalPrev + totalSynced,
+    }, { onConflict: "company_db" });
+  }
 
-  return { companyDb, synced: totalSynced, error: lastError ?? undefined };
+  return { companyDb, synced: totalSynced, error: lastError ?? undefined, mode: opts.backfill ? "backfill" : "incremental" };
 }
 
 Deno.serve(async (req) => {
@@ -189,18 +217,37 @@ Deno.serve(async (req) => {
   }
 
   const startedAt = Date.now();
-  const results: Array<{ companyDb: string; synced: number; skipped?: string; error?: string }> = [];
+  const results: Array<{ companyDb: string; synced: number; skipped?: string; error?: string; mode?: string }> = [];
+
+  // Parse opções via query string ou body
+  let backfill = false;
+  let fromDate: string | undefined;
+  let onlyCompany: string | undefined;
+  try {
+    const url = new URL(req.url);
+    if (url.searchParams.get("backfill") === "1" || url.searchParams.get("mode") === "backfill") backfill = true;
+    fromDate = url.searchParams.get("from_date") || undefined;
+    onlyCompany = url.searchParams.get("company_db") || undefined;
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      if (body?.backfill) backfill = true;
+      if (body?.from_date) fromDate = body.from_date;
+      if (body?.company_db) onlyCompany = body.company_db;
+    }
+  } catch { /* ignore */ }
+
   try {
     const { data: creds, error } = await sb
       .from("system_credentials")
       .select("company_db")
       .eq("system_name", "sap");
     if (error) throw new Error(error.message);
-    const companyDbs = Array.from(new Set((creds || []).map((c: { company_db: string }) => c.company_db).filter(Boolean)));
+    let companyDbs = Array.from(new Set((creds || []).map((c: { company_db: string }) => c.company_db).filter(Boolean)));
+    if (onlyCompany) companyDbs = companyDbs.filter((c) => c === onlyCompany);
 
     for (const companyDb of companyDbs) {
       if (Date.now() - startedAt > TIME_BUDGET_MS) { results.push({ companyDb, synced: 0, skipped: "time_budget_exceeded" }); continue; }
-      try { results.push(await syncCompany(sb, companyDb)); }
+      try { results.push(await syncCompany(sb, companyDb, { backfill, fromDate, onlyCompany })); }
       catch (e) { results.push({ companyDb, synced: 0, error: (e as Error).message }); }
     }
 
