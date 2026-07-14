@@ -37,6 +37,7 @@ import {
   ArrowDown,
   LayoutGrid,
   List,
+  Briefcase,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { getErpShortLabel } from "@/lib/erp-labels";
