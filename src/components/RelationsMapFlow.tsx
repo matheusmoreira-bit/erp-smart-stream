@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  Controls,
   MarkerType,
   type Node,
   type Edge,
