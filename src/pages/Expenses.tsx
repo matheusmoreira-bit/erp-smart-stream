@@ -939,14 +939,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       // Data de vencimento, Status da aprovação e ordena do mais recente
       // para o mais antigo. A paginação é feita no servidor.
       const { sapFunctionFetch } = await import("@/lib/auth-fetch");
-      const filtersPayload = {
-        supplier: sapFilters.supplier.trim() || undefined,
-        requester: sapFilters.requester.trim() || undefined,
-        approver: sapFilters.approver.trim() || undefined,
-        approval_status: sapFilters.approvalStatus || undefined,
-        date_from: sapFilters.dateFrom || undefined,
-        date_to: sapFilters.dateTo || undefined,
-      };
       const res = await sapFunctionFetch("sap-purchase-orders-hana", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -954,7 +946,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           company_db: session.companyDB,
           offset: skip,
           limit: SAP_PAGE_STEP,
-          filters: filtersPayload,
         }),
       });
       const data = await res.json().catch(() => ({}));
