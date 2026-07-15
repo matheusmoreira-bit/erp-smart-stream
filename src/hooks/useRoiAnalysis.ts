@@ -72,6 +72,45 @@ function pickParams(all: RoiParameters[], companyDb: string): RoiParameters {
   return (perCompany || global) as RoiParameters;
 }
 
+/**
+ * Cronograma real de aquisição de licenças SAP.
+ * A partir de cada data, o total de licenças ativas passa a ser `total`.
+ * Distribuição: 60% PRO (R$1.400/mês) + 40% CRM (R$900/mês).
+ */
+const SAP_LICENSE_SCHEDULE: Array<{ from: string; total: number }> = [
+  { from: "2000-01-01", total: 22 },  // contrato original
+  { from: "2025-04-28", total: 51 },  // +29
+  { from: "2025-06-30", total: 62 },  // +11
+  { from: "2025-08-30", total: 83 },  // +21
+  { from: "2026-07-14", total: 103 }, // +20 transferidas da Cactus
+];
+const SAP_PRO_RATIO = 0.6;
+const SAP_PRO_MONTHLY = 1400;
+const SAP_CRM_MONTHLY = 900;
+
+function sapLicensesOn(dateIso: string): number {
+  let n = 0;
+  for (const s of SAP_LICENSE_SCHEDULE) if (dateIso >= s.from) n = s.total;
+  return n;
+}
+
+/** Custo total das licenças SAP no intervalo [from, to] (inclusive), integrando dia a dia. */
+function sapLicenseCostInPeriod(from: Date, to: Date): number {
+  if (to < from) return 0;
+  let total = 0;
+  const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
+  const end = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
+  while (d <= end) {
+    const iso = d.toISOString().slice(0, 10);
+    const n = sapLicensesOn(iso);
+    const pro = Math.round(n * SAP_PRO_RATIO);
+    const crm = n - pro;
+    total += (pro * SAP_PRO_MONTHLY + crm * SAP_CRM_MONTHLY) / 30;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return total;
+}
+
 interface ExpenseRow {
   id: string;
   company_db: string | null;
@@ -200,6 +239,13 @@ export function useRoiAnalysis(opts: Options) {
     if (!params.length) return [];
     const periodDays = from && to ? Math.max(1, daysBetween(from, to)) : 30;
 
+    // Custo TOTAL de licenças SAP no período, com base no cronograma real de aquisição
+    // (22 → 51 → 62 → 83 → 103), split 60% PRO / 40% CRM.
+    const now = new Date();
+    const effFrom = from || new Date(now.getTime() - periodDays * 86400000);
+    const effTo = to || now;
+    const totalSapLicenseCost = sapLicenseCostInPeriod(effFrom, effTo);
+
     // Agrupa aprovações finais (Y) por company+doc_entry
     const approvedIdx = new Map<string, ApprovalRow>();
     for (const a of approvals) {
@@ -278,6 +324,12 @@ export function useRoiAnalysis(opts: Options) {
       : companyDb
         ? [companyDb]
         : Array.from(unifiedByCompany.keys());
+
+    // Total de docs analisados (para ratear o custo de licenças SAP entre empresas)
+    const totalDocsAllCompanies = companiesToProcess.reduce(
+      (s, db) => s + (unifiedByCompany.get(db)?.length || 0),
+      0,
+    );
 
     return companiesToProcess.map((db) => {
       const p = pickParams(params, db);
@@ -365,9 +417,11 @@ export function useRoiAnalysis(opts: Options) {
         (nDocs * p.tempo_lancar_flow_min / 60) * custoHoraSolic +
         (nApprovals * p.tempo_aprovar_flow_min / 60) * custoHoraAprov;
 
-      // Licenças pro-rata ao período (mensais)
+      // Licenças SAP: rateio pelo cronograma real (22→103), proporcional aos docs da empresa.
+      const docShare = totalDocsAllCompanies > 0 ? nDocs / totalDocsAllCompanies : 0;
+      const licencasSap = totalSapLicenseCost * docShare;
+      // Licenças Flow: contagem de usuários ativos × custo unitário, pro-rata ao período.
       const proRata = periodDays / 30;
-      const licencasSap = (nAprovadores * p.custo_licenca_aprovador_sap + nSolicitantes * p.custo_licenca_solicitante_sap) * proRata;
       const licencasFlow = (nAprovadores + nSolicitantes) * p.custo_licenca_flow * proRata;
 
       const custoTotalSap = custoTempoSap + licencasSap + prejuizo;
