@@ -50,13 +50,21 @@ export function RoiAnalysis({ mode }: Props) {
   const single = mode === "company" ? metricsByCompany[0] : null;
 
   const comparisonData = useMemo(() => {
+    const sumBy = (k: keyof typeof metricsByCompany[number]) =>
+      metricsByCompany.reduce((s, m) => s + (Number(m[k]) || 0), 0);
+    const prejSap = mode === "company"
+      ? (single?.prejuizo_atraso_sap_only || 0)
+      : sumBy("prejuizo_atraso_sap_only");
+    const prejFlow = mode === "company"
+      ? (single?.prejuizo_atraso_via_flow || 0)
+      : sumBy("prejuizo_atraso_via_flow");
     const data = mode === "company" && single
       ? [{
           nome: "Custo Tempo", SAP: single.custo_tempo_sap, "ERP Flow": single.custo_tempo_flow,
         }, {
           nome: "Licenças", SAP: single.custo_licencas_sap_mes, "ERP Flow": single.custo_licencas_flow_mes,
         }, {
-          nome: "Prejuízo Atraso", SAP: single.prejuizo_atraso, "ERP Flow": single.prejuizo_atraso,
+          nome: "Prejuízo Atraso", SAP: prejSap, "ERP Flow": prejFlow,
         }]
       : totals
         ? [{
@@ -64,11 +72,12 @@ export function RoiAnalysis({ mode }: Props) {
           }, {
             nome: "Licenças", SAP: totals.custo_licencas_sap, "ERP Flow": totals.custo_licencas_flow,
           }, {
-            nome: "Prejuízo Atraso", SAP: totals.prejuizo_atraso, "ERP Flow": totals.prejuizo_atraso,
+            nome: "Prejuízo Atraso", SAP: prejSap, "ERP Flow": prejFlow,
           }]
         : [];
     return data;
-  }, [mode, single, totals]);
+  }, [mode, single, totals, metricsByCompany]);
+
 
   const displayEconomia = mode === "company" ? single?.economia_periodo || 0 : totals?.economia_periodo || 0;
   const displayEconomiaPct = mode === "company" ? single?.economia_percent || 0 : totals?.economia_percent || 0;
