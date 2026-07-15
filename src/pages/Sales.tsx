@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Helmet } from "react-helmet-async";
 import { motion } from "framer-motion";
 import {
   RefreshCw,
@@ -14,8 +13,11 @@ import {
   Clock,
   CheckCircle2,
   History,
+  ArrowLeft,
+  LogOut,
+  Receipt,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,10 +27,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
+import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { PageTitle } from "@/components/PageTitle";
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 
