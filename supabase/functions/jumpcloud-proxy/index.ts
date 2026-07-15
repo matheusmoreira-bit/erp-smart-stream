@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireAdminOrSapAdmin(req);
+    await requireAdminOrSapModule(req, "users");
     const supabase = createClient(
 
       Deno.env.get("SUPABASE_URL")!,
