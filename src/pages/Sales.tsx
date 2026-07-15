@@ -13,8 +13,6 @@ import {
   Clock,
   CheckCircle2,
   History,
-  ArrowLeft,
-  LogOut,
   Receipt,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -32,8 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { PageTitle } from "@/components/PageTitle";
+import { PageHeader } from "@/components/PageHeader";
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 
