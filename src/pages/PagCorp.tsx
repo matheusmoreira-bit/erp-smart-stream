@@ -1067,6 +1067,20 @@ export default function PagCorp() {
             </Select>
           </div>
           <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Integração / Baixa</label>
+            <Select value={settlementFilter} onValueChange={(v) => setSettlementFilter(v as typeof settlementFilter)}>
+              <SelectTrigger className="w-52 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="not_integrated">Não integrado</SelectItem>
+                <SelectItem value="integrated_pending">Integrado — aguardando baixa</SelectItem>
+                <SelectItem value="settled">Baixado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Cartão</label>
             <Select value={cardFilter} onValueChange={setCardFilter}>
               <SelectTrigger className="w-56 bg-card">
