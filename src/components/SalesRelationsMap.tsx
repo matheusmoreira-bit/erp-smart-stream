@@ -289,79 +289,79 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
               empty={baixas.length === 0 && externalPaid === 0}
             >
               {/* Saldo inicial (baixas externas) — cinza apagado */}
-              {externalPaid > 0 && (
-                <div className="flex items-center justify-between rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2 opacity-60">
-                  <div className="flex items-start gap-2">
-                    <Info className="w-3.5 h-3.5 mt-0.5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">
-                        Saldo inicial já baixado (fora do ERP Flow)
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Pagamentos registrados diretamente no ERP antes ou fora desta ferramenta.
-                      </p>
+              {externalPaid > 0 && (() => {
+                const restaExt = Math.max(0, +(invoice.docTotal - externalPaid).toFixed(2));
+                return (
+                  <div className="rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2 opacity-70">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <Info className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-muted-foreground truncate">
+                            Saldo inicial já baixado (fora do ERP Flow)
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Pagamentos registrados diretamente no ERP antes ou fora desta ferramenta.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-mono text-sm text-muted-foreground">
+                          − {formatCurrency(externalPaid, invoice.currency)}
+                        </p>
+                      </div>
                     </div>
+                    <ResidualBar
+                      residual={restaExt}
+                      total={invoice.docTotal}
+                      currency={invoice.currency}
+                      muted
+                    />
                   </div>
-                  <div className="text-right">
-                    <p className="font-mono text-sm text-muted-foreground">
-                      − {formatCurrency(externalPaid, invoice.currency)}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      resta{" "}
-                      <span className="font-mono">
-                        {formatCurrency(
-                          Math.max(0, +(invoice.docTotal - externalPaid).toFixed(2)),
-                          invoice.currency,
-                        )}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {timeline.map(({ baixa, residualAfter }, idx) => (
                 <div
                   key={baixa.id + "-" + idx}
-                  className="flex items-center justify-between rounded-md border border-border/60 bg-card px-3 py-2"
+                  className="rounded-md border border-border/60 bg-card px-3 py-2"
                 >
-                  <div className="flex items-start gap-2">
-                    <BaixaStatusIcon status={baixa.status} />
-                    <div>
-                      <p className="text-sm font-medium">
-                        Baixa em {formatDate(baixa.data_recebimento)}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2">
-                        <BaixaStatusLabel status={baixa.status} />
-                        {baixa.sap_incoming_payment_doc_entry && (
-                          <span className="font-mono">
-                            SAP #{baixa.sap_incoming_payment_doc_entry}
-                          </span>
-                        )}
-                        {baixa.valor_juros_multa > 0 && (
-                          <span className="text-amber-500">
-                            + {formatCurrency(baixa.valor_juros_multa, invoice.currency)} juros/multa
-                          </span>
-                        )}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start gap-2 min-w-0">
+                      <BaixaStatusIcon status={baixa.status} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          Baixa em {formatDate(baixa.data_recebimento)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2">
+                          <BaixaStatusLabel status={baixa.status} />
+                          {baixa.sap_incoming_payment_doc_entry && (
+                            <span className="font-mono">
+                              SAP #{baixa.sap_incoming_payment_doc_entry}
+                            </span>
+                          )}
+                          {baixa.valor_juros_multa > 0 && (
+                            <span className="text-amber-500">
+                              + {formatCurrency(baixa.valor_juros_multa, invoice.currency)} juros/multa
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-mono text-sm font-semibold">
+                        − {formatCurrency(baixa.valor_baixado, invoice.currency)}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-mono text-sm font-semibold">
-                      − {formatCurrency(baixa.valor_baixado, invoice.currency)}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      resta{" "}
-                      <span
-                        className={`font-mono ${
-                          residualAfter > 0 ? "text-foreground" : "text-emerald-500"
-                        }`}
-                      >
-                        {formatCurrency(residualAfter, invoice.currency)}
-                      </span>
-                    </p>
-                  </div>
+                  <ResidualBar
+                    residual={residualAfter}
+                    total={invoice.docTotal}
+                    currency={invoice.currency}
+                  />
                 </div>
               ))}
+
 
               {baixas.length > 0 && finalResidual === 0 && (
                 <div className="flex items-center gap-2 text-xs text-emerald-500 pt-1">
@@ -415,6 +415,63 @@ function FlowArrow() {
     </div>
   );
 }
+
+function ResidualBar({
+  residual,
+  total,
+  currency,
+  muted = false,
+}: {
+  residual: number;
+  total: number;
+  currency: string;
+  muted?: boolean;
+}) {
+  const safeTotal = total > 0 ? total : 1;
+  const pctResidual = Math.max(0, Math.min(100, (residual / safeTotal) * 100));
+  const pctPaid = 100 - pctResidual;
+  const settled = residual <= 0.005;
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="relative h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+        <div
+          className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+            muted
+              ? "bg-muted-foreground/40"
+              : settled
+                ? "bg-emerald-500"
+                : "bg-primary"
+          }`}
+          style={{ width: `${pctPaid}%` }}
+        />
+      </div>
+      <div
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-mono shrink-0 ${
+          muted
+            ? "border-border/60 bg-muted/30 text-muted-foreground"
+            : settled
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+              : "border-primary/40 bg-primary/10 text-primary"
+        }`}
+        title={`Saldo residual após este evento · ${pctResidual.toFixed(1)}% do total`}
+      >
+        {settled ? (
+          <>
+            <CheckCircle2 className="w-3 h-3" />
+            quitado
+          </>
+        ) : (
+          <>
+            <span className="uppercase tracking-wider text-[9px] opacity-70">resta</span>
+            {formatCurrency(residual, currency)}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 function BaixaStatusIcon({ status }: { status: string }) {
   if (status === "sincronizado") return <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-emerald-500" />;
