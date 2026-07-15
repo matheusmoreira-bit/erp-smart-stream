@@ -45,6 +45,7 @@ export default function IdpSyncPage() {
     autoSync,
     linkManually,
     syncAttributes,
+    reprocessUserAttributes,
     unlinkUser,
   } = useIdpSync();
 
@@ -53,6 +54,7 @@ export default function IdpSyncPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncingAttrs, setSyncingAttrs] = useState(false);
   const [linkingUser, setLinkingUser] = useState<string | null>(null);
+  const [reprocessingUser, setReprocessingUser] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMappings();
@@ -129,6 +131,25 @@ export default function IdpSyncPage() {
       setSyncingAttrs(false);
     }
   };
+
+  const handleReprocessUser = async (sapUserCode: string) => {
+    setReprocessingUser(sapUserCode);
+    try {
+      // Garante lista JC fresca para recalcular o centro de custo a partir do valor atual
+      const jcList = jcUsers.length > 0 ? jcUsers : await fetchJumpCloudUsers(true);
+      const attrs = await reprocessUserAttributes(sapUserCode, jcList);
+      toast.success(
+        attrs.cost_center_code
+          ? `Atributos reprocessados • CC ${attrs.cost_center_code}`
+          : "Atributos reprocessados (sem centro de custo no JumpCloud)"
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao reprocessar atributos");
+    } finally {
+      setReprocessingUser(null);
+    }
+  };
+
 
   const handleComboSelect = useCallback(
     async (sapUserCode: string, option: SapSearchOption | null) => {
@@ -439,17 +460,33 @@ export default function IdpSyncPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="w-24 flex justify-end">
+                  <div className="w-24 flex justify-end gap-1">
                     {isLinked && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive h-8 w-8"
-                        onClick={() => handleUnlink(row.sapUser.UserCode)}
-                        title="Desvincular"
-                      >
-                        <Unlink className="w-4 h-4" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-primary h-8 w-8"
+                          onClick={() => handleReprocessUser(row.sapUser.UserCode)}
+                          disabled={reprocessingUser === row.sapUser.UserCode}
+                          title="Reprocessar atributos e recalcular centro de custo"
+                        >
+                          {reprocessingUser === row.sapUser.UserCode ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive h-8 w-8"
+                          onClick={() => handleUnlink(row.sapUser.UserCode)}
+                          title="Desvincular"
+                        >
+                          <Unlink className="w-4 h-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
