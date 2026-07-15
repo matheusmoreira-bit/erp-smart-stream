@@ -310,16 +310,20 @@ export async function sapAction(
   endpoint: string,
   method: "POST" | "PATCH" = "POST",
   body?: Record<string, unknown>,
+  opts: SapCallOptions = {},
 ): Promise<{ data: unknown }> {
-  const result = await callProxy({
-    action: "sapAction",
-    sessionId: session.sessionId,
-    routeId: session.routeId,
-    companyDB: session.companyDB,
-    endpoint,
-    method,
-    body,
-  });
+  const result = await callProxy(
+    {
+      action: "sapAction",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      companyDB: session.companyDB,
+      endpoint,
+      method,
+      body,
+    },
+    opts,
+  );
   return { data: result.data };
 }
 
