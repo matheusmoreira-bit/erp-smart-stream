@@ -460,17 +460,33 @@ export default function IdpSyncPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="w-24 flex justify-end">
+                  <div className="w-24 flex justify-end gap-1">
                     {isLinked && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive h-8 w-8"
-                        onClick={() => handleUnlink(row.sapUser.UserCode)}
-                        title="Desvincular"
-                      >
-                        <Unlink className="w-4 h-4" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-primary h-8 w-8"
+                          onClick={() => handleReprocessUser(row.sapUser.UserCode)}
+                          disabled={reprocessingUser === row.sapUser.UserCode}
+                          title="Reprocessar atributos e recalcular centro de custo"
+                        >
+                          {reprocessingUser === row.sapUser.UserCode ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive h-8 w-8"
+                          onClick={() => handleUnlink(row.sapUser.UserCode)}
+                          title="Desvincular"
+                        >
+                          <Unlink className="w-4 h-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
