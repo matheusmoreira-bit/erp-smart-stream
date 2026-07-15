@@ -450,6 +450,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                 nfLinks={nfLinksWithPayments}
                 apPayables={apLinks.data?.payables || []}
                 enriched={enriched}
+                fluxo={fluxoRow}
                 onNodeClick={(id) => {
                   if (id === "root") setDetailStage("pc_lancado");
                   else if (id === "requester") setDetailStage("rascunho");
