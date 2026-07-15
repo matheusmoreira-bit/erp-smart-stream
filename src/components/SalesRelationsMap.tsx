@@ -498,16 +498,26 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                     <div className="flex items-start gap-2 min-w-0">
                       <BaixaStatusIcon status={baixa.status} />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">
+                        <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                           Baixa em {formatDate(baixa.data_recebimento)}
+                          <Link
+                            to={`/vendas/historico?baixa=${baixa.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary hover:underline"
+                            title="Abrir baixa no histórico"
+                          >
+                            abrir <ExternalLink className="w-3 h-3" />
+                          </Link>
                         </p>
-                        <p className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2">
+                        <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
                           <BaixaStatusLabel status={baixa.status} />
                           {baixa.sap_incoming_payment_doc_entry && (
                             <span className="font-mono">
                               SAP #{baixa.sap_incoming_payment_doc_entry}
                             </span>
                           )}
+                          <IdBadge label="ID" value={baixa.id} short />
                           {baixa.valor_juros_multa > 0 && (
                             <span className="text-amber-500">
                               + {formatCurrency(baixa.valor_juros_multa, invoice.currency)} juros/multa
@@ -515,6 +525,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                           )}
                         </p>
                       </div>
+
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-mono text-sm font-semibold">
