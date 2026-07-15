@@ -271,6 +271,53 @@ export function useIdpSync() {
     [fetchMappings]
   );
 
+  /**
+   * Reprocessa os atributos (department, cost_center_code, jobTitle, etc.)
+   * de um único vínculo já existente — mantém idp_user_id/status e apenas
+   * recalcula os campos derivados a partir do JumpCloud.
+   */
+  const reprocessUserAttributes = useCallback(
+    async (sapUserCode: string, jcList?: JumpCloudUser[]) => {
+      const jumpCloudUsers = jcList || jcUsers;
+      const mapping = mappings.find((m) => m.sap_user_code === sapUserCode);
+      if (!mapping || !mapping.idp_user_id) {
+        throw new Error("Vínculo JumpCloud não encontrado para este usuário");
+      }
+      const jc = jumpCloudUsers.find((u) => u._id === mapping.idp_user_id);
+      if (!jc) {
+        throw new Error("Usuário não encontrado no JumpCloud (talvez tenha sido removido)");
+      }
+
+      const row = {
+        sap_user_code: mapping.sap_user_code,
+        sap_user_name: mapping.sap_user_name,
+        sap_email: mapping.sap_email,
+        idp_provider: "jumpcloud",
+        idp_user_id: mapping.idp_user_id,
+        idp_email: mapping.idp_email,
+        idp_display_name: mapping.idp_display_name,
+        status: "linked",
+        linked_at: mapping.linked_at,
+        ...jcAttrs(jc),
+        attributes_synced_at: new Date().toISOString(),
+      };
+
+      const { authFetch } = await import("@/lib/auth-fetch");
+      const res = await authFetch("idp-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upsertMany", rows: [row] }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ${res.status}`);
+      }
+      await fetchMappings();
+      return jcAttrs(jc);
+    },
+    [jcUsers, mappings, fetchMappings]
+  );
+
   return {
     jcUsers,
     mappings,
