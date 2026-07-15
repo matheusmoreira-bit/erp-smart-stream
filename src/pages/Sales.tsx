@@ -564,6 +564,23 @@ export default function SalesPage() {
           </div>
         )}
       </div>
+
+      <BaixaRecebimentoDialog
+        open={baixaOpen}
+        onClose={() => setBaixaOpen(false)}
+        invoices={selectionRows.map<BaixaInvoiceRow>((r) => ({
+          docEntry: r.docEntry,
+          docNum: r.docNum,
+          cardCode: r.cardCode,
+          cardName: r.cardName,
+          currency: r.currency,
+          saldoResidual: r.saldoResidual,
+        }))}
+        onSuccess={() => {
+          clearSelection();
+          void loadInvoices(true);
+        }}
+      />
     </div>
   );
 }
