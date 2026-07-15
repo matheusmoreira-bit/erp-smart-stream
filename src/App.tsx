@@ -10,6 +10,7 @@ import AnalyticsPage from "./pages/Analytics.tsx";
 import ApprovalsHub from "./pages/ApprovalsHub.tsx";
 import Expenses from "./pages/Expenses.tsx";
 import Sales from "./pages/Sales.tsx";
+import BaixasHistory from "./pages/BaixasHistory.tsx";
 import ApprovalRules from "./pages/ApprovalRules.tsx";
 import PagCorp from "./pages/PagCorp.tsx";
 import PagCorpMapping from "./pages/PagCorpMapping.tsx";
