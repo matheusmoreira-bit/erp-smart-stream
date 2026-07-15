@@ -84,6 +84,7 @@ import {
   ALLOWED_ATTACHMENT_ACCEPT,
   ALLOWED_ATTACHMENT_HINT,
 } from "@/lib/attachment-validation";
+import { useCurrentUserCostCenter, isItemAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
@@ -229,6 +230,17 @@ export function CreateExpenseModal({
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: projectMapRow,
   });
+
+  // Centro de custo do usuário logado (via mapeamento IdP). Usado para
+  // pré-preencher o CC padrão em compras e restringir itens IMP%/FOL%.
+  const { costCenter: userCostCenter } = useCurrentUserCostCenter();
+
+  // Filtro de alçada: itens IMP% só para CC 1.2.2.%; itens FOL% só para CC 1.6.%.
+  // Vale só no fluxo de compras — vendas mantém a lista integral.
+  const filteredItemOptions = useMemo(() => {
+    if (isSales) return itemOptions;
+    return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter));
+  }, [itemOptions, userCostCenter, isSales]);
 
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
@@ -469,6 +481,25 @@ export function CreateExpenseModal({
     cardMappingLoaded, costCenterOptions, projectOptions, itemOptions,
   ]);
 
+  // Pré-preenche o CC do cabeçalho com o centro de custo do usuário logado
+  // (via mapeamento IdP), apenas em compras e quando ainda não há CC definido.
+  useEffect(() => {
+    if (!open || isSales) return;
+    if (headerCostCenter) return;
+    if (!userCostCenter) return;
+    if (!costCenterOptions.length) return;
+    const opt =
+      costCenterOptions.find((o) => o.code === userCostCenter) ||
+      { code: userCostCenter, name: userCostCenter, extra: "" };
+    setHeaderCostCenter(opt);
+    setItems((prev) =>
+      prev.map((it) => ({
+        ...it,
+        sapCostCenter: it.sapCostCenter || opt,
+        cost_center: it.cost_center || opt.code,
+      })),
+    );
+  }, [open, isSales, userCostCenter, costCenterOptions, headerCostCenter]);
 
 
   // Apply prefill when modal opens
@@ -1715,6 +1746,18 @@ export function CreateExpenseModal({
         toast.error(`Item ${n}: centro de custo é obrigatório`);
         return;
       }
+      // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.6.%.
+      if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter)) {
+        const codeUp = String(it.item_code).toUpperCase();
+        if (codeUp.startsWith("IMP")) {
+          toast.error(`Item ${n}: itens IMP% são restritos a usuários do CC 1.2.2.%`);
+        } else if (codeUp.startsWith("FOL")) {
+          toast.error(`Item ${n}: itens FOL% são restritos a usuários do CC 1.6.%`);
+        } else {
+          toast.error(`Item ${n}: item não permitido para o seu centro de custo`);
+        }
+        return;
+      }
       // Open Gaming: projeto por linha é obrigatório (política interna).
       if (sapSession?.companyDB === "open_gaming_sa" && (!it.project || !String(it.project).trim())) {
         toast.error(`Item ${n}: projeto é obrigatório para Open Gaming`);
@@ -2825,7 +2868,7 @@ export function CreateExpenseModal({
                     </Button>
                   </div>
                   <CachedSearchCombobox
-                    options={itemOptions}
+                    options={filteredItemOptions}
                     isLoading={itemsLoading}
                     value={item.sapItem || null}
                     onChange={(val) => {
