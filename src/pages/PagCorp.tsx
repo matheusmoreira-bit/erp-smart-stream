@@ -359,6 +359,46 @@ export default function PagCorp() {
     });
   }, [transactions, search, statusFilter, cardFilter, showNondeductible]);
 
+  /**
+   * Constrói a lista de renderização com agrupamento visual:
+   * quando 2+ transações compartilham o mesmo integrationLogId (ou sapDocEntry),
+   * significa que foram integradas juntas em um único Pedido de Compra
+   * consolidado no SAP. Renderizamos um cabeçalho colapsável para tornar isso
+   * óbvio no leitor.
+   */
+  const rowItems = useMemo(() => {
+    const groupKeyOf = (t: PagCorpTransaction): string | null => {
+      if (!t.integrated) return null;
+      if (t.integrationLogId) return `log:${t.integrationLogId}`;
+      if (t.sapDocEntry != null) return `de:${t.sapDocEntry}`;
+      return null;
+    };
+    const groups = new Map<string, PagCorpTransaction[]>();
+    for (const t of filteredTransactions) {
+      const k = groupKeyOf(t);
+      if (!k) continue;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(t);
+    }
+    type Item =
+      | { type: "single"; tx: PagCorpTransaction }
+      | { type: "group"; key: string; txs: PagCorpTransaction[] };
+    const out: Item[] = [];
+    const seen = new Set<string>();
+    for (const t of filteredTransactions) {
+      const k = groupKeyOf(t);
+      if (k && (groups.get(k)?.length ?? 0) >= 2) {
+        if (!seen.has(k)) {
+          seen.add(k);
+          out.push({ type: "group", key: k, txs: groups.get(k)! });
+        }
+        continue;
+      }
+      out.push({ type: "single", tx: t });
+    }
+    return out;
+  }, [filteredTransactions]);
+
   // Lista única de cartões para o filtro
   const cardOptions = useMemo(() => {
     const set = new Map<string, string>();
