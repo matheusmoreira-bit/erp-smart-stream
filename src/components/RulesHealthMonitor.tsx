@@ -321,12 +321,16 @@ export function RulesHealthMonitor({ rules, isLoading, onOpenRule }: Props) {
   const amountGaps = useMemo(() => computeAmountGaps(activeCCs, domains), [activeCCs, domains]);
 
   /* ── 4. Regras sobrepostas ── */
+  // Regras personalizadas (prioridade >= 9999) são fluxos pontuais que
+  // intencionalmente sobrepõem outras regras — ignoramos no cruzamento.
+  const CUSTOM_PRIORITY = 9999;
   const overlaps = useMemo(() => {
     const out: { a: ApprovalRule; b: ApprovalRule; ccs: string[]; sameProject: boolean }[] = [];
-    for (let i = 0; i < domains.length; i++) {
-      for (let j = i + 1; j < domains.length; j++) {
-        const a = domains[i];
-        const b = domains[j];
+    const eligible = domains.filter((d) => (d.rule.priority || 0) < CUSTOM_PRIORITY);
+    for (let i = 0; i < eligible.length; i++) {
+      for (let j = i + 1; j < eligible.length; j++) {
+        const a = eligible[i];
+        const b = eligible[j];
         // Mesma prioridade → indício mais forte de sobreposição real (não é resolvida por prioridade).
         if ((a.rule.priority || 0) !== (b.rule.priority || 0)) continue;
         if (!docTypesIntersect(a.docTypes, b.docTypes)) continue;
