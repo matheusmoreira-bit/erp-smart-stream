@@ -9,7 +9,7 @@ import { AuthError, requireAdminOrSapAdmin, authErrorResponse } from "../_shared
 const corsHeaders = {
   ...baseCors,
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db",
+    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
 };
 
 const DEFAULT_BASE_URL = "https://api.mastertax.app";
