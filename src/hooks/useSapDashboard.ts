@@ -57,25 +57,78 @@ interface ViewRow {
   Filial: string;
 }
 
-/* ── Approval view row type (VW_TODAS_APROVACOES) ── */
+/* ── Approval view row (VW_PEDIDOS_COMPRA_APROVACOES) — HanaApi ─────────
+ * Colunas devolvidas pela view (nomes em PT-BR conforme o HANA):
+ *   Nº pedido de compra, Nº do Esboço, Código/Nome do fornecedor,
+ *   Data de lançamento, Data de entrega, Total do documento,
+ *   Status do pedido, Cancelado?, FGR :: SOLICITANTE, Aprovador(es),
+ *   Data/Hora de criação do fluxo, Data/Hora de aprovação,
+ *   Status da aprovação, Observações.
+ * Mantemos aliases (camelCase / snake_case) por robustez contra o proxy.
+ */
+type RawApprovalRow = Record<string, unknown>;
 interface ApprovalViewRow {
-  Code?: number;
   Aprovador?: string;
-  Email_Aprovador?: string;
-  Tipo_Solicitacao?: string;
   Status_Aprovacao?: string;
-  Status_Documento?: string;
+  Data_Documento?: string | null;   // criação do fluxo
+  Data_Lancamento?: string | null;  // aprovação
+  Dias_Desde_Criacao?: number;
   Num_Documento?: number;
   Solicitante?: string;
-  Cod_PN?: string;
   Nome_PN?: string;
-  Moeda?: string;
-  Valor_Total_LC?: number;
-  Data_Documento?: string | null;
-  Data_Lancamento?: string | null;
-  Data_Vencimento?: string | null;
-  Dias_Desde_Criacao?: number;
-  Modelo_Aprovacao?: string;
+}
+
+function pick(row: RawApprovalRow, ...keys: string[]): unknown {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k];
+  }
+  return undefined;
+}
+
+function combineDateAndHour(date: unknown, hour: unknown): string | null {
+  if (!date) return null;
+  const iso = new Date(String(date));
+  if (isNaN(iso.getTime())) return null;
+  let hh = 0, mm = 0;
+  if (hour != null && hour !== "") {
+    const n = Number(hour);
+    if (Number.isFinite(n)) {
+      if (n >= 100) { hh = Math.floor(n / 100); mm = n % 100; }
+      else { hh = Math.trunc(n); }
+    }
+  }
+  iso.setUTCHours(hh, mm, 0, 0);
+  return iso.toISOString();
+}
+
+function mapPedidoAprovacaoRow(raw: RawApprovalRow): ApprovalViewRow {
+  const statusApr = String(pick(raw, "Status da aprovação", "Status_Aprovacao", "statusAprovacao") || "").trim();
+  const norm =
+    /aprov/i.test(statusApr) && !/pend|aguard/i.test(statusApr) ? "Aprovado"
+    : /rejeit|reprov|negad/i.test(statusApr) ? "Rejeitado"
+    : /pend|aguard/i.test(statusApr) ? "Pendente"
+    : statusApr;
+  const criacao = combineDateAndHour(
+    pick(raw, "Data de criação do fluxo", "Data_Criacao_Fluxo", "dataCriacaoFluxo"),
+    pick(raw, "Hora de criação do fluxo", "Hora_Criacao_Fluxo", "horaCriacaoFluxo"),
+  );
+  const aprov = combineDateAndHour(
+    pick(raw, "Data de aprovação", "Data_Aprovacao", "dataAprovacao"),
+    pick(raw, "Hora de aprovação", "Hora_Aprovacao", "horaAprovacao"),
+  );
+  const dias = criacao
+    ? Math.max(0, Math.round((Date.now() - new Date(criacao).getTime()) / 86400000))
+    : undefined;
+  return {
+    Aprovador: (pick(raw, "Aprovador(es)", "Aprovadores", "Aprovador") as string) || undefined,
+    Status_Aprovacao: norm || undefined,
+    Data_Documento: criacao,
+    Data_Lancamento: aprov,
+    Dias_Desde_Criacao: dias,
+    Num_Documento: Number(pick(raw, "Nº pedido de compra", "Num_Pedido_Compra", "numPedidoCompra")) || undefined,
+    Solicitante: (pick(raw, "FGR :: SOLICITANTE", "Solicitante") as string) || undefined,
+    Nome_PN: (pick(raw, "Nome do fornecedor", "Nome_PN") as string) || undefined,
+  };
 }
 
 /* ── Helpers ── */
