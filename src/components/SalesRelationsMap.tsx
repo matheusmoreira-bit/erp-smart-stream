@@ -8,7 +8,6 @@ import {
   Receipt,
   Wallet,
   ArrowDown,
-  ArrowDown,
   CheckCircle2,
   Clock,
   AlertTriangle,
