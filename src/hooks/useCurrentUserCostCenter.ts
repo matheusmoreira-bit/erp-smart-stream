@@ -75,8 +75,11 @@ export function useCurrentUserCostCenter() {
 
 /**
  * Aplica as regras de alçada de itens por centro de custo:
- * - Itens IMP% só liberados para CC 1.2.2.%
- * - Itens FOL% só liberados para CC 1.6.%
+ * - Itens FOL% liberados para CC de Pessoas e Cultura (1.5.1.3) OU quando o
+ *   CC do usuário estiver vazio (evita falso negativo por falha/ausência de
+ *   vínculo no IdP).
+ * - Itens IMP% liberados para CC 1.2.2.% OU quando o CC do usuário estiver
+ *   vazio (mesma lógica de tolerância a falso negativo).
  *
  * `bypass` (super-user / admin) libera todos os itens.
  */
@@ -88,7 +91,9 @@ export function isItemAllowedForCostCenter(
   if (bypass) return true;
   const code = String(itemCode || "").toUpperCase().trim();
   const cc = String(costCenter || "").trim();
+  // CC vazio (usuário sem vínculo no IdP) → não bloqueia (evita falso negativo).
+  if (!cc) return true;
   if (code.startsWith("IMP")) return cc.startsWith("1.2.2.");
-  if (code.startsWith("FOL")) return cc.startsWith("1.6.");
+  if (code.startsWith("FOL")) return cc === "1.5.1.3" || cc.startsWith("1.5.1.3.");
   return true;
 }
