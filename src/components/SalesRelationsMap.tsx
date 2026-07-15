@@ -52,7 +52,8 @@ interface SalesOrderRef {
 }
 
 interface BaixaEntry {
-  id: string;
+  id: string | null;              // null quando origem = SAP puro (fora do ERP Flow)
+  origin: "internal" | "external"; // internal = registrada no ERP Flow; external = SAP direto
   data_recebimento: string;
   valor_baixado: number;
   valor_juros_multa: number;
