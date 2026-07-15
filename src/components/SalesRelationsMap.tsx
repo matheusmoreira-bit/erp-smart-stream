@@ -678,6 +678,30 @@ function BaixaStatusLabel({ status }: { status: string }) {
   );
 }
 
+function IdBadge({ label, value, short = false }: { label: string; value: string; short?: boolean }) {
+  const display = short && value.length > 10 ? `${value.slice(0, 4)}…${value.slice(-4)}` : value;
+  return (
+    <button
+      type="button"
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(value);
+          toast.success(`${label} copiado`, { description: value });
+        } catch {
+          window.prompt(`Copie o ${label}:`, value);
+        }
+      }}
+      className="inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+      title={`${label}: ${value} · clique para copiar`}
+    >
+      <span className="uppercase tracking-wider text-[9px] opacity-70">{label}</span>
+      {display}
+      <Copy className="w-2.5 h-2.5 opacity-60" />
+    </button>
+  );
+}
+
 function MapSkeleton() {
   return (
     <div className="space-y-3 mt-2" aria-busy="true" aria-label="Carregando mapa de relações">
