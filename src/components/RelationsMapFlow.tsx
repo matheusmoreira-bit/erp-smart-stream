@@ -382,7 +382,12 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         undefined,
       when: (enrichmentActive && startAt) || expense.created_at,
       extra: enrichmentActive
-        ? [expense.supplier_name, fluxo?.centro_custo ? `CC ${fluxo.centro_custo}` : null]
+        ? [
+            expense.supplier_name,
+            fluxo?.centro_custo ? `CC ${fluxo.centro_custo}` : null,
+            fluxo?.id_esboco ? `Esboço #${fluxo.id_esboco}` : null,
+            fluxo?.id_pedido ? `Pedido #${fluxo.id_pedido}` : null,
+          ]
             .filter(Boolean)
             .join(" · ") || null
         : expense.supplier_name || null,
