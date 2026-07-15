@@ -189,11 +189,13 @@ export function BaixaRecebimentoDialog({
 
     try {
       const itensPayload = invoices
-        .filter((inv) => (rateioValores[inv.docEntry] || 0) > 0)
+        .filter((inv) => (rateioValores[rowKey(inv)] || 0) > 0)
         .map((inv) => ({
           invoiceDocEntry: inv.docEntry,
           invoiceDocNum: String(inv.docNum),
-          valorBaixado: rateioValores[inv.docEntry],
+          valorBaixado: rateioValores[rowKey(inv)],
+          invoiceType: inv.docType ?? "invoice",
+          invoiceDocLine: inv.docType === "journal_entry" ? (inv.docLine ?? 0) : null,
         }));
       if (itensPayload.length === 0) throw new Error("Nenhum item com valor a baixar.");
 
