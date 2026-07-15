@@ -15,6 +15,9 @@ import {
   Info,
   Download,
   FileDown,
+  RefreshCw,
+  Inbox,
+  ServerCrash,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
