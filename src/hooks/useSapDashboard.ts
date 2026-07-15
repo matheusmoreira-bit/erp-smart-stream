@@ -6,6 +6,7 @@ import type { FlowStage } from "@/components/FlowTimeline";
 import type { Insight } from "@/components/InsightsPanel";
 import type { ValidationItem } from "@/components/ValidationTable";
 import { type CompanyTargets, DEFAULT_TARGETS } from "@/hooks/useCompanies";
+import { useSapFluxoAnalise } from "@/hooks/useSapFluxoAnalise";
 
 export interface ApproverStats {
   name: string;
@@ -167,7 +168,12 @@ function stageStatus(avgDays: number): "ok" | "warning" | "critical" {
 }
 
 /* ── Build stages from view data ── */
-function buildStages(rows: ViewRow[], approvalDays: number[], targets: CompanyTargets): FlowStage[] {
+function buildStages(
+  rows: ViewRow[],
+  approvalDays: number[],
+  targets: CompanyTargets,
+  approvalToPedidoDays: number[] = [],
+): FlowStage[] {
   const pedidoToNfEmissao: number[] = [];
   const nfEmissaoToNfLanc: number[] = [];
   const nfLancToPagamento: number[] = [];
@@ -183,7 +189,12 @@ function buildStages(rows: ViewRow[], approvalDays: number[], targets: CompanyTa
     if (d3 !== null) nfLancToPagamento.push(d3);
   }
 
-  const avgPedidoNf = avg(pedidoToNfEmissao);
+  // Preferimos Aprovação→Pedido do cache de VW_FIN_ANALISE_FLUXO (SAP);
+  // se vazio, caímos no legado Pedido→NF como aproximação da etapa.
+  const useFluxo = approvalToPedidoDays.length > 0;
+  const pedidoStageSource = useFluxo ? approvalToPedidoDays : pedidoToNfEmissao;
+
+  const avgPedidoStage = avg(pedidoStageSource);
   const avgNfEmissaoLanc = avg(nfEmissaoToNfLanc);
   const avgNfPag = avg(nfLancToPagamento);
   const avgApproval = avg(approvalDays);
@@ -198,7 +209,7 @@ function buildStages(rows: ViewRow[], approvalDays: number[], targets: CompanyTa
     { id: "requisicao", name: "REQUISIÇÃO", avgDays: 1, targetDays: targets.requisicao, status: "ok", count: 0 },
     { id: "cotacao", name: "COTAÇÃO", avgDays: 1, targetDays: targets.cotacao, status: "ok", count: 0 },
     { id: "aprovacao", name: "APROVAÇÃO", avgDays: avgApproval || 1, targetDays: targets.aprovacao, status: stageStatusCustom(avgApproval || 1, targets.aprovacao), count: approvalDays.length },
-    { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoNf || 1, targetDays: targets.pedido_compra, status: stageStatusCustom(avgPedidoNf || 1, targets.pedido_compra), count: pedidoToNfEmissao.length },
+    { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoStage || 1, targetDays: targets.pedido_compra, status: stageStatusCustom(avgPedidoStage || 1, targets.pedido_compra), count: pedidoStageSource.length },
     { id: "nf_entrada", name: "NF ENTRADA", avgDays: avgNfEmissaoLanc || 1, targetDays: targets.nf_entrada, status: stageStatusCustom(avgNfEmissaoLanc || 1, targets.nf_entrada), count: nfEmissaoToNfLanc.length },
     { id: "pagamento", name: "PAGAMENTO", avgDays: avgNfPag || 1, targetDays: targets.pagamento, status: stageStatusCustom(avgNfPag || 1, targets.pagamento), count: nfLancToPagamento.length },
   ];
@@ -465,6 +476,14 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
   const [approvalDaysRaw, setApprovalDaysRaw] = useState<number[]>([]);
   const [approvalRowsRaw, setApprovalRowsRaw] = useState<ApprovalViewRow[]>([]);
 
+  // Cache VW_FIN_ANALISE_FLUXO — usado para derivar Aprovação → Pedido em SAP.
+  const { rows: fluxoRows } = useSapFluxoAnalise({
+    companyDb: session?.companyDB,
+    from: dateFilter?.from || undefined,
+    to: dateFilter?.to || undefined,
+    enabled: session?.erpType === "sap",
+  });
+
   const fetchData = useCallback(async () => {
     if (!session) return;
     setError(null);
@@ -576,7 +595,20 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
 
   const { stages, metrics, insights, validations, approverStats } = useMemo(() => {
     const rows = filterRowsByDate(rawRows, dateFilter);
-    const computedStages = buildStages(rows, approvalDaysRaw, effectiveTargets);
+
+    // Aprovação → Pedido a partir do cache VW_FIN_ANALISE_FLUXO (SAP).
+    // Contamos apenas linhas que tenham data_aprovacao e data_lancamento
+    // vinculadas a um pedido (id_pedido presente).
+    const approvalToPedidoDays: number[] = [];
+    if (session?.erpType === "sap") {
+      for (const f of fluxoRows) {
+        if (!f.id_pedido) continue;
+        const d = daysBetween(f.data_aprovacao, f.data_lancamento);
+        if (d !== null) approvalToPedidoDays.push(Math.max(d, 0));
+      }
+    }
+
+    const computedStages = buildStages(rows, approvalDaysRaw, effectiveTargets, approvalToPedidoDays);
     const vals = buildValidations(rows);
     const errorCount = vals.filter((v) => v.status === "error").length;
     const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
@@ -618,7 +650,7 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
       validations: vals,
       approverStats: computedApproverStats,
     };
-  }, [rawRows, approvalDaysRaw, approvalRowsRaw, dateFilter, effectiveTargets]);
+  }, [rawRows, approvalDaysRaw, approvalRowsRaw, fluxoRows, session?.erpType, dateFilter, effectiveTargets]);
 
   return { stages, metrics, insights, validations, approverStats, isLoading, error, refresh: fetchData };
 }
