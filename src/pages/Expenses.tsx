@@ -917,11 +917,15 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [sourceMode, setSourceMode] = usePersistedState<"flow" | "both">(filterKey("source"), "both");
   const [sapOrders, setSapOrders] = useState<Expense[]>([]);
   const [isLoadingSap, setIsLoadingSap] = useState(false);
+  const [isRevalidatingSap, setIsRevalidatingSap] = useState(false);
+  const [sapFromCache, setSapFromCache] = useState(false);
+  const [sapCacheUpdatedAt, setSapCacheUpdatedAt] = useState<string | null>(null);
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
   const [sapHasMore, setSapHasMore] = useState(false);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
   const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
   const SAP_PAGE_STEP = 100;
+  const SAP_CACHE_KEY = "purchase_orders_hana_v1";
 
 
   // Migração: usuários com preferência antiga "flow" salva no localStorage
@@ -932,73 +936,87 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   }, []);
 
   const fetchSapPage = useCallback(
-    async (skip: number): Promise<Expense[]> => {
-      if (!session) return [];
-      // Dados vêm da view HANA VW_PEDIDOS_COMPRA_APROVACOES via edge function,
-      // que já retorna Fornecedor, Solicitante, Aprovador, Data de documento,
-      // Data de vencimento, Status da aprovação e ordena do mais recente
-      // para o mais antigo. A paginação é feita no servidor.
-      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
-      const res = await sapFunctionFetch("sap-purchase-orders-hana", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          company_db: session.companyDB,
-          offset: skip,
-          limit: SAP_PAGE_STEP,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((data as any)?.error || `Falha HANA ${res.status}`);
-      }
-      const rows = Array.isArray((data as any).rows) ? (data as any).rows : [];
-      return (rows as any[]).map((r) => ({
-        id: r.id ?? `sap-${r.sap_doc_entry ?? r.sap_doc_num}`,
-        supplier_code: r.supplier_code || undefined,
-        supplier_name: r.supplier_name || r.supplier_code || "—",
-        total_amount: Number(r.total_amount || 0),
-        currency: r.currency || "BRL",
-        status: (r.status as ExpenseStatus) || ("pc_lancado" as ExpenseStatus),
-        requester_name: r.requester_name || "(ERP)",
-        current_approver: r.current_approver || undefined,
-        sap_doc_entry: r.sap_doc_entry ?? undefined,
-        sap_doc_num: r.sap_doc_num ?? undefined,
-        sap_purchase_order_status: r.sap_purchase_order_status || undefined,
-        company_db: session.companyDB,
-        doc_date: r.doc_date || undefined,
-        due_date: r.due_date || undefined,
-        remarks: r.remarks || undefined,
-        created_at: r.created_at || r.doc_date || new Date().toISOString(),
-        updated_at: r.updated_at || r.doc_date || new Date().toISOString(),
-        origin: "manual",
-      }));
-    },
+...
     [session],
   );
 
   useEffect(() => {
     if (!showSourceToggle || sourceMode !== "both" || !session) return;
     let cancelled = false;
+    const companyDB = session.companyDB;
+
     (async () => {
-      setIsLoadingSap(true);
+      // 1) Carrega cache imediatamente (mostra dados salvos enquanto rede busca)
+      try {
+        const { data: cached } = await supabase
+          .from("sap_cache")
+          .select("data, updated_at")
+          .eq("cache_key", SAP_CACHE_KEY)
+          .eq("company_db", companyDB)
+          .maybeSingle();
+        if (!cancelled && cached && Array.isArray((cached as any).data)) {
+          const rows = (cached as any).data as Expense[];
+          if (rows.length > 0) {
+            setSapOrders(rows);
+            setSapHasMore(rows.length >= SAP_PAGE_STEP);
+            setSapFromCache(true);
+            setSapCacheUpdatedAt((cached as any).updated_at || null);
+          }
+        }
+      } catch (e) {
+        console.warn("[Expenses] leitura de cache SAP falhou:", e);
+      }
+
+      if (cancelled) return;
+
+      // 2) Revalida em background — sem bloquear UI se já temos cache
+      const hasCached = !cancelled;
+      setIsLoadingSap((prev) => (sapOrders.length === 0 ? true : prev));
+      setIsRevalidatingSap(true);
       try {
         const mapped = await fetchSapPage(0);
         if (cancelled) return;
         setSapOrders(mapped);
         setSapHasMore(mapped.length === SAP_PAGE_STEP);
+        setSapFromCache(false);
+        setSapCacheUpdatedAt(new Date().toISOString());
+        // Persiste cache (fire-and-forget)
+        const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+        supabase
+          .from("sap_cache")
+          .upsert(
+            {
+              cache_key: SAP_CACHE_KEY,
+              company_db: companyDB,
+              data: mapped as any,
+              expires_at: expiresAt,
+            },
+            { onConflict: "cache_key,company_db" },
+          )
+          .then(({ error }) => {
+            if (error) console.warn("[Expenses] gravação de cache SAP falhou:", error.message);
+          });
       } catch (e) {
         if (!cancelled) {
-          toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
-          setSapOrders([]);
-          setSapHasMore(false);
+          // Se já temos cache, não limpa a tela — apenas avisa discretamente
+          if (sapOrders.length === 0) {
+            toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
+            setSapOrders([]);
+            setSapHasMore(false);
+          } else {
+            console.warn("[Expenses] revalidação SAP falhou, mantendo cache:", e);
+          }
         }
       } finally {
-        if (!cancelled) setIsLoadingSap(false);
+        if (!cancelled) {
+          setIsLoadingSap(false);
+          setIsRevalidatingSap(false);
+        }
       }
     })();
     return () => { cancelled = true; };
-  }, [sourceMode, showSourceToggle, session, fetchSapPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceMode, showSourceToggle, session?.companyDB, session?.sessionId, fetchSapPage]);
 
   const loadMoreSap = useCallback(async () => {
     if (isLoadingMoreSap || !sapHasMore) return;
