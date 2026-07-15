@@ -244,6 +244,8 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
         "Pedido de Venda",
         String(o.docNum ?? o.docEntry),
         formatDate(o.docDate),
+        "",
+        "",
         formatCurrency(o.docTotal ?? 0, invoice.currency),
         "",
         "",
@@ -254,6 +256,8 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
       "NF de Venda",
       String(invoice.docNum),
       formatDate(invoice.docDate),
+      "",
+      "",
       formatCurrency(invoice.docTotal, invoice.currency),
       "",
       "",
@@ -262,6 +266,8 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
     if (externalPaid > 0) {
       rows.push([
         "Baixa (fora do ERP Flow)",
+        "—",
+        "—",
         "—",
         "—",
         "",
@@ -275,6 +281,8 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
         "Baixa",
         baixa.sap_incoming_payment_doc_entry ? `SAP #${baixa.sap_incoming_payment_doc_entry}` : "—",
         formatDate(baixa.data_recebimento),
+        formatTime(baixa.created_at),
+        baixa.criado_por_nome || baixa.criado_por_user_code || "—",
         "",
         formatCurrency(baixa.valor_baixado, invoice.currency),
         baixa.valor_juros_multa > 0 ? formatCurrency(baixa.valor_juros_multa, invoice.currency) : "",
@@ -288,11 +296,14 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
     "Etapa",
     "Documento",
     "Data",
+    "Hora",
+    "Usuário",
     "Valor documento",
     "Valor baixado",
     "Juros/Multa",
     "Saldo residual",
   ];
+
 
   function fileBase() {
     return `mapa-relacoes-NF-${invoice!.docNum}`;
