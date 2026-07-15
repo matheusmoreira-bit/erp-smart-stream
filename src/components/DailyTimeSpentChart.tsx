@@ -90,6 +90,42 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
         if (offset > 200000) break;
       }
 
+      // Fallback: para company_db::id_pedido sem data_lancamento no
+      // sap_fluxo_analise_cache, usa doc_date do sap_purchase_order_cache.
+      // Isso cobre pedidos ainda não sincronizados no VW_FIN_ANALISE_FLUXO
+      // ou linhas onde data_lancamento veio nula (esboço ainda não virou PC).
+      const haveKey = new Set(all.map((r) => `${r.company_db}::${r.doc_entry}`));
+      let poOffset = 0;
+      while (true) {
+        let pq = supabase
+          .from("sap_purchase_order_cache")
+          .select("doc_date, company_db, doc_entry")
+          .gte("doc_date", START_DATE)
+          .not("doc_date", "is", null)
+          .order("doc_date", { ascending: true })
+          .range(poOffset, poOffset + PAGE_SIZE - 1);
+        if (!consolidated && companyDb) pq = pq.eq("company_db", companyDb);
+        const { data, error } = await pq;
+        if (error) {
+          console.error("DailyTimeSpentChart fallback (PO cache) error", error);
+          break;
+        }
+        if (!data || data.length === 0) break;
+        for (const r of data as { doc_date: string; company_db: string; doc_entry: number }[]) {
+          const key = `${r.company_db}::${r.doc_entry}`;
+          if (haveKey.has(key)) continue;
+          haveKey.add(key);
+          all.push({
+            doc_date: String(r.doc_date).slice(0, 10),
+            company_db: r.company_db,
+            doc_entry: r.doc_entry,
+          });
+        }
+        if (data.length < PAGE_SIZE) break;
+        poOffset += PAGE_SIZE;
+        if (poOffset > 200000) break;
+      }
+
       // Identifica POs criados via ERP Flow (têm expense vinculada)
       const expAll: { company_db: string; sap_doc_entry: number }[] = [];
       let expOffset = 0;
