@@ -141,19 +141,20 @@ function normalizeStatus(rawStatus: unknown, cancelled: unknown, approvalStatus:
 }
 
 function mapRow(raw: Record<string, unknown>, companyDb: string) {
-  const docNum = toInt(pick(raw, "Nº pedido de compra", "N° pedido de compra", "Num_Pedido_Compra", "numPedidoCompra", "DocNum"));
-  const docEntry = toInt(pick(raw, "Nº do Esboço", "N° do Esboço", "Num_Esboco", "DraftDocEntry", "DocEntry"));
-  const cardCode = toStr(pick(raw, "Código do fornecedor", "Codigo_PN", "CardCode"));
-  const cardName = toStr(pick(raw, "Nome do fornecedor", "Nome_PN", "CardName"));
-  const docDate = toIso(pick(raw, "Data de lançamento", "Data_Lancamento", "DocDate"));
-  const dueDate = toIso(pick(raw, "Data de entrega", "Data_Entrega", "DocDueDate"));
-  const total = toNum(pick(raw, "Total do documento", "Total_Documento", "DocTotal"));
+  const docNum = toInt(pick(raw, "Nº do documento", "N° do documento", "Nº pedido de compra", "N° pedido de compra", "Num_Pedido_Compra", "numPedidoCompra", "DocNum"));
+  const docEntry = toInt(pick(raw, "Draft DocEntry", "Nº do Esboço", "N° do Esboço", "Num_Esboco", "DraftDocEntry", "DocEntry"));
+  const cardCode = toStr(pick(raw, "Código PN/Fornecedor", "Codigo PN/Fornecedor", "Código do fornecedor", "Codigo_PN", "CardCode"));
+  const cardName = toStr(pick(raw, "Fornecedor / Parceiro", "Fornecedor/Parceiro", "Nome do fornecedor", "Nome_PN", "CardName"));
+  const docDate = toIso(pick(raw, "Data do documento", "Data de lançamento", "Data_Lancamento", "DocDate"));
+  const dueDate = toIso(pick(raw, "Data de vencimento", "Data de entrega", "Data_Entrega", "DocDueDate"));
+  const total = toNum(pick(raw, "Valor total", "Valor do documento na moeda original", "Total do documento", "Total_Documento", "DocTotal"));
+  const currency = toStr(pick(raw, "Código da moeda original", "Codigo da moeda original", "Currency", "DocCurrency"));
   const rawStatus = pick(raw, "Status do pedido", "Status_Pedido", "DocumentStatus");
   const cancelled = pick(raw, "Cancelado?", "Cancelado", "Cancelled");
-  const solicitante = toStr(pick(raw, "FGR :: SOLICITANTE", "Solicitante", "FGR::SOLICITANTE"));
-  const approver = toStr(pick(raw, "Aprovador(es)", "Aprovadores", "Aprovador"));
+  const solicitante = toStr(pick(raw, "Solicitante", "FGR :: SOLICITANTE", "FGR::SOLICITANTE"));
+  const approver = toStr(pick(raw, "Aprovador", "Aprovador(es)", "Aprovadores"));
   const flowCreatedAt = combineDateHour(
-    pick(raw, "Data de criação do fluxo", "Data_Criacao_Fluxo"),
+    pick(raw, "Data de criação", "Data de criação do fluxo", "Data_Criacao_Fluxo"),
     pick(raw, "Hora de criação do fluxo", "Hora_Criacao_Fluxo"),
   );
   const approvalDate = combineDateHour(
@@ -176,7 +177,7 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
     supplier_code: cardCode ?? undefined,
     supplier_name: cardName || cardCode || "—",
     total_amount: total ?? 0,
-    currency: "BRL",
+    currency: currency && currency !== "R$" ? currency : "BRL",
     status,
     requester_name: solicitante || "(ERP)",
     current_approver: approver ?? undefined,
@@ -187,7 +188,6 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
     created_at: docDate || flowCreatedAt || new Date().toISOString(),
     updated_at: approvalDate || docDate || new Date().toISOString(),
     origin: "manual" as const,
-    // Extras HANA (não fazem parte de Expense mas úteis)
     hana_flow_created_at: flowCreatedAt,
     hana_approval_date: approvalDate,
   };
