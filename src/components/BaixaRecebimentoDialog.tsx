@@ -339,7 +339,14 @@ export function BaixaRecebimentoDialog({
                             onChange={(e) =>
                               setRateio((prev) => ({ ...prev, [inv.docEntry]: e.target.value }))
                             }
-                            title={excede ? "Valor acima do saldo — excedente vira juros/multa" : undefined}
+                            disabled={invoices.length === 1}
+                            title={
+                              invoices.length === 1
+                                ? "Com 1 NF selecionada, o valor a baixar é o próprio saldo residual."
+                                : excede
+                                  ? "Valor acima do saldo — excedente vira juros/multa"
+                                  : undefined
+                            }
                           />
                         </td>
                       </tr>
