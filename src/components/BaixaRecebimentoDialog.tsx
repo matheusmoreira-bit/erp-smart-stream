@@ -272,9 +272,16 @@ export function BaixaRecebimentoDialog({
               <Input
                 inputMode="decimal"
                 value={valorRecebidoTxt}
-                onChange={(e) => setValorRecebidoTxt(e.target.value)}
-                disabled={invoices.length === 1}
-                title={invoices.length === 1 ? "Com 1 NF selecionada, o valor recebido é o próprio saldo residual." : undefined}
+                onChange={(e) => {
+                  const txt = e.target.value;
+                  setValorRecebidoTxt(txt);
+                  // Com 1 NF selecionada, o rateio acompanha o valor recebido
+                  if (invoices.length === 1) {
+                    const only = invoices[0];
+                    setRateio({ [only.docEntry]: txt });
+                  }
+                }}
+                title="O cliente pode ter pago um valor diferente do saldo residual (a menor, adiantamento; a maior, juros/multa)."
               />
             </div>
             <div className="space-y-1 sm:col-span-2">
