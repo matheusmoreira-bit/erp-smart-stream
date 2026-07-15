@@ -1401,6 +1401,8 @@ export type Database = {
           conta_juros_multa_nome: string | null
           created_at: string
           criado_por: string | null
+          criado_por_nome: string | null
+          criado_por_user_code: string | null
           data_recebimento: string
           id: string
           sap_error_message: string | null
@@ -1420,6 +1422,8 @@ export type Database = {
           conta_juros_multa_nome?: string | null
           created_at?: string
           criado_por?: string | null
+          criado_por_nome?: string | null
+          criado_por_user_code?: string | null
           data_recebimento: string
           id?: string
           sap_error_message?: string | null
@@ -1439,6 +1443,8 @@ export type Database = {
           conta_juros_multa_nome?: string | null
           created_at?: string
           criado_por?: string | null
+          criado_por_nome?: string | null
+          criado_por_user_code?: string | null
           data_recebimento?: string
           id?: string
           sap_error_message?: string | null
