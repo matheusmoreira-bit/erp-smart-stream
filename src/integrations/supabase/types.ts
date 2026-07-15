@@ -1390,6 +1390,95 @@ export type Database = {
           },
         ]
       }
+      baixas_recebimento: {
+        Row: {
+          card_code: string
+          card_name: string | null
+          company_db: string
+          conta_contabil_codigo: string
+          conta_contabil_nome: string | null
+          created_at: string
+          criado_por: string | null
+          data_recebimento: string
+          id: string
+          sap_error_message: string | null
+          sap_incoming_payment_doc_entry: number | null
+          status: string
+          updated_at: string
+          valor_juros_multa: number
+          valor_total: number
+        }
+        Insert: {
+          card_code: string
+          card_name?: string | null
+          company_db: string
+          conta_contabil_codigo: string
+          conta_contabil_nome?: string | null
+          created_at?: string
+          criado_por?: string | null
+          data_recebimento: string
+          id?: string
+          sap_error_message?: string | null
+          sap_incoming_payment_doc_entry?: number | null
+          status?: string
+          updated_at?: string
+          valor_juros_multa?: number
+          valor_total: number
+        }
+        Update: {
+          card_code?: string
+          card_name?: string | null
+          company_db?: string
+          conta_contabil_codigo?: string
+          conta_contabil_nome?: string | null
+          created_at?: string
+          criado_por?: string | null
+          data_recebimento?: string
+          id?: string
+          sap_error_message?: string | null
+          sap_incoming_payment_doc_entry?: number | null
+          status?: string
+          updated_at?: string
+          valor_juros_multa?: number
+          valor_total?: number
+        }
+        Relationships: []
+      }
+      baixas_recebimento_itens: {
+        Row: {
+          baixa_id: string
+          created_at: string
+          id: string
+          invoice_doc_entry: number
+          invoice_doc_num: string | null
+          valor_baixado: number
+        }
+        Insert: {
+          baixa_id: string
+          created_at?: string
+          id?: string
+          invoice_doc_entry: number
+          invoice_doc_num?: string | null
+          valor_baixado: number
+        }
+        Update: {
+          baixa_id?: string
+          created_at?: string
+          id?: string
+          invoice_doc_entry?: number
+          invoice_doc_num?: string | null
+          valor_baixado?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "baixas_recebimento_itens_baixa_id_fkey"
+            columns: ["baixa_id"]
+            isOneToOne: false
+            referencedRelation: "baixas_recebimento"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           company_db: string
@@ -3373,6 +3462,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pedidos_venda_erp: {
+        Row: {
+          card_code: string | null
+          company_db: string
+          created_at: string
+          criado_por: string | null
+          doc_entry: number
+          doc_num: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          card_code?: string | null
+          company_db: string
+          created_at?: string
+          criado_por?: string | null
+          doc_entry: number
+          doc_num?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          card_code?: string | null
+          company_db?: string
+          created_at?: string
+          criado_por?: string | null
+          doc_entry?: number
+          doc_num?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       permission_group_modules: {
         Row: {
