@@ -58,8 +58,6 @@ const ANON_READABLE_TABLES = [
   "pagcorp_nondeductible_cards",
   "pagcorp_nondeductible_expenses",
   "pagcorp_settlement_accounts",
-  "pagcorp_supplier_links",
-  "pagcorp_item_mapping",
   "pagcorp_account_mapping",
   "nf_entrada_logs",
   "nf_entrada_imports",
