@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   FileText,
   Receipt,
   Wallet,
-  Loader2,
   ArrowDown,
   CheckCircle2,
   Clock,
@@ -14,6 +14,9 @@ import {
   Info,
   Download,
   FileDown,
+  RefreshCw,
+  Inbox,
+  ServerCrash,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
@@ -75,12 +78,15 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
   const [orders, setOrders] = useState<SalesOrderRef[]>([]);
   const [baixas, setBaixas] = useState<BaixaEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     if (!open || !invoice || !session) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setError(null);
       try {
         // 1) Pedidos de venda que originaram esta NF (via DocumentLines.BaseType=17)
         const invRes = await sapQueryAll(
@@ -130,13 +136,14 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
         }
 
         // 2) Baixas registradas no Lovable para esta NF
-        const { data: itens } = await supabase
+        const { data: itens, error: baixasErr } = await supabase
           .from("baixas_recebimento_itens")
           .select(
             "valor_baixado, baixa_id, baixas_recebimento!inner(id,data_recebimento,valor_juros_multa,status,sap_incoming_payment_doc_entry,created_at,company_db)",
           )
           .eq("invoice_doc_entry", invoice.docEntry)
           .eq("baixas_recebimento.company_db", session.companyDB);
+        if (baixasErr) throw new Error(baixasErr.message);
 
         const baixaRows: BaixaEntry[] = ((itens || []) as Array<{
           valor_baixado: number;
@@ -169,6 +176,12 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           setOrders(orderRows);
           setBaixas(baixaRows);
         }
+      } catch (e) {
+        if (!cancelled) {
+          setOrders([]);
+          setBaixas([]);
+          setError(e instanceof Error ? e.message : String(e));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -176,7 +189,9 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, invoice, session]);
+  }, [open, invoice, session, reloadNonce]);
+
+
 
   // Cálculos:
   //  - total baixado por nós (soma dos itens registrados no Lovable p/ essa NF)
@@ -326,7 +341,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                 size="sm"
                 className="h-7 gap-1 text-xs"
                 onClick={handleExportCsv}
-                disabled={loading}
+                disabled={loading || !!error}
               >
                 <Download className="w-3.5 h-3.5" /> CSV
               </Button>
@@ -336,7 +351,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                 size="sm"
                 className="h-7 gap-1 text-xs"
                 onClick={handleExportPdf}
-                disabled={loading}
+                disabled={loading || !!error}
               >
                 <FileDown className="w-3.5 h-3.5" /> PDF
               </Button>
@@ -350,12 +365,14 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           </div>
         </DialogHeader>
 
-
         {loading ? (
-          <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" /> Carregando fluxo…
-          </div>
+          <MapSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={() => setReloadNonce((n) => n + 1)} />
+        ) : orders.length === 0 && baixas.length === 0 && externalPaid === 0 ? (
+          <EmptyState />
         ) : (
+
           <div className="space-y-3 mt-2">
             {/* Pedido de Venda */}
             <FlowSection
@@ -639,3 +656,50 @@ function BaixaStatusLabel({ status }: { status: string }) {
     </Badge>
   );
 }
+
+function MapSkeleton() {
+  return (
+    <div className="space-y-3 mt-2" aria-busy="true" aria-label="Carregando mapa de relações">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="space-y-1.5">
+          <Skeleton className="h-3 w-32" />
+          <div className="space-y-1.5">
+            <Skeleton className="h-14 w-full rounded-md" />
+            {i === 2 && <Skeleton className="h-14 w-full rounded-md" />}
+          </div>
+          {i < 2 && (
+            <div className="flex justify-center py-1">
+              <Skeleton className="h-4 w-4 rounded-full" />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/5 p-4 flex flex-col items-center text-center gap-2">
+      <ServerCrash className="w-6 h-6 text-destructive" />
+      <p className="text-sm font-medium text-destructive">Não foi possível carregar o mapa de relações.</p>
+      <p className="text-xs text-muted-foreground max-w-md break-words">{message}</p>
+      <Button size="sm" variant="outline" className="gap-1.5 mt-1" onClick={onRetry}>
+        <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+      </Button>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="mt-4 rounded-md border border-dashed border-border/60 p-6 flex flex-col items-center text-center gap-2">
+      <Inbox className="w-6 h-6 text-muted-foreground" />
+      <p className="text-sm font-medium">Nenhum vínculo encontrado.</p>
+      <p className="text-xs text-muted-foreground max-w-md">
+        Esta NF ainda não possui pedidos de venda vinculados nem baixas registradas.
+      </p>
+    </div>
+  );
+}
+
