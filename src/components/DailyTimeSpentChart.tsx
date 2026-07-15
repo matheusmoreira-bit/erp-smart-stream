@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Loader2, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { isTestCompanyDb } from "@/lib/test-company";
 
 interface Props {
   companyDb?: string;
@@ -13,8 +15,30 @@ interface Props {
   tempoLancarSapMin: number;
 }
 
+type Granularity = "day" | "week" | "month";
 const START_DATE = "2025-06-01";
 const PAGE_SIZE = 1000;
+
+function bucketKey(iso: string, g: Granularity): string {
+  if (g === "day") return iso;
+  const d = new Date(iso + "T00:00:00Z");
+  if (g === "month") return iso.slice(0, 7); // YYYY-MM
+  // week: segunda-feira como âncora
+  const day = d.getUTCDay(); // 0=Dom..6=Sáb
+  const diff = (day + 6) % 7; // dias desde segunda
+  d.setUTCDate(d.getUTCDate() - diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function fmtBucketLabel(key: string, g: Granularity): string {
+  if (g === "month") {
+    const [y, m] = key.split("-");
+    return `${m}/${y.slice(2)}`;
+  }
+  const [y, m, d] = key.split("-");
+  return `${d}/${m}`;
+}
+
 
 export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMin, tempoLancarSapMin }: Props) {
   const { isAdmin } = useAuth();
