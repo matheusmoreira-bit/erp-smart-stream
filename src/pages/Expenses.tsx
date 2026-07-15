@@ -72,6 +72,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
+import { SapPoDetails } from "@/components/SapPoDetails";
 
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
