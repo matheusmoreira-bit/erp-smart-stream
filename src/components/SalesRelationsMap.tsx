@@ -200,13 +200,147 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
 
   if (!invoice) return null;
 
+  // ── Linhas normalizadas para exportação (CSV/PDF) ───────────────
+  function buildRows() {
+    if (!invoice) return [] as string[][];
+    const rows: string[][] = [];
+    for (const o of orders) {
+      rows.push([
+        "Pedido de Venda",
+        String(o.docNum ?? o.docEntry),
+        formatDate(o.docDate),
+        formatCurrency(o.docTotal ?? 0, invoice.currency),
+        "",
+        "",
+        "",
+      ]);
+    }
+    rows.push([
+      "NF de Venda",
+      String(invoice.docNum),
+      formatDate(invoice.docDate),
+      formatCurrency(invoice.docTotal, invoice.currency),
+      "",
+      "",
+      formatCurrency(+(invoice.docTotal - externalPaid).toFixed(2), invoice.currency),
+    ]);
+    if (externalPaid > 0) {
+      rows.push([
+        "Baixa (fora do ERP Flow)",
+        "—",
+        "—",
+        "",
+        formatCurrency(externalPaid, invoice.currency),
+        "",
+        formatCurrency(+(invoice.docTotal - externalPaid).toFixed(2), invoice.currency),
+      ]);
+    }
+    for (const { baixa, residualAfter } of timeline) {
+      rows.push([
+        "Baixa",
+        baixa.sap_incoming_payment_doc_entry ? `SAP #${baixa.sap_incoming_payment_doc_entry}` : "—",
+        formatDate(baixa.data_recebimento),
+        "",
+        formatCurrency(baixa.valor_baixado, invoice.currency),
+        baixa.valor_juros_multa > 0 ? formatCurrency(baixa.valor_juros_multa, invoice.currency) : "",
+        formatCurrency(residualAfter, invoice.currency),
+      ]);
+    }
+    return rows;
+  }
+
+  const headers = [
+    "Etapa",
+    "Documento",
+    "Data",
+    "Valor documento",
+    "Valor baixado",
+    "Juros/Multa",
+    "Saldo residual",
+  ];
+
+  function fileBase() {
+    return `mapa-relacoes-NF-${invoice!.docNum}`;
+  }
+
+  function handleExportCsv() {
+    const rows = buildRows();
+    const esc = (v: string) => `"${(v || "").replace(/"/g, '""')}"`;
+    const csv =
+      "\uFEFF" +
+      [headers, ...rows].map((r) => r.map(esc).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileBase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleExportPdf() {
+    const rows = buildRows();
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    doc.setFontSize(14);
+    doc.text(`Mapa de relações — NF #${invoice!.docNum}`, 40, 40);
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    const meta = [
+      `Cliente: ${invoice!.cardName} (${invoice!.cardCode})`,
+      `Emitida em ${formatDate(invoice!.docDate)}`,
+      `Total: ${formatCurrency(invoice!.docTotal, invoice!.currency)}`,
+      `Saldo residual atual: ${formatCurrency(finalResidual, invoice!.currency)}`,
+    ];
+    meta.forEach((line, i) => doc.text(line, 40, 58 + i * 12));
+
+    autoTable(doc, {
+      startY: 58 + meta.length * 12 + 8,
+      head: [headers],
+      body: rows,
+      styles: { fontSize: 8, cellPadding: 4 },
+      headStyles: { fillColor: [40, 40, 40] },
+      columnStyles: {
+        3: { halign: "right" },
+        4: { halign: "right" },
+        5: { halign: "right" },
+        6: { halign: "right" },
+      },
+    });
+
+    doc.save(`${fileBase()}.pdf`);
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-primary" />
-            Mapa de relações — NF #{invoice.docNum}
+          <DialogTitle className="flex items-center gap-2 justify-between pr-6">
+            <span className="flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-primary" />
+              Mapa de relações — NF #{invoice.docNum}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={handleExportCsv}
+                disabled={loading}
+              >
+                <Download className="w-3.5 h-3.5" /> CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={handleExportPdf}
+                disabled={loading}
+              >
+                <FileDown className="w-3.5 h-3.5" /> PDF
+              </Button>
+            </div>
           </DialogTitle>
           <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
             <span>{invoice.cardName}</span>
@@ -215,6 +349,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
             <span className="font-mono">{formatCurrency(invoice.docTotal, invoice.currency)}</span>
           </div>
         </DialogHeader>
+
 
         {loading ? (
           <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
