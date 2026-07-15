@@ -237,10 +237,11 @@ export function CreateExpenseModal({
 
   // Filtro de alçada: itens IMP% só para CC 1.2.2.%; itens FOL% só para CC 1.6.%.
   // Vale só no fluxo de compras — vendas mantém a lista integral.
+  const bypassCcItemRules = !!sapSession?.isSuperUser;
   const filteredItemOptions = useMemo(() => {
     if (isSales) return itemOptions;
-    return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter));
-  }, [itemOptions, userCostCenter, isSales]);
+    return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
+  }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
 
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
@@ -1747,7 +1748,7 @@ export function CreateExpenseModal({
         return;
       }
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.6.%.
-      if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter)) {
+      if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
         const codeUp = String(it.item_code).toUpperCase();
         if (codeUp.startsWith("IMP")) {
           toast.error(`Item ${n}: itens IMP% são restritos a usuários do CC 1.2.2.%`);
