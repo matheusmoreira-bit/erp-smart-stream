@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Helmet } from "react-helmet-async";
 import { motion } from "framer-motion";
 import {
   RefreshCw,
@@ -14,8 +13,11 @@ import {
   Clock,
   CheckCircle2,
   History,
+  ArrowLeft,
+  LogOut,
+  Receipt,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,10 +27,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
+import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { PageTitle } from "@/components/PageTitle";
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 
@@ -93,7 +98,9 @@ interface ClientGroup {
 /* ─────────────────────────── Page ─────────────────────────── */
 
 export default function SalesPage() {
-  const { session } = useSap();
+  const { session, logout } = useSap();
+  const navigate = useNavigate();
+  const { getLabel } = useCompanies();
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [erroMsg, setErroMsg] = useState<string | null>(null);
@@ -318,46 +325,85 @@ export default function SalesPage() {
   /* ── UI ─────────────────────────────────────────────── */
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Helmet>
-        <title>Vendas — NFs de venda por cliente</title>
-      </Helmet>
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <PageTitle title="Vendas" />
 
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-wrap items-center justify-between gap-3"
-        >
-          <div>
-            <h1 className="text-2xl font-bold">Vendas — NFs de venda</h1>
-            <p className="text-xs text-muted-foreground">
-              Base: <span className="font-mono">{companyDb}</span> · agrupado por cliente com saldo residual em tempo real.
-            </p>
+      {/* Header padronizado */}
+      <header className="border-b border-border px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/")}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Receipt className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">
+                Vendas <span className="text-gradient">— NFs de venda</span>
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Agrupado por cliente com saldo residual em tempo real
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm" className="gap-1.5">
-              <Link to="/vendas/historico">
-                <History className="w-3.5 h-3.5" />
-                Histórico de baixas
-              </Link>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/vendas/historico")}
+              className="gap-2"
+            >
+              <History className="w-4 h-4" /> Histórico de baixas
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => void loadInvoices(true)}
               disabled={loading}
-              className="gap-1.5"
+              className="gap-2"
             >
               {loading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="w-4 h-4" />
               )}
               Atualizar
             </Button>
+            <div className="text-right">
+              <p className="text-sm font-medium text-foreground">
+                {getLabel(session?.companyDB || "")}
+              </p>
+              <p className="text-xs text-muted-foreground">{session?.userName}</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
+              Conectado
+            </div>
+            <ThemeToggle />
+            <button
+              onClick={logout}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Sair"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 space-y-4">
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-xs text-muted-foreground"
+        >
+          Base: <span className="font-mono">{companyDb}</span> · ERP: {erpLabel}
         </motion.div>
 
         {/* Filters */}
