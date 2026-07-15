@@ -1748,7 +1748,7 @@ export function CreateExpenseModal({
         return;
       }
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.6.%.
-      if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter)) {
+      if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
         const codeUp = String(it.item_code).toUpperCase();
         if (codeUp.startsWith("IMP")) {
           toast.error(`Item ${n}: itens IMP% são restritos a usuários do CC 1.2.2.%`);
