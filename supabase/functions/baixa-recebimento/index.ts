@@ -283,6 +283,8 @@ Deno.serve(async (req) => {
         valor_juros_multa: Number(input.valorJurosMulta || 0),
         status: "pendente_sincronizacao",
         criado_por: criadoPor,
+        criado_por_user_code: sap.userName,
+        criado_por_nome: criadoPorNome,
       }).select("id").single();
       if (insertErr || !baixa) return json(500, { ok: false, errorMessage: insertErr?.message || "Falha ao gravar baixa." });
 
