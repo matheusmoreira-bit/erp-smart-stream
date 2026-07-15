@@ -321,6 +321,48 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
         </div>
       </div>
 
+      {/* Legenda fixa: origem das datas e regra de classificação das séries. */}
+      <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-wide font-semibold text-foreground/80">
+            Origem da data do lançamento
+          </div>
+          <div>
+            Primária:{" "}
+            <code className="font-mono text-foreground">sap_fluxo_analise_cache.data_lancamento</code>{" "}
+            (view HANA <code className="font-mono">VW_FIN_ANALISE_FLUXO</code>), agrupada pelo{" "}
+            {granularity === "day" ? "dia" : granularity === "week" ? "início da semana" : "mês"}.
+          </div>
+          <div>
+            Fallback (quando ausente para <code className="font-mono">company_db::id_pedido</code>):{" "}
+            <code className="font-mono text-foreground">sap_purchase_order_cache.doc_date</code>.
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-wide font-semibold text-foreground/80">
+            Classificação das séries
+          </div>
+          <div className="flex items-start gap-2">
+            <span aria-hidden className="mt-1 w-2 h-2 rounded-full bg-primary shrink-0" />
+            <span>
+              <span className="text-primary font-medium">ERP Flow</span> — pedido com{" "}
+              <code className="font-mono">expenses.sap_doc_entry</code> vinculado (foi lançado via ERP Flow).
+              Vale apenas para lançamentos a partir de {new Date(FLOW_LAUNCH_DATE + "T00:00:00Z").toLocaleDateString("pt-BR")}.
+            </span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span aria-hidden className="mt-1 w-2 h-2 rounded-full bg-destructive shrink-0" />
+            <span>
+              <span className="text-destructive font-medium">SAP puro</span> — pedido sem esse vínculo (lançado direto no SAP).
+            </span>
+          </div>
+          <div className="opacity-80">
+            Minutos/dia = (nº pedidos × tempo unitário) ÷ dias do bucket · unitário: SAP {tempoLancarSapMin}min, Flow {tempoLancarFlowMin}min.
+          </div>
+        </div>
+      </div>
+
+
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
