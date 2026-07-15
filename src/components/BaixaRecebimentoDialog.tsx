@@ -265,10 +265,11 @@ export function BaixaRecebimentoDialog({
                 value={conta}
                 onChange={setConta}
                 placeholder="Buscar conta contábil..."
+                portalContainer={dialogContentRef.current}
                 required
               />
             </div>
-            {isOverpayment && (
+            {excedente > 0 && (
               <div className="space-y-1 sm:col-span-2">
                 <Label className="text-xs flex items-center gap-1 text-amber-600 dark:text-amber-400">
                   <AlertTriangle className="w-3.5 h-3.5" />
@@ -280,6 +281,7 @@ export function BaixaRecebimentoDialog({
                   value={contaJuros}
                   onChange={setContaJuros}
                   placeholder="Buscar conta de receita financeira / juros..."
+                  portalContainer={dialogContentRef.current}
                   required
                 />
               </div>
@@ -293,7 +295,7 @@ export function BaixaRecebimentoDialog({
                 Rateio por NF
               </p>
               <Badge variant="outline" className="text-[10px]">
-                {valorRecebido >= saldoTotal - 0.001 ? "Automático" : "Manual"}
+                {Math.abs(diffSoma) <= 0.01 ? "OK" : diffSoma > 0 ? "Faltam" : "Excede"}
               </Badge>
             </div>
             <div className="rounded-lg border border-border overflow-hidden">
