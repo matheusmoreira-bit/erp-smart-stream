@@ -144,8 +144,6 @@ export default function SalesPage() {
           $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
           $orderby: "DocDate desc",
         };
-          $orderby: "DocDate desc",
-        };
 
         // 1b) Fetch open opening balances (Saldo Inicial) as JournalEntries
         //     marcados com TransactionCode = 'SI' (ou Reference = 'SI' como fallback).
