@@ -305,6 +305,8 @@ Deno.serve(async (req) => {
         invoice_doc_entry: Number(it.invoiceDocEntry),
         invoice_doc_num: it.invoiceDocNum != null ? String(it.invoiceDocNum) : null,
         valor_baixado: Number(it.valorBaixado),
+        invoice_type: it.invoiceType === "journal_entry" ? "journal_entry" : "invoice",
+        invoice_doc_line: it.invoiceType === "journal_entry" ? Number(it.invoiceDocLine || 0) : null,
       }));
       const { error: itemErr } = await sb.from("baixas_recebimento_itens").insert(itensPayload);
       if (itemErr) {
