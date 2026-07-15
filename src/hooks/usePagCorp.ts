@@ -548,6 +548,7 @@ export function usePagCorp() {
     if (!res.ok || result.success === false) {
       throw new Error(result.error || `Erro ${res.status}`);
     }
+    invalidatePagCorpIntegrationStatus(companyDb);
     return result;
   }, []);
 
