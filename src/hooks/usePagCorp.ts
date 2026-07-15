@@ -163,95 +163,104 @@ export function usePagCorp() {
         };
       });
 
-      // Check which transactions are already integrated NA EMPRESA ATUAL.
-      // Sem company_db, não marca como integrada (evita herdar status de outra base).
-      const expenseIds = items.map((t) => Number(t.id)).filter((id) => !isNaN(id));
-      if (expenseIds.length > 0 && companyDb) {
-        const { data: logs } = await supabase
-          .from("pagcorp_integration_log")
-          .select("pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry, settlement_status, settlement_payment_doc_num, settlement_error")
-          .in("pagcorp_expense_id", expenseIds)
-          .eq("status", "success")
-          .eq("company_db", companyDb);
-
-        const integratedMap = new Map<number, { id: string; docNum: number | null; docEntry: number | null; settlementStatus: string | null; settlementPaymentDocNum: number | null; settlementError: string | null }>();
-        (logs || []).forEach((log: any) => {
-          integratedMap.set(log.pagcorp_expense_id, {
-            id: log.id,
-            docNum: log.sap_doc_num ?? null,
-            docEntry: log.sap_doc_entry ?? null,
-            settlementStatus: log.settlement_status ?? null,
-            settlementPaymentDocNum: log.settlement_payment_doc_num ?? null,
-            settlementError: log.settlement_error ?? null,
-          });
-        });
-
-        items.forEach((t) => {
-          const hit = integratedMap.get(Number(t.id));
-          if (hit) {
-            t.integrated = true;
-            t.integrationLogId = hit.id;
-            t.sapDocNum = hit.docNum;
-            t.sapDocEntry = hit.docEntry;
-            t.settlementStatus = hit.settlementStatus;
-            t.settlementPaymentDocNum = hit.settlementPaymentDocNum;
-            t.settlementError = hit.settlementError;
-          }
-        });
-      }
-
-      // Annotate nondeductible cards + per-expense overrides
+      // Busca status de integração + marcações de não-dedutibilidade via
+      // Edge Function (usa service_role internamente, valida sessão SAP).
+      // Assim as tabelas `pagcorp_integration_log`,
+      // `pagcorp_nondeductible_cards` e `pagcorp_nondeductible_expenses`
+      // não precisam de acesso `anon`.
       if (companyDb) {
-        // 1) Card-level
-        const { data: nondeductible } = await supabase
-          .from("pagcorp_nondeductible_cards" as any)
-          .select("card_identifier, supplier_code, supplier_name")
-          .eq("company_db", companyDb);
-        if (nondeductible && nondeductible.length) {
-          const map = new Map<string, { code: string; name?: string }>();
-          (nondeductible as any[]).forEach((c) =>
-            map.set(String(c.card_identifier), { code: c.supplier_code, name: c.supplier_name }),
-          );
-          items.forEach((t) => {
-            const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
-              (t.cardName && String(t.cardName).trim()) || "";
-            const hit = key ? map.get(key) : undefined;
-            if (hit) {
-              t.isNondeductible = true;
-              t.nondeductibleSupplierCode = hit.code;
-              t.nondeductibleSupplierName = hit.name;
-            }
+        const expenseIds = items.map((t) => Number(t.id)).filter((id) => !isNaN(id));
+        try {
+          const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+          const statusRes = await sapFunctionFetch("pagcorp-integration-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ companyDb, expenseIds }),
           });
-        }
+          if (statusRes.ok) {
+            const {
+              integrations = [],
+              nondeductibleCards = [],
+              nondeductibleExpenses = [],
+            } = await statusRes.json();
 
-        // 2) Per-expense overrides (B4) — prevalece sobre o do cartão
-        const expIds = items.map((t) => Number(t.id)).filter((n) => !isNaN(n));
-        if (expIds.length > 0) {
-          const { data: ndExp } = await supabase
-            .from("pagcorp_nondeductible_expenses" as any)
-            .select("pagcorp_expense_id, supplier_code, supplier_name")
-            .eq("company_db", companyDb)
-            .in("pagcorp_expense_id", expIds);
-          if (ndExp && ndExp.length) {
-            const map = new Map<number, { code?: string; name?: string }>();
-            (ndExp as any[]).forEach((r) =>
-              map.set(Number(r.pagcorp_expense_id), {
-                code: r.supplier_code || undefined,
-                name: r.supplier_name || undefined,
-              }),
-            );
+            // Marca integradas
+            const integratedMap = new Map<number, {
+              id: string;
+              docNum: number | null;
+              docEntry: number | null;
+              settlementStatus: string | null;
+              settlementPaymentDocNum: number | null;
+              settlementError: string | null;
+            }>();
+            (integrations as any[]).forEach((log) => {
+              integratedMap.set(Number(log.pagcorp_expense_id), {
+                id: log.id,
+                docNum: log.sap_doc_num ?? null,
+                docEntry: log.sap_doc_entry ?? null,
+                settlementStatus: log.settlement_status ?? null,
+                settlementPaymentDocNum: log.settlement_payment_doc_num ?? null,
+                settlementError: log.settlement_error ?? null,
+              });
+            });
             items.forEach((t) => {
-              const hit = map.get(Number(t.id));
+              const hit = integratedMap.get(Number(t.id));
               if (hit) {
-                t.isNondeductible = true;
-                t.nondeductibleAtExpense = true;
-                if (hit.code) t.nondeductibleSupplierCode = hit.code;
-                if (hit.name) t.nondeductibleSupplierName = hit.name;
+                t.integrated = true;
+                t.integrationLogId = hit.id;
+                t.sapDocNum = hit.docNum;
+                t.sapDocEntry = hit.docEntry;
+                t.settlementStatus = hit.settlementStatus;
+                t.settlementPaymentDocNum = hit.settlementPaymentDocNum;
+                t.settlementError = hit.settlementError;
               }
             });
+
+            // Não-dedutíveis por cartão
+            if ((nondeductibleCards as any[]).length) {
+              const map = new Map<string, { code: string; name?: string }>();
+              (nondeductibleCards as any[]).forEach((c) =>
+                map.set(String(c.card_identifier), { code: c.supplier_code, name: c.supplier_name }),
+              );
+              items.forEach((t) => {
+                const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+                  (t.cardName && String(t.cardName).trim()) || "";
+                const hit = key ? map.get(key) : undefined;
+                if (hit) {
+                  t.isNondeductible = true;
+                  t.nondeductibleSupplierCode = hit.code;
+                  t.nondeductibleSupplierName = hit.name;
+                }
+              });
+            }
+
+            // Overrides por expense (prevalece sobre o do cartão)
+            if ((nondeductibleExpenses as any[]).length) {
+              const map = new Map<number, { code?: string; name?: string }>();
+              (nondeductibleExpenses as any[]).forEach((r) =>
+                map.set(Number(r.pagcorp_expense_id), {
+                  code: r.supplier_code || undefined,
+                  name: r.supplier_name || undefined,
+                }),
+              );
+              items.forEach((t) => {
+                const hit = map.get(Number(t.id));
+                if (hit) {
+                  t.isNondeductible = true;
+                  t.nondeductibleAtExpense = true;
+                  if (hit.code) t.nondeductibleSupplierCode = hit.code;
+                  if (hit.name) t.nondeductibleSupplierName = hit.name;
+                }
+              });
+            }
+          } else {
+            console.warn("pagcorp-integration-status non-ok:", statusRes.status);
           }
+        } catch (e) {
+          console.warn("PagCorp integration-status fetch failed:", e);
         }
       }
+
 
       setTransactions(items);
 
