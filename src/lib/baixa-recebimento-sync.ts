@@ -32,6 +32,10 @@ export interface CreateBaixaInput {
     invoiceDocEntry: number;
     invoiceDocNum: string | number;
     valorBaixado: number;
+    /** 'invoice' (padrão) ou 'journal_entry' (Saldo Inicial). */
+    invoiceType?: "invoice" | "journal_entry";
+    /** Linha do JournalEntry — obrigatório quando invoiceType='journal_entry'. */
+    invoiceDocLine?: number | null;
   }>;
 }
 

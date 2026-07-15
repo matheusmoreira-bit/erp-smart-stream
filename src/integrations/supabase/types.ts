@@ -1462,7 +1462,9 @@ export type Database = {
           created_at: string
           id: string
           invoice_doc_entry: number
+          invoice_doc_line: number | null
           invoice_doc_num: string | null
+          invoice_type: string
           valor_baixado: number
         }
         Insert: {
@@ -1470,7 +1472,9 @@ export type Database = {
           created_at?: string
           id?: string
           invoice_doc_entry: number
+          invoice_doc_line?: number | null
           invoice_doc_num?: string | null
+          invoice_type?: string
           valor_baixado: number
         }
         Update: {
@@ -1478,7 +1482,9 @@ export type Database = {
           created_at?: string
           id?: string
           invoice_doc_entry?: number
+          invoice_doc_line?: number | null
           invoice_doc_num?: string | null
+          invoice_type?: string
           valor_baixado?: number
         }
         Relationships: [

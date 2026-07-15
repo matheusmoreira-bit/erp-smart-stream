@@ -22,6 +22,8 @@ type BaixaInput = {
     invoiceDocEntry: number;
     invoiceDocNum?: string | number | null;
     valorBaixado: number;
+    invoiceType?: "invoice" | "journal_entry";
+    invoiceDocLine?: number | null;
   }>;
 };
 
@@ -105,11 +107,17 @@ function buildIncomingPayment(
     TransferAccount: baixa.conta_contabil_codigo,
     TransferSum: Number(baixa.valor_total),
     BPLID: bplId,
-    PaymentInvoices: itens.map((it) => ({
-      DocEntry: Number(it.invoice_doc_entry),
-      SumApplied: Number(it.valor_baixado),
-      InvoiceType: "it_Invoice",
-    })),
+    PaymentInvoices: itens.map((it) => {
+      const type = String(it.invoice_type || "invoice");
+      const isJE = type === "journal_entry";
+      const entry: Record<string, unknown> = {
+        DocEntry: Number(it.invoice_doc_entry),
+        SumApplied: Number(it.valor_baixado),
+        InvoiceType: isJE ? "it_JournalEntry" : "it_Invoice",
+      };
+      if (isJE) entry.DocLine = Number(it.invoice_doc_line || 0);
+      return entry;
+    }),
   };
 
   if (excedente > 0 && baixa.conta_juros_multa_codigo) {
@@ -173,7 +181,7 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
 
   const { data: itens, error: itensErr } = await sb
     .from("baixas_recebimento_itens")
-    .select("invoice_doc_entry,valor_baixado")
+    .select("invoice_doc_entry,valor_baixado,invoice_type,invoice_doc_line")
     .eq("baixa_id", baixaId);
   if (itensErr || !itens?.length) {
     const msg = itensErr?.message || "Baixa sem itens.";
@@ -184,10 +192,13 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
   const baseUrl = await getSapBaseUrl(headers.companyDB);
   const cookie = `B1SESSION=${headers.sapSession}${headers.routeId ? `; ROUTEID=${headers.routeId}` : ""}`;
 
-  // Filial (BPLId): pega da primeira NF associada; se não conseguir, usa default_branch_id do
-  // system_credentials (fallback 1). Necessário para bases com mais de uma filial no SAP.
-  const firstDocEntry = Number((itens[0] as { invoice_doc_entry: number }).invoice_doc_entry);
-  const invoiceBpl = await fetchInvoiceBplId(baseUrl, cookie, firstDocEntry);
+  // Filial (BPLId): tenta uma NF real do rateio; se todos os itens forem SI (JournalEntry)
+  // ou a consulta falhar, cai para default_branch_id do system_credentials (fallback 1).
+  const firstInvoice = (itens as Array<{ invoice_doc_entry: number; invoice_type?: string }>)
+    .find((it) => (it.invoice_type || "invoice") === "invoice");
+  const invoiceBpl = firstInvoice
+    ? await fetchInvoiceBplId(baseUrl, cookie, Number(firstInvoice.invoice_doc_entry))
+    : null;
   const bplId = invoiceBpl ?? await resolveDefaultBranchId(headers.companyDB);
 
   const sapResp = await fetch(`${baseUrl}/IncomingPayments`, {
@@ -294,6 +305,8 @@ Deno.serve(async (req) => {
         invoice_doc_entry: Number(it.invoiceDocEntry),
         invoice_doc_num: it.invoiceDocNum != null ? String(it.invoiceDocNum) : null,
         valor_baixado: Number(it.valorBaixado),
+        invoice_type: it.invoiceType === "journal_entry" ? "journal_entry" : "invoice",
+        invoice_doc_line: it.invoiceType === "journal_entry" ? Number(it.invoiceDocLine || 0) : null,
       }));
       const { error: itemErr } = await sb.from("baixas_recebimento_itens").insert(itensPayload);
       if (itemErr) {

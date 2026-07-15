@@ -27,6 +27,10 @@ export interface BaixaInvoiceRow {
   cardName: string;
   currency: string;
   saldoResidual: number;
+  /** 'invoice' (NF) ou 'journal_entry' (Saldo Inicial via JE). Default: 'invoice'. */
+  docType?: "invoice" | "journal_entry";
+  /** Linha do JournalEntry (obrigatório quando docType='journal_entry'). */
+  docLine?: number | null;
 }
 
 interface BaixaRecebimentoDialogProps {
@@ -74,8 +78,14 @@ export function BaixaRecebimentoDialog({
   const [conta, setConta] = useState<SapSearchOption | null>(null);
   const [contaJuros, setContaJuros] = useState<SapSearchOption | null>(null);
   const [valorRecebidoTxt, setValorRecebidoTxt] = useState<string>(saldoTotal.toFixed(2).replace(".", ","));
-  const [rateio, setRateio] = useState<Record<number, string>>({});
+  const [rateio, setRateio] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Chave estável para rateio: combina tipo + docEntry + docLine.
+  // NFs (invoice) e Saldos Iniciais (journal_entry) podem compartilhar DocEntry, então
+  // precisamos de uma chave composta para evitar colisão.
+  const rowKey = (inv: BaixaInvoiceRow) =>
+    `${inv.docType ?? "invoice"}:${inv.docEntry}:${inv.docLine ?? 0}`;
 
   // Reset when dialog reopens with new selection
   useEffect(() => {
@@ -84,10 +94,10 @@ export function BaixaRecebimentoDialog({
     setConta(null);
     setContaJuros(null);
     setValorRecebidoTxt(saldoTotal.toFixed(2).replace(".", ","));
-    // Rateio inicial = saldo residual de cada NF
-    const initial: Record<number, string> = {};
+    // Rateio inicial = saldo residual de cada linha
+    const initial: Record<string, string> = {};
     for (const inv of invoices) {
-      initial[inv.docEntry] = inv.saldoResidual.toFixed(2).replace(".", ",");
+      initial[rowKey(inv)] = inv.saldoResidual.toFixed(2).replace(".", ",");
     }
     setRateio(initial);
   }, [open, saldoTotal, invoices, today]);
@@ -125,8 +135,8 @@ export function BaixaRecebimentoDialog({
 
   const valorRecebido = parseAmount(valorRecebidoTxt);
   const rateioValores = useMemo(() => {
-    const map: Record<number, number> = {};
-    for (const inv of invoices) map[inv.docEntry] = parseAmount(rateio[inv.docEntry] || "0");
+    const map: Record<string, number> = {};
+    for (const inv of invoices) map[rowKey(inv)] = parseAmount(rateio[rowKey(inv)] || "0");
     return map;
   }, [rateio, invoices]);
   const somaRateio = useMemo(
@@ -139,7 +149,7 @@ export function BaixaRecebimentoDialog({
   const excedente = useMemo(
     () =>
       invoices.reduce((acc, inv) => {
-        const v = rateioValores[inv.docEntry] || 0;
+        const v = rateioValores[rowKey(inv)] || 0;
         return acc + Math.max(0, +(v - inv.saldoResidual).toFixed(2));
       }, 0),
     [invoices, rateioValores],
@@ -179,11 +189,13 @@ export function BaixaRecebimentoDialog({
 
     try {
       const itensPayload = invoices
-        .filter((inv) => (rateioValores[inv.docEntry] || 0) > 0)
+        .filter((inv) => (rateioValores[rowKey(inv)] || 0) > 0)
         .map((inv) => ({
           invoiceDocEntry: inv.docEntry,
           invoiceDocNum: String(inv.docNum),
-          valorBaixado: rateioValores[inv.docEntry],
+          valorBaixado: rateioValores[rowKey(inv)],
+          invoiceType: inv.docType ?? "invoice",
+          invoiceDocLine: inv.docType === "journal_entry" ? (inv.docLine ?? 0) : null,
         }));
       if (itensPayload.length === 0) throw new Error("Nenhum item com valor a baixar.");
 
@@ -253,7 +265,7 @@ export function BaixaRecebimentoDialog({
                   // Com 1 NF selecionada, o rateio acompanha o valor recebido
                   if (invoices.length === 1) {
                     const only = invoices[0];
-                    setRateio({ [only.docEntry]: txt });
+                    setRateio({ [rowKey(only)]: txt });
                   }
                 }}
                 title="O cliente pode ter pago um valor diferente do saldo residual (a menor, adiantamento; a maior, juros/multa)."
@@ -311,11 +323,22 @@ export function BaixaRecebimentoDialog({
                 </thead>
                 <tbody>
                   {invoices.map((inv) => {
-                    const val = rateioValores[inv.docEntry] || 0;
+                    const k = rowKey(inv);
+                    const val = rateioValores[k] || 0;
                     const excede = val > inv.saldoResidual + 0.001;
+                    const isSI = inv.docType === "journal_entry";
                     return (
-                      <tr key={inv.docEntry} className="border-b border-border/40">
-                        <td className="py-1.5 px-2 font-mono">{inv.docNum}</td>
+                      <tr key={k} className="border-b border-border/40">
+                        <td className="py-1.5 px-2 font-mono">
+                          {isSI ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[9px] py-0 px-1">SI</Badge>
+                              {inv.docNum}
+                            </span>
+                          ) : (
+                            inv.docNum
+                          )}
+                        </td>
                         <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
                           {fmt(inv.saldoResidual, inv.currency)}
                         </td>
@@ -323,14 +346,14 @@ export function BaixaRecebimentoDialog({
                           <Input
                             inputMode="decimal"
                             className={`h-7 text-xs text-right font-mono ${excede ? "border-amber-500 bg-amber-500/5" : ""}`}
-                            value={rateio[inv.docEntry] || ""}
+                            value={rateio[k] || ""}
                             onChange={(e) =>
-                              setRateio((prev) => ({ ...prev, [inv.docEntry]: e.target.value }))
+                              setRateio((prev) => ({ ...prev, [k]: e.target.value }))
                             }
                             disabled={invoices.length === 1}
                             title={
                               invoices.length === 1
-                                ? "Com 1 NF selecionada, o valor a baixar é o próprio saldo residual."
+                                ? "Com 1 item selecionado, o valor a baixar é o próprio saldo residual."
                                 : excede
                                   ? "Valor acima do saldo — excedente vira juros/multa"
                                   : undefined
