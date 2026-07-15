@@ -151,6 +151,7 @@ export default function IdpSyncPage() {
   };
 
 
+  const handleComboSelect = useCallback(
     async (sapUserCode: string, option: SapSearchOption | null) => {
       if (!option) return;
       const jcUser = jcUsers.find((j) => j._id === option.code);
