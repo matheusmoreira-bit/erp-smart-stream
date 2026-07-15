@@ -184,6 +184,8 @@ export function BaixaRecebimentoDialog({
           data_recebimento: dataRecebimento,
           conta_contabil_codigo: conta!.code,
           conta_contabil_nome: conta!.name,
+          conta_juros_multa_codigo: contaJuros?.code || null,
+          conta_juros_multa_nome: contaJuros?.name || null,
           valor_total: valorRecebido,
           valor_juros_multa: excedente,
           status: "pendente_sincronizacao",
@@ -207,61 +209,15 @@ export function BaixaRecebimentoDialog({
       const { error: itemErr } = await supabase.from("baixas_recebimento_itens").insert(itensPayload);
       if (itemErr) throw new Error(itemErr.message);
 
-      // 2) POST em IncomingPayments no SAP via sap-b1-proxy → sapAction
-      const paymentInvoices = itensPayload.map((it) => ({
-        DocEntry: it.invoice_doc_entry,
-        SumApplied: Number(it.valor_baixado),
-        InvoiceType: "it_Invoice",
-      }));
-      const paymentAccounts =
-        excedente > 0 && contaJuros
-          ? [
-              {
-                AccountCode: contaJuros.code,
-                SumPaid: excedente,
-              },
-            ]
-          : [];
+      // 2) Sincroniza com SAP via helper compartilhado (mesma lógica usada no retry)
+      const { ok, sapDocEntry, errorMessage } = await syncBaixaRecebimentoToSap(session, baixaId);
 
-      const payload: Record<string, unknown> = {
-        DocType: "rCustomer",
-        CardCode: cardCode,
-        DocDate: dataRecebimento,
-        TransferDate: dataRecebimento,
-        TransferAccount: conta!.code,
-        TransferSum: valorRecebido,
-        PaymentInvoices: paymentInvoices,
-      };
-      if (paymentAccounts.length > 0) payload.PaymentAccounts = paymentAccounts;
-
-      let sapDocEntry: number | null = null;
-      try {
-        const result = await sapAction(session, "IncomingPayments", "POST", payload);
-        const data = result?.data as { DocEntry?: number; error?: unknown } | undefined;
-        if (data && typeof data === "object" && data.error) {
-          throw new Error(typeof data.error === "string" ? data.error : "SAP retornou erro");
-        }
-        if (data && typeof data.DocEntry === "number") sapDocEntry = data.DocEntry;
-      } catch (sapErr) {
-        const msg = (sapErr as Error).message || "Falha ao criar IncomingPayment no SAP";
-        await supabase
-          .from("baixas_recebimento")
-          .update({ status: "erro", sap_error_message: msg })
-          .eq("id", baixaId);
-        toast.error(`Baixa salva localmente, mas SAP recusou: ${msg}`);
-        onSuccess(); // ainda refresh — baixa aparece com status erro
+      if (!ok) {
+        toast.error(`Baixa salva localmente, mas SAP recusou: ${errorMessage}`);
+        onSuccess();
         onClose();
         return;
       }
-
-      // 3) Marca como sincronizado
-      await supabase
-        .from("baixas_recebimento")
-        .update({
-          status: "sincronizado",
-          sap_incoming_payment_doc_entry: sapDocEntry,
-        })
-        .eq("id", baixaId);
 
       toast.success(
         `Baixa registrada${sapDocEntry ? ` · IncomingPayment #${sapDocEntry}` : ""}.`,
