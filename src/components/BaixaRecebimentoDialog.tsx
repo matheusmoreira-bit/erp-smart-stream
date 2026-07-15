@@ -121,40 +121,35 @@ export function BaixaRecebimentoDialog({
     () => Object.values(rateioValores).reduce((s, v) => s + v, 0),
     [rateioValores],
   );
-  const excedente = Math.max(0, +(valorRecebido - somaRateio).toFixed(2));
-  const isOverpayment = valorRecebido > saldoTotal + 0.001;
-  const rateioExcedeSaldo = invoices.some(
-    (inv) => (rateioValores[inv.docEntry] || 0) > inv.saldoResidual + 0.001,
+  // Excedente por linha (parte do rateio que ultrapassa o saldo residual da NF)
+  // é contabilizado como juros/multa. A soma total dos rateios continua igual
+  // ao valor recebido — o excedente já está embutido nas linhas.
+  const excedente = useMemo(
+    () =>
+      invoices.reduce((acc, inv) => {
+        const v = rateioValores[inv.docEntry] || 0;
+        return acc + Math.max(0, +(v - inv.saldoResidual).toFixed(2));
+      }, 0),
+    [invoices, rateioValores],
   );
-
-  // Auto-ajusta rateio quando valor recebido muda:
-  //  - Se valor >= saldoTotal: rateio = saldo total de cada NF (excedente vira juros/multa)
-  //  - Se valor < saldoTotal: mantém edição manual (usuário distribui)
-  useEffect(() => {
-    if (!open) return;
-    if (valorRecebido >= saldoTotal - 0.001) {
-      const next: Record<number, string> = {};
-      for (const inv of invoices) next[inv.docEntry] = inv.saldoResidual.toFixed(2).replace(".", ",");
-      setRateio(next);
-    }
-    // Se < saldoTotal, deixa o usuário editar por NF; não sobrescreve.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valorRecebido, saldoTotal, open]);
+  const diffSoma = +(valorRecebido - somaRateio).toFixed(2);
 
   /* ── Validações ─────────────────────────────────────── */
   const validationErrors: string[] = [];
   if (!dataRecebimento) validationErrors.push("Informe a data de recebimento.");
   if (!conta) validationErrors.push("Selecione a conta contábil de recebimento.");
   if (valorRecebido <= 0) validationErrors.push("Informe um valor recebido maior que zero.");
-  if (rateioExcedeSaldo)
-    validationErrors.push("Nenhum item do rateio pode exceder o saldo residual da NF.");
-  if (valorRecebido < saldoTotal - 0.001) {
-    if (Math.abs(somaRateio - valorRecebido) > 0.01) {
-      validationErrors.push("A soma do rateio deve igualar o valor recebido.");
-    }
+  if (Math.abs(diffSoma) > 0.01) {
+    validationErrors.push(
+      diffSoma > 0
+        ? `Faltam ${fmt(diffSoma, currency)} para completar o valor recebido.`
+        : `Rateio excede o valor recebido em ${fmt(-diffSoma, currency)}.`,
+    );
   }
-  if (isOverpayment && !contaJuros) {
-    validationErrors.push("Valor recebido excede o saldo — selecione a conta de juros/multa.");
+  if (excedente > 0 && !contaJuros) {
+    validationErrors.push(
+      "Há valor a baixar acima do saldo de uma ou mais NFs — selecione a conta de juros/multa.",
+    );
   }
 
   /* ── Submit ─────────────────────────────────────────── */
