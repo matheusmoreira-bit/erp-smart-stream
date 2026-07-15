@@ -182,7 +182,9 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
+  const [settlementFilter, setSettlementFilter] = useState<"all" | "not_integrated" | "integrated_pending" | "settled">("all");
   const [cardFilter, setCardFilter] = useState<string>("all");
+  const [reprocessingGroup, setReprocessingGroup] = useState<string | null>(null);
   const [validateDialog, setValidateDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
   const [relationsDialog, setRelationsDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
   const [integrateDialog, setIntegrateDialog] = useState<{
@@ -304,6 +306,48 @@ export default function PagCorp() {
     }
   };
 
+  // Reprocessa a baixa de um grupo consolidado (todas as transações compartilham
+  // o mesmo integrationLogId → uma única chamada ao watcher cobre o grupo inteiro).
+  const handleReprocessGroup = async (groupKey: string, txs: PagCorpTransaction[]) => {
+    const logId = txs.find((t) => t.integrationLogId)?.integrationLogId;
+    if (!logId) {
+      toast.error("Log de integração não localizado para este grupo.");
+      return;
+    }
+    setReprocessingGroup(groupKey);
+    try {
+      const resp = await sapFunctionFetch("pagcorp-settlement-watcher", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logId, forceRetry: true }),
+      });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) throw new Error(data?.error || `HTTP ${resp.status}`);
+      const result = Array.isArray(data?.results) ? data.results[0] : null;
+      const status = result?.status;
+      if (status === "settled") {
+        toast.success(`Baixa emitida no SAP (${txs.length} transações).`);
+      } else if (status === "awaiting_invoice") {
+        toast.info("Aguardando NF de entrada lançar o PC no SAP.");
+      } else if (status === "awaiting_settlement") {
+        toast.warning(result?.error === "ptax_missing"
+          ? "PTAX ainda não publicada — nova tentativa após a publicação do BCB."
+          : "Sem conta contábil de baixa cadastrada para a classificação do evento.");
+      } else if (status === "error") {
+        toast.error(`Falha na baixa: ${result?.error || "erro desconhecido"}`);
+      } else if (data?.skipped) {
+        toast.info("Já existe uma baixa em andamento para este grupo.");
+      } else {
+        toast.message("Baixa enfileirada para reprocessamento.");
+      }
+      await fetchTransactions(startDate, endDate, session?.companyDB);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao reprocessar baixa.");
+    } finally {
+      setReprocessingGroup(null);
+    }
+  };
+
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
@@ -334,6 +378,14 @@ export default function PagCorp() {
       list = list.filter((t) => t.hasAccountability && t.accountabilityApproved);
     }
 
+    if (settlementFilter === "not_integrated") {
+      list = list.filter((t) => !t.integrated);
+    } else if (settlementFilter === "integrated_pending") {
+      list = list.filter((t) => t.integrated && t.settlementStatus !== "settled");
+    } else if (settlementFilter === "settled") {
+      list = list.filter((t) => t.settlementStatus === "settled");
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -357,7 +409,7 @@ export default function PagCorp() {
       const tb = b.date ? new Date(b.date).getTime() : 0;
       return tb - ta;
     });
-  }, [transactions, search, statusFilter, cardFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, settlementFilter, cardFilter, showNondeductible]);
 
   /**
    * Constrói a lista de renderização com agrupamento visual:
@@ -1015,6 +1067,20 @@ export default function PagCorp() {
             </Select>
           </div>
           <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Integração / Baixa</label>
+            <Select value={settlementFilter} onValueChange={(v) => setSettlementFilter(v as typeof settlementFilter)}>
+              <SelectTrigger className="w-52 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="not_integrated">Não integrado</SelectItem>
+                <SelectItem value="integrated_pending">Integrado — aguardando baixa</SelectItem>
+                <SelectItem value="settled">Baixado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Cartão</label>
             <Select value={cardFilter} onValueChange={setCardFilter}>
               <SelectTrigger className="w-56 bg-card">
@@ -1460,9 +1526,30 @@ export default function PagCorp() {
                                   </span>
                                 </>
                               )}
-                              <span className="ml-auto text-xs text-muted-foreground">
-                                {expanded ? "Ocultar itens" : "Ver itens"}
-                              </span>
+                              <div className="ml-auto flex items-center gap-2">
+                                {settledCount < txs.length && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 gap-1 text-xs"
+                                    disabled={reprocessingGroup === item.key}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReprocessGroup(item.key, txs);
+                                    }}
+                                  >
+                                    {reprocessingGroup === item.key ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <RefreshCw className="w-3 h-3" />
+                                    )}
+                                    {settledCount > 0 ? "Reprocessar baixa" : "Processar baixa"}
+                                  </Button>
+                                )}
+                                <span className="text-xs text-muted-foreground">
+                                  {expanded ? "Ocultar itens" : "Ver itens"}
+                                </span>
+                              </div>
                             </div>
                           </TableCell>
                         </TableRow>
