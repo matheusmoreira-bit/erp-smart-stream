@@ -80,7 +80,14 @@ export async function syncBaixaRecebimentoToSap(
   }
 
   try {
-    const result = await sapAction(session, "IncomingPayments", "POST", payload);
+    // silentSessionExpired: uma sessão SAP expirada durante a criação do
+    // IncomingPayment NÃO deve derrubar a sessão global do usuário (isso
+    // atrapalhava outras rotinas — telas de aprovação, listagens etc.).
+    // Marcamos a baixa como "erro" e devolvemos mensagem clara; o usuário
+    // pode refazer o login e tentar novamente pelo botão de retry.
+    const result = await sapAction(session, "IncomingPayments", "POST", payload, {
+      silentSessionExpired: true,
+    });
     const data = result?.data as { DocEntry?: number; error?: unknown } | undefined;
     if (data && typeof data === "object" && data.error) {
       throw new Error(typeof data.error === "string" ? data.error : "SAP retornou erro");
@@ -99,7 +106,10 @@ export async function syncBaixaRecebimentoToSap(
 
     return { ok: true, sapDocEntry, errorMessage: null };
   } catch (e) {
-    const msg = (e as Error).message || "Falha ao criar IncomingPayment no SAP";
+    const isSessionExpired = e instanceof SapSessionExpiredError;
+    const msg = isSessionExpired
+      ? "Sessão SAP expirou durante o lançamento. Faça login no SAP novamente e reenvie a baixa."
+      : (e as Error).message || "Falha ao criar IncomingPayment no SAP";
     await supabase
       .from("baixas_recebimento")
       .update({ status: "erro", sap_error_message: msg })
