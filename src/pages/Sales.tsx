@@ -755,6 +755,7 @@ export default function SalesPage() {
         invoices={selectionRows.map<BaixaInvoiceRow>((r) => ({
           docEntry: r.docEntry,
           docNum: r.docNum,
+          folioNumber: r.folioNumber,
           cardCode: r.cardCode,
           cardName: r.cardName,
           currency: r.currency,
