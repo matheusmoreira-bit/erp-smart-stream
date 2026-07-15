@@ -258,6 +258,18 @@ Deno.serve(async (req) => {
         // vínculo com usuário Cloud para RLS/leitura direta pelo cliente.
       }
 
+      // Nome amigável do usuário SAP: pega de user_profiles pelo user_code+company_db.
+      let criadoPorNome: string | null = null;
+      try {
+        const { data: prof } = await sb
+          .from("user_profiles")
+          .select("display_name")
+          .eq("company_db", sap.companyDB)
+          .eq("user_code", sap.userName)
+          .maybeSingle();
+        criadoPorNome = (prof as { display_name?: string | null } | null)?.display_name || null;
+      } catch { /* opcional */ }
+
       const { data: baixa, error: insertErr } = await sb.from("baixas_recebimento").insert({
         company_db: sap.companyDB,
         card_code: input.cardCode.trim(),
@@ -271,6 +283,8 @@ Deno.serve(async (req) => {
         valor_juros_multa: Number(input.valorJurosMulta || 0),
         status: "pendente_sincronizacao",
         criado_por: criadoPor,
+        criado_por_user_code: sap.userName,
+        criado_por_nome: criadoPorNome,
       }).select("id").single();
       if (insertErr || !baixa) return json(500, { ok: false, errorMessage: insertErr?.message || "Falha ao gravar baixa." });
 
