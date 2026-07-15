@@ -166,11 +166,14 @@ export function useTemporalAnalysis(opts: Options) {
         fetchAll<PayRow>(buildPay),
       ]);
 
-      setExpenses(expRows);
-      setHistory(histRows);
-      setPos(poRows);
-      setNfs(nfRows);
-      setPays(payRows);
+      // Remove bases de teste da análise
+      const notTest = <T extends { company_db: string }>(r: T) => !isTestCompanyDb(r.company_db);
+      setExpenses(expRows.filter(notTest));
+      setHistory(histRows.filter(notTest));
+      setPos(poRows.filter(notTest));
+      setNfs(nfRows.filter(notTest));
+      setPays(payRows.filter(notTest));
+
 
       // logs em segundo passo (só IDs relevantes)
       const ids = expRows.map((e) => e.id);
