@@ -232,13 +232,24 @@ export function useRoiAnalysis(opts: Options) {
         if (toDate) q = q.lte("doc_date", toDate);
         return q;
       };
+      const buildFluxo = () => {
+        let q = (supabase as any)
+          .from("sap_fluxo_analise_cache")
+          .select("company_db, data_aprovacao, data_vencimento, data_lancamento, data_pagamento, valor, id_esboco, id_pedido")
+          .order("data_lancamento", { ascending: true });
+        if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
+        if (fromIso) q = q.gte("data_lancamento", fromIso);
+        if (toIso) q = q.lte("data_lancamento", toIso);
+        return q;
+      };
 
-      const [pr, cr, expensesAll, approvalsAll, posAll] = await Promise.all([
+      const [pr, cr, expensesAll, approvalsAll, posAll, fluxoAll] = await Promise.all([
         supabase.from("roi_parameters").select("*"),
         supabase.from("companies").select("company_db, display_name"),
         fetchAll<ExpenseRow>(buildExpenses),
         fetchAll<ApprovalRow>(buildApprovals),
         fetchAll<PoCacheRow>(buildPos),
+        fetchAll<FluxoRow>(buildFluxo).catch(() => [] as FluxoRow[]),
       ]);
 
       if (pr.error) throw pr.error;
@@ -254,6 +265,12 @@ export function useRoiAnalysis(opts: Options) {
       setExpenses(expensesAll.filter((e) => !isTestCompanyDb(e.company_db) && (e.created_at || "") >= flowLaunchIso));
       setApprovals(approvalsAll.filter((a) => !isTestCompanyDb(a.company_db)));
       setPos(posAll.filter((p) => !isTestCompanyDb(p.company_db)));
+      setFluxo((fluxoAll || []).filter((f) => !isTestCompanyDb(f.company_db)));
+
+
+
+    } catch (e: any) {
+
 
 
 
