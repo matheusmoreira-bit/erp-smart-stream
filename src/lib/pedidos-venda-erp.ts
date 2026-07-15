@@ -28,13 +28,15 @@ export async function registerPedidoVendaErp(input: RegisterPedidoVendaErpInput)
   const criadoPor = userData?.user?.id;
 
   const { error } = await supabase.from("pedidos_venda_erp").upsert(
-    {
-      company_db: input.companyDb,
-      doc_entry: input.docEntry,
-      doc_num: input.docNum ?? null,
-      card_code: input.cardCode ?? null,
-      criado_por: criadoPor,
-    },
+    [
+      {
+        company_db: input.companyDb,
+        doc_entry: input.docEntry,
+        doc_num: input.docNum != null ? String(input.docNum) : undefined,
+        card_code: input.cardCode ?? undefined,
+        criado_por: criadoPor,
+      },
+    ],
     { onConflict: "company_db,doc_entry" },
   );
 
