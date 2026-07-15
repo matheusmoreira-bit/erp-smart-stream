@@ -112,6 +112,18 @@ export function BaixaRecebimentoDialog({
     enabled: open,
   });
 
+  // Contas contábeis liberadas para recebimento (bancos de entrada).
+  // Mantido como allowlist explícita — se precisar adicionar contas, incluir aqui.
+  const RECEIVING_ACCOUNT_CODES = ["1.1.1.02.000019", "1.1.1.02.000018"];
+  const receivingAccounts = useMemo(
+    () =>
+      accountsCache.options.filter((opt) =>
+        RECEIVING_ACCOUNT_CODES.includes(opt.code) ||
+        RECEIVING_ACCOUNT_CODES.includes(opt.extra || ""),
+      ),
+    [accountsCache.options],
+  );
+
   const valorRecebido = parseAmount(valorRecebidoTxt);
   const rateioValores = useMemo(() => {
     const map: Record<number, number> = {};
@@ -260,7 +272,7 @@ export function BaixaRecebimentoDialog({
             <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs">Conta contábil / banco</Label>
               <CachedSearchCombobox
-                options={accountsCache.options}
+                options={receivingAccounts}
                 isLoading={accountsCache.isLoading}
                 value={conta}
                 onChange={setConta}
