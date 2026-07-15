@@ -48,6 +48,7 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
   const [flowKeys, setFlowKeys] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
+  const [syncingFluxo, setSyncingFluxo] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [granularity, setGranularity] = useState<Granularity>("week");
 
