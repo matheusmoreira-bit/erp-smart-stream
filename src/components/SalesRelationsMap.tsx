@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   FileText,
   Receipt,
@@ -11,10 +12,15 @@ import {
   Clock,
   AlertTriangle,
   Info,
+  Download,
+  FileDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import type { SapSession } from "@/lib/sap-client";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
 
 interface Props {
   open: boolean;
