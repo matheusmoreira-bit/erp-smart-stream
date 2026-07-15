@@ -566,6 +566,16 @@ Deno.serve(async (req) => {
       190,
     );
 
+    const toIsoDate = (v: unknown): string | null => {
+      if (!v) return null;
+      const s = String(v);
+      // DD/MM/YYYY
+      const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    };
+
     const documentLines = lineMappings.map(({ tx, acctMapping, cardMapping, itemCode }) => {
       const override = lineOverrides[String(tx.id)] || {};
       // Priority: per-line override > card mapping > account mapping
@@ -585,11 +595,15 @@ Deno.serve(async (req) => {
           ? `[#${tx.id}] ${tx.description || "PagCorp"}`
           : (tx.description || "PagCorp")
       ).slice(0, 100);
+      // Data da transação vira Data de Entrega da linha (ShipDate). Assim,
+      // cada linha do PC consolidado carrega a data real da despesa.
+      const lineTxDate = toIsoDate((tx as Record<string, unknown>).date) || txDate;
       const line: Record<string, unknown> = {
         ItemCode: finalItem,
         FreeText: lineFreeText,
         Quantity: 1,
         UnitPrice: Number(tx.amount) || 0,
+        ShipDate: lineTxDate,
         ...lineCustom,
       };
       // Só envia Currency para moedas estrangeiras. BRL é a moeda local
@@ -606,10 +620,20 @@ Deno.serve(async (req) => {
     // SAP assumes local currency (BRL) even when the PagCorp expense is in USD.
     const headerCurrency = String(transaction.currency || "").toUpperCase();
 
+    // DocDueDate (Data de Entrega do cabeçalho): data da ÚLTIMA transação
+    // integrada em lote (mais recente); em integração unitária = data da
+    // própria transação. Isso reflete o "vencimento" do bordero para o
+    // time financeiro em vez de usar `today`.
+    const txDates = transactions
+      .map((t) => toIsoDate((t as Record<string, unknown>).date))
+      .filter((d): d is string => !!d)
+      .sort();
+    const lastTxDate = txDates.length > 0 ? txDates[txDates.length - 1] : txDate;
+
     const baseDoc: Record<string, unknown> = {
       CardCode: supplierCode,
       DocDate: txDate,
-      DocDueDate: today,
+      DocDueDate: lastTxDate,
       TaxDate: txDate,
       BPL_IDAssignedToInvoice: branchId,
       Comments: description,
