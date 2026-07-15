@@ -252,7 +252,7 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
         </div>
       ) : data.length === 0 || totals.docs === 0 ? (
         <div className="py-8 text-center text-sm text-muted-foreground">
-          Sem pedidos no cache SAP.{isAdmin ? " Clique em \"Backfill SAP\" para importar o histórico." : ""}
+          Sem lançamentos no cache do fluxo SAP (VW_FIN_ANALISE_FLUXO).{isAdmin ? " Clique em \"Sync Fluxo HANA\" para importar o histórico." : ""}
         </div>
       ) : (
         <div className="h-72 w-full">
