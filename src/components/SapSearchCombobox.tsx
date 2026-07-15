@@ -94,18 +94,51 @@ export function SapSearchCombobox({
       }
       setIsLoading(true);
       try {
-        const safeTerm = term.replace(/'/g, "''");
-        const filter = filterTemplate
-          .replace(/\{qLower\}/g, safeTerm.toLowerCase())
-          .replace(/\{q\}/g, safeTerm);
-        const { data } = await sapQuery(session, endpoint, {
-          $filter: filter,
-          $select: selectFields,
-          $top: topResults,
-        });
+        // Remove siglas (INC., S.A., LTDA…) para tolerar diferenças entre o
+        // nome no documento e o cadastro no SAP. Ex.: "Figma Inc." → "figma".
+        const core = stripCorporateSuffixes(term);
+        // Termos a consultar no SAP: original + core (quando difere). Buscamos
+        // pelos dois e mesclamos, dedupando por CardCode.
+        const termsToQuery = Array.from(
+          new Set([term, core].filter((t) => t && t.length >= minChars)),
+        );
 
-        const rows = (data as any)?.value || [];
-        setOptions(rows.map(mapRow));
+        const safe = (s: string) => s.replace(/'/g, "''");
+        const results = await Promise.all(
+          termsToQuery.map(async (t) => {
+            const filter = filterTemplate
+              .replace(/\{qLower\}/g, safe(t).toLowerCase())
+              .replace(/\{q\}/g, safe(t));
+            try {
+              const { data } = await sapQuery(session, endpoint, {
+                $filter: filter,
+                $select: selectFields,
+                $top: topResults,
+              });
+              return ((data as any)?.value || []).map(mapRow) as SapSearchOption[];
+            } catch (e) {
+              console.warn("SAP search variant error:", t, e);
+              return [] as SapSearchOption[];
+            }
+          }),
+        );
+
+        // Dedupe por code
+        const seen = new Set<string>();
+        const merged: SapSearchOption[] = [];
+        for (const list of results) {
+          for (const opt of list) {
+            const k = String(opt.code || opt.name || "").toLowerCase();
+            if (k && !seen.has(k)) {
+              seen.add(k);
+              merged.push(opt);
+            }
+          }
+        }
+
+        // Re-rankeia localmente com tolerância a siglas para o topo ficar melhor.
+        const ranked = filterAndRank(merged, term, topResults);
+        setOptions(ranked.length > 0 ? ranked : merged);
       } catch (e) {
         console.error("SAP search error:", e);
         setOptions([]);
