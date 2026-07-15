@@ -45,6 +45,7 @@ export default function IdpSyncPage() {
     autoSync,
     linkManually,
     syncAttributes,
+    reprocessUserAttributes,
     unlinkUser,
   } = useIdpSync();
 
@@ -53,6 +54,7 @@ export default function IdpSyncPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncingAttrs, setSyncingAttrs] = useState(false);
   const [linkingUser, setLinkingUser] = useState<string | null>(null);
+  const [reprocessingUser, setReprocessingUser] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMappings();
