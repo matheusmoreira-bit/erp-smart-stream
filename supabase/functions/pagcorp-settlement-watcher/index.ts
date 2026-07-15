@@ -574,6 +574,22 @@ Deno.serve(async (req) => {
               hasUserSapCookie: true,
               userSapCompanyDb,
             });
+            // Valida sessão do usuário com um ping leve. Se estiver expirada
+            // (401 "Invalid session"), cai para o login com credenciais salvas
+            // — evita quebrar a baixa quando o token SAP do usuário venceu.
+            try {
+              const ping = await fetch(`${baseUrl}/CurrentUser`, { headers: { Cookie: cookie } });
+              if (ping.status === 401) {
+                await ping.body?.cancel().catch(() => {});
+                safeWarn(requestId, "user_sap_session_expired", { companyDb });
+                cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+              } else {
+                await ping.body?.cancel().catch(() => {});
+              }
+            } catch (pingErr) {
+              safeWarn(requestId, "user_sap_session_probe_failed", { companyDb, error: (pingErr as Error).message });
+              cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+            }
           } else {
             safeLog(requestId, "sap_session_strategy", {
               companyDb,
