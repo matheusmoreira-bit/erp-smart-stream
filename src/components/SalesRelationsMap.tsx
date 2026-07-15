@@ -144,7 +144,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
         const { data: itens, error: baixasErr } = await supabase
           .from("baixas_recebimento_itens")
           .select(
-            "valor_baixado, baixa_id, baixas_recebimento!inner(id,data_recebimento,valor_juros_multa,status,sap_incoming_payment_doc_entry,created_at,company_db)",
+            "valor_baixado, baixa_id, baixas_recebimento!inner(id,data_recebimento,valor_juros_multa,status,sap_incoming_payment_doc_entry,created_at,company_db,criado_por_nome,criado_por_user_code)",
           )
           .eq("invoice_doc_entry", invoice.docEntry)
           .eq("baixas_recebimento.company_db", session.companyDB);
@@ -159,6 +159,8 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
             status: string;
             sap_incoming_payment_doc_entry: number | null;
             created_at: string;
+            criado_por_nome: string | null;
+            criado_por_user_code: string | null;
           };
         }>).map((it) => ({
           id: it.baixas_recebimento.id,
@@ -168,7 +170,10 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           status: it.baixas_recebimento.status,
           sap_incoming_payment_doc_entry: it.baixas_recebimento.sap_incoming_payment_doc_entry,
           created_at: it.baixas_recebimento.created_at,
+          criado_por_nome: it.baixas_recebimento.criado_por_nome,
+          criado_por_user_code: it.baixas_recebimento.criado_por_user_code,
         }));
+
 
         // Ordena por data de recebimento (asc), depois por created_at
         baixaRows.sort((a, b) => {
