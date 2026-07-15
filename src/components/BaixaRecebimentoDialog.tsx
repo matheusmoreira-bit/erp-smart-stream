@@ -103,6 +103,7 @@ export function BaixaRecebimentoDialog({
       initial[rowKey(inv)] = inv.saldoResidual.toFixed(2).replace(".", ",");
     }
     setRateio(initial);
+    setConfirmOpen(false);
   }, [open, saldoTotal, invoices, today]);
 
   const accountsCache = useSapCachedList({
