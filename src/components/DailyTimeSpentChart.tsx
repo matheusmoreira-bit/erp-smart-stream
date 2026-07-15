@@ -17,6 +17,8 @@ interface Props {
 
 type Granularity = "day" | "week" | "month";
 const START_DATE = "2025-06-01";
+/** Data em que o ERP Flow entrou em produção. Antes disso, 0 documentos via Flow. */
+const FLOW_LAUNCH_DATE = "2026-07-01";
 const PAGE_SIZE = 1000;
 
 function bucketKey(iso: string, g: Granularity): string {
