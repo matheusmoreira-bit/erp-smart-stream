@@ -132,6 +132,64 @@ function extractEventClassification(payload: Record<string, unknown> | null): st
 }
 
 /**
+ * Parser robusto: aceita DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD e ISO com "T".
+ * Retorna a data em ISO YYYY-MM-DD ancorada em UTC (sem deslocamento por fuso).
+ * Evita usar `new Date(str)` cru — que em algumas plataformas trata "09/07/2026"
+ * como mês/dia (formato US) e desalinha o dia útil ao buscar PTAX.
+ */
+function parseIsoDate(raw: unknown): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  // Se veio com "T", pega só a parte da data ANTES de qualquer parse
+  // (o PagCorp devolve às vezes "2026-07-09T00:00:00-03:00" — em ISO com fuso
+  // negativo, se deixássemos o Date parsear, "2026-07-09T00:00:00-03:00" vira
+  // 03:00Z, mesmo dia, ok; mas "2026-07-09T00:00:00Z" no fuso local BRT vira
+  // 08/07. Cortar antes do "T" é mais seguro).
+  const isoT = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoT) {
+    const y = +isoT[1], m = +isoT[2], d = +isoT[3];
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${isoT[1]}-${isoT[2]}-${isoT[3]}`;
+  }
+
+  // DD/MM/YYYY ou DD-MM-YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (dmy) {
+    let y = parseInt(dmy[3], 10);
+    if (y < 100) y += 2000;
+    const m = parseInt(dmy[2], 10);
+    const d = parseInt(dmy[1], 10);
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+    const check = new Date(Date.UTC(y, m - 1, d));
+    if (check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) return null;
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  return null;
+}
+
+/**
+ * Extrai a data da TRANSAÇÃO (dia da compra no cartão) do payload PagCorp.
+ * Ordem de preferência reflete o que a API traz: `eventDate` → `date` →
+ * `expenseDate` → `transactionDate` → `createdAt`. Retorna ISO YYYY-MM-DD.
+ */
+function extractTransactionDate(payload: Record<string, unknown> | null): string | null {
+  if (!payload) return null;
+  const tx = (payload.transaction || payload) as Record<string, unknown>;
+  const candidates = [
+    tx?.eventDate, tx?.date, tx?.expenseDate, tx?.transactionDate, tx?.createdAt,
+    (payload as Record<string, unknown>).eventDate,
+    (payload as Record<string, unknown>).date,
+  ];
+  for (const c of candidates) {
+    const iso = parseIsoDate(c);
+    if (iso) return iso;
+  }
+  return null;
+}
+
+/**
  * Normaliza classificação p/ comparação (colapsa espaços múltiplos, trim, lowercase).
  * O PagCorp devolve "Compra Internacional  - Saldo Dolar Utilizado" com 2 espaços;
  * a normalização evita quebrar o match se alguém cadastrar com 1 espaço.
@@ -662,6 +720,9 @@ Deno.serve(async (req) => {
               //    houver, cai para moeda (BRL/USD) ou fallback global.
               const cardKey = extractCardKey(row.pagcorp_data);
               const eventClass = extractEventClassification(row.pagcorp_data);
+              // Data da compra no cartão — é ela que rege a PTAX (dia da fato
+              // gerador cambial), NÃO a data em que o fiscal lançou a NF.
+              const txDate = extractTransactionDate(row.pagcorp_data);
 
               // 4. Emite UM Pagamento de Fornecedor por NF, baixando a
               //    PurchaseInvoice em Contas a Pagar. Idempotente: se a NF já
@@ -701,10 +762,13 @@ Deno.serve(async (req) => {
                   const invCur = (invoice.DocCurrency || "").toUpperCase();
                   let docRate: number | null = null;
                   if (invCur === "USD") {
-                    const ptax = await fetchPtax(invCur, invoice.DocDate);
+                    // Preferimos a data da TRANSAÇÃO no cartão (evento cambial).
+                    // Se não vier no payload, cai para a data da NF (comportamento antigo).
+                    const ptaxDateBase = txDate || invoice.DocDate;
+                    const ptax = await fetchPtax(invCur, ptaxDateBase);
                     if (!ptax) {
                       if (!firstPtaxMissingMsg) {
-                        firstPtaxMissingMsg = `PTAX ${invCur} indisponível para ${invoice.DocDate}`;
+                        firstPtaxMissingMsg = `PTAX ${invCur} indisponível para ${ptaxDateBase} (transação=${txDate || "—"}, NF=${invoice.DocDate})`;
                       }
                       // remove desta iteração da contagem de "contas usadas" — nada foi pago
                       accountsUsed.pop();
