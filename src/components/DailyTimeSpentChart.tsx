@@ -240,6 +240,35 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
     }
   };
 
+  // Reconstrói a série completa: sincroniza o cache do fluxo (VW_FIN_ANALISE_FLUXO)
+  // e, em seguida, atualiza o cache de pedidos SAP (fonte do fallback usado
+  // quando data_lancamento está ausente). Ao final, recarrega o gráfico.
+  const [rebuilding, setRebuilding] = useState(false);
+  const runRebuildSeries = async () => {
+    setRebuilding(true);
+    try {
+      const { data: fluxoData, error: fluxoErr } = await supabase.functions.invoke("sap-fluxo-analise-sync", {
+        body: companyDb ? { company_db: companyDb } : {},
+      });
+      if (fluxoErr) throw fluxoErr;
+      const fluxoTotal = (fluxoData as any)?.total_synced ?? 0;
+
+      const { data: poData, error: poErr } = await supabase.functions.invoke("sap-po-cache-sync", {
+        body: { backfill: true, from_date: START_DATE, ...(companyDb ? { company_db: companyDb } : {}) },
+      });
+      if (poErr) throw poErr;
+      const poTotal = (poData as any)?.total_synced ?? 0;
+
+      toast.success(`Série reconstruída — fluxo: ${fluxoTotal} linhas · pedidos (fallback): ${poTotal}`);
+      setReloadKey((k) => k + 1);
+    } catch (e: any) {
+      toast.error(`Reconstrução falhou: ${e?.message || e}`);
+    } finally {
+      setRebuilding(false);
+    }
+  };
+
+
 
   return (
     <div className="glass-card p-4 sm:p-6 space-y-4">
@@ -275,6 +304,16 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
               <Button size="sm" variant="outline" onClick={runFluxoSync} disabled={syncingFluxo}>
                 {syncingFluxo ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                 <span className="ml-1">Sync Fluxo HANA</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={runRebuildSeries}
+                disabled={rebuilding || backfilling || syncingFluxo}
+                title="Sincroniza VW_FIN_ANALISE_FLUXO e o cache de pedidos SAP (usado como fallback quando data_lancamento está ausente) e recarrega o gráfico."
+              >
+                {rebuilding ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                <span className="ml-1">Reconstruir série</span>
               </Button>
             </>
           )}
