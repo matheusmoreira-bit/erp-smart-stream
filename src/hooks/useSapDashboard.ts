@@ -476,6 +476,14 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
   const [approvalDaysRaw, setApprovalDaysRaw] = useState<number[]>([]);
   const [approvalRowsRaw, setApprovalRowsRaw] = useState<ApprovalViewRow[]>([]);
 
+  // Cache VW_FIN_ANALISE_FLUXO — usado para derivar Aprovação → Pedido em SAP.
+  const { rows: fluxoRows } = useSapFluxoAnalise({
+    companyDb: session?.companyDB,
+    from: dateFilter?.from || undefined,
+    to: dateFilter?.to || undefined,
+    enabled: session?.erpType === "sap",
+  });
+
   const fetchData = useCallback(async () => {
     if (!session) return;
     setError(null);
