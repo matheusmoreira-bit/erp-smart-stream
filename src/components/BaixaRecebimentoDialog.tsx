@@ -272,7 +272,7 @@ export function BaixaRecebimentoDialog({
             <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs">Conta contábil / banco</Label>
               <CachedSearchCombobox
-                options={accountsCache.options}
+                options={receivingAccounts}
                 isLoading={accountsCache.isLoading}
                 value={conta}
                 onChange={setConta}
