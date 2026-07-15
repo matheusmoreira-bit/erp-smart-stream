@@ -267,6 +267,8 @@ export function BaixaRecebimentoDialog({
                 inputMode="decimal"
                 value={valorRecebidoTxt}
                 onChange={(e) => setValorRecebidoTxt(e.target.value)}
+                disabled={invoices.length === 1}
+                title={invoices.length === 1 ? "Com 1 NF selecionada, o valor recebido é o próprio saldo residual." : undefined}
               />
             </div>
             <div className="space-y-1 sm:col-span-2">
