@@ -527,6 +527,15 @@ function ExpenseDetailModal({
 
             <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
 
+            {isErpNative && (
+              <SapPoDetails
+                companyDb={expense.company_db}
+                sapDocEntry={expense.sap_doc_entry ?? null}
+                sapDocNum={expense.sap_doc_num ?? null}
+                createdAt={expense.created_at}
+              />
+            )}
+
 
 
 
