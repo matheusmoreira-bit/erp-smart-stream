@@ -107,11 +107,17 @@ function buildIncomingPayment(
     TransferAccount: baixa.conta_contabil_codigo,
     TransferSum: Number(baixa.valor_total),
     BPLID: bplId,
-    PaymentInvoices: itens.map((it) => ({
-      DocEntry: Number(it.invoice_doc_entry),
-      SumApplied: Number(it.valor_baixado),
-      InvoiceType: "it_Invoice",
-    })),
+    PaymentInvoices: itens.map((it) => {
+      const type = String(it.invoice_type || "invoice");
+      const isJE = type === "journal_entry";
+      const entry: Record<string, unknown> = {
+        DocEntry: Number(it.invoice_doc_entry),
+        SumApplied: Number(it.valor_baixado),
+        InvoiceType: isJE ? "it_JournalEntry" : "it_Invoice",
+      };
+      if (isJE) entry.DocLine = Number(it.invoice_doc_line || 0);
+      return entry;
+    }),
   };
 
   if (excedente > 0 && baixa.conta_juros_multa_codigo) {
