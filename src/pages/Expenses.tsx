@@ -72,6 +72,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
+import { SapPoDetails } from "@/components/SapPoDetails";
 
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
@@ -525,6 +526,15 @@ function ExpenseDetailModal({
             )}
 
             <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
+
+            {isErpNative && (
+              <SapPoDetails
+                companyDb={expense.company_db}
+                sapDocEntry={expense.sap_doc_entry ?? null}
+                sapDocNum={expense.sap_doc_num ?? null}
+                createdAt={expense.created_at}
+              />
+            )}
 
 
 

@@ -26,7 +26,7 @@ import {
   Paperclip,
 } from "lucide-react";
 import type { NfEntradaLink, ContaPagarLink } from "@/hooks/useRelationsMapDerived";
-import type { RelationsMapExpense } from "./RelationsMap";
+import type { RelationsMapExpense, SapFluxoEnrichment } from "./RelationsMap";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type ChainRow = {
@@ -48,6 +48,8 @@ interface Props {
   nfLinks: NfEntradaLink[];
   apPayables: ContaPagarLink[];
   enriched: boolean;
+  /** Marcos de tempo do documento (VW_FIN_ANALISE_FLUXO) — exibidos quando `enriched`. */
+  fluxo?: SapFluxoEnrichment | null;
   flowType?: RelationsFlowType;
   onNodeClick?: (id: string, kind: string) => void;
 }
@@ -305,8 +307,23 @@ interface StageBucket {
   items: Array<{ id: string; data: DocCardData }>;
 }
 
+function diffDays(a?: string | null, b?: string | null): number | null {
+  if (!a || !b) return null;
+  const t1 = new Date(a).getTime();
+  const t2 = new Date(b).getTime();
+  if (!Number.isFinite(t1) || !Number.isFinite(t2)) return null;
+  return (t2 - t1) / (1000 * 60 * 60 * 24);
+}
+
+function fmtDays(d: number | null): string {
+  if (d == null) return "—";
+  const abs = Math.abs(d);
+  if (abs < 1) return `${Math.round(abs * 24)}h`;
+  return `${abs.toFixed(abs < 10 ? 1 : 0)}d`;
+}
+
 function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width: number } {
-  const { expense, approverRows, nfLinks, apPayables, flowType = "compras" } = props;
+  const { expense, approverRows, nfLinks, apPayables, flowType = "compras", enriched, fluxo } = props;
 
   const stageKeys = FLOW_STAGES[flowType];
   const buckets: Record<StageKey, StageBucket> = {} as Record<StageKey, StageBucket>;
@@ -320,6 +337,29 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
   const statusRaw = (expense.status || "").toLowerCase();
   const isFailed = statusRaw === "rejeitado" || statusRaw === "cancelado";
   const integrated = !!expense.sap_doc_num || statusRaw === "integrado" || statusRaw === "aprovado";
+
+  // Tempos enriquecidos (dias entre marcos VW_FIN_ANALISE_FLUXO). Identifica o
+  // maior delta para destacar o gargalo do fluxo.
+  const enrichmentActive = !!enriched && !!fluxo;
+  const startAt = fluxo?.data_atualizacao_esboco || expense.created_at || null;
+  const deltas = enrichmentActive
+    ? {
+        rootToApproval: diffDays(startAt, fluxo?.data_aprovacao),
+        approvalToPc: diffDays(fluxo?.data_aprovacao, fluxo?.data_lancamento),
+        pcToNf: null as number | null, // NFs têm data própria por linha
+        nfToPay: diffDays(fluxo?.data_vencimento, fluxo?.data_pagamento),
+      }
+    : null;
+  const maxDelta = deltas
+    ? Math.max(
+        ...([deltas.rootToApproval, deltas.approvalToPc, deltas.nfToPay].filter(
+          (v): v is number => v != null && v > 0,
+        ) as number[]),
+        0,
+      )
+    : 0;
+  const isBottleneck = (d: number | null) => d != null && d > 0 && maxDelta > 0 && d === maxDelta;
+
 
   /* ── Stage 1: Pedido / Despesa ── */
   const rootKey: StageKey = flowType === "pagcorp" ? "despesa_pagcorp" : "pedido";
@@ -335,13 +375,22 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       identifier: expense.sap_doc_num ? `SAP #${expense.sap_doc_num}` : expense.id.slice(0, 8),
       amount: expense.total_amount,
       currency: expense.currency,
-      who: expense.requester_name || expense.requester_email || undefined,
-      when: expense.created_at,
-      extra: expense.supplier_name || null,
+      who:
+        (enrichmentActive && fluxo?.solicitante) ||
+        expense.requester_name ||
+        expense.requester_email ||
+        undefined,
+      when: (enrichmentActive && startAt) || expense.created_at,
+      extra: enrichmentActive
+        ? [expense.supplier_name, fluxo?.centro_custo ? `CC ${fluxo.centro_custo}` : null]
+            .filter(Boolean)
+            .join(" · ") || null
+        : expense.supplier_name || null,
       state: rootState,
       hasTarget: false,
     },
   });
+
 
   /* ── Stage 2 (compras only): Aprovadores empilhados ── */
   const approverIds: string[] = [];
@@ -356,10 +405,23 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           : r.isCurrent
             ? "current"
             : "pending";
+      // Delta de tempo aprovação: para o aprovador que decidiu (done/rejected),
+      // usa data_atualizacao_esboco → decision_date. Para o "atual", tempo em aberto.
+      const approverDelta =
+        enrichmentActive
+          ? r.decidedAt
+            ? diffDays(startAt, r.decidedAt)
+            : r.isCurrent
+              ? diffDays(startAt, new Date().toISOString())
+              : null
+          : null;
+      const isApproverBottleneck =
+        enrichmentActive && approverDelta != null && isBottleneck(deltas?.rootToApproval ?? null) && r.done;
+
       buckets.aprovacao.items.push({
         id,
         data: {
-          tone: "blue",
+          tone: isApproverBottleneck ? "warn" : "blue",
           icon: ShieldCheck,
           kind: `Nível ${r.level_order}`,
           identifier: r.approver_name,
@@ -368,9 +430,18 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           status: r.rejected ? "rejeitado" : r.done ? "aprovado" : r.isCurrent ? "atual" : "pendente",
           statusTone: r.rejected ? "warn" : r.done ? "success" : r.isCurrent ? "amber" : "muted",
           state,
-          extra: r.remarks || null,
+          extra:
+            enrichmentActive && approverDelta != null
+              ? [
+                  r.isCurrent ? `Aguardando há ${fmtDays(approverDelta)}` : `Decidido em ${fmtDays(approverDelta)}`,
+                  r.remarks,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : r.remarks || null,
         },
       });
+
 
       // fan-out from root → each approver
       edges.push({
@@ -396,17 +467,27 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       : approverRows.some((r) => r.isCurrent)
         ? "pending"
         : "pending";
+  const pcSapBottleneck = enrichmentActive && isBottleneck(deltas?.approvalToPc ?? null);
   buckets.pc_sap.items.push({
     id: pcSapId,
     data: {
-      tone: "amber",
+      tone: pcSapBottleneck ? "warn" : "amber",
       icon: FileCheck2,
       kind: "PC no SAP",
       identifier: expense.sap_doc_num ? `SAP #${expense.sap_doc_num}` : "Aguardando integração",
       amount: expense.total_amount,
       currency: expense.currency,
-      extra: expense.company_db || null,
-      when: expense.updated_at,
+      extra: enrichmentActive
+        ? [
+            expense.company_db,
+            deltas?.approvalToPc != null
+              ? `Aprovação→Lanç ${fmtDays(deltas.approvalToPc)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || null
+        : expense.company_db || null,
+      when: (enrichmentActive && fluxo?.data_lancamento) || expense.updated_at,
       status: integrated ? "integrado" : isFailed ? statusRaw : "pendente",
       statusTone: integrated ? "success" : isFailed ? "warn" : "muted",
       state: pcSapState,

@@ -66,6 +66,21 @@ interface SapHistoryRow {
   remarks: string | null;
 }
 
+export interface SapFluxoEnrichment {
+  data_atualizacao_esboco: string | null;
+  data_aprovacao: string | null;
+  data_lancamento: string | null;
+  data_vencimento: string | null;
+  data_pagamento: string | null;
+  solicitante: string | null;
+  aprovador: string | null;
+  descricao: string | null;
+  centro_custo: string | null;
+  marca: string | null;
+  departamento: string | null;
+}
+
+
 
 export interface RelationsMapExpense {
   id: string;
@@ -140,6 +155,8 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
   const [enriched, setEnriched] = useState(false);
+  const [fluxoRow, setFluxoRow] = useState<SapFluxoEnrichment | null>(null);
+
 
   const derivedInput = {
     expenseId: expense?.id || "",
@@ -216,6 +233,38 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
       cancelled = true;
     };
   }, [open, expense]);
+
+  // Enriquecimento: busca linha do sap_fluxo_analise_cache (VW_FIN_ANALISE_FLUXO)
+  // para exibir marcos de tempo (esboço → aprovação → lançamento → vencimento →
+  // pagamento) e gargalos. Carregado só quando o usuário liga "Enriquecer".
+  useEffect(() => {
+    if (!enriched || !open || !expense?.company_db) {
+      setFluxoRow(null);
+      return;
+    }
+    const candidates = [
+      expense.sap_doc_num != null ? String(expense.sap_doc_num) : null,
+      expense.sap_doc_entry != null ? String(expense.sap_doc_entry) : null,
+    ].filter((v): v is string => !!v);
+    if (candidates.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("sap_fluxo_analise_cache")
+        .select(
+          "data_atualizacao_esboco, data_aprovacao, data_lancamento, data_vencimento, data_pagamento, solicitante, aprovador, descricao, centro_custo, marca, departamento",
+        )
+        .eq("company_db", expense.company_db!)
+        .in("id_pedido", candidates)
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setFluxoRow((data ?? null) as SapFluxoEnrichment | null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enriched, open, expense?.company_db, expense?.sap_doc_num, expense?.sap_doc_entry]);
+
 
 
   const stages = useMemo(() => {
@@ -401,6 +450,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                 nfLinks={nfLinksWithPayments}
                 apPayables={apLinks.data?.payables || []}
                 enriched={enriched}
+                fluxo={fluxoRow}
                 onNodeClick={(id) => {
                   if (id === "root") setDetailStage("pc_lancado");
                   else if (id === "requester") setDetailStage("rascunho");
