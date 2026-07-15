@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
     const creds = await getJumpCloudCredentials(supabase);
     const apiKey = creds.api_key;
-    const orgId = creds.org_id;
+    const orgId = (creds.org_id || "").trim();
 
     const headers: Record<string, string> = {
       "x-api-key": apiKey,
@@ -52,6 +52,21 @@ Deno.serve(async (req) => {
       Accept: "application/json",
     };
     if (orgId) headers["x-org-id"] = orgId;
+
+    const parseJumpCloudError = (status: number, errText: string): string => {
+      let detail = errText;
+      try {
+        const parsed = JSON.parse(errText);
+        detail = parsed.message || parsed.error || errText;
+      } catch { /* keep raw */ }
+      if (status === 404 && /organization/i.test(detail)) {
+        return `JumpCloud: organização não encontrada (org_id="${orgId}"). Verifique o "org_id" salvo em system_credentials — ele precisa bater com o ID da sua organização no JumpCloud (ou deixe vazio se sua conta for single-org).`;
+      }
+      if (status === 401) {
+        return `JumpCloud: API Key inválida ou sem permissão (${detail}).`;
+      }
+      return `Erro na API JumpCloud (${status}): ${detail}`;
+    };
 
     // LIST USERS
     if (action === "listUsers" || (!action && req.method === "GET")) {
