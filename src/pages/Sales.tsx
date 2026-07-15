@@ -601,13 +601,15 @@ export default function SalesPage() {
                         </thead>
                         <tbody>
                           {g.rows.map((r) => {
+                            const rk = rowKey(r);
                             const canSelect = r.saldoResidual > 0;
-                            const isSelected = selected.has(r.docEntry);
+                            const isSelected = selected.has(rk);
                             const rowClash =
                               selectionCardCode && selectionCardCode !== r.cardCode;
+                            const isSI = r.docType === "journal_entry";
                             return (
                               <tr
-                                key={r.docEntry}
+                                key={rk}
                                 className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${
                                   isSelected ? "bg-primary/5" : ""
                                 }`}
@@ -618,7 +620,7 @@ export default function SalesPage() {
                                       checked={isSelected}
                                       onCheckedChange={(v) => toggleRow(r, !!v)}
                                       disabled={!!rowClash && !isSelected}
-                                      aria-label={`Selecionar NF ${r.docNum}`}
+                                      aria-label={`Selecionar ${isSI ? "SI" : "NF"} ${r.docNum}`}
                                     />
                                   ) : (
                                     <CheckCircle2
@@ -627,7 +629,22 @@ export default function SalesPage() {
                                     />
                                   )}
                                 </td>
-                                <td className="py-2 px-2 font-mono">{r.docNum}</td>
+                                <td className="py-2 px-2 font-mono">
+                                  {isSI ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <Badge
+                                        variant="outline"
+                                        className="border-amber-500/40 text-amber-500 text-[9px] px-1 py-0"
+                                        title="Saldo Inicial (Lançamento contábil)"
+                                      >
+                                        SI
+                                      </Badge>
+                                      {r.docNum}
+                                    </span>
+                                  ) : (
+                                    r.docNum
+                                  )}
+                                </td>
                                 <td className="py-2 px-2">{formatDate(r.docDate)}</td>
                                 <td className="py-2 px-2">{formatDate(r.docDueDate)}</td>
                                 <td className="py-2 px-2 text-right font-mono">
@@ -668,7 +685,11 @@ export default function SalesPage() {
                                   </Badge>
                                 </td>
                                 <td className="py-2 px-2">
-                                  {r.origem === "erp_flow" ? (
+                                  {isSI ? (
+                                    <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">
+                                      SI
+                                    </Badge>
+                                  ) : r.origem === "erp_flow" ? (
                                     <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
                                       ERP Flow
                                     </Badge>
@@ -679,16 +700,20 @@ export default function SalesPage() {
                                   )}
                                 </td>
                                 <td className="py-2 px-2 text-right">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7"
-                                    onClick={() => setMapInvoice(r)}
-                                    aria-label={`Ver mapa de relações da NF ${r.docNum}`}
-                                    title="Mapa de relações"
-                                  >
-                                    <Network className="w-3.5 h-3.5 text-muted-foreground" />
-                                  </Button>
+                                  {isSI ? (
+                                    <span className="inline-block w-7" />
+                                  ) : (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7"
+                                      onClick={() => setMapInvoice(r)}
+                                      aria-label={`Ver mapa de relações da NF ${r.docNum}`}
+                                      title="Mapa de relações"
+                                    >
+                                      <Network className="w-3.5 h-3.5 text-muted-foreground" />
+                                    </Button>
+                                  )}
                                 </td>
                               </tr>
                             );
