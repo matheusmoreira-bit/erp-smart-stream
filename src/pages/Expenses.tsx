@@ -974,7 +974,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         origin: "manual",
       }));
     },
-    [session, sapFilters],
+    [session],
   );
 
   useEffect(() => {
