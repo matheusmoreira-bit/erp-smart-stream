@@ -1471,9 +1471,6 @@ export default function PagCorp() {
                     });
                   })()}
                 </TableBody>
-                    );
-                  })}
-                </TableBody>
               </Table>
             </div>
           )}
