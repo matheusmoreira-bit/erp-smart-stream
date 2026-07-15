@@ -50,7 +50,10 @@ function CredentialModal({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; detail?: string } | null>(null);
   const testEndpoint = TEST_ENDPOINTS[system.name];
-  const canTest = !!testEndpoint && hasExisting;
+  const isJumpCloud = system.name === "jumpcloud";
+  const canTest = isJumpCloud
+    ? !!(values.api_key?.trim() || hasExisting)
+    : (!!testEndpoint && hasExisting);
 
   // Load existing non-secret values (custom_fields, toggle) when dialog opens
   useEffect(() => {
@@ -103,10 +106,43 @@ function CredentialModal({
   };
 
   const handleTest = async () => {
-    if (!testEndpoint) return;
     setTesting(true);
     setTestResult(null);
     try {
+      if (isJumpCloud) {
+        const apiKey = values.api_key?.trim();
+        const isMtpForm = values.is_mtp === "true";
+        const payload: Record<string, unknown> = { action: "testKey" };
+        if (apiKey) payload.api_key = apiKey;
+        // Se o usuário já mexeu no toggle no formulário, mandamos o valor atual;
+        // senão, deixamos o backend usar o valor salvo.
+        if (values.is_mtp !== undefined) payload.is_mtp = isMtpForm;
+        const res = await sapFunctionFetch("jumpcloud-proxy", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data?.ok) {
+          const orgs = Array.isArray(data.organizations)
+            ? data.organizations.map((o: any) => `${o.name} (${o.id})`).join(", ")
+            : undefined;
+          setTestResult({
+            ok: true,
+            message: `${data.message ?? "Chave válida"} — ${data.elapsedMs ?? 0}ms`,
+            detail: orgs,
+          });
+          toast.success("API Key do JumpCloud válida");
+        } else {
+          setTestResult({
+            ok: false,
+            message: data?.error || `Falha no teste (HTTP ${res.status})`,
+          });
+          toast.error("Falha ao validar API Key");
+        }
+        return;
+      }
+
+      if (!testEndpoint) return;
       const qs = companyDb ? `?company_db=${encodeURIComponent(companyDb)}` : "";
       const res = await sapFunctionFetch(`${testEndpoint}${qs}`, { method: "GET" });
       const data = await res.json().catch(() => ({}));
@@ -116,7 +152,7 @@ function CredentialModal({
           message: `Conexão OK (HTTP ${data.status}) em ${data.elapsedMs}ms`,
           detail: data.url,
         });
-        toast.success("Conexão com Master Tax bem-sucedida");
+        toast.success(`Conexão com ${system.label} bem-sucedida`);
       } else {
         setTestResult({
           ok: false,

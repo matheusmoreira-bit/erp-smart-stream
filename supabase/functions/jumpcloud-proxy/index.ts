@@ -40,13 +40,34 @@ Deno.serve(async (req) => {
     );
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || (req.method === "POST" ? (await req.json()).action : null);
+    let body: Record<string, any> = {};
+    if (req.method === "POST") {
+      try { body = await req.json(); } catch { body = {}; }
+    }
+    const action = url.searchParams.get("action") || body.action || null;
 
-    const creds = await getJumpCloudCredentials(supabase);
-    const apiKey = creds.api_key;
-    const isMtp = String(creds.is_mtp ?? "").toLowerCase() === "true";
+    const creds = await getJumpCloudCredentials(supabase).catch((e) => {
+      // Para testKey, permitimos operar sem credenciais salvas se overrides forem enviados
+      if (action === "testKey" && (body.api_key || body.apiKey)) return {} as Record<string, string>;
+      throw e;
+    });
+
+    // Overrides (só para testKey/preflight — não persistem)
+    const overrideApiKey = (body.api_key || body.apiKey || "").toString().trim();
+    const overrideIsMtpRaw = body.is_mtp ?? body.isMtp;
+    const apiKey = overrideApiKey || creds.api_key;
+    const isMtp = overrideIsMtpRaw !== undefined
+      ? String(overrideIsMtpRaw).toLowerCase() === "true"
+      : String(creds.is_mtp ?? "").toLowerCase() === "true";
     // org_id armazenado é IGNORADO — MTP descobre via /api/organizations; stand-alone dispensa header.
     const legacyOrgId = (creds.org_id || "").trim();
+
+    if (!apiKey) {
+      return new Response(JSON.stringify({ ok: false, error: "API Key não informada." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const baseHeaders: Record<string, string> = {
       "x-api-key": apiKey,
@@ -91,6 +112,56 @@ Deno.serve(async (req) => {
         name: o.displayName || o.name || o._id || o.id,
       })).filter((o) => !!o.id);
     };
+
+    // Ação: testar chave (opcionalmente com overrides api_key/is_mtp vindos do formulário).
+    if (action === "testKey") {
+      const started = Date.now();
+      try {
+        if (isMtp) {
+          // MTP → precisa listar organizations com essa key
+          const orgs = await listOrganizations();
+          return new Response(JSON.stringify({
+            ok: true,
+            mode: "mtp",
+            organizations_count: orgs.length,
+            organizations: orgs.slice(0, 20),
+            elapsedMs: Date.now() - started,
+            message: `Chave MTP válida — ${orgs.length} organization(s) acessíveis.`,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } else {
+          // Stand-alone → chama /api/systemusers?limit=1
+          const resp = await fetch(
+            "https://console.jumpcloud.com/api/systemusers?limit=1&fields=_id email",
+            { headers: baseHeaders }
+          );
+          if (!resp.ok) {
+            const errText = await resp.text();
+            return new Response(JSON.stringify({
+              ok: false,
+              status: resp.status,
+              error: parseJumpCloudError(resp.status, errText, "/systemusers"),
+              elapsedMs: Date.now() - started,
+            }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+          const data = await resp.json();
+          const total = data.totalCount ?? (data.results?.length ?? 0);
+          return new Response(JSON.stringify({
+            ok: true,
+            mode: "standalone",
+            total_users: total,
+            elapsedMs: Date.now() - started,
+            message: `Chave stand-alone válida — ${total} usuário(s) visível(is).`,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return new Response(JSON.stringify({
+          ok: false,
+          error: msg,
+          elapsedMs: Date.now() - started,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
 
     // Ação explícita: listar organizations (para UI de diagnóstico).
     if (action === "listOrganizations") {
@@ -162,7 +233,6 @@ Deno.serve(async (req) => {
 
     // SEARCH USERS (busca em todas orgs quando MTP)
     if (action === "searchUsers") {
-      const body = req.method === "POST" ? await req.json() : {};
       const query = body.query || url.searchParams.get("query") || "";
 
       const searchBody = {
