@@ -113,6 +113,56 @@ Deno.serve(async (req) => {
       })).filter((o) => !!o.id);
     };
 
+    // Ação: testar chave (opcionalmente com overrides api_key/is_mtp vindos do formulário).
+    if (action === "testKey") {
+      const started = Date.now();
+      try {
+        if (isMtp) {
+          // MTP → precisa listar organizations com essa key
+          const orgs = await listOrganizations();
+          return new Response(JSON.stringify({
+            ok: true,
+            mode: "mtp",
+            organizations_count: orgs.length,
+            organizations: orgs.slice(0, 20),
+            elapsedMs: Date.now() - started,
+            message: `Chave MTP válida — ${orgs.length} organization(s) acessíveis.`,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } else {
+          // Stand-alone → chama /api/systemusers?limit=1
+          const resp = await fetch(
+            "https://console.jumpcloud.com/api/systemusers?limit=1&fields=_id email",
+            { headers: baseHeaders }
+          );
+          if (!resp.ok) {
+            const errText = await resp.text();
+            return new Response(JSON.stringify({
+              ok: false,
+              status: resp.status,
+              error: parseJumpCloudError(resp.status, errText, "/systemusers"),
+              elapsedMs: Date.now() - started,
+            }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+          const data = await resp.json();
+          const total = data.totalCount ?? (data.results?.length ?? 0);
+          return new Response(JSON.stringify({
+            ok: true,
+            mode: "standalone",
+            total_users: total,
+            elapsedMs: Date.now() - started,
+            message: `Chave stand-alone válida — ${total} usuário(s) visível(is).`,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return new Response(JSON.stringify({
+          ok: false,
+          error: msg,
+          elapsedMs: Date.now() - started,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
     // Ação explícita: listar organizations (para UI de diagnóstico).
     if (action === "listOrganizations") {
       if (!isMtp) {
