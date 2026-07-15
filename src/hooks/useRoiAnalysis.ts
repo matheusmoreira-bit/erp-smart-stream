@@ -239,6 +239,13 @@ export function useRoiAnalysis(opts: Options) {
     if (!params.length) return [];
     const periodDays = from && to ? Math.max(1, daysBetween(from, to)) : 30;
 
+    // Custo TOTAL de licenças SAP no período, com base no cronograma real de aquisição
+    // (22 → 51 → 62 → 83 → 103), split 60% PRO / 40% CRM.
+    const now = new Date();
+    const effFrom = from || new Date(now.getTime() - periodDays * 86400000);
+    const effTo = to || now;
+    const totalSapLicenseCost = sapLicenseCostInPeriod(effFrom, effTo);
+
     // Agrupa aprovações finais (Y) por company+doc_entry
     const approvedIdx = new Map<string, ApprovalRow>();
     for (const a of approvals) {
