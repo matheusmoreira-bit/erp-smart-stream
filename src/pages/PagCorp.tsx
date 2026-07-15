@@ -369,8 +369,10 @@ export default function PagCorp() {
   const rowItems = useMemo(() => {
     const groupKeyOf = (t: PagCorpTransaction): string | null => {
       if (!t.integrated) return null;
-      if (t.integrationLogId) return `log:${t.integrationLogId}`;
+      // Consolidação real acontece no SAP: N transações → 1 PO (mesmo DocEntry/DocNum).
+      // O integrationLogId é 1:1 com a transação, então não serve para agrupar.
       if (t.sapDocEntry != null) return `de:${t.sapDocEntry}`;
+      if (t.sapDocNum != null) return `dn:${t.sapDocNum}`;
       return null;
     };
     const groups = new Map<string, PagCorpTransaction[]>();
