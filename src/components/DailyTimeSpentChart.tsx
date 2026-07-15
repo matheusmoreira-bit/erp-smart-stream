@@ -302,14 +302,67 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
                 label={{ value: unitLabel, angle: -90, position: "insideLeft", fontSize: 11 }}
               />
               <Tooltip
-                labelFormatter={(l) => `${bucketNoun[0].toUpperCase() + bucketNoun.slice(1)} de ${fmtBucket(String(l))}`}
-                formatter={(value: any, name: string, ctx: any) => {
-                  const p = ctx?.payload || {};
-                  const isFlow = name.startsWith("ERP Flow");
-                  const n = isFlow ? p.docs_flow : p.docs_sap;
-                  return [`${Number(value).toFixed(1)} min/dia (${n ?? 0} pedidos)`, name];
+                cursor={{ stroke: "hsl(var(--muted-foreground))", strokeOpacity: 0.25 }}
+                content={({ active, label, payload }: any) => {
+                  if (!active || !payload || payload.length === 0) return null;
+                  const p = payload[0]?.payload || {};
+                  const sapPoint = payload.find((it: any) => String(it?.dataKey) === "sap_min");
+                  const flowPoint = payload.find((it: any) => String(it?.dataKey) === "flow_min");
+                  const sapMin = Number(sapPoint?.value ?? 0);
+                  const flowMin = Number(flowPoint?.value ?? 0);
+                  const sapDocs = Number(p.docs_sap ?? 0);
+                  const flowDocs = Number(p.docs_flow ?? 0);
+                  const total = sapDocs + flowDocs;
+                  return (
+                    <div
+                      className="rounded-lg border border-border bg-card/95 backdrop-blur px-3 py-2 shadow-lg text-xs space-y-2 max-w-[320px]"
+                      role="tooltip"
+                    >
+                      <div className="font-semibold text-foreground">
+                        {`${bucketNoun[0].toUpperCase() + bucketNoun.slice(1)} de ${fmtBucket(String(label))}`}
+                      </div>
+                      <div className="text-[11px] leading-snug text-muted-foreground">
+                        <div>
+                          <span className="text-foreground">Data:</span>{" "}
+                          <code className="font-mono">sap_fluxo_analise_cache.data_lancamento</code>{" "}
+                          <span className="opacity-70">(fallback:</span>{" "}
+                          <code className="font-mono">sap_purchase_order_cache.doc_date</code>
+                          <span className="opacity-70">)</span>
+                        </div>
+                        <div>
+                          <span className="text-foreground">Classificação:</span> pedidos com{" "}
+                          <code className="font-mono">expenses.sap_doc_entry</code> vinculado ={" "}
+                          <span className="text-primary font-medium">ERP Flow</span>; sem vínculo ={" "}
+                          <span className="text-destructive font-medium">SAP puro</span>.
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 gap-y-1">
+                        <span className="inline-flex items-center gap-1.5 text-destructive">
+                          <span aria-hidden className="w-2 h-2 rounded-full bg-destructive" />
+                          SAP puro
+                        </span>
+                        <span className="text-muted-foreground">
+                          {sapDocs} pedidos × {tempoLancarSapMin} min
+                        </span>
+                        <span className="font-mono text-foreground">{sapMin.toFixed(1)} min/dia</span>
+
+                        <span className="inline-flex items-center gap-1.5 text-primary">
+                          <span aria-hidden className="w-2 h-2 rounded-full bg-primary" />
+                          ERP Flow
+                        </span>
+                        <span className="text-muted-foreground">
+                          {flowDocs} pedidos × {tempoLancarFlowMin} min
+                        </span>
+                        <span className="font-mono text-foreground">{flowMin.toFixed(1)} min/dia</span>
+
+                        <span className="pt-1 border-t border-border/60 col-span-3" />
+                        <span className="text-muted-foreground">Total</span>
+                        <span className="text-muted-foreground">{total} pedidos</span>
+                        <span className="font-mono text-foreground">{(sapMin + flowMin).toFixed(1)} min/dia</span>
+                      </div>
+                    </div>
+                  );
                 }}
-                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Line type="monotone" dataKey="sap_min" name={`SAP puro (${tempoLancarSapMin}min/pedido)`} stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
