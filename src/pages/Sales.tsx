@@ -140,8 +140,10 @@ export default function SalesPage() {
         const cutoffIso = cutoff.toISOString().slice(0, 10);
         const invoiceParams: Record<string, string> = {
           $select:
-            "DocEntry,DocNum,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
+            "DocEntry,DocNum,FolioNumber,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
           $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
+          $orderby: "DocDate desc",
+        };
           $orderby: "DocDate desc",
         };
 
