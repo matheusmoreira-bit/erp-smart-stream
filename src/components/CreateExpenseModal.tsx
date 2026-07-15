@@ -231,6 +231,17 @@ export function CreateExpenseModal({
     mapRow: projectMapRow,
   });
 
+  // Centro de custo do usuário logado (via mapeamento IdP). Usado para
+  // pré-preencher o CC padrão em compras e restringir itens IMP%/FOL%.
+  const { costCenter: userCostCenter } = useCurrentUserCostCenter();
+
+  // Filtro de alçada: itens IMP% só para CC 1.2.2.%; itens FOL% só para CC 1.6.%.
+  // Vale só no fluxo de compras — vendas mantém a lista integral.
+  const filteredItemOptions = useMemo(() => {
+    if (isSales) return itemOptions;
+    return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter));
+  }, [itemOptions, userCostCenter, isSales]);
+
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
