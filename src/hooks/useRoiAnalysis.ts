@@ -146,6 +146,21 @@ interface PoCacheRow {
   doc_total: number | null;
 }
 
+/**
+ * Linha de VW_FIN_ANALISE_FLUXO em cache. Fornece a amarração
+ * Esboço → Pedido → NF → CP e as datas reais de vencimento/pagamento.
+ */
+interface FluxoRow {
+  company_db: string;
+  data_aprovacao: string | null;
+  data_vencimento: string | null;
+  data_lancamento: string | null;
+  data_pagamento: string | null;
+  valor: number | null;
+  id_esboco: string | null;
+  id_pedido: string | null;
+}
+
 interface Company {
   company_db: string;
   display_name: string;
@@ -158,8 +173,10 @@ export function useRoiAnalysis(opts: Options) {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
   const [pos, setPos] = useState<PoCacheRow[]>([]);
+  const [fluxo, setFluxo] = useState<FluxoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
 
   const load = useCallback(async () => {
     setLoading(true);
