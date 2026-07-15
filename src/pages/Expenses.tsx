@@ -1007,7 +1007,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       if (cancelled) return;
 
       // 2) Revalida em background — sem bloquear UI se já temos cache
-      const hasCached = !cancelled;
       setIsLoadingSap((prev) => (sapOrders.length === 0 ? true : prev));
       setIsRevalidatingSap(true);
       try {
