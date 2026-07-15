@@ -175,7 +175,7 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
 
     // Skip expiry detection on the login action itself — wrong creds shouldn't trigger a global logout
     if (action !== "login" && looksLikeSessionExpired(data)) {
-      notifySessionExpired();
+      if (!opts.silentSessionExpired) notifySessionExpired();
       throw new SapSessionExpiredError();
     }
 
