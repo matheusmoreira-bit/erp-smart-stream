@@ -110,7 +110,7 @@ export default function SalesPage() {
   const [onlyOpen, setOnlyOpen] = useState(true);
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [selected, setSelected] = useState<Set<number>>(new Set()); // set of docEntry
+  const [selected, setSelected] = useState<Set<string>>(new Set()); // set de row keys (docType:docEntry:docLine)
   const [baixaOpen, setBaixaOpen] = useState(false);
   const [mapInvoice, setMapInvoice] = useState<InvoiceRow | null>(null);
   const fetchTokenRef = useRef(0);
