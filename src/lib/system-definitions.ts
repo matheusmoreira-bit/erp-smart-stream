@@ -162,8 +162,8 @@ export const SYSTEMS: SystemConfig[] = [
     description: "Gestão de identidades e diretório de usuários",
     icon: Users,
     fields: [
-      { key: "api_key", label: "API Key", type: "password", placeholder: "Chave de API do JumpCloud" },
-      { key: "org_id", label: "Organization ID", placeholder: "ID da organização" },
+      { key: "api_key", label: "API Key", type: "password", placeholder: "Chave de API do JumpCloud", description: "Use uma API Key do JumpCloud com permissão para listar usuários. Se for uma conta MTP (multi-tenant), ative a opção abaixo e o sistema descobrirá automaticamente todas as organizations do tenant." },
+      { key: "is_mtp", label: "Conta MTP (multi-tenant)", type: "toggle", description: "Ative se a API Key pertencer a um tenant MTP. O sistema chamará /api/organizations e listará usuários de todas as organizations. Deixe desligado para contas stand-alone." },
     ],
   },
   {
