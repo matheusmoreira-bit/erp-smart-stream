@@ -517,7 +517,10 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                 );
               })()}
 
-              {timeline.map(({ baixa, residualAfter }, idx) => (
+              {timeline.map(({ baixa, residualAfter }, idx) => {
+                const userLabel =
+                  baixa.criado_por_nome || baixa.criado_por_user_code || null;
+                return (
                 <div
                   key={baixa.id + "-" + idx}
                   className="rounded-md border border-border/60 bg-card px-3 py-2"
@@ -527,7 +530,10 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                       <BaixaStatusIcon status={baixa.status} />
                       <div className="min-w-0">
                         <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
-                          Baixa em {formatDate(baixa.data_recebimento)}
+                          Baixa #{idx + 1} em {formatDate(baixa.data_recebimento)}
+                          <span className="text-[11px] font-normal text-muted-foreground">
+                            às {formatTime(baixa.created_at)}
+                          </span>
                           <Link
                             to={`/vendas/historico?baixa=${baixa.id}`}
                             target="_blank"
@@ -540,12 +546,22 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                         </p>
                         <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
                           <BaixaStatusLabel status={baixa.status} />
-                          {baixa.sap_incoming_payment_doc_entry && (
+                          {baixa.sap_incoming_payment_doc_entry ? (
                             <span className="font-mono">
                               SAP #{baixa.sap_incoming_payment_doc_entry}
                             </span>
+                          ) : (
+                            <span className="italic">SAP DocEntry pendente</span>
                           )}
-                          <IdBadge label="ID" value={baixa.id} short />
+                          {userLabel && (
+                            <span
+                              className="inline-flex items-center gap-1"
+                              title={baixa.criado_por_user_code || undefined}
+                            >
+                              <span className="uppercase tracking-wider text-[9px] opacity-70">Usuário</span>
+                              <span className="font-medium text-foreground/80">{userLabel}</span>
+                            </span>
+                          )}
                           {baixa.valor_juros_multa > 0 && (
                             <span className="text-amber-500">
                               + {formatCurrency(baixa.valor_juros_multa, invoice.currency)} juros/multa
@@ -556,10 +572,16 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
 
                     </div>
                     <div className="text-right shrink-0">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor baixado</p>
                       <p className="font-mono text-sm font-semibold">
                         − {formatCurrency(baixa.valor_baixado, invoice.currency)}
                       </p>
                     </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
+                      Saldo residual após esta baixa
+                    </span>
                   </div>
                   <ResidualBar
                     residual={residualAfter}
@@ -567,7 +589,9 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                     currency={invoice.currency}
                   />
                 </div>
-              ))}
+                );
+              })}
+
 
 
               {baixas.length > 0 && finalResidual === 0 && (
