@@ -183,7 +183,6 @@ Deno.serve(async (req) => {
 
     // SEARCH USERS (busca em todas orgs quando MTP)
     if (action === "searchUsers") {
-      const body = req.method === "POST" ? await req.json() : {};
       const query = body.query || url.searchParams.get("query") || "";
 
       const searchBody = {
