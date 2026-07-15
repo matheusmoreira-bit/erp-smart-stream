@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
   let _http = 200;
   let _err: string | null = null;
   try {
-    await requireUserOrSapSession(req);
+    await requireUserOrSapSessionHeaders(req);
 
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
