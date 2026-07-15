@@ -44,65 +44,123 @@ Deno.serve(async (req) => {
 
     const creds = await getJumpCloudCredentials(supabase);
     const apiKey = creds.api_key;
-    const orgId = (creds.org_id || "").trim();
+    const isMtp = String(creds.is_mtp ?? "").toLowerCase() === "true";
+    // org_id armazenado é IGNORADO — MTP descobre via /api/organizations; stand-alone dispensa header.
+    const legacyOrgId = (creds.org_id || "").trim();
 
-    const headers: Record<string, string> = {
+    const baseHeaders: Record<string, string> = {
       "x-api-key": apiKey,
       "Content-Type": "application/json",
       Accept: "application/json",
     };
-    if (orgId) headers["x-org-id"] = orgId;
+    const withOrg = (orgId?: string) => {
+      const h = { ...baseHeaders };
+      if (orgId) h["x-org-id"] = orgId;
+      return h;
+    };
 
-    const parseJumpCloudError = (status: number, errText: string): string => {
+    const parseJumpCloudError = (status: number, errText: string, ctx?: string): string => {
       let detail = errText;
       try {
         const parsed = JSON.parse(errText);
         detail = parsed.message || parsed.error || errText;
       } catch { /* keep raw */ }
+      if (status === 401) return `JumpCloud: API Key inválida ou sem permissão (${detail}).`;
+      if (status === 403) return `JumpCloud: API Key sem permissão para ${ctx ?? "esta operação"} (${detail}).`;
       if (status === 404 && /organization/i.test(detail)) {
-        return `JumpCloud: organização não encontrada (org_id="${orgId}"). Verifique o "org_id" salvo em system_credentials — ele precisa bater com o ID da sua organização no JumpCloud (ou deixe vazio se sua conta for single-org).`;
+        return `JumpCloud: organização não encontrada${ctx ? ` em ${ctx}` : ""}. Verifique se a API Key é MTP (marque a opção "Conta MTP") ou stand-alone.`;
       }
-      if (status === 401) {
-        return `JumpCloud: API Key inválida ou sem permissão (${detail}).`;
-      }
-      return `Erro na API JumpCloud (${status}): ${detail}`;
+      return `Erro na API JumpCloud (${status}${ctx ? ` @ ${ctx}` : ""}): ${detail}`;
     };
 
-    // LIST USERS
-    if (action === "listUsers" || (!action && req.method === "GET")) {
-      const allUsers: unknown[] = [];
+    // Descobre organizations (MTP) ou usa uma "org virtual" para stand-alone.
+    type Org = { id: string; name: string };
+    const listOrganizations = async (): Promise<Org[]> => {
+      const resp = await fetch("https://console.jumpcloud.com/api/organizations?limit=100", {
+        headers: baseHeaders,
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error("JumpCloud /organizations error:", resp.status, errText);
+        throw new Error(parseJumpCloudError(resp.status, errText, "/organizations"));
+      }
+      const data = await resp.json();
+      const results = data.results || data.organizations || data || [];
+      return (results as any[]).map((o) => ({
+        id: o._id || o.id,
+        name: o.displayName || o.name || o._id || o.id,
+      })).filter((o) => !!o.id);
+    };
+
+    // Ação explícita: listar organizations (para UI de diagnóstico).
+    if (action === "listOrganizations") {
+      if (!isMtp) {
+        return new Response(JSON.stringify({
+          organizations: [],
+          is_mtp: false,
+          message: "Conta configurada como stand-alone; /organizations só se aplica a contas MTP.",
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const orgs = await listOrganizations();
+      return new Response(JSON.stringify({ organizations: orgs, is_mtp: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Alvos: MTP → todas orgs; stand-alone → uma passagem sem x-org-id (mantém legacyOrgId se ainda existir para compat).
+    const targets: Array<Org | null> = isMtp
+      ? (await listOrganizations())
+      : [legacyOrgId ? { id: legacyOrgId, name: "default" } : null];
+
+    if (isMtp && targets.length === 0) {
+      throw new Error("JumpCloud MTP: nenhuma organization retornada por /api/organizations. Verifique se a API Key é do tenant MTP.");
+    }
+
+    const fetchUsersForOrg = async (org: Org | null) => {
+      const headers = withOrg(org?.id);
+      const collected: any[] = [];
       let skip = 0;
       const limit = 100;
       let hasMore = true;
-
       while (hasMore) {
         const resp = await fetch(
           `https://console.jumpcloud.com/api/systemusers?limit=${limit}&skip=${skip}&fields=_id email username displayname firstname lastname suspended department costCenter jobTitle company employeeIdentifier employeeType manager`,
           { headers }
         );
-
         if (!resp.ok) {
           const errText = await resp.text();
-          console.error("JumpCloud API error:", resp.status, errText);
-          throw new Error(parseJumpCloudError(resp.status, errText));
+          console.error("JumpCloud API error:", resp.status, errText, "org:", org?.id);
+          throw new Error(parseJumpCloudError(resp.status, errText, org ? `org ${org.name} (${org.id})` : "stand-alone"));
         }
-
         const data = await resp.json();
         const results = data.results || data || [];
-        allUsers.push(...results);
-
+        for (const u of results as any[]) {
+          collected.push(org ? { ...u, __org_id: org.id, __org_name: org.name } : u);
+        }
         hasMore = results.length === limit;
         skip += limit;
-
-        if (allUsers.length > 5000) hasMore = false;
+        if (collected.length > 20000) hasMore = false;
       }
+      return collected;
+    };
 
-      return new Response(JSON.stringify({ users: allUsers }), {
+    // LIST USERS
+    if (action === "listUsers" || (!action && req.method === "GET")) {
+      const allUsers: unknown[] = [];
+      for (const org of targets) {
+        const users = await fetchUsersForOrg(org);
+        allUsers.push(...users);
+      }
+      return new Response(JSON.stringify({
+        users: allUsers,
+        is_mtp: isMtp,
+        organizations: isMtp ? (targets as Org[]).map((o) => ({ id: o!.id, name: o!.name })) : [],
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // SEARCH USERS
+    // SEARCH USERS (busca em todas orgs quando MTP)
     if (action === "searchUsers") {
       const body = req.method === "POST" ? await req.json() : {};
       const query = body.query || url.searchParams.get("query") || "";
@@ -120,25 +178,30 @@ Deno.serve(async (req) => {
         limit: 20,
       };
 
-      const resp = await fetch("https://console.jumpcloud.com/api/search/systemusers", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(searchBody),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        console.error("JumpCloud search error:", resp.status, errText);
-        throw new Error(parseJumpCloudError(resp.status, errText));
+      const allResults: any[] = [];
+      for (const org of targets) {
+        const resp = await fetch("https://console.jumpcloud.com/api/search/systemusers", {
+          method: "POST",
+          headers: withOrg(org?.id),
+          body: JSON.stringify(searchBody),
+        });
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error("JumpCloud search error:", resp.status, errText, "org:", org?.id);
+          throw new Error(parseJumpCloudError(resp.status, errText, org ? `org ${org.name} (${org.id})` : "stand-alone"));
+        }
+        const data = await resp.json();
+        for (const u of (data.results || []) as any[]) {
+          allResults.push(org ? { ...u, __org_id: org.id, __org_name: org.name } : u);
+        }
       }
 
-      const data = await resp.json();
-      return new Response(JSON.stringify({ users: data.results || [] }), {
+      return new Response(JSON.stringify({ users: allResults }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ error: "Ação inválida. Use: listUsers, searchUsers" }), {
+    return new Response(JSON.stringify({ error: "Ação inválida. Use: listUsers, searchUsers, listOrganizations" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
