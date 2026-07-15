@@ -26,6 +26,7 @@ import { useSap } from "@/contexts/SapContext";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import { getErpShortLabel } from "@/lib/erp-labels";
+import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 
