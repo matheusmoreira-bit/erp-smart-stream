@@ -104,8 +104,19 @@ async function doFetchWithTimeout(body: Record<string, unknown>, timeoutMs: numb
   }
 }
 
+export interface SapCallOptions {
+  /**
+   * Se true, um erro de sessão SAP expirada NÃO dispara o evento global
+   * `erp:session-expired` (que derruba a sessão inteira e desloga o Supabase).
+   * Use em fluxos de escrita isolados (ex.: baixa de recebimento) onde a
+   * falha deve marcar apenas o próprio documento, sem atrapalhar outras
+   * telas/rotinas do sistema.
+   */
+  silentSessionExpired?: boolean;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function callProxy(body: Record<string, unknown>): Promise<any> {
+async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {}): Promise<any> {
   const action = typeof body?.action === "string" ? body.action : "";
   const canRetry = RETRIABLE_ACTIONS.has(action);
   const maxAttempts = canRetry ? MAX_RETRIES + 1 : 1;
@@ -164,7 +175,7 @@ async function callProxy(body: Record<string, unknown>): Promise<any> {
 
     // Skip expiry detection on the login action itself — wrong creds shouldn't trigger a global logout
     if (action !== "login" && looksLikeSessionExpired(data)) {
-      notifySessionExpired();
+      if (!opts.silentSessionExpired) notifySessionExpired();
       throw new SapSessionExpiredError();
     }
 
@@ -299,16 +310,20 @@ export async function sapAction(
   endpoint: string,
   method: "POST" | "PATCH" = "POST",
   body?: Record<string, unknown>,
+  opts: SapCallOptions = {},
 ): Promise<{ data: unknown }> {
-  const result = await callProxy({
-    action: "sapAction",
-    sessionId: session.sessionId,
-    routeId: session.routeId,
-    companyDB: session.companyDB,
-    endpoint,
-    method,
-    body,
-  });
+  const result = await callProxy(
+    {
+      action: "sapAction",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      companyDB: session.companyDB,
+      endpoint,
+      method,
+      body,
+    },
+    opts,
+  );
   return { data: result.data };
 }
 
