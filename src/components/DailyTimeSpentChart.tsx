@@ -194,11 +194,12 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
             <ToggleGroupItem value="month" className="text-xs h-7 px-2">Mês</ToggleGroupItem>
           </ToggleGroup>
           <span>
-            Desde 01/06/2025 · <strong className="text-foreground">{totals.docs}</strong> pedidos ·
+            Desde 01/06/2025 · <strong className="text-foreground">{totals.docs}</strong> pedidos
+            {" "}(<strong className="text-foreground">{totals.docs_sap}</strong> SAP puro + <strong className="text-foreground">{totals.docs_flow}</strong> via Flow) ·
             {" "}Flow <strong className="text-foreground">{fmtH(totals.flow / 60)}</strong> vs
-            {" "}SAP <strong className="text-foreground">{fmtH(totals.sap / 60)}</strong> ·
-            {" "}economia <strong className="text-primary">{fmtH((totals.sap - totals.flow) / 60)}</strong>
+            {" "}SAP puro <strong className="text-foreground">{fmtH(totals.sap / 60)}</strong>
           </span>
+
           {isAdmin && (
             <Button size="sm" variant="outline" onClick={runBackfill} disabled={backfilling}>
               {backfilling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
