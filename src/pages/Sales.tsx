@@ -57,6 +57,7 @@ function formatDate(dateStr?: string | null) {
 interface SapInvoice {
   DocEntry: number;
   DocNum: number;
+  FolioNumber: number | null;
   CardCode: string;
   CardName: string;
   DocDate: string;
@@ -71,6 +72,8 @@ interface SapInvoice {
 interface InvoiceRow {
   docEntry: number;
   docNum: number;
+  /** Número da NFSE / folio fiscal (SAP FolioNumber). */
+  folioNumber: number | null;
   cardCode: string;
   cardName: string;
   docDate: string;
