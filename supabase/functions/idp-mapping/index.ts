@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,11 +19,26 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await requireAdmin(req);
+    await requireAdminOrSapAdmin(req);
     const adminClient = getServiceClient();
 
     const body = await req.json().catch(() => ({}));
     const action = body.action as string;
+
+    if (action === "list") {
+      const idpProvider = typeof body.idp_provider === "string" && body.idp_provider.trim()
+        ? body.idp_provider.trim()
+        : "jumpcloud";
+      const { data, error } = await adminClient
+        .from("idp_user_mapping")
+        .select("*")
+        .eq("idp_provider", idpProvider)
+        .order("sap_user_code");
+      if (error) throw error;
+      return new Response(JSON.stringify({ mappings: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (action === "upsertMany") {
       const rows = body.rows as Array<Record<string, unknown>>;
