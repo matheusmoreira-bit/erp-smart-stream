@@ -345,12 +345,15 @@ export default function IdpSyncPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="grid grid-cols-[1fr_1.2fr_auto] items-center px-6 py-3 border-b border-border bg-muted/30">
+            <div className="grid grid-cols-[1fr_1.1fr_1.1fr_auto] items-center px-6 py-3 border-b border-border bg-muted/30">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Usuário SAP
               </span>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 JumpCloud
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Depto / Centro de Custo
               </span>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-24 text-right">
                 Ações
@@ -362,10 +365,11 @@ export default function IdpSyncPage() {
             ) : (
               filtered.map((row) => {
                 const isLinked = row.status === "linked" && row.mapping;
+                const m = row.mapping;
                 return (
                 <div
                   key={row.sapUser.UserCode}
-                  className={`grid grid-cols-[1fr_1.2fr_auto] items-center px-6 py-3 border-b border-border last:border-b-0 transition-colors ${
+                  className={`grid grid-cols-[1fr_1.1fr_1.1fr_auto] items-center px-6 py-3 border-b border-border last:border-b-0 transition-colors ${
                     isLinked
                       ? "bg-green-500/10 hover:bg-green-500/15 border-l-2 border-l-green-500"
                       : "hover:bg-muted/20"
@@ -383,15 +387,15 @@ export default function IdpSyncPage() {
 
                   {/* JumpCloud - combobox or linked info */}
                   <div className="min-w-0 pr-2">
-                    {row.status === "linked" && row.mapping ? (
+                    {isLinked && m ? (
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm text-foreground truncate">
-                            {row.mapping.idp_display_name}
+                            {m.idp_display_name}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {row.mapping.idp_email}
+                            {m.job_title || m.idp_email}
                           </p>
                         </div>
                       </div>
@@ -407,9 +411,36 @@ export default function IdpSyncPage() {
                     )}
                   </div>
 
+                  {/* Employment info */}
+                  <div className="min-w-0 pr-2">
+                    {isLinked && m ? (
+                      m.department || m.cost_center_code ? (
+                        <div className="min-w-0">
+                          <p className="text-sm text-foreground truncate" title={m.department || ""}>
+                            {m.department || <span className="text-muted-foreground italic">Sem depto</span>}
+                          </p>
+                          <p
+                            className="text-xs text-muted-foreground truncate"
+                            title={m.cost_center_label || ""}
+                          >
+                            {m.cost_center_code
+                              ? `CC ${m.cost_center_code}`
+                              : "Sem centro de custo"}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">
+                          Clique em "Atributos" para sincronizar
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+
                   {/* Actions */}
                   <div className="w-24 flex justify-end">
-                    {row.status === "linked" && (
+                    {isLinked && (
                       <Button
                         variant="ghost"
                         size="icon"
