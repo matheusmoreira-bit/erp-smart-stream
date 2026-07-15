@@ -237,10 +237,11 @@ export function CreateExpenseModal({
 
   // Filtro de alçada: itens IMP% só para CC 1.2.2.%; itens FOL% só para CC 1.6.%.
   // Vale só no fluxo de compras — vendas mantém a lista integral.
+  const bypassCcItemRules = !!sapSession?.isSuperUser;
   const filteredItemOptions = useMemo(() => {
     if (isSales) return itemOptions;
-    return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter));
-  }, [itemOptions, userCostCenter, isSales]);
+    return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
+  }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
 
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
