@@ -977,13 +977,61 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     [session],
   );
 
+  const refreshSapNowRef = useRef<() => Promise<void>>(async () => {});
+
   useEffect(() => {
     if (!showSourceToggle || sourceMode !== "both" || !session) return;
     let cancelled = false;
     const companyDB = session.companyDB;
 
+    const revalidate = async (force: boolean) => {
+      setIsLoadingSap((prev) => (sapOrders.length === 0 ? true : prev));
+      setIsRevalidatingSap(true);
+      try {
+        const mapped = await fetchSapPage(0);
+        if (cancelled) return;
+        setSapOrders(mapped);
+        setSapHasMore(mapped.length === SAP_PAGE_STEP);
+        setSapFromCache(false);
+        setSapCacheUpdatedAt(new Date().toISOString());
+        const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+        supabase
+          .from("sap_cache")
+          .upsert(
+            {
+              cache_key: SAP_CACHE_KEY,
+              company_db: companyDB,
+              data: mapped as any,
+              expires_at: expiresAt,
+            },
+            { onConflict: "cache_key,company_db" },
+          )
+          .then(({ error }) => {
+            if (error) console.warn("[Expenses] gravação de cache SAP falhou:", error.message);
+          });
+        if (force) toast.success(`Sincronizado com o ERP (${mapped.length} pedidos)`);
+      } catch (e) {
+        if (cancelled) return;
+        if (sapOrders.length === 0) {
+          toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
+          setSapOrders([]);
+          setSapHasMore(false);
+        } else {
+          if (force) toast.error(e instanceof Error ? e.message : "Falha ao sincronizar com o ERP");
+          else console.warn("[Expenses] revalidação SAP falhou, mantendo cache:", e);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSap(false);
+          setIsRevalidatingSap(false);
+        }
+      }
+    };
+
+    refreshSapNowRef.current = () => revalidate(true);
+
     (async () => {
-      // 1) Carrega cache imediatamente (mostra dados salvos enquanto rede busca)
+      // 1) Carrega cache imediatamente
       try {
         const { data: cached } = await supabase
           .from("sap_cache")
@@ -1005,54 +1053,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       }
 
       if (cancelled) return;
-
-      // 2) Revalida em background — sem bloquear UI se já temos cache
-      setIsLoadingSap((prev) => (sapOrders.length === 0 ? true : prev));
-      setIsRevalidatingSap(true);
-      try {
-        const mapped = await fetchSapPage(0);
-        if (cancelled) return;
-        setSapOrders(mapped);
-        setSapHasMore(mapped.length === SAP_PAGE_STEP);
-        setSapFromCache(false);
-        setSapCacheUpdatedAt(new Date().toISOString());
-        // Persiste cache (fire-and-forget)
-        const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
-        supabase
-          .from("sap_cache")
-          .upsert(
-            {
-              cache_key: SAP_CACHE_KEY,
-              company_db: companyDB,
-              data: mapped as any,
-              expires_at: expiresAt,
-            },
-            { onConflict: "cache_key,company_db" },
-          )
-          .then(({ error }) => {
-            if (error) console.warn("[Expenses] gravação de cache SAP falhou:", error.message);
-          });
-      } catch (e) {
-        if (!cancelled) {
-          // Se já temos cache, não limpa a tela — apenas avisa discretamente
-          if (sapOrders.length === 0) {
-            toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
-            setSapOrders([]);
-            setSapHasMore(false);
-          } else {
-            console.warn("[Expenses] revalidação SAP falhou, mantendo cache:", e);
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingSap(false);
-          setIsRevalidatingSap(false);
-        }
-      }
+      // 2) Revalida em background
+      await revalidate(false);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceMode, showSourceToggle, session?.companyDB, session?.sessionId, fetchSapPage]);
+
+  const refreshSapNow = useCallback(async () => {
+    await refreshSapNowRef.current();
+  }, []);
 
   const loadMoreSap = useCallback(async () => {
     if (isLoadingMoreSap || !sapHasMore) return;
@@ -1730,10 +1740,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               ))}
             </div>
             {/* Toggle de origem removido: sempre carregamos ERP Flow + ERP. */}
-            {showSourceToggle && isLoadingSap && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
-                Carregando pedidos do ERP…
+            {showSourceToggle && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refreshSapNow}
+                  disabled={isRevalidatingSap || isLoadingSap}
+                  className="h-8 gap-2"
+                  aria-label="Atualizar agora — sincronizar com o ERP"
+                  title={sapCacheUpdatedAt ? `Cache: ${new Date(sapCacheUpdatedAt).toLocaleString("pt-BR")}` : "Sem cache"}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRevalidatingSap || isLoadingSap ? "animate-spin" : ""}`} aria-hidden="true" />
+                  <span className="text-xs">Atualizar agora</span>
+                </Button>
+                {(isLoadingSap || isRevalidatingSap) && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                    Sincronizando com o ERP…
+                  </span>
+                )}
+                {!isLoadingSap && !isRevalidatingSap && sapFromCache && sapCacheUpdatedAt && (
+                  <span className="text-xs text-muted-foreground">
+                    Cache de {new Date(sapCacheUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
               </div>
             )}
             {isAdmin && (
