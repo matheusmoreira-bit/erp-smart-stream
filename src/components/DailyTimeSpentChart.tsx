@@ -139,9 +139,19 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm sm:text-base font-semibold flex items-center gap-2">
           <Clock className="w-4 h-4 text-primary" />
-          Tempo gasto no lançamento por dia (pedidos de compra SAP)
+          Tempo gasto no lançamento por {bucketNoun} (pedidos de compra SAP)
         </h3>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <ToggleGroup
+            type="single"
+            size="sm"
+            value={granularity}
+            onValueChange={(v) => v && setGranularity(v as Granularity)}
+          >
+            <ToggleGroupItem value="day" className="text-xs h-7 px-2">Dia</ToggleGroupItem>
+            <ToggleGroupItem value="week" className="text-xs h-7 px-2">Semana</ToggleGroupItem>
+            <ToggleGroupItem value="month" className="text-xs h-7 px-2">Mês</ToggleGroupItem>
+          </ToggleGroup>
           <span>
             Desde 01/06/2025 · <strong className="text-foreground">{totals.docs}</strong> pedidos ·
             {" "}Flow <strong className="text-foreground">{fmtH(totals.flow / 60)}</strong> vs
@@ -170,17 +180,17 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
           <ResponsiveContainer>
             <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-              <XAxis dataKey="date" tickFormatter={fmtDate} minTickGap={24} fontSize={11} />
+              <XAxis dataKey="date" tickFormatter={fmtBucket} minTickGap={24} fontSize={11} />
               <YAxis
                 fontSize={11}
-                tickFormatter={(v) => `${v}min`}
-                label={{ value: "min/dia", angle: -90, position: "insideLeft", fontSize: 11 }}
+                tickFormatter={(v) => `${Math.round(v)}min`}
+                label={{ value: unitLabel, angle: -90, position: "insideLeft", fontSize: 11 }}
               />
               <Tooltip
-                labelFormatter={(l) => `Dia ${fmtDate(String(l))}`}
+                labelFormatter={(l) => `${bucketNoun[0].toUpperCase() + bucketNoun.slice(1)} de ${fmtBucket(String(l))}`}
                 formatter={(value: any, name: string, ctx: any) => {
                   const docs = ctx?.payload?.docs;
-                  return [`${value} min (${docs} pedidos)`, name];
+                  return [`${Number(value).toFixed(1)} min/dia (${docs} pedidos)`, name];
                 }}
                 contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
               />
@@ -191,6 +201,7 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
           </ResponsiveContainer>
         </div>
       )}
+
     </div>
   );
 }
