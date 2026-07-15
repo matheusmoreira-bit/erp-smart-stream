@@ -425,19 +425,154 @@ export function BaixaRecebimentoDialog({
             Cancelar
           </Button>
           <Button
-            onClick={handleConfirmar}
+            onClick={() => setConfirmOpen(true)}
             disabled={submitting || validationErrors.length > 0}
             className="gap-1.5"
           >
-            {submitting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <DollarSign className="w-3.5 h-3.5" />
-            )}
-            Confirmar baixa {fmt(valorRecebido, currency)}
+            <DollarSign className="w-3.5 h-3.5" />
+            Revisar baixa {fmt(valorRecebido, currency)}
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Confirmação final antes de gravar */}
+      <Dialog open={confirmOpen} onOpenChange={(v) => !submitting && setConfirmOpen(v)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Confirmar baixa de recebimento
+            </DialogTitle>
+            <DialogDescription>
+              Revise os dados abaixo. Ao confirmar, a baixa será registrada e enviada ao SAP.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            <div className="rounded-md border border-border p-3 space-y-1.5">
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground text-xs">Cliente</span>
+                <span className="font-medium text-right">
+                  {cardName}
+                  <span className="text-muted-foreground font-mono ml-1">({cardCode})</span>
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground text-xs">Data do recebimento</span>
+                <span className="font-mono">
+                  {dataRecebimento
+                    ? new Date(dataRecebimento + "T00:00:00").toLocaleDateString("pt-BR")
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground text-xs">Conta contábil / banco</span>
+                <span className="text-right">
+                  <span className="font-mono text-xs">{conta?.code}</span>
+                  <span className="block text-xs text-muted-foreground">{conta?.name}</span>
+                </span>
+              </div>
+              {excedente > 0 && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground text-xs">Conta juros/multa</span>
+                  <span className="text-right">
+                    <span className="font-mono text-xs">{contaJuros?.code}</span>
+                    <span className="block text-xs text-muted-foreground">{contaJuros?.name}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-md border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border text-muted-foreground">
+                    <th className="text-left py-1.5 px-2">Documento</th>
+                    <th className="text-right py-1.5 px-2">Saldo</th>
+                    <th className="text-right py-1.5 px-2">A baixar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices
+                    .filter((inv) => (rateioValores[rowKey(inv)] || 0) > 0)
+                    .map((inv) => {
+                      const val = rateioValores[rowKey(inv)] || 0;
+                      const isSI = inv.docType === "journal_entry";
+                      return (
+                        <tr key={rowKey(inv)} className="border-b border-border/40">
+                          <td className="py-1.5 px-2 font-mono">
+                            {isSI ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[9px] py-0 px-1">SI</Badge>
+                                {inv.docNum}
+                              </span>
+                            ) : (
+                              <>
+                                {inv.docNum}
+                                {inv.folioNumber != null && (
+                                  <span className="text-[10px] text-muted-foreground ml-1">
+                                    · NFSE {inv.folioNumber}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
+                            {fmt(inv.saldoResidual, inv.currency)}
+                          </td>
+                          <td className="py-1.5 px-2 text-right font-mono font-semibold">
+                            {fmt(val, inv.currency)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/20 border-t border-border/60">
+                    <td className="py-1.5 px-2 font-medium">Total recebido</td>
+                    <td></td>
+                    <td className="py-1.5 px-2 text-right font-mono font-semibold">
+                      {fmt(valorRecebido, currency)}
+                    </td>
+                  </tr>
+                  {excedente > 0 && (
+                    <tr className="bg-amber-500/5">
+                      <td className="py-1.5 px-2 text-amber-600 dark:text-amber-400 font-medium">
+                        Juros/multa (excedente)
+                      </td>
+                      <td></td>
+                      <td className="py-1.5 px-2 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">
+                        {fmt(excedente, currency)}
+                      </td>
+                    </tr>
+                  )}
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting}>
+              Voltar
+            </Button>
+            <Button
+              onClick={async () => {
+                await handleConfirmar();
+                setConfirmOpen(false);
+              }}
+              disabled={submitting}
+              className="gap-1.5"
+            >
+              {submitting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <DollarSign className="w-3.5 h-3.5" />
+              )}
+              Confirmar baixa {fmt(valorRecebido, currency)}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
