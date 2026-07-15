@@ -168,7 +168,12 @@ function stageStatus(avgDays: number): "ok" | "warning" | "critical" {
 }
 
 /* ── Build stages from view data ── */
-function buildStages(rows: ViewRow[], approvalDays: number[], targets: CompanyTargets): FlowStage[] {
+function buildStages(
+  rows: ViewRow[],
+  approvalDays: number[],
+  targets: CompanyTargets,
+  approvalToPedidoDays: number[] = [],
+): FlowStage[] {
   const pedidoToNfEmissao: number[] = [];
   const nfEmissaoToNfLanc: number[] = [];
   const nfLancToPagamento: number[] = [];
@@ -184,7 +189,12 @@ function buildStages(rows: ViewRow[], approvalDays: number[], targets: CompanyTa
     if (d3 !== null) nfLancToPagamento.push(d3);
   }
 
-  const avgPedidoNf = avg(pedidoToNfEmissao);
+  // Preferimos Aprovação→Pedido do cache de VW_FIN_ANALISE_FLUXO (SAP);
+  // se vazio, caímos no legado Pedido→NF como aproximação da etapa.
+  const useFluxo = approvalToPedidoDays.length > 0;
+  const pedidoStageSource = useFluxo ? approvalToPedidoDays : pedidoToNfEmissao;
+
+  const avgPedidoStage = avg(pedidoStageSource);
   const avgNfEmissaoLanc = avg(nfEmissaoToNfLanc);
   const avgNfPag = avg(nfLancToPagamento);
   const avgApproval = avg(approvalDays);
@@ -199,7 +209,7 @@ function buildStages(rows: ViewRow[], approvalDays: number[], targets: CompanyTa
     { id: "requisicao", name: "REQUISIÇÃO", avgDays: 1, targetDays: targets.requisicao, status: "ok", count: 0 },
     { id: "cotacao", name: "COTAÇÃO", avgDays: 1, targetDays: targets.cotacao, status: "ok", count: 0 },
     { id: "aprovacao", name: "APROVAÇÃO", avgDays: avgApproval || 1, targetDays: targets.aprovacao, status: stageStatusCustom(avgApproval || 1, targets.aprovacao), count: approvalDays.length },
-    { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoNf || 1, targetDays: targets.pedido_compra, status: stageStatusCustom(avgPedidoNf || 1, targets.pedido_compra), count: pedidoToNfEmissao.length },
+    { id: "pedido_compra", name: "PEDIDO COMPRA", avgDays: avgPedidoStage || 1, targetDays: targets.pedido_compra, status: stageStatusCustom(avgPedidoStage || 1, targets.pedido_compra), count: pedidoStageSource.length },
     { id: "nf_entrada", name: "NF ENTRADA", avgDays: avgNfEmissaoLanc || 1, targetDays: targets.nf_entrada, status: stageStatusCustom(avgNfEmissaoLanc || 1, targets.nf_entrada), count: nfEmissaoToNfLanc.length },
     { id: "pagamento", name: "PAGAMENTO", avgDays: avgNfPag || 1, targetDays: targets.pagamento, status: stageStatusCustom(avgNfPag || 1, targets.pagamento), count: nfLancToPagamento.length },
   ];
