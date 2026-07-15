@@ -216,6 +216,7 @@ export default function SalesPage() {
           return {
             docEntry: inv.DocEntry,
             docNum: inv.DocNum,
+            folioNumber: inv.FolioNumber != null ? Number(inv.FolioNumber) : null,
             cardCode: inv.CardCode || "—",
             cardName: inv.CardName || "—",
             docDate: inv.DocDate,
