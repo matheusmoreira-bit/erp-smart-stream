@@ -82,6 +82,7 @@ export function BaixaRecebimentoDialog({
   const [valorRecebidoTxt, setValorRecebidoTxt] = useState<string>(saldoTotal.toFixed(2).replace(".", ","));
   const [rateio, setRateio] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Chave estável para rateio: combina tipo + docEntry + docLine.
   // NFs (invoice) e Saldos Iniciais (journal_entry) podem compartilhar DocEntry, então
