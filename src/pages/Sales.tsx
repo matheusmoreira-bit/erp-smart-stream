@@ -613,6 +613,13 @@ export default function SalesPage() {
           void loadInvoices(true);
         }}
       />
+
+      <SalesRelationsMap
+        open={!!mapInvoice}
+        onClose={() => setMapInvoice(null)}
+        session={session}
+        invoice={mapInvoice}
+      />
     </div>
   );
 }
