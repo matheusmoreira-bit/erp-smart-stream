@@ -363,8 +363,10 @@ export default function SalesPage() {
 
   /* ── selection ──────────────────────────────────────── */
 
+  const rowKey = (r: InvoiceRow) => `${r.docType}:${r.docEntry}:${r.docLine ?? 0}`;
+
   const selectionRows = useMemo(
-    () => invoices.filter((r) => selected.has(r.docEntry)),
+    () => invoices.filter((r) => selected.has(rowKey(r))),
     [invoices, selected],
   );
 
@@ -376,14 +378,15 @@ export default function SalesPage() {
     (r: InvoiceRow, checked: boolean) => {
       setSelected((prev) => {
         const next = new Set(prev);
+        const k = `${r.docType}:${r.docEntry}:${r.docLine ?? 0}`;
         if (checked) {
           if (selectionCardCode && selectionCardCode !== r.cardCode) {
-            toast.error("Uma baixa deve conter NFs de um único cliente. Limpe a seleção antes.");
+            toast.error("A baixa deve conter documentos de um único cliente. Limpe a seleção antes.");
             return prev;
           }
-          next.add(r.docEntry);
+          next.add(k);
         } else {
-          next.delete(r.docEntry);
+          next.delete(k);
         }
         return next;
       });
