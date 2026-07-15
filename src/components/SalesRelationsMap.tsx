@@ -21,6 +21,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import type { SapSession } from "@/lib/sap-client";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { Copy, ExternalLink } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -384,22 +387,26 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
               {orders.map((o) => (
                 <div
                   key={o.docEntry}
-                  className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2"
+                  className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2 gap-3"
                 >
-                  <div>
-                    <p className="text-sm font-medium">Pedido #{o.docNum ?? o.docEntry}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                      Pedido #{o.docNum ?? o.docEntry}
+                      <IdBadge label="DocEntry" value={String(o.docEntry)} />
+                    </p>
                     <p className="text-[11px] text-muted-foreground">
                       Emitido em {formatDate(o.docDate)}
                     </p>
                   </div>
                   {o.docTotal != null && (
-                    <span className="font-mono text-sm">
+                    <span className="font-mono text-sm shrink-0">
                       {formatCurrency(o.docTotal, invoice.currency)}
                     </span>
                   )}
                 </div>
               ))}
             </FlowSection>
+
 
             <FlowArrow />
 
@@ -410,8 +417,11 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
             >
               <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">NF #{invoice.docNum}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
+                      NF #{invoice.docNum}
+                      <IdBadge label="DocEntry" value={String(invoice.docEntry)} />
+                    </p>
                     <p className="text-[11px] text-muted-foreground">
                       Emitida em {formatDate(invoice.docDate)} · Total{" "}
                       <span className="font-mono">{formatCurrency(invoice.docTotal, invoice.currency)}</span>
@@ -488,16 +498,26 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                     <div className="flex items-start gap-2 min-w-0">
                       <BaixaStatusIcon status={baixa.status} />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">
+                        <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                           Baixa em {formatDate(baixa.data_recebimento)}
+                          <Link
+                            to={`/vendas/historico?baixa=${baixa.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary hover:underline"
+                            title="Abrir baixa no histórico"
+                          >
+                            abrir <ExternalLink className="w-3 h-3" />
+                          </Link>
                         </p>
-                        <p className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2">
+                        <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
                           <BaixaStatusLabel status={baixa.status} />
                           {baixa.sap_incoming_payment_doc_entry && (
                             <span className="font-mono">
                               SAP #{baixa.sap_incoming_payment_doc_entry}
                             </span>
                           )}
+                          <IdBadge label="ID" value={baixa.id} short />
                           {baixa.valor_juros_multa > 0 && (
                             <span className="text-amber-500">
                               + {formatCurrency(baixa.valor_juros_multa, invoice.currency)} juros/multa
@@ -505,6 +525,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                           )}
                         </p>
                       </div>
+
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-mono text-sm font-semibold">
@@ -654,6 +675,30 @@ function BaixaStatusLabel({ status }: { status: string }) {
     <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">
       Pendente
     </Badge>
+  );
+}
+
+function IdBadge({ label, value, short = false }: { label: string; value: string; short?: boolean }) {
+  const display = short && value.length > 10 ? `${value.slice(0, 4)}…${value.slice(-4)}` : value;
+  return (
+    <button
+      type="button"
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(value);
+          toast.success(`${label} copiado`, { description: value });
+        } catch {
+          window.prompt(`Copie o ${label}:`, value);
+        }
+      }}
+      className="inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+      title={`${label}: ${value} · clique para copiar`}
+    >
+      <span className="uppercase tracking-wider text-[9px] opacity-70">{label}</span>
+      {display}
+      <Copy className="w-2.5 h-2.5 opacity-60" />
+    </button>
   );
 }
 
