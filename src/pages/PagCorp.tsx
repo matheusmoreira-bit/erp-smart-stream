@@ -22,6 +22,8 @@ import {
   CheckCircle,
   Network,
   MoreHorizontal,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -205,6 +207,15 @@ export default function PagCorp() {
   const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
   const [showNondeductible, setShowNondeductible] = useState(false);
   const [integratingNondeductible, setIntegratingNondeductible] = useState(false);
+  // Grupos de PCs consolidados (várias transações → um único PC no SAP)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) =>
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
 
@@ -347,6 +358,46 @@ export default function PagCorp() {
       return tb - ta;
     });
   }, [transactions, search, statusFilter, cardFilter, showNondeductible]);
+
+  /**
+   * Constrói a lista de renderização com agrupamento visual:
+   * quando 2+ transações compartilham o mesmo integrationLogId (ou sapDocEntry),
+   * significa que foram integradas juntas em um único Pedido de Compra
+   * consolidado no SAP. Renderizamos um cabeçalho colapsável para tornar isso
+   * óbvio no leitor.
+   */
+  const rowItems = useMemo(() => {
+    const groupKeyOf = (t: PagCorpTransaction): string | null => {
+      if (!t.integrated) return null;
+      if (t.integrationLogId) return `log:${t.integrationLogId}`;
+      if (t.sapDocEntry != null) return `de:${t.sapDocEntry}`;
+      return null;
+    };
+    const groups = new Map<string, PagCorpTransaction[]>();
+    for (const t of filteredTransactions) {
+      const k = groupKeyOf(t);
+      if (!k) continue;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(t);
+    }
+    type Item =
+      | { type: "single"; tx: PagCorpTransaction }
+      | { type: "group"; key: string; txs: PagCorpTransaction[] };
+    const out: Item[] = [];
+    const seen = new Set<string>();
+    for (const t of filteredTransactions) {
+      const k = groupKeyOf(t);
+      if (k && (groups.get(k)?.length ?? 0) >= 2) {
+        if (!seen.has(k)) {
+          seen.add(k);
+          out.push({ type: "group", key: k, txs: groups.get(k)! });
+        }
+        continue;
+      }
+      out.push({ type: "single", tx: t });
+    }
+    return out;
+  }, [filteredTransactions]);
 
   // Lista única de cartões para o filtro
   const cardOptions = useMemo(() => {
@@ -1140,12 +1191,20 @@ export default function PagCorp() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((t) => {
-                    const hasAttachments = t.hasAccountability && Array.isArray(t.attachments) && t.attachments.length > 0;
-                    const isSelected = selectedIds.has(t.id);
-
-                    return (
-                      <TableRow key={t.id} className="border-border" data-state={isSelected ? "selected" : undefined}>
+                  {(() => {
+                    const renderTxRow = (t: PagCorpTransaction, opts: { inGroup?: boolean } = {}) => {
+                      const isSelected = selectedIds.has(t.id);
+                      const inGroup = !!opts.inGroup;
+                      return (
+                      <TableRow
+                        key={t.id}
+                        className={
+                          inGroup
+                            ? "border-border border-l-2 border-l-success/60 bg-success/5"
+                            : "border-border"
+                        }
+                        data-state={isSelected ? "selected" : undefined}
+                      >
                         <TableCell className="w-10">
                           {!t.integrated && !t.isReversed && (
                             <Checkbox
@@ -1155,7 +1214,7 @@ export default function PagCorp() {
                             />
                           )}
                         </TableCell>
-                        <TableCell className="text-sm text-foreground whitespace-nowrap">
+                        <TableCell className={`text-sm text-foreground whitespace-nowrap ${inGroup ? "pl-6" : ""}`}>
                           {formatDate(t.date)}
                         </TableCell>
                         <TableCell className="text-sm text-foreground max-w-[250px] truncate">
@@ -1251,7 +1310,7 @@ export default function PagCorp() {
                                         ) : (
                                           <CheckCircle2 className="w-3 h-3 text-success" />
                                         )}
-                                        Integrado
+                                        {inGroup ? "Item consolidado" : "Integrado"}
                                         <MoreHorizontal className="w-3.5 h-3.5 ml-0.5 opacity-70" />
                                       </Button>
                                     </DropdownMenuTrigger>
@@ -1261,7 +1320,6 @@ export default function PagCorp() {
                                       </DropdownMenuLabel>
                                       <DropdownMenuSeparator />
 
-                                      {/* Read-only status rows */}
                                       {t.sapDocNum != null && (
                                         <div className="px-2 py-1.5 text-[11px] flex items-center justify-between gap-2">
                                           <span className="text-muted-foreground">Pedido de Compra</span>
@@ -1315,9 +1373,6 @@ export default function PagCorp() {
                                 );
                               })()}
                             </div>
-
-
-
                           ) : t.isReversed ? (
                             <Badge variant="outline" className="text-muted-foreground text-xs gap-1">
                               <XCircle className="w-3 h-3" /> Sem integração
@@ -1347,8 +1402,74 @@ export default function PagCorp() {
                           )}
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
+                      );
+                    };
+
+                    return rowItems.flatMap((item) => {
+                      if (item.type === "single") return [renderTxRow(item.tx)];
+
+                      const txs = item.txs;
+                      const first = txs[0];
+                      const docNum = first.sapDocNum;
+                      const docEntry = first.sapDocEntry;
+                      const totals: Record<string, number> = {};
+                      for (const t of txs) {
+                        const cur = t.currency || "BRL";
+                        totals[cur] = (totals[cur] || 0) + (t.amount || 0);
+                      }
+                      const totalsStr = Object.entries(totals)
+                        .map(([cur, val]) => formatCurrency(val, cur))
+                        .join(" • ");
+                      const expanded = expandedGroups.has(item.key);
+                      const settledCount = txs.filter((t) => t.settlementStatus === "settled").length;
+
+                      const header = (
+                        <TableRow
+                          key={`group-${item.key}`}
+                          className="border-border bg-success/10 hover:bg-success/15 cursor-pointer"
+                          onClick={() => toggleGroup(item.key)}
+                        >
+                          <TableCell className="w-10">
+                            {expanded ? (
+                              <ChevronDown className="w-4 h-4 text-success" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-success" />
+                            )}
+                          </TableCell>
+                          <TableCell colSpan={6} className="py-2">
+                            <div className="flex flex-wrap items-center gap-2 text-sm">
+                              <Layers className="w-4 h-4 text-success shrink-0" />
+                              <span className="font-semibold text-foreground">
+                                PC consolidado{docNum != null ? ` #${docNum}` : docEntry != null ? ` (DocEntry ${docEntry})` : ""}
+                              </span>
+                              <Badge variant="secondary" className="bg-success/20 text-success border-success/30">
+                                {txs.length} transações
+                              </Badge>
+                              <span className="text-muted-foreground">•</span>
+                              <span className="font-medium text-foreground tabular-nums">{totalsStr}</span>
+                              {settledCount > 0 && (
+                                <>
+                                  <span className="text-muted-foreground">•</span>
+                                  <span className="text-xs text-success inline-flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    {settledCount === txs.length
+                                      ? "Baixa emitida"
+                                      : `${settledCount}/${txs.length} baixados`}
+                                  </span>
+                                </>
+                              )}
+                              <span className="ml-auto text-xs text-muted-foreground">
+                                {expanded ? "Ocultar itens" : "Ver itens"}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+
+                      if (!expanded) return [header];
+                      return [header, ...txs.map((t) => renderTxRow(t, { inGroup: true }))];
+                    });
+                  })()}
                 </TableBody>
               </Table>
             </div>
