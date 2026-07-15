@@ -151,39 +151,37 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           }));
         }
 
-        // 2) Baixas registradas no Lovable para esta NF
-        const { data: itens, error: baixasErr } = await supabase
-          .from("baixas_recebimento_itens")
-          .select(
-            "valor_baixado, baixa_id, baixas_recebimento!inner(id,data_recebimento,valor_juros_multa,status,sap_incoming_payment_doc_entry,created_at,company_db,criado_por_nome,criado_por_user_code)",
-          )
-          .eq("invoice_doc_entry", invoice.docEntry)
-          .eq("baixas_recebimento.company_db", session.companyDB);
+        // 2) Baixas registradas no Lovable para esta NF.
+        //    Usa RPC SECURITY DEFINER porque a RLS de baixas_recebimento
+        //    restringe leitura ao criador/admin, e o mapa deve mostrar as
+        //    baixas de qualquer usuário da empresa que baixou a mesma NF.
+        const { data: rpcData, error: baixasErr } = await supabase.rpc(
+          "list_baixas_by_invoice",
+          { p_company_db: session.companyDB, p_invoice_doc_entry: invoice.docEntry },
+        );
         if (baixasErr) throw new Error(baixasErr.message);
 
-        const internalBaixas: BaixaEntry[] = ((itens || []) as Array<{
-          valor_baixado: number;
-          baixas_recebimento: {
-            id: string;
-            data_recebimento: string;
-            valor_juros_multa: number;
-            status: string;
-            sap_incoming_payment_doc_entry: number | null;
-            created_at: string;
-            criado_por_nome: string | null;
-            criado_por_user_code: string | null;
-          };
-        }>).map((it) => ({
-          id: it.baixas_recebimento.id,
+        const internalBaixas: BaixaEntry[] = ((rpcData || []) as Array<{
+          id: string;
+          data_recebimento: string;
+          valor_baixado: number | string;
+          valor_juros_multa: number | string;
+          status: string;
+          sap_incoming_payment_doc_entry: number | null;
+          created_at: string;
+          criado_por_nome: string | null;
+          criado_por_user_code: string | null;
+        }>).map((r) => ({
+          id: r.id,
           origin: "internal" as const,
-          data_recebimento: it.baixas_recebimento.data_recebimento,
-          valor_baixado: Number(it.valor_baixado || 0),
-          valor_juros_multa: Number(it.baixas_recebimento.valor_juros_multa || 0),
-          status: it.baixas_recebimento.status,
-          sap_incoming_payment_doc_entry: it.baixas_recebimento.sap_incoming_payment_doc_entry,
-          created_at: it.baixas_recebimento.created_at,
-          criado_por_nome: it.baixas_recebimento.criado_por_nome,
-          criado_por_user_code: it.baixas_recebimento.criado_por_user_code,
+          data_recebimento: r.data_recebimento,
+          valor_baixado: Number(r.valor_baixado || 0),
+          valor_juros_multa: Number(r.valor_juros_multa || 0),
+          status: r.status,
+          sap_incoming_payment_doc_entry: r.sap_incoming_payment_doc_entry,
+          created_at: r.created_at,
+          criado_por_nome: r.criado_por_nome,
+          criado_por_user_code: r.criado_por_user_code,
         }));
 
         // 3) IncomingPayments no SAP para este CardCode (todas as baixas —
