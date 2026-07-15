@@ -198,6 +198,8 @@ export function useSynapseIntegrations(companyDB?: string) {
         jumpcloud_sap_sync: "synapse-jc-sync",
         pagcorp_erp_sync: "synapse-pagcorp-sync",
         purchase_order_notifications: "synapse-po-notify",
+        pagcorp_settlement_watcher: "pagcorp-settlement-watcher",
+        jumpcloud_attributes_sync: "jumpcloud-attributes-sync",
       };
       const functionName = edgeFunctionMap[integrationKey] || "synapse-jc-sync";
 
