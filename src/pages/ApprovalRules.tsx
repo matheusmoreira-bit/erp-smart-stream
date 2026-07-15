@@ -1537,7 +1537,7 @@ export default function ApprovalRulesPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-          <TabsList className="grid grid-cols-3 w-full sm:w-[720px]">
+          <TabsList className="grid grid-cols-4 w-full sm:w-[880px]">
             <TabsTrigger value="standard" className="gap-1.5">
               <Settings2 className="w-3.5 h-3.5" />
               Regras padrão
@@ -1552,6 +1552,10 @@ export default function ApprovalRulesPage() {
                 {customRules.length}
               </span>
             </TabsTrigger>
+            <TabsTrigger value="health" className="gap-1.5">
+              <Activity className="w-3.5 h-3.5" />
+              Saúde das regras
+            </TabsTrigger>
             <TabsTrigger value="substitutes" className="gap-1.5">
               <UserCog className="w-3.5 h-3.5" />
               Substitutos
@@ -1561,6 +1565,14 @@ export default function ApprovalRulesPage() {
 
         {activeTab === "substitutes" ? (
           <SubstituteApproversTab isAdmin={isAdmin} />
+        ) : null}
+
+        {activeTab === "health" ? (
+          <RulesHealthMonitor
+            rules={rules}
+            isLoading={isLoading}
+            onOpenRule={(r) => openEdit(r)}
+          />
         ) : null}
 
         {activeTab !== "substitutes" && activeTab === "custom" && (
