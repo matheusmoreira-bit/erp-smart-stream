@@ -200,7 +200,15 @@ export function useTemporalAnalysis(opts: Options) {
   useEffect(() => { load(); }, [load]);
 
   const metrics = useMemo<TemporalMetrics>(() => {
-    // ---- SAP nativo: por (company_db, doc_entry) do approval_history
+    // ---- SAP nativo: PO existente → aprovação final Y no approval_history.
+    // Início = min(doc_date do PO, primeira decisão registrada); fim = última decisão Y.
+    // Isso amplia a amostra para todo PO que passou pelo workflow (mesmo com 1 só decisão).
+    const poDateIdx = new Map<string, number>();
+    for (const p of pos) {
+      if (p.doc_date) {
+        poDateIdx.set(`${p.company_db}::${p.doc_entry}`, new Date(p.doc_date).getTime());
+      }
+    }
     const histIdx = new Map<string, { first: number; lastY: number | null }>();
     for (const h of history) {
       if (!h.doc_entry || !h.decision_date) continue;
@@ -212,11 +220,17 @@ export function useTemporalAnalysis(opts: Options) {
       histIdx.set(key, cur);
     }
     const sapNativeDurations: number[] = [];
-    for (const { first, lastY } of histIdx.values()) {
-      if (lastY != null && lastY > first) sapNativeDurations.push((lastY - first) / HOUR_MS);
+    for (const [key, { first, lastY }] of histIdx.entries()) {
+      if (lastY == null) continue;
+      const poDate = poDateIdx.get(key);
+      const start = poDate != null ? Math.min(poDate, first) : first;
+      const dur = (lastY - start) / HOUR_MS;
+      // filtra outliers absurdos (>180 dias) e negativos
+      if (dur > 0 && dur < 24 * 180) sapNativeDurations.push(dur);
     }
 
-    // ---- ERP Flow: created_at -> integrated (fallback: approved mais tardio)
+    // ---- ERP Flow: created_at -> integrated (fallback: última aprovação)
+    // Não exigimos sap_doc_entry: se foi aprovado no Flow, o ciclo de aprovação vale como amostra.
     const logByExpense = new Map<string, ApprovalLogRow[]>();
     for (const l of logs) {
       const arr = logByExpense.get(l.expense_id) || [];
@@ -242,10 +256,11 @@ export function useTemporalAnalysis(opts: Options) {
         flowApprovalDurations.push((lastApproved - createdMs) / HOUR_MS);
       }
       const endMs = integrated || lastApproved;
-      if (endMs && endMs > createdMs && e.sap_doc_entry) {
+      if (endMs && endMs > createdMs) {
         flowDurations.push((endMs - createdMs) / HOUR_MS);
       }
     }
+
 
     // ---- PO -> NF (via base_po_doc_entry)
     const poIdx = new Map<string, PoRow>();
