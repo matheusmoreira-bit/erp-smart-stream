@@ -20,6 +20,67 @@ const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 60_000;
 const sapSessionValidationCache = new Map<string, { expiresAt: number; value: SapSessionValidation }>();
 const encoder = new TextEncoder();
 
+/* ─────────── Strict header validation ───────────
+ * Todos os headers x-sap-* são atacáveis: um cliente pode declarar
+ * qualquer coisa. Aqui rejeitamos:
+ *  - vazios / apenas whitespace
+ *  - comprimento fora de limites
+ *  - qualquer caractere de controle (CR/LF/TAB) → previne injeção
+ *  - charset fora do esperado para cada campo
+ */
+const SAP_HEADER_PATTERNS = {
+  // SAP HANA DB names: [A-Za-z0-9_], até 64. Aceitamos hífen para folga.
+  companyDB: /^[A-Za-z0-9_-]{1,64}$/,
+  // UserCode SAP: alfa-numérico + . _ - @ (aceita e-mails intercompany).
+  sapUser: /^[A-Za-z0-9._@-]{1,128}$/,
+  // B1SESSION cookie: hex/base64/UUID-like.
+  sapSession: /^[A-Za-z0-9+/=_.\-]{8,512}$/,
+  // ROUTEID pode vir vazio; quando presente, mesmo charset da sessão.
+  routeId: /^[A-Za-z0-9+/=_.\-]{0,256}$/,
+  // Token assinado: "<payload_b64url>.<signature_b64url>".
+  authToken: /^[A-Za-z0-9_-]{4,4096}\.[A-Za-z0-9_-]{16,512}$/,
+} as const;
+
+export interface SapHeaderBundle {
+  sapSession: string;
+  routeId: string;
+  sapUser: string;
+  companyDB: string;
+  sapAuthToken: string;
+}
+
+/**
+ * Extrai e valida os headers x-sap-*. Retorna null se qualquer campo
+ * obrigatório estiver ausente/malformado. Nunca lança — quem chama
+ * decide se responde 401.
+ */
+export function parseSapHeaders(req: Request): SapHeaderBundle | null {
+  const raw = {
+    sapSession: req.headers.get("x-sap-session"),
+    routeId: req.headers.get("x-sap-route"),
+    sapUser: req.headers.get("x-sap-user"),
+    companyDB: req.headers.get("x-company-db"),
+    sapAuthToken: req.headers.get("x-sap-auth-token"),
+  };
+  // Missing required (routeId + authToken são opcionais).
+  if (!raw.sapSession || !raw.sapUser || !raw.companyDB) return null;
+
+  const sapSession = raw.sapSession.trim();
+  const routeId = (raw.routeId || "").trim();
+  const sapUser = raw.sapUser.trim();
+  const companyDB = raw.companyDB.trim();
+  const sapAuthToken = (raw.sapAuthToken || "").trim();
+
+  if (!SAP_HEADER_PATTERNS.sapSession.test(sapSession)) return null;
+  if (routeId && !SAP_HEADER_PATTERNS.routeId.test(routeId)) return null;
+  if (!SAP_HEADER_PATTERNS.sapUser.test(sapUser)) return null;
+  if (!SAP_HEADER_PATTERNS.companyDB.test(companyDB)) return null;
+  if (sapAuthToken && !SAP_HEADER_PATTERNS.authToken.test(sapAuthToken)) return null;
+
+  return { sapSession, routeId, sapUser, companyDB, sapAuthToken };
+}
+
+
 function getSapSessionValidationCacheKey(companyDB: string, sapUser: string, sapSession: string, routeId: string) {
   return `${companyDB}:${sapUser}:${sapSession}:${routeId}`;
 }
@@ -202,7 +263,8 @@ export async function requireAdmin(req: Request) {
   return user;
 }
 
-async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
+// deno-lint-ignore no-explicit-any
+async function getSapBaseUrl(admin: any, companyDB: string): Promise<string> {
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
   const { data } = await admin
     .from("system_credentials")
@@ -212,9 +274,8 @@ async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: 
     .eq("credential_key", "service_layer_url")
     .maybeSingle();
 
-  const rawUrl = typeof data?.credential_value === "string" && data.credential_value.trim()
-    ? data.credential_value.trim()
-    : fallback;
+  const cred = (data as { credential_value?: unknown } | null)?.credential_value;
+  const rawUrl = typeof cred === "string" && cred.trim() ? cred.trim() : fallback;
   let url = rawUrl.replace(/\/+$/, "");
   if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
   else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
@@ -222,18 +283,12 @@ async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: 
 }
 
 async function validateSapAdmin(req: Request) {
-  const sapSession = req.headers.get("x-sap-session")?.trim();
-  const routeId = req.headers.get("x-sap-route")?.trim() || "";
-  const sapUser = req.headers.get("x-sap-user")?.trim();
-  const companyDB = req.headers.get("x-company-db")?.trim();
-  if (!sapSession || !sapUser || !companyDB) {
-    console.warn("[validateSapAdmin] missing SAP headers", {
-      hasSession: !!sapSession,
-      hasUser: !!sapUser,
-      hasCompanyDB: !!companyDB,
-    });
+  const headers = parseSapHeaders(req);
+  if (!headers) {
+    console.warn("[validateSapAdmin] missing/invalid SAP headers");
     return null;
   }
+  const { sapSession, routeId, sapUser, companyDB } = headers;
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -282,6 +337,7 @@ async function validateSapAdmin(req: Request) {
   return { id: `sap:${companyDB}:${sapUser}`, email: sapUser, companyDB, userName: sapUser, source: "sap_admin" as const };
 }
 
+
 export async function requireAdminOrSapAdmin(req: Request) {
   try {
     return await requireAdmin(req);
@@ -329,30 +385,22 @@ export async function requireAdminOrSapSession(req: Request) {
 }
 
 /**
- * Lightweight variant: accepts a caller that declared SAP session headers
- * without probing SAP. Only safe for endpoints that return non-sensitive
- * metadata (no credential values, no PII). Falls back to Cloud admin auth.
+ * Lightweight variant: aceita chamador com SAP session declarada, mas
+ * exige prova — ou (a) token HMAC `x-sap-auth-token` válido (cheap, sem
+ * network), ou (b) probe do B1 Service Layer via validateSapSession.
+ * Nunca confia apenas nos headers.
  */
 export async function requireAdminOrSapSessionHeaders(req: Request) {
   try {
     const user = await requireAdmin(req);
     return { ...user, source: "cloud_admin" as const };
   } catch (err) {
-    const sapSession = req.headers.get("x-sap-session")?.trim();
-    const sapUser = req.headers.get("x-sap-user")?.trim();
-    const companyDB = req.headers.get("x-company-db")?.trim();
-    if (sapSession && sapUser && companyDB) {
-      return {
-        id: `sap:${companyDB}:${sapUser}`,
-        email: sapUser,
-        companyDB,
-        userName: sapUser,
-        source: "sap_headers" as const,
-      };
-    }
+    const sap = await validateSapSession(req);
+    if (sap) return sap;
     throw err;
   }
 }
+
 
 /**
  * Validate that the caller has a valid SAP B1 session (any user). Used by
@@ -360,18 +408,17 @@ export async function requireAdminOrSapSessionHeaders(req: Request) {
  * account at all (e.g. PagCorp listing).
  */
 export async function validateSapSession(req: Request) {
-  const sapSession = req.headers.get("x-sap-session")?.trim();
-  const routeId = req.headers.get("x-sap-route")?.trim() || "";
-  const sapUser = req.headers.get("x-sap-user")?.trim();
-  const companyDB = req.headers.get("x-company-db")?.trim();
-  if (!sapSession || !sapUser || !companyDB) return null;
+  const headers = parseSapHeaders(req);
+  if (!headers) return null;
+  const { sapSession, routeId, sapUser, companyDB, sapAuthToken } = headers;
 
   const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
   const cached = sapSessionValidationCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   try {
-    const signed = await verifySapAuthToken(req.headers.get("x-sap-auth-token")?.trim() || "", sapSession, sapUser, companyDB);
+    const signed = await verifySapAuthToken(sapAuthToken, sapSession, sapUser, companyDB);
+
     if (signed) {
       sapSessionValidationCache.set(cacheKey, {
         expiresAt: Date.now() + SAP_SESSION_VALIDATION_CACHE_TTL_MS,
@@ -443,30 +490,19 @@ export async function requireUserOrSapSession(req: Request) {
 }
 
 /**
- * Lightweight variant of requireUserOrSapSession: accepts SAP session
- * headers without probing SAP. Safe for endpoints that only read/write
- * non-sensitive metadata scoped by company_db (no credential values, no
- * PII). Avoids 401s when the SAP session has expired on the server side.
+ * Lightweight variant of requireUserOrSapSession: exige prova de sessão
+ * SAP (HMAC token ou probe do B1). Nunca aceita apenas headers.
  */
 export async function requireUserOrSapSessionHeaders(req: Request) {
   try {
     return await requireUser(req);
   } catch (err) {
-    const sapSession = req.headers.get("x-sap-session")?.trim();
-    const sapUser = req.headers.get("x-sap-user")?.trim();
-    const companyDB = req.headers.get("x-company-db")?.trim();
-    if (sapSession && sapUser && companyDB) {
-      return {
-        id: `sap:${companyDB}:${sapUser}`,
-        email: sapUser,
-        companyDB,
-        userName: sapUser,
-        source: "sap_headers" as const,
-      };
-    }
+    const sap = await validateSapSession(req);
+    if (sap) return sap;
     throw err;
   }
 }
+
 
 export function authErrorResponse(err: unknown, corsHeaders: Record<string, string>) {
   if (err instanceof AuthError) {

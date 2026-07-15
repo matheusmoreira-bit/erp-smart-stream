@@ -89,25 +89,27 @@ export async function publicFunctionFetch(
  * when there's no Lovable Cloud session. Injects SAP session headers when
  * available so the server can validate via SAP Service Layer.
  */
-function readSapHeaders(path?: string): Record<string, string> {
+function readSapHeaders(_path?: string): Record<string, string> {
   try {
     const raw = sessionStorage.getItem("erp_session_v1");
     if (!raw) return {};
     const s = JSON.parse(raw);
     if (s?.erpType !== "sap" || !s.sessionId || !s.userName || !s.companyDB) return {};
-    const functionName = String(path || "").split("/").filter(Boolean).pop() || "";
-    const includeSignedToken = functionName === "expense-approval-action";
+    // Sempre incluir o token HMAC quando disponível: as edge functions
+    // agora exigem prova (token OU probe SAP). Enviar sempre evita o
+    // fallback caro de round-trip ao Service Layer em endpoints leves.
     return {
       "x-sap-session": s.sessionId,
       "x-sap-route": s.routeId || "",
       "x-sap-user": s.userName,
       "x-company-db": s.companyDB,
-      ...(includeSignedToken && s.sapAuthToken ? { "x-sap-auth-token": s.sapAuthToken } : {}),
+      ...(s.sapAuthToken ? { "x-sap-auth-token": s.sapAuthToken } : {}),
     };
   } catch {
     return {};
   }
 }
+
 
 function getCurrentErpType(): string | null {
   try {
