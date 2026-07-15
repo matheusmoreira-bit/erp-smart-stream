@@ -75,12 +75,15 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
   const [orders, setOrders] = useState<SalesOrderRef[]>([]);
   const [baixas, setBaixas] = useState<BaixaEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     if (!open || !invoice || !session) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setError(null);
       try {
         // 1) Pedidos de venda que originaram esta NF (via DocumentLines.BaseType=17)
         const invRes = await sapQueryAll(
@@ -130,13 +133,14 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
         }
 
         // 2) Baixas registradas no Lovable para esta NF
-        const { data: itens } = await supabase
+        const { data: itens, error: baixasErr } = await supabase
           .from("baixas_recebimento_itens")
           .select(
             "valor_baixado, baixa_id, baixas_recebimento!inner(id,data_recebimento,valor_juros_multa,status,sap_incoming_payment_doc_entry,created_at,company_db)",
           )
           .eq("invoice_doc_entry", invoice.docEntry)
           .eq("baixas_recebimento.company_db", session.companyDB);
+        if (baixasErr) throw new Error(baixasErr.message);
 
         const baixaRows: BaixaEntry[] = ((itens || []) as Array<{
           valor_baixado: number;
@@ -169,6 +173,12 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           setOrders(orderRows);
           setBaixas(baixaRows);
         }
+      } catch (e) {
+        if (!cancelled) {
+          setOrders([]);
+          setBaixas([]);
+          setError(e instanceof Error ? e.message : String(e));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -176,7 +186,9 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, invoice, session]);
+  }, [open, invoice, session, reloadNonce]);
+
+
 
   // Cálculos:
   //  - total baixado por nós (soma dos itens registrados no Lovable p/ essa NF)
