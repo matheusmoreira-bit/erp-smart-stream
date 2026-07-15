@@ -720,6 +720,9 @@ Deno.serve(async (req) => {
               //    houver, cai para moeda (BRL/USD) ou fallback global.
               const cardKey = extractCardKey(row.pagcorp_data);
               const eventClass = extractEventClassification(row.pagcorp_data);
+              // Data da compra no cartão — é ela que rege a PTAX (dia da fato
+              // gerador cambial), NÃO a data em que o fiscal lançou a NF.
+              const txDate = extractTransactionDate(row.pagcorp_data);
 
               // 4. Emite UM Pagamento de Fornecedor por NF, baixando a
               //    PurchaseInvoice em Contas a Pagar. Idempotente: se a NF já
