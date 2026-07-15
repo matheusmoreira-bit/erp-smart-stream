@@ -417,9 +417,11 @@ export function useRoiAnalysis(opts: Options) {
         (nDocs * p.tempo_lancar_flow_min / 60) * custoHoraSolic +
         (nApprovals * p.tempo_aprovar_flow_min / 60) * custoHoraAprov;
 
-      // Licenças pro-rata ao período (mensais)
+      // Licenças SAP: rateio pelo cronograma real (22→103), proporcional aos docs da empresa.
+      const docShare = totalDocsAllCompanies > 0 ? nDocs / totalDocsAllCompanies : 0;
+      const licencasSap = totalSapLicenseCost * docShare;
+      // Licenças Flow: contagem de usuários ativos × custo unitário, pro-rata ao período.
       const proRata = periodDays / 30;
-      const licencasSap = (nAprovadores * p.custo_licenca_aprovador_sap + nSolicitantes * p.custo_licenca_solicitante_sap) * proRata;
       const licencasFlow = (nAprovadores + nSolicitantes) * p.custo_licenca_flow * proRata;
 
       const custoTotalSap = custoTempoSap + licencasSap + prejuizo;
