@@ -1193,6 +1193,20 @@ export default function PagCorp() {
             Integrar em lote{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
           </Button>
           <Button
+            onClick={handleBatchReprocessSettlement}
+            disabled={batchReprocessing}
+            variant="outline"
+            className="gap-2"
+            title="Reprocessa a baixa de todas as transações filtradas cuja NF de entrada já foi lançada"
+          >
+            {batchReprocessing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <DownloadCloud className="w-4 h-4" />
+            )}
+            Reprocessar baixa em lote
+          </Button>
+          <Button
             onClick={() => setPresentationDialogOpen(true)}
             variant="outline"
             className="gap-2"
