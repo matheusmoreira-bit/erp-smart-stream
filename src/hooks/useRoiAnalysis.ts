@@ -267,14 +267,8 @@ export function useRoiAnalysis(opts: Options) {
       setPos(posAll.filter((p) => !isTestCompanyDb(p.company_db)));
       setFluxo((fluxoAll || []).filter((f) => !isTestCompanyDb(f.company_db)));
 
-
-
     } catch (e: any) {
 
-
-
-
-    } catch (e: any) {
       console.error("useRoiAnalysis load error", e);
       setError(e?.message || "Falha ao carregar dados de ROI");
     } finally {
