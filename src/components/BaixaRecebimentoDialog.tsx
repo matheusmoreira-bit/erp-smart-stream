@@ -180,9 +180,16 @@ export function BaixaRecebimentoDialog({
     let baixaId: string | null = null;
 
     try {
-      // 1) Persist no Supabase como pendente_sincronizacao
+      // 1) Confirma sessão Supabase (RLS depende de auth.uid())
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
+      if (!userId) {
+        toast.error("Sua sessão expirou. Faça login novamente para lançar a baixa.");
+        setSubmitting(false);
+        return;
+      }
+      // 2) Persist no Supabase como pendente_sincronizacao.
+      // criado_por é preenchido automaticamente pelo trigger set_baixa_criado_por_trigger
       const { data: baixaRow, error: insertErr } = await supabase
         .from("baixas_recebimento")
         .insert({
@@ -197,7 +204,6 @@ export function BaixaRecebimentoDialog({
           valor_total: valorRecebido,
           valor_juros_multa: excedente,
           status: "pendente_sincronizacao",
-          criado_por: userId,
         })
         .select("id")
         .single();
@@ -267,6 +273,8 @@ export function BaixaRecebimentoDialog({
                 inputMode="decimal"
                 value={valorRecebidoTxt}
                 onChange={(e) => setValorRecebidoTxt(e.target.value)}
+                disabled={invoices.length === 1}
+                title={invoices.length === 1 ? "Com 1 NF selecionada, o valor recebido é o próprio saldo residual." : undefined}
               />
             </div>
             <div className="space-y-1 sm:col-span-2">
@@ -337,7 +345,14 @@ export function BaixaRecebimentoDialog({
                             onChange={(e) =>
                               setRateio((prev) => ({ ...prev, [inv.docEntry]: e.target.value }))
                             }
-                            title={excede ? "Valor acima do saldo — excedente vira juros/multa" : undefined}
+                            disabled={invoices.length === 1}
+                            title={
+                              invoices.length === 1
+                                ? "Com 1 NF selecionada, o valor a baixar é o próprio saldo residual."
+                                : excede
+                                  ? "Valor acima do saldo — excedente vira juros/multa"
+                                  : undefined
+                            }
                           />
                         </td>
                       </tr>
