@@ -576,11 +576,21 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
   /* ── Stage: Contas a Pagar ── */
   // AP nodes: prefer the ones already linked to NFs; add orphan ones connected directly to PC SAP.
   const linkedApKey = new Set<string>();
+  const matchesFluxoCp = (entry: string | number | null | undefined, docNum?: string | number | null) => {
+    if (!fluxoCpId) return false;
+    const e = entry != null ? String(entry) : null;
+    const dn = docNum != null ? String(docNum) : null;
+    return e === fluxoCpId || dn === fluxoCpId;
+  };
+
   nfLinks.forEach((nf) => {
     (nf.ap_links || []).forEach((ap) => {
       const apId = `ap-${nf.id}-${ap.source}-${ap.ap_doc_entry}`;
       linkedApKey.add(`${ap.source}:${ap.ap_doc_entry}`);
       const paidFully = ap.ap_paid !== null && ap.ap_total !== null && Math.abs((ap.ap_paid || 0) - (ap.ap_total || 0)) < 0.01;
+      const isFluxoCp = matchesFluxoCp(ap.ap_doc_entry, ap.ap_doc_num);
+      if (isFluxoCp) cpFluxoMatched = true;
+      const paidExtra = ap.ap_paid !== null && ap.ap_paid !== undefined ? `Pago: ${formatCurrency(ap.ap_paid, expense.currency)}` : null;
       buckets.contas_pagar.items.push({
         id: apId,
         data: {
@@ -594,7 +604,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           status: paidFully ? "pago" : "em aberto",
           statusTone: paidFully ? "success" : "muted",
           state: paidFully ? "done" : "pending",
-          extra: ap.ap_paid !== null && ap.ap_paid !== undefined ? `Pago: ${formatCurrency(ap.ap_paid, expense.currency)}` : null,
+          extra: [paidExtra, isFluxoCp ? `Vínculo fluxo · CP #${fluxoCpId}` : null].filter(Boolean).join(" · ") || null,
         },
       });
       nfById[nf.id]?.apChildren.push(apId);
@@ -620,6 +630,9 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
 
     const apId = `orphan-ap-${ap.id}`;
     const paidFully = ap.status?.toLowerCase() === "pago";
+    const isFluxoCp = matchesFluxoCp(entry, ap.numero_documento);
+    if (isFluxoCp) cpFluxoMatched = true;
+    const vencExtra = ap.data_vencimento ? `Venc: ${formatDateShort(ap.data_vencimento)}` : null;
     buckets.contas_pagar.items.push({
       id: apId,
       data: {
@@ -633,7 +646,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         status: ap.status || (paidFully ? "pago" : "em aberto"),
         statusTone: paidFully ? "success" : "muted",
         state: paidFully ? "done" : "pending",
-        extra: ap.data_vencimento ? `Venc: ${formatDateShort(ap.data_vencimento)}` : null,
+        extra: [vencExtra, isFluxoCp ? `Vínculo fluxo · CP #${fluxoCpId}` : null].filter(Boolean).join(" · ") || null,
       },
     });
     edges.push({
@@ -649,6 +662,80 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       markerEnd: { type: MarkerType.ArrowClosed, color: TONE_STYLES.violet.edge },
     });
   });
+
+  // Nós sintéticos vindos do fluxo (VW_FIN_ANALISE_FLUXO) quando o cache aponta
+  // uma NF/CP que ainda não aparece nas listas locais — permite ao usuário
+  // enxergar a amarração completa mesmo sem os documentos importados.
+  if (enrichmentActive && fluxoNfId && !nfFluxoMatched) {
+    const ghostNfId = `nf-fluxo-${fluxoNfId}`;
+    nfById[`fluxo:${fluxoNfId}`] = { id: ghostNfId, apChildren: [] };
+    buckets.nf_entrada.items.push({
+      id: ghostNfId,
+      data: {
+        tone: "green",
+        icon: Receipt,
+        kind: `NF #${fluxoNfId}`,
+        identifier: fluxo?.fornecedor || expense.supplier_name || "Fornecedor —",
+        currency: expense.currency,
+        when: fluxo?.data_lancamento || null,
+        status: "vínculo fluxo",
+        statusTone: "muted",
+        state: "pending",
+        extra: "Referência VW_FIN_ANALISE_FLUXO",
+      },
+    });
+    edges.push({
+      id: `e-pcsap-${ghostNfId}`,
+      source: pcSapId,
+      target: ghostNfId,
+      type: "smoothstep",
+      style: {
+        stroke: TONE_STYLES.green.edge,
+        strokeWidth: 1.5,
+        strokeDasharray: "4 3",
+      },
+      markerEnd: { type: MarkerType.ArrowClosed, color: TONE_STYLES.green.edge },
+    });
+  }
+  if (enrichmentActive && fluxoCpId && !cpFluxoMatched) {
+    const ghostCpId = `ap-fluxo-${fluxoCpId}`;
+    // Se criamos um nó de NF fantasma, pendure o CP nele; senão, sai do PC SAP.
+    const ghostNfKey = fluxoNfId ? `fluxo:${fluxoNfId}` : null;
+    const parentId = ghostNfKey && nfById[ghostNfKey] ? nfById[ghostNfKey].id : pcSapId;
+    buckets.contas_pagar.items.push({
+      id: ghostCpId,
+      data: {
+        tone: "violet",
+        icon: Wallet,
+        kind: `CP #${fluxoCpId}`,
+        identifier: fluxo?.fornecedor || expense.supplier_name || "—",
+        amount: fluxo?.valor ?? null,
+        currency: expense.currency,
+        when: fluxo?.data_pagamento || fluxo?.data_vencimento || null,
+        status: fluxo?.data_pagamento ? "pago" : "vínculo fluxo",
+        statusTone: fluxo?.data_pagamento ? "success" : "muted",
+        state: fluxo?.data_pagamento ? "done" : "pending",
+        extra: [
+          fluxo?.data_vencimento ? `Venc: ${formatDateShort(fluxo.data_vencimento)}` : null,
+          "Referência VW_FIN_ANALISE_FLUXO",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      },
+    });
+    edges.push({
+      id: `e-${parentId}-${ghostCpId}`,
+      source: parentId,
+      target: ghostCpId,
+      type: "smoothstep",
+      style: {
+        stroke: TONE_STYLES.violet.edge,
+        strokeWidth: 1.5,
+        strokeDasharray: "4 3",
+      },
+      markerEnd: { type: MarkerType.ArrowClosed, color: TONE_STYLES.violet.edge },
+    });
+  }
 
   /* ── Convert buckets into positioned nodes ── */
   // Determine vertical extents to vertically center each column.
