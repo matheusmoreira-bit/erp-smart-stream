@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
       await sapLogout(baseUrl, session);
     }
 
-    console.log(`[sap-purchase-orders-hana] db=${dbName} rawRows=${rawRows.length} firstKeys=${rawRows[0] ? Object.keys(rawRows[0]).slice(0,8).join("|") : "-"}`);
+    console.log(`[sap-purchase-orders-hana] db=${dbName} rawRows=${rawRows.length} allKeys=${rawRows[0] ? Object.keys(rawRows[0]).join("|") : "-"} sample=${JSON.stringify(rawRows[0] || {}).slice(0,800)}`);
 
     const mapped = rawRows
       .map((r) => mapRow(r, companyDb))
