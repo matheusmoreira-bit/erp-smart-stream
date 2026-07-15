@@ -300,6 +300,20 @@ export function useRoiAnalysis(opts: Options) {
       }
     }
 
+    // Index do cache VW_FIN_ANALISE_FLUXO por (company_db, id_pedido).
+    // Usado para calcular o atraso real via data_vencimento × data_pagamento.
+    const fluxoByPo = new Map<string, FluxoRow>();
+    for (const f of fluxo) {
+      if (!f.company_db || !f.id_pedido) continue;
+      const key = `${f.company_db}::${f.id_pedido}`;
+      const prev = fluxoByPo.get(key);
+      // Preferimos a linha com data_pagamento preenchida (mais completa).
+      if (!prev || (!prev.data_pagamento && f.data_pagamento)) {
+        fluxoByPo.set(key, f);
+      }
+    }
+
+
     // Index de expenses por (company_db, sap_doc_entry) para juntar com cache SAP
     const expenseByPo = new Map<string, ExpenseRow>();
     for (const e of expenses) {
@@ -416,26 +430,40 @@ export function useRoiAnalysis(opts: Options) {
           }
         }
 
-        // atraso: approvedAt > due_date (via approval_history + doc_entry)
-        // Ignora docs "nascidos vencidos" (criação > vencimento): atraso não é do fluxo de aprovação.
-        if (d.doc_entry && d.due_date) {
+
+        // Atraso real: usa data_vencimento × data_pagamento do cache
+        // VW_FIN_ANALISE_FLUXO (linha do pedido). Fallback: approval_history
+        // (approvedAt > due_date) para docs sem pareamento no fluxo.
+        let atraso: number | null = null;
+        const fluxoRow = d.doc_entry ? fluxoByPo.get(`${db}::${d.doc_entry}`) : undefined;
+        const fluxoVenc = fluxoRow?.data_vencimento || null;
+        const fluxoPag = fluxoRow?.data_pagamento || null;
+        if (fluxoVenc && fluxoPag) {
+          const due = new Date(fluxoVenc);
+          const pago = new Date(fluxoPag);
+          const dias = daysBetween(due, pago);
+          if (Number.isFinite(dias) && dias > 0) atraso = dias;
+        } else if (d.doc_entry && d.due_date) {
+          // Fallback (comportamento antigo)
           const approvedRow = approvedIdx.get(`${db}::${d.doc_entry}`);
           if (approvedRow?.decision_date) {
             const due = new Date(d.due_date);
             const createdLate = d.created_at ? new Date(d.created_at) > due : false;
             if (!createdLate) {
               const approved = new Date(approvedRow.decision_date);
-              const atraso = daysBetween(due, approved);
-              if (atraso > 0) {
-                sumAtraso += atraso;
-                countAtrasados++;
-                const p_val = d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
-                prejuizo += p_val;
-                if (viaFlow) { atrasoViaFlow++; prejuizoViaFlow += p_val; }
-                else { atrasoSapOnly++; prejuizoSapOnly += p_val; }
-              }
+              const dias = daysBetween(due, approved);
+              if (dias > 0) atraso = dias;
             }
           }
+        }
+
+        if (atraso !== null) {
+          sumAtraso += atraso;
+          countAtrasados++;
+          const p_val = d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
+          prejuizo += p_val;
+          if (viaFlow) { atrasoViaFlow++; prejuizoViaFlow += p_val; }
+          else { atrasoSapOnly++; prejuizoSapOnly += p_val; }
         }
       }
 
@@ -510,7 +538,7 @@ export function useRoiAnalysis(opts: Options) {
         economia_percent: economiaPercent,
       };
     });
-  }, [params, expenses, approvals, pos, companyDb, consolidated, companies, from?.getTime(), to?.getTime()]);
+  }, [params, expenses, approvals, pos, fluxo, companyDb, consolidated, companies, from?.getTime(), to?.getTime()]);
 
   const totals = useMemo(() => {
     if (!metricsByCompany.length) return null;
