@@ -155,6 +155,8 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
   const [enriched, setEnriched] = useState(false);
+  const [fluxoRow, setFluxoRow] = useState<SapFluxoEnrichment | null>(null);
+
 
   const derivedInput = {
     expenseId: expense?.id || "",
