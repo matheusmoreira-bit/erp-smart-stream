@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
         if (!resp.ok) {
           const errText = await resp.text();
           console.error("JumpCloud API error:", resp.status, errText);
-          throw new Error(`Erro na API JumpCloud: ${resp.status}`);
+          throw new Error(parseJumpCloudError(resp.status, errText));
         }
 
         const data = await resp.json();
