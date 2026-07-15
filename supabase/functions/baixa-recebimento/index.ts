@@ -183,10 +183,17 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
 
   const baseUrl = await getSapBaseUrl(headers.companyDB);
   const cookie = `B1SESSION=${headers.sapSession}${headers.routeId ? `; ROUTEID=${headers.routeId}` : ""}`;
+
+  // Filial (BPLId): pega da primeira NF associada; se não conseguir, usa default_branch_id do
+  // system_credentials (fallback 1). Necessário para bases com mais de uma filial no SAP.
+  const firstDocEntry = Number((itens[0] as { invoice_doc_entry: number }).invoice_doc_entry);
+  const invoiceBpl = await fetchInvoiceBplId(baseUrl, cookie, firstDocEntry);
+  const bplId = invoiceBpl ?? await resolveDefaultBranchId(headers.companyDB);
+
   const sapResp = await fetch(`${baseUrl}/IncomingPayments`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: cookie },
-    body: JSON.stringify(buildIncomingPayment(baixa as Record<string, unknown>, itens as Array<Record<string, unknown>>)),
+    body: JSON.stringify(buildIncomingPayment(baixa as Record<string, unknown>, itens as Array<Record<string, unknown>>, bplId)),
   });
   const text = await sapResp.text();
   let payload: unknown = null;
