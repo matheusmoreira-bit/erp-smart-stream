@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isTestCompanyDb } from "@/lib/test-company";
 
+/** Data em que o ERP Flow entrou em produção. Antes disso: 0 documentos via Flow. */
+export const FLOW_LAUNCH_DATE_ISO = "2026-07-01";
+
+
+
 
 export interface RoiParameters {
   id: string;
@@ -225,9 +230,15 @@ export function useRoiAnalysis(opts: Options) {
       setParams((pr.data || []) as RoiParameters[]);
       // Remove bases de teste da análise
       setCompanies(((cr.data || []) as Company[]).filter((c) => !isTestCompanyDb(c.company_db)));
-      setExpenses(expensesAll.filter((e) => !isTestCompanyDb(e.company_db)));
+      // Antes do go-live do ERP Flow (FLOW_LAUNCH_DATE_ISO) NÃO havia lançamentos via Flow em produção.
+      // Descarta expenses anteriores para não contaminar a segregação SAP puro vs via Flow.
+      // (approval_history vem do SAP e reflete o cenário nativo — mantemos todo o histórico.)
+      const flowLaunchIso = `${FLOW_LAUNCH_DATE_ISO}T00:00:00Z`;
+      setExpenses(expensesAll.filter((e) => !isTestCompanyDb(e.company_db) && (e.created_at || "") >= flowLaunchIso));
       setApprovals(approvalsAll.filter((a) => !isTestCompanyDb(a.company_db)));
       setPos(posAll.filter((p) => !isTestCompanyDb(p.company_db)));
+
+
 
     } catch (e: any) {
       console.error("useRoiAnalysis load error", e);

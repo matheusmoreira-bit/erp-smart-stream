@@ -17,6 +17,8 @@ interface Props {
 
 type Granularity = "day" | "week" | "month";
 const START_DATE = "2025-06-01";
+/** Data em que o ERP Flow entrou em produção. Antes disso, 0 documentos via Flow. */
+const FLOW_LAUNCH_DATE = "2026-07-01";
 const PAGE_SIZE = 1000;
 
 function bucketKey(iso: string, g: Granularity): string {
@@ -42,7 +44,8 @@ function fmtBucketLabel(key: string, g: Granularity): string {
 
 export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMin, tempoLancarSapMin }: Props) {
   const { isAdmin } = useAuth();
-  const [rows, setRows] = useState<{ doc_date: string; company_db: string }[]>([]);
+  const [rows, setRows] = useState<{ doc_date: string; company_db: string; doc_entry: number }[]>([]);
+  const [flowKeys, setFlowKeys] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -52,12 +55,12 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const all: { doc_date: string; company_db: string }[] = [];
+      const all: { doc_date: string; company_db: string; doc_entry: number }[] = [];
       let offset = 0;
       while (true) {
         let q = supabase
           .from("sap_purchase_order_cache")
-          .select("doc_date, company_db", { count: "exact" })
+          .select("doc_date, company_db, doc_entry", { count: "exact" })
           .gte("doc_date", START_DATE)
           .not("doc_date", "is", null)
           .order("doc_date", { ascending: true })
@@ -69,50 +72,88 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
           break;
         }
         if (!data || data.length === 0) break;
-        all.push(...(data as { doc_date: string; company_db: string }[]));
+        all.push(...(data as { doc_date: string; company_db: string; doc_entry: number }[]));
         if (data.length < PAGE_SIZE) break;
         offset += PAGE_SIZE;
         if (offset > 200000) break;
       }
+
+      // Identifica POs criados via ERP Flow (têm expense vinculada)
+      const expAll: { company_db: string; sap_doc_entry: number }[] = [];
+      let expOffset = 0;
+      while (true) {
+        let eq = supabase
+          .from("expenses")
+          .select("company_db, sap_doc_entry")
+          .not("sap_doc_entry", "is", null)
+          .range(expOffset, expOffset + PAGE_SIZE - 1);
+        if (!consolidated && companyDb) eq = eq.eq("company_db", companyDb);
+        const { data, error } = await eq;
+        if (error) { console.error("DailyTimeSpentChart expenses error", error); break; }
+        if (!data || data.length === 0) break;
+        expAll.push(...(data as any));
+        if (data.length < PAGE_SIZE) break;
+        expOffset += PAGE_SIZE;
+        if (expOffset > 200000) break;
+      }
       if (cancelled) return;
+      const flow = new Set(expAll.map((e) => `${e.company_db}::${e.sap_doc_entry}`));
       // Exclui bases de teste
       setRows(all.filter((r) => !isTestCompanyDb(r.company_db)));
+      setFlowKeys(flow);
       setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [companyDb, consolidated, reloadKey]);
 
   const data = useMemo(() => {
-    const byBucket = new Map<string, number>();
+    type B = { sap: number; flow: number };
+    const byBucket = new Map<string, B>();
     for (const r of rows) {
       const day = (r.doc_date || "").slice(0, 10);
       if (!day) continue;
+      const isFlow = flowKeys.has(`${r.company_db}::${r.doc_entry}`) && day >= FLOW_LAUNCH_DATE;
       const k = bucketKey(day, granularity);
-      byBucket.set(k, (byBucket.get(k) || 0) + 1);
+      const cur = byBucket.get(k) || { sap: 0, flow: 0 };
+      if (isFlow) cur.flow++; else cur.sap++;
+      byBucket.set(k, cur);
     }
     if (!byBucket.size) return [];
-    // Média por dia dentro do bucket: total_min / dias_no_bucket
     const daysInBucket = granularity === "day" ? 1 : granularity === "week" ? 7 : 30;
     const buckets = [...byBucket.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, docs]) => ({
+      .map(([key, { sap, flow }]) => ({
         date: key,
-        docs,
-        flow_min: (docs * tempoLancarFlowMin) / daysInBucket,
-        sap_min: (docs * tempoLancarSapMin) / daysInBucket,
+        docs: sap + flow,
+        docs_sap: sap,
+        docs_flow: flow,
+        // SAP puro = docs que NÃO passaram pelo Flow
+        sap_min: (sap * tempoLancarSapMin) / daysInBucket,
+        // Flow = docs integrados via Flow (0 antes de FLOW_LAUNCH_DATE)
+        flow_min: (flow * tempoLancarFlowMin) / daysInBucket,
       }));
     return buckets;
-  }, [rows, tempoLancarFlowMin, tempoLancarSapMin, granularity]);
+  }, [rows, flowKeys, tempoLancarFlowMin, tempoLancarSapMin, granularity]);
 
   const totals = useMemo(() => {
-    const docs = rows.length;
-    const flow = docs * tempoLancarFlowMin;
-    const sap = docs * tempoLancarSapMin;
-    return { docs, flow, sap };
-  }, [rows, tempoLancarFlowMin, tempoLancarSapMin]);
+    let sapDocs = 0, flowDocs = 0;
+    for (const r of rows) {
+      const day = (r.doc_date || "").slice(0, 10);
+      const isFlow = flowKeys.has(`${r.company_db}::${r.doc_entry}`) && day >= FLOW_LAUNCH_DATE;
+      if (isFlow) flowDocs++; else sapDocs++;
+    }
+    return {
+      docs: sapDocs + flowDocs,
+      docs_sap: sapDocs,
+      docs_flow: flowDocs,
+      flow: flowDocs * tempoLancarFlowMin,
+      sap: sapDocs * tempoLancarSapMin,
+    };
+  }, [rows, flowKeys, tempoLancarFlowMin, tempoLancarSapMin]);
 
   const fmtBucket = (v: string) => fmtBucketLabel(v, granularity);
   const fmtH = (v: number) => `${v.toFixed(1)}h`;
+
   const unitLabel = granularity === "day" ? "min/dia (média)" : granularity === "week" ? "min/dia (média da semana)" : "min/dia (média do mês)";
   const bucketNoun = granularity === "day" ? "dia" : granularity === "week" ? "semana" : "mês";
 
@@ -153,11 +194,12 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
             <ToggleGroupItem value="month" className="text-xs h-7 px-2">Mês</ToggleGroupItem>
           </ToggleGroup>
           <span>
-            Desde 01/06/2025 · <strong className="text-foreground">{totals.docs}</strong> pedidos ·
+            Desde 01/06/2025 · <strong className="text-foreground">{totals.docs}</strong> pedidos
+            {" "}(<strong className="text-foreground">{totals.docs_sap}</strong> SAP puro + <strong className="text-foreground">{totals.docs_flow}</strong> via Flow) ·
             {" "}Flow <strong className="text-foreground">{fmtH(totals.flow / 60)}</strong> vs
-            {" "}SAP <strong className="text-foreground">{fmtH(totals.sap / 60)}</strong> ·
-            {" "}economia <strong className="text-primary">{fmtH((totals.sap - totals.flow) / 60)}</strong>
+            {" "}SAP puro <strong className="text-foreground">{fmtH(totals.sap / 60)}</strong>
           </span>
+
           {isAdmin && (
             <Button size="sm" variant="outline" onClick={runBackfill} disabled={backfilling}>
               {backfilling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
@@ -189,14 +231,17 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
               <Tooltip
                 labelFormatter={(l) => `${bucketNoun[0].toUpperCase() + bucketNoun.slice(1)} de ${fmtBucket(String(l))}`}
                 formatter={(value: any, name: string, ctx: any) => {
-                  const docs = ctx?.payload?.docs;
-                  return [`${Number(value).toFixed(1)} min/dia (${docs} pedidos)`, name];
+                  const p = ctx?.payload || {};
+                  const isFlow = name.startsWith("ERP Flow");
+                  const n = isFlow ? p.docs_flow : p.docs_sap;
+                  return [`${Number(value).toFixed(1)} min/dia (${n ?? 0} pedidos)`, name];
                 }}
                 contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="sap_min" name={`SAP (${tempoLancarSapMin}min/pedido)`} stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="sap_min" name={`SAP puro (${tempoLancarSapMin}min/pedido)`} stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="flow_min" name={`ERP Flow (${tempoLancarFlowMin}min/pedido)`} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+
             </LineChart>
           </ResponsiveContainer>
         </div>
