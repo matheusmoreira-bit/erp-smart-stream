@@ -1,118 +1,98 @@
+## Objetivo
 
-# Plano — Relatório Técnico Executivo do ERP Flow
+Eliminar os 10 findings críticos do scan de segurança e reduzir os warnings antes da publicação. O foco é remover acesso do role `anon` (usuário não autenticado) a dados financeiros e a configurações que controlam aprovações.
 
-Vou produzir um único arquivo markdown versionado em `docs/relatorio-tecnico.md` (15–25 páginas), com tom para equipe técnica / auditoria de TI, cobrindo capacidades funcionais, arquitetura, integrações, automações, dependências e postura de segurança (incluindo achados atuais do scanner, checklist secure-by-default e recomendações de hardening).
+## Escopo — Fase 1 (bloqueadores de publicação)
 
-## Fase 1 — Exploração (read-only)
+### 1. Remover leitura anônima de dados financeiros
+Drop das policies `anon SELECT` nas tabelas:
+- `expenses`, `expense_items`, `expense_attachments`, `expense_approval_log`
+- `audit_log` (policy "Anyone can view expense audit_log" — remover `anon` do array de roles, manter para `authenticated`)
+- `pagcorp_integration_log`
+- `nf_entrada_logs`, `nf_entrada_imports`
 
-Antes de escrever, faço um levantamento sistemático para não deixar módulo de fora:
+Verificar que já existem policies para `authenticated` cobrindo o uso legítimo. Onde faltar, criar policy `authenticated` escopada (dono/aprovador/admin).
 
-1. **Inventário funcional** — mapear todas as rotas em `src/App.tsx` e páginas em `src/pages/*` (Approvals, ApprovalHistory, Expenses, AdvancePayments, NfEntrada, PagCorp, FiscalAudit, AuditConsole, Suppliers, Items, Users/UsersHub, IdpSync, Analytics, Sales, Intercompany, LicenseAnalysis, Synapse, IntegrationsHub, SapUsersAdmin, Credentials, Notifications, etc.).
-2. **Hooks e domínios** — ler `src/hooks/*` e `src/lib/*` para agrupar cada página nos domínios de negócio: Aprovações, Despesas, NF-e Entrada, PagCorp (cartão corporativo), Auditoria Fiscal/Console, SAP Sync, Fornecedores/Itens, Licenças, Notificações (email/WhatsApp), Synapse (agentes/IA).
-3. **Integrações externas** — listar via `.lovable/memory/features/*` e `src/lib/{sap-client,omie-client,invoke-fn,notifications}.ts`: SAP Business One Service Layer, Omie, PagCorp, Google Drive (connector), SMTP, Lovable AI Gateway, Convex (VITE_CONVEX_*), IDP/SSO. Documentar segregação por base (`integration-base-segregation`) e o modo "OMIE open modules".
-4. **Backend Lovable Cloud (Supabase)**:
-   - Listar as ~90 tabelas do schema `public` já visíveis no contexto, agrupadas por domínio, com contagem de policies RLS.
-   - Documentar as funções `SECURITY DEFINER` presentes (has_role, audit_trigger, verify_audit_chain, email_queue_dispatch/wake, reassign_approval_rule_safe, can_access_audit_console, register_external_api_*, try_watcher_lock, get_sap_sync_health, etc.).
-   - Descrever a trilha de auditoria hash-encadeada (`audit_trail` + `audit_trail_archive` + `verify_audit_chain`).
-   - Descrever a fila de e-mails (pgmq + cron `process-email-queue` + `email_send_state`).
-   - Mapear os 3 buckets de storage (`expense-attachments`, `nf-entrada-files`, `audit-console-docs`) e suas policies.
-5. **Edge Functions** — `code--list_dir supabase/functions/` para listar cada função, agrupar por propósito (SAP proxy, PagCorp, Omie, notificação, workers da fila, auditoria) e apontar segredos consumidos.
-6. **Automações / Cron** — extrair jobs `cron.*` referenciados no código e nos memos (`process-email-queue`, `expense-sap-status-sync`, watchers, prune, reminders overdue, sync PO/NF/Vendor Payment).
-7. **Dependências** — ler `package.json`, executar mentalmente o inventário (React 18, Vite 5, Tailwind, Radix, React Query, jsPDF, recharts, react-router-dom 7, framer-motion, xyflow, pptxgenjs) + rodar `code--dependency_scan` para incluir estado atual de vulnerabilidades.
-8. **Segurança** — consolidar:
-   - Os 3 warnings ativos do scanner (audit-console-docs sem policy de leitura para não-admin; expense-attachments sem policies listadas; nf-entrada-files legível por qualquer autenticado sem checagem de posse).
-   - Rodar `supabase--linter` para complementar.
-   - Checklist da skill `revisao-seguranca-lovable` aplicado item a item.
-   - Segredos configurados (lista de nomes já disponível, sem valores).
-   - Regras de visibilidade de documentos e OMIE open modules já memorizadas.
-9. **Config & Ops** — `index.html` (SEO/meta), `vite.config.ts`, `playwright.config.ts`, `vitest.config.ts`, `supabase/config.toml`, ESLint, testes existentes (`src/lib/*.test.ts`, `useApprovalRules.test.ts`), `docs/external-approvals-api.md`.
+### 2. Remover escrita anônima (privilege escalation)
+Drop de TODAS as policies `anon` (SELECT/INSERT/UPDATE/DELETE) em:
+- `approval_rules` e `approval_rule_levels` — só admin gerencia
+- `sap_cache` — só service_role/edge functions
+- `pagcorp_settlement_accounts` — só admin
 
-Uso `acp_subagent--explore` em paralelo para acelerar (um agente para hooks/páginas, outro para edge functions + cron, outro para dependências/segurança), consolidando os retornos.
+Substituir por policies `authenticated` restritas ao `admin` via `has_role(auth.uid(),'admin')`.
 
-## Fase 2 — Estrutura do documento
+### 3. Warnings de exposição
+Remover `anon` SELECT de:
+- `pagcorp_nondeductible_cards`
+- `synapse_execution_log`, `synapse_integrations`, `synapse_global_settings`
 
-```text
-docs/relatorio-tecnico.md
-├── 1. Sumário executivo
-├── 2. Visão de produto e escopo funcional
-├── 3. Arquitetura técnica
-│   ├── 3.1 Stack e camadas (front, Lovable Cloud, Edge, integrações)
-│   ├── 3.2 Diagrama de contexto (ASCII)
-│   └── 3.3 Fluxos de dados críticos (aprovação, NF entrada, PagCorp, auditoria)
-├── 4. Módulos funcionais (por domínio)
-│   ├── Aprovações & Regras & Substitutos & Delegação
-│   ├── Despesas, Adiantamentos, Anexos
-│   ├── NF de Entrada (import + vínculo ERP + pedido de compras)
-│   ├── PagCorp (cartão corporativo, mapeamentos, não-dedutíveis)
-│   ├── Auditoria Fiscal e Audit Console (runs, divergências, insights)
-│   ├── Fornecedores, Itens, Intercompany
-│   ├── Usuários, Permissões, Grupos, IDP/SSO, Licenças
-│   ├── Analytics, Insights, Produtividade
-│   ├── Notificações (email, WhatsApp, overdue reminders)
-│   └── Synapse (agentes/IA), AI Chat Global
-├── 5. Integrações externas
-│   ├── SAP B1 Service Layer (multi-empresa, multi-senha, health)
-│   ├── Omie (regra "open modules" temporária)
-│   ├── PagCorp (HMAC, AES, credenciais)
-│   ├── Google Drive (connector)
-│   ├── SMTP e templates transacionais
-│   ├── Lovable AI Gateway
-│   └── Convex (uso e status)
-├── 6. Automações e jobs agendados
-│   ├── Cron jobs (email queue, SAP sync, prunes, reminders)
-│   ├── Watchers (try_watcher_lock/release)
-│   ├── Filas pgmq (auth_emails, transactional_emails, DLQ)
-│   └── Triggers (audit_trigger, updated_at, cascade delete, notifications skip test)
-├── 7. Modelo de dados
-│   ├── Tabelas por domínio (com contagem de policies)
-│   ├── Trilha de auditoria hash-encadeada
-│   ├── Idempotência (expense_action_idempotency)
-│   └── Cache SAP e sync state
-├── 8. Segurança
-│   ├── 8.1 Modelo de autorização (RLS + has_role + user_roles + user_group_assignments)
-│   ├── 8.2 Buckets de storage e políticas
-│   ├── 8.3 Segredos (inventário sem valores)
-│   ├── 8.4 Achados atuais do scanner (3 warnings) + linter
-│   ├── 8.5 Checklist secure-by-default (item a item, OK / Corrigir / Não verificado)
-│   ├── 8.6 Classes de vulnerabilidade avaliadas (fonte→sink)
-│   └── 8.7 Postura de auditoria (audit_trail append-only + verify_audit_chain)
-├── 9. Backups, DR e retenção
-│   ├── Backups do Lovable Cloud (Supabase managed)
-│   ├── Retenção: integration_log 90d, whatsapp_* 60d, audit_trail_archive
-│   ├── Idempotência e purge de reservations
-│   └── Recomendação de estratégia de restore
-├── 10. Testes, qualidade e observabilidade
-│   ├── Vitest, Playwright, ESLint, tsgo
-│   ├── audit_log / audit_trail / expense_sap_sync_runs
-│   └── Health checks (get_sap_sync_health, email_send_state)
-├── 11. Dependências e supply chain
-│   ├── Inventário resumido do package.json
-│   ├── Resultado do dependency_scan (jspdf/dompurify, recharts, react-router-dom, etc. — estado atual)
-│   └── Overrides aplicados (dompurify pin)
-├── 12. Riscos e recomendações de hardening
-│   ├── Curto prazo (fix dos 3 warnings de storage, HIBP, brute force)
-│   ├── Médio prazo (SSO/MFA, CSP, rate limiting em edge functions)
-│   └── Longo prazo (GHAS/CodeQL, secret scanning, chaos/DR drill)
-├── 13. Roadmap sugerido e itens em aberto
-└── Apêndices
-    ├── A. Lista completa de rotas
-    ├── B. Lista completa de edge functions
-    ├── C. Tabelas por domínio com policies
-    ├── D. Segredos configurados (só nomes)
-    └── E. Glossário
+Manter `companies` (is_active=true) público, pois é usado na tela de login para listar bases.
+
+### 4. Storage bucket `expense-attachments`
+Adicionar policies em `storage.objects` restringindo o bucket a `authenticated`, escopadas ao dono do expense (via subquery em `expense_attachments`).
+
+## Escopo — Fase 2 (hardening — pode ir junto na mesma migration)
+
+### 5. `search_path` em funções SECURITY DEFINER
+Adicionar `SET search_path = public` nas funções que ainda estão sem (o scan aponta ~5 funções — identificar via linter e corrigir uma a uma).
+
+### 6. Policies `USING (true)` em UPDATE/DELETE/INSERT
+Revisar as ~30 policies apontadas pelo scan e trocar `true` por checagem real (`auth.uid()=user_id`, `has_role(...,'admin')`, etc.). Como são muitas tabelas, faço um levantamento tabela-a-tabela e proponho o replace de cada uma dentro da mesma migration.
+
+### 7. SECURITY DEFINER executável por `authenticated`
+Revogar `EXECUTE ... FROM authenticated` das funções que só devem ser chamadas por edge functions/service_role (ex.: `email_queue_dispatch`, `email_queue_wake`, `move_to_dlq`, `enqueue_email`, `delete_email`, `read_email_batch`, `prune_old_integration_data`, `archive_audit_trail`). Manter execução para funções usadas pelo app (`has_role`, `create_item_variante`, `check_applicable_approval_rules`, etc.).
+
+## Escopo — Fase 3 (config, fora de migration)
+
+- Ativar **Password HIBP Check** no Cloud → Users → Auth Settings.
+- Confirmar verificação de e-mail obrigatória.
+
+## Fora deste plano
+
+- Cabeçalhos CSP/HSTS/frame-ancestors: dependem do host (Lovable serve os cabeçalhos padrão). Documento como recomendação para o time de infra, não altero no código.
+- SSO Okta: já estava na lista de recomendações, mas é projeto separado.
+- Code scanning GitHub: responsabilidade do repositório.
+
+## Riscos e mitigação
+
+- **Quebra de funcionalidade**: se algum código do app ou edge function estiver dependendo do role `anon` para ler/escrever nessas tabelas, ele passa a falhar. Antes de aplicar, faço grep no código por chamadas anônimas (sem `supabase.auth.getSession()`) contra essas tabelas. As edge functions usam `service_role`, então não são afetadas.
+- **Regras de aprovação**: hoje `approval_rules`/`approval_rule_levels` estão editáveis por qualquer um sem login — impacto crítico. A troca para "só admin" pode quebrar telas que hoje editam anonimamente; identificar essas telas e garantir que o usuário está logado como admin (o app já tem `has_role`).
+
+## Ordem de execução
+
+1. Grep no `src/` e nas edge functions procurando queries às tabelas afetadas para confirmar que usam sessão autenticada.
+2. Uma migration única com Fase 1 + Fase 2.
+3. Rodar `security--run_security_scan` de novo e confirmar que os 10 críticos sumiram.
+4. Ligar HIBP via `supabase--configure_auth`.
+
+## Detalhes técnicos
+
+Padrão de policy para dados financeiros:
+```sql
+DROP POLICY "Anon can read expenses" ON public.expenses;
+-- (mantém as policies existentes de authenticated que já filtram por dono/aprovador/admin)
 ```
 
-## Fase 3 — Verificação antes de entregar
+Padrão para approval_rules:
+```sql
+DROP POLICY "Anon can read approval_rules" ON public.approval_rules;
+DROP POLICY "Anon can insert approval_rules" ON public.approval_rules;
+DROP POLICY "Anon can update approval_rules" ON public.approval_rules;
+DROP POLICY "Anon can delete approval_rules" ON public.approval_rules;
+-- garantir policies authenticated para admin (has_role) já existem
+```
 
-- Reler o documento e checar cobertura dos itens pedidos (funcionalidades, módulos, integrações, automações, ferramentas, controles, backups, arquitetura, dependências, segurança).
-- Rodar `code--dependency_scan` uma vez para congelar o snapshot da seção 11 na data do relatório.
-- Rodar `supabase--linter` para incorporar achados atuais na seção 8.4.
-- Confirmar que nenhuma URL/ID do Supabase e nenhuma chave sensível aparecem no documento.
-- Marcar explicitamente itens em "Não verificado" quando não conseguir confirmar (ex.: HIBP ativo, brute-force lockout) para não afirmar cobertura que não existe.
-
-## Entregável
-
-- `docs/relatorio-tecnico.md` — documento único, ~20 páginas, versionado no repositório.
-- Nenhuma outra alteração de código, schema ou configuração.
-
-Se preferir também um PDF, gero em um segundo passo depois que aprovar o conteúdo.
+Padrão para storage:
+```sql
+CREATE POLICY "auth can read own expense files" ON storage.objects
+FOR SELECT TO authenticated
+USING (
+  bucket_id = 'expense-attachments'
+  AND EXISTS (
+    SELECT 1 FROM public.expense_attachments a
+    JOIN public.expenses e ON e.id = a.expense_id
+    WHERE a.file_path = storage.objects.name
+      AND (e.requester_id = auth.uid() OR public.has_role(auth.uid(),'admin'))
+  )
+);
+```
