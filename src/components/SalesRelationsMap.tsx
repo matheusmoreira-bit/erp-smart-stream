@@ -595,8 +595,12 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                   baixa.criado_por_nome || baixa.criado_por_user_code || null;
                 return (
                 <div
-                  key={baixa.id + "-" + idx}
-                  className="rounded-md border border-border/60 bg-card px-3 py-2"
+                  key={(baixa.id || `sap-${baixa.sap_incoming_payment_doc_entry}`) + "-" + idx}
+                  className={`rounded-md border px-3 py-2 ${
+                    baixa.origin === "external"
+                      ? "border-dashed border-border/60 bg-muted/10"
+                      : "border-border/60 bg-card"
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-start gap-2 min-w-0">
@@ -607,15 +611,22 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                           <span className="text-[11px] font-normal text-muted-foreground">
                             às {formatTime(baixa.created_at)}
                           </span>
-                          <Link
-                            to={`/vendas/historico?baixa=${baixa.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary hover:underline"
-                            title="Abrir baixa no histórico"
-                          >
-                            abrir <ExternalLink className="w-3 h-3" />
-                          </Link>
+                          {baixa.origin === "internal" && baixa.id && (
+                            <Link
+                              to={`/vendas/historico?baixa=${baixa.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary hover:underline"
+                              title="Abrir baixa no histórico"
+                            >
+                              abrir <ExternalLink className="w-3 h-3" />
+                            </Link>
+                          )}
+                          {baixa.origin === "external" && (
+                            <Badge variant="outline" className="text-[9px] border-border/60 text-muted-foreground">
+                              fora do ERP Flow
+                            </Badge>
+                          )}
                         </p>
                         <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
                           <BaixaStatusLabel status={baixa.status} />
