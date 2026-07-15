@@ -37,6 +37,10 @@ function json(status: number, body: unknown) {
   });
 }
 
+const IDEMPOTENCY_IN_FLIGHT_WAIT_MS = 1200;
+const IDEMPOTENCY_IN_FLIGHT_POLL_MS = 200;
+const IDEMPOTENCY_STALE_MS = 5 * 60 * 1000;
+
 // Stages ajudam a rastrear em qual passo a requisição foi rejeitada ou falhou.
 // O nome do stage vai tanto nos logs (JSON estruturado) quanto no corpo da
 // resposta de erro, permitindo que o front-end mostre mensagens específicas.
@@ -63,6 +67,10 @@ function stageLog(stage: Stage, level: "info" | "warn" | "error", data: Record<s
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 
@@ -114,7 +122,7 @@ function isDesignatedApprover(
 }
 
 async function isSapSuperuser(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   companyDB: string,
   sapSession: string,
   routeId: string,
@@ -264,14 +272,53 @@ Deno.serve(async (req) => {
         const cached = (prior as any).response ?? { ok: true };
         return json((prior as any).status_code, { ...cached, replayed: true, requestId });
       }
-      // Reserva em andamento. Se ela é antiga (>5min), o request original
-      // provavelmente crashed antes de gravar a resposta — assumimos como
-      // stale, apagamos e permitimos a nova tentativa reusar a mesma chave.
-      // O cron `purge-expense-action-idempotency` faz a limpeza definitiva,
-      // mas o cliente não precisa esperar por ele para reenviar.
       const priorAgeMs = Date.now() - new Date((prior as any).created_at).getTime();
-      const STALE_MS = 5 * 60 * 1000;
-      if (priorAgeMs > STALE_MS) {
+      if (priorAgeMs <= IDEMPOTENCY_STALE_MS) {
+        // Reserva em andamento recente: normalmente é um segundo clique/atalho
+        // chegando milissegundos depois do primeiro. Em vez de devolver 409
+        // imediatamente, aguardamos brevemente a primeira requisição finalizar
+        // e então reentregamos a resposta gravada. Isso preserva a proteção
+        // contra duplicidade sem transformar duplo disparo da UI em erro.
+        const startedWait = Date.now();
+        while (Date.now() - startedWait < IDEMPOTENCY_IN_FLIGHT_WAIT_MS) {
+          await sleep(IDEMPOTENCY_IN_FLIGHT_POLL_MS);
+          const { data: refreshed, error: refreshErr } = await admin
+            .from("expense_action_idempotency")
+            .select("status_code, response, completed_at")
+            .eq("idempotency_key", idempotencyKey)
+            .maybeSingle();
+          if (refreshErr) {
+            stageLog("idempotency_reserve", "warn", {
+              requestId, idempotencyKey, phase: "wait_refresh", error: refreshErr.message,
+            });
+            break;
+          }
+          if ((refreshed as any)?.completed_at && (refreshed as any)?.status_code) {
+            stageLog("idempotency_replay", "info", {
+              requestId,
+              idempotencyKey,
+              replayedStatus: (refreshed as any).status_code,
+              waitedMs: Date.now() - startedWait,
+            });
+            const cached = (refreshed as any).response ?? { ok: true };
+            return json((refreshed as any).status_code, { ...cached, replayed: true, requestId });
+          }
+        }
+        stageLog("idempotency_conflict", "warn", {
+          requestId, idempotencyKey, reason: "in_flight", priorAgeMs,
+        });
+        return json(409, {
+          error: "Sua aprovação já está sendo processada. Aguarde alguns segundos antes de tentar novamente.",
+          stage: "idempotency_conflict",
+          requestId,
+          inFlightAgeMs: priorAgeMs,
+        });
+      }
+
+      // Reserva antiga: o request original provavelmente crashed antes de
+      // gravar a resposta — assumimos como stale, apagamos e permitimos a nova
+      // tentativa reusar a mesma chave. O cron faz a limpeza definitiva.
+      if (priorAgeMs > IDEMPOTENCY_STALE_MS) {
         stageLog("idempotency_reserve", "warn", {
           requestId, idempotencyKey, phase: "takeover_stale", priorAgeMs,
         });
@@ -292,16 +339,6 @@ Deno.serve(async (req) => {
         }
         // Cai para o INSERT abaixo (código 23505 vira 409 se outra
         // requisição chegar aqui ao mesmo tempo — comportamento correto).
-      } else {
-        stageLog("idempotency_conflict", "warn", {
-          requestId, idempotencyKey, reason: "in_flight", priorAgeMs,
-        });
-        return json(409, {
-          error: "Já existe uma requisição idêntica em processamento. Aguarde alguns segundos e tente novamente.",
-          stage: "idempotency_conflict",
-          requestId,
-          inFlightAgeMs: priorAgeMs,
-        });
       }
     }
 
@@ -319,10 +356,40 @@ Deno.serve(async (req) => {
       });
       // Código 23505 = unique_violation → outra requisição chegou antes.
       const isRace = (reserveErr as any).code === "23505";
+      if (isRace) {
+        const startedWait = Date.now();
+        while (Date.now() - startedWait < IDEMPOTENCY_IN_FLIGHT_WAIT_MS) {
+          await sleep(IDEMPOTENCY_IN_FLIGHT_POLL_MS);
+          const { data: raced, error: raceLookupErr } = await admin
+            .from("expense_action_idempotency")
+            .select("status_code, response, completed_at")
+            .eq("idempotency_key", idempotencyKey)
+            .maybeSingle();
+          if (raceLookupErr) {
+            stageLog("idempotency_reserve", "warn", {
+              requestId, idempotencyKey, phase: "race_lookup", error: raceLookupErr.message,
+            });
+            break;
+          }
+          if ((raced as any)?.completed_at && (raced as any)?.status_code) {
+            stageLog("idempotency_replay", "info", {
+              requestId,
+              idempotencyKey,
+              replayedStatus: (raced as any).status_code,
+              waitedMs: Date.now() - startedWait,
+            });
+            const cached = (raced as any).response ?? { ok: true };
+            return json((raced as any).status_code, { ...cached, replayed: true, requestId });
+          }
+        }
+        return json(409, {
+          error: "Sua aprovação já está sendo processada. Aguarde alguns segundos antes de tentar novamente.",
+          stage: "idempotency_conflict",
+          requestId,
+        });
+      }
       return json(isRace ? 409 : 500, {
-        error: isRace
-          ? "Requisição idêntica em processamento (conflito ao reservar a chave de idempotência)."
-          : `Falha ao reservar chave de idempotência: ${reserveErr.message}`,
+        error: `Falha ao reservar chave de idempotência: ${reserveErr.message}`,
         stage: "idempotency_reserve",
         requestId,
       });

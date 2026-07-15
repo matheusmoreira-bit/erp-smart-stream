@@ -486,6 +486,7 @@ function ApprovalDetailModal({
   const [errorKind, setErrorKind] = useState<"mutation" | "refresh" | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
   const [showAllLines, setShowAllLines] = useState(false);
+  const confirmInFlightRef = useRef(false);
   const { session } = useSap();
 
   // Rateio — sempre derivado do doc atual
@@ -626,7 +627,8 @@ function ApprovalDetailModal({
   };
 
   const confirmRiskAction = async () => {
-    if (!riskConfirm || !doc || isActioning) return;
+    if (!riskConfirm || !doc || isActioning || confirmInFlightRef.current) return;
+    confirmInFlightRef.current = true;
     setActionError(null);
     setErrorKind(null);
     try {
@@ -640,6 +642,8 @@ function ApprovalDetailModal({
       const isRefresh = e instanceof Error && e.name === "RefreshError";
       setErrorKind(isRefresh ? "refresh" : "mutation");
       setActionError(e instanceof Error ? e.message : "Erro ao processar ação");
+    } finally {
+      confirmInFlightRef.current = false;
     }
   };
 
