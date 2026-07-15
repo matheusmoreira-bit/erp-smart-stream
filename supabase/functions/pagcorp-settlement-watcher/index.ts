@@ -762,10 +762,13 @@ Deno.serve(async (req) => {
                   const invCur = (invoice.DocCurrency || "").toUpperCase();
                   let docRate: number | null = null;
                   if (invCur === "USD") {
-                    const ptax = await fetchPtax(invCur, invoice.DocDate);
+                    // Preferimos a data da TRANSAÇÃO no cartão (evento cambial).
+                    // Se não vier no payload, cai para a data da NF (comportamento antigo).
+                    const ptaxDateBase = txDate || invoice.DocDate;
+                    const ptax = await fetchPtax(invCur, ptaxDateBase);
                     if (!ptax) {
                       if (!firstPtaxMissingMsg) {
-                        firstPtaxMissingMsg = `PTAX ${invCur} indisponível para ${invoice.DocDate}`;
+                        firstPtaxMissingMsg = `PTAX ${invCur} indisponível para ${ptaxDateBase} (transação=${txDate || "—"}, NF=${invoice.DocDate})`;
                       }
                       // remove desta iteração da contagem de "contas usadas" — nada foi pago
                       accountsUsed.pop();
