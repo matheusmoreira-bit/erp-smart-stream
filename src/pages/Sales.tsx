@@ -14,7 +14,9 @@ import {
   CheckCircle2,
   History,
   Receipt,
+  Network,
 } from "lucide-react";
+import { SalesRelationsMap } from "@/components/SalesRelationsMap";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
