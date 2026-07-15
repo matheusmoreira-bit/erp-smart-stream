@@ -27,6 +27,10 @@ export interface BaixaInvoiceRow {
   cardName: string;
   currency: string;
   saldoResidual: number;
+  /** 'invoice' (NF) ou 'journal_entry' (Saldo Inicial via JE). Default: 'invoice'. */
+  docType?: "invoice" | "journal_entry";
+  /** Linha do JournalEntry (obrigatório quando docType='journal_entry'). */
+  docLine?: number | null;
 }
 
 interface BaixaRecebimentoDialogProps {
