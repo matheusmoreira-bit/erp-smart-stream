@@ -25,6 +25,15 @@ export interface RoiCompanyMetrics {
   n_approvals: number;
   n_aprovadores: number;
   n_solicitantes: number;
+  // Segregação por origem
+  n_docs_sap_only: number;   // Criados direto no SAP (sem passar pelo ERP Flow)
+  n_docs_via_flow: number;   // Criados no ERP Flow, aprovados e integrados ao SAP
+  valor_sap_only: number;
+  valor_via_flow: number;
+  docs_atrasados_sap_only: number;
+  docs_atrasados_via_flow: number;
+  prejuizo_atraso_sap_only: number;
+  prejuizo_atraso_via_flow: number;
   antecedencia_media_dias: number | null;
   atraso_medio_dias: number | null;
   docs_atrasados: number;
