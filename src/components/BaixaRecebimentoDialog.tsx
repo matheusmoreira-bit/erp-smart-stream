@@ -338,7 +338,17 @@ export function BaixaRecebimentoDialog({
                               {inv.docNum}
                             </span>
                           ) : (
-                            inv.docNum
+                            <div className="flex flex-col leading-tight">
+                              <span title="DocNum no SAP">{inv.docNum}</span>
+                              {inv.folioNumber != null && (
+                                <span
+                                  className="text-[10px] text-muted-foreground"
+                                  title="Número da NFSE"
+                                >
+                                  NFSE {inv.folioNumber}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
