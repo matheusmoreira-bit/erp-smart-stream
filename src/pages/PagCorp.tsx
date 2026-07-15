@@ -1526,9 +1526,30 @@ export default function PagCorp() {
                                   </span>
                                 </>
                               )}
-                              <span className="ml-auto text-xs text-muted-foreground">
-                                {expanded ? "Ocultar itens" : "Ver itens"}
-                              </span>
+                              <div className="ml-auto flex items-center gap-2">
+                                {settledCount < txs.length && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 gap-1 text-xs"
+                                    disabled={reprocessingGroup === item.key}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReprocessGroup(item.key, txs);
+                                    }}
+                                  >
+                                    {reprocessingGroup === item.key ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <RefreshCw className="w-3 h-3" />
+                                    )}
+                                    {settledCount > 0 ? "Reprocessar baixa" : "Processar baixa"}
+                                  </Button>
+                                )}
+                                <span className="text-xs text-muted-foreground">
+                                  {expanded ? "Ocultar itens" : "Ver itens"}
+                                </span>
+                              </div>
                             </div>
                           </TableCell>
                         </TableRow>
