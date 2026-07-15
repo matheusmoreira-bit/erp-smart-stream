@@ -176,6 +176,24 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
     }
   };
 
+  const runFluxoSync = async () => {
+    setSyncingFluxo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sap-fluxo-analise-sync", {
+        body: companyDb ? { company_db: companyDb } : {},
+      });
+      if (error) throw error;
+      const total = (data as any)?.total_synced ?? 0;
+      toast.success(`VW_FIN_ANALISE_FLUXO sincronizada — ${total} linhas`);
+      setReloadKey((k) => k + 1);
+    } catch (e: any) {
+      toast.error(`Sync do fluxo falhou: ${e?.message || e}`);
+    } finally {
+      setSyncingFluxo(false);
+    }
+  };
+
+
   return (
     <div className="glass-card p-4 sm:p-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
