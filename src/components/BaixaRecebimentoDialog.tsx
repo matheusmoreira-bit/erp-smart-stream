@@ -320,12 +320,12 @@ export function BaixaRecebimentoDialog({
                         <td className="py-1.5 px-2 text-right">
                           <Input
                             inputMode="decimal"
-                            className={`h-7 text-xs text-right font-mono ${excede ? "border-destructive" : ""}`}
+                            className={`h-7 text-xs text-right font-mono ${excede ? "border-amber-500 bg-amber-500/5" : ""}`}
                             value={rateio[inv.docEntry] || ""}
                             onChange={(e) =>
                               setRateio((prev) => ({ ...prev, [inv.docEntry]: e.target.value }))
                             }
-                            disabled={valorRecebido >= saldoTotal - 0.001}
+                            title={excede ? "Valor acima do saldo — excedente vira juros/multa" : undefined}
                           />
                         </td>
                       </tr>
@@ -336,13 +336,17 @@ export function BaixaRecebimentoDialog({
                   <tr className="bg-muted/20 border-t border-border/60">
                     <td className="py-2 px-2 font-medium">Total do rateio</td>
                     <td className="py-2 px-2 text-right font-mono text-muted-foreground">
-                      {fmt(saldoTotal, currency)}
+                      Recebido: {fmt(valorRecebido, currency)}
                     </td>
-                    <td className="py-2 px-2 text-right font-mono font-semibold">
+                    <td
+                      className={`py-2 px-2 text-right font-mono font-semibold ${
+                        Math.abs(diffSoma) > 0.01 ? "text-destructive" : ""
+                      }`}
+                    >
                       {fmt(somaRateio, currency)}
                     </td>
                   </tr>
-                  {isOverpayment && (
+                  {excedente > 0 && (
                     <tr className="border-t border-border/60 bg-amber-500/5">
                       <td className="py-2 px-2 text-amber-600 dark:text-amber-400 font-medium">
                         Excedente (juros/multa)
