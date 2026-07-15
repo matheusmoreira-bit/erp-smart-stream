@@ -265,7 +265,7 @@ export function BaixaRecebimentoDialog({
                   // Com 1 NF selecionada, o rateio acompanha o valor recebido
                   if (invoices.length === 1) {
                     const only = invoices[0];
-                    setRateio({ [only.docEntry]: txt });
+                    setRateio({ [rowKey(only)]: txt });
                   }
                 }}
                 title="O cliente pode ter pago um valor diferente do saldo residual (a menor, adiantamento; a maior, juros/multa)."
