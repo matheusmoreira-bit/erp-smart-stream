@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     }
 
     const baseHeaders: Record<string, string> = {
-      "x-api-key": apiKey,
+      "x-api-key": apiKeyTrim,
       "Content-Type": "application/json",
       Accept: "application/json",
     };
