@@ -571,6 +571,18 @@ export default function SalesPage() {
                                     </Badge>
                                   )}
                                 </td>
+                                <td className="py-2 px-2 text-right">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => setMapInvoice(r)}
+                                    aria-label={`Ver mapa de relações da NF ${r.docNum}`}
+                                    title="Mapa de relações"
+                                  >
+                                    <Network className="w-3.5 h-3.5 text-muted-foreground" />
+                                  </Button>
+                                </td>
                               </tr>
                             );
                           })}
