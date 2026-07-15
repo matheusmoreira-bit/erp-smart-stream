@@ -283,18 +283,12 @@ async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: 
 }
 
 async function validateSapAdmin(req: Request) {
-  const sapSession = req.headers.get("x-sap-session")?.trim();
-  const routeId = req.headers.get("x-sap-route")?.trim() || "";
-  const sapUser = req.headers.get("x-sap-user")?.trim();
-  const companyDB = req.headers.get("x-company-db")?.trim();
-  if (!sapSession || !sapUser || !companyDB) {
-    console.warn("[validateSapAdmin] missing SAP headers", {
-      hasSession: !!sapSession,
-      hasUser: !!sapUser,
-      hasCompanyDB: !!companyDB,
-    });
+  const headers = parseSapHeaders(req);
+  if (!headers) {
+    console.warn("[validateSapAdmin] missing/invalid SAP headers");
     return null;
   }
+  const { sapSession, routeId, sapUser, companyDB } = headers;
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -342,6 +336,7 @@ async function validateSapAdmin(req: Request) {
 
   return { id: `sap:${companyDB}:${sapUser}`, email: sapUser, companyDB, userName: sapUser, source: "sap_admin" as const };
 }
+
 
 export async function requireAdminOrSapAdmin(req: Request) {
   try {
