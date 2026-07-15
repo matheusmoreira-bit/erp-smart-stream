@@ -78,8 +78,14 @@ export function BaixaRecebimentoDialog({
   const [conta, setConta] = useState<SapSearchOption | null>(null);
   const [contaJuros, setContaJuros] = useState<SapSearchOption | null>(null);
   const [valorRecebidoTxt, setValorRecebidoTxt] = useState<string>(saldoTotal.toFixed(2).replace(".", ","));
-  const [rateio, setRateio] = useState<Record<number, string>>({});
+  const [rateio, setRateio] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Chave estável para rateio: combina tipo + docEntry + docLine.
+  // NFs (invoice) e Saldos Iniciais (journal_entry) podem compartilhar DocEntry, então
+  // precisamos de uma chave composta para evitar colisão.
+  const rowKey = (inv: BaixaInvoiceRow) =>
+    `${inv.docType ?? "invoice"}:${inv.docEntry}:${inv.docLine ?? 0}`;
 
   // Reset when dialog reopens with new selection
   useEffect(() => {
@@ -88,10 +94,10 @@ export function BaixaRecebimentoDialog({
     setConta(null);
     setContaJuros(null);
     setValorRecebidoTxt(saldoTotal.toFixed(2).replace(".", ","));
-    // Rateio inicial = saldo residual de cada NF
-    const initial: Record<number, string> = {};
+    // Rateio inicial = saldo residual de cada linha
+    const initial: Record<string, string> = {};
     for (const inv of invoices) {
-      initial[inv.docEntry] = inv.saldoResidual.toFixed(2).replace(".", ",");
+      initial[rowKey(inv)] = inv.saldoResidual.toFixed(2).replace(".", ",");
     }
     setRateio(initial);
   }, [open, saldoTotal, invoices, today]);
@@ -129,8 +135,8 @@ export function BaixaRecebimentoDialog({
 
   const valorRecebido = parseAmount(valorRecebidoTxt);
   const rateioValores = useMemo(() => {
-    const map: Record<number, number> = {};
-    for (const inv of invoices) map[inv.docEntry] = parseAmount(rateio[inv.docEntry] || "0");
+    const map: Record<string, number> = {};
+    for (const inv of invoices) map[rowKey(inv)] = parseAmount(rateio[rowKey(inv)] || "0");
     return map;
   }, [rateio, invoices]);
   const somaRateio = useMemo(
@@ -143,7 +149,7 @@ export function BaixaRecebimentoDialog({
   const excedente = useMemo(
     () =>
       invoices.reduce((acc, inv) => {
-        const v = rateioValores[inv.docEntry] || 0;
+        const v = rateioValores[rowKey(inv)] || 0;
         return acc + Math.max(0, +(v - inv.saldoResidual).toFixed(2));
       }, 0),
     [invoices, rateioValores],
