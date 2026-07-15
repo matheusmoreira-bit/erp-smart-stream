@@ -209,6 +209,13 @@ export default function PagCorp() {
     open: boolean;
     transactions: PagCorpTransaction[];
   }>({ open: false, transactions: [] });
+  const [dateConflictDialog, setDateConflictDialog] = useState<{
+    open: boolean;
+    oldest: string;
+    kept: number;
+    dropped: number;
+    filtered: PagCorpTransaction[];
+  }>({ open: false, oldest: "", kept: 0, dropped: 0, filtered: [] });
   const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
   const [showNondeductible, setShowNondeductible] = useState(false);
   const [integratingNondeductible, setIntegratingNondeductible] = useState(false);
