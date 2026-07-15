@@ -405,10 +405,23 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           : r.isCurrent
             ? "current"
             : "pending";
+      // Delta de tempo aprovação: para o aprovador que decidiu (done/rejected),
+      // usa data_atualizacao_esboco → decision_date. Para o "atual", tempo em aberto.
+      const approverDelta =
+        enrichmentActive
+          ? r.decidedAt
+            ? diffDays(startAt, r.decidedAt)
+            : r.isCurrent
+              ? diffDays(startAt, new Date().toISOString())
+              : null
+          : null;
+      const isApproverBottleneck =
+        enrichmentActive && approverDelta != null && isBottleneck(deltas?.rootToApproval ?? null) && r.done;
+
       buckets.aprovacao.items.push({
         id,
         data: {
-          tone: "blue",
+          tone: isApproverBottleneck ? "warn" : "blue",
           icon: ShieldCheck,
           kind: `Nível ${r.level_order}`,
           identifier: r.approver_name,
@@ -417,9 +430,18 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           status: r.rejected ? "rejeitado" : r.done ? "aprovado" : r.isCurrent ? "atual" : "pendente",
           statusTone: r.rejected ? "warn" : r.done ? "success" : r.isCurrent ? "amber" : "muted",
           state,
-          extra: r.remarks || null,
+          extra:
+            enrichmentActive && approverDelta != null
+              ? [
+                  r.isCurrent ? `Aguardando há ${fmtDays(approverDelta)}` : `Decidido em ${fmtDays(approverDelta)}`,
+                  r.remarks,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : r.remarks || null,
         },
       });
+
 
       // fan-out from root → each approver
       edges.push({
