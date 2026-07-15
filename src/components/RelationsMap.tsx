@@ -234,6 +234,38 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
     };
   }, [open, expense]);
 
+  // Enriquecimento: busca linha do sap_fluxo_analise_cache (VW_FIN_ANALISE_FLUXO)
+  // para exibir marcos de tempo (esboço → aprovação → lançamento → vencimento →
+  // pagamento) e gargalos. Carregado só quando o usuário liga "Enriquecer".
+  useEffect(() => {
+    if (!enriched || !open || !expense?.company_db) {
+      setFluxoRow(null);
+      return;
+    }
+    const candidates = [
+      expense.sap_doc_num != null ? String(expense.sap_doc_num) : null,
+      expense.sap_doc_entry != null ? String(expense.sap_doc_entry) : null,
+    ].filter((v): v is string => !!v);
+    if (candidates.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("sap_fluxo_analise_cache")
+        .select(
+          "data_atualizacao_esboco, data_aprovacao, data_lancamento, data_vencimento, data_pagamento, solicitante, aprovador, descricao, centro_custo, marca, departamento",
+        )
+        .eq("company_db", expense.company_db!)
+        .in("id_pedido", candidates)
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setFluxoRow((data ?? null) as SapFluxoEnrichment | null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enriched, open, expense?.company_db, expense?.sap_doc_num, expense?.sap_doc_entry]);
+
+
 
   const stages = useMemo(() => {
     if (!expense) return [] as { key: StageKey; label: string; icon: any; state: "done" | "current" | "pending" | "skipped"; hasDoc: boolean }[];
