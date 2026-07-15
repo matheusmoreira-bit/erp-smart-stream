@@ -59,7 +59,7 @@ export function BaixaRecebimentoDialog({
 }: BaixaRecebimentoDialogProps) {
   const { session } = useSap();
   const companyDb = session?.companyDB || "";
-  const dialogContentRef = useRef<HTMLDivElement>(null);
+  const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
 
   // Regra: 1 cliente por baixa
   const cardCode = invoices[0]?.cardCode || "";
