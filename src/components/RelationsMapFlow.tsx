@@ -485,6 +485,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       extra: enrichmentActive
         ? [
             expense.company_db,
+            fluxo?.id_pedido ? `Pedido #${fluxo.id_pedido}` : null,
             deltas?.approvalToPc != null
               ? `Aprovação→Lanç ${fmtDays(deltas.approvalToPc)}`
               : null,
