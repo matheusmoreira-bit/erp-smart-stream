@@ -508,13 +508,15 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
       if (session.erpType === "sap") {
         const [paymentResult, approvalResult] = await Promise.all([
           sapQueryView<ViewRow>(session, "VW_ANALISE_PAGAMENTOS_DETALHADO"),
-          sapQueryView<ApprovalViewRow>(session, "VW_TODAS_APROVACOES").catch(() => ({ data: [] as ApprovalViewRow[] })),
+          // Fonte oficial do histórico de aprovações (HanaApi): pedido de compra
+          // × aprovador, com datas/horas de criação do fluxo e da aprovação.
+          sapQueryView<RawApprovalRow>(session, "VW_PEDIDOS_COMPRA_APROVACOES").catch(() => ({ data: [] as RawApprovalRow[] })),
         ]);
 
         const payRows = paymentResult.data || [];
         setRawRows(payRows);
 
-        const approvalRows = approvalResult.data || [];
+        const approvalRows: ApprovalViewRow[] = (approvalResult.data || []).map(mapPedidoAprovacaoRow);
         const days: number[] = [];
         for (const a of approvalRows) {
           if (a.Status_Aprovacao === "Aprovado" || a.Status_Aprovacao === "Rejeitado") {
