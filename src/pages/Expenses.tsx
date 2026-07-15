@@ -1740,10 +1740,31 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               ))}
             </div>
             {/* Toggle de origem removido: sempre carregamos ERP Flow + ERP. */}
-            {showSourceToggle && isLoadingSap && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
-                Carregando pedidos do ERP…
+            {showSourceToggle && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refreshSapNow}
+                  disabled={isRevalidatingSap || isLoadingSap}
+                  className="h-8 gap-2"
+                  aria-label="Atualizar agora — sincronizar com o ERP"
+                  title={sapCacheUpdatedAt ? `Cache: ${new Date(sapCacheUpdatedAt).toLocaleString("pt-BR")}` : "Sem cache"}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRevalidatingSap || isLoadingSap ? "animate-spin" : ""}`} aria-hidden="true" />
+                  <span className="text-xs">Atualizar agora</span>
+                </Button>
+                {(isLoadingSap || isRevalidatingSap) && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                    Sincronizando com o ERP…
+                  </span>
+                )}
+                {!isLoadingSap && !isRevalidatingSap && sapFromCache && sapCacheUpdatedAt && (
+                  <span className="text-xs text-muted-foreground">
+                    Cache de {new Date(sapCacheUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
               </div>
             )}
             {isAdmin && (
