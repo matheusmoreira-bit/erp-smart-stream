@@ -221,6 +221,28 @@ Deno.serve(async (req) => {
     const limit = Math.min(Math.max(Number(body?.limit ?? url.searchParams.get("limit") ?? 100), 1), 500);
     const offset = Math.max(Number(body?.offset ?? url.searchParams.get("offset") ?? 0), 0);
 
+    // Filtros opcionais. Todos os textos são case-insensitive/substring.
+    const filters = (body?.filters && typeof body.filters === "object" ? body.filters : {}) as {
+      supplier?: string;
+      requester?: string;
+      approver?: string;
+      approval_status?: string; // status mapeado: pendente_aprovacao|aprovado|rejeitado|cancelado|encerrado|pc_lancado
+      date_from?: string;       // ISO / yyyy-mm-dd
+      date_to?: string;
+    };
+    const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+    const supplierQ = norm(filters.supplier);
+    const requesterQ = norm(filters.requester);
+    const approverQ = norm(filters.approver);
+    const statusQ = norm(filters.approval_status);
+    const parseDay = (s: string | undefined, endOfDay = false) => {
+      if (!s) return null;
+      const d = new Date(s.length <= 10 ? `${s}T${endOfDay ? "23:59:59.999" : "00:00:00"}Z` : s);
+      return isNaN(d.getTime()) ? null : d.getTime();
+    };
+    const dateFromMs = parseDay(filters.date_from, false);
+    const dateToMs = parseDay(filters.date_to, true);
+
     if (!companyDb) {
       return new Response(JSON.stringify({ error: "company_db obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -276,11 +298,34 @@ Deno.serve(async (req) => {
       }
     }
 
-    const rows = Array.from(byKey.values()).sort((a, b) => {
+    let rows = Array.from(byKey.values()).sort((a, b) => {
       const at = new Date(a.doc_date || a.created_at).getTime();
       const bt = new Date(b.doc_date || b.created_at).getTime();
       return bt - at;
     });
+
+    if (supplierQ || requesterQ || approverQ || statusQ || dateFromMs != null || dateToMs != null) {
+      rows = rows.filter((r) => {
+        if (supplierQ) {
+          const hay = `${norm(r.supplier_name)} ${norm(r.supplier_code)}`;
+          if (!hay.includes(supplierQ)) return false;
+        }
+        if (requesterQ && !norm(r.requester_name).includes(requesterQ)) return false;
+        if (approverQ && !norm(r.current_approver).includes(approverQ)) return false;
+        if (statusQ) {
+          const raw = norm(r.sap_purchase_order_status);
+          const mapped = norm(r.status);
+          if (!raw.includes(statusQ) && !mapped.includes(statusQ)) return false;
+        }
+        if (dateFromMs != null || dateToMs != null) {
+          const t = r.doc_date ? new Date(r.doc_date).getTime() : NaN;
+          if (!Number.isFinite(t)) return false;
+          if (dateFromMs != null && t < dateFromMs) return false;
+          if (dateToMs != null && t > dateToMs) return false;
+        }
+        return true;
+      });
+    }
 
     const total = rows.length;
     const page = rows.slice(offset, offset + limit);
