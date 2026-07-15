@@ -534,10 +534,19 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
 
   /* ── Stage: NF de Entrada ── */
   const nfById: Record<string, { id: string; apChildren: string[] }> = {};
+  const fluxoNfId = enrichmentActive ? fluxo?.id_nf || null : null;
+  const fluxoCpId = enrichmentActive ? fluxo?.id_cp || null : null;
+  let nfFluxoMatched = false;
+  let cpFluxoMatched = false;
   nfLinks.forEach((nf) => {
     const id = `nf-${nf.id}`;
     nfById[nf.id] = { id, apChildren: [] };
     const statusOk = /close|paga/i.test(nf.status);
+    const nfDocEntryStr = nf.sap_invoice_draft_id ? String(nf.sap_invoice_draft_id) : null;
+    const matchesFluxoNf =
+      !!fluxoNfId &&
+      (nfDocEntryStr === fluxoNfId || nf.numero_nf === fluxoNfId || nf.id === fluxoNfId);
+    if (matchesFluxoNf) nfFluxoMatched = true;
     buckets.nf_entrada.items.push({
       id,
       data: {
@@ -551,6 +560,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         status: nf.status,
         statusTone: statusOk ? "success" : "muted",
         state: statusOk ? "done" : "pending",
+        extra: matchesFluxoNf ? `Vínculo fluxo · NF #${fluxoNfId}` : undefined,
       },
     });
     edges.push({
