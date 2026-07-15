@@ -323,11 +323,22 @@ export function BaixaRecebimentoDialog({
                 </thead>
                 <tbody>
                   {invoices.map((inv) => {
-                    const val = rateioValores[inv.docEntry] || 0;
+                    const k = rowKey(inv);
+                    const val = rateioValores[k] || 0;
                     const excede = val > inv.saldoResidual + 0.001;
+                    const isSI = inv.docType === "journal_entry";
                     return (
-                      <tr key={inv.docEntry} className="border-b border-border/40">
-                        <td className="py-1.5 px-2 font-mono">{inv.docNum}</td>
+                      <tr key={k} className="border-b border-border/40">
+                        <td className="py-1.5 px-2 font-mono">
+                          {isSI ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[9px] py-0 px-1">SI</Badge>
+                              {inv.docNum}
+                            </span>
+                          ) : (
+                            inv.docNum
+                          )}
+                        </td>
                         <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
                           {fmt(inv.saldoResidual, inv.currency)}
                         </td>
@@ -335,14 +346,14 @@ export function BaixaRecebimentoDialog({
                           <Input
                             inputMode="decimal"
                             className={`h-7 text-xs text-right font-mono ${excede ? "border-amber-500 bg-amber-500/5" : ""}`}
-                            value={rateio[inv.docEntry] || ""}
+                            value={rateio[k] || ""}
                             onChange={(e) =>
-                              setRateio((prev) => ({ ...prev, [inv.docEntry]: e.target.value }))
+                              setRateio((prev) => ({ ...prev, [k]: e.target.value }))
                             }
                             disabled={invoices.length === 1}
                             title={
                               invoices.length === 1
-                                ? "Com 1 NF selecionada, o valor a baixar é o próprio saldo residual."
+                                ? "Com 1 item selecionado, o valor a baixar é o próprio saldo residual."
                                 : excede
                                   ? "Valor acima do saldo — excedente vira juros/multa"
                                   : undefined
