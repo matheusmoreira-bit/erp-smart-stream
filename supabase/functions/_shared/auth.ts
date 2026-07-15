@@ -20,6 +20,67 @@ const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 60_000;
 const sapSessionValidationCache = new Map<string, { expiresAt: number; value: SapSessionValidation }>();
 const encoder = new TextEncoder();
 
+/* ─────────── Strict header validation ───────────
+ * Todos os headers x-sap-* são atacáveis: um cliente pode declarar
+ * qualquer coisa. Aqui rejeitamos:
+ *  - vazios / apenas whitespace
+ *  - comprimento fora de limites
+ *  - qualquer caractere de controle (CR/LF/TAB) → previne injeção
+ *  - charset fora do esperado para cada campo
+ */
+const SAP_HEADER_PATTERNS = {
+  // SAP HANA DB names: [A-Za-z0-9_], até 64. Aceitamos hífen para folga.
+  companyDB: /^[A-Za-z0-9_-]{1,64}$/,
+  // UserCode SAP: alfa-numérico + . _ - @ (aceita e-mails intercompany).
+  sapUser: /^[A-Za-z0-9._@-]{1,128}$/,
+  // B1SESSION cookie: hex/base64/UUID-like.
+  sapSession: /^[A-Za-z0-9+/=_.\-]{8,512}$/,
+  // ROUTEID pode vir vazio; quando presente, mesmo charset da sessão.
+  routeId: /^[A-Za-z0-9+/=_.\-]{0,256}$/,
+  // Token assinado: "<payload_b64url>.<signature_b64url>".
+  authToken: /^[A-Za-z0-9_-]{4,4096}\.[A-Za-z0-9_-]{16,512}$/,
+} as const;
+
+export interface SapHeaderBundle {
+  sapSession: string;
+  routeId: string;
+  sapUser: string;
+  companyDB: string;
+  sapAuthToken: string;
+}
+
+/**
+ * Extrai e valida os headers x-sap-*. Retorna null se qualquer campo
+ * obrigatório estiver ausente/malformado. Nunca lança — quem chama
+ * decide se responde 401.
+ */
+export function parseSapHeaders(req: Request): SapHeaderBundle | null {
+  const raw = {
+    sapSession: req.headers.get("x-sap-session"),
+    routeId: req.headers.get("x-sap-route"),
+    sapUser: req.headers.get("x-sap-user"),
+    companyDB: req.headers.get("x-company-db"),
+    sapAuthToken: req.headers.get("x-sap-auth-token"),
+  };
+  // Missing required (routeId + authToken são opcionais).
+  if (!raw.sapSession || !raw.sapUser || !raw.companyDB) return null;
+
+  const sapSession = raw.sapSession.trim();
+  const routeId = (raw.routeId || "").trim();
+  const sapUser = raw.sapUser.trim();
+  const companyDB = raw.companyDB.trim();
+  const sapAuthToken = (raw.sapAuthToken || "").trim();
+
+  if (!SAP_HEADER_PATTERNS.sapSession.test(sapSession)) return null;
+  if (routeId && !SAP_HEADER_PATTERNS.routeId.test(routeId)) return null;
+  if (!SAP_HEADER_PATTERNS.sapUser.test(sapUser)) return null;
+  if (!SAP_HEADER_PATTERNS.companyDB.test(companyDB)) return null;
+  if (sapAuthToken && !SAP_HEADER_PATTERNS.authToken.test(sapAuthToken)) return null;
+
+  return { sapSession, routeId, sapUser, companyDB, sapAuthToken };
+}
+
+
 function getSapSessionValidationCacheKey(companyDB: string, sapUser: string, sapSession: string, routeId: string) {
   return `${companyDB}:${sapUser}:${sapSession}:${routeId}`;
 }
