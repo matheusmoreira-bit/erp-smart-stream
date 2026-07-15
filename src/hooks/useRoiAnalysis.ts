@@ -276,10 +276,23 @@ export function useRoiAnalysis(opts: Options) {
       let countAtrasados = 0;
       let valorTotal = 0;
       let prejuizo = 0;
+      // Segregação por origem
+      let nDocsSapOnly = 0;
+      let nDocsViaFlow = 0;
+      let valorSapOnly = 0;
+      let valorViaFlow = 0;
+      let atrasoSapOnly = 0;
+      let atrasoViaFlow = 0;
+      let prejuizoSapOnly = 0;
+      let prejuizoViaFlow = 0;
 
       for (const d of docs) {
         if (d.requester_email) solicitantes.add(d.requester_email.toLowerCase());
         valorTotal += d.total_amount;
+
+        const viaFlow = d.source !== "cache"; // "expense" ou "both" → passou pelo ERP Flow
+        if (viaFlow) { nDocsViaFlow++; valorViaFlow += d.total_amount; }
+        else { nDocsSapOnly++; valorSapOnly += d.total_amount; }
 
         // antecedência: created_at → due_date
         if (d.due_date && d.created_at) {
@@ -302,7 +315,10 @@ export function useRoiAnalysis(opts: Options) {
             if (atraso > 0) {
               sumAtraso += atraso;
               countAtrasados++;
-              prejuizo += d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
+              const p_val = d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
+              prejuizo += p_val;
+              if (viaFlow) { atrasoViaFlow++; prejuizoViaFlow += p_val; }
+              else { atrasoSapOnly++; prejuizoSapOnly += p_val; }
             }
           }
         }
