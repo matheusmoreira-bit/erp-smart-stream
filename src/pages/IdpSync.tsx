@@ -44,12 +44,14 @@ export default function IdpSyncPage() {
     fetchMappings,
     autoSync,
     linkManually,
+    syncAttributes,
     unlinkUser,
   } = useIdpSync();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "linked" | "pending">("all");
   const [syncing, setSyncing] = useState(false);
+  const [syncingAttrs, setSyncingAttrs] = useState(false);
   const [linkingUser, setLinkingUser] = useState<string | null>(null);
 
   useEffect(() => {
