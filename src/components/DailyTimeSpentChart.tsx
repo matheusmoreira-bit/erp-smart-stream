@@ -48,6 +48,7 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
   const [flowKeys, setFlowKeys] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
+  const [syncingFluxo, setSyncingFluxo] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [granularity, setGranularity] = useState<Granularity>("week");
 
@@ -175,6 +176,24 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
     }
   };
 
+  const runFluxoSync = async () => {
+    setSyncingFluxo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sap-fluxo-analise-sync", {
+        body: companyDb ? { company_db: companyDb } : {},
+      });
+      if (error) throw error;
+      const total = (data as any)?.total_synced ?? 0;
+      toast.success(`VW_FIN_ANALISE_FLUXO sincronizada — ${total} linhas`);
+      setReloadKey((k) => k + 1);
+    } catch (e: any) {
+      toast.error(`Sync do fluxo falhou: ${e?.message || e}`);
+    } finally {
+      setSyncingFluxo(false);
+    }
+  };
+
+
   return (
     <div className="glass-card p-4 sm:p-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -201,11 +220,18 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
           </span>
 
           {isAdmin && (
-            <Button size="sm" variant="outline" onClick={runBackfill} disabled={backfilling}>
-              {backfilling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-              <span className="ml-1">Backfill SAP</span>
-            </Button>
+            <>
+              <Button size="sm" variant="outline" onClick={runBackfill} disabled={backfilling}>
+                {backfilling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                <span className="ml-1">Backfill SAP</span>
+              </Button>
+              <Button size="sm" variant="outline" onClick={runFluxoSync} disabled={syncingFluxo}>
+                {syncingFluxo ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                <span className="ml-1">Sync Fluxo HANA</span>
+              </Button>
+            </>
           )}
+
         </div>
       </div>
 

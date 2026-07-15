@@ -146,6 +146,21 @@ interface PoCacheRow {
   doc_total: number | null;
 }
 
+/**
+ * Linha de VW_FIN_ANALISE_FLUXO em cache. Fornece a amarração
+ * Esboço → Pedido → NF → CP e as datas reais de vencimento/pagamento.
+ */
+interface FluxoRow {
+  company_db: string;
+  data_aprovacao: string | null;
+  data_vencimento: string | null;
+  data_lancamento: string | null;
+  data_pagamento: string | null;
+  valor: number | null;
+  id_esboco: string | null;
+  id_pedido: string | null;
+}
+
 interface Company {
   company_db: string;
   display_name: string;
@@ -158,8 +173,10 @@ export function useRoiAnalysis(opts: Options) {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
   const [pos, setPos] = useState<PoCacheRow[]>([]);
+  const [fluxo, setFluxo] = useState<FluxoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -215,13 +232,24 @@ export function useRoiAnalysis(opts: Options) {
         if (toDate) q = q.lte("doc_date", toDate);
         return q;
       };
+      const buildFluxo = () => {
+        let q = (supabase as any)
+          .from("sap_fluxo_analise_cache")
+          .select("company_db, data_aprovacao, data_vencimento, data_lancamento, data_pagamento, valor, id_esboco, id_pedido")
+          .order("data_lancamento", { ascending: true });
+        if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
+        if (fromIso) q = q.gte("data_lancamento", fromIso);
+        if (toIso) q = q.lte("data_lancamento", toIso);
+        return q;
+      };
 
-      const [pr, cr, expensesAll, approvalsAll, posAll] = await Promise.all([
+      const [pr, cr, expensesAll, approvalsAll, posAll, fluxoAll] = await Promise.all([
         supabase.from("roi_parameters").select("*"),
         supabase.from("companies").select("company_db, display_name"),
         fetchAll<ExpenseRow>(buildExpenses),
         fetchAll<ApprovalRow>(buildApprovals),
         fetchAll<PoCacheRow>(buildPos),
+        fetchAll<FluxoRow>(buildFluxo).catch(() => [] as FluxoRow[]),
       ]);
 
       if (pr.error) throw pr.error;
@@ -237,10 +265,10 @@ export function useRoiAnalysis(opts: Options) {
       setExpenses(expensesAll.filter((e) => !isTestCompanyDb(e.company_db) && (e.created_at || "") >= flowLaunchIso));
       setApprovals(approvalsAll.filter((a) => !isTestCompanyDb(a.company_db)));
       setPos(posAll.filter((p) => !isTestCompanyDb(p.company_db)));
-
-
+      setFluxo((fluxoAll || []).filter((f) => !isTestCompanyDb(f.company_db)));
 
     } catch (e: any) {
+
       console.error("useRoiAnalysis load error", e);
       setError(e?.message || "Falha ao carregar dados de ROI");
     } finally {
