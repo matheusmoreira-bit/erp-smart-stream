@@ -132,7 +132,25 @@ export default function IdpSyncPage() {
     }
   };
 
-  const handleComboSelect = useCallback(
+  const handleReprocessUser = async (sapUserCode: string) => {
+    setReprocessingUser(sapUserCode);
+    try {
+      // Garante lista JC fresca para recalcular o centro de custo a partir do valor atual
+      const jcList = jcUsers.length > 0 ? jcUsers : await fetchJumpCloudUsers(true);
+      const attrs = await reprocessUserAttributes(sapUserCode, jcList);
+      toast.success(
+        attrs.cost_center_code
+          ? `Atributos reprocessados • CC ${attrs.cost_center_code}`
+          : "Atributos reprocessados (sem centro de custo no JumpCloud)"
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao reprocessar atributos");
+    } finally {
+      setReprocessingUser(null);
+    }
+  };
+
+
     async (sapUserCode: string, option: SapSearchOption | null) => {
       if (!option) return;
       const jcUser = jcUsers.find((j) => j._id === option.code);
