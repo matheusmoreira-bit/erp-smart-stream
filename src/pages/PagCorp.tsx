@@ -1801,6 +1801,24 @@ export default function PagCorp() {
         onConfirm={handleConfirmConsolidate}
       />
 
+      <ConfirmDialog
+        open={dateConflictDialog.open}
+        onOpenChange={(open) => {
+          if (!open) setDateConflictDialog((prev) => ({ ...prev, open: false }));
+        }}
+        title="Datas divergentes na seleção"
+        description={`Existem transações em datas diferentes. A integração em lote seguirá apenas com as ${dateConflictDialog.kept} transação(ões) da data mais antiga (${(() => {
+          try { return new Date(dateConflictDialog.oldest).toLocaleDateString("pt-BR"); } catch { return dateConflictDialog.oldest; }
+        })()}). Outras ${dateConflictDialog.dropped} serão ignoradas neste lote.`}
+        confirmLabel="Continuar com data mais antiga"
+        cancelLabel="Cancelar"
+        onConfirm={() => {
+          const list = dateConflictDialog.filtered;
+          setDateConflictDialog({ open: false, oldest: "", kept: 0, dropped: 0, filtered: [] });
+          proceedBatchUnified(list);
+        }}
+      />
+
       <PagCorpPresentationDialog
         open={presentationDialogOpen}
         onClose={() => setPresentationDialogOpen(false)}
