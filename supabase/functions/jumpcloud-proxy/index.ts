@@ -9,17 +9,26 @@ const corsHeaders = {
 
 
 async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>) {
+  // JumpCloud é uma integração tenant-wide (não por empresa). Historicamente,
+  // o painel de credenciais permitia salvar por company_db, o que gerou
+  // múltiplos conjuntos (global + por empresa). Aqui pegamos SEMPRE o valor
+  // mais recente de cada chave, independente do company_db, para que a
+  // última atualização feita pelo admin prevaleça.
   const { data, error } = await supabase
     .from("system_credentials")
-    .select("credential_key, credential_value")
-    .eq("system_name", "jumpcloud");
+    .select("credential_key, credential_value, updated_at, company_db")
+    .eq("system_name", "jumpcloud")
+    .order("updated_at", { ascending: false });
 
   if (error) throw new Error(`Erro ao buscar credenciais JumpCloud: ${error.message}`);
   if (!data || data.length === 0) throw new Error("Credenciais JumpCloud não configuradas");
 
   const creds: Record<string, string> = {};
-  for (const row of data) {
-    creds[row.credential_key] = row.credential_value;
+  for (const row of data as any[]) {
+    // Primeiro que aparecer (mais recente) vence — não sobrescreva.
+    if (!(row.credential_key in creds)) {
+      creds[row.credential_key] = row.credential_value;
+    }
   }
 
   if (!creds.api_key) throw new Error("API Key do JumpCloud não configurada");
@@ -62,7 +71,8 @@ Deno.serve(async (req) => {
     // org_id armazenado é IGNORADO — MTP descobre via /api/organizations; stand-alone dispensa header.
     const legacyOrgId = (creds.org_id || "").trim();
 
-    if (!apiKey) {
+    const apiKeyTrim = (apiKey || "").trim();
+    if (!apiKeyTrim) {
       return new Response(JSON.stringify({ ok: false, error: "API Key não informada." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -70,7 +80,7 @@ Deno.serve(async (req) => {
     }
 
     const baseHeaders: Record<string, string> = {
-      "x-api-key": apiKey,
+      "x-api-key": apiKeyTrim,
       "Content-Type": "application/json",
       Accept: "application/json",
     };
