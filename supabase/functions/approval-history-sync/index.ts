@@ -356,7 +356,7 @@ function mapHanaApprovalRow(raw: Record<string, unknown>, companyDb: string) {
 }
 
 async function fetchAndMergeHanaApprovals(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   companyDb: string,
 ): Promise<{ merged: number; upserted: number; skipped?: string; error?: string }> {
   try {
