@@ -1746,6 +1746,17 @@ export function CreateExpenseModal({
         toast.error(`Item ${n}: centro de custo é obrigatório`);
         return;
       }
+      // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.6.%.
+      if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter)) {
+        const codeUp = String(it.item_code).toUpperCase();
+        if (codeUp.startsWith("IMP")) {
+          toast.error(`Item ${n}: itens IMP% são restritos a usuários do CC 1.2.2.%`);
+        } else if (codeUp.startsWith("FOL")) {
+          toast.error(`Item ${n}: itens FOL% são restritos a usuários do CC 1.6.%`);
+        } else {
+          toast.error(`Item ${n}: item não permitido para o seu centro de custo`);
+        }
+        return;
       // Open Gaming: projeto por linha é obrigatório (política interna).
       if (sapSession?.companyDB === "open_gaming_sa" && (!it.project || !String(it.project).trim())) {
         toast.error(`Item ${n}: projeto é obrigatório para Open Gaming`);
