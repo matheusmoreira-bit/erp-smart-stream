@@ -350,6 +350,76 @@ export default function PagCorp() {
     }
   };
 
+  // Reprocessa a baixa em lote para todas as transações filtradas que já tenham
+  // a NF de entrada lançada (settlementStatus = 'awaiting_settlement') ou que
+  // estejam em 'error' retentável. Cada integrationLogId gera 1 chamada ao
+  // watcher (o watcher já cobre todas as linhas daquele PC).
+  const handleBatchReprocessSettlement = async () => {
+    const eligible = filteredTransactions.filter(
+      (t) =>
+        t.integrationLogId &&
+        t.settlementStatus &&
+        t.settlementStatus !== "settled" &&
+        (t.settlementStatus === "awaiting_settlement" || t.settlementStatus === "error"),
+    );
+    const uniqueLogIds = Array.from(
+      new Set(eligible.map((t) => t.integrationLogId as string)),
+    );
+    if (uniqueLogIds.length === 0) {
+      toast.info("Nenhuma transação com NF de entrada lançada aguardando baixa.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Reprocessar a baixa de ${uniqueLogIds.length} grupo(s) (${eligible.length} transações)?`,
+    );
+    if (!confirmed) return;
+
+    setBatchReprocessing(true);
+    let settled = 0;
+    let awaiting = 0;
+    let errors = 0;
+    let skipped = 0;
+    try {
+      for (const logId of uniqueLogIds) {
+        try {
+          const resp = await sapFunctionFetch("pagcorp-settlement-watcher", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ logId, forceRetry: true }),
+          });
+          const data = await resp.json().catch(() => null);
+          if (!resp.ok) {
+            errors++;
+            continue;
+          }
+          if (data?.skipped) {
+            skipped++;
+            continue;
+          }
+          const results: Array<{ status?: string }> = Array.isArray(data?.results)
+            ? data.results
+            : [];
+          if (results.some((r) => r.status === "settled")) settled++;
+          else if (results.some((r) => r.status === "error")) errors++;
+          else awaiting++;
+        } catch {
+          errors++;
+        }
+      }
+      toast.success(
+        `Reprocessamento concluído — baixados: ${settled}, aguardando: ${awaiting}, erros: ${errors}${
+          skipped ? `, ignorados: ${skipped}` : ""
+        }.`,
+      );
+      await fetchTransactions(startDate, endDate, session?.companyDB);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha no reprocessamento em lote.");
+    } finally {
+      setBatchReprocessing(false);
+    }
+  };
+
+
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
