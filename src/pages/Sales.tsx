@@ -739,6 +739,8 @@ export default function SalesPage() {
           cardName: r.cardName,
           currency: r.currency,
           saldoResidual: r.saldoResidual,
+          docType: r.docType,
+          docLine: r.docLine,
         }))}
         onSuccess={() => {
           clearSelection();
