@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { sapAction } from "@/lib/sap-client";
-import type { SapSession } from "@/contexts/SapContext";
+import type { ErpSession } from "@/contexts/SapContext";
 
 /**
  * Sincroniza uma baixa de recebimento (baixas_recebimento + itens) com o SAP B1
