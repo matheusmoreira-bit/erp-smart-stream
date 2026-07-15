@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { requireUserOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
 import { logIntegrationCall } from "../_shared/integration-log.ts";
 
 const corsHeaders = {
