@@ -64,6 +64,7 @@ import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
 import { SapValidationDialog } from "@/components/SapValidationDialog";
 import { RelationsMap, type RelationsMapExpense } from "@/components/RelationsMap";
