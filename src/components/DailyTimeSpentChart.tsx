@@ -305,6 +305,17 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
                 {syncingFluxo ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                 <span className="ml-1">Sync Fluxo HANA</span>
               </Button>
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={runRebuildSeries}
+                disabled={rebuilding || backfilling || syncingFluxo}
+                title="Sincroniza VW_FIN_ANALISE_FLUXO e o cache de pedidos SAP (usado como fallback quando data_lancamento está ausente) e recarrega o gráfico."
+              >
+                {rebuilding ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                <span className="ml-1">Reconstruir série</span>
+              </Button>
             </>
           )}
 
