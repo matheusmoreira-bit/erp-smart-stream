@@ -59,6 +59,7 @@ export function BaixaRecebimentoDialog({
 }: BaixaRecebimentoDialogProps) {
   const { session } = useSap();
   const companyDb = session?.companyDB || "";
+  const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
 
   // Regra: 1 cliente por baixa
   const cardCode = invoices[0]?.cardCode || "";
@@ -121,40 +122,35 @@ export function BaixaRecebimentoDialog({
     () => Object.values(rateioValores).reduce((s, v) => s + v, 0),
     [rateioValores],
   );
-  const excedente = Math.max(0, +(valorRecebido - somaRateio).toFixed(2));
-  const isOverpayment = valorRecebido > saldoTotal + 0.001;
-  const rateioExcedeSaldo = invoices.some(
-    (inv) => (rateioValores[inv.docEntry] || 0) > inv.saldoResidual + 0.001,
+  // Excedente por linha (parte do rateio que ultrapassa o saldo residual da NF)
+  // é contabilizado como juros/multa. A soma total dos rateios continua igual
+  // ao valor recebido — o excedente já está embutido nas linhas.
+  const excedente = useMemo(
+    () =>
+      invoices.reduce((acc, inv) => {
+        const v = rateioValores[inv.docEntry] || 0;
+        return acc + Math.max(0, +(v - inv.saldoResidual).toFixed(2));
+      }, 0),
+    [invoices, rateioValores],
   );
-
-  // Auto-ajusta rateio quando valor recebido muda:
-  //  - Se valor >= saldoTotal: rateio = saldo total de cada NF (excedente vira juros/multa)
-  //  - Se valor < saldoTotal: mantém edição manual (usuário distribui)
-  useEffect(() => {
-    if (!open) return;
-    if (valorRecebido >= saldoTotal - 0.001) {
-      const next: Record<number, string> = {};
-      for (const inv of invoices) next[inv.docEntry] = inv.saldoResidual.toFixed(2).replace(".", ",");
-      setRateio(next);
-    }
-    // Se < saldoTotal, deixa o usuário editar por NF; não sobrescreve.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valorRecebido, saldoTotal, open]);
+  const diffSoma = +(valorRecebido - somaRateio).toFixed(2);
 
   /* ── Validações ─────────────────────────────────────── */
   const validationErrors: string[] = [];
   if (!dataRecebimento) validationErrors.push("Informe a data de recebimento.");
   if (!conta) validationErrors.push("Selecione a conta contábil de recebimento.");
   if (valorRecebido <= 0) validationErrors.push("Informe um valor recebido maior que zero.");
-  if (rateioExcedeSaldo)
-    validationErrors.push("Nenhum item do rateio pode exceder o saldo residual da NF.");
-  if (valorRecebido < saldoTotal - 0.001) {
-    if (Math.abs(somaRateio - valorRecebido) > 0.01) {
-      validationErrors.push("A soma do rateio deve igualar o valor recebido.");
-    }
+  if (Math.abs(diffSoma) > 0.01) {
+    validationErrors.push(
+      diffSoma > 0
+        ? `Faltam ${fmt(diffSoma, currency)} para completar o valor recebido.`
+        : `Rateio excede o valor recebido em ${fmt(-diffSoma, currency)}.`,
+    );
   }
-  if (isOverpayment && !contaJuros) {
-    validationErrors.push("Valor recebido excede o saldo — selecione a conta de juros/multa.");
+  if (excedente > 0 && !contaJuros) {
+    validationErrors.push(
+      "Há valor a baixar acima do saldo de uma ou mais NFs — selecione a conta de juros/multa.",
+    );
   }
 
   /* ── Submit ─────────────────────────────────────────── */
@@ -233,7 +229,7 @@ export function BaixaRecebimentoDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !submitting && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent ref={setDialogEl} className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wallet className="w-5 h-5 text-primary" />
@@ -269,10 +265,11 @@ export function BaixaRecebimentoDialog({
                 value={conta}
                 onChange={setConta}
                 placeholder="Buscar conta contábil..."
+                portalContainer={dialogEl}
                 required
               />
             </div>
-            {isOverpayment && (
+            {excedente > 0 && (
               <div className="space-y-1 sm:col-span-2">
                 <Label className="text-xs flex items-center gap-1 text-amber-600 dark:text-amber-400">
                   <AlertTriangle className="w-3.5 h-3.5" />
@@ -284,6 +281,7 @@ export function BaixaRecebimentoDialog({
                   value={contaJuros}
                   onChange={setContaJuros}
                   placeholder="Buscar conta de receita financeira / juros..."
+                  portalContainer={dialogEl}
                   required
                 />
               </div>
@@ -297,7 +295,7 @@ export function BaixaRecebimentoDialog({
                 Rateio por NF
               </p>
               <Badge variant="outline" className="text-[10px]">
-                {valorRecebido >= saldoTotal - 0.001 ? "Automático" : "Manual"}
+                {Math.abs(diffSoma) <= 0.01 ? "OK" : diffSoma > 0 ? "Faltam" : "Excede"}
               </Badge>
             </div>
             <div className="rounded-lg border border-border overflow-hidden">
@@ -322,12 +320,12 @@ export function BaixaRecebimentoDialog({
                         <td className="py-1.5 px-2 text-right">
                           <Input
                             inputMode="decimal"
-                            className={`h-7 text-xs text-right font-mono ${excede ? "border-destructive" : ""}`}
+                            className={`h-7 text-xs text-right font-mono ${excede ? "border-amber-500 bg-amber-500/5" : ""}`}
                             value={rateio[inv.docEntry] || ""}
                             onChange={(e) =>
                               setRateio((prev) => ({ ...prev, [inv.docEntry]: e.target.value }))
                             }
-                            disabled={valorRecebido >= saldoTotal - 0.001}
+                            title={excede ? "Valor acima do saldo — excedente vira juros/multa" : undefined}
                           />
                         </td>
                       </tr>
@@ -338,13 +336,17 @@ export function BaixaRecebimentoDialog({
                   <tr className="bg-muted/20 border-t border-border/60">
                     <td className="py-2 px-2 font-medium">Total do rateio</td>
                     <td className="py-2 px-2 text-right font-mono text-muted-foreground">
-                      {fmt(saldoTotal, currency)}
+                      Recebido: {fmt(valorRecebido, currency)}
                     </td>
-                    <td className="py-2 px-2 text-right font-mono font-semibold">
+                    <td
+                      className={`py-2 px-2 text-right font-mono font-semibold ${
+                        Math.abs(diffSoma) > 0.01 ? "text-destructive" : ""
+                      }`}
+                    >
                       {fmt(somaRateio, currency)}
                     </td>
                   </tr>
-                  {isOverpayment && (
+                  {excedente > 0 && (
                     <tr className="border-t border-border/60 bg-amber-500/5">
                       <td className="py-2 px-2 text-amber-600 dark:text-amber-400 font-medium">
                         Excedente (juros/multa)
