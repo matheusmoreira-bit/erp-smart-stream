@@ -1380,7 +1380,7 @@ export default function ApprovalRulesPage() {
   const [search, setSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const [activeTab, setActiveTab] = useState<"standard" | "custom" | "substitutes">("standard");
+  const [activeTab, setActiveTab] = useState<"standard" | "custom" | "substitutes" | "health">("standard");
   const { isAdmin } = useAuth();
 
   const CUSTOM_PRIORITY = 9999;
