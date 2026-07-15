@@ -190,6 +190,255 @@ function mapRow(r: WebhookRow, companyDb: string) {
   };
 }
 
+/* =========================================================================
+ * HANA view VW_PEDIDOS_COMPRA_APROVACOES (Apiuser)
+ * -------------------------------------------------------------------------
+ * Fase adicional que loga como Apiuser em cada empresa SAP, consulta a
+ * view VW_PEDIDOS_COMPRA_APROVACOES e mescla o resultado em approval_history.
+ * Diferente do webhook n8n (que só traz pendentes), esta view retorna a
+ * decisão final (Aprovado/Rejeitado) com data/hora — permitindo popular
+ * decisões que aconteceram fora do ERP Flow (SAP puro).
+ * =======================================================================*/
+
+function normalizeSapBaseUrl(url: string): string {
+  let u = url.replace(/\/+$/, "");
+  if (u.includes("/b1s/v1")) u = u.replace("/b1s/v1", "/b1s/v2");
+  else if (!u.includes("/b1s/v2")) u = `${u}/b1s/v2`;
+  return u;
+}
+
+async function sapLoginServiceLayer(
+  baseUrl: string,
+  user: string,
+  pass: string,
+  db: string,
+): Promise<{ sessionId: string; routeId: string }> {
+  const resp = await fetch(`${baseUrl}/Login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ UserName: user, Password: pass, CompanyDB: db }),
+  });
+  if (!resp.ok) throw new Error(`Login SAP falhou: ${resp.status} ${await resp.text().catch(() => "")}`);
+  const json = await resp.json();
+  const cookies = resp.headers.get("set-cookie") || "";
+  const routeMatch = cookies.match(/B1ROUTEID=([^;]+)/);
+  return { sessionId: json.SessionId as string, routeId: routeMatch?.[1] ?? "" };
+}
+
+async function sapLogoutServiceLayer(
+  baseUrl: string,
+  s: { sessionId: string; routeId: string },
+): Promise<void> {
+  try {
+    await fetch(`${baseUrl}/Logout`, {
+      method: "POST",
+      headers: { Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}` },
+    });
+  } catch { /* ignore */ }
+}
+
+async function fetchHanaView(database: string, sessionId: string, view: string): Promise<Record<string, unknown>[]> {
+  const dynamicToken = await generateDynamicToken();
+  const params = new URLSearchParams({
+    SessionId: sessionId,
+    DB: database,
+    View: view,
+    DynamicToken: dynamicToken,
+    _t: String(Date.now()),
+  });
+  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, {
+    headers: {
+      "X-SessionId": sessionId,
+      "X-DB": database,
+      "X-View": view,
+      "X-Dynamic-Token": dynamicToken,
+    },
+  });
+  if (!resp.ok) throw new Error(`HANA view falhou: ${resp.status}`);
+  const text = await resp.text();
+  if (!text) return [];
+  const payload = JSON.parse(text);
+  if (Array.isArray(payload)) {
+    const wrapped = payload.find((it) => it && typeof it === "object" && Array.isArray((it as { data?: unknown }).data));
+    if (wrapped) return (wrapped as { data: Record<string, unknown>[] }).data;
+    return payload as Record<string, unknown>[];
+  }
+  if (payload && Array.isArray(payload.data)) return payload.data as Record<string, unknown>[];
+  return [];
+}
+
+function pickField(row: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const k of keys) {
+    const v = row[k];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return undefined;
+}
+
+function combineDateHourFlexible(date: unknown, hour: unknown): string | null {
+  if (!date) return null;
+  const d = new Date(String(date));
+  if (isNaN(d.getTime())) return null;
+  let hh = 0, mm = 0, ss = 0;
+  if (hour != null && hour !== "") {
+    const s = String(hour).trim();
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
+      const parts = s.split(":").map((p) => parseInt(p, 10));
+      hh = parts[0] || 0; mm = parts[1] || 0; ss = parts[2] || 0;
+    } else {
+      const n = Number(s);
+      if (Number.isFinite(n)) {
+        if (n >= 100) { hh = Math.floor(n / 100); mm = n % 100; }
+        else { hh = Math.trunc(n); }
+      }
+    }
+  }
+  d.setUTCHours(hh, mm, ss, 0);
+  return d.toISOString();
+}
+
+function normalizeHanaDecision(status: unknown): string {
+  const s = String(status || "").trim();
+  if (!s) return "P";
+  if (/rejeit|reprov|negad/i.test(s)) return "N";
+  if (/aprov/i.test(s) && !/pend|aguard/i.test(s)) return "Y";
+  if (/pend|aguard/i.test(s)) return "P";
+  return "P";
+}
+
+function mapHanaApprovalRow(raw: Record<string, unknown>, companyDb: string) {
+  const docNum = toInt(pickField(raw, "Nº pedido de compra", "Num_Pedido_Compra", "numPedidoCompra", "DocNum"));
+  const docEntry = toInt(pickField(raw, "Nº do Esboço", "Num_Esboco", "DraftDocEntry", "DocEntry"));
+  const approverName = (pickField(raw, "Aprovador(es)", "Aprovadores", "Aprovador") as string) || null;
+  const approverEmail = ((pickField(raw, "Email do aprovador", "Email_Aprovador", "emailAprovador") as string) || "").trim() || null;
+  const decision = normalizeHanaDecision(pickField(raw, "Status da aprovação", "Status_Aprovacao", "statusAprovacao"));
+  const decisionDate = decision === "P" ? null : combineDateHourFlexible(
+    pickField(raw, "Data de aprovação", "Data_Aprovacao", "dataAprovacao"),
+    pickField(raw, "Hora de aprovação", "Hora_Aprovacao", "horaAprovacao"),
+  );
+  const remarks = (pickField(raw, "Observações", "Observacoes", "observacoes") as string) || null;
+  const cardCode = (pickField(raw, "Código do fornecedor", "Codigo_PN", "CardCode") as string) || null;
+  const cardName = (pickField(raw, "Nome do fornecedor", "Nome_PN", "CardName") as string) || null;
+  const solicitante = (pickField(raw, "FGR :: SOLICITANTE", "Solicitante") as string) || null;
+  const total = toNumber(pickField(raw, "Total do documento", "Total_Documento", "DocTotal"));
+  const currency = normalizeCurrency(pickField(raw, "Moeda", "Currency", "DocCur"));
+
+  // Chave estável por (docEntry|docNum, aprovador). Prefixo "hana" evita
+  // colisão com o formato do webhook n8n (`${Code}::${email}`).
+  const docKey = docEntry != null ? `E${docEntry}` : docNum != null ? `N${docNum}` : "";
+  const approverKey = (approverEmail || approverName || "").toLowerCase().trim();
+  if (!docKey || !approverKey) return null;
+
+  return {
+    external_id: `hana::${docKey}::${approverKey}`,
+    company_db: companyDb,
+    decision,
+    decision_date: decisionDate,
+    approver_code: null,
+    approver_name: approverName,
+    approver_email: approverEmail,
+    requester_code: null,
+    requester_name: solicitante,
+    doc_object_type: "22",
+    doc_type_name: "Pedido de Compra",
+    doc_entry: docEntry,
+    doc_num: docNum,
+    doc_total: total,
+    currency,
+    card_code: cardCode,
+    card_name: cardName,
+    remarks,
+    stage_name: null,
+    step: null,
+    raw: { source: "hana_view", view: "VW_PEDIDOS_COMPRA_APROVACOES", ...raw } as unknown as Record<string, unknown>,
+    synced_at: new Date().toISOString(),
+  };
+}
+
+async function fetchAndMergeHanaApprovals(
+  supabase: ReturnType<typeof createClient>,
+  companyDb: string,
+): Promise<{ merged: number; upserted: number; skipped?: string; error?: string }> {
+  try {
+    const { data: credRows } = await supabase
+      .from("system_credentials")
+      .select("credential_key, credential_value")
+      .eq("system_name", "sap")
+      .eq("company_db", companyDb);
+    const creds: Record<string, string> = {};
+    for (const r of (credRows || []) as { credential_key: string; credential_value: string }[]) {
+      creds[r.credential_key] = r.credential_value;
+    }
+    if (!creds.username || !creds.password || !creds.service_layer_url) {
+      return { merged: 0, upserted: 0, skipped: "credenciais SAP incompletas" };
+    }
+    if (creds.use_hana_db === "false") {
+      return { merged: 0, upserted: 0, skipped: "HANA desabilitado" };
+    }
+    // Segurança: só logar como Apiuser (evita bloquear contas reais).
+    if ((creds.username || "").trim().toLowerCase() !== "apiuser") {
+      return { merged: 0, upserted: 0, skipped: "usuário SAP não é Apiuser" };
+    }
+
+    const baseUrl = normalizeSapBaseUrl(creds.service_layer_url);
+    const dbName = creds.company_db || companyDb;
+    const session = await sapLoginServiceLayer(baseUrl, creds.username, creds.password, dbName);
+
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = await fetchHanaView(dbName, session.sessionId, "VW_PEDIDOS_COMPRA_APROVACOES");
+    } finally {
+      await sapLogoutServiceLayer(baseUrl, session);
+    }
+
+    const mapped = new Map<string, ReturnType<typeof mapHanaApprovalRow>>();
+    for (const r of rows) {
+      const row = mapHanaApprovalRow(r, companyDb);
+      if (!row) continue;
+      mapped.set(`${row.company_db}::${row.external_id}`, row);
+    }
+    const payload = Array.from(mapped.values()).filter((r): r is NonNullable<typeof r> => !!r);
+
+    // Regra de regressão: não sobrescrever Y/N existente com P.
+    const externalIds = payload.map((p) => p.external_id);
+    const existingByKey = new Map<string, string>();
+    if (externalIds.length > 0) {
+      const CHUNK = 500;
+      for (let i = 0; i < externalIds.length; i += CHUNK) {
+        const ids = externalIds.slice(i, i + CHUNK);
+        const { data: existing } = await supabase
+          .from("approval_history")
+          .select("company_db,external_id,decision")
+          .eq("company_db", companyDb)
+          .in("external_id", ids);
+        for (const e of (existing || []) as Array<{ company_db: string; external_id: string; decision: string | null }>) {
+          existingByKey.set(`${e.company_db}::${e.external_id}`, e.decision || "");
+        }
+      }
+    }
+    const safe = payload.filter((p) => {
+      const prev = existingByKey.get(`${p.company_db}::${p.external_id}`);
+      return !((prev === "Y" || prev === "N") && p.decision === "P");
+    });
+
+    let upserted = 0;
+    const BATCH = 200;
+    for (let i = 0; i < safe.length; i += BATCH) {
+      const slice = safe.slice(i, i + BATCH);
+      const { error } = await supabase
+        .from("approval_history")
+        .upsert(slice, { onConflict: "company_db,external_id" });
+      if (error) throw new Error(error.message);
+      upserted += slice.length;
+    }
+
+    return { merged: rows.length, upserted };
+  } catch (e) {
+    return { merged: 0, upserted: 0, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+
 
 async function updateSyncState(
   supabase: ReturnType<typeof createClient>,
