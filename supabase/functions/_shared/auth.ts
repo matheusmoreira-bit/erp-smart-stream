@@ -263,7 +263,8 @@ export async function requireAdmin(req: Request) {
   return user;
 }
 
-async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
+// deno-lint-ignore no-explicit-any
+async function getSapBaseUrl(admin: any, companyDB: string): Promise<string> {
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
   const { data } = await admin
     .from("system_credentials")
@@ -273,9 +274,8 @@ async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: 
     .eq("credential_key", "service_layer_url")
     .maybeSingle();
 
-  const rawUrl = typeof data?.credential_value === "string" && data.credential_value.trim()
-    ? data.credential_value.trim()
-    : fallback;
+  const cred = (data as { credential_value?: unknown } | null)?.credential_value;
+  const rawUrl = typeof cred === "string" && cred.trim() ? cred.trim() : fallback;
   let url = rawUrl.replace(/\/+$/, "");
   if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
   else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
