@@ -122,7 +122,7 @@ function isDesignatedApprover(
 }
 
 async function isSapSuperuser(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   companyDB: string,
   sapSession: string,
   routeId: string,
