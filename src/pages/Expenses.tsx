@@ -1760,8 +1760,98 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           </div>
         </section>
 
-
-
+        {/* Filtros específicos da view HANA VW_PEDIDOS_COMPRA_APROVACOES */}
+        {showSourceToggle && sourceMode === "both" && (
+          <section aria-label="Filtros dos pedidos SAP" className="glass-card p-3 sm:p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Filtros SAP (VW_PEDIDOS_COMPRA_APROVACOES)
+              </div>
+              {hasSapFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => preserveScroll(() => setSapFilters(emptySapFilters))}
+                >
+                  <XIcon className="w-3.5 h-3.5 mr-1" /> Limpar filtros SAP
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="sap-flt-supplier" className="text-[11px] text-muted-foreground">Fornecedor</Label>
+                <Input
+                  id="sap-flt-supplier"
+                  value={sapFilters.supplier}
+                  onChange={(e) => setSapFilters({ ...sapFilters, supplier: e.target.value })}
+                  placeholder="Nome ou código"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sap-flt-requester" className="text-[11px] text-muted-foreground">Solicitante</Label>
+                <Input
+                  id="sap-flt-requester"
+                  value={sapFilters.requester}
+                  onChange={(e) => setSapFilters({ ...sapFilters, requester: e.target.value })}
+                  placeholder="Nome"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sap-flt-approver" className="text-[11px] text-muted-foreground">Aprovador</Label>
+                <Input
+                  id="sap-flt-approver"
+                  value={sapFilters.approver}
+                  onChange={(e) => setSapFilters({ ...sapFilters, approver: e.target.value })}
+                  placeholder="Nome"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sap-flt-status" className="text-[11px] text-muted-foreground">Status da aprovação</Label>
+                <Select
+                  value={sapFilters.approvalStatus || "all"}
+                  onValueChange={(v) => setSapFilters({ ...sapFilters, approvalStatus: v === "all" ? "" : v })}
+                >
+                  <SelectTrigger id="sap-flt-status" className="h-9 text-sm">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="pendente_aprovacao">Pendente</SelectItem>
+                    <SelectItem value="aprovado">Aprovado</SelectItem>
+                    <SelectItem value="rejeitado">Rejeitado</SelectItem>
+                    <SelectItem value="cancelado">Cancelado</SelectItem>
+                    <SelectItem value="encerrado">Encerrado</SelectItem>
+                    <SelectItem value="pc_lancado">PC lançado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sap-flt-from" className="text-[11px] text-muted-foreground">Data de (lançamento)</Label>
+                <Input
+                  id="sap-flt-from"
+                  type="date"
+                  value={sapFilters.dateFrom}
+                  onChange={(e) => setSapFilters({ ...sapFilters, dateFrom: e.target.value })}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sap-flt-to" className="text-[11px] text-muted-foreground">Data até</Label>
+                <Input
+                  id="sap-flt-to"
+                  type="date"
+                  value={sapFilters.dateTo}
+                  onChange={(e) => setSapFilters({ ...sapFilters, dateTo: e.target.value })}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Content */}
         {isLoading ? (
