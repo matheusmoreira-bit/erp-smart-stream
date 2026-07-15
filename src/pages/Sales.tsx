@@ -14,7 +14,9 @@ import {
   CheckCircle2,
   History,
   Receipt,
+  Network,
 } from "lucide-react";
+import { SalesRelationsMap } from "@/components/SalesRelationsMap";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,6 +108,7 @@ export default function SalesPage() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Set<number>>(new Set()); // set of docEntry
   const [baixaOpen, setBaixaOpen] = useState(false);
+  const [mapInvoice, setMapInvoice] = useState<InvoiceRow | null>(null);
   const fetchTokenRef = useRef(0);
 
   const isSap = session?.erpType === "sap";
@@ -486,6 +489,7 @@ export default function SalesPage() {
                             <th className="text-right py-2 px-2">Saldo residual</th>
                             <th className="text-left py-2 px-2">Status</th>
                             <th className="text-left py-2 px-2">Origem</th>
+                            <th className="w-8 py-2 px-2"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -567,6 +571,18 @@ export default function SalesPage() {
                                     </Badge>
                                   )}
                                 </td>
+                                <td className="py-2 px-2 text-right">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => setMapInvoice(r)}
+                                    aria-label={`Ver mapa de relações da NF ${r.docNum}`}
+                                    title="Mapa de relações"
+                                  >
+                                    <Network className="w-3.5 h-3.5 text-muted-foreground" />
+                                  </Button>
+                                </td>
                               </tr>
                             );
                           })}
@@ -596,6 +612,13 @@ export default function SalesPage() {
           clearSelection();
           void loadInvoices(true);
         }}
+      />
+
+      <SalesRelationsMap
+        open={!!mapInvoice}
+        onClose={() => setMapInvoice(null)}
+        session={session}
+        invoice={mapInvoice}
       />
     </div>
   );
