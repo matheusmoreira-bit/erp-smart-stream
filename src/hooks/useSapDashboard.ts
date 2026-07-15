@@ -595,7 +595,20 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
 
   const { stages, metrics, insights, validations, approverStats } = useMemo(() => {
     const rows = filterRowsByDate(rawRows, dateFilter);
-    const computedStages = buildStages(rows, approvalDaysRaw, effectiveTargets);
+
+    // Aprovação → Pedido a partir do cache VW_FIN_ANALISE_FLUXO (SAP).
+    // Contamos apenas linhas que tenham data_aprovacao e data_lancamento
+    // vinculadas a um pedido (id_pedido presente).
+    const approvalToPedidoDays: number[] = [];
+    if (session?.erpType === "sap") {
+      for (const f of fluxoRows) {
+        if (!f.id_pedido) continue;
+        const d = daysBetween(f.data_aprovacao, f.data_lancamento);
+        if (d !== null) approvalToPedidoDays.push(Math.max(d, 0));
+      }
+    }
+
+    const computedStages = buildStages(rows, approvalDaysRaw, effectiveTargets, approvalToPedidoDays);
     const vals = buildValidations(rows);
     const errorCount = vals.filter((v) => v.status === "error").length;
     const compliance = vals.length > 0 ? Math.round(((vals.length - errorCount) / vals.length) * 100) : 100;
@@ -637,7 +650,7 @@ export function useSapDashboard(dateFilter?: DateFilter, targets?: CompanyTarget
       validations: vals,
       approverStats: computedApproverStats,
     };
-  }, [rawRows, approvalDaysRaw, approvalRowsRaw, dateFilter, effectiveTargets]);
+  }, [rawRows, approvalDaysRaw, approvalRowsRaw, fluxoRows, session?.erpType, dateFilter, effectiveTargets]);
 
   return { stages, metrics, insights, validations, approverStats, isLoading, error, refresh: fetchData };
 }
