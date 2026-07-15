@@ -34,20 +34,26 @@ export function RoiAnalysis({ mode }: Props) {
   const { isAdmin } = useAuth();
   const [period, setPeriod] = useState<PeriodFilterValue>(DEFAULT_PERIOD);
   const [paramsOpen, setParamsOpen] = useState(false);
+  const [filterCompanyDb, setFilterCompanyDb] = useState<string>("");
 
   const dateFilter = period.preset === "all"
     ? { from: undefined as Date | undefined, to: undefined as Date | undefined }
     : { from: period.range.from || undefined, to: period.range.to || undefined };
 
-  const companyDb = mode === "company" ? session?.companyDB : undefined;
-  const { metricsByCompany, totals, activeParams, params, loading, error, refresh } = useRoiAnalysis({
-    companyDb,
+  const selectedCompanyDb = mode === "company"
+    ? session?.companyDB
+    : (filterCompanyDb || undefined);
+  const effConsolidated = mode === "consolidated" && !filterCompanyDb;
+  const effMode: "company" | "consolidated" = effConsolidated ? "consolidated" : "company";
+
+  const { metricsByCompany, totals, activeParams, params, companies, loading, error, refresh } = useRoiAnalysis({
+    companyDb: selectedCompanyDb,
     from: dateFilter.from,
     to: dateFilter.to,
-    consolidated: mode === "consolidated",
+    consolidated: effConsolidated,
   });
 
-  const single = mode === "company" ? metricsByCompany[0] : null;
+  const single = effMode === "company" ? metricsByCompany[0] : null;
 
   const comparisonData = useMemo(() => {
     const sumBy = (k: keyof typeof metricsByCompany[number]) =>
