@@ -922,6 +922,22 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
   const SAP_PAGE_STEP = 100;
 
+  // Filtros específicos da view HANA VW_PEDIDOS_COMPRA_APROVACOES.
+  // Aplicados server-side na edge function `sap-purchase-orders-hana`.
+  type SapFilters = {
+    supplier: string;
+    requester: string;
+    approver: string;
+    approvalStatus: string; // "" | pendente_aprovacao | aprovado | rejeitado | cancelado | encerrado | pc_lancado
+    dateFrom: string;       // yyyy-mm-dd
+    dateTo: string;         // yyyy-mm-dd
+  };
+  const emptySapFilters: SapFilters = { supplier: "", requester: "", approver: "", approvalStatus: "", dateFrom: "", dateTo: "" };
+  const [sapFilters, setSapFilters] = usePersistedState<SapFilters>(filterKey("sapFilters"), emptySapFilters);
+  const hasSapFilters =
+    !!sapFilters.supplier || !!sapFilters.requester || !!sapFilters.approver ||
+    !!sapFilters.approvalStatus || !!sapFilters.dateFrom || !!sapFilters.dateTo;
+
   // Migração: usuários com preferência antiga "flow" salva no localStorage
   // são movidos para "both" para que sempre vejam todos os pedidos pendentes.
   useEffect(() => {
