@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isTestCompanyDb } from "@/lib/test-company";
+
 
 export interface TemporalMetrics {
   // SAP nativo: rascunho/aprovação inicial -> PO gerado
