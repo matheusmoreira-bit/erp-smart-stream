@@ -513,5 +513,5 @@ export function useRoiAnalysis(opts: Options) {
     return params.find((p) => p.company_db === null) || params[0];
   }, [params, companyDb]);
 
-  return { metricsByCompany, totals, params, activeParams, loading, error, refresh: load };
+  return { metricsByCompany, totals, params, activeParams, companies, loading, error, refresh: load };
 }
