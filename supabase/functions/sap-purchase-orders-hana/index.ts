@@ -282,28 +282,6 @@ Deno.serve(async (req) => {
       return bt - at;
     });
 
-    if (supplierQ || requesterQ || approverQ || statusQ || dateFromMs != null || dateToMs != null) {
-      rows = rows.filter((r) => {
-        if (supplierQ) {
-          const hay = `${norm(r.supplier_name)} ${norm(r.supplier_code)}`;
-          if (!hay.includes(supplierQ)) return false;
-        }
-        if (requesterQ && !norm(r.requester_name).includes(requesterQ)) return false;
-        if (approverQ && !norm(r.current_approver).includes(approverQ)) return false;
-        if (statusQ) {
-          const raw = norm(r.sap_purchase_order_status);
-          const mapped = norm(r.status);
-          if (!raw.includes(statusQ) && !mapped.includes(statusQ)) return false;
-        }
-        if (dateFromMs != null || dateToMs != null) {
-          const t = r.doc_date ? new Date(r.doc_date).getTime() : NaN;
-          if (!Number.isFinite(t)) return false;
-          if (dateFromMs != null && t < dateFromMs) return false;
-          if (dateToMs != null && t > dateToMs) return false;
-        }
-        return true;
-      });
-    }
 
     const total = rows.length;
     const page = rows.slice(offset, offset + limit);
