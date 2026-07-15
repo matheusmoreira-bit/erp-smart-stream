@@ -135,19 +135,36 @@ export default function SalesPage() {
         const cutoff = new Date();
         cutoff.setMonth(cutoff.getMonth() - 12);
         const cutoffIso = cutoff.toISOString().slice(0, 10);
-        const params: Record<string, string> = {
+        const invoiceParams: Record<string, string> = {
           $select:
             "DocEntry,DocNum,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
           $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
           $orderby: "DocDate desc",
         };
-        const { data } = await sapQueryAll(session, "Invoices", params, !force);
-        if (fetchTokenRef.current !== token) return;
-        const rawList = ((data?.value as SapInvoice[]) || []).filter(Boolean);
 
-        // 2) Cross-reference pedidos_venda_erp (origem)
+        // 1b) Fetch open opening balances (Saldo Inicial) as JournalEntries
+        //     marcados com TransactionCode = 'SI' (ou Reference = 'SI' como fallback).
+        //     Só interessam as linhas com ShortName = CardCode e saldo em aberto.
+        const jeParams: Record<string, string> = {
+          $select: "JdtNum,ReferenceDate,DueDate,Memo,Reference,TransactionCode,JournalEntryLines",
+          $filter: "TransactionCode eq 'SI' or Reference eq 'SI'",
+          $expand: "JournalEntryLines",
+          $orderby: "ReferenceDate desc",
+        };
+
+        const [invRes, jeRes] = await Promise.all([
+          sapQueryAll(session, "Invoices", invoiceParams, !force),
+          sapQueryAll(session, "JournalEntries", jeParams, !force).catch((e) => {
+            console.warn("SI JournalEntries fetch failed:", (e as Error).message);
+            return { data: { value: [] } };
+          }),
+        ]);
+        if (fetchTokenRef.current !== token) return;
+        const rawList = ((invRes.data?.value as SapInvoice[]) || []).filter(Boolean);
+
+        // Build cross-references
         const docEntries = rawList.map((r) => r.DocEntry).filter((n) => Number.isFinite(n));
-        const [pedidosRes, baixasRes] = await Promise.all([
+        const [pedidosRes, baixasRes, bpNamesRes] = await Promise.all([
           docEntries.length
             ? supabase
                 .from("pedidos_venda_erp")
@@ -155,13 +172,14 @@ export default function SalesPage() {
                 .eq("company_db", companyDb)
                 .in("doc_entry", docEntries)
             : Promise.resolve({ data: [] as { doc_entry: number }[], error: null }),
-          // 3) Pending baixas (not yet synced) for this company_db,
-          //    aggregated by invoice_doc_entry.
+          // Pending baixas (not yet synced) for this company_db,
+          // por tipo/DocEntry/DocLine.
           supabase
             .from("baixas_recebimento_itens")
-            .select("invoice_doc_entry,valor_baixado,baixas_recebimento!inner(company_db,status)")
+            .select("invoice_doc_entry,invoice_type,invoice_doc_line,valor_baixado,baixas_recebimento!inner(company_db,status)")
             .eq("baixas_recebimento.company_db", companyDb)
             .eq("baixas_recebimento.status", "pendente_sincronizacao"),
+          Promise.resolve({ data: [] as { CardCode: string; CardName: string }[] }),
         ]);
 
         if (pedidosRes.error) console.warn("pedidos_venda_erp:", pedidosRes.error.message);
@@ -170,23 +188,25 @@ export default function SalesPage() {
         const erpFlowSet = new Set(
           (pedidosRes.data || []).map((r) => Number((r as { doc_entry: number }).doc_entry)),
         );
-        const pendingByDocEntry = new Map<number, number>();
-        for (const b of (baixasRes.data || []) as {
+        // key = `${type}:${docEntry}:${docLine ?? 0}`
+        const pendingByKey = new Map<string, number>();
+        for (const b of (baixasRes.data || []) as Array<{
           invoice_doc_entry: number;
+          invoice_type?: string | null;
+          invoice_doc_line?: number | null;
           valor_baixado: number;
-        }[]) {
-          const key = Number(b.invoice_doc_entry);
-          pendingByDocEntry.set(
-            key,
-            (pendingByDocEntry.get(key) || 0) + Number(b.valor_baixado || 0),
-          );
+        }>) {
+          const type = (b.invoice_type || "invoice") === "journal_entry" ? "journal_entry" : "invoice";
+          const line = type === "journal_entry" ? Number(b.invoice_doc_line || 0) : 0;
+          const key = `${type}:${Number(b.invoice_doc_entry)}:${line}`;
+          pendingByKey.set(key, (pendingByKey.get(key) || 0) + Number(b.valor_baixado || 0));
         }
 
-        // 4) Map to InvoiceRow
-        const rows: InvoiceRow[] = rawList.map((inv) => {
+        // 4) Map invoices to InvoiceRow
+        const invoiceRows: InvoiceRow[] = rawList.map((inv) => {
           const paid = Number(inv.PaidToDate || 0);
           const total = Number(inv.DocTotal || 0);
-          const pending = pendingByDocEntry.get(inv.DocEntry) || 0;
+          const pending = pendingByKey.get(`invoice:${inv.DocEntry}:0`) || 0;
           const saldo = Math.max(0, +(total - paid - pending).toFixed(2));
           const cancelled = inv.Cancelled === "tYES";
           const closed = inv.DocumentStatus === "bost_Close";
@@ -205,9 +225,89 @@ export default function SalesPage() {
             currency: inv.DocCurrency || "BRL",
             origem: erpFlowSet.has(inv.DocEntry) ? "erp_flow" : "erp",
             isOpen: !cancelled && !closed,
+            docType: "invoice",
+            docLine: null,
           };
         });
-        setInvoices(rows);
+
+        // 5) Map opening-balance journal entry lines to InvoiceRow (docType='journal_entry')
+        type JELine = {
+          Line_ID?: number;
+          LineNum?: number;
+          ShortName?: string;
+          AccountCode?: string;
+          Debit?: number;
+          Credit?: number;
+          BalanceDueDebit?: number;
+          BalanceDueCredit?: number;
+          LineMemo?: string;
+          DueDate?: string | null;
+          FCCurrency?: string | null;
+        };
+        type JEDoc = {
+          JdtNum?: number;
+          ReferenceDate?: string;
+          DueDate?: string | null;
+          Memo?: string | null;
+          Reference?: string | null;
+          TransactionCode?: string | null;
+          JournalEntryLines?: JELine[];
+        };
+        const jeList = ((jeRes.data?.value as JEDoc[]) || []).filter(Boolean);
+        const siRows: InvoiceRow[] = [];
+        for (const je of jeList) {
+          const jdt = Number(je.JdtNum || 0);
+          if (!jdt) continue;
+          const lines = Array.isArray(je.JournalEntryLines) ? je.JournalEntryLines : [];
+          for (const ln of lines) {
+            const cardCode = (ln.ShortName || "").trim();
+            // Só linhas de BP (CardCode não numérico "puro" de conta contábil).
+            // Regra prática: ShortName com letras costuma ser BP; conta contábil só tem números/pontos.
+            if (!cardCode || /^[\d.]+$/.test(cardCode)) continue;
+            const debit = Number(ln.Debit || 0);
+            const credit = Number(ln.Credit || 0);
+            const balDeb = Number(ln.BalanceDueDebit || 0);
+            // saldo aberto do cliente: usamos BalanceDueDebit quando disponível;
+            // se não vier, caímos para Debit-Credit (só se sobrar débito).
+            const total = debit > 0 ? debit : Math.max(0, debit - credit);
+            const openRaw = balDeb > 0 ? balDeb : total;
+            if (openRaw <= 0.001) continue;
+            const lineNum = Number(ln.Line_ID ?? ln.LineNum ?? 0);
+            const key = `journal_entry:${jdt}:${lineNum}`;
+            const pending = pendingByKey.get(key) || 0;
+            const saldo = Math.max(0, +(openRaw - pending).toFixed(2));
+            siRows.push({
+              docEntry: jdt,
+              docNum: jdt,
+              cardCode,
+              cardName: cardCode, // preenchido a partir das NFs abaixo, se houver
+              docDate: je.ReferenceDate || "",
+              docDueDate: ln.DueDate || je.DueDate || null,
+              docTotal: total,
+              paidToDate: Math.max(0, total - openRaw),
+              pendingBaixa: pending,
+              saldoResidual: saldo,
+              status: saldo > 0 ? "Aberto" : "Fechado",
+              currency: (ln.FCCurrency || "BRL") as string,
+              origem: "erp",
+              isOpen: saldo > 0,
+              docType: "journal_entry",
+              docLine: lineNum,
+            });
+          }
+        }
+
+        // Reaproveita CardName vindo das NFs para preencher SI (BP sem NF ficará com CardCode).
+        const nameByCode = new Map<string, string>();
+        for (const r of invoiceRows) {
+          if (r.cardCode && r.cardName && !nameByCode.has(r.cardCode)) nameByCode.set(r.cardCode, r.cardName);
+        }
+        for (const r of siRows) {
+          const nm = nameByCode.get(r.cardCode);
+          if (nm) r.cardName = nm;
+        }
+
+        setInvoices([...invoiceRows, ...siRows]);
       } catch (e) {
         console.error("Sales load error:", e);
         setErroMsg((e as Error).message || "Falha ao carregar NFs de venda");
