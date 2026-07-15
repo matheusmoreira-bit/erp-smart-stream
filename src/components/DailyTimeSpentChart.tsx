@@ -220,11 +220,18 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
           </span>
 
           {isAdmin && (
-            <Button size="sm" variant="outline" onClick={runBackfill} disabled={backfilling}>
-              {backfilling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-              <span className="ml-1">Backfill SAP</span>
-            </Button>
+            <>
+              <Button size="sm" variant="outline" onClick={runBackfill} disabled={backfilling}>
+                {backfilling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                <span className="ml-1">Backfill SAP</span>
+              </Button>
+              <Button size="sm" variant="outline" onClick={runFluxoSync} disabled={syncingFluxo}>
+                {syncingFluxo ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                <span className="ml-1">Sync Fluxo HANA</span>
+              </Button>
+            </>
           )}
+
         </div>
       </div>
 
