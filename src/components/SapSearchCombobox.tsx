@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2 } from "lucide-react";
 import { sapQuery } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
+import { stripCorporateSuffixes, filterAndRank } from "@/lib/supplier-search";
 
 export interface SapSearchOption {
   code: string;
