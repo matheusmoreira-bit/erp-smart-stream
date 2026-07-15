@@ -337,6 +337,12 @@ export default function SalesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link to="/vendas/historico">
+                <History className="w-3.5 h-3.5" />
+                Histórico de baixas
+              </Link>
+            </Button>
             <Button
               variant="outline"
               size="sm"
