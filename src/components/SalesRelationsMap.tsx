@@ -416,6 +416,63 @@ function FlowArrow() {
   );
 }
 
+function ResidualBar({
+  residual,
+  total,
+  currency,
+  muted = false,
+}: {
+  residual: number;
+  total: number;
+  currency: string;
+  muted?: boolean;
+}) {
+  const safeTotal = total > 0 ? total : 1;
+  const pctResidual = Math.max(0, Math.min(100, (residual / safeTotal) * 100));
+  const pctPaid = 100 - pctResidual;
+  const settled = residual <= 0.005;
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="relative h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+        <div
+          className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+            muted
+              ? "bg-muted-foreground/40"
+              : settled
+                ? "bg-emerald-500"
+                : "bg-primary"
+          }`}
+          style={{ width: `${pctPaid}%` }}
+        />
+      </div>
+      <div
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-mono shrink-0 ${
+          muted
+            ? "border-border/60 bg-muted/30 text-muted-foreground"
+            : settled
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+              : "border-primary/40 bg-primary/10 text-primary"
+        }`}
+        title={`Saldo residual após este evento · ${pctResidual.toFixed(1)}% do total`}
+      >
+        {settled ? (
+          <>
+            <CheckCircle2 className="w-3 h-3" />
+            quitado
+          </>
+        ) : (
+          <>
+            <span className="uppercase tracking-wider text-[9px] opacity-70">resta</span>
+            {formatCurrency(residual, currency)}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function BaixaStatusIcon({ status }: { status: string }) {
   if (status === "sincronizado") return <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-emerald-500" />;
   if (status === "erro") return <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-destructive" />;
