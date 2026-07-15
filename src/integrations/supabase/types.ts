@@ -3547,6 +3547,120 @@ export type Database = {
         }
         Relationships: []
       }
+      sap_fluxo_analise_cache: {
+        Row: {
+          aprovador: string | null
+          centro_custo: string | null
+          company_db: string
+          created_at: string
+          data_aprovacao: string | null
+          data_atualizacao_esboco: string | null
+          data_lancamento: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          departamento: string | null
+          descricao: string | null
+          flow_key: string
+          fornecedor: string | null
+          id: string
+          id_cp: string | null
+          id_esboco: string | null
+          id_nf: string | null
+          id_pedido: string | null
+          marca: string | null
+          raw_json: Json | null
+          solicitante: string | null
+          synced_at: string
+          updated_at: string
+          valor: number | null
+        }
+        Insert: {
+          aprovador?: string | null
+          centro_custo?: string | null
+          company_db: string
+          created_at?: string
+          data_aprovacao?: string | null
+          data_atualizacao_esboco?: string | null
+          data_lancamento?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          departamento?: string | null
+          descricao?: string | null
+          flow_key: string
+          fornecedor?: string | null
+          id?: string
+          id_cp?: string | null
+          id_esboco?: string | null
+          id_nf?: string | null
+          id_pedido?: string | null
+          marca?: string | null
+          raw_json?: Json | null
+          solicitante?: string | null
+          synced_at?: string
+          updated_at?: string
+          valor?: number | null
+        }
+        Update: {
+          aprovador?: string | null
+          centro_custo?: string | null
+          company_db?: string
+          created_at?: string
+          data_aprovacao?: string | null
+          data_atualizacao_esboco?: string | null
+          data_lancamento?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          departamento?: string | null
+          descricao?: string | null
+          flow_key?: string
+          fornecedor?: string | null
+          id?: string
+          id_cp?: string | null
+          id_esboco?: string | null
+          id_nf?: string | null
+          id_pedido?: string | null
+          marca?: string | null
+          raw_json?: Json | null
+          solicitante?: string | null
+          synced_at?: string
+          updated_at?: string
+          valor?: number | null
+        }
+        Relationships: []
+      }
+      sap_fluxo_analise_sync_state: {
+        Row: {
+          company_db: string
+          created_at: string
+          last_batch_count: number | null
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          total_synced: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          last_batch_count?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          total_synced?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          last_batch_count?: number | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          total_synced?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sap_nf_entrada_cache: {
         Row: {
           base_po_doc_entry: number | null
