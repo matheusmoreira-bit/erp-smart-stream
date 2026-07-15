@@ -116,6 +116,20 @@ export default function IdpSyncPage() {
     toast.success("Lista JumpCloud atualizada");
   };
 
+  const handleSyncAttrs = async () => {
+    setSyncingAttrs(true);
+    try {
+      const jcList = await fetchJumpCloudUsers(true);
+      const n = await syncAttributes(jcList);
+      if (n > 0) toast.success(`Atributos atualizados para ${n} usuário(s).`);
+      else toast.info("Nenhum vínculo para atualizar.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao sincronizar atributos");
+    } finally {
+      setSyncingAttrs(false);
+    }
+  };
+
   const handleComboSelect = useCallback(
     async (sapUserCode: string, option: SapSearchOption | null) => {
       if (!option) return;
