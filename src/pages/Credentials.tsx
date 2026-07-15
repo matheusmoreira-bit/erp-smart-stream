@@ -50,7 +50,10 @@ function CredentialModal({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; detail?: string } | null>(null);
   const testEndpoint = TEST_ENDPOINTS[system.name];
-  const canTest = !!testEndpoint && hasExisting;
+  const isJumpCloud = system.name === "jumpcloud";
+  const canTest = isJumpCloud
+    ? !!(values.api_key?.trim() || hasExisting)
+    : (!!testEndpoint && hasExisting);
 
   // Load existing non-secret values (custom_fields, toggle) when dialog opens
   useEffect(() => {
