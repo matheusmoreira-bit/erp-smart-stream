@@ -22,6 +22,8 @@ import {
   CheckCircle,
   Network,
   MoreHorizontal,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   DropdownMenu,
