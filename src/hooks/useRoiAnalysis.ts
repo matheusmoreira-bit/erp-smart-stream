@@ -374,19 +374,23 @@ export function useRoiAnalysis(opts: Options) {
         }
 
         // atraso: approvedAt > due_date (via approval_history + doc_entry)
+        // Ignora docs "nascidos vencidos" (criação > vencimento): atraso não é do fluxo de aprovação.
         if (d.doc_entry && d.due_date) {
           const approvedRow = approvedIdx.get(`${db}::${d.doc_entry}`);
           if (approvedRow?.decision_date) {
-            const approved = new Date(approvedRow.decision_date);
             const due = new Date(d.due_date);
-            const atraso = daysBetween(due, approved);
-            if (atraso > 0) {
-              sumAtraso += atraso;
-              countAtrasados++;
-              const p_val = d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
-              prejuizo += p_val;
-              if (viaFlow) { atrasoViaFlow++; prejuizoViaFlow += p_val; }
-              else { atrasoSapOnly++; prejuizoSapOnly += p_val; }
+            const createdLate = d.created_at ? new Date(d.created_at) > due : false;
+            if (!createdLate) {
+              const approved = new Date(approvedRow.decision_date);
+              const atraso = daysBetween(due, approved);
+              if (atraso > 0) {
+                sumAtraso += atraso;
+                countAtrasados++;
+                const p_val = d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
+                prejuizo += p_val;
+                if (viaFlow) { atrasoViaFlow++; prejuizoViaFlow += p_val; }
+                else { atrasoSapOnly++; prejuizoSapOnly += p_val; }
+              }
             }
           }
         }
