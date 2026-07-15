@@ -98,7 +98,9 @@ interface ClientGroup {
 /* ─────────────────────────── Page ─────────────────────────── */
 
 export default function SalesPage() {
-  const { session } = useSap();
+  const { session, logout } = useSap();
+  const navigate = useNavigate();
+  const { getLabel } = useCompanies();
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [erroMsg, setErroMsg] = useState<string | null>(null);
