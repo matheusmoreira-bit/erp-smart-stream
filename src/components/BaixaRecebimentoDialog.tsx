@@ -180,9 +180,16 @@ export function BaixaRecebimentoDialog({
     let baixaId: string | null = null;
 
     try {
-      // 1) Persist no Supabase como pendente_sincronizacao
+      // 1) Confirma sessão Supabase (RLS depende de auth.uid())
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
+      if (!userId) {
+        toast.error("Sua sessão expirou. Faça login novamente para lançar a baixa.");
+        setSubmitting(false);
+        return;
+      }
+      // 2) Persist no Supabase como pendente_sincronizacao.
+      // criado_por é preenchido automaticamente pelo trigger set_baixa_criado_por_trigger
       const { data: baixaRow, error: insertErr } = await supabase
         .from("baixas_recebimento")
         .insert({
@@ -197,7 +204,6 @@ export function BaixaRecebimentoDialog({
           valor_total: valorRecebido,
           valor_juros_multa: excedente,
           status: "pendente_sincronizacao",
-          criado_por: userId,
         })
         .select("id")
         .single();
