@@ -59,6 +59,8 @@ interface BaixaEntry {
   status: string;
   sap_incoming_payment_doc_entry: number | null;
   created_at: string;
+  criado_por_nome: string | null;
+  criado_por_user_code: string | null;
 }
 
 function formatCurrency(value: number, currency: string = "BRL") {
