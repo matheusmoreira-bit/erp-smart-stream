@@ -1397,6 +1397,8 @@ export type Database = {
           company_db: string
           conta_contabil_codigo: string
           conta_contabil_nome: string | null
+          conta_juros_multa_codigo: string | null
+          conta_juros_multa_nome: string | null
           created_at: string
           criado_por: string | null
           data_recebimento: string
@@ -1414,6 +1416,8 @@ export type Database = {
           company_db: string
           conta_contabil_codigo: string
           conta_contabil_nome?: string | null
+          conta_juros_multa_codigo?: string | null
+          conta_juros_multa_nome?: string | null
           created_at?: string
           criado_por?: string | null
           data_recebimento: string
@@ -1431,6 +1435,8 @@ export type Database = {
           company_db?: string
           conta_contabil_codigo?: string
           conta_contabil_nome?: string | null
+          conta_juros_multa_codigo?: string | null
+          conta_juros_multa_nome?: string | null
           created_at?: string
           criado_por?: string | null
           data_recebimento?: string

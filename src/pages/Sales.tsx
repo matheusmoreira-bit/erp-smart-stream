@@ -13,7 +13,9 @@ import {
   Wallet,
   Clock,
   CheckCircle2,
+  History,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -335,6 +337,12 @@ export default function SalesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link to="/vendas/historico">
+                <History className="w-3.5 h-3.5" />
+                Histórico de baixas
+              </Link>
+            </Button>
             <Button
               variant="outline"
               size="sm"
