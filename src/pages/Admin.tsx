@@ -613,7 +613,7 @@ export default function Admin() {
     <div className="min-h-screen bg-background">
       {/* Header — mobile first */}
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-1 rounded-lg bg-[hsl(var(--cactus-amber))]/10 border border-[hsl(var(--cactus-amber))]/20 shrink-0">
               <img src={cactusLogo.url} alt="Cactus" className="w-7 h-7 object-contain" />
