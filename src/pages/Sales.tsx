@@ -337,7 +337,8 @@ export default function SalesPage() {
       return (
         r.cardName.toLowerCase().includes(q) ||
         r.cardCode.toLowerCase().includes(q) ||
-        String(r.docNum).includes(q)
+        String(r.docNum).includes(q) ||
+        (r.folioNumber != null && String(r.folioNumber).includes(q))
       );
     });
   }, [invoices, onlyOpen, search]);
