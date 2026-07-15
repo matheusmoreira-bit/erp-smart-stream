@@ -99,6 +99,7 @@ export default function SalesPage() {
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Set<number>>(new Set()); // set of docEntry
+  const [baixaOpen, setBaixaOpen] = useState(false);
   const fetchTokenRef = useRef(0);
 
   const isSap = session?.erpType === "sap";
