@@ -650,8 +650,8 @@ export default function Admin() {
         </div>
 
         {/* Desktop tabs */}
-        <div className="hidden md:block max-w-5xl mx-auto px-6">
-          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+        <div className="hidden md:block max-w-7xl mx-auto px-6">
+          <div className="flex items-center gap-x-1 gap-y-1 flex-wrap">
             {[
               { key: "companies", label: "Empresas", icon: Building2 },
               { key: "permissions", label: "Permissões", icon: Users },
@@ -659,7 +659,7 @@ export default function Admin() {
               { key: "audit", label: "Logs", icon: ScrollText },
               { key: "admin_users", label: "Admins", icon: ShieldCheck },
               { key: "tools", label: "Ferramentas", icon: Wrench },
-              { key: "roi", label: "ROI Consolidado", icon: TrendingUp },
+              { key: "roi", label: "ROI", icon: TrendingUp },
             ].map((t) => {
               const Icon = t.icon;
               const isActive = activeTab === t.key;
@@ -668,7 +668,7 @@ export default function Admin() {
                   key={t.key}
                   onClick={() => setActiveTab(t.key as typeof activeTab)}
                   className={cn(
-                    "relative px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5",
+                    "relative px-2.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5",
                     isActive ? "text-[hsl(var(--cactus-amber))]" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -683,14 +683,14 @@ export default function Admin() {
             <div className="ml-auto flex items-center gap-1">
               <button
                 onClick={() => navigate("/backoffice/audit-trail")}
-                className="px-3 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
               >
                 <FileCheck2 className="w-4 h-4" />
                 Audit Trail
               </button>
               <button
                 onClick={() => navigate("/backoffice/sap-users")}
-                className="px-3 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
               >
                 <Users className="w-4 h-4" />
                 Usuários SAP
