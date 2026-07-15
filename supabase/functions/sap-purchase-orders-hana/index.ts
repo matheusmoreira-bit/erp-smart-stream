@@ -4,8 +4,14 @@
 // lançamento (mais recente primeiro) e retorna paginado.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+
+const corsHeaders = {
+  ...baseCorsHeaders,
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-retry-count, x-sap-session, x-sap-route, x-sap-user, x-sap-auth-token, x-company-db",
+};
 
 const HANA_VIEWS_URL =
   Deno.env.get("HANA_VIEWS_URL") ||
