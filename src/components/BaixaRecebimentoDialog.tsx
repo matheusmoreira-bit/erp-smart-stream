@@ -17,7 +17,7 @@ import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { supabase } from "@/integrations/supabase/client";
-import { sapAction } from "@/lib/sap-client";
+import { syncBaixaRecebimentoToSap } from "@/lib/baixa-recebimento-sync";
 import { useSap } from "@/contexts/SapContext";
 import { DateInputBR } from "@/components/DateInputBR";
 
