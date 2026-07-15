@@ -329,6 +329,7 @@ export function useIdpSync() {
     autoSync,
     linkManually,
     syncAttributes,
+    reprocessUserAttributes,
     unlinkUser,
   };
 }
