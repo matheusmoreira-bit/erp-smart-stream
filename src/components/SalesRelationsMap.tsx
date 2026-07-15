@@ -21,6 +21,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import type { SapSession } from "@/lib/sap-client";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { Copy, ExternalLink } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
