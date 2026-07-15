@@ -40,13 +40,34 @@ Deno.serve(async (req) => {
     );
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || (req.method === "POST" ? (await req.json()).action : null);
+    let body: Record<string, any> = {};
+    if (req.method === "POST") {
+      try { body = await req.json(); } catch { body = {}; }
+    }
+    const action = url.searchParams.get("action") || body.action || null;
 
-    const creds = await getJumpCloudCredentials(supabase);
-    const apiKey = creds.api_key;
-    const isMtp = String(creds.is_mtp ?? "").toLowerCase() === "true";
+    const creds = await getJumpCloudCredentials(supabase).catch((e) => {
+      // Para testKey, permitimos operar sem credenciais salvas se overrides forem enviados
+      if (action === "testKey" && (body.api_key || body.apiKey)) return {} as Record<string, string>;
+      throw e;
+    });
+
+    // Overrides (só para testKey/preflight — não persistem)
+    const overrideApiKey = (body.api_key || body.apiKey || "").toString().trim();
+    const overrideIsMtpRaw = body.is_mtp ?? body.isMtp;
+    const apiKey = overrideApiKey || creds.api_key;
+    const isMtp = overrideIsMtpRaw !== undefined
+      ? String(overrideIsMtpRaw).toLowerCase() === "true"
+      : String(creds.is_mtp ?? "").toLowerCase() === "true";
     // org_id armazenado é IGNORADO — MTP descobre via /api/organizations; stand-alone dispensa header.
     const legacyOrgId = (creds.org_id || "").trim();
+
+    if (!apiKey) {
+      return new Response(JSON.stringify({ ok: false, error: "API Key não informada." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const baseHeaders: Record<string, string> = {
       "x-api-key": apiKey,
