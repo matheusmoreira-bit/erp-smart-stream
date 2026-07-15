@@ -18,11 +18,44 @@ export interface IdpMapping {
   linked_at: string | null;
   created_at: string;
   updated_at: string;
+  // Employment info (JumpCloud → SAP)
+  employee_id: string | null;
+  employee_type: string | null;
+  job_title: string | null;
+  company_name: string | null;
+  department: string | null;
+  cost_center_code: string | null;
+  cost_center_label: string | null;
+  manager_idp_id: string | null;
+  attributes_synced_at: string | null;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const JC_CACHE_KEY = "jumpcloud:all";
+
+/** Cost Center vem como "1.6.1.2 - OPERAÇÕES DE INFRAESTRUTURA"; extraímos o código. */
+export function parseCostCenterCode(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const m = trimmed.match(/^([^\s-]+)/);
+  return m ? m[1] : trimmed;
+}
+
+function jcAttrs(jc: JumpCloudUser | undefined | null) {
+  if (!jc) return {};
+  return {
+    employee_id: jc.employeeIdentifier || null,
+    employee_type: jc.employeeType || null,
+    job_title: jc.jobTitle || null,
+    company_name: jc.company || null,
+    department: jc.department || null,
+    cost_center_code: parseCostCenterCode(jc.costCenter),
+    cost_center_label: jc.costCenter || null,
+    manager_idp_id: jc.manager || null,
+  };
+}
 
 export function useIdpSync() {
   const [jcUsers, setJcUsers] = useState<JumpCloudUser[]>([]);
@@ -115,6 +148,8 @@ export function useIdpSync() {
             : null,
           status: jcMatch ? "linked" : "pending",
           linked_at: jcMatch ? new Date().toISOString() : null,
+          ...jcAttrs(jcMatch),
+          attributes_synced_at: jcMatch ? new Date().toISOString() : null,
         });
       }
 
