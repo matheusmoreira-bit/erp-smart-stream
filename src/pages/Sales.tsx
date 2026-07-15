@@ -283,6 +283,7 @@ export default function SalesPage() {
             siRows.push({
               docEntry: jdt,
               docNum: jdt,
+              folioNumber: null,
               cardCode,
               cardName: cardCode, // preenchido a partir das NFs abaixo, se houver
               docDate: je.ReferenceDate || "",
