@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
       if (!resp.ok) {
         const errText = await resp.text();
         console.error("JumpCloud search error:", resp.status, errText);
-        throw new Error(`Erro na busca JumpCloud: ${resp.status}`);
+        throw new Error(parseJumpCloudError(resp.status, errText));
       }
 
       const data = await resp.json();
