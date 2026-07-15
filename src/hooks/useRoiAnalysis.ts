@@ -231,11 +231,13 @@ export function useRoiAnalysis(opts: Options) {
       // Remove bases de teste da análise
       setCompanies(((cr.data || []) as Company[]).filter((c) => !isTestCompanyDb(c.company_db)));
       // Antes do go-live do ERP Flow (FLOW_LAUNCH_DATE_ISO) NÃO havia lançamentos via Flow em produção.
-      // Descarta expenses/aprovações anteriores para não contaminar a segregação SAP puro vs via Flow.
+      // Descarta expenses anteriores para não contaminar a segregação SAP puro vs via Flow.
+      // (approval_history vem do SAP e reflete o cenário nativo — mantemos todo o histórico.)
       const flowLaunchIso = `${FLOW_LAUNCH_DATE_ISO}T00:00:00Z`;
       setExpenses(expensesAll.filter((e) => !isTestCompanyDb(e.company_db) && (e.created_at || "") >= flowLaunchIso));
-      setApprovals(approvalsAll.filter((a) => !isTestCompanyDb(a.company_db) && (a.decision_date || "") >= flowLaunchIso));
+      setApprovals(approvalsAll.filter((a) => !isTestCompanyDb(a.company_db)));
       setPos(posAll.filter((p) => !isTestCompanyDb(p.company_db)));
+
 
 
     } catch (e: any) {
