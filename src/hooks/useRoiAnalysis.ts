@@ -325,6 +325,12 @@ export function useRoiAnalysis(opts: Options) {
         ? [companyDb]
         : Array.from(unifiedByCompany.keys());
 
+    // Total de docs analisados (para ratear o custo de licenças SAP entre empresas)
+    const totalDocsAllCompanies = companiesToProcess.reduce(
+      (s, db) => s + (unifiedByCompany.get(db)?.length || 0),
+      0,
+    );
+
     return companiesToProcess.map((db) => {
       const p = pickParams(params, db);
       const docs = unifiedByCompany.get(db) || [];
