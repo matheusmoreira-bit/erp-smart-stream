@@ -1,0 +1,1 @@
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.idp_user_mapping TO authenticated; GRANT ALL ON public.idp_user_mapping TO service_role;
