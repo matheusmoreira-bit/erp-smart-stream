@@ -79,6 +79,16 @@ function formatDate(dateStr?: string | null) {
   }
 }
 
+function formatTime(iso?: string | null) {
+  if (!iso) return "—";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+  } catch {
+    return "—";
+  }
+}
+
+
 export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
   const [orders, setOrders] = useState<SalesOrderRef[]>([]);
   const [baixas, setBaixas] = useState<BaixaEntry[]>([]);
