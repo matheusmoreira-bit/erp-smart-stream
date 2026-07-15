@@ -387,22 +387,26 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
               {orders.map((o) => (
                 <div
                   key={o.docEntry}
-                  className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2"
+                  className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2 gap-3"
                 >
-                  <div>
-                    <p className="text-sm font-medium">Pedido #{o.docNum ?? o.docEntry}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                      Pedido #{o.docNum ?? o.docEntry}
+                      <IdBadge label="DocEntry" value={String(o.docEntry)} />
+                    </p>
                     <p className="text-[11px] text-muted-foreground">
                       Emitido em {formatDate(o.docDate)}
                     </p>
                   </div>
                   {o.docTotal != null && (
-                    <span className="font-mono text-sm">
+                    <span className="font-mono text-sm shrink-0">
                       {formatCurrency(o.docTotal, invoice.currency)}
                     </span>
                   )}
                 </div>
               ))}
             </FlowSection>
+
 
             <FlowArrow />
 
