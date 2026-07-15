@@ -26,6 +26,7 @@ import { useSap } from "@/contexts/SapContext";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import { getErpShortLabel } from "@/lib/erp-labels";
+import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 
@@ -98,6 +99,7 @@ export default function SalesPage() {
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Set<number>>(new Set()); // set of docEntry
+  const [baixaOpen, setBaixaOpen] = useState(false);
   const fetchTokenRef = useRef(0);
 
   const isSap = session?.erpType === "sap";
@@ -396,7 +398,7 @@ export default function SalesPage() {
               <Button
                 size="sm"
                 className="gap-1.5"
-                onClick={() => toast.info("Tela de baixa será entregue na próxima etapa.")}
+                onClick={() => setBaixaOpen(true)}
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 Dar baixa ({selected.size})
@@ -562,6 +564,23 @@ export default function SalesPage() {
           </div>
         )}
       </div>
+
+      <BaixaRecebimentoDialog
+        open={baixaOpen}
+        onClose={() => setBaixaOpen(false)}
+        invoices={selectionRows.map<BaixaInvoiceRow>((r) => ({
+          docEntry: r.docEntry,
+          docNum: r.docNum,
+          cardCode: r.cardCode,
+          cardName: r.cardName,
+          currency: r.currency,
+          saldoResidual: r.saldoResidual,
+        }))}
+        onSuccess={() => {
+          clearSelection();
+          void loadInvoices(true);
+        }}
+      />
     </div>
   );
 }
