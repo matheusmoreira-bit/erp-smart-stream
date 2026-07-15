@@ -922,34 +922,43 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const fetchSapPage = useCallback(
     async (skip: number): Promise<Expense[]> => {
       if (!session) return [];
-      const res = await sapQuery(
-        session as any,
-        "PurchaseOrders",
-        {
-          $select: "DocEntry,DocNum,CardCode,CardName,DocTotal,DocCurrency,DocDate,CreationDate,DocumentStatus,Comments",
-          $orderby: "DocDate desc",
-          $top: String(SAP_PAGE_STEP),
-          $skip: String(skip),
-        },
-        false,
-      );
-      const rows = Array.isArray((res as any).data)
-        ? (res as any).data
-        : ((res as any).data?.value || []);
+      // Dados vêm da view HANA VW_PEDIDOS_COMPRA_APROVACOES via edge function,
+      // que já retorna Fornecedor, Solicitante, Aprovador, Data de documento,
+      // Data de vencimento, Status da aprovação e ordena do mais recente
+      // para o mais antigo. A paginação é feita no servidor.
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("sap-purchase-orders-hana", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_db: session.companyDB,
+          offset: skip,
+          limit: SAP_PAGE_STEP,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as any)?.error || `Falha HANA ${res.status}`);
+      }
+      const rows = Array.isArray((data as any).rows) ? (data as any).rows : [];
       return (rows as any[]).map((r) => ({
-        id: `sap-${r.DocEntry}`,
-        supplier_code: r.CardCode || undefined,
-        supplier_name: r.CardName || r.CardCode || "—",
-        total_amount: Number(r.DocTotal || 0),
-        currency: r.DocCurrency || "BRL",
-        status: "pc_lancado" as ExpenseStatus,
-        requester_name: "(ERP)",
-        sap_doc_entry: r.DocEntry,
-        sap_doc_num: r.DocNum,
+        id: r.id ?? `sap-${r.sap_doc_entry ?? r.sap_doc_num}`,
+        supplier_code: r.supplier_code || undefined,
+        supplier_name: r.supplier_name || r.supplier_code || "—",
+        total_amount: Number(r.total_amount || 0),
+        currency: r.currency || "BRL",
+        status: (r.status as ExpenseStatus) || ("pc_lancado" as ExpenseStatus),
+        requester_name: r.requester_name || "(ERP)",
+        current_approver: r.current_approver || undefined,
+        sap_doc_entry: r.sap_doc_entry ?? undefined,
+        sap_doc_num: r.sap_doc_num ?? undefined,
+        sap_purchase_order_status: r.sap_purchase_order_status || undefined,
         company_db: session.companyDB,
-        remarks: r.Comments || undefined,
-        created_at: r.DocDate || r.CreationDate || new Date().toISOString(),
-        updated_at: r.DocDate || r.CreationDate || new Date().toISOString(),
+        doc_date: r.doc_date || undefined,
+        due_date: r.due_date || undefined,
+        remarks: r.remarks || undefined,
+        created_at: r.created_at || r.doc_date || new Date().toISOString(),
+        updated_at: r.updated_at || r.doc_date || new Date().toISOString(),
         origin: "manual",
       }));
     },
