@@ -657,3 +657,50 @@ function BaixaStatusLabel({ status }: { status: string }) {
     </Badge>
   );
 }
+
+function MapSkeleton() {
+  return (
+    <div className="space-y-3 mt-2" aria-busy="true" aria-label="Carregando mapa de relações">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="space-y-1.5">
+          <Skeleton className="h-3 w-32" />
+          <div className="space-y-1.5">
+            <Skeleton className="h-14 w-full rounded-md" />
+            {i === 2 && <Skeleton className="h-14 w-full rounded-md" />}
+          </div>
+          {i < 2 && (
+            <div className="flex justify-center py-1">
+              <Skeleton className="h-4 w-4 rounded-full" />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/5 p-4 flex flex-col items-center text-center gap-2">
+      <ServerCrash className="w-6 h-6 text-destructive" />
+      <p className="text-sm font-medium text-destructive">Não foi possível carregar o mapa de relações.</p>
+      <p className="text-xs text-muted-foreground max-w-md break-words">{message}</p>
+      <Button size="sm" variant="outline" className="gap-1.5 mt-1" onClick={onRetry}>
+        <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+      </Button>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="mt-4 rounded-md border border-dashed border-border/60 p-6 flex flex-col items-center text-center gap-2">
+      <Inbox className="w-6 h-6 text-muted-foreground" />
+      <p className="text-sm font-medium">Nenhum vínculo encontrado.</p>
+      <p className="text-xs text-muted-foreground max-w-md">
+        Esta NF ainda não possui pedidos de venda vinculados nem baixas registradas.
+      </p>
+    </div>
+  );
+}
+
