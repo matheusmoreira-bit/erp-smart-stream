@@ -42,7 +42,21 @@ Deno.serve(async (req) => {
     }
 
     if (action === "link") {
-      const { sap_user_code, idp_provider, idp_user_id, idp_email, idp_display_name } = body;
+      const {
+        sap_user_code,
+        idp_provider,
+        idp_user_id,
+        idp_email,
+        idp_display_name,
+        employee_id,
+        employee_type,
+        job_title,
+        company_name,
+        department,
+        cost_center_code,
+        cost_center_label,
+        manager_idp_id,
+      } = body;
       if (!sap_user_code || !idp_provider) {
         return new Response(JSON.stringify({ error: "Parâmetros inválidos" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -59,6 +73,15 @@ Deno.serve(async (req) => {
             idp_display_name,
             status: "linked",
             linked_at: new Date().toISOString(),
+            employee_id: employee_id ?? null,
+            employee_type: employee_type ?? null,
+            job_title: job_title ?? null,
+            company_name: company_name ?? null,
+            department: department ?? null,
+            cost_center_code: cost_center_code ?? null,
+            cost_center_label: cost_center_label ?? null,
+            manager_idp_id: manager_idp_id ?? null,
+            attributes_synced_at: new Date().toISOString(),
           },
           { onConflict: "sap_user_code,idp_provider" }
         );

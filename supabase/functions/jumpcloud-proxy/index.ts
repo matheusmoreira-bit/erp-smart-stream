@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
 
       while (hasMore) {
         const resp = await fetch(
-          `https://console.jumpcloud.com/api/systemusers?limit=${limit}&skip=${skip}&fields=_id email username displayname firstname lastname suspended`,
+          `https://console.jumpcloud.com/api/systemusers?limit=${limit}&skip=${skip}&fields=_id email username displayname firstname lastname suspended department costCenter jobTitle company employeeIdentifier employeeType manager`,
           { headers }
         );
 
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
             { lastname: { $regex: query } },
           ],
         },
-        fields: ["_id", "email", "username", "displayname", "firstname", "lastname", "suspended"],
+        fields: ["_id", "email", "username", "displayname", "firstname", "lastname", "suspended", "department", "costCenter", "jobTitle", "company", "employeeIdentifier", "employeeType", "manager"],
         limit: 20,
       };
 

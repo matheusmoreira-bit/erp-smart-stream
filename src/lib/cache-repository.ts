@@ -59,6 +59,14 @@ export interface JumpCloudCacheEntry {
   firstname?: string;
   lastname?: string;
   suspended?: boolean;
+  // Employment Information
+  department?: string;
+  costCenter?: string;
+  jobTitle?: string;
+  company?: string;
+  employeeIdentifier?: string;
+  employeeType?: string;
+  manager?: string;
 }
 
 export interface SapUser {
