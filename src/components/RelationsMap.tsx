@@ -259,7 +259,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
       const { data } = await supabase
         .from("sap_fluxo_analise_cache")
         .select(
-          "data_atualizacao_esboco, data_aprovacao, data_lancamento, data_vencimento, data_pagamento, solicitante, aprovador, descricao, centro_custo, marca, departamento, id_esboco, id_pedido, id_nf, id_cp",
+          "data_atualizacao_esboco, data_aprovacao, data_lancamento, data_vencimento, data_pagamento, solicitante, aprovador, descricao, centro_custo, marca, departamento, fornecedor, valor, id_esboco, id_pedido, id_nf, id_cp",
         )
         .eq("company_db", expense.company_db!)
         .in("id_pedido", candidates)
