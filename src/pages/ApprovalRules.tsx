@@ -23,6 +23,7 @@ import {
   UserCog,
 } from "lucide-react";
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
+import { RulesHealthMonitor } from "@/components/RulesHealthMonitor";
 import { useAuth } from "@/hooks/useAuth";
 import { RuleSimulator } from "@/components/RuleSimulator";
 import { Button } from "@/components/ui/button";
