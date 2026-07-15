@@ -186,6 +186,7 @@ export default function PagCorp() {
   const [settlementFilter, setSettlementFilter] = useState<"all" | "not_integrated" | "integrated_pending" | "settled">("all");
   const [cardFilter, setCardFilter] = useState<string>("all");
   const [reprocessingGroup, setReprocessingGroup] = useState<string | null>(null);
+  const [batchReprocessing, setBatchReprocessing] = useState(false);
   const [validateDialog, setValidateDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
   const [relationsDialog, setRelationsDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
   const [integrateDialog, setIntegrateDialog] = useState<{
