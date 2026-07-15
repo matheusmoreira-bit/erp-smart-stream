@@ -138,6 +138,80 @@ export function RoiAnalysis({ mode }: Props) {
             />
           </div>
 
+          {/* Segregação: SAP direto vs ERP Flow */}
+          {(() => {
+            const nSap = mode === "company"
+              ? (single?.n_docs_sap_only || 0)
+              : metricsByCompany.reduce((s, m) => s + m.n_docs_sap_only, 0);
+            const nFlow = mode === "company"
+              ? (single?.n_docs_via_flow || 0)
+              : metricsByCompany.reduce((s, m) => s + m.n_docs_via_flow, 0);
+            const vSap = mode === "company"
+              ? (single?.valor_sap_only || 0)
+              : metricsByCompany.reduce((s, m) => s + m.valor_sap_only, 0);
+            const vFlow = mode === "company"
+              ? (single?.valor_via_flow || 0)
+              : metricsByCompany.reduce((s, m) => s + m.valor_via_flow, 0);
+            const aSap = mode === "company"
+              ? (single?.docs_atrasados_sap_only || 0)
+              : metricsByCompany.reduce((s, m) => s + m.docs_atrasados_sap_only, 0);
+            const aFlow = mode === "company"
+              ? (single?.docs_atrasados_via_flow || 0)
+              : metricsByCompany.reduce((s, m) => s + m.docs_atrasados_via_flow, 0);
+            const pSap = mode === "company"
+              ? (single?.prejuizo_atraso_sap_only || 0)
+              : metricsByCompany.reduce((s, m) => s + m.prejuizo_atraso_sap_only, 0);
+            const pFlow = mode === "company"
+              ? (single?.prejuizo_atraso_via_flow || 0)
+              : metricsByCompany.reduce((s, m) => s + m.prejuizo_atraso_via_flow, 0);
+            const total = nSap + nFlow;
+            const pctSap = total > 0 ? (nSap / total) * 100 : 0;
+            const pctFlow = total > 0 ? (nFlow / total) * 100 : 0;
+            return (
+              <div className="glass-card p-4 sm:p-6 space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <h3 className="text-sm sm:text-base font-semibold flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-primary" />
+                    Origem dos Pedidos de Compra
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {total} pedidos analisados no período
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-destructive">Criados direto no SAP</span>
+                      <span className="text-xs text-muted-foreground">{fmtNum(pctSap, 1)}%</span>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-foreground">{nSap}</div>
+                    <ul className="text-xs text-muted-foreground space-y-1 pt-1 border-t border-border/40">
+                      <li className="flex justify-between"><span>Valor total</span><span className="tabular-nums text-foreground">{fmtBRL(vSap)}</span></li>
+                      <li className="flex justify-between"><span>Aprovados em atraso</span><span className="tabular-nums text-destructive">{aSap}</span></li>
+                      <li className="flex justify-between"><span>Prejuízo (multa+juros)</span><span className="tabular-nums text-destructive">{fmtBRL(pSap)}</span></li>
+                    </ul>
+                  </div>
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-primary">Via ERP Flow → integrados ao SAP</span>
+                      <span className="text-xs text-muted-foreground">{fmtNum(pctFlow, 1)}%</span>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-foreground">{nFlow}</div>
+                    <ul className="text-xs text-muted-foreground space-y-1 pt-1 border-t border-border/40">
+                      <li className="flex justify-between"><span>Valor total</span><span className="tabular-nums text-foreground">{fmtBRL(vFlow)}</span></li>
+                      <li className="flex justify-between"><span>Aprovados em atraso</span><span className="tabular-nums text-destructive">{aFlow}</span></li>
+                      <li className="flex justify-between"><span>Prejuízo (multa+juros)</span><span className="tabular-nums text-destructive">{fmtBRL(pFlow)}</span></li>
+                    </ul>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Comparativo aplicado sobre o total ({total} pedidos): a coluna <strong className="text-destructive">SAP</strong> nas análises abaixo assume que todos seriam lançados/aprovados diretamente no SAP; a coluna <strong className="text-primary">ERP Flow</strong> assume que todos passariam pelo Flow. A segregação acima mostra o cenário real observado no período.
+                </p>
+              </div>
+            );
+          })()}
+
+
           {/* Comparativo em barras */}
           <div className="glass-card p-4 sm:p-6">
             <h3 className="text-sm sm:text-base font-semibold mb-4 flex items-center gap-2">

@@ -25,6 +25,15 @@ export interface RoiCompanyMetrics {
   n_approvals: number;
   n_aprovadores: number;
   n_solicitantes: number;
+  // Segregação por origem
+  n_docs_sap_only: number;   // Criados direto no SAP (sem passar pelo ERP Flow)
+  n_docs_via_flow: number;   // Criados no ERP Flow, aprovados e integrados ao SAP
+  valor_sap_only: number;
+  valor_via_flow: number;
+  docs_atrasados_sap_only: number;
+  docs_atrasados_via_flow: number;
+  prejuizo_atraso_sap_only: number;
+  prejuizo_atraso_via_flow: number;
   antecedencia_media_dias: number | null;
   atraso_medio_dias: number | null;
   docs_atrasados: number;
@@ -267,10 +276,23 @@ export function useRoiAnalysis(opts: Options) {
       let countAtrasados = 0;
       let valorTotal = 0;
       let prejuizo = 0;
+      // Segregação por origem
+      let nDocsSapOnly = 0;
+      let nDocsViaFlow = 0;
+      let valorSapOnly = 0;
+      let valorViaFlow = 0;
+      let atrasoSapOnly = 0;
+      let atrasoViaFlow = 0;
+      let prejuizoSapOnly = 0;
+      let prejuizoViaFlow = 0;
 
       for (const d of docs) {
         if (d.requester_email) solicitantes.add(d.requester_email.toLowerCase());
         valorTotal += d.total_amount;
+
+        const viaFlow = d.source !== "cache"; // "expense" ou "both" → passou pelo ERP Flow
+        if (viaFlow) { nDocsViaFlow++; valorViaFlow += d.total_amount; }
+        else { nDocsSapOnly++; valorSapOnly += d.total_amount; }
 
         // antecedência: created_at → due_date
         if (d.due_date && d.created_at) {
@@ -293,7 +315,10 @@ export function useRoiAnalysis(opts: Options) {
             if (atraso > 0) {
               sumAtraso += atraso;
               countAtrasados++;
-              prejuizo += d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
+              const p_val = d.total_amount * (p.multa_percent / 100 + (p.juros_mes_percent / 100) * (atraso / 30));
+              prejuizo += p_val;
+              if (viaFlow) { atrasoViaFlow++; prejuizoViaFlow += p_val; }
+              else { atrasoSapOnly++; prejuizoSapOnly += p_val; }
             }
           }
         }
@@ -343,6 +368,14 @@ export function useRoiAnalysis(opts: Options) {
         n_approvals: nApprovals,
         n_aprovadores: nAprovadores,
         n_solicitantes: nSolicitantes,
+        n_docs_sap_only: nDocsSapOnly,
+        n_docs_via_flow: nDocsViaFlow,
+        valor_sap_only: valorSapOnly,
+        valor_via_flow: valorViaFlow,
+        docs_atrasados_sap_only: atrasoSapOnly,
+        docs_atrasados_via_flow: atrasoViaFlow,
+        prejuizo_atraso_sap_only: prejuizoSapOnly,
+        prejuizo_atraso_via_flow: prejuizoViaFlow,
         antecedencia_media_dias: countAntecedencia > 0 ? sumAntecedencia / countAntecedencia : null,
         atraso_medio_dias: countAtrasados > 0 ? sumAtraso / countAtrasados : null,
         docs_atrasados: countAtrasados,
