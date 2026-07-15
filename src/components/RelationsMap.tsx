@@ -78,6 +78,13 @@ export interface SapFluxoEnrichment {
   centro_custo: string | null;
   marca: string | null;
   departamento: string | null;
+  fornecedor: string | null;
+  valor: number | null;
+  /** IDs amarrando o fluxo Esboço → Pedido → NF → CP (VW_FIN_ANALISE_FLUXO). */
+  id_esboco: string | null;
+  id_pedido: string | null;
+  id_nf: string | null;
+  id_cp: string | null;
 }
 
 
@@ -252,7 +259,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
       const { data } = await supabase
         .from("sap_fluxo_analise_cache")
         .select(
-          "data_atualizacao_esboco, data_aprovacao, data_lancamento, data_vencimento, data_pagamento, solicitante, aprovador, descricao, centro_custo, marca, departamento",
+          "data_atualizacao_esboco, data_aprovacao, data_lancamento, data_vencimento, data_pagamento, solicitante, aprovador, descricao, centro_custo, marca, departamento, fornecedor, valor, id_esboco, id_pedido, id_nf, id_cp",
         )
         .eq("company_db", expense.company_db!)
         .in("id_pedido", candidates)
