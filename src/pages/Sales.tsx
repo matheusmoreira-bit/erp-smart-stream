@@ -57,6 +57,7 @@ function formatDate(dateStr?: string | null) {
 interface SapInvoice {
   DocEntry: number;
   DocNum: number;
+  FolioNumber: number | null;
   CardCode: string;
   CardName: string;
   DocDate: string;
@@ -71,6 +72,8 @@ interface SapInvoice {
 interface InvoiceRow {
   docEntry: number;
   docNum: number;
+  /** Número da NFSE / folio fiscal (SAP FolioNumber). */
+  folioNumber: number | null;
   cardCode: string;
   cardName: string;
   docDate: string;
@@ -137,7 +140,7 @@ export default function SalesPage() {
         const cutoffIso = cutoff.toISOString().slice(0, 10);
         const invoiceParams: Record<string, string> = {
           $select:
-            "DocEntry,DocNum,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
+            "DocEntry,DocNum,FolioNumber,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
           $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
           $orderby: "DocDate desc",
         };
@@ -213,6 +216,7 @@ export default function SalesPage() {
           return {
             docEntry: inv.DocEntry,
             docNum: inv.DocNum,
+            folioNumber: inv.FolioNumber != null ? Number(inv.FolioNumber) : null,
             cardCode: inv.CardCode || "—",
             cardName: inv.CardName || "—",
             docDate: inv.DocDate,
@@ -279,6 +283,7 @@ export default function SalesPage() {
             siRows.push({
               docEntry: jdt,
               docNum: jdt,
+              folioNumber: null,
               cardCode,
               cardName: cardCode, // preenchido a partir das NFs abaixo, se houver
               docDate: je.ReferenceDate || "",
@@ -332,7 +337,8 @@ export default function SalesPage() {
       return (
         r.cardName.toLowerCase().includes(q) ||
         r.cardCode.toLowerCase().includes(q) ||
-        String(r.docNum).includes(q)
+        String(r.docNum).includes(q) ||
+        (r.folioNumber != null && String(r.folioNumber).includes(q))
       );
     });
   }, [invoices, onlyOpen, search]);
@@ -642,7 +648,21 @@ export default function SalesPage() {
                                       {r.docNum}
                                     </span>
                                   ) : (
-                                    r.docNum
+                                    <div className="flex flex-col leading-tight">
+                                      <span title="DocEntry / DocNum no SAP">{r.docNum}</span>
+                                      {r.folioNumber != null ? (
+                                        <span
+                                          className="text-[10px] text-muted-foreground"
+                                          title="Número da NFSE (FolioNumber)"
+                                        >
+                                          NFSE {r.folioNumber}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] text-muted-foreground/60">
+                                          NFSE —
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </td>
                                 <td className="py-2 px-2">{formatDate(r.docDate)}</td>
@@ -735,6 +755,7 @@ export default function SalesPage() {
         invoices={selectionRows.map<BaixaInvoiceRow>((r) => ({
           docEntry: r.docEntry,
           docNum: r.docNum,
+          folioNumber: r.folioNumber,
           cardCode: r.cardCode,
           cardName: r.cardName,
           currency: r.currency,
