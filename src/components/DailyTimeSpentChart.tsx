@@ -42,22 +42,22 @@ function fmtBucketLabel(key: string, g: Granularity): string {
 
 export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMin, tempoLancarSapMin }: Props) {
   const { isAdmin } = useAuth();
-  const [rows, setRows] = useState<{ doc_date: string }[]>([]);
+  const [rows, setRows] = useState<{ doc_date: string; company_db: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [granularity, setGranularity] = useState<Granularity>("week");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const all: { doc_date: string }[] = [];
+      const all: { doc_date: string; company_db: string }[] = [];
       let offset = 0;
-      // Paginar sap_purchase_order_cache
       while (true) {
         let q = supabase
           .from("sap_purchase_order_cache")
-          .select("doc_date", { count: "exact" })
+          .select("doc_date, company_db", { count: "exact" })
           .gte("doc_date", START_DATE)
           .not("doc_date", "is", null)
           .order("doc_date", { ascending: true })
@@ -69,54 +69,53 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
           break;
         }
         if (!data || data.length === 0) break;
-        all.push(...(data as { doc_date: string }[]));
+        all.push(...(data as { doc_date: string; company_db: string }[]));
         if (data.length < PAGE_SIZE) break;
         offset += PAGE_SIZE;
-        if (offset > 200000) break; // hard cap
+        if (offset > 200000) break;
       }
       if (cancelled) return;
-      setRows(all);
+      // Exclui bases de teste
+      setRows(all.filter((r) => !isTestCompanyDb(r.company_db)));
       setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [companyDb, consolidated, reloadKey]);
 
   const data = useMemo(() => {
-    const byDay = new Map<string, number>();
+    const byBucket = new Map<string, number>();
     for (const r of rows) {
       const day = (r.doc_date || "").slice(0, 10);
       if (!day) continue;
-      byDay.set(day, (byDay.get(day) || 0) + 1);
+      const k = bucketKey(day, granularity);
+      byBucket.set(k, (byBucket.get(k) || 0) + 1);
     }
-    if (!byDay.size) return [];
-    const days: { date: string; docs: number; flow_min: number; sap_min: number }[] = [];
-    const start = new Date(START_DATE + "T00:00:00Z");
-    const end = new Date();
-    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-      const key = d.toISOString().slice(0, 10);
-      const docs = byDay.get(key) || 0;
-      days.push({
+    if (!byBucket.size) return [];
+    // Média por dia dentro do bucket: total_min / dias_no_bucket
+    const daysInBucket = granularity === "day" ? 1 : granularity === "week" ? 7 : 30;
+    const buckets = [...byBucket.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, docs]) => ({
         date: key,
         docs,
-        flow_min: docs * tempoLancarFlowMin,
-        sap_min: docs * tempoLancarSapMin,
-      });
-    }
-    return days;
-  }, [rows, tempoLancarFlowMin, tempoLancarSapMin]);
+        flow_min: (docs * tempoLancarFlowMin) / daysInBucket,
+        sap_min: (docs * tempoLancarSapMin) / daysInBucket,
+      }));
+    return buckets;
+  }, [rows, tempoLancarFlowMin, tempoLancarSapMin, granularity]);
 
   const totals = useMemo(() => {
-    const docs = data.reduce((s, d) => s + d.docs, 0);
-    const flow = data.reduce((s, d) => s + d.flow_min, 0);
-    const sap = data.reduce((s, d) => s + d.sap_min, 0);
+    const docs = rows.length;
+    const flow = docs * tempoLancarFlowMin;
+    const sap = docs * tempoLancarSapMin;
     return { docs, flow, sap };
-  }, [data]);
+  }, [rows, tempoLancarFlowMin, tempoLancarSapMin]);
 
-  const fmtDate = (v: string) => {
-    const [y, m, d] = v.split("-");
-    return `${d}/${m}`;
-  };
+  const fmtBucket = (v: string) => fmtBucketLabel(v, granularity);
   const fmtH = (v: number) => `${v.toFixed(1)}h`;
+  const unitLabel = granularity === "day" ? "min/dia (média)" : granularity === "week" ? "min/dia (média da semana)" : "min/dia (média do mês)";
+  const bucketNoun = granularity === "day" ? "dia" : granularity === "week" ? "semana" : "mês";
+
 
   const runBackfill = async () => {
     setBackfilling(true);
