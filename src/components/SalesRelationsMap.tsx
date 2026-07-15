@@ -52,7 +52,8 @@ interface SalesOrderRef {
 }
 
 interface BaixaEntry {
-  id: string;
+  id: string | null;              // null quando origem = SAP puro (fora do ERP Flow)
+  origin: "internal" | "external"; // internal = registrada no ERP Flow; external = SAP direto
   data_recebimento: string;
   valor_baixado: number;
   valor_juros_multa: number;
@@ -160,7 +161,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           .eq("baixas_recebimento.company_db", session.companyDB);
         if (baixasErr) throw new Error(baixasErr.message);
 
-        const baixaRows: BaixaEntry[] = ((itens || []) as Array<{
+        const internalBaixas: BaixaEntry[] = ((itens || []) as Array<{
           valor_baixado: number;
           baixas_recebimento: {
             id: string;
@@ -174,6 +175,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           };
         }>).map((it) => ({
           id: it.baixas_recebimento.id,
+          origin: "internal" as const,
           data_recebimento: it.baixas_recebimento.data_recebimento,
           valor_baixado: Number(it.valor_baixado || 0),
           valor_juros_multa: Number(it.baixas_recebimento.valor_juros_multa || 0),
@@ -183,6 +185,77 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           criado_por_nome: it.baixas_recebimento.criado_por_nome,
           criado_por_user_code: it.baixas_recebimento.criado_por_user_code,
         }));
+
+        // 3) IncomingPayments no SAP para este CardCode (todas as baixas —
+        //    inclusive as feitas fora do ERP Flow). Filtro final por linhas
+        //    de PaymentInvoices que apontam para este DocEntry.
+        const knownSapDocs = new Set<number>(
+          internalBaixas
+            .map((b) => b.sap_incoming_payment_doc_entry)
+            .filter((n): n is number => typeof n === "number" && Number.isFinite(n)),
+        );
+        let externalBaixas: BaixaEntry[] = [];
+        try {
+          const cardCodeEsc = invoice.cardCode.replace(/'/g, "''");
+          const ipRes = await sapQueryAll(
+            session,
+            "IncomingPayments",
+            {
+              $select: "DocEntry,DocNum,DocDate,DocTime,CreationDate,CardCode,Cancelled,UserSign",
+              $expand: "PaymentInvoices($select=DocEntry,InvoiceType,SumApplied)",
+              $filter: `CardCode eq '${cardCodeEsc}' and Cancelled eq 'tNO'`,
+            },
+            true,
+          );
+          const ipRows = (ipRes.data?.value as Array<{
+            DocEntry: number;
+            DocNum?: number;
+            DocDate?: string;
+            DocTime?: string | number | null;
+            CreationDate?: string;
+            Cancelled?: string;
+            UserSign?: number | null;
+            PaymentInvoices?: Array<{ DocEntry: number; InvoiceType?: string; SumApplied?: number }>;
+          }>) || [];
+          externalBaixas = ipRows
+            .filter((ip) => knownSapDocs.has(Number(ip.DocEntry)) === false)
+            .map((ip) => {
+              const applied = (ip.PaymentInvoices || [])
+                .filter((pi) => Number(pi.DocEntry) === invoice.docEntry)
+                .reduce((s, pi) => s + Number(pi.SumApplied || 0), 0);
+              return { ip, applied };
+            })
+            .filter((x) => x.applied > 0)
+            .map(({ ip, applied }) => {
+              // Compõe timestamp de created_at a partir de DocDate + DocTime.
+              // DocTime no Service Layer costuma vir como número HHMM (ex.: 1435 = 14:35).
+              let iso = ip.CreationDate || ip.DocDate || "";
+              if (ip.DocDate && ip.DocTime != null) {
+                const t = String(ip.DocTime).padStart(4, "0");
+                const hh = t.slice(0, 2);
+                const mm = t.slice(2, 4);
+                iso = `${ip.DocDate}T${hh}:${mm}:00`;
+              }
+              return {
+                id: null,
+                origin: "external" as const,
+                data_recebimento: ip.DocDate || "",
+                valor_baixado: applied,
+                valor_juros_multa: 0,
+                status: "sincronizado",
+                sap_incoming_payment_doc_entry: Number(ip.DocEntry),
+                created_at: iso,
+                criado_por_nome: null,
+                criado_por_user_code: ip.UserSign != null ? `SAP UserSign ${ip.UserSign}` : "SAP (fora do ERP Flow)",
+              } satisfies BaixaEntry;
+            });
+        } catch (e) {
+          // Se falhar a consulta de IncomingPayments, não bloqueia o mapa —
+          // caímos para o cálculo antigo (agregado como "saldo inicial já baixado").
+          console.warn("[SalesRelationsMap] falha ao listar IncomingPayments:", e);
+        }
+
+        const baixaRows: BaixaEntry[] = [...internalBaixas, ...externalBaixas];
 
 
         // Ordena por data de recebimento (asc), depois por created_at
@@ -522,8 +595,12 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                   baixa.criado_por_nome || baixa.criado_por_user_code || null;
                 return (
                 <div
-                  key={baixa.id + "-" + idx}
-                  className="rounded-md border border-border/60 bg-card px-3 py-2"
+                  key={(baixa.id || `sap-${baixa.sap_incoming_payment_doc_entry}`) + "-" + idx}
+                  className={`rounded-md border px-3 py-2 ${
+                    baixa.origin === "external"
+                      ? "border-dashed border-border/60 bg-muted/10"
+                      : "border-border/60 bg-card"
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-start gap-2 min-w-0">
@@ -534,15 +611,22 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                           <span className="text-[11px] font-normal text-muted-foreground">
                             às {formatTime(baixa.created_at)}
                           </span>
-                          <Link
-                            to={`/vendas/historico?baixa=${baixa.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary hover:underline"
-                            title="Abrir baixa no histórico"
-                          >
-                            abrir <ExternalLink className="w-3 h-3" />
-                          </Link>
+                          {baixa.origin === "internal" && baixa.id && (
+                            <Link
+                              to={`/vendas/historico?baixa=${baixa.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary hover:underline"
+                              title="Abrir baixa no histórico"
+                            >
+                              abrir <ExternalLink className="w-3 h-3" />
+                            </Link>
+                          )}
+                          {baixa.origin === "external" && (
+                            <Badge variant="outline" className="text-[9px] border-border/60 text-muted-foreground">
+                              fora do ERP Flow
+                            </Badge>
+                          )}
                         </p>
                         <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
                           <BaixaStatusLabel status={baixa.status} />
