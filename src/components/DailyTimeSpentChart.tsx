@@ -56,15 +56,18 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
     let cancelled = false;
     (async () => {
       setLoading(true);
+      // Fonte de dados: sap_fluxo_analise_cache (VW_FIN_ANALISE_FLUXO), usando
+      // data_lancamento como data do documento. Chave = company_db::id_pedido.
       const all: { doc_date: string; company_db: string; doc_entry: number }[] = [];
       let offset = 0;
       while (true) {
         let q = supabase
-          .from("sap_purchase_order_cache")
-          .select("doc_date, company_db, doc_entry", { count: "exact" })
-          .gte("doc_date", START_DATE)
-          .not("doc_date", "is", null)
-          .order("doc_date", { ascending: true })
+          .from("sap_fluxo_analise_cache")
+          .select("data_lancamento, company_db, id_pedido")
+          .gte("data_lancamento", START_DATE)
+          .not("data_lancamento", "is", null)
+          .not("id_pedido", "is", null)
+          .order("data_lancamento", { ascending: true })
           .range(offset, offset + PAGE_SIZE - 1);
         if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
         const { data, error } = await q;
@@ -73,7 +76,15 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
           break;
         }
         if (!data || data.length === 0) break;
-        all.push(...(data as { doc_date: string; company_db: string; doc_entry: number }[]));
+        for (const r of data as { data_lancamento: string; company_db: string; id_pedido: string }[]) {
+          const doc = Number(r.id_pedido);
+          if (!Number.isFinite(doc)) continue;
+          all.push({
+            doc_date: String(r.data_lancamento).slice(0, 10),
+            company_db: r.company_db,
+            doc_entry: doc,
+          });
+        }
         if (data.length < PAGE_SIZE) break;
         offset += PAGE_SIZE;
         if (offset > 200000) break;
