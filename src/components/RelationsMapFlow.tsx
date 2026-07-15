@@ -375,13 +375,22 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       identifier: expense.sap_doc_num ? `SAP #${expense.sap_doc_num}` : expense.id.slice(0, 8),
       amount: expense.total_amount,
       currency: expense.currency,
-      who: expense.requester_name || expense.requester_email || undefined,
-      when: expense.created_at,
-      extra: expense.supplier_name || null,
+      who:
+        (enrichmentActive && fluxo?.solicitante) ||
+        expense.requester_name ||
+        expense.requester_email ||
+        undefined,
+      when: (enrichmentActive && startAt) || expense.created_at,
+      extra: enrichmentActive
+        ? [expense.supplier_name, fluxo?.centro_custo ? `CC ${fluxo.centro_custo}` : null]
+            .filter(Boolean)
+            .join(" · ") || null
+        : expense.supplier_name || null,
       state: rootState,
       hasTarget: false,
     },
   });
+
 
   /* ── Stage 2 (compras only): Aprovadores empilhados ── */
   const approverIds: string[] = [];
