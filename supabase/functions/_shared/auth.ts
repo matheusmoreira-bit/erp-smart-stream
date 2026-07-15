@@ -408,18 +408,17 @@ export async function requireAdminOrSapSessionHeaders(req: Request) {
  * account at all (e.g. PagCorp listing).
  */
 export async function validateSapSession(req: Request) {
-  const sapSession = req.headers.get("x-sap-session")?.trim();
-  const routeId = req.headers.get("x-sap-route")?.trim() || "";
-  const sapUser = req.headers.get("x-sap-user")?.trim();
-  const companyDB = req.headers.get("x-company-db")?.trim();
-  if (!sapSession || !sapUser || !companyDB) return null;
+  const headers = parseSapHeaders(req);
+  if (!headers) return null;
+  const { sapSession, routeId, sapUser, companyDB, sapAuthToken } = headers;
 
   const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
   const cached = sapSessionValidationCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   try {
-    const signed = await verifySapAuthToken(req.headers.get("x-sap-auth-token")?.trim() || "", sapSession, sapUser, companyDB);
+    const signed = await verifySapAuthToken(sapAuthToken, sapSession, sapUser, companyDB);
+
     if (signed) {
       sapSessionValidationCache.set(cacheKey, {
         expiresAt: Date.now() + SAP_SESSION_VALIDATION_CACHE_TTL_MS,
