@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { parseSapHeaders, validateSapSession } from "../_shared/auth.ts";
+import { parseSapHeaders, requireUser, validateSapSession } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -206,6 +206,15 @@ Deno.serve(async (req) => {
       if (validation) return json(400, { ok: false, errorMessage: validation });
 
       const sb = adminClient();
+      let criadoPor: string | null = null;
+      try {
+        const cloudUser = await requireUser(req);
+        criadoPor = cloudUser.id;
+      } catch {
+        // A baixa continua permitida para sessão SAP válida; apenas não haverá
+        // vínculo com usuário Cloud para RLS/leitura direta pelo cliente.
+      }
+
       const { data: baixa, error: insertErr } = await sb.from("baixas_recebimento").insert({
         company_db: sap.companyDB,
         card_code: input.cardCode.trim(),
@@ -218,6 +227,7 @@ Deno.serve(async (req) => {
         valor_total: Number(input.valorTotal),
         valor_juros_multa: Number(input.valorJurosMulta || 0),
         status: "pendente_sincronizacao",
+        criado_por: criadoPor,
       }).select("id").single();
       if (insertErr || !baixa) return json(500, { ok: false, errorMessage: insertErr?.message || "Falha ao gravar baixa." });
 
