@@ -66,6 +66,21 @@ interface SapHistoryRow {
   remarks: string | null;
 }
 
+export interface SapFluxoEnrichment {
+  data_atualizacao_esboco: string | null;
+  data_aprovacao: string | null;
+  data_lancamento: string | null;
+  data_vencimento: string | null;
+  data_pagamento: string | null;
+  solicitante: string | null;
+  aprovador: string | null;
+  descricao: string | null;
+  centro_custo: string | null;
+  marca: string | null;
+  departamento: string | null;
+}
+
+
 
 export interface RelationsMapExpense {
   id: string;
