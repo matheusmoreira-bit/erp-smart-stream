@@ -18,7 +18,7 @@ export interface SyncBaixaResult {
 }
 
 export async function syncBaixaRecebimentoToSap(
-  session: ErpSession,
+  session: SapSession,
   baixaId: string,
 ): Promise<SyncBaixaResult> {
   // 1) Carrega baixa + itens do Supabase
