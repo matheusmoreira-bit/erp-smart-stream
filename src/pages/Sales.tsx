@@ -648,7 +648,21 @@ export default function SalesPage() {
                                       {r.docNum}
                                     </span>
                                   ) : (
-                                    r.docNum
+                                    <div className="flex flex-col leading-tight">
+                                      <span title="DocEntry / DocNum no SAP">{r.docNum}</span>
+                                      {r.folioNumber != null ? (
+                                        <span
+                                          className="text-[10px] text-muted-foreground"
+                                          title="Número da NFSE (FolioNumber)"
+                                        >
+                                          NFSE {r.folioNumber}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] text-muted-foreground/60">
+                                          NFSE —
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </td>
                                 <td className="py-2 px-2">{formatDate(r.docDate)}</td>
