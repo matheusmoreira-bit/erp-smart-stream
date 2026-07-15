@@ -367,7 +367,7 @@ export default function PagCorp() {
       const tb = b.date ? new Date(b.date).getTime() : 0;
       return tb - ta;
     });
-  }, [transactions, search, statusFilter, cardFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, settlementFilter, cardFilter, showNondeductible]);
 
   /**
    * Constrói a lista de renderização com agrupamento visual:
