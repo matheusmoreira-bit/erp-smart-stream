@@ -58,13 +58,13 @@ export function RoiAnalysis({ mode }: Props) {
   const comparisonData = useMemo(() => {
     const sumBy = (k: keyof typeof metricsByCompany[number]) =>
       metricsByCompany.reduce((s, m) => s + (Number(m[k]) || 0), 0);
-    const prejSap = mode === "company"
+    const prejSap = effMode === "company"
       ? (single?.prejuizo_atraso_sap_only || 0)
       : sumBy("prejuizo_atraso_sap_only");
-    const prejFlow = mode === "company"
+    const prejFlow = effMode === "company"
       ? (single?.prejuizo_atraso_via_flow || 0)
       : sumBy("prejuizo_atraso_via_flow");
-    const data = mode === "company" && single
+    const data = effMode === "company" && single
       ? [{
           nome: "Custo Tempo", SAP: single.custo_tempo_sap, "ERP Flow": single.custo_tempo_flow,
         }, {
@@ -85,8 +85,8 @@ export function RoiAnalysis({ mode }: Props) {
   }, [mode, single, totals, metricsByCompany]);
 
 
-  const displayEconomia = mode === "company" ? single?.economia_periodo || 0 : totals?.economia_periodo || 0;
-  const displayEconomiaPct = mode === "company" ? single?.economia_percent || 0 : totals?.economia_percent || 0;
+  const displayEconomia = effMode === "company" ? single?.economia_periodo || 0 : totals?.economia_periodo || 0;
+  const displayEconomiaPct = effMode === "company" ? single?.economia_percent || 0 : totals?.economia_percent || 0;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -132,22 +132,22 @@ export function RoiAnalysis({ mode }: Props) {
             />
             <MetricCard
               title="Horas Economizadas"
-              value={`${fmtNum((mode === "company" ? single?.horas_sap : totals?.horas_sap) || 0)}h → ${fmtNum((mode === "company" ? single?.horas_flow : totals?.horas_flow) || 0)}h`}
+              value={`${fmtNum((effMode === "company" ? single?.horas_sap : totals?.horas_sap) || 0)}h → ${fmtNum((effMode === "company" ? single?.horas_flow : totals?.horas_flow) || 0)}h`}
               subtitle="Tempo operacional SAP vs Flow"
               icon={Clock}
               delay={0.1}
             />
             <MetricCard
               title="Prejuízo por Atraso"
-              value={fmtBRL(mode === "company" ? single?.prejuizo_atraso || 0 : totals?.prejuizo_atraso || 0)}
+              value={fmtBRL(effMode === "company" ? single?.prejuizo_atraso || 0 : totals?.prejuizo_atraso || 0)}
               subtitle="Multa + juros em docs vencidos"
               icon={AlertTriangle}
               delay={0.2}
             />
             <MetricCard
               title="Docs Analisados"
-              value={String(mode === "company" ? single?.n_docs || 0 : totals?.n_docs || 0)}
-              subtitle={`${mode === "company" ? single?.n_approvals || 0 : totals?.n_approvals || 0} aprovações`}
+              value={String(effMode === "company" ? single?.n_docs || 0 : totals?.n_docs || 0)}
+              subtitle={`${effMode === "company" ? single?.n_approvals || 0 : totals?.n_approvals || 0} aprovações`}
               icon={DollarSign}
               delay={0.3}
             />
@@ -155,28 +155,28 @@ export function RoiAnalysis({ mode }: Props) {
 
           {/* Segregação: SAP direto vs ERP Flow */}
           {(() => {
-            const nSap = mode === "company"
+            const nSap = effMode === "company"
               ? (single?.n_docs_sap_only || 0)
               : metricsByCompany.reduce((s, m) => s + m.n_docs_sap_only, 0);
-            const nFlow = mode === "company"
+            const nFlow = effMode === "company"
               ? (single?.n_docs_via_flow || 0)
               : metricsByCompany.reduce((s, m) => s + m.n_docs_via_flow, 0);
-            const vSap = mode === "company"
+            const vSap = effMode === "company"
               ? (single?.valor_sap_only || 0)
               : metricsByCompany.reduce((s, m) => s + m.valor_sap_only, 0);
-            const vFlow = mode === "company"
+            const vFlow = effMode === "company"
               ? (single?.valor_via_flow || 0)
               : metricsByCompany.reduce((s, m) => s + m.valor_via_flow, 0);
-            const aSap = mode === "company"
+            const aSap = effMode === "company"
               ? (single?.docs_atrasados_sap_only || 0)
               : metricsByCompany.reduce((s, m) => s + m.docs_atrasados_sap_only, 0);
-            const aFlow = mode === "company"
+            const aFlow = effMode === "company"
               ? (single?.docs_atrasados_via_flow || 0)
               : metricsByCompany.reduce((s, m) => s + m.docs_atrasados_via_flow, 0);
-            const pSap = mode === "company"
+            const pSap = effMode === "company"
               ? (single?.prejuizo_atraso_sap_only || 0)
               : metricsByCompany.reduce((s, m) => s + m.prejuizo_atraso_sap_only, 0);
-            const pFlow = mode === "company"
+            const pFlow = effMode === "company"
               ? (single?.prejuizo_atraso_via_flow || 0)
               : metricsByCompany.reduce((s, m) => s + m.prejuizo_atraso_via_flow, 0);
             const total = nSap + nFlow;
@@ -257,7 +257,7 @@ export function RoiAnalysis({ mode }: Props) {
           </div>
 
           {/* Análise consolidada por empresa */}
-          {mode === "consolidated" && (
+          {effMode === "consolidated" && (
             <div className="glass-card p-4 sm:p-6">
               <h3 className="text-sm sm:text-base font-semibold mb-4 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-primary" />
@@ -310,9 +310,9 @@ export function RoiAnalysis({ mode }: Props) {
                 <QuantRow
                   label="Tempo médio de antecedência (lançamento → vencimento)"
                   value={
-                    (mode === "company" ? single?.antecedencia_media_dias : null) != null
+                    (effMode === "company" ? single?.antecedencia_media_dias : null) != null
                       ? `${fmtNum(single!.antecedencia_media_dias!, 1)} dias`
-                      : mode === "consolidated"
+                      : effMode === "consolidated"
                         ? `${fmtNum(avgOf(metricsByCompany, "antecedencia_media_dias"), 1)} dias (méd.)`
                         : "—"
                   }
@@ -320,9 +320,9 @@ export function RoiAnalysis({ mode }: Props) {
                 <QuantRow
                   label="Atraso médio nos documentos vencidos"
                   value={
-                    (mode === "company" ? single?.atraso_medio_dias : null) != null
+                    (effMode === "company" ? single?.atraso_medio_dias : null) != null
                       ? `${fmtNum(single!.atraso_medio_dias!, 1)} dias`
-                      : mode === "consolidated"
+                      : effMode === "consolidated"
                         ? `${fmtNum(avgOf(metricsByCompany, "atraso_medio_dias"), 1)} dias (méd.)`
                         : "—"
                   }
@@ -339,8 +339,8 @@ export function RoiAnalysis({ mode }: Props) {
                   label="Redução de tempo operacional"
                   value={
                     (() => {
-                      const s = mode === "company" ? single?.horas_sap : totals?.horas_sap;
-                      const f = mode === "company" ? single?.horas_flow : totals?.horas_flow;
+                      const s = effMode === "company" ? single?.horas_sap : totals?.horas_sap;
+                      const f = effMode === "company" ? single?.horas_flow : totals?.horas_flow;
                       if (!s || s === 0) return "—";
                       return `${fmtNum(((s - (f || 0)) / s) * 100, 1)}%`;
                     })()
@@ -364,7 +364,7 @@ export function RoiAnalysis({ mode }: Props) {
                   ganho aplicável a todo o volume do período.
                 </p>
                 <p>
-                  O prejuízo por atraso ({fmtBRL(mode === "company" ? single?.prejuizo_atraso || 0 : totals?.prejuizo_atraso || 0)})
+                  O prejuízo por atraso ({fmtBRL(effMode === "company" ? single?.prejuizo_atraso || 0 : totals?.prejuizo_atraso || 0)})
                   reflete multa {activeParams?.multa_percent}% e juros {activeParams?.juros_mes_percent}%/mês sobre documentos
                   aprovados após o vencimento. Acelerar a aprovação com o ERP Flow reduz diretamente esse risco financeiro.
                 </p>
@@ -382,18 +382,18 @@ export function RoiAnalysis({ mode }: Props) {
 
           {/* Tempo gasto no lançamento por dia (desde 01/06/2025) */}
           <DailyTimeSpentChart
-            companyDb={mode === "company" ? companyDb : undefined}
-            consolidated={mode === "consolidated"}
+            companyDb={selectedCompanyDb}
+            consolidated={effMode === "consolidated"}
             tempoLancarFlowMin={activeParams?.tempo_lancar_flow_min ?? 3}
             tempoLancarSapMin={activeParams?.tempo_lancar_sap_min ?? 15}
           />
 
           {/* Análise Temporal — SAP nativo vs ERP Flow + ciclo do documento */}
           <TemporalAnalysis
-            companyDb={mode === "company" ? companyDb : undefined}
+            companyDb={selectedCompanyDb}
             from={dateFilter.from}
             to={dateFilter.to}
-            consolidated={mode === "consolidated"}
+            consolidated={effMode === "consolidated"}
           />
         </>
       )}
@@ -403,7 +403,7 @@ export function RoiAnalysis({ mode }: Props) {
           open={paramsOpen}
           onOpenChange={setParamsOpen}
           allParams={params}
-          scopeCompanyDb={mode === "company" ? companyDb || null : null}
+          scopeCompanyDb={selectedCompanyDb || null}
           onSaved={refresh}
         />
       )}
