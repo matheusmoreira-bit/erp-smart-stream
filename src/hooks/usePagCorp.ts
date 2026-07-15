@@ -274,20 +274,15 @@ export function usePagCorp() {
       // `pagcorp_nondeductible_cards` e `pagcorp_nondeductible_expenses`
       // não precisam de acesso `anon`.
       if (companyDb) {
-        const expenseIds = items.map((t) => Number(t.id)).filter((id) => !isNaN(id));
+        const expenseIds = items
+          .map((t) => Number(t.id))
+          .filter((id) => Number.isFinite(id) && !Number.isNaN(id));
         try {
-          const { sapFunctionFetch } = await import("@/lib/auth-fetch");
-          const statusRes = await sapFunctionFetch("pagcorp-integration-status", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ companyDb, expenseIds }),
-          });
-          if (statusRes.ok) {
-            const {
-              integrations = [],
-              nondeductibleCards = [],
-              nondeductibleExpenses = [],
-            } = await statusRes.json();
+          const {
+            integrations = [],
+            nondeductibleCards = [],
+            nondeductibleExpenses = [],
+          } = await fetchIntegrationStatus(companyDb, expenseIds);
 
             // Marca integradas
             const integratedMap = new Map<number, {
@@ -358,9 +353,6 @@ export function usePagCorp() {
                 }
               });
             }
-          } else {
-            console.warn("pagcorp-integration-status non-ok:", statusRes.status);
-          }
         } catch (e) {
           console.warn("PagCorp integration-status fetch failed:", e);
         }
