@@ -75,6 +75,7 @@ const App = () => (
               {/* Operação */}
               <Route path="/compras" element={<Expenses />} />
               <Route path="/vendas" element={<Sales />} />
+              <Route path="/vendas/historico" element={<BaixasHistory />} />
 
               {/* Aprovações */}
               <Route path="/aprovacoes" element={<ApprovalsHub />} />
