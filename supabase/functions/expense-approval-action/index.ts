@@ -356,10 +356,40 @@ Deno.serve(async (req) => {
       });
       // Código 23505 = unique_violation → outra requisição chegou antes.
       const isRace = (reserveErr as any).code === "23505";
+      if (isRace) {
+        const startedWait = Date.now();
+        while (Date.now() - startedWait < IDEMPOTENCY_IN_FLIGHT_WAIT_MS) {
+          await sleep(IDEMPOTENCY_IN_FLIGHT_POLL_MS);
+          const { data: raced, error: raceLookupErr } = await admin
+            .from("expense_action_idempotency")
+            .select("status_code, response, completed_at")
+            .eq("idempotency_key", idempotencyKey)
+            .maybeSingle();
+          if (raceLookupErr) {
+            stageLog("idempotency_reserve", "warn", {
+              requestId, idempotencyKey, phase: "race_lookup", error: raceLookupErr.message,
+            });
+            break;
+          }
+          if ((raced as any)?.completed_at && (raced as any)?.status_code) {
+            stageLog("idempotency_replay", "info", {
+              requestId,
+              idempotencyKey,
+              replayedStatus: (raced as any).status_code,
+              waitedMs: Date.now() - startedWait,
+            });
+            const cached = (raced as any).response ?? { ok: true };
+            return json((raced as any).status_code, { ...cached, replayed: true, requestId });
+          }
+        }
+        return json(409, {
+          error: "Sua aprovação já está sendo processada. Aguarde alguns segundos antes de tentar novamente.",
+          stage: "idempotency_conflict",
+          requestId,
+        });
+      }
       return json(isRace ? 409 : 500, {
-        error: isRace
-          ? "Requisição idêntica em processamento (conflito ao reservar a chave de idempotência)."
-          : `Falha ao reservar chave de idempotência: ${reserveErr.message}`,
+        error: `Falha ao reservar chave de idempotência: ${reserveErr.message}`,
         stage: "idempotency_reserve",
         requestId,
       });
