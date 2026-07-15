@@ -398,7 +398,7 @@ export default function SalesPage() {
               <Button
                 size="sm"
                 className="gap-1.5"
-                onClick={() => toast.info("Tela de baixa será entregue na próxima etapa.")}
+                onClick={() => setBaixaOpen(true)}
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 Dar baixa ({selected.size})
