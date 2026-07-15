@@ -71,7 +71,8 @@ Deno.serve(async (req) => {
     // org_id armazenado é IGNORADO — MTP descobre via /api/organizations; stand-alone dispensa header.
     const legacyOrgId = (creds.org_id || "").trim();
 
-    if (!apiKey) {
+    const apiKeyTrim = (apiKey || "").trim();
+    if (!apiKeyTrim) {
       return new Response(JSON.stringify({ ok: false, error: "API Key não informada." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
