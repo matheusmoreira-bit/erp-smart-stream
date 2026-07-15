@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isTestCompanyDb } from "@/lib/test-company";
+
 
 export interface RoiParameters {
   id: string;
@@ -221,10 +223,12 @@ export function useRoiAnalysis(opts: Options) {
       if (cr.error) throw cr.error;
 
       setParams((pr.data || []) as RoiParameters[]);
-      setCompanies((cr.data || []) as Company[]);
-      setExpenses(expensesAll);
-      setApprovals(approvalsAll);
-      setPos(posAll);
+      // Remove bases de teste da análise
+      setCompanies(((cr.data || []) as Company[]).filter((c) => !isTestCompanyDb(c.company_db)));
+      setExpenses(expensesAll.filter((e) => !isTestCompanyDb(e.company_db)));
+      setApprovals(approvalsAll.filter((a) => !isTestCompanyDb(a.company_db)));
+      setPos(posAll.filter((p) => !isTestCompanyDb(p.company_db)));
+
     } catch (e: any) {
       console.error("useRoiAnalysis load error", e);
       setError(e?.message || "Falha ao carregar dados de ROI");
