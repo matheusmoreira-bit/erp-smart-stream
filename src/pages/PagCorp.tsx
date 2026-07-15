@@ -306,6 +306,48 @@ export default function PagCorp() {
     }
   };
 
+  // Reprocessa a baixa de um grupo consolidado (todas as transações compartilham
+  // o mesmo integrationLogId → uma única chamada ao watcher cobre o grupo inteiro).
+  const handleReprocessGroup = async (groupKey: string, txs: PagCorpTransaction[]) => {
+    const logId = txs.find((t) => t.integrationLogId)?.integrationLogId;
+    if (!logId) {
+      toast.error("Log de integração não localizado para este grupo.");
+      return;
+    }
+    setReprocessingGroup(groupKey);
+    try {
+      const resp = await sapFunctionFetch("pagcorp-settlement-watcher", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logId, forceRetry: true }),
+      });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) throw new Error(data?.error || `HTTP ${resp.status}`);
+      const result = Array.isArray(data?.results) ? data.results[0] : null;
+      const status = result?.status;
+      if (status === "settled") {
+        toast.success(`Baixa emitida no SAP (${txs.length} transações).`);
+      } else if (status === "awaiting_invoice") {
+        toast.info("Aguardando NF de entrada lançar o PC no SAP.");
+      } else if (status === "awaiting_settlement") {
+        toast.warning(result?.error === "ptax_missing"
+          ? "PTAX ainda não publicada — nova tentativa após a publicação do BCB."
+          : "Sem conta contábil de baixa cadastrada para a classificação do evento.");
+      } else if (status === "error") {
+        toast.error(`Falha na baixa: ${result?.error || "erro desconhecido"}`);
+      } else if (data?.skipped) {
+        toast.info("Já existe uma baixa em andamento para este grupo.");
+      } else {
+        toast.message("Baixa enfileirada para reprocessamento.");
+      }
+      await fetchTransactions(startDate, endDate, session?.companyDB);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao reprocessar baixa.");
+    } finally {
+      setReprocessingGroup(null);
+    }
+  };
+
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
