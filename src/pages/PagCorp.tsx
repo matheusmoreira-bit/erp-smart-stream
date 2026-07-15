@@ -207,6 +207,15 @@ export default function PagCorp() {
   const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
   const [showNondeductible, setShowNondeductible] = useState(false);
   const [integratingNondeductible, setIntegratingNondeductible] = useState(false);
+  // Grupos de PCs consolidados (várias transações → um único PC no SAP)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) =>
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
 
