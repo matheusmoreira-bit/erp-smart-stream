@@ -21,7 +21,7 @@ const sapCorsHeaders = {
   ...baseCorsHeaders,
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db",
+    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
   "Access-Control-Expose-Headers": "x-request-id",
 };
 
