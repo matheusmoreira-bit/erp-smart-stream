@@ -242,6 +242,21 @@ export default function IdpSyncPage() {
               JumpCloud
             </Button>
             <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncAttrs}
+              disabled={syncingAttrs || isLoadingJc || isLoadingMappings}
+              className="gap-2"
+              title="Atualizar departamento, centro de custo e demais atributos de todos os vínculos"
+            >
+              {syncingAttrs ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              Atributos
+            </Button>
+            <Button
               variant="default"
               size="sm"
               onClick={handleAutoSync}
