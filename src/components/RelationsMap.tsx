@@ -78,6 +78,11 @@ export interface SapFluxoEnrichment {
   centro_custo: string | null;
   marca: string | null;
   departamento: string | null;
+  /** IDs amarrando o fluxo Esboço → Pedido → NF → CP (VW_FIN_ANALISE_FLUXO). */
+  id_esboco: string | null;
+  id_pedido: string | null;
+  id_nf: string | null;
+  id_cp: string | null;
 }
 
 
