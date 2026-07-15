@@ -359,11 +359,9 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                     total={invoice.docTotal}
                     currency={invoice.currency}
                   />
-
-                    </p>
-                  </div>
                 </div>
               ))}
+
 
               {baixas.length > 0 && finalResidual === 0 && (
                 <div className="flex items-center gap-2 text-xs text-emerald-500 pt-1">
