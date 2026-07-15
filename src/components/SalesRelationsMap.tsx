@@ -342,7 +342,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                 size="sm"
                 className="h-7 gap-1 text-xs"
                 onClick={handleExportCsv}
-                disabled={loading}
+                disabled={loading || !!error}
               >
                 <Download className="w-3.5 h-3.5" /> CSV
               </Button>
@@ -352,7 +352,7 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                 size="sm"
                 className="h-7 gap-1 text-xs"
                 onClick={handleExportPdf}
-                disabled={loading}
+                disabled={loading || !!error}
               >
                 <FileDown className="w-3.5 h-3.5" /> PDF
               </Button>
@@ -366,12 +366,14 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           </div>
         </DialogHeader>
 
-
         {loading ? (
-          <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" /> Carregando fluxo…
-          </div>
+          <MapSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={() => setReloadNonce((n) => n + 1)} />
+        ) : orders.length === 0 && baixas.length === 0 && externalPaid === 0 ? (
+          <EmptyState />
         ) : (
+
           <div className="space-y-3 mt-2">
             {/* Pedido de Venda */}
             <FlowSection
