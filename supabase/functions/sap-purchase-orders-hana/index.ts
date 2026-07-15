@@ -86,11 +86,14 @@ function toIso(v: unknown): string | null {
 
 function toNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
-  const s = String(v).replace(/\./g, "").replace(",", ".");
-  const n = Number(s);
-  if (Number.isFinite(n)) return n;
-  const n2 = Number(v);
-  return Number.isFinite(n2) ? n2 : null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const s = String(v).trim();
+  if (!s) return null;
+  // "1.234,56" (pt-BR) vs "1234.56" (already numeric string)
+  const hasComma = s.includes(",");
+  const normalized = hasComma ? s.replace(/\./g, "").replace(",", ".") : s;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
 }
 
 function toInt(v: unknown): number | null {
