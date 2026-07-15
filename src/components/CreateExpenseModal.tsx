@@ -1757,6 +1757,7 @@ export function CreateExpenseModal({
           toast.error(`Item ${n}: item não permitido para o seu centro de custo`);
         }
         return;
+      }
       // Open Gaming: projeto por linha é obrigatório (política interna).
       if (sapSession?.companyDB === "open_gaming_sa" && (!it.project || !String(it.project).trim())) {
         toast.error(`Item ${n}: projeto é obrigatório para Open Gaming`);
