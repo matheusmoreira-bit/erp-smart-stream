@@ -307,8 +307,23 @@ interface StageBucket {
   items: Array<{ id: string; data: DocCardData }>;
 }
 
+function diffDays(a?: string | null, b?: string | null): number | null {
+  if (!a || !b) return null;
+  const t1 = new Date(a).getTime();
+  const t2 = new Date(b).getTime();
+  if (!Number.isFinite(t1) || !Number.isFinite(t2)) return null;
+  return (t2 - t1) / (1000 * 60 * 60 * 24);
+}
+
+function fmtDays(d: number | null): string {
+  if (d == null) return "—";
+  const abs = Math.abs(d);
+  if (abs < 1) return `${Math.round(abs * 24)}h`;
+  return `${abs.toFixed(abs < 10 ? 1 : 0)}d`;
+}
+
 function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width: number } {
-  const { expense, approverRows, nfLinks, apPayables, flowType = "compras" } = props;
+  const { expense, approverRows, nfLinks, apPayables, flowType = "compras", enriched, fluxo } = props;
 
   const stageKeys = FLOW_STAGES[flowType];
   const buckets: Record<StageKey, StageBucket> = {} as Record<StageKey, StageBucket>;
@@ -322,6 +337,29 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
   const statusRaw = (expense.status || "").toLowerCase();
   const isFailed = statusRaw === "rejeitado" || statusRaw === "cancelado";
   const integrated = !!expense.sap_doc_num || statusRaw === "integrado" || statusRaw === "aprovado";
+
+  // Tempos enriquecidos (dias entre marcos VW_FIN_ANALISE_FLUXO). Identifica o
+  // maior delta para destacar o gargalo do fluxo.
+  const enrichmentActive = !!enriched && !!fluxo;
+  const startAt = fluxo?.data_atualizacao_esboco || expense.created_at || null;
+  const deltas = enrichmentActive
+    ? {
+        rootToApproval: diffDays(startAt, fluxo?.data_aprovacao),
+        approvalToPc: diffDays(fluxo?.data_aprovacao, fluxo?.data_lancamento),
+        pcToNf: null as number | null, // NFs têm data própria por linha
+        nfToPay: diffDays(fluxo?.data_vencimento, fluxo?.data_pagamento),
+      }
+    : null;
+  const maxDelta = deltas
+    ? Math.max(
+        ...([deltas.rootToApproval, deltas.approvalToPc, deltas.nfToPay].filter(
+          (v): v is number => v != null && v > 0,
+        ) as number[]),
+        0,
+      )
+    : 0;
+  const isBottleneck = (d: number | null) => d != null && d > 0 && maxDelta > 0 && d === maxDelta;
+
 
   /* ── Stage 1: Pedido / Despesa ── */
   const rootKey: StageKey = flowType === "pagcorp" ? "despesa_pagcorp" : "pedido";
