@@ -292,6 +292,31 @@ export async function requireAdminOrSapAdmin(req: Request) {
   }
 }
 
+export async function requireAdminOrSapModule(req: Request, moduleKey: string) {
+  try {
+    return await requireAdmin(req);
+  } catch (err) {
+    const sapAdmin = await validateSapAdmin(req);
+    if (sapAdmin) return sapAdmin;
+
+    const sap = await validateSapSession(req);
+    if (!sap?.userName) throw err;
+
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data, error } = await admin.rpc("sap_user_has_module", {
+      _sap_username: sap.userName,
+      _module_key: moduleKey,
+    });
+    if (error || data !== true) {
+      throw new AuthError("Acesso negado — módulo sem permissão", 403);
+    }
+    return { ...sap, source: "sap_module" as const };
+  }
+}
+
 export async function requireAdminOrSapSession(req: Request) {
   try {
     const user = await requireAdmin(req);

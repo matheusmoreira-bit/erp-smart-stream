@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import type { SapUser } from "@/lib/cache-repository";
 import { jumpCloudUsersCache, type JumpCloudCacheEntry } from "@/lib/cache-repository";
 
@@ -30,8 +29,6 @@ export interface IdpMapping {
   attributes_synced_at: string | null;
 }
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const JC_CACHE_KEY = "jumpcloud:all";
 
 /** Cost Center vem como "1.6.1.2 - OPERAÇÕES DE INFRAESTRUTURA"; extraímos o código. */
@@ -77,8 +74,12 @@ export function useIdpSync() {
     setIsLoadingJc(true);
     setError(null);
     try {
-      const { authFetch } = await import("@/lib/auth-fetch");
-      const res = await authFetch(`jumpcloud-proxy?action=listUsers`);
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("jumpcloud-proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "listUsers" }),
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Erro ${res.status}`);
@@ -98,16 +99,20 @@ export function useIdpSync() {
 
   const fetchMappings = useCallback(async () => {
     setIsLoadingMappings(true);
+    setError(null);
     try {
-      const { data, error: err } = await supabase
-        .from("idp_user_mapping")
-        .select("*")
-        .eq("idp_provider", "jumpcloud")
-        .order("sap_user_code");
-      if (err) throw err;
-      setMappings((data as IdpMapping[]) || []);
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("idp-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list", idp_provider: "jumpcloud" }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Erro ${res.status}`);
+      setMappings((payload.mappings as IdpMapping[]) || []);
     } catch (e) {
       console.error("Error fetching mappings:", e);
+      setError(e instanceof Error ? e.message : "Erro ao buscar vínculos IdP");
     } finally {
       setIsLoadingMappings(false);
     }
@@ -155,8 +160,8 @@ export function useIdpSync() {
 
       if (upserts.length === 0) return;
 
-      const { authFetch } = await import("@/lib/auth-fetch");
-      const res = await authFetch("idp-mapping", {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("idp-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "upsertMany", rows: upserts }),
@@ -172,8 +177,8 @@ export function useIdpSync() {
 
   const linkManually = useCallback(
     async (sapUserCode: string, jcUser: JumpCloudUser) => {
-      const { authFetch } = await import("@/lib/auth-fetch");
-      const res = await authFetch("idp-mapping", {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("idp-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -234,8 +239,8 @@ export function useIdpSync() {
 
       if (rows.length === 0) return 0;
 
-      const { authFetch } = await import("@/lib/auth-fetch");
-      const res = await authFetch("idp-mapping", {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("idp-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "upsertMany", rows }),
@@ -252,8 +257,8 @@ export function useIdpSync() {
 
   const unlinkUser = useCallback(
     async (sapUserCode: string) => {
-      const { authFetch } = await import("@/lib/auth-fetch");
-      const res = await authFetch("idp-mapping", {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("idp-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -302,8 +307,8 @@ export function useIdpSync() {
         attributes_synced_at: new Date().toISOString(),
       };
 
-      const { authFetch } = await import("@/lib/auth-fetch");
-      const res = await authFetch("idp-mapping", {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const res = await sapFunctionFetch("idp-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "upsertMany", rows: [row] }),

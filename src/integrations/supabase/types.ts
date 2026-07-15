@@ -4773,6 +4773,10 @@ export type Database = {
         Args: { _message?: string; _name: string; _status?: string }
         Returns: undefined
       }
+      sap_user_has_module: {
+        Args: { _module_key: string; _sap_username: string }
+        Returns: boolean
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       substitute_grants_for_me: {
