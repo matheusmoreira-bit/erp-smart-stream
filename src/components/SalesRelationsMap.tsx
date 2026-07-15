@@ -346,10 +346,10 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
       styles: { fontSize: 8, cellPadding: 4 },
       headStyles: { fillColor: [40, 40, 40] },
       columnStyles: {
-        3: { halign: "right" },
-        4: { halign: "right" },
         5: { halign: "right" },
         6: { halign: "right" },
+        7: { halign: "right" },
+        8: { halign: "right" },
       },
     });
 
