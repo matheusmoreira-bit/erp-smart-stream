@@ -23,6 +23,8 @@ import { DateInputBR } from "@/components/DateInputBR";
 export interface BaixaInvoiceRow {
   docEntry: number;
   docNum: number;
+  /** Número da NFSE / folio fiscal (SAP FolioNumber). Opcional. */
+  folioNumber?: number | null;
   cardCode: string;
   cardName: string;
   currency: string;
