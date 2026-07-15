@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isTestCompanyDb } from "@/lib/test-company";
+
 
 export interface RoiParameters {
   id: string;
