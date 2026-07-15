@@ -1,6 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireAdminOrSapAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
+import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+
+const HANA_VIEWS_URL =
+  Deno.env.get("HANA_VIEWS_URL") ||
+  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
