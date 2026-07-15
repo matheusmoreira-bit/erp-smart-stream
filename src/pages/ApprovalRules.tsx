@@ -1589,7 +1589,7 @@ export default function ApprovalRulesPage() {
           </div>
         )}
 
-        {activeTab !== "substitutes" && (<>
+        {activeTab !== "substitutes" && activeTab !== "health" && (<>
         {/* Search & Filters */}
         <div className="glass-card p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
           <div className="relative flex-1 min-w-[200px]">
