@@ -83,6 +83,10 @@ interface InvoiceRow {
   currency: string;
   origem: "erp_flow" | "erp";
   isOpen: boolean;
+  /** Tipo do documento no SAP: NF de venda ('invoice') ou Saldo Inicial via JE ('journal_entry'). */
+  docType: "invoice" | "journal_entry";
+  /** Linha do JournalEntry (apenas quando docType='journal_entry'). */
+  docLine?: number | null;
 }
 
 interface ClientGroup {
