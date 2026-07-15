@@ -7,7 +7,7 @@ import {
   FileText,
   Receipt,
   Wallet,
-  Loader2,
+  ArrowDown,
   ArrowDown,
   CheckCircle2,
   Clock,
