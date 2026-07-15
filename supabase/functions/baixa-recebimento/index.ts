@@ -91,7 +91,11 @@ function validateInput(input: BaixaInput, sessionCompanyDb: string): string | nu
   return null;
 }
 
-function buildIncomingPayment(baixa: Record<string, unknown>, itens: Array<Record<string, unknown>>) {
+function buildIncomingPayment(
+  baixa: Record<string, unknown>,
+  itens: Array<Record<string, unknown>>,
+  bplId: number,
+) {
   const excedente = Number(baixa.valor_juros_multa || 0);
   const payload: Record<string, unknown> = {
     DocType: "rCustomer",
@@ -100,6 +104,7 @@ function buildIncomingPayment(baixa: Record<string, unknown>, itens: Array<Recor
     TransferDate: baixa.data_recebimento,
     TransferAccount: baixa.conta_contabil_codigo,
     TransferSum: Number(baixa.valor_total),
+    BPLID: bplId,
     PaymentInvoices: itens.map((it) => ({
       DocEntry: Number(it.invoice_doc_entry),
       SumApplied: Number(it.valor_baixado),
@@ -114,6 +119,37 @@ function buildIncomingPayment(baixa: Record<string, unknown>, itens: Array<Recor
     }];
   }
   return payload;
+}
+
+async function resolveDefaultBranchId(companyDb: string): Promise<number> {
+  const sb = adminClient();
+  const { data } = await sb
+    .from("system_credentials")
+    .select("credential_value")
+    .eq("company_db", companyDb)
+    .eq("system_name", "sap")
+    .eq("credential_key", "default_branch_id")
+    .maybeSingle();
+  const raw = Number(data?.credential_value);
+  return Number.isFinite(raw) && raw > 0 ? raw : 1;
+}
+
+async function fetchInvoiceBplId(
+  baseUrl: string,
+  cookie: string,
+  docEntry: number,
+): Promise<number | null> {
+  try {
+    const r = await fetch(`${baseUrl}/Invoices(${docEntry})?$select=BPL_IDAssignedToInvoice`, {
+      headers: { Cookie: cookie },
+    });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null) as { BPL_IDAssignedToInvoice?: unknown } | null;
+    const v = Number(j?.BPL_IDAssignedToInvoice);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof parseSapHeaders>) {
@@ -147,10 +183,17 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
 
   const baseUrl = await getSapBaseUrl(headers.companyDB);
   const cookie = `B1SESSION=${headers.sapSession}${headers.routeId ? `; ROUTEID=${headers.routeId}` : ""}`;
+
+  // Filial (BPLId): pega da primeira NF associada; se não conseguir, usa default_branch_id do
+  // system_credentials (fallback 1). Necessário para bases com mais de uma filial no SAP.
+  const firstDocEntry = Number((itens[0] as { invoice_doc_entry: number }).invoice_doc_entry);
+  const invoiceBpl = await fetchInvoiceBplId(baseUrl, cookie, firstDocEntry);
+  const bplId = invoiceBpl ?? await resolveDefaultBranchId(headers.companyDB);
+
   const sapResp = await fetch(`${baseUrl}/IncomingPayments`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: cookie },
-    body: JSON.stringify(buildIncomingPayment(baixa as Record<string, unknown>, itens as Array<Record<string, unknown>>)),
+    body: JSON.stringify(buildIncomingPayment(baixa as Record<string, unknown>, itens as Array<Record<string, unknown>>, bplId)),
   });
   const text = await sapResp.text();
   let payload: unknown = null;
