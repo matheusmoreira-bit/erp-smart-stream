@@ -2837,7 +2837,7 @@ export function CreateExpenseModal({
                     </Button>
                   </div>
                   <CachedSearchCombobox
-                    options={itemOptions}
+                    options={filteredItemOptions}
                     isLoading={itemsLoading}
                     value={item.sapItem || null}
                     onChange={(val) => {
