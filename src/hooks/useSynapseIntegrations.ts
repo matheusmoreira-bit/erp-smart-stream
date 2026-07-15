@@ -146,6 +146,48 @@ export function useSynapseIntegrations(companyDB?: string) {
       } as any);
     }
 
+    // Ensure PagCorp Settlement Watcher (baixa automática)
+    const { data: pswData } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "pagcorp_settlement_watcher")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!pswData) {
+      await supabase.from("synapse_integrations").insert({
+        integration_key: "pagcorp_settlement_watcher",
+        display_name: "Baixa automática — Cartões PagCorp",
+        description:
+          "Após a NF de Entrada fechar o PO no SAP, emite VendorPayment para dar baixa na PurchaseInvoice usando a GL do cartão PagCorp configurada em Settlement Accounts.",
+        is_active: false,
+        interval_minutes: 5,
+        parameters: {},
+        company_db: companyDb,
+      } as any);
+    }
+
+    // Ensure JumpCloud Attributes Sync (IdP → mapping)
+    const { data: jcaData } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "jumpcloud_attributes_sync")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!jcaData) {
+      await supabase.from("synapse_integrations").insert({
+        integration_key: "jumpcloud_attributes_sync",
+        display_name: "Sincronização de atributos — JumpCloud (IdP)",
+        description:
+          "Atualiza periodicamente atributos (departamento, centro de custo, cargo, gestor…) dos usuários vinculados a partir do JumpCloud.",
+        is_active: false,
+        interval_minutes: 30,
+        parameters: {},
+        company_db: companyDb,
+      } as any);
+    }
+
     await fetchIntegrations();
   }, [fetchIntegrations]);
 
@@ -156,6 +198,8 @@ export function useSynapseIntegrations(companyDB?: string) {
         jumpcloud_sap_sync: "synapse-jc-sync",
         pagcorp_erp_sync: "synapse-pagcorp-sync",
         purchase_order_notifications: "synapse-po-notify",
+        pagcorp_settlement_watcher: "pagcorp-settlement-watcher",
+        jumpcloud_attributes_sync: "jumpcloud-attributes-sync",
       };
       const functionName = edgeFunctionMap[integrationKey] || "synapse-jc-sync";
 
