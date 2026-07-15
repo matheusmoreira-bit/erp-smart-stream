@@ -26,7 +26,7 @@ import {
   Paperclip,
 } from "lucide-react";
 import type { NfEntradaLink, ContaPagarLink } from "@/hooks/useRelationsMapDerived";
-import type { RelationsMapExpense } from "./RelationsMap";
+import type { RelationsMapExpense, SapFluxoEnrichment } from "./RelationsMap";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type ChainRow = {
@@ -48,6 +48,8 @@ interface Props {
   nfLinks: NfEntradaLink[];
   apPayables: ContaPagarLink[];
   enriched: boolean;
+  /** Marcos de tempo do documento (VW_FIN_ANALISE_FLUXO) — exibidos quando `enriched`. */
+  fluxo?: SapFluxoEnrichment | null;
   flowType?: RelationsFlowType;
   onNodeClick?: (id: string, kind: string) => void;
 }
