@@ -467,17 +467,27 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       : approverRows.some((r) => r.isCurrent)
         ? "pending"
         : "pending";
+  const pcSapBottleneck = enrichmentActive && isBottleneck(deltas?.approvalToPc ?? null);
   buckets.pc_sap.items.push({
     id: pcSapId,
     data: {
-      tone: "amber",
+      tone: pcSapBottleneck ? "warn" : "amber",
       icon: FileCheck2,
       kind: "PC no SAP",
       identifier: expense.sap_doc_num ? `SAP #${expense.sap_doc_num}` : "Aguardando integração",
       amount: expense.total_amount,
       currency: expense.currency,
-      extra: expense.company_db || null,
-      when: expense.updated_at,
+      extra: enrichmentActive
+        ? [
+            expense.company_db,
+            deltas?.approvalToPc != null
+              ? `Aprovação→Lanç ${fmtDays(deltas.approvalToPc)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || null
+        : expense.company_db || null,
+      when: (enrichmentActive && fluxo?.data_lancamento) || expense.updated_at,
       status: integrated ? "integrado" : isFailed ? statusRaw : "pendente",
       statusTone: integrated ? "success" : isFailed ? "warn" : "muted",
       state: pcSapState,
