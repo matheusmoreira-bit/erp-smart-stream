@@ -231,14 +231,17 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
               <Tooltip
                 labelFormatter={(l) => `${bucketNoun[0].toUpperCase() + bucketNoun.slice(1)} de ${fmtBucket(String(l))}`}
                 formatter={(value: any, name: string, ctx: any) => {
-                  const docs = ctx?.payload?.docs;
-                  return [`${Number(value).toFixed(1)} min/dia (${docs} pedidos)`, name];
+                  const p = ctx?.payload || {};
+                  const isFlow = name.startsWith("ERP Flow");
+                  const n = isFlow ? p.docs_flow : p.docs_sap;
+                  return [`${Number(value).toFixed(1)} min/dia (${n ?? 0} pedidos)`, name];
                 }}
                 contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="sap_min" name={`SAP (${tempoLancarSapMin}min/pedido)`} stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="sap_min" name={`SAP puro (${tempoLancarSapMin}min/pedido)`} stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="flow_min" name={`ERP Flow (${tempoLancarFlowMin}min/pedido)`} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+
             </LineChart>
           </ResponsiveContainer>
         </div>
