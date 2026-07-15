@@ -1747,13 +1747,14 @@ export function CreateExpenseModal({
         toast.error(`Item ${n}: centro de custo é obrigatório`);
         return;
       }
-      // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.6.%.
+      // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
+      // CC vazio (sem vínculo no IdP) não bloqueia — evita falso negativo.
       if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
         const codeUp = String(it.item_code).toUpperCase();
         if (codeUp.startsWith("IMP")) {
           toast.error(`Item ${n}: itens IMP% são restritos a usuários do CC 1.2.2.%`);
         } else if (codeUp.startsWith("FOL")) {
-          toast.error(`Item ${n}: itens FOL% são restritos a usuários do CC 1.6.%`);
+          toast.error(`Item ${n}: itens FOL% são restritos a usuários de Pessoas e Cultura (CC 1.5.1.3)`);
         } else {
           toast.error(`Item ${n}: item não permitido para o seu centro de custo`);
         }
