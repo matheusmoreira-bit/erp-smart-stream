@@ -22,6 +22,8 @@ type BaixaInput = {
     invoiceDocEntry: number;
     invoiceDocNum?: string | number | null;
     valorBaixado: number;
+    invoiceType?: "invoice" | "journal_entry";
+    invoiceDocLine?: number | null;
   }>;
 };
 
