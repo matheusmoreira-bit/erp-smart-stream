@@ -481,6 +481,25 @@ export function CreateExpenseModal({
     cardMappingLoaded, costCenterOptions, projectOptions, itemOptions,
   ]);
 
+  // Pré-preenche o CC do cabeçalho com o centro de custo do usuário logado
+  // (via mapeamento IdP), apenas em compras e quando ainda não há CC definido.
+  useEffect(() => {
+    if (!open || isSales) return;
+    if (headerCostCenter) return;
+    if (!userCostCenter) return;
+    if (!costCenterOptions.length) return;
+    const opt =
+      costCenterOptions.find((o) => o.code === userCostCenter) ||
+      { code: userCostCenter, name: userCostCenter, extra: "" };
+    setHeaderCostCenter(opt);
+    setItems((prev) =>
+      prev.map((it) => ({
+        ...it,
+        sapCostCenter: it.sapCostCenter || opt,
+        cost_center: it.cost_center || opt.code,
+      })),
+    );
+  }, [open, isSales, userCostCenter, costCenterOptions, headerCostCenter]);
 
 
   // Apply prefill when modal opens
