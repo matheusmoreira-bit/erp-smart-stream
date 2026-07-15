@@ -300,6 +300,20 @@ export function useRoiAnalysis(opts: Options) {
       }
     }
 
+    // Index do cache VW_FIN_ANALISE_FLUXO por (company_db, id_pedido).
+    // Usado para calcular o atraso real via data_vencimento × data_pagamento.
+    const fluxoByPo = new Map<string, FluxoRow>();
+    for (const f of fluxo) {
+      if (!f.company_db || !f.id_pedido) continue;
+      const key = `${f.company_db}::${f.id_pedido}`;
+      const prev = fluxoByPo.get(key);
+      // Preferimos a linha com data_pagamento preenchida (mais completa).
+      if (!prev || (!prev.data_pagamento && f.data_pagamento)) {
+        fluxoByPo.set(key, f);
+      }
+    }
+
+
     // Index de expenses por (company_db, sap_doc_entry) para juntar com cache SAP
     const expenseByPo = new Map<string, ExpenseRow>();
     for (const e of expenses) {
