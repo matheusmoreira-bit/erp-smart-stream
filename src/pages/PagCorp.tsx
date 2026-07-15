@@ -676,6 +676,20 @@ export default function PagCorp() {
    *  - ≥2 selected, all sem prestação → consolidar em 1 PC
    *  - ≥2 selected, mixed/com prestação → percorrer em lote (uma por uma)
    */
+  const proceedBatchUnified = (list: PagCorpTransaction[]) => {
+    if (list.length === 0) {
+      toast.info("Nenhuma transação elegível");
+      return;
+    }
+    if (list.length === 1) {
+      const t = list[0];
+      openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic");
+      return;
+    }
+    // ≥2 selecionadas → SEMPRE consolida em 1 PC (independente de prestação).
+    setConsolidateDialog({ open: true, transactions: list });
+  };
+
   const handleIntegrateBatchUnified = async () => {
     if (!(await checkSapCredentials())) return;
     const selected = selectableTransactions.filter((t) => selectedIds.has(t.id));
@@ -683,14 +697,40 @@ export default function PagCorp() {
       toast.info("Selecione ao menos uma transação");
       return;
     }
-    if (selected.length === 1) {
-      const t = selected[0];
-      openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic");
-      return;
+    if (selected.length > 1) {
+      // 1) Bloqueia se houver portadores/fornecedores divergentes na seleção.
+      //    Indedutíveis usam fluxo próprio (integrateAllNondeductible), então
+      //    esta trava só se aplica ao lote genérico.
+      const supplierKey = (t: PagCorpTransaction) =>
+        String(t.accountCode || t.accountName || t.cardName || "").trim().toLowerCase();
+      const suppliers = new Set(selected.map(supplierKey).filter(Boolean));
+      if (suppliers.size > 1) {
+        toast.error("Portadores divergentes na seleção", {
+          description:
+            "Selecione apenas transações do mesmo portador para integrar em lote. Para indedutíveis, use o botão específico.",
+        });
+        return;
+      }
+      // 2) Datas divergentes → confirmar e seguir apenas com a data mais antiga.
+      const dates = new Set(
+        selected.map((t) => String(t.date || "").slice(0, 10)).filter(Boolean),
+      );
+      if (dates.size > 1) {
+        const oldest = [...dates].sort()[0];
+        const filtered = selected.filter(
+          (t) => String(t.date || "").slice(0, 10) === oldest,
+        );
+        setDateConflictDialog({
+          open: true,
+          oldest,
+          kept: filtered.length,
+          dropped: selected.length - filtered.length,
+          filtered,
+        });
+        return;
+      }
     }
-    // ≥2 selecionadas → SEMPRE consolida em 1 PC (independente de prestação).
-    // Comprovantes de todas serão anexados ao PC consolidado.
-    setConsolidateDialog({ open: true, transactions: selected });
+    proceedBatchUnified(selected);
   };
 
   const advanceBatch = () => {
