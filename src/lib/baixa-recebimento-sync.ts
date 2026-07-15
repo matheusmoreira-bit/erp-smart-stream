@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { sapAction } from "@/lib/sap-client";
+import { sapAction, SapSessionExpiredError } from "@/lib/sap-client";
 import type { SapSession } from "@/lib/sap-client";
 
 /**
