@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isTestCompanyDb } from "@/lib/test-company";
 
+/** Data em que o ERP Flow entrou em produção. Antes disso: 0 documentos via Flow. */
+export const FLOW_LAUNCH_DATE_ISO = "2026-07-01";
+
+
+
 
 export interface RoiParameters {
   id: string;
