@@ -1,6 +1,5 @@
-import { supabase } from "@/integrations/supabase/client";
-import { sapAction, SapSessionExpiredError } from "@/lib/sap-client";
 import type { SapSession } from "@/lib/sap-client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 /**
  * Sincroniza uma baixa de recebimento (baixas_recebimento + itens) com o SAP B1
@@ -15,105 +14,65 @@ export interface SyncBaixaResult {
   ok: boolean;
   sapDocEntry: number | null;
   errorMessage: string | null;
+  baixaId?: string | null;
+}
+
+export interface CreateBaixaInput {
+  companyDb: string;
+  cardCode: string;
+  cardName: string;
+  dataRecebimento: string;
+  contaContabilCodigo: string;
+  contaContabilNome?: string | null;
+  contaJurosMultaCodigo?: string | null;
+  contaJurosMultaNome?: string | null;
+  valorTotal: number;
+  valorJurosMulta: number;
+  itens: Array<{
+    invoiceDocEntry: number;
+    invoiceDocNum: string | number;
+    valorBaixado: number;
+  }>;
+}
+
+async function callBaixaFunction(body: Record<string, unknown>): Promise<SyncBaixaResult> {
+  try {
+    const response = await sapFunctionFetch("baixa-recebimento", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    const sapDocEntry = Number.isFinite(Number(data.sapDocEntry)) ? Number(data.sapDocEntry) : null;
+    const errorMessage = data.errorMessage || data.error || null;
+
+    if (!response.ok || !data.ok) {
+      return { ok: false, sapDocEntry, errorMessage: errorMessage || `Falha ao lançar baixa (${response.status})`, baixaId: data.baixaId || null };
+    }
+
+    return { ok: true, sapDocEntry, errorMessage: null, baixaId: data.baixaId || null };
+  } catch (e) {
+    const msg = (e as Error).message || "Falha ao criar IncomingPayment no SAP";
+    return { ok: false, sapDocEntry: null, errorMessage: msg };
+  }
+}
+
+export async function createBaixaRecebimentoAndSync(
+  session: SapSession,
+  input: CreateBaixaInput,
+): Promise<SyncBaixaResult> {
+  if (!session?.sessionId) {
+    return { ok: false, sapDocEntry: null, errorMessage: "Sessão SAP indisponível." };
+  }
+  return callBaixaFunction({ action: "createAndSync", input });
 }
 
 export async function syncBaixaRecebimentoToSap(
   session: SapSession,
   baixaId: string,
 ): Promise<SyncBaixaResult> {
-  // 1) Carrega baixa + itens do Supabase
-  const { data: baixa, error: baixaErr } = await supabase
-    .from("baixas_recebimento")
-    .select("*")
-    .eq("id", baixaId)
-    .single();
-
-  if (baixaErr || !baixa) {
-    return { ok: false, sapDocEntry: null, errorMessage: baixaErr?.message || "Baixa não encontrada" };
+  if (!session?.sessionId) {
+    return { ok: false, sapDocEntry: null, errorMessage: "Sessão SAP indisponível.", baixaId };
   }
-
-  if (baixa.status === "sincronizado" && baixa.sap_incoming_payment_doc_entry) {
-    return {
-      ok: true,
-      sapDocEntry: baixa.sap_incoming_payment_doc_entry,
-      errorMessage: null,
-    };
-  }
-
-  const { data: itens, error: itensErr } = await supabase
-    .from("baixas_recebimento_itens")
-    .select("invoice_doc_entry,valor_baixado")
-    .eq("baixa_id", baixaId);
-
-  if (itensErr || !itens || itens.length === 0) {
-    const msg = itensErr?.message || "Baixa sem itens";
-    await supabase
-      .from("baixas_recebimento")
-      .update({ status: "erro", sap_error_message: msg })
-      .eq("id", baixaId);
-    return { ok: false, sapDocEntry: null, errorMessage: msg };
-  }
-
-  const excedente = Number(baixa.valor_juros_multa || 0);
-
-  const payload: Record<string, unknown> = {
-    DocType: "rCustomer",
-    CardCode: baixa.card_code,
-    DocDate: baixa.data_recebimento,
-    TransferDate: baixa.data_recebimento,
-    TransferAccount: baixa.conta_contabil_codigo,
-    TransferSum: Number(baixa.valor_total),
-    PaymentInvoices: itens.map((it) => ({
-      DocEntry: Number(it.invoice_doc_entry),
-      SumApplied: Number(it.valor_baixado),
-      InvoiceType: "it_Invoice",
-    })),
-  };
-
-  if (excedente > 0 && baixa.conta_juros_multa_codigo) {
-    payload.PaymentAccounts = [
-      {
-        AccountCode: baixa.conta_juros_multa_codigo,
-        SumPaid: excedente,
-      },
-    ];
-  }
-
-  try {
-    // silentSessionExpired: uma sessão SAP expirada durante a criação do
-    // IncomingPayment NÃO deve derrubar a sessão global do usuário (isso
-    // atrapalhava outras rotinas — telas de aprovação, listagens etc.).
-    // Marcamos a baixa como "erro" e devolvemos mensagem clara; o usuário
-    // pode refazer o login e tentar novamente pelo botão de retry.
-    const result = await sapAction(session, "IncomingPayments", "POST", payload, {
-      silentSessionExpired: true,
-    });
-    const data = result?.data as { DocEntry?: number; error?: unknown } | undefined;
-    if (data && typeof data === "object" && data.error) {
-      throw new Error(typeof data.error === "string" ? data.error : "SAP retornou erro");
-    }
-    const sapDocEntry =
-      data && typeof data.DocEntry === "number" ? data.DocEntry : null;
-
-    await supabase
-      .from("baixas_recebimento")
-      .update({
-        status: "sincronizado",
-        sap_incoming_payment_doc_entry: sapDocEntry,
-        sap_error_message: null,
-      })
-      .eq("id", baixaId);
-
-    return { ok: true, sapDocEntry, errorMessage: null };
-  } catch (e) {
-    const isSessionExpired = e instanceof SapSessionExpiredError;
-    const msg = isSessionExpired
-      ? "Sessão SAP expirou durante o lançamento. Faça login no SAP novamente e reenvie a baixa."
-      : (e as Error).message || "Falha ao criar IncomingPayment no SAP";
-    await supabase
-      .from("baixas_recebimento")
-      .update({ status: "erro", sap_error_message: msg })
-      .eq("id", baixaId);
-    return { ok: false, sapDocEntry: null, errorMessage: msg };
-  }
+  return callBaixaFunction({ action: "syncExisting", baixaId });
 }

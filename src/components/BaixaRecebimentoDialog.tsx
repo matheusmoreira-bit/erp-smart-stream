@@ -16,8 +16,7 @@ import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
-import { supabase } from "@/integrations/supabase/client";
-import { syncBaixaRecebimentoToSap } from "@/lib/baixa-recebimento-sync";
+import { createBaixaRecebimentoAndSync } from "@/lib/baixa-recebimento-sync";
 import { useSap } from "@/contexts/SapContext";
 import { DateInputBR } from "@/components/DateInputBR";
 
@@ -177,54 +176,30 @@ export function BaixaRecebimentoDialog({
       return;
     }
     setSubmitting(true);
-    let baixaId: string | null = null;
 
     try {
-      // 1) Confirma sessão Supabase (RLS depende de auth.uid())
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData?.user?.id;
-      if (!userId) {
-        toast.error("Sua sessão expirou. Faça login novamente para lançar a baixa.");
-        setSubmitting(false);
-        return;
-      }
-      // 2) Persist no Supabase como pendente_sincronizacao.
-      // criado_por é preenchido automaticamente pelo trigger set_baixa_criado_por_trigger
-      const { data: baixaRow, error: insertErr } = await supabase
-        .from("baixas_recebimento")
-        .insert({
-          company_db: companyDb,
-          card_code: cardCode,
-          card_name: cardName,
-          data_recebimento: dataRecebimento,
-          conta_contabil_codigo: conta!.code,
-          conta_contabil_nome: conta!.name,
-          conta_juros_multa_codigo: contaJuros?.code || null,
-          conta_juros_multa_nome: contaJuros?.name || null,
-          valor_total: valorRecebido,
-          valor_juros_multa: excedente,
-          status: "pendente_sincronizacao",
-        })
-        .select("id")
-        .single();
-      if (insertErr || !baixaRow) throw new Error(insertErr?.message || "Falha ao gravar baixa");
-      baixaId = baixaRow.id;
-
       const itensPayload = invoices
         .filter((inv) => (rateioValores[inv.docEntry] || 0) > 0)
         .map((inv) => ({
-          baixa_id: baixaId,
-          invoice_doc_entry: inv.docEntry,
-          invoice_doc_num: String(inv.docNum),
-          valor_baixado: rateioValores[inv.docEntry],
+          invoiceDocEntry: inv.docEntry,
+          invoiceDocNum: String(inv.docNum),
+          valorBaixado: rateioValores[inv.docEntry],
         }));
       if (itensPayload.length === 0) throw new Error("Nenhum item com valor a baixar.");
 
-      const { error: itemErr } = await supabase.from("baixas_recebimento_itens").insert(itensPayload);
-      if (itemErr) throw new Error(itemErr.message);
-
-      // 2) Sincroniza com SAP via helper compartilhado (mesma lógica usada no retry)
-      const { ok, sapDocEntry, errorMessage } = await syncBaixaRecebimentoToSap(session, baixaId);
+      const { ok, sapDocEntry, errorMessage } = await createBaixaRecebimentoAndSync(session, {
+        companyDb,
+        cardCode,
+        cardName,
+        dataRecebimento,
+        contaContabilCodigo: conta!.code,
+        contaContabilNome: conta!.name,
+        contaJurosMultaCodigo: contaJuros?.code || null,
+        contaJurosMultaNome: contaJuros?.name || null,
+        valorTotal: valorRecebido,
+        valorJurosMulta: excedente,
+        itens: itensPayload,
+      });
 
       if (!ok) {
         toast.error(`Baixa salva localmente, mas SAP recusou: ${errorMessage}`);
