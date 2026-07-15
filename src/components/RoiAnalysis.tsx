@@ -91,7 +91,31 @@ export function RoiAnalysis({ mode }: Props) {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <PeriodFilter value={period} onChange={setPeriod} />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <PeriodFilter value={period} onChange={setPeriod} />
+          {mode === "consolidated" && (
+            <Select
+              value={filterCompanyDb || "__all__"}
+              onValueChange={(v) => setFilterCompanyDb(v === "__all__" ? "" : v)}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-[240px]">
+                <Building2 className="w-4 h-4 mr-1 text-muted-foreground" />
+                <SelectValue placeholder="Todas as empresas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todas as empresas</SelectItem>
+                {companies
+                  .slice()
+                  .sort((a, b) => a.display_name.localeCompare(b.display_name))
+                  .map((c) => (
+                    <SelectItem key={c.company_db} value={c.company_db}>
+                      {c.display_name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
         <div className="flex items-center gap-2 self-end sm:self-auto">
           {isAdmin && (
             <Button variant="ghost" size="sm" onClick={() => setParamsOpen(true)} className="text-muted-foreground">
