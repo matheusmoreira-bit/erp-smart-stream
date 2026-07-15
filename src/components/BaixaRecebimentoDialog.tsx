@@ -43,7 +43,7 @@ function fmt(v: number, ccy: string = "BRL") {
 
 function parseAmount(txt: string): number {
   const clean = txt
-    .replace(/[^\d,.\-]/g, "")
+    .replace(/[^\d,.-]/g, "")
     .replace(/\.(?=\d{3}(\D|$))/g, "") // remove milhar
     .replace(",", ".");
   const n = Number(clean);
