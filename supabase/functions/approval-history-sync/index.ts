@@ -776,7 +776,18 @@ Deno.serve(async (req) => {
       console.warn(`[approval-history-sync] merge audit_log falhou: ${String(e)}`);
     }
 
-    const summary = `Sincronizados ${upserted} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression}, audit-merge:${auditMerged}, audit-upsert:${auditInserted})`;
+    // ================================================================
+    // Fase extra: HANA view VW_PEDIDOS_COMPRA_APROVACOES (Apiuser)
+    // Ignora empresas de teste; traz decisões finais (Y/N) do SAP puro.
+    // ================================================================
+    let hanaResult: { merged: number; upserted: number; skipped?: string; error?: string } = { merged: 0, upserted: 0 };
+    if (!isTestCompanyDb(companyDb)) {
+      hanaResult = await fetchAndMergeHanaApprovals(supabase, companyDb);
+      if (hanaResult.error) console.warn(`[approval-history-sync] HANA view falhou: ${hanaResult.error}`);
+      if (hanaResult.skipped) console.log(`[approval-history-sync] HANA view skipped: ${hanaResult.skipped}`);
+    }
+
+    const summary = `Sincronizados ${upserted} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression}, audit-merge:${auditMerged}, audit-upsert:${auditInserted}, hana-merge:${hanaResult.merged}, hana-upsert:${hanaResult.upserted}${hanaResult.skipped ? `, hana-skipped:${hanaResult.skipped}` : ""}${hanaResult.error ? `, hana-error:${hanaResult.error}` : ""})`;
     await updateSyncState(supabase, "success", summary, upserted);
     await releaseWatcherLock(supabase, "approval-history-sync", "ok", summary);
 
@@ -785,9 +796,11 @@ Deno.serve(async (req) => {
       received: rows.length,
       upserted,
       audit: { merged: auditMerged, upserted: auditInserted },
+      hana: hanaResult,
       skipped: { test: skippedTest, unknown_company: skippedUnknownCompany, regression: skippedRegression },
       companyDb,
     });
+
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await updateSyncState(supabase, "error", message, 0).catch(() => {});
