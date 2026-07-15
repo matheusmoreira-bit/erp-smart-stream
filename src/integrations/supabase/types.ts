@@ -2197,13 +2197,22 @@ export type Database = {
       }
       idp_user_mapping: {
         Row: {
+          attributes_synced_at: string | null
+          company_name: string | null
+          cost_center_code: string | null
+          cost_center_label: string | null
           created_at: string
+          department: string | null
+          employee_id: string | null
+          employee_type: string | null
           id: string
           idp_display_name: string | null
           idp_email: string | null
           idp_provider: string
           idp_user_id: string | null
+          job_title: string | null
           linked_at: string | null
+          manager_idp_id: string | null
           sap_email: string | null
           sap_user_code: string
           sap_user_name: string | null
@@ -2211,13 +2220,22 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          attributes_synced_at?: string | null
+          company_name?: string | null
+          cost_center_code?: string | null
+          cost_center_label?: string | null
           created_at?: string
+          department?: string | null
+          employee_id?: string | null
+          employee_type?: string | null
           id?: string
           idp_display_name?: string | null
           idp_email?: string | null
           idp_provider?: string
           idp_user_id?: string | null
+          job_title?: string | null
           linked_at?: string | null
+          manager_idp_id?: string | null
           sap_email?: string | null
           sap_user_code: string
           sap_user_name?: string | null
@@ -2225,13 +2243,22 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          attributes_synced_at?: string | null
+          company_name?: string | null
+          cost_center_code?: string | null
+          cost_center_label?: string | null
           created_at?: string
+          department?: string | null
+          employee_id?: string | null
+          employee_type?: string | null
           id?: string
           idp_display_name?: string | null
           idp_email?: string | null
           idp_provider?: string
           idp_user_id?: string | null
+          job_title?: string | null
           linked_at?: string | null
+          manager_idp_id?: string | null
           sap_email?: string | null
           sap_user_code?: string
           sap_user_name?: string | null
