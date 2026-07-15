@@ -4864,6 +4864,20 @@ export type Database = {
         Returns: undefined
       }
       is_sap_user_admin: { Args: { _sap_username: string }; Returns: boolean }
+      list_baixas_by_invoice: {
+        Args: { p_company_db: string; p_invoice_doc_entry: number }
+        Returns: {
+          created_at: string
+          criado_por_nome: string
+          criado_por_user_code: string
+          data_recebimento: string
+          id: string
+          sap_incoming_payment_doc_entry: number
+          status: string
+          valor_baixado: number
+          valor_juros_multa: number
+        }[]
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
