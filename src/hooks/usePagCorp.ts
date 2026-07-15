@@ -1,6 +1,111 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+// ---------------------------------------------------------------------------
+// In-memory cache for pagcorp-integration-status
+// Reduz chamadas repetidas quando o usuário navega entre telas / refaz o
+// mesmo filtro. TTL curto para não mascarar mudanças reais (integração
+// acabou de rodar, marcações de não-dedutíveis, etc.).
+// ---------------------------------------------------------------------------
+const INTEGRATION_STATUS_TTL_MS = 30_000;
+const INTEGRATION_STATUS_CHUNK = 5000;
+
+type IntegrationStatusPayload = {
+  integrations: any[];
+  nondeductibleCards: any[];
+  nondeductibleExpenses: any[];
+};
+
+const integrationStatusCache = new Map<string, { at: number; data: IntegrationStatusPayload }>();
+const integrationStatusInflight = new Map<string, Promise<IntegrationStatusPayload>>();
+
+function integrationStatusKey(companyDb: string, ids: number[]): string {
+  // Ordena e junta para gerar chave estável independente da ordem do array.
+  const sorted = [...ids].sort((a, b) => a - b);
+  return `${companyDb}::${sorted.length}::${sorted.join(",")}`;
+}
+
+async function fetchIntegrationStatus(
+  companyDb: string,
+  expenseIds: number[],
+): Promise<IntegrationStatusPayload> {
+  const key = integrationStatusKey(companyDb, expenseIds);
+
+  // 1. Cache hit válido
+  const cached = integrationStatusCache.get(key);
+  if (cached && Date.now() - cached.at < INTEGRATION_STATUS_TTL_MS) {
+    return cached.data;
+  }
+
+  // 2. Dedupe requisições concorrentes com a mesma chave
+  const inflight = integrationStatusInflight.get(key);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+    const merged: IntegrationStatusPayload = {
+      integrations: [],
+      nondeductibleCards: [],
+      nondeductibleExpenses: [],
+    };
+    const seenCards = new Set<string>();
+
+    // Chunk defensivo: a edge function limita a 5000 ids por chamada.
+    for (let i = 0; i < Math.max(expenseIds.length, 1); i += INTEGRATION_STATUS_CHUNK) {
+      const chunk = expenseIds.slice(i, i + INTEGRATION_STATUS_CHUNK);
+      const res = await sapFunctionFetch("pagcorp-integration-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyDb, expenseIds: chunk }),
+      });
+      if (!res.ok) {
+        throw new Error(`pagcorp-integration-status ${res.status}`);
+      }
+      const {
+        integrations = [],
+        nondeductibleCards = [],
+        nondeductibleExpenses = [],
+      } = await res.json();
+
+      merged.integrations.push(...(integrations as any[]));
+      merged.nondeductibleExpenses.push(...(nondeductibleExpenses as any[]));
+      // Cartões não dependem de expenseIds; dedupe por card_identifier.
+      for (const c of nondeductibleCards as any[]) {
+        const cid = String(c?.card_identifier ?? "");
+        if (!cid || seenCards.has(cid)) continue;
+        seenCards.add(cid);
+        merged.nondeductibleCards.push(c);
+      }
+
+      if (expenseIds.length === 0) break; // um único fetch "vazio"
+    }
+
+    integrationStatusCache.set(key, { at: Date.now(), data: merged });
+    return merged;
+  })();
+
+  integrationStatusInflight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    integrationStatusInflight.delete(key);
+  }
+}
+
+/**
+ * Invalida o cache de integration-status. Chamar após ações que mudam o
+ * estado no servidor (integrar, reverter, marcar não-dedutível).
+ */
+export function invalidatePagCorpIntegrationStatus(companyDb?: string) {
+  if (!companyDb) {
+    integrationStatusCache.clear();
+    return;
+  }
+  for (const k of integrationStatusCache.keys()) {
+    if (k.startsWith(`${companyDb}::`)) integrationStatusCache.delete(k);
+  }
+}
+
 export interface PagCorpTransaction {
   id: string | number;
   date: string;
