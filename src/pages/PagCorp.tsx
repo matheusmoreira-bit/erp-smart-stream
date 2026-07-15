@@ -1450,6 +1450,21 @@ export default function PagCorp() {
                                         ? "Reprocessar baixa"
                                         : "Baixa automática";
 
+                                // Progressão: Integrado → NF lançada → Baixado
+                                const nfDone = settled || st === "awaiting_settlement";
+                                const currentStep = settled ? 3 : nfDone ? 2 : 1;
+                                const stepClass = (idx: number) => {
+                                  if (idx < currentStep) return "text-success font-medium";
+                                  if (idx === currentStep)
+                                    return st === "error"
+                                      ? "text-destructive font-semibold"
+                                      : settled
+                                        ? "text-success font-semibold"
+                                        : "text-primary font-semibold";
+                                  return "text-muted-foreground/60";
+                                };
+                                const sepClass = (idx: number) =>
+                                  idx < currentStep ? "text-success/70" : "text-muted-foreground/40";
                                 return (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -1458,13 +1473,30 @@ export default function PagCorp() {
                                         size="sm"
                                         className="h-7 px-2 text-[11px] gap-1"
                                         disabled={isRunning}
+                                        title={
+                                          inGroup
+                                            ? "Item consolidado"
+                                            : `Status: ${settled ? "Baixado" : nfDone ? "NF lançada" : "Integrado"}`
+                                        }
                                       >
                                         {isRunning ? (
                                           <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : settled ? (
+                                          <CheckCircle2 className="w-3 h-3 text-success" />
                                         ) : (
                                           <CheckCircle2 className="w-3 h-3 text-success" />
                                         )}
-                                        {inGroup ? "Item consolidado" : "Integrado"}
+                                        {inGroup ? (
+                                          <span>Item consolidado</span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 leading-none">
+                                            <span className={stepClass(1)}>Integrado</span>
+                                            <span className={sepClass(1)}>›</span>
+                                            <span className={stepClass(2)}>NF</span>
+                                            <span className={sepClass(2)}>›</span>
+                                            <span className={stepClass(3)}>Baixa</span>
+                                          </span>
+                                        )}
                                         <MoreHorizontal className="w-3.5 h-3.5 ml-0.5 opacity-70" />
                                       </Button>
                                     </DropdownMenuTrigger>
