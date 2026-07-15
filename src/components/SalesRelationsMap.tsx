@@ -417,8 +417,11 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
             >
               <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">NF #{invoice.docNum}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
+                      NF #{invoice.docNum}
+                      <IdBadge label="DocEntry" value={String(invoice.docEntry)} />
+                    </p>
                     <p className="text-[11px] text-muted-foreground">
                       Emitida em {formatDate(invoice.docDate)} · Total{" "}
                       <span className="font-mono">{formatCurrency(invoice.docTotal, invoice.currency)}</span>
