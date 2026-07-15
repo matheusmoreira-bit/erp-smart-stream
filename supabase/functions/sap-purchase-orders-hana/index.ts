@@ -245,9 +245,12 @@ Deno.serve(async (req) => {
       await sapLogout(baseUrl, session);
     }
 
+    console.log(`[sap-purchase-orders-hana] db=${dbName} rawRows=${rawRows.length} firstKeys=${rawRows[0] ? Object.keys(rawRows[0]).slice(0,8).join("|") : "-"}`);
+
     const mapped = rawRows
       .map((r) => mapRow(r, companyDb))
       .filter((r): r is NonNullable<ReturnType<typeof mapRow>> => !!r);
+    console.log(`[sap-purchase-orders-hana] mapped=${mapped.length}`);
 
     // Dedup por sap_doc_entry/sap_doc_num — pode haver múltiplas linhas
     // (uma por aprovador). Mantemos a mais recente por data de aprovação e
