@@ -464,6 +464,7 @@ export function usePagCorp() {
       .single();
 
     if (error) throw error;
+    invalidatePagCorpIntegrationStatus(companyDb);
 
     // Audit
     const { logAuditAction } = await import("@/hooks/useAuditLog");
