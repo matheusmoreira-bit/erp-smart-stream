@@ -84,6 +84,7 @@ import {
   ALLOWED_ATTACHMENT_ACCEPT,
   ALLOWED_ATTACHMENT_HINT,
 } from "@/lib/attachment-validation";
+import { useCurrentUserCostCenter, isItemAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
