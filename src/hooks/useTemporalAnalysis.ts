@@ -105,62 +105,70 @@ export function useTemporalAnalysis(opts: Options) {
       const fromIso = from?.toISOString();
       const toIso = to?.toISOString();
 
-      let expQ = supabase
-        .from("expenses")
-        .select("id, company_db, created_at, sap_doc_entry")
-        .limit(20000);
-      let histQ = supabase
-        .from("approval_history")
-        .select("company_db, doc_entry, decision, decision_date")
-        .limit(60000);
-      let poQ = supabase
-        .from("sap_purchase_order_cache")
-        .select("company_db, doc_entry, doc_date")
-        .limit(30000);
-      let nfQ = supabase
-        .from("sap_nf_entrada_cache")
-        .select("company_db, doc_entry, doc_date, base_po_doc_entry")
-        .limit(30000);
-      let payQ = supabase
-        .from("sap_vendor_payment_cache")
-        .select("company_db, doc_entry, doc_date, invoice_links")
-        .limit(30000);
-
-      if (!consolidated && companyDb) {
-        expQ = expQ.eq("company_db", companyDb);
-        histQ = histQ.eq("company_db", companyDb);
-        poQ = poQ.eq("company_db", companyDb);
-        nfQ = nfQ.eq("company_db", companyDb);
-        payQ = payQ.eq("company_db", companyDb);
-      }
-      if (fromIso) {
-        expQ = expQ.gte("created_at", fromIso);
-        histQ = histQ.gte("decision_date", fromIso);
-        poQ = poQ.gte("doc_date", fromIso.slice(0, 10));
-        nfQ = nfQ.gte("doc_date", fromIso.slice(0, 10));
-        payQ = payQ.gte("doc_date", fromIso.slice(0, 10));
-      }
-      if (toIso) {
-        expQ = expQ.lte("created_at", toIso);
-        histQ = histQ.lte("decision_date", toIso);
-        poQ = poQ.lte("doc_date", toIso.slice(0, 10));
-        nfQ = nfQ.lte("doc_date", toIso.slice(0, 10));
-        payQ = payQ.lte("doc_date", toIso.slice(0, 10));
+      // Paginação para superar o limite padrão do PostgREST (1000 linhas/resposta)
+      const PAGE = 1000;
+      async function fetchAll<T>(build: () => any): Promise<T[]> {
+        const out: T[] = [];
+        for (let offset = 0; ; offset += PAGE) {
+          const { data, error } = await build().range(offset, offset + PAGE - 1);
+          if (error) throw error;
+          const rows = (data || []) as T[];
+          out.push(...rows);
+          if (rows.length < PAGE) break;
+          if (offset > 500000) break;
+        }
+        return out;
       }
 
-      const [er, hr, pr, nr, yr] = await Promise.all([expQ, histQ, poQ, nfQ, payQ]);
-      if (er.error) throw er.error;
-      if (hr.error) throw hr.error;
-      if (pr.error) throw pr.error;
-      if (nr.error) throw nr.error;
-      if (yr.error) throw yr.error;
+      const buildExp = () => {
+        let q = supabase.from("expenses").select("id, company_db, created_at, sap_doc_entry").order("created_at", { ascending: true });
+        if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
+        if (fromIso) q = q.gte("created_at", fromIso);
+        if (toIso) q = q.lte("created_at", toIso);
+        return q;
+      };
+      const buildHist = () => {
+        let q = supabase.from("approval_history").select("company_db, doc_entry, decision, decision_date").order("decision_date", { ascending: true });
+        if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
+        if (fromIso) q = q.gte("decision_date", fromIso);
+        if (toIso) q = q.lte("decision_date", toIso);
+        return q;
+      };
+      const buildPo = () => {
+        let q = supabase.from("sap_purchase_order_cache").select("company_db, doc_entry, doc_date").order("doc_date", { ascending: true });
+        if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
+        if (fromIso) q = q.gte("doc_date", fromIso.slice(0, 10));
+        if (toIso) q = q.lte("doc_date", toIso.slice(0, 10));
+        return q;
+      };
+      const buildNf = () => {
+        let q = supabase.from("sap_nf_entrada_cache").select("company_db, doc_entry, doc_date, base_po_doc_entry").order("doc_date", { ascending: true });
+        if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
+        if (fromIso) q = q.gte("doc_date", fromIso.slice(0, 10));
+        if (toIso) q = q.lte("doc_date", toIso.slice(0, 10));
+        return q;
+      };
+      const buildPay = () => {
+        let q = supabase.from("sap_vendor_payment_cache").select("company_db, doc_entry, doc_date, invoice_links").order("doc_date", { ascending: true });
+        if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
+        if (fromIso) q = q.gte("doc_date", fromIso.slice(0, 10));
+        if (toIso) q = q.lte("doc_date", toIso.slice(0, 10));
+        return q;
+      };
 
-      const expRows = (er.data || []) as ExpenseTiming[];
+      const [expRows, histRows, poRows, nfRows, payRows] = await Promise.all([
+        fetchAll<ExpenseTiming>(buildExp),
+        fetchAll<ApprovalHistoryRow>(buildHist),
+        fetchAll<PoRow>(buildPo),
+        fetchAll<NfRow>(buildNf),
+        fetchAll<PayRow>(buildPay),
+      ]);
+
       setExpenses(expRows);
-      setHistory((hr.data || []) as ApprovalHistoryRow[]);
-      setPos((pr.data || []) as PoRow[]);
-      setNfs((nr.data || []) as NfRow[]);
-      setPays((yr.data || []) as PayRow[]);
+      setHistory(histRows);
+      setPos(poRows);
+      setNfs(nfRows);
+      setPays(payRows);
 
       // logs em segundo passo (só IDs relevantes)
       const ids = expRows.map((e) => e.id);
