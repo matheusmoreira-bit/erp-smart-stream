@@ -2572,10 +2572,8 @@ export default function ApprovalsPage() {
 
   const handleDelegate = async (params: { userInternalKey: number; userName: string; userEmail: string; reason: string }) => {
     if (!session || !delegationDoc) return;
-    if (!isSuperUser) {
-      toast.error("Apenas super-usuários podem delegar aprovações.");
-      return;
-    }
+    // Qualquer aprovador responsável pelo documento pode delegar.
+
     setIsDelegating(true);
     try {
       const internalId = (delegationDoc as unknown as { __internalId?: string }).__internalId;
