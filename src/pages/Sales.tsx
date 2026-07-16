@@ -105,10 +105,32 @@ interface ClientGroup {
 /* ─────────────────────────── Page ─────────────────────────── */
 
 export default function SalesPage() {
+  const { session } = useSap();
+  const { hasAccess, loading } = useModuleAccess("sales");
+  if (!session) return <Navigate to="/" replace />;
+  if (loading) return null;
+  if (!hasAccess) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="text-center">
+          <p className="text-lg font-semibold text-foreground">Sem acesso ao módulo Vendas</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Este módulo é restrito ao time de Contas a Receber. Solicite ao administrador o módulo <code>sales</code>.
+          </p>
+          <Link to="/" className="mt-4 inline-block text-sm text-primary hover:underline">
+            Voltar ao menu
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return <SalesPageInner />;
+}
+
+function SalesPageInner() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { getLabel } = useCompanies();
-  const { hasAccess: canAccessSales, loading: permLoading } = useModuleAccess("sales");
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [erroMsg, setErroMsg] = useState<string | null>(null);
