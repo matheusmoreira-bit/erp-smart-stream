@@ -166,19 +166,30 @@ Deno.serve(async (req) => {
 
   let q = supabase
     .from("pagcorp_integration_log")
-    .select("id, company_db, sap_doc_entry, sap_payload, pagcorp_data, integration_type")
+    .select("id, company_db, sap_doc_entry, sap_payload, sap_response, pagcorp_data, integration_type")
     .not("sap_doc_entry", "is", null);
   if (companyDbFilter) q = q.eq("company_db", companyDbFilter);
   if (logIdsFilter?.length) q = q.in("id", logIdsFilter);
   const { data: rows, error: rowsErr } = await q.order("created_at", { ascending: false }).limit(limit);
   if (rowsErr) return json(500, { error: rowsErr.message });
 
-  // filter out rows already carrying AttachmentEntry
-  const targets = (rows || []).filter((r: any) => {
-    const p = r.sap_payload || {};
-    const nested = p.purchase_order || {};
-    return p.AttachmentEntry == null && nested.AttachmentEntry == null;
-  });
+  // Só ficam de fora as linhas em que o PurchaseOrder no SAP já reflete o vínculo
+  // (sap_response.purchase_order.AttachmentEntry populado).
+  function existingAttachment(r: any): number | null {
+    const resp = r.sap_response || {};
+    const po = resp.purchase_order || {};
+    // 1) attachment já vinculado no doc SAP (retornado pelo POST)
+    if (typeof po.AttachmentEntry === "number" && po.AttachmentEntry > 0) return null;
+    // 2) attachment já subido para SAP mas não vinculado ao doc → reutilizar
+    if (typeof resp.attachmentEntry === "number" && resp.attachmentEntry > 0) return resp.attachmentEntry;
+    return null;
+  }
+  function alreadyLinked(r: any): boolean {
+    const resp = r.sap_response || {};
+    const po = resp.purchase_order || {};
+    return typeof po.AttachmentEntry === "number" && po.AttachmentEntry > 0;
+  }
+  const targets = (rows || []).filter((r: any) => !alreadyLinked(r));
 
   // resolve endpoint per company_db (fallback PurchaseInvoices)
   const companies = Array.from(new Set(targets.map((r: any) => r.company_db)));
@@ -200,6 +211,7 @@ Deno.serve(async (req) => {
       candidates: targets.map((r: any) => ({
         id: r.id, company_db: r.company_db, sap_doc_entry: r.sap_doc_entry,
         endpoint: endpointByCompany[r.company_db] || "PurchaseInvoices",
+        existing_attachment_entry: existingAttachment(r),
         receipt_count: collectReceiptUrls(r.pagcorp_data?.receipts || []).length,
       })),
       total: targets.length,
