@@ -132,11 +132,21 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  // Admin auth: aceita service role (backfill via ops) ou usuário Cloud com role admin.
+  // Admin auth: aceita JWT com role=service_role (backfill via ops) ou usuário Cloud com role admin.
   const authHeader = req.headers.get("authorization") || "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const isServiceRole = !!serviceKey && bearer === serviceKey;
+  let isServiceRole = false;
+  if (bearer) {
+    try {
+      const parts = bearer.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(
+          atob(parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(parts[1].length + (4 - parts[1].length % 4) % 4, "=")),
+        );
+        if (payload?.role === "service_role") isServiceRole = true;
+      }
+    } catch { /* ignore */ }
+  }
   if (!isServiceRole) {
     try {
       const u = await requireUser(req);
