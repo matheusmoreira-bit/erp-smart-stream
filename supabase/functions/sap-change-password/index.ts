@@ -236,7 +236,9 @@ Deno.serve(async (req) => {
       try { session = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password); }
       catch (e) {
         const suffix = creds.source === "fallback" ? " (usando credenciais padrão)" : "";
-        results.push({ companyDB: companyDb, displayName, status: "error", message: (e instanceof Error ? e.message : "Falha ao autenticar") + suffix });
+        const msg = (e instanceof Error ? e.message : "Falha ao autenticar") + suffix;
+        console.error(`[sap-change-password] login failed`, { companyDb, sapCompanyDb: creds.sapCompanyDb, source: creds.source, msg });
+        results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
         continue;
       }
       try {
@@ -246,7 +248,9 @@ Deno.serve(async (req) => {
           "GET",
         );
         if (!lookup.ok) {
-          results.push({ companyDB: companyDb, displayName, status: "error", message: extractSapError(lookup.data, `HTTP ${lookup.status}`) });
+          const msg = extractSapError(lookup.data, `HTTP ${lookup.status}`);
+          console.error(`[sap-change-password] user lookup failed`, { companyDb, userCode, status: lookup.status, msg });
+          results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
           continue;
         }
         const payload = lookup.data as { value?: Array<{ InternalKey?: number; UserCode?: string }> } | Array<{ InternalKey?: number; UserCode?: string }>;
@@ -263,11 +267,14 @@ Deno.serve(async (req) => {
           if (isSamePasswordError(msg)) {
             results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" });
           } else {
+            console.error(`[sap-change-password] PATCH failed`, { companyDb, userCode, internalKey: rows[0].InternalKey, status: patch.status, msg });
             results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
           }
         }
       } catch (e) {
-        results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro ao alterar senha" });
+        const msg = e instanceof Error ? e.message : "Erro ao alterar senha";
+        console.error(`[sap-change-password] exception`, { companyDb, userCode, msg });
+        results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
       } finally {
         await sapLogout(session);
       }

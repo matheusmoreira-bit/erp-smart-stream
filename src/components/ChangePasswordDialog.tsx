@@ -164,7 +164,10 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
       } else if (successes > 0) {
         toast.warning(`Concluído com falhas: ${successes} sucesso(s), ${skipped} ignorada(s), ${failures} erro(s).`);
       } else {
-        toast.error(`Falhou em todas as empresas (${failures}).`);
+        const firstError = allResults.find((r) => r.status === "error")?.message;
+        toast.error(
+          `Falhou em todas as empresas (${failures})${firstError ? `: ${firstError}` : ""}. Veja o resumo abaixo.`,
+        );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao alterar senha";
