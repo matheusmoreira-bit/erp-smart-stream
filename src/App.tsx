@@ -100,6 +100,7 @@ const App = () => (
               <Route path="/integracoes/automacoes" element={<IntegrationsHub tab="automations" />} />
               <Route path="/integracoes/monitor" element={<IntegrationsHub tab="monitor" />} />
               <Route path="/integracoes/credenciais" element={<IntegrationsHub tab="credentials" />} />
+              <Route path="/integracoes/colaboradores" element={<IntegrationsHub tab="employees" />} />
 
               {/* Usuários */}
               <Route path="/usuarios" element={<Navigate to="/usuarios/lista" replace />} />

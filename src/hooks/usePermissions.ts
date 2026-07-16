@@ -67,6 +67,7 @@ export const VIEW_ONLY_MODULES = [
   { key: "users_productivity", label: "Usuários — Produtividade" },
   { key: "notifications", label: "Notificações" },
   { key: "integration_history", label: "Integrações — Monitor" },
+  { key: "employee_integration", label: "Integrações — Colaboradores" },
   { key: "audit_log", label: "Auditoria — Logs do Sistema" },
   { key: "fiscal_audit", label: "Auditoria — Fiscal" },
   { key: "audit_console", label: "Auditoria — SAP" },
