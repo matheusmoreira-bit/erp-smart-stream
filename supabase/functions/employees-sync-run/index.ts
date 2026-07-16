@@ -362,7 +362,7 @@ function itemBase(
     company_db: companyDb,
     jumpcloud_user_id: norm.jumpCloudUserId,
     sap_employee_id: existing?.EmployeeID ? Number(existing.EmployeeID) : null,
-    employee_name: norm.displayName ?? [norm.firstName, norm.lastName].filter(Boolean).join(" ") || null,
+    employee_name: norm.displayName ?? ([norm.firstName, norm.lastName].filter(Boolean).join(" ") || null),
     employee_email: norm.email,
     manager_jc_id: norm.managerJumpCloudUserId,
     normalized_payload: norm as unknown as Record<string, unknown>,
