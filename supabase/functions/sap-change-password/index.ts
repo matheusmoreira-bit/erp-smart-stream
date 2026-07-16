@@ -164,7 +164,29 @@ Deno.serve(async (req) => {
     // Regular SAP users can only change their own password.
     // Cloud admins and SAP admins may change any user's password.
     const callerSource = (caller as { source?: string }).source;
-    const isAdmin = callerSource === "cloud_admin" || callerSource === "sap_admin";
+    const callerId = (caller as { id?: string }).id || "";
+    const adminSvc = service();
+    let isAdmin = false;
+    // Cloud user: check has_role(admin)
+    if (!callerSource || callerSource === "cloud_user") {
+      if (callerId && !callerId.startsWith("sap:")) {
+        const { data: hasRole } = await adminSvc.rpc("has_role", { _user_id: callerId, _role: "admin" });
+        if (hasRole === true) isAdmin = true;
+      }
+    }
+    // SAP session: check SAP admin mapping or manager
+    if (!isAdmin && callerSource === "sap_session" && callerUserCode) {
+      if (callerUserCode.toLowerCase() === "manager") {
+        isAdmin = true;
+      } else {
+        const { data: isSapAdmin } = await adminSvc.rpc("is_sap_user_admin", {
+          _sap_username: callerUserCode.toLowerCase(),
+        });
+        if (isSapAdmin === true) isAdmin = true;
+      }
+    }
+    if (callerSource === "cloud_admin" || callerSource === "sap_admin") isAdmin = true;
+
     if (!isAdmin && callerUserCode && userCode.toLowerCase() !== callerUserCode.toLowerCase()) {
       return new Response(JSON.stringify({ error: "Só é permitido alterar a própria senha" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
