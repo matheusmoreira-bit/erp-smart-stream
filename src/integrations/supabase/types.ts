@@ -4728,6 +4728,10 @@ export type Database = {
     Functions: {
       _audit_canonicalize: { Args: { _data: Json }; Returns: string }
       _audit_row_pk: { Args: { _row: Json; _tbl: unknown }; Returns: Json }
+      _run_pagcorp_attachment_backfill: {
+        Args: { _body?: Json }
+        Returns: number
+      }
       active_officials_for_substitute: {
         Args: { _substitute_identifier: string }
         Returns: {

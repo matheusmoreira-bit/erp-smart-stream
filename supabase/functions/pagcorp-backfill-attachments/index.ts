@@ -132,11 +132,21 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  // Admin auth: aceita service role (backfill via ops) ou usuário Cloud com role admin.
+  // Admin auth: aceita JWT com role=service_role (backfill via ops) ou usuário Cloud com role admin.
   const authHeader = req.headers.get("authorization") || "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const isServiceRole = !!serviceKey && bearer === serviceKey;
+  let isServiceRole = false;
+  if (bearer) {
+    try {
+      const parts = bearer.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(
+          atob(parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(parts[1].length + (4 - parts[1].length % 4) % 4, "=")),
+        );
+        if (payload?.role === "service_role") isServiceRole = true;
+      }
+    } catch { /* ignore */ }
+  }
   if (!isServiceRole) {
     try {
       const u = await requireUser(req);
@@ -156,19 +166,30 @@ Deno.serve(async (req) => {
 
   let q = supabase
     .from("pagcorp_integration_log")
-    .select("id, company_db, sap_doc_entry, sap_payload, pagcorp_data, integration_type")
+    .select("id, company_db, sap_doc_entry, sap_payload, sap_response, pagcorp_data, integration_type")
     .not("sap_doc_entry", "is", null);
   if (companyDbFilter) q = q.eq("company_db", companyDbFilter);
   if (logIdsFilter?.length) q = q.in("id", logIdsFilter);
   const { data: rows, error: rowsErr } = await q.order("created_at", { ascending: false }).limit(limit);
   if (rowsErr) return json(500, { error: rowsErr.message });
 
-  // filter out rows already carrying AttachmentEntry
-  const targets = (rows || []).filter((r: any) => {
-    const p = r.sap_payload || {};
-    const nested = p.purchase_order || {};
-    return p.AttachmentEntry == null && nested.AttachmentEntry == null;
-  });
+  // Só ficam de fora as linhas em que o PurchaseOrder no SAP já reflete o vínculo
+  // (sap_response.purchase_order.AttachmentEntry populado).
+  function existingAttachment(r: any): number | null {
+    const resp = r.sap_response || {};
+    const po = resp.purchase_order || {};
+    // 1) attachment já vinculado no doc SAP (retornado pelo POST)
+    if (typeof po.AttachmentEntry === "number" && po.AttachmentEntry > 0) return null;
+    // 2) attachment já subido para SAP mas não vinculado ao doc → reutilizar
+    if (typeof resp.attachmentEntry === "number" && resp.attachmentEntry > 0) return resp.attachmentEntry;
+    return null;
+  }
+  function alreadyLinked(r: any): boolean {
+    const resp = r.sap_response || {};
+    const po = resp.purchase_order || {};
+    return typeof po.AttachmentEntry === "number" && po.AttachmentEntry > 0;
+  }
+  const targets = (rows || []).filter((r: any) => !alreadyLinked(r));
 
   // resolve endpoint per company_db (fallback PurchaseInvoices)
   const companies = Array.from(new Set(targets.map((r: any) => r.company_db)));
@@ -190,6 +211,7 @@ Deno.serve(async (req) => {
       candidates: targets.map((r: any) => ({
         id: r.id, company_db: r.company_db, sap_doc_entry: r.sap_doc_entry,
         endpoint: endpointByCompany[r.company_db] || "PurchaseInvoices",
+        existing_attachment_entry: existingAttachment(r),
         receipt_count: collectReceiptUrls(r.pagcorp_data?.receipts || []).length,
       })),
       total: targets.length,
@@ -213,31 +235,44 @@ Deno.serve(async (req) => {
     const endpoint = endpointByCompany[companyDb] || "PurchaseInvoices";
     for (const r of list) {
       try {
-        const receipts = r.pagcorp_data?.receipts || [];
-        const files = await downloadReceipts(receipts);
-        if (!files.length) {
-          results.push({ id: r.id, company_db: companyDb, sap_doc_entry: r.sap_doc_entry, ok: false, skipped: "sem recibos" });
-          continue;
+        let attachmentEntry: number | null = existingAttachment(r);
+        let filesCount = 0;
+        let source: "reused" | "uploaded" = "reused";
+        if (attachmentEntry == null) {
+          const receipts = r.pagcorp_data?.receipts || [];
+          const files = await downloadReceipts(receipts);
+          if (!files.length) {
+            results.push({ id: r.id, company_db: companyDb, sap_doc_entry: r.sap_doc_entry, ok: false, skipped: "sem recibos" });
+            continue;
+          }
+          filesCount = files.length;
+          attachmentEntry = await uploadAttachments(sap, files);
+          source = "uploaded";
         }
-        const attachmentEntry = await uploadAttachments(sap, files);
         if (attachmentEntry == null) throw new Error("Attachments2 sem AbsoluteEntry");
         await patchDocumentAttachment(sap, endpoint, Number(r.sap_doc_entry), attachmentEntry);
 
-        // update sap_payload to reflect the added AttachmentEntry
+        // update sap_payload/sap_response to reflect the added AttachmentEntry
         const patched = { ...(r.sap_payload || {}) };
         if (patched.purchase_order && typeof patched.purchase_order === "object") {
           patched.purchase_order = { ...patched.purchase_order, AttachmentEntry: attachmentEntry };
         }
         patched.AttachmentEntry = attachmentEntry;
         patched.attachment_backfilled_at = new Date().toISOString();
+        const patchedResp = { ...(r.sap_response || {}) };
+        if (patchedResp.purchase_order && typeof patchedResp.purchase_order === "object") {
+          patchedResp.purchase_order = { ...patchedResp.purchase_order, AttachmentEntry: attachmentEntry };
+        }
+        patchedResp.attachmentEntry = attachmentEntry;
+        patchedResp.attachment_backfilled_at = new Date().toISOString();
 
         await supabase.from("pagcorp_integration_log")
-          .update({ sap_payload: patched, updated_at: new Date().toISOString() })
+          .update({ sap_payload: patched, sap_response: patchedResp, updated_at: new Date().toISOString() })
           .eq("id", r.id);
 
         results.push({
           id: r.id, company_db: companyDb, sap_doc_entry: r.sap_doc_entry,
-          endpoint, attachment_entry: attachmentEntry, files: files.length, ok: true,
+          endpoint, attachment_entry: attachmentEntry, files: filesCount, source, ok: true,
         });
       } catch (e) {
         results.push({
