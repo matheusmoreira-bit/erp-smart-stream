@@ -1158,7 +1158,7 @@ function ApprovalDetailModal({
                 {/* Delegação disponível apenas para aprovações internas (Regra Interna).
                     Aprovações nativas do SAP não podem ser delegadas daqui porque a
                     decisão precisa ser enviada pelo próprio usuário SAP. */}
-                {isSuperUser && doc.approvalRequestId <= 0 && (
+                {canApprove && doc.approvalRequestId <= 0 && (
                   <Button
                     variant="outline"
                     onClick={() => onDelegate(doc)}
@@ -1169,7 +1169,7 @@ function ApprovalDetailModal({
                     Delegar
                   </Button>
                 )}
-                {isSuperUser && doc.approvalRequestId <= 0 && doc.delegatedFrom && (
+                {canApprove && doc.approvalRequestId <= 0 && doc.delegatedFrom && (
                   <Button
                     variant="outline"
                     onClick={() => onRevokeDelegation(doc)}
