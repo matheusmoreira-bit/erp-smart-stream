@@ -1103,10 +1103,10 @@ function ApprovalDetailModal({
                           if (!res.ok || !data?.signed_url) throw new Error(data?.error || "URL indisponível");
                           openViewer(att.file_name, data.signed_url as string);
                         } catch (e) {
-                          console.error("Erro ao abrir anexo:", e);
-                          toast.error("Não foi possível abrir o anexo");
-                          setViewer(null);
-                        }
+                           console.error("Erro ao abrir anexo:", e);
+                           toast.error(e instanceof Error ? e.message : "Não foi possível abrir o anexo");
+                           setViewer(null);
+                         }
                       }}
                       className="w-full text-left text-xs bg-muted/20 hover:bg-muted/40 px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
                       title="Visualizar anexo"
