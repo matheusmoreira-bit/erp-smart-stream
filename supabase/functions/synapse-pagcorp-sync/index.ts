@@ -861,6 +861,29 @@ Deno.serve(async (req) => {
           if (!line[0][key]) delete line[0][key];
         }
 
+        // ── Anexos: quando upload_receipts=true (default), anexa recibos
+        // ao PurchaseOrder. Se houver recibos e o upload falhar, aborta a
+        // integração — a regra é: com a flag ligada, nunca integrar sem anexo.
+        const uploadFlagRaw = integrationParams.upload_receipts;
+        const uploadReceiptsEnabled = uploadFlagRaw === undefined || uploadFlagRaw === null
+          ? true
+          : String(uploadFlagRaw).toLowerCase() === "true";
+        let attachmentEntry: number | null = null;
+        if (uploadReceiptsEnabled) {
+          const receipts = Array.isArray(expense.receipts) ? expense.receipts : [];
+          if (receipts.length > 0) {
+            const files = await downloadPagCorpReceipts(receipts);
+            if (files.length === 0) {
+              throw new Error("Nenhum recibo pôde ser baixado do PagCorp — integração abortada (upload_receipts=true).");
+            }
+            attachmentEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
+            if (!attachmentEntry) {
+              throw new Error("Falha ao anexar recibos no SAP — integração abortada (upload_receipts=true).");
+            }
+            sapPayload.AttachmentEntry = attachmentEntry;
+          }
+        }
+
         const sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
 
         // Log success
