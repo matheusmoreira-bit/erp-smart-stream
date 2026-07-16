@@ -12,3 +12,4 @@
 - [OMIE open modules](mem://features/omie-open-modules.md) — Temporary rule: OMIE companies must keep all modules unlocked for all users, without permission-level control.
 - [WhatsApp notifications](mem://features/whatsapp-notifications.md) — Cron-based WhatsApp pipes (login failures, pending approvals) with per-user phone book imported from SAP MobilePhone or manual.
 - [Integration base segregation](mem://features/integration-base-segregation.md) — Toda integração persiste e filtra por company_db do contexto SAP ativo, sem vazar entre bases.
+- [Sales module access](mem://features/sales-module-access.md) — Módulo Vendas restrito ao grupo Contas a Receber; fora dos DEFAULT_MODULES; guardas em Sales.tsx e BaixasHistory.tsx.
