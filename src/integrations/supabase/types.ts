@@ -1683,6 +1683,312 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_department_mapping: {
+        Row: {
+          created_at: string
+          id: string
+          integration_config_id: string
+          jumpcloud_department: string
+          sap_department_code: string | null
+          sap_department_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          integration_config_id: string
+          jumpcloud_department: string
+          sap_department_code?: string | null
+          sap_department_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          integration_config_id?: string
+          jumpcloud_department?: string
+          sap_department_code?: string | null
+          sap_department_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_department_mapping_integration_config_id_fkey"
+            columns: ["integration_config_id"]
+            isOneToOne: false
+            referencedRelation: "employee_integration_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_integration_config: {
+        Row: {
+          company_db: string
+          created_at: string
+          created_by: string | null
+          default_branch_code: string | null
+          default_department_code: string | null
+          id: string
+          is_active: boolean
+          jumpcloud_organization_id: string | null
+          last_execution_at: string | null
+          last_execution_message: string | null
+          last_execution_status: string | null
+          name: string
+          preferred_hour: number | null
+          schedule_type: string
+          sync_inactive_users: boolean
+          sync_managers: boolean
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          default_branch_code?: string | null
+          default_department_code?: string | null
+          id?: string
+          is_active?: boolean
+          jumpcloud_organization_id?: string | null
+          last_execution_at?: string | null
+          last_execution_message?: string | null
+          last_execution_status?: string | null
+          name: string
+          preferred_hour?: number | null
+          schedule_type?: string
+          sync_inactive_users?: boolean
+          sync_managers?: boolean
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          default_branch_code?: string | null
+          default_department_code?: string | null
+          id?: string
+          is_active?: boolean
+          jumpcloud_organization_id?: string | null
+          last_execution_at?: string | null
+          last_execution_message?: string | null
+          last_execution_status?: string | null
+          name?: string
+          preferred_hour?: number | null
+          schedule_type?: string
+          sync_inactive_users?: boolean
+          sync_managers?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      employee_pending_relation: {
+        Row: {
+          created_at: string
+          employee_jc_id: string
+          id: string
+          integration_config_id: string
+          last_attempt_at: string | null
+          manager_jc_id: string
+          message: string | null
+          resolved_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          employee_jc_id: string
+          id?: string
+          integration_config_id: string
+          last_attempt_at?: string | null
+          manager_jc_id: string
+          message?: string | null
+          resolved_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          employee_jc_id?: string
+          id?: string
+          integration_config_id?: string
+          last_attempt_at?: string | null
+          manager_jc_id?: string
+          message?: string | null
+          resolved_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_pending_relation_integration_config_id_fkey"
+            columns: ["integration_config_id"]
+            isOneToOne: false
+            referencedRelation: "employee_integration_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_sync_execution: {
+        Row: {
+          company_db: string
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          execution_type: string
+          finished_at: string | null
+          id: string
+          integration_config_id: string
+          started_at: string
+          status: string
+          total_created: number
+          total_errors: number
+          total_inactivated: number
+          total_matched: number
+          total_pending: number
+          total_source: number
+          total_unchanged: number
+          total_updated: number
+          triggered_by: string | null
+          triggered_by_email: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          execution_type: string
+          finished_at?: string | null
+          id?: string
+          integration_config_id: string
+          started_at?: string
+          status?: string
+          total_created?: number
+          total_errors?: number
+          total_inactivated?: number
+          total_matched?: number
+          total_pending?: number
+          total_source?: number
+          total_unchanged?: number
+          total_updated?: number
+          triggered_by?: string | null
+          triggered_by_email?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          execution_type?: string
+          finished_at?: string | null
+          id?: string
+          integration_config_id?: string
+          started_at?: string
+          status?: string
+          total_created?: number
+          total_errors?: number
+          total_inactivated?: number
+          total_matched?: number
+          total_pending?: number
+          total_source?: number
+          total_unchanged?: number
+          total_updated?: number
+          triggered_by?: string | null
+          triggered_by_email?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_sync_execution_integration_config_id_fkey"
+            columns: ["integration_config_id"]
+            isOneToOne: false
+            referencedRelation: "employee_integration_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_sync_item: {
+        Row: {
+          changed_fields: Json
+          company_db: string
+          created_at: string
+          department_source: string | null
+          department_target: string | null
+          employee_email: string | null
+          employee_name: string | null
+          error_code: string | null
+          execution_id: string
+          hash: string | null
+          id: string
+          integration_config_id: string
+          jumpcloud_user_id: string | null
+          manager_jc_id: string | null
+          message: string | null
+          normalized_payload: Json | null
+          result: string
+          sap_employee_id: number | null
+          sap_payload: Json | null
+          source_payload: Json | null
+        }
+        Insert: {
+          changed_fields?: Json
+          company_db: string
+          created_at?: string
+          department_source?: string | null
+          department_target?: string | null
+          employee_email?: string | null
+          employee_name?: string | null
+          error_code?: string | null
+          execution_id: string
+          hash?: string | null
+          id?: string
+          integration_config_id: string
+          jumpcloud_user_id?: string | null
+          manager_jc_id?: string | null
+          message?: string | null
+          normalized_payload?: Json | null
+          result: string
+          sap_employee_id?: number | null
+          sap_payload?: Json | null
+          source_payload?: Json | null
+        }
+        Update: {
+          changed_fields?: Json
+          company_db?: string
+          created_at?: string
+          department_source?: string | null
+          department_target?: string | null
+          employee_email?: string | null
+          employee_name?: string | null
+          error_code?: string | null
+          execution_id?: string
+          hash?: string | null
+          id?: string
+          integration_config_id?: string
+          jumpcloud_user_id?: string | null
+          manager_jc_id?: string | null
+          message?: string | null
+          normalized_payload?: Json | null
+          result?: string
+          sap_employee_id?: number | null
+          sap_payload?: Json | null
+          source_payload?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_sync_item_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "employee_sync_execution"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_sync_item_integration_config_id_fkey"
+            columns: ["integration_config_id"]
+            isOneToOne: false
+            referencedRelation: "employee_integration_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enabled_erp_types: {
         Row: {
           created_at: string
@@ -4753,6 +5059,10 @@ export type Database = {
         Args: { _company_db: string }
         Returns: boolean
       }
+      can_manage_employee_integration: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       check_applicable_approval_rules:
         | {
             Args: {
@@ -4866,6 +5176,10 @@ export type Database = {
           p_entity_type: string
         }
         Returns: undefined
+      }
+      is_employee_sync_company_allowed: {
+        Args: { _company_db: string }
+        Returns: boolean
       }
       is_sap_user_admin: { Args: { _sap_username: string }; Returns: boolean }
       list_baixas_by_invoice: {
