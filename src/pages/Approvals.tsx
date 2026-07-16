@@ -2630,10 +2630,8 @@ export default function ApprovalsPage() {
 
   const handleRevokeDelegation = async (doc: ApprovalDoc) => {
     if (!session) return;
-    if (!isSuperUser) {
-      toast.error("Apenas super-usuários podem revogar delegações.");
-      return;
-    }
+    // Qualquer aprovador do documento pode revogar a própria delegação.
+
     const internalId = (doc as unknown as { __internalId?: string }).__internalId;
     if (!internalId) {
       toast.error("Somente aprovações internas permitem revogar delegação.");
