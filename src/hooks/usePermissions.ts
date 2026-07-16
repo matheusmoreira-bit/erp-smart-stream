@@ -93,10 +93,12 @@ export const ALL_MODULES = [
 // Legacy alias
 export const SAP_MODULES = ALL_MODULES;
 
-/** Default modules granted when a user has no assignment. */
+/** Default modules granted when a user has no assignment.
+ * "sales" NÃO faz parte dos defaults — é restrito ao grupo "Contas a Receber"
+ * (ou admins/superuser). Somente usuários explicitamente atribuídos a um grupo
+ * que inclua o módulo "sales" enxergam Vendas. */
 const DEFAULT_MODULES = [
   "expenses",
-  "sales",
   "approvals",
   "approval_history",
   "suppliers",
