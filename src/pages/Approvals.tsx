@@ -1158,7 +1158,7 @@ function ApprovalDetailModal({
                 {/* Delegação disponível apenas para aprovações internas (Regra Interna).
                     Aprovações nativas do SAP não podem ser delegadas daqui porque a
                     decisão precisa ser enviada pelo próprio usuário SAP. */}
-                {isSuperUser && doc.approvalRequestId <= 0 && (
+                {canApprove && doc.approvalRequestId <= 0 && (
                   <Button
                     variant="outline"
                     onClick={() => onDelegate(doc)}
@@ -1169,7 +1169,7 @@ function ApprovalDetailModal({
                     Delegar
                   </Button>
                 )}
-                {isSuperUser && doc.approvalRequestId <= 0 && doc.delegatedFrom && (
+                {canApprove && doc.approvalRequestId <= 0 && doc.delegatedFrom && (
                   <Button
                     variant="outline"
                     onClick={() => onRevokeDelegation(doc)}
@@ -2572,10 +2572,8 @@ export default function ApprovalsPage() {
 
   const handleDelegate = async (params: { userInternalKey: number; userName: string; userEmail: string; reason: string }) => {
     if (!session || !delegationDoc) return;
-    if (!isSuperUser) {
-      toast.error("Apenas super-usuários podem delegar aprovações.");
-      return;
-    }
+    // Qualquer aprovador responsável pelo documento pode delegar.
+
     setIsDelegating(true);
     try {
       const internalId = (delegationDoc as unknown as { __internalId?: string }).__internalId;
@@ -2632,10 +2630,8 @@ export default function ApprovalsPage() {
 
   const handleRevokeDelegation = async (doc: ApprovalDoc) => {
     if (!session) return;
-    if (!isSuperUser) {
-      toast.error("Apenas super-usuários podem revogar delegações.");
-      return;
-    }
+    // Qualquer aprovador do documento pode revogar a própria delegação.
+
     const internalId = (doc as unknown as { __internalId?: string }).__internalId;
     if (!internalId) {
       toast.error("Somente aprovações internas permitem revogar delegação.");
