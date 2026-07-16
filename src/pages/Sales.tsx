@@ -17,7 +17,8 @@ import {
   Network,
 } from "lucide-react";
 import { SalesRelationsMap } from "@/components/SalesRelationsMap";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
