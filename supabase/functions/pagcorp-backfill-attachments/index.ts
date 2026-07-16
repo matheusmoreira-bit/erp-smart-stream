@@ -235,31 +235,44 @@ Deno.serve(async (req) => {
     const endpoint = endpointByCompany[companyDb] || "PurchaseInvoices";
     for (const r of list) {
       try {
-        const receipts = r.pagcorp_data?.receipts || [];
-        const files = await downloadReceipts(receipts);
-        if (!files.length) {
-          results.push({ id: r.id, company_db: companyDb, sap_doc_entry: r.sap_doc_entry, ok: false, skipped: "sem recibos" });
-          continue;
+        let attachmentEntry: number | null = existingAttachment(r);
+        let filesCount = 0;
+        let source: "reused" | "uploaded" = "reused";
+        if (attachmentEntry == null) {
+          const receipts = r.pagcorp_data?.receipts || [];
+          const files = await downloadReceipts(receipts);
+          if (!files.length) {
+            results.push({ id: r.id, company_db: companyDb, sap_doc_entry: r.sap_doc_entry, ok: false, skipped: "sem recibos" });
+            continue;
+          }
+          filesCount = files.length;
+          attachmentEntry = await uploadAttachments(sap, files);
+          source = "uploaded";
         }
-        const attachmentEntry = await uploadAttachments(sap, files);
         if (attachmentEntry == null) throw new Error("Attachments2 sem AbsoluteEntry");
         await patchDocumentAttachment(sap, endpoint, Number(r.sap_doc_entry), attachmentEntry);
 
-        // update sap_payload to reflect the added AttachmentEntry
+        // update sap_payload/sap_response to reflect the added AttachmentEntry
         const patched = { ...(r.sap_payload || {}) };
         if (patched.purchase_order && typeof patched.purchase_order === "object") {
           patched.purchase_order = { ...patched.purchase_order, AttachmentEntry: attachmentEntry };
         }
         patched.AttachmentEntry = attachmentEntry;
         patched.attachment_backfilled_at = new Date().toISOString();
+        const patchedResp = { ...(r.sap_response || {}) };
+        if (patchedResp.purchase_order && typeof patchedResp.purchase_order === "object") {
+          patchedResp.purchase_order = { ...patchedResp.purchase_order, AttachmentEntry: attachmentEntry };
+        }
+        patchedResp.attachmentEntry = attachmentEntry;
+        patchedResp.attachment_backfilled_at = new Date().toISOString();
 
         await supabase.from("pagcorp_integration_log")
-          .update({ sap_payload: patched, updated_at: new Date().toISOString() })
+          .update({ sap_payload: patched, sap_response: patchedResp, updated_at: new Date().toISOString() })
           .eq("id", r.id);
 
         results.push({
           id: r.id, company_db: companyDb, sap_doc_entry: r.sap_doc_entry,
-          endpoint, attachment_entry: attachmentEntry, files: files.length, ok: true,
+          endpoint, attachment_entry: attachmentEntry, files: filesCount, source, ok: true,
         });
       } catch (e) {
         results.push({
