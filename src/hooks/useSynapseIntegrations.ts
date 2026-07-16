@@ -120,6 +120,7 @@ export function useSynapseIntegrations(companyDB?: string) {
           default_currency: "",
           default_doc_rate: "",
           notification_email: "",
+          upload_receipts: "true",
         },
         company_db: companyDb,
       } as any);

@@ -396,6 +396,98 @@ async function postSapDocument(
   };
 }
 
+// ── Attachment helpers (mirror pagcorp-to-sap) ───────────────────────
+
+function extFromContentType(ct: string | null): string {
+  const c = (ct || "").toLowerCase().split(";")[0].trim();
+  const map: Record<string, string> = {
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png",
+    "image/gif": "gif", "image/webp": "webp",
+    "image/heic": "heic", "image/heif": "heif",
+    "application/xml": "xml", "text/xml": "xml",
+    "application/zip": "zip", "text/plain": "txt",
+  };
+  return map[c] || "";
+}
+function extFromUrl(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const m = path.match(/\.([a-zA-Z0-9]{2,5})$/);
+    return m ? m[1].toLowerCase() : "";
+  } catch {
+    const m = url.match(/\.([a-zA-Z0-9]{2,5})(?:\?|$)/);
+    return m ? m[1].toLowerCase() : "";
+  }
+}
+function ensureFilenameWithExt(rawName: string | undefined, fallbackIndex: number, url: string, contentType: string | null): string {
+  const base = (rawName || `recibo_${fallbackIndex}`).trim().replace(/[\r\n\t]/g, "").replace(/[\\/]+/g, "_");
+  const hasExt = /\.[a-zA-Z0-9]{2,5}$/.test(base);
+  if (hasExt) return base;
+  const ext = extFromUrl(url) || extFromContentType(contentType) || "pdf";
+  return `${base}.${ext}`;
+}
+function collectReceiptUrls(receipts: any[]): { url: string; name?: string }[] {
+  const out: { url: string; name?: string }[] = [];
+  const seen = new Set<string>();
+  const push = (url: unknown, name?: unknown) => {
+    if (typeof url !== "string" || !url) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    out.push({ url, name: typeof name === "string" ? name : undefined });
+  };
+  for (const r of receipts || []) {
+    if (!r) continue;
+    if (Array.isArray(r.files)) {
+      for (const f of r.files) {
+        if (typeof f === "string") push(f);
+        else if (f && typeof f === "object") push(f.url || f.fileUrl || f.link, f.fileName || f.name);
+      }
+    }
+    push(r.url || r.fileUrl || r.link || r.downloadUrl || r.receiptUrl || r.imageUrl || r?.file?.url, r.fileName || r.name);
+  }
+  return out;
+}
+async function downloadPagCorpReceipts(receipts: any[]): Promise<{ name: string; blob: Blob }[]> {
+  const files: { name: string; blob: Blob }[] = [];
+  const sources = collectReceiptUrls(receipts);
+  for (const src of sources) {
+    try {
+      const res = await fetch(src.url);
+      if (!res.ok) {
+        console.warn(`[synapse-pagcorp] falha ao baixar recibo ${src.url}: HTTP ${res.status}`);
+        continue;
+      }
+      const blob = await res.blob();
+      const name = ensureFilenameWithExt(src.name, files.length + 1, src.url, res.headers.get("content-type"));
+      files.push({ name, blob });
+    } catch (e) {
+      console.warn(`[synapse-pagcorp] erro baixando recibo ${src.url}:`, e);
+    }
+  }
+  return files;
+}
+async function uploadAttachmentsToSap(
+  sapBaseUrl: string,
+  cookies: string,
+  files: { name: string; blob: Blob }[],
+): Promise<number | null> {
+  if (files.length === 0) return null;
+  const form = new FormData();
+  for (const f of files) form.append("files", f.blob, f.name);
+  const res = await fetch(`${sapBaseUrl}/Attachments2`, {
+    method: "POST",
+    headers: { Cookie: cookies },
+    body: form,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.error?.message?.value || JSON.stringify(body);
+    throw new Error(`SAP Attachments2 falhou [${res.status}]: ${msg}`);
+  }
+  return body.AbsoluteEntry ?? null;
+}
+
 // ── SAP validation helpers ───────────────────────────────────────────
 
 async function sapEntityExists(sapBaseUrl: string, cookies: string, entity: string, code: string): Promise<boolean> {
@@ -767,6 +859,29 @@ Deno.serve(async (req) => {
         const line = sapPayload.DocumentLines as any[];
         for (const key of Object.keys(line[0])) {
           if (!line[0][key]) delete line[0][key];
+        }
+
+        // ── Anexos: quando upload_receipts=true (default), anexa recibos
+        // ao PurchaseOrder. Se houver recibos e o upload falhar, aborta a
+        // integração — a regra é: com a flag ligada, nunca integrar sem anexo.
+        const uploadFlagRaw = integrationParams.upload_receipts;
+        const uploadReceiptsEnabled = uploadFlagRaw === undefined || uploadFlagRaw === null
+          ? true
+          : String(uploadFlagRaw).toLowerCase() === "true";
+        let attachmentEntry: number | null = null;
+        if (uploadReceiptsEnabled) {
+          const receipts = Array.isArray(expense.receipts) ? expense.receipts : [];
+          if (receipts.length > 0) {
+            const files = await downloadPagCorpReceipts(receipts);
+            if (files.length === 0) {
+              throw new Error("Nenhum recibo pôde ser baixado do PagCorp — integração abortada (upload_receipts=true).");
+            }
+            attachmentEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
+            if (!attachmentEntry) {
+              throw new Error("Falha ao anexar recibos no SAP — integração abortada (upload_receipts=true).");
+            }
+            sapPayload.AttachmentEntry = attachmentEntry;
+          }
         }
 
         const sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
