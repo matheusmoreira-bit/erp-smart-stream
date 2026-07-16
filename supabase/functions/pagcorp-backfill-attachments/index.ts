@@ -132,14 +132,20 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  // Admin auth (Cloud user with 'admin' role)
-  try {
-    const u = await requireUser(req);
-    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: u.id, _role: "admin" });
-    if (!isAdmin) return json(403, { error: "admin required" });
-  } catch (e) {
-    if (e instanceof AuthError) return json(e.status, { error: e.message });
-    return json(500, { error: e instanceof Error ? e.message : String(e) });
+  // Admin auth: aceita service role (backfill via ops) ou usuário Cloud com role admin.
+  const authHeader = req.headers.get("authorization") || "";
+  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const isServiceRole = !!serviceKey && bearer === serviceKey;
+  if (!isServiceRole) {
+    try {
+      const u = await requireUser(req);
+      const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: u.id, _role: "admin" });
+      if (!isAdmin) return json(403, { error: "admin required" });
+    } catch (e) {
+      if (e instanceof AuthError) return json(e.status, { error: e.message });
+      return json(500, { error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   const body = await req.json().catch(() => ({}));
