@@ -298,7 +298,7 @@ export function normalizeJumpCloud(u: JumpCloudUser): NormalizedEmployee {
     firstName: s(u.firstname),
     middleName: s(u.middlename),
     lastName: s(u.lastname),
-    displayName: s(u.displayname) ?? [s(u.firstname), s(u.lastname)].filter(Boolean).join(" ") || null,
+    displayName: s(u.displayname) ?? ([s(u.firstname), s(u.lastname)].filter(Boolean).join(" ") || null),
     email,
     jobTitle: s(u.jobTitle),
     departmentName: s(u.department),
