@@ -108,6 +108,7 @@ export default function SalesPage() {
   const { session, logout } = useSap();
   const navigate = useNavigate();
   const { getLabel } = useCompanies();
+  const { hasAccess: canAccessSales, loading: permLoading } = useModuleAccess("sales");
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [erroMsg, setErroMsg] = useState<string | null>(null);
