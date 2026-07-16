@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+import { useModuleAccess } from "@/hooks/usePermissions";
 import {
   RefreshCw,
   Loader2,
@@ -111,6 +112,29 @@ function StatusBadge({ status }: { status: string }) {
 /* ─────────────────────────── Page ─────────────────────────── */
 
 export default function BaixasHistoryPage() {
+  const { session } = useSap();
+  const { hasAccess, loading: permLoading } = useModuleAccess("sales");
+  if (!session) return <Navigate to="/" replace />;
+  if (permLoading) return null;
+  if (!hasAccess) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="text-center">
+          <p className="text-lg font-semibold text-foreground">Sem acesso ao módulo Vendas</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Este módulo é restrito ao time de Contas a Receber. Solicite ao administrador o módulo <code>sales</code>.
+          </p>
+          <Link to="/" className="mt-4 inline-block text-sm text-primary hover:underline">
+            Voltar ao menu
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return <BaixasHistoryInner />;
+}
+
+function BaixasHistoryInner() {
   const { session } = useSap();
   const companyDb = session?.companyDB || null;
   const isSap = session?.erpType === "sap";
