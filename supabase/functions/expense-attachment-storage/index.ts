@@ -51,11 +51,23 @@ function emailPrefix(v: string): string {
   const i = s.indexOf("@");
   return i > 0 ? s.slice(0, i) : s;
 }
+// Canonicalize identifiers so "leonardo.rossini", "Leonardo Rossini" and
+// "leonardo_rossini" all match. Strips accents and non-alphanumerics.
+function canonicalId(v: unknown): string {
+  return emailPrefix(String(v ?? ""))
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
 function callerMatches(caller: string, candidate: unknown): boolean {
   const c = normalize(caller);
   const v = normalize(candidate);
   if (!c || !v) return false;
-  return c === v || emailPrefix(c) === emailPrefix(v);
+  if (c === v || emailPrefix(c) === emailPrefix(v)) return true;
+  const cc = canonicalId(c);
+  const vc = canonicalId(v);
+  return !!cc && !!vc && cc === vc;
 }
 
 interface Caller {
