@@ -113,6 +113,83 @@ export function SapLoginForm() {
     loadCompanies();
   }, [loadCompanies]);
 
+  // Post Google redirect: if there's a pending OMIE company + a Supabase session,
+  // verify access via user_group_assignments and complete the ERP login.
+  useEffect(() => {
+    if (postRedirectHandledRef.current) return;
+    const pending = sessionStorage.getItem(OMIE_PENDING_KEY);
+    if (!pending) return;
+    postRedirectHandledRef.current = true;
+
+    (async () => {
+      setGoogleLoading(true);
+      try {
+        // Wait briefly for the Lovable auth wrapper to hydrate the session after redirect.
+        let authSession = (await supabase.auth.getSession()).data.session;
+        for (let i = 0; !authSession && i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 150));
+          authSession = (await supabase.auth.getSession()).data.session;
+        }
+        const email = authSession?.user?.email || "";
+        if (!email) {
+          toast.error("Não foi possível obter o e-mail do Google");
+          sessionStorage.removeItem(OMIE_PENDING_KEY);
+          return;
+        }
+
+        const allowed = await isEmailAllowedForOmieCompany(email, pending);
+        if (!allowed) {
+          toast.error("Acesso não liberado", {
+            description: `Sua conta ${email} não está autorizada para esta empresa OMIE. Contate o administrador.`,
+          });
+          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          sessionStorage.removeItem(OMIE_PENDING_KEY);
+          return;
+        }
+
+        await login(email, "", pending, "omie");
+        sessionStorage.removeItem(OMIE_PENDING_KEY);
+        toast.success("Conectado ao OMIE!");
+      } catch (err) {
+        toast.error("Falha ao completar login OMIE", {
+          description: err instanceof Error ? err.message : String(err),
+        });
+        sessionStorage.removeItem(OMIE_PENDING_KEY);
+      } finally {
+        setGoogleLoading(false);
+      }
+    })();
+  }, [login]);
+
+  const handleOmieGoogle = async () => {
+    if (!companyDB) {
+      toast.error("Selecione a empresa");
+      return;
+    }
+    try {
+      setGoogleLoading(true);
+      sessionStorage.setItem(OMIE_PENDING_KEY, companyDB);
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) {
+        sessionStorage.removeItem(OMIE_PENDING_KEY);
+        toast.error("Falha no login com Google", {
+          description: result.error instanceof Error ? result.error.message : String(result.error),
+        });
+        setGoogleLoading(false);
+      }
+      // If redirected: browser will navigate away; effect above completes the flow on return.
+    } catch (err) {
+      sessionStorage.removeItem(OMIE_PENDING_KEY);
+      setGoogleLoading(false);
+      toast.error("Falha no login com Google", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyDB) {
