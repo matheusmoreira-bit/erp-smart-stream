@@ -82,8 +82,16 @@ function emailPrefix(email: string): string {
   const i = e.indexOf("@");
   return i > 0 ? e.slice(0, i) : e;
 }
+function stripDiacritics(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 function tokenize(s: string): string[] {
-  return normalize(s).replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
+  // Drop email domain so tokens like "cactusgaming"/"net" don't pollute the match.
+  const noDomain = normalize(s).replace(/@[^\s]*/g, " ");
+  return stripDiacritics(noDomain)
+    .replace(/[._\-]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
 }
 
 /**
