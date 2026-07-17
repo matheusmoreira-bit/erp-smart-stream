@@ -1245,6 +1245,7 @@ export type Database = {
         Row: {
           empresa_id: string
           janela_dias: number
+          source_company_dbs: string[]
           tolerancia_valor_abs: number
           tolerancia_valor_pct: number
           updated_at: string
@@ -1254,6 +1255,7 @@ export type Database = {
         Insert: {
           empresa_id: string
           janela_dias?: number
+          source_company_dbs?: string[]
           tolerancia_valor_abs?: number
           tolerancia_valor_pct?: number
           updated_at?: string
@@ -1263,6 +1265,7 @@ export type Database = {
         Update: {
           empresa_id?: string
           janela_dias?: number
+          source_company_dbs?: string[]
           tolerancia_valor_abs?: number
           tolerancia_valor_pct?: number
           updated_at?: string
