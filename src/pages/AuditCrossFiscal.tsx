@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, PlayCircle, ExternalLink, Download } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Loader2, PlayCircle, Download, Search, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useSap } from "@/contexts/SapContext";
-import { useAuditCrossFiscal, type CenarioCruzamento, type CruzamentoRow } from "@/hooks/useAuditCrossFiscal";
+import { useAuditCrossFiscal, type CenarioCruzamento, type CruzamentoRow, type StatusMatch } from "@/hooks/useAuditCrossFiscal";
+import { KanbanColumn } from "@/components/audit-cross/KanbanColumn";
+import { CruzamentoCard } from "@/components/audit-cross/CruzamentoCard";
+import { CruzamentoDetailDrawer } from "@/components/audit-cross/CruzamentoDetailDrawer";
 
 const CENARIO_LABEL: Record<CenarioCruzamento, string> = {
   pago_sem_nota: "Pago sem nota",
@@ -17,22 +17,12 @@ const CENARIO_LABEL: Record<CenarioCruzamento, string> = {
   conciliado: "Conciliado",
 };
 
-const CENARIO_VARIANT: Record<CenarioCruzamento, "destructive" | "secondary" | "default"> = {
-  pago_sem_nota: "destructive",
-  nota_sem_pagamento: "secondary",
-  conciliado: "default",
+const STATUS_LABEL: Record<StatusMatch, string> = {
+  automatico: "Automático",
+  ambiguo: "Ambíguo",
+  confirmado_manual: "Confirmado",
+  ignorado: "Ignorado",
 };
-
-const ERP_LABEL: Record<string, string> = { omie: "Omie", sap_b1: "SAP B1", sap: "SAP B1" };
-
-function money(v: number | null | undefined) {
-  if (v == null) return "—";
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-function fmtDate(v: string | null | undefined) {
-  if (!v) return "—";
-  return new Date(v).toLocaleDateString("pt-BR");
-}
 
 function toCsv(rows: CruzamentoRow[]): string {
   const head = [
@@ -41,7 +31,7 @@ function toCsv(rows: CruzamentoRow[]): string {
     "Status", "Observação",
   ];
   const body = rows.map((r) => [
-    CENARIO_LABEL[r.cenario], ERP_LABEL[r.erp_origem || ""] || r.erp_origem || "",
+    CENARIO_LABEL[r.cenario], r.erp_origem || "",
     r.cnpj_fornecedor, r.razao_social_fornecedor ?? "",
     r.nota_numero ?? "", r.nota_valor ?? "", r.nota_data_emissao ?? "",
     r.conta_paga_id_externo ?? "", r.conta_paga_valor ?? "", r.conta_paga_data_baixa ?? "",
@@ -72,26 +62,47 @@ export default function AuditCrossFiscal() {
 
   const [inicio, setInicio] = useState<string>(firstOfMonth);
   const [fim, setFim] = useState<string>(lastOfMonth);
-  const [aba, setAba] = useState<CenarioCruzamento>("conciliado");
   const [running, setRunning] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusMatch | "all">("all");
+  const [detailRow, setDetailRow] = useState<CruzamentoRow | null>(null);
 
-  const { rows, loading, error, refresh, runCross, updateRow } = useAuditCrossFiscal({
+  const { rows, loading, refresh, runCross, updateRow } = useAuditCrossFiscal({
     empresa_id: empresaId || undefined,
     erp_origem: erp || undefined,
     periodo_inicio: inicio || undefined,
     periodo_fim: fim || undefined,
   });
 
-  const stats = useMemo(() => {
-    const s = { conciliado: { n: 0, total: 0 }, pago_sem_nota: { n: 0, total: 0 }, nota_sem_pagamento: { n: 0, total: 0 } };
-    for (const r of rows) {
-      s[r.cenario].n += 1;
-      s[r.cenario].total += Number(r.conta_paga_valor ?? r.nota_valor ?? 0);
-    }
-    return s;
-  }, [rows]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (statusFilter !== "all" && r.status_match !== statusFilter) return false;
+      if (!q) return true;
+      return (
+        (r.cnpj_fornecedor || "").toLowerCase().includes(q) ||
+        (r.razao_social_fornecedor || "").toLowerCase().includes(q) ||
+        (r.nota_numero || "").toLowerCase().includes(q) ||
+        (r.conta_paga_id_externo || "").toLowerCase().includes(q)
+      );
+    });
+  }, [rows, search, statusFilter]);
 
-  const rowsAba = useMemo(() => rows.filter((r) => r.cenario === aba), [rows, aba]);
+  const grouped = useMemo(() => {
+    const g: Record<CenarioCruzamento, CruzamentoRow[]> = {
+      pago_sem_nota: [], conciliado: [], nota_sem_pagamento: [],
+    };
+    for (const r of filtered) g[r.cenario].push(r);
+    return g;
+  }, [filtered]);
+
+  const totals = useMemo(() => {
+    const t = { pago_sem_nota: 0, conciliado: 0, nota_sem_pagamento: 0 } as Record<CenarioCruzamento, number>;
+    for (const r of filtered) {
+      t[r.cenario] += Number(r.conta_paga_valor ?? r.nota_valor ?? 0);
+    }
+    return t;
+  }, [filtered]);
 
   async function handleRun() {
     if (!empresaId) return toast({ title: "Empresa logada não identificada", variant: "destructive" });
@@ -110,155 +121,155 @@ export default function AuditCrossFiscal() {
   }
 
   function handleExport() {
-    const csv = toCsv(rowsAba);
+    const csv = toCsv(filtered);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `cruzamento_${aba}_${inicio}_${fim}.csv`;
+    a.download = `cruzamento_${inicio}_${fim}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
+  async function handleConfirm(row: CruzamentoRow) {
+    try {
+      await updateRow(row.id, { status_match: "confirmado_manual" });
+      toast({ title: "Match confirmado" });
+    } catch (e) {
+      toast({ title: "Falha ao confirmar", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  async function handleIgnore(row: CruzamentoRow) {
+    try {
+      await updateRow(row.id, { status_match: "ignorado" });
+      toast({ title: "Registro ignorado" });
+    } catch (e) {
+      toast({ title: "Falha ao ignorar", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4">
       <div>
         <h2 className="text-xl font-bold">Cruzamento Fiscal × Pagamentos</h2>
         <p className="text-sm text-muted-foreground">
-          Compara notas capturadas pelo MasterTax com contas pagas no ERP da empresa logada.
+          Kanban com 3 raias: pagamentos no ERP, conciliados com MasterTax, notas sem pagamento localizado.
         </p>
       </div>
 
-      {/* Filtros */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-        <div>
-          <Label>Empresa (logada)</Label>
+      {/* Filtros de período */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+        <div className="col-span-2">
+          <Label className="text-xs">Empresa</Label>
           <Input value={loggedCompany?.display_name || loggedCompanyDb || "—"} readOnly disabled />
         </div>
         <div>
-          <Label>ERP</Label>
+          <Label className="text-xs">ERP</Label>
           <Input value={erp ? erp.toUpperCase() : "—"} readOnly disabled />
         </div>
         <div>
-          <Label>Início</Label>
+          <Label className="text-xs">Início</Label>
           <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
         </div>
         <div>
-          <Label>Fim</Label>
+          <Label className="text-xs">Fim</Label>
           <Input type="date" value={fim} onChange={(e) => setFim(e.target.value)} />
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleRun} disabled={running || !empresaId}>
+          <Button onClick={handleRun} disabled={running || !empresaId} className="flex-1">
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-            Executar cruzamento
+            <span className="ml-1 hidden sm:inline">Executar</span>
           </Button>
-          <Button variant="outline" onClick={refresh}>Atualizar</Button>
+          <Button variant="outline" size="icon" onClick={refresh} aria-label="Atualizar">
+            <RefreshCw className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
       {!empresaId && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-600 text-sm px-3 py-2">
-          Não foi possível identificar a empresa da sessão atual ({loggedCompanyDb || "sem companyDB"}). Faça login novamente na empresa desejada.
+          Não foi possível identificar a empresa da sessão atual ({loggedCompanyDb || "sem companyDB"}).
         </div>
       )}
 
-      {/* Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {(Object.keys(CENARIO_LABEL) as CenarioCruzamento[]).map((k) => (
-          <button
-            key={k}
-            onClick={() => setAba(k)}
-            className={`text-left rounded-md border p-4 hover:bg-muted/40 ${aba === k ? "border-primary" : "border-border"}`}
-          >
-            <div className="text-xs uppercase text-muted-foreground">{CENARIO_LABEL[k]}</div>
-            <div className="text-2xl font-bold tabular-nums">{stats[k].n}</div>
-            <div className="text-xs text-muted-foreground tabular-nums">{money(stats[k].total)}</div>
-          </button>
-        ))}
-      </div>
-
-      <Tabs value={aba} onValueChange={(v) => setAba(v as CenarioCruzamento)}>
-        <div className="flex items-center justify-between">
-          <TabsList>
-            {(Object.keys(CENARIO_LABEL) as CenarioCruzamento[]).map((k) => (
-              <TabsTrigger key={k} value={k}>{CENARIO_LABEL[k]}</TabsTrigger>
-            ))}
-          </TabsList>
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={rowsAba.length === 0}>
-            <Download className="w-4 h-4" /> Exportar CSV
+      {/* Busca e filtros de status */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por CNPJ, fornecedor, NF ou ID no ERP..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          {(["all", "automatico", "ambiguo", "confirmado_manual", "ignorado"] as const).map((s) => (
+            <Button
+              key={s}
+              size="sm"
+              variant={statusFilter === s ? "default" : "outline"}
+              onClick={() => setStatusFilter(s)}
+              className="h-7 text-xs"
+            >
+              {s === "all" ? "Todos" : STATUS_LABEL[s]}
+            </Button>
+          ))}
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={filtered.length === 0} className="h-7">
+            <Download className="w-3 h-3 mr-1" /> CSV
           </Button>
         </div>
+      </div>
 
-        {(Object.keys(CENARIO_LABEL) as CenarioCruzamento[]).map((k) => (
-          <TabsContent key={k} value={k} className="mt-4">
-            <div className="rounded-md border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fornecedor</TableHead>
-                    <TableHead>CNPJ</TableHead>
-                    <TableHead>NF</TableHead>
-                    <TableHead className="text-right">Valor NF</TableHead>
-                    <TableHead className="text-right">Valor pago</TableHead>
-                    <TableHead className="text-right">Δ R$</TableHead>
-                    <TableHead className="text-right">Δ dias</TableHead>
-                    <TableHead>ERP</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading && (
-                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
-                  )}
-                  {!loading && rowsAba.length === 0 && (
-                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                      Nenhum registro. Execute o cruzamento para gerar dados.
-                    </TableCell></TableRow>
-                  )}
-                  {rowsAba.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="max-w-[260px] truncate">{r.razao_social_fornecedor || "—"}</TableCell>
-                      <TableCell className="font-mono text-xs">{r.cnpj_fornecedor}</TableCell>
-                      <TableCell className="font-mono text-xs">{r.nota_numero || "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{money(r.nota_valor)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{money(r.conta_paga_valor)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.diferenca_valor != null ? money(r.diferenca_valor) : "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.diferenca_dias ?? "—"}</TableCell>
-                      <TableCell>
-                        {r.erp_origem
-                          ? <Badge variant="outline">{ERP_LABEL[r.erp_origem] || r.erp_origem}</Badge>
-                          : <span className="text-muted-foreground text-xs">—</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={r.status_match === "ambiguo" ? "destructive" : "secondary"}>
-                          {r.status_match}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {r.conta_paga_link_origem && (
-                          <a href={r.conta_paga_link_origem} target="_blank" rel="noreferrer"
-                             className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                            <ExternalLink className="w-3 h-3" /> ERP
-                          </a>
-                        )}
-                        {r.status_match === "ambiguo" && (
-                          <Button
-                            variant="ghost" size="sm"
-                            onClick={() => updateRow(r.id, { status_match: "confirmado_manual" })}
-                          >
-                            Confirmar
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+      {/* Kanban */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <KanbanColumn
+          title="ERP"
+          subtitle="Pagamentos sem nota localizada"
+          accent="destructive"
+          count={grouped.pago_sem_nota.length}
+          total={totals.pago_sem_nota}
+          emptyLabel={loading ? "Carregando…" : "Nenhum pagamento órfão no período."}
+        >
+          {grouped.pago_sem_nota.map((r) => (
+            <CruzamentoCard key={r.id} row={r} onOpen={setDetailRow} onConfirm={handleConfirm} onIgnore={handleIgnore} />
+          ))}
+        </KanbanColumn>
+
+        <KanbanColumn
+          title="AMBOS"
+          subtitle="Nota conciliada com pagamento"
+          accent="success"
+          count={grouped.conciliado.length}
+          total={totals.conciliado}
+          emptyLabel={loading ? "Carregando…" : "Nenhuma conciliação neste período. Execute o cruzamento."}
+        >
+          {grouped.conciliado.map((r) => (
+            <CruzamentoCard key={r.id} row={r} onOpen={setDetailRow} onConfirm={handleConfirm} onIgnore={handleIgnore} />
+          ))}
+        </KanbanColumn>
+
+        <KanbanColumn
+          title="MasterTax"
+          subtitle="Notas sem pagamento localizado"
+          accent="warning"
+          count={grouped.nota_sem_pagamento.length}
+          total={totals.nota_sem_pagamento}
+          emptyLabel={loading ? "Carregando…" : "Nenhuma nota órfã no período."}
+        >
+          {grouped.nota_sem_pagamento.map((r) => (
+            <CruzamentoCard key={r.id} row={r} onOpen={setDetailRow} onConfirm={handleConfirm} onIgnore={handleIgnore} />
+          ))}
+        </KanbanColumn>
+      </div>
+
+      <CruzamentoDetailDrawer
+        row={detailRow}
+        open={!!detailRow}
+        onOpenChange={(v) => !v && setDetailRow(null)}
+        onConfirm={handleConfirm}
+        onIgnore={handleIgnore}
+      />
     </div>
   );
 }
