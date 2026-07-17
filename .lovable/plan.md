@@ -1,37 +1,65 @@
-## Contexto
+## Objetivo
 
-Identifiquei 4 despesas na **open_gaming_sa** exatamente na situação descrita:
+Substituir a visualização atual da página `AuditCrossFiscal` (tabela + tabs) por um Kanban de 3 raias, onde cada card é um documento/pagamento e a raia representa o status da conciliação.
 
-| ID | Solicitante | Valor | Status | Aprovador atual |
-|---|---|---|---|---|
-| 70b7e8bf… | samuel.ramos | R$ 75.000,00 | pendente_aprovacao (nível 2) | Lucas Pereira |
-| c15261ea… | samuel.ramos | R$ 96.564,57 | pendente_aprovacao (nível 2) | Lucas Pereira |
-| 52471da7… | samuel.ramos | R$ 26.353,46 | pendente_aprovacao (nível 2) | Lucas Pereira |
-| 933f62f6… | samuel.ramos | R$ 25.354,33 | pendente_aprovacao (nível 2) | Lucas Pereira |
+## Raias
 
-Todas têm `expense_approval_log.approved` pelo **leonardo.rossini** no nível 1. Foram reatribuídas na correção anterior das regras `DONALD` → `DONALD BET` (regra `ab0e3565…` — nível 1 Leonardo, nível 2 Lucas). Antes da reatribuição, elas rodavam na regra genérica `1.8.% 0-300k` (nível único = Leonardo), então a aprovação do Leonardo já era a aprovação final para o solicitante.
+```text
+┌─────────────────────┬─────────────────────┬─────────────────────┐
+│  ERP (só pago)      │  AMBOS (conciliado) │  MasterTax (só NF)  │
+│  cenario =          │  cenario =          │  cenario =          │
+│  pago_sem_nota      │  conciliado         │  nota_sem_pagamento │
+├─────────────────────┼─────────────────────┼─────────────────────┤
+│ [Card pagamento]    │ [Card NF ↔ pagto]   │ [Card NF]           │
+│ Fornecedor          │ Fornecedor          │ Fornecedor          │
+│ CNPJ                │ CNPJ                │ CNPJ                │
+│ Valor pago          │ NF nº · valor       │ NF nº · valor       │
+│ Data baixa          │ Pagto · data · valor│ Data emissão        │
+│ Forma pagto         │ Δ R$ · Δ dias       │ Chave acesso        │
+│ [→ ERP]             │ score · status      │                     │
+│                     │ [→ ERP]             │                     │
+└─────────────────────┴─────────────────────┴─────────────────────┘
+```
 
-Nenhuma foi integrada ao SAP ainda (`sap_doc_entry = null`).
+- Contadores no topo de cada raia: quantidade + soma R$.
+- Filtros mantidos: empresa (sessão), período início/fim, botão **Executar cruzamento** e **Atualizar**.
+- Busca por CNPJ/fornecedor/nº NF acima das raias.
+- Filtro por status_match (automatico / ambiguo / confirmado_manual / ignorado) com chips.
 
-## Plano
+## Card
 
-1. **Marcar como aprovadas** as 4 despesas via UPDATE direto:
-   - `status = 'aprovado'`
-   - `current_approver = NULL`, `current_level_order = NULL`
-   - `updated_at = now()`
-2. **Registrar em `expense_approval_log`** um evento `approved` de sistema por documento (nível 2), com remarks explicando que a aprovação do Leonardo no nível 1 (regra genérica anterior) já era terminal e o nível do Lucas foi retroativamente considerado aprovado após a correção das regras.
-3. **Registrar em `audit_log`** um `retroactive_approval` por documento com o motivo, atores e valores originais para rastreabilidade.
-4. **Disparar integração ao SAP** para cada uma via `expense-to-sap` (mesma edge function usada pelo retry automático, com `use_service_account: true`). O `expense-integration-retry` já roda a cada 10 min como rede de segurança em caso de falha transitória — mas vamos chamar agora para acelerar.
-5. **Buscar por outros documentos na mesma situação** antes de fechar: rodar a mesma query global (não só open_gaming_sa) filtrando `pendente_aprovacao` com `approved by leonardo.rossini` no histórico e `current_approver` diferente de Leonardo, para garantir que não fica ninguém para trás. Aplicar o mesmo tratamento se encontrar.
+- Componente reutilizável `CruzamentoCard` com 3 variantes visuais (por raia).
+- Cor de borda por raia: destrutivo (ERP), sucesso (AMBOS), aviso (MasterTax).
+- Ações no card (menu ⋯):
+  - Abrir origem no ERP (quando `conta_paga_link_origem` existe).
+  - Confirmar (para status `ambiguo`).
+  - Ignorar (marca `status_match = ignorado`).
+  - Ver detalhes (drawer lateral com JSON completo, candidatos ambíguos, diferenças).
+- Badge de `status_match` no rodapé.
+- Scroll vertical dentro da raia; raias ocupam altura da viewport (`h-[calc(100vh-...)]`).
 
-## Detalhes técnicos
+## Interações
 
-- Uso direto de `supabase--insert` (SQL) para os passos 1–3, dentro de uma única transação lógica por documento.
-- Chamada de `expense-to-sap` via `supabase--curl_edge_functions` com `Authorization: Bearer <service_role>` — mas como não temos a service key exposta ao agente, usar a rota interna: fazer um POST simulado apenas atualizando `sap_integration_last_attempt_at = null` e deixar o cron `expense-integration-retry` (a cada 10 min) pegar. **Alternativa preferida**: chamar `supabase--curl_edge_functions` com `path: /expense-to-sap` e `body: { expense_id, use_service_account: true }` — a função aceita esse modo quando invocada com credencial interna. Se falhar por auth, cai no cron.
-- Nenhuma alteração de código-fonte é necessária — é uma correção de dados.
+- Clique no card → abre `Drawer` (shadcn `sheet`) com todos os campos e o histórico da linha.
+- Botão **Exportar CSV** aplicado à raia visível ou ao conjunto filtrado (mantém a lógica existente em `toCsv`).
+- Empty state por raia com CTA para "Executar cruzamento" quando não há dados.
 
-## Riscos e mitigação
+## Escopo técnico
 
-- **Duplicidade no SAP**: mitigada pelo próprio `expense-to-sap` que só integra quando `sap_doc_entry IS NULL`.
-- **Aprovação incorreta se a regra atual REALMENTE deveria exigir Lucas**: mitigada porque o usuário (Leonardo) confirma que essas eram terminais na regra anterior; registro em audit_log preserva evidência para reversão.
-- **Documentos originados no ERP**: mitigado — todos os 4 são `origin: manual`.
+Alterações apenas em frontend — motor (`audit-cross-fiscal-run`), hook (`useAuditCrossFiscal`) e schema permanecem inalterados.
+
+**Arquivos**:
+- `src/pages/AuditCrossFiscal.tsx` — troca layout de Tabs/Table por Kanban de 3 colunas.
+- `src/components/audit-cross/CruzamentoCard.tsx` (novo) — card individual.
+- `src/components/audit-cross/CruzamentoDetailDrawer.tsx` (novo) — drawer de detalhes.
+- `src/components/audit-cross/KanbanColumn.tsx` (novo) — raia com header (título, contador, total, empty state) e área rolável.
+
+**Sem drag & drop**: mover cards entre raias não faz sentido semântico (a raia é derivada do cenário). Ações discretas via menu no card já cobrem os fluxos manuais (`confirmado_manual` / `ignorado`).
+
+**Responsivo**: em telas <lg, colunas empilham verticalmente; em ≥lg, grid 3 colunas.
+
+## Fora do escopo
+
+- Rodar o cruzamento nas bases produtivas (`SBO_ANAGAMING`, `SBO_CACTUS`) — hoje sem notas do MasterTax capturadas; tratar em passo separado depois que os pulls estiverem populando.
+- Corrigir as 4 notas com `sap_company_db` nulo — item de saneamento independente.
+- Cron automático do cruzamento.
