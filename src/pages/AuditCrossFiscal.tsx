@@ -69,7 +69,7 @@ export default function AuditCrossFiscal() {
 
   const { rows, loading, refresh, runCross, updateRow } = useAuditCrossFiscal({
     empresa_id: empresaId || undefined,
-    erp_origem: erp || undefined,
+    // erp_origem intencionalmente omitido: linhas "nota_sem_pagamento" têm erp_origem=NULL
     periodo_inicio: inicio || undefined,
     periodo_fim: fim || undefined,
   });
