@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers, Eye, EyeOff } from "lucide-react";
@@ -9,10 +9,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSap } from "@/contexts/SapContext";
 import type { ErpType } from "@/contexts/SapContext";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
+
+const OMIE_PENDING_KEY = "omie_google_pending_company_db";
+
+async function isEmailAllowedForOmieCompany(email: string, companyDb: string): Promise<boolean> {
+  const local = email.split("@")[0].toLowerCase();
+  const full = email.toLowerCase();
+  const { data, error } = await supabase
+    .from("user_group_assignments")
+    .select("sap_email, company_db")
+    .or(`company_db.eq.${companyDb},company_db.is.null`);
+  if (error || !data) return false;
+  return data.some((row: any) => {
+    const e = (row.sap_email || "").toLowerCase();
+    return e === full || e === local || e.startsWith(local + "@");
+  });
+}
 
 interface CompanyOption {
   label: string;
