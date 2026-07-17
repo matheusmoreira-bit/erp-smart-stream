@@ -375,20 +375,44 @@ export function SapLoginForm() {
           )}
 
           {/* Stateless ERP info */}
-          {isStateless && companyDB && (
+          {isStateless && companyDB && !isOmie && (
             <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/20 border border-border">
               O login será feito automaticamente usando as credenciais do {erpInfo.label} configuradas para esta empresa.
             </div>
           )}
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <LogIn className="w-4 h-4 mr-2" />
-            )}
-            {isLoading ? "Conectando..." : "Entrar"}
-          </Button>
+          {isOmie && companyDB && (
+            <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/20 border border-border">
+              Empresas OMIE utilizam login via Google. Seu acesso é validado pelo mapeamento configurado no Backoffice.
+            </div>
+          )}
+
+          {isOmie ? (
+            <Button
+              type="button"
+              className="w-full"
+              onClick={handleOmieGoogle}
+              disabled={googleLoading || isLoading || !companyDB}
+            >
+              {googleLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.9 3.6 14.7 2.6 12 2.6 6.9 2.6 2.8 6.7 2.8 11.9S6.9 21.4 12 21.4c6.9 0 9.3-4.8 9.3-8.6 0-.6-.1-1.1-.2-1.6H12z"/>
+                </svg>
+              )}
+              {googleLoading ? "Conectando..." : "Entrar com Google"}
+            </Button>
+          ) : (
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <LogIn className="w-4 h-4 mr-2" />
+              )}
+              {isLoading ? "Conectando..." : "Entrar"}
+            </Button>
+          )}
         </form>
 
         <div className="flex items-center justify-between mt-4">
