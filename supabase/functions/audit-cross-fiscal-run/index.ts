@@ -74,6 +74,13 @@ Deno.serve(async (req) => {
       usarRaizCnpjFallback: Boolean(cfg?.usar_raiz_cnpj_fallback ?? DEFAULT_TOLERANCE.usarRaizCnpjFallback),
     };
 
+    // Bases-fonte para leitura de notas MasterTax:
+    // sempre inclui a própria company_db + as configuradas em source_company_dbs.
+    const cfgSources: string[] = Array.isArray(cfg?.source_company_dbs) ? cfg!.source_company_dbs : [];
+    const sourceCompanyDbs = Array.from(
+      new Set<string>([emp.company_db, ...cfgSources].filter(Boolean) as string[]),
+    );
+
     // 3) notas MasterTax do período (tolerando janela para casar com baixas fora do mês)
     const janelaMs = tol.janelaDias * 24 * 60 * 60 * 1000;
     const notaInicio = new Date(new Date(body.periodo_inicio).getTime() - janelaMs).toISOString().slice(0, 10);
@@ -83,7 +90,7 @@ Deno.serve(async (req) => {
       .select("id, cnpj_fornecedor, nome_fornecedor, numero_nf, chave_acesso, valor_total, data_emissao, sap_company_db")
       .gte("data_emissao", notaInicio)
       .lte("data_emissao", notaFim)
-      .eq("sap_company_db", emp.company_db);
+      .in("sap_company_db", sourceCompanyDbs);
     if (notasErr) throw notasErr;
     const notas: NotaRow[] = (notasRaw || []).map((n: any) => ({
       id: n.id,
