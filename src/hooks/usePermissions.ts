@@ -340,6 +340,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   const [userModules, setUserModules] = useState<string[]>(DEFAULT_MODULES);
   const [perms, setPerms] = useState<Record<string, ModulePerms>>({});
   const [loading, setLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     if (!session?.userName) {
@@ -351,8 +352,10 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
     const allKeys = ALL_MODULES.map((m) => m.key);
     const identifier = session.userName.toLowerCase();
+    let cancelled = false;
 
     const grantAll = () => {
+      if (cancelled) return;
       setUserModules(allKeys);
       setPerms(Object.fromEntries(allKeys.map((k) => [k, FULL_PERMS])));
       setLoading(false);
@@ -361,7 +364,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
     // SAP superuser, OMIE company, or "manager" account → grant all
     if (session.isSuperUser || session.erpType === "omie" || identifier === "manager") {
       grantAll();
-      return;
+      return () => { cancelled = true; };
     }
 
     (async () => {
@@ -395,6 +398,8 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
         return sapEmail === identifier || sapEmail.startsWith(identifier + "@");
       });
 
+      if (cancelled) return;
+
       if (!mine || mine.length === 0) {
         setUserModules(DEFAULT_MODULES);
         setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
@@ -406,8 +411,10 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
       const { data: modules } = await supabase
         .from("permission_group_modules")
-        .select("module_key, can_view, can_create, can_edit, can_delete")
+        .select("module_key, can_view, can_create, can_edit, can_delete, group_id")
         .in("group_id", groupIds);
+
+      if (cancelled) return;
 
       // Merge multiple groups via OR
       const merged: Record<string, ModulePerms> = {};
@@ -426,7 +433,38 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
       setLoading(false);
     })();
-  }, [session?.userName, session?.companyDB, session?.isSuperUser, session?.erpType]);
+
+    return () => { cancelled = true; };
+  }, [session?.userName, session?.companyDB, session?.isSuperUser, session?.erpType, refreshTick]);
+
+  // Live refresh: when a backoffice admin changes assignments or group modules,
+  // reload permissions automatically so the menu updates without re-login.
+  useEffect(() => {
+    if (!session?.userName) return;
+    const bump = () => setRefreshTick((n) => n + 1);
+    const channel = supabase
+      .channel("permissions-live-" + session.userName.toLowerCase())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_group_assignments" },
+        bump,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "permission_group_modules" },
+        bump,
+      )
+      .subscribe();
+
+    const onFocus = () => bump();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [session?.userName]);
+
 
   const can: ModulePerms = moduleKey
     ? (perms[moduleKey] ?? { view: userModules.includes(moduleKey), create: false, edit: false, delete: false })
