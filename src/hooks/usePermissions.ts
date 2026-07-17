@@ -442,8 +442,16 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   useEffect(() => {
     if (!session?.userName) return;
     const bump = () => setRefreshTick((n) => n + 1);
+    // Unique channel per hook instance — the same page can mount useModuleAccess
+    // in multiple components (MainMenu, MobileBottomNav, MobileMenuSheet…) and
+    // Realtime rejects re-subscribing callbacks under the same channel name.
+    const channelName =
+      "permissions-live-" +
+      session.userName.toLowerCase() +
+      "-" +
+      Math.random().toString(36).slice(2, 10);
     const channel = supabase
-      .channel("permissions-live-" + session.userName.toLowerCase())
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "user_group_assignments" },
