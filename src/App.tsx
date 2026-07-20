@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SapProvider } from "@/contexts/SapContext";
+import { PermissionsV2Provider } from "@/contexts/PermissionsV2Context";
 import Index from "./pages/Index.tsx";
 import AnalyticsPage from "./pages/Analytics.tsx";
 import ApprovalsHub from "./pages/ApprovalsHub.tsx";
@@ -53,6 +54,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <SapProvider>
+          <PermissionsV2Provider>
           <BrowserRouter>
             <StickyHeaderMeasure />
             <Routes>
@@ -135,6 +137,7 @@ const App = () => (
           <TestCompanyBanner />
           <DefaultPasswordWarning />
           <GlobalAiChat />
+          </PermissionsV2Provider>
         </SapProvider>
       </TooltipProvider>
     </QueryClientProvider>
