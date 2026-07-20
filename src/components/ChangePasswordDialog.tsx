@@ -240,6 +240,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
                 required
                 autoComplete="new-password"
               />
+              <PasswordPolicyChecklist password={newPassword} userCode={session.userName} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-pw">Confirmar Nova Senha</Label>
