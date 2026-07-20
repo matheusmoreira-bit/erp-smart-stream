@@ -222,6 +222,7 @@ Deno.serve(async (req) => {
         view: "VW_PEDIDOS_COMPRA_APROVACOES",
         sessionId: session.sessionId,
         hanaApiUrl: creds.hana_api_url,
+        useV2: creds.hana_api_v2 === "true",
       });
     } finally {
       await sapLogout(baseUrl, session);
