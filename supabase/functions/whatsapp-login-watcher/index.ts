@@ -73,25 +73,19 @@ async function sapLogin(baseUrl: string, user: string, pass: string, db: string)
 }
 
 async function fetchUsr5(database: string, sessionId: string): Promise<Usr5[]> {
-  const params = new URLSearchParams({
-    SessionId: sessionId,
-    DB: database,
-    Table: "USR5",
-    _t: String(Date.now()),
+async function fetchUsr5(
+  companyDb: string,
+  database: string,
+  sessionId: string,
+  hanaApiUrl?: string | null,
+): Promise<Usr5[]> {
+  const rows = await fetchHanaView({
+    schema: resolveHanaSchema(companyDb, database),
+    view: "USR5",
+    sessionId,
+    hanaApiUrl,
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, { method: "GET" });
-  if (!resp.ok) throw new Error(`HANA view falhou: ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  // Formato: pode vir como [{data:[...]}], {data:[...]} ou array direto
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && typeof it === "object" && Array.isArray(it.data));
-    if (wrapped) return wrapped.data as Usr5[];
-    return payload as Usr5[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as Usr5[];
-  return [];
+  return rows as unknown as Usr5[];
 }
 
 async function sendWhatsApp(message: string) {
