@@ -62,6 +62,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   const [hanaLoaded, setHanaLoaded] = useState(false);
   const [hanaOptions, setHanaOptions] = useState<EnrichedSupplierOption[] | null>(null);
+  const [hanaReloadTick, setHanaReloadTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +71,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       setHanaLoaded(false);
       return;
     }
+    setHanaLoaded(false);
     (async () => {
       try {
         const { data, error } = await supabase.functions.invoke("sap-suppliers-hana", {
@@ -102,7 +104,8 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       }
     })();
     return () => { cancelled = true; };
-  }, [companyDb, isSales]);
+  }, [companyDb, isSales, hanaReloadTick]);
+
 
   const {
     options: sapOptions,
