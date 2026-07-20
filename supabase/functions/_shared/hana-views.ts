@@ -1,18 +1,14 @@
-// Helper compartilhado para consumir views HANA.
+// Helper compartilhado para consumir views HANA — SEMPRE V2.
 //
-// Suporta duas variantes:
-//   - V1 (default, via middleware n8n): usa HANA_VIEWS_URL + query string + headers X-*.
-//   - V2 (direto no servidor de origem): GET {hanaApiUrl}/data/{SCHEMA}.{VIEW}
-//     com headers `dynamictoken` e `sessionid` (lowercase). Sem query string.
+// V2 (direto no servidor de origem): GET {hanaApiUrl}/data/{SCHEMA}.{VIEW}
+// com headers `dynamictoken` e `sessionid` (lowercase).
 //
-// A escolha é por empresa: quando `hanaApiUrl` é passado (lido de
-// system_credentials.hana_api_url), usa V2. Caso contrário, mantém V1.
+// V1 (middleware n8n) foi descontinuado — todas as bases estão migradas.
+// Se `hanaApiUrl` não vier setado, usa o IP primário conhecido do HanaAPI.
 
 import { generateDynamicToken } from "./sap-middleware-token.ts";
 
-const DEFAULT_HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+const DEFAULT_HANA_API_URL = "http://201.48.79.205:8001";
 
 export interface FetchHanaViewParams {
   /** Schema HANA onde a view está publicada (ex.: "SBO_OPENGAMING"). */
@@ -21,11 +17,11 @@ export interface FetchHanaViewParams {
   view: string;
   /** SessionId obtido no Login do Service Layer. */
   sessionId: string;
-  /** URL base do servidor HANA direto (V2). Obrigatória quando useV2=true. */
+  /** URL base do servidor HANA direto (V2). Se omitida, usa o IP primário conhecido. */
   hanaApiUrl?: string | null;
-  /** Força usar V2 (direto). Só entra em V2 quando useV2 === true E hanaApiUrl estiver setada. */
+  /** @deprecated V1 foi descontinuada; o helper sempre usa V2. Mantido para compat. */
   useV2?: boolean;
-  /** Middleware URL (V1). Default = env HANA_VIEWS_URL. */
+  /** @deprecated V1 (middleware n8n) foi descontinuada. Mantido para compat. */
   middlewareUrl?: string;
   /** Paginação (V2 apenas): limita nº de linhas retornadas. Inteiro >= 1. */
   limit?: number;
@@ -73,105 +69,83 @@ function parsePayload(text: string): Record<string, unknown>[] {
 }
 
 /**
- * Executa a chamada da view HANA usando V2 (direto) quando `hanaApiUrl` for
- * fornecido, ou V1 (middleware n8n) caso contrário. Retorna as linhas cruas.
+ * Executa a chamada da view HANA sempre via V2 (direto no servidor de origem).
+ * Tenta o `hanaApiUrl` da empresa primeiro e faz fallback para o IP secundário.
  */
 export async function fetchHanaView(
   params: FetchHanaViewParams,
 ): Promise<Record<string, unknown>[]> {
   const { schema, view, sessionId } = params;
   const dynamicToken = await generateDynamicToken();
-  const useV2 = !!(params.useV2 && params.hanaApiUrl && params.hanaApiUrl.trim());
+
+  const primaryBase = (params.hanaApiUrl && params.hanaApiUrl.trim()
+    ? params.hanaApiUrl
+    : DEFAULT_HANA_API_URL
+  ).replace(/\/+$/, "");
+  // Fallback secundário: IP alternativo, mesma porta/path.
+  const FALLBACK_BASE = "http://189.91.68.202:8001";
+  const bases: string[] = [primaryBase];
+  try {
+    const primaryHost = new URL(primaryBase).host;
+    const fallbackHost = new URL(FALLBACK_BASE).host;
+    if (primaryHost !== fallbackHost) bases.push(FALLBACK_BASE);
+  } catch {
+    bases.push(FALLBACK_BASE);
+  }
+
+  // Query string opcional: limit/offset + filtros Campo__op=valor.
+  const qs = new URLSearchParams();
+  if (typeof params.limit === "number" && Number.isFinite(params.limit) && params.limit >= 1) {
+    qs.set("limit", String(Math.floor(params.limit)));
+  }
+  if (typeof params.offset === "number" && Number.isFinite(params.offset) && params.offset >= 0) {
+    qs.set("offset", String(Math.floor(params.offset)));
+  }
+  if (params.filters) {
+    for (const [key, value] of Object.entries(params.filters)) {
+      if (value === undefined || value === null) continue;
+      const v = Array.isArray(value) ? value.join(",") : String(value);
+      qs.set(key, v);
+    }
+  }
+  const queryString = qs.toString();
 
   let resp: Response | undefined;
-  if (useV2) {
-    const primaryBase = params.hanaApiUrl!.replace(/\/+$/, "");
-    // Fallback secundário: IP alternativo, mesma porta/path.
-    const FALLBACK_BASE = "http://189.91.68.202:8001";
-    const bases: string[] = [primaryBase];
+  let lastErr: unknown = null;
+  for (const base of bases) {
+    const url = `${base}/data/${encodeURIComponent(schema)}.${encodeURIComponent(view)}${queryString ? `?${queryString}` : ""}`;
     try {
-      const primaryHost = new URL(primaryBase).host;
-      const fallbackHost = new URL(FALLBACK_BASE).host;
-      if (primaryHost !== fallbackHost) bases.push(FALLBACK_BASE);
-    } catch {
-      bases.push(FALLBACK_BASE);
-    }
-
-    // Query string opcional: limit/offset + filtros Campo__op=valor.
-    const qs = new URLSearchParams();
-    if (typeof params.limit === "number" && Number.isFinite(params.limit) && params.limit >= 1) {
-      qs.set("limit", String(Math.floor(params.limit)));
-    }
-    if (typeof params.offset === "number" && Number.isFinite(params.offset) && params.offset >= 0) {
-      qs.set("offset", String(Math.floor(params.offset)));
-    }
-    if (params.filters) {
-      for (const [key, value] of Object.entries(params.filters)) {
-        if (value === undefined || value === null) continue;
-        const v = Array.isArray(value) ? value.join(",") : String(value);
-        qs.set(key, v);
-      }
-    }
-    const queryString = qs.toString();
-
-    let lastErr: unknown = null;
-    for (const base of bases) {
-      const url = `${base}/data/${encodeURIComponent(schema)}.${encodeURIComponent(view)}${queryString ? `?${queryString}` : ""}`;
-      try {
-        const r = await fetch(url, {
-          headers: {
-            dynamictoken: dynamicToken,
-            sessionid: sessionId,
-          },
-        });
-        if (r.ok) {
-          resp = r;
-          break;
-        }
-
-        // 5xx → tenta próximo IP; 4xx → propaga sem fallback.
-        if (r.status >= 500) {
-          lastErr = new Error(`HTTP ${r.status} em ${base}`);
-          continue;
-        }
+      const r = await fetch(url, {
+        headers: {
+          dynamictoken: dynamicToken,
+          sessionid: sessionId,
+        },
+      });
+      if (r.ok) {
         resp = r;
         break;
-      } catch (e) {
-        lastErr = e;
+      }
+      // 5xx → tenta próximo IP; 4xx → propaga sem fallback.
+      if (r.status >= 500) {
+        lastErr = new Error(`HTTP ${r.status} em ${base}`);
         continue;
       }
+      resp = r;
+      break;
+    } catch (e) {
+      lastErr = e;
+      continue;
     }
-    if (!resp) {
-      throw new Error(
-        `HANA view ${view} falhou (v2, todos os IPs): ${String((lastErr as Error)?.message || lastErr)}`,
-      );
-    }
-  } else {
-    const middleware = params.middlewareUrl || DEFAULT_HANA_VIEWS_URL;
-    const qs = new URLSearchParams({
-      SessionId: sessionId,
-      DB: schema,
-      Schema: schema,
-      View: view,
-      DynamicToken: dynamicToken,
-      _t: String(Date.now()),
-    });
-    resp = await fetch(`${middleware}?${qs.toString()}`, {
-      headers: {
-        "X-SessionId": sessionId,
-        "X-DB": schema,
-        "X-Schema": schema,
-        "X-View": view,
-        "X-Dynamic-Token": dynamicToken,
-      },
-    });
+  }
+  if (!resp) {
+    throw new Error(
+      `HANA view ${view} falhou (v2, todos os IPs): ${String((lastErr as Error)?.message || lastErr)}`,
+    );
   }
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
-    throw new Error(
-      `HANA view ${view} falhou (${useV2 ? "v2" : "v1"}): ${resp.status} ${text}`,
-    );
+    throw new Error(`HANA view ${view} falhou (v2): ${resp.status} ${text}`);
   }
   const text = await resp.text();
   return parsePayload(text);
