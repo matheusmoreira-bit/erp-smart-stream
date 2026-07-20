@@ -226,6 +226,19 @@ Deno.serve(async (req) => {
     const schema = HANA_SCHEMA_OVERRIDES[companyDb] || dbName;
     const session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
 
+    // Filtros HanaAPI V2 (Campo__op=valor) — aceita via body.filters
+    // ou como querystring "hf_Campo__op=valor" para uso em GET.
+    const filters: Record<string, string> = {};
+    if (body?.filters && typeof body.filters === "object") {
+      for (const [k, v] of Object.entries(body.filters as Record<string, unknown>)) {
+        if (v == null) continue;
+        filters[k] = Array.isArray(v) ? v.join(",") : String(v);
+      }
+    }
+    for (const [k, v] of url.searchParams.entries()) {
+      if (k.startsWith("hf_") && k.length > 3) filters[k.slice(3)] = v;
+    }
+
     let rawRows: Record<string, unknown>[] = [];
     try {
       rawRows = await fetchHanaView({
@@ -234,10 +247,14 @@ Deno.serve(async (req) => {
         sessionId: session.sessionId,
         hanaApiUrl: creds.hana_api_url,
         useV2: creds.use_hana_v2 === "true" || creds.hana_api_v2 === "true",
+        limit,
+        offset,
+        filters,
       });
     } finally {
       await sapLogout(baseUrl, session);
     }
+
 
     const mapped = rawRows
       .map((r) => mapRow(r, companyDb))
