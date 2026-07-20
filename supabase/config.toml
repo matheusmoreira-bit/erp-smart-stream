@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.sap-purchase-orders-hana]
 verify_jwt = false
+
+[functions.sap-suppliers-hana]
+verify_jwt = false
