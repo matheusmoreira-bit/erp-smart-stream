@@ -291,8 +291,10 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   return {
     options: merged,
-    isLoading: sapLoading,
+    isLoading: sapLoading || (!hanaLoaded && !!companyDb),
     reload: () => {
+      setHanaLoaded(false);
+      setHanaOptions(null);
       reloadSap();
       void fetchLocal();
     },
@@ -301,4 +303,5 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     activeCount,
     normalize: normalizeText,
   };
+
 }
