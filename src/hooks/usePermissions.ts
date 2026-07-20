@@ -489,8 +489,8 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
 
   const can: ModulePerms = moduleKey
-    ? (perms[moduleKey] ?? { view: userModules.includes(moduleKey), create: false, edit: false, delete: false })
-    : { view: true, create: false, edit: false, delete: false };
+    ? (perms[moduleKey] ?? { ...NONE_PERMS, view: userModules.includes(moduleKey) })
+    : { ...NONE_PERMS, view: true };
 
   const hasAccess = moduleKey ? (perms[moduleKey]?.view ?? userModules.includes(moduleKey)) : true;
 
