@@ -10,6 +10,45 @@ import { generateDynamicToken } from "./sap-middleware-token.ts";
 
 const DEFAULT_HANA_API_URL = "http://201.48.79.205:8001";
 
+/**
+ * Overrides de schema HANA por companyDB do Service Layer.
+ * Mantido aqui para ser reutilizado por todas as edge functions que consultam
+ * a HanaAPI V2 (todas as bases estão migradas — V1 descontinuada).
+ */
+export const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
+  open_gaming_sa: "OPENGAMING",
+};
+
+/** Resolve o schema HANA para um companyDB. */
+export function resolveHanaSchema(companyDb: string, dbName?: string | null): string {
+  return HANA_SCHEMA_OVERRIDES[companyDb] || dbName || companyDb;
+}
+
+/**
+ * Carrega as credenciais SAP + HanaAPI (V2) de uma empresa em um formato
+ * simples de key/value. Retorna null quando a HanaAPI não está habilitada
+ * (falta credencial, `use_hana_db=false` ou usuário SAP diferente de Apiuser).
+ */
+export async function loadHanaCreds(
+  sb: { from: (t: string) => any },
+  companyDb: string,
+): Promise<Record<string, string> | null> {
+  const { data, error } = await sb
+    .from("system_credentials")
+    .select("credential_key, credential_value")
+    .eq("system_name", "sap")
+    .eq("company_db", companyDb);
+  if (error) throw new Error(`Credenciais SAP erro: ${error.message}`);
+  const kv: Record<string, string> = {};
+  for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
+    kv[r.credential_key] = r.credential_value ?? "";
+  }
+  if (!kv.service_layer_url || !kv.username || !kv.password) return null;
+  if (kv.use_hana_db === "false") return null;
+  if ((kv.username || "").trim().toLowerCase() !== "apiuser") return null;
+  return kv;
+}
+
 export interface FetchHanaViewParams {
   /** Schema HANA onde a view está publicada (ex.: "SBO_OPENGAMING"). */
   schema: string;
