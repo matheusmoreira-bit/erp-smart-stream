@@ -125,8 +125,9 @@ const DEFAULT_READ_ONLY_MODULES = new Set<string>([
   "items",
 ]);
 
-const FULL_PERMS: ModulePerms = { view: true, create: true, edit: true, delete: true };
-const VIEW_ONLY_PERMS: ModulePerms = { view: true, create: false, edit: false, delete: false };
+const FULL_PERMS: ModulePerms = { view: true, create: true, edit: true, delete: true, approve: true, integrate: true, export: true };
+const VIEW_ONLY_PERMS: ModulePerms = { view: true, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
+const NONE_PERMS: ModulePerms = { view: false, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
 
 function isViewOnlyKey(key: string): boolean {
   return (
