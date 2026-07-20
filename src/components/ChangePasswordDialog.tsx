@@ -99,8 +99,9 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
       return;
     }
 
-    if (newPassword.length < 4) {
-      toast.error("A nova senha deve ter pelo menos 4 caracteres.");
+    const policy = checkPasswordPolicy(newPassword, session.userName);
+    if (!policy.valid) {
+      toast.error(`Senha não atende à política: ${policy.failed[0].label}`);
       return;
     }
 
