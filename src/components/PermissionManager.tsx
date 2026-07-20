@@ -715,6 +715,8 @@ export default function PermissionManager() {
       )}
 
       {view.name === "users" && <UsersView onBack={goRoot} groups={groups} />}
+
+      {view.name === "sap-mapping" && <SapGroupMappingManager onBack={goRoot} />}
     </div>
   );
 }
