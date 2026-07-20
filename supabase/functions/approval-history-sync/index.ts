@@ -369,7 +369,7 @@ async function fetchAndMergeHanaApprovals(
 
     let rows: Record<string, unknown>[] = [];
     try {
-      rows = await fetchHanaView(dbName, session.sessionId, "VW_PEDIDOS_COMPRA_APROVACOES");
+      rows = await fetchHanaView(companyDb, dbName, session.sessionId, "VW_PEDIDOS_COMPRA_APROVACOES", creds.hana_api_url);
     } finally {
       await sapLogoutServiceLayer(baseUrl, session);
     }
