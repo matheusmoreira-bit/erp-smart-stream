@@ -139,6 +139,11 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
       if (existingSap) {
         // Já veio do SAP — apenas anexa o id local para permitir retry se erro.
+        const localTaxId = r.federal_tax_id || r.u_fgr_taxid0 || undefined;
+        if (localTaxId && !existingSap.extra) existingSap.extra = localTaxId;
+        if (localTaxId && !existingSap.details?.taxId) {
+          existingSap.details = { ...(existingSap.details || {}), taxId: localTaxId };
+        }
         existingSap.localId = r.id;
         existingSap.syncStatus = status;
         // Se local marca não sincronizado, sinaliza no badge
