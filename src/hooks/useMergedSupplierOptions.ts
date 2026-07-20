@@ -296,8 +296,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     options: merged,
     isLoading: sapLoading || (!hanaLoaded && !!companyDb),
     reload: () => {
-      setHanaLoaded(false);
-      setHanaOptions(null);
+      setHanaReloadTick((t) => t + 1);
       reloadSap();
       void fetchLocal();
     },
