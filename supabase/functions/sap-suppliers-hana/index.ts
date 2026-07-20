@@ -167,6 +167,15 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (isSales) {
+      // VW_CLIENTES não existe — retornamos hana_unavailable para que o
+      // client caia no fallback via Service Layer (BusinessPartners).
+      return new Response(JSON.stringify({
+        error: "hana_unavailable",
+        message: "VW_CLIENTES não disponível; usar Service Layer.",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const creds = await loadCreds(sb, companyDb);
     if (!creds) {
@@ -181,7 +190,7 @@ Deno.serve(async (req) => {
     const schema = HANA_SCHEMA_OVERRIDES[companyDb] || dbName;
     const session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
 
-    const view = isSales ? "VW_CLIENTES" : "VW_FORNECEDORES";
+    const view = "VW_FORNECEDORES";
     let rawRows: Record<string, unknown>[] = [];
     try {
       rawRows = await fetchView(schema, session.sessionId, view);
