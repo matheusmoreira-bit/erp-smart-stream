@@ -38,6 +38,7 @@ import {
 } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import SapGroupMappingManager from "@/components/SapGroupMappingManager";
+import PermissionsEnforcementManager from "@/components/PermissionsEnforcementManager";
 
 interface SapCacheUser {
   UserCode: string;
@@ -692,6 +693,16 @@ export default function PermissionManager() {
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </IosRow>
+            <IosRow onClick={() => setView({ name: "enforcement" })}>
+              <div className="w-9 h-9 rounded-xl bg-destructive/15 flex items-center justify-center shrink-0">
+                <Shield className="w-4 h-4 text-destructive" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Enforcement v2</p>
+                <p className="text-xs text-muted-foreground">Shadow log e ativação por empresa</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </IosRow>
           </IosList>
         </div>
       )}
@@ -720,6 +731,8 @@ export default function PermissionManager() {
       {view.name === "users" && <UsersView onBack={goRoot} groups={groups} />}
 
       {view.name === "sap-mapping" && <SapGroupMappingManager onBack={goRoot} />}
+
+      {view.name === "enforcement" && <PermissionsEnforcementManager onBack={goRoot} />}
     </div>
   );
 }
