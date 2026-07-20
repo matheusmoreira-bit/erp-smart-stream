@@ -16,7 +16,7 @@ const corsHeaders = {
 
 // Mapa: companyDB (Service Layer) -> schema HANA onde as views estão publicadas.
 const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
-  open_gaming_sa: "OPENGAMING",
+  open_gaming_sa: "SBO_OPENGAMING",
 };
 
 function buildBaseUrl(raw: string): string {

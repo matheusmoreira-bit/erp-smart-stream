@@ -13,7 +13,7 @@ import { fetchHanaView } from "../_shared/hana-views.ts";
 
 const TIME_BUDGET_MS = 90_000;
 
-const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "OPENGAMING" };
+const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "SBO_OPENGAMING" };
 
 function buildBaseUrl(raw: string): string {
   let url = raw.replace(/\/+$/, "");

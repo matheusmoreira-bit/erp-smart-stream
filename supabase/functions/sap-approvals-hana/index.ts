@@ -13,7 +13,7 @@ const corsHeaders = {
 };
 
 const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
-  open_gaming_sa: "OPENGAMING",
+  open_gaming_sa: "SBO_OPENGAMING",
 };
 
 Deno.serve(async (req) => {
