@@ -270,6 +270,24 @@ function GroupDetail({
                       checked={p.delete}
                       onChange={(v) => setFlag(m.key, "delete", v)}
                     />
+                    <CrudChip
+                      icon={CheckCircle2}
+                      label="Aprovar"
+                      checked={p.approve}
+                      onChange={(v) => setFlag(m.key, "approve", v)}
+                    />
+                    <CrudChip
+                      icon={Send}
+                      label="Integrar"
+                      checked={p.integrate}
+                      onChange={(v) => setFlag(m.key, "integrate", v)}
+                    />
+                    <CrudChip
+                      icon={Download}
+                      label="Exportar"
+                      checked={p.export}
+                      onChange={(v) => setFlag(m.key, "export", v)}
+                    />
                   </div>
                 )}
               </div>
