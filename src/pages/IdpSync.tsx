@@ -20,6 +20,8 @@ import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
+import { IdpBindingFlagCard } from "@/components/IdpBindingFlagCard";
+
 
 function jcToOption(jc: JumpCloudUser): SapSearchOption {
   const name = jc.displayname || `${jc.firstname || ""} ${jc.lastname || ""}`.trim() || jc.username;
@@ -313,6 +315,10 @@ export default function IdpSyncPage() {
             {error}
           </div>
         )}
+
+        <IdpBindingFlagCard />
+
+
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4">
