@@ -137,6 +137,7 @@ const App = () => (
           <TestCompanyBanner />
           <DefaultPasswordWarning />
           <GlobalAiChat />
+          </PermissionsV2Provider>
         </SapProvider>
       </TooltipProvider>
     </QueryClientProvider>
