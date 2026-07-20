@@ -27,7 +27,21 @@ export interface FetchHanaViewParams {
   useV2?: boolean;
   /** Middleware URL (V1). Default = env HANA_VIEWS_URL. */
   middlewareUrl?: string;
+  /** Paginação (V2 apenas): limita nº de linhas retornadas. Inteiro >= 1. */
+  limit?: number;
+  /** Paginação (V2 apenas): pula N linhas. Inteiro >= 0. */
+  offset?: number;
+  /**
+   * Filtros de consulta (V2 apenas). Cada chave deve estar no formato
+   * `Campo__op` (ex.: `DocNum__eq`, `CardName__ilike`, `DocDate__gte`).
+   * Operadores suportados pelo HanaAPI V2:
+   *   eq, like, ilike, contains, startswith, endswith, gt, gte, lt, lte, in.
+   * Para `in`, passe uma string com valores separados por vírgula
+   * (`"A,B,C"`) ou um array (`["A","B","C"]`) que será serializado.
+   */
+  filters?: Record<string, string | number | boolean | Array<string | number>>;
 }
+
 
 function parsePayload(text: string): Record<string, unknown>[] {
   if (!text) return [];
