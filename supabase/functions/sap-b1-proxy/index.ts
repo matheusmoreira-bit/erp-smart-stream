@@ -559,22 +559,27 @@ Deno.serve(async (req) => {
 
       // Respect per-company toggle: when HANA DB queries are disabled, short-circuit with empty result.
       // Hooks that depend on these views already handle empty data gracefully.
+      let hanaApiUrl: string | null = null;
       try {
         const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-        const { data: flag } = await sb
+        const { data: flags } = await sb
           .from("system_credentials")
-          .select("credential_value")
+          .select("credential_key, credential_value")
           .eq("company_db", database)
           .eq("system_name", "sap")
-          .eq("credential_key", "use_hana_db")
-          .maybeSingle();
-        if (flag?.credential_value === "false") {
+          .in("credential_key", ["use_hana_db", "hana_api_url"]);
+        const kv: Record<string, string> = {};
+        for (const r of (flags || []) as Array<{ credential_key: string; credential_value: string }>) {
+          kv[r.credential_key] = r.credential_value ?? "";
+        }
+        if (kv.use_hana_db === "false") {
           return new Response(JSON.stringify({ data: [], fromCache: false, hanaDisabled: true }), {
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
+        hanaApiUrl = kv.hana_api_url || null;
       } catch (e) {
-        console.warn("Could not read use_hana_db flag, defaulting to enabled:", e);
+        console.warn("Could not read HANA flags, defaulting to enabled:", e);
       }
 
       const tableName = extractTableName(table);
