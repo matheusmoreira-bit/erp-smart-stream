@@ -616,6 +616,22 @@ function ApprovalDetailModal({
     // está sendo decidido e destaca quando é super-usuário agindo em
     // documento de outro aprovador.
     setActionError(null);
+
+    // Gate v2 (síncrono, snapshot em RAM). Em modo `off`/`shadow` sempre
+    // libera; em `enforce` respeita o veredito. Negativas geram log
+    // fire-and-forget — zero impacto na latência do clique.
+    const gate = gateSync({
+      module: "approvals",
+      action: "approve",
+      clientAllows: canApprove,
+      companyDb: session?.companyDB ?? null,
+      identifier: session?.userName ?? null,
+    });
+    if (!gate.allow) {
+      toast.error("Você não tem permissão para esta ação nesta empresa.");
+      return;
+    }
+
     // Gera uma chave de idempotência por INTENÇÃO do usuário (um clique em
     // Aprovar/Rejeitar). A mesma chave é reutilizada em "Tentar novamente"
     // após erro, garantindo que o servidor não processe a mesma ação duas
