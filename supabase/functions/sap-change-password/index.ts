@@ -220,64 +220,86 @@ Deno.serve(async (req) => {
     const nameMap = new Map<string, string>();
     (companiesData || []).forEach((c: { company_db: string; display_name: string }) => nameMap.set(c.company_db, c.display_name));
 
-    const results: ResultRow[] = [];
-    for (const companyDb of targets) {
+    // Timeout individual por empresa (ms). Ajustável via secret.
+    const PER_COMPANY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_TIMEOUT_MS") || "25000");
+
+    async function changeForCompany(companyDb: string): Promise<ResultRow> {
       const displayName = nameMap.get(companyDb) || companyDb;
-      let creds: AdminCreds | null;
-      try { creds = await getAdminCreds(admin, companyDb); }
-      catch (e) {
-        results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro ao ler credenciais" });
-        continue;
-      }
-      if (!creds) {
-        results.push({ companyDB: companyDb, displayName, status: "error", message: "Sem credenciais administrativas configuradas" });
-        continue;
-      }
-      let baseUrl: string;
-      try { baseUrl = await getBaseUrl(admin, companyDb); }
-      catch (e) {
-        results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro ao ler URL do Service Layer" });
-        continue;
-      }
-      let session: Session;
-      try { session = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password); }
-      catch (e) {
-        const suffix = creds.source === "fallback" ? " (usando credenciais padrão)" : "";
-        const msg = (e instanceof Error ? e.message : "Falha ao autenticar") + suffix;
-        console.error(`[sap-change-password] login failed`, { companyDb, sapCompanyDb: creds.sapCompanyDb, source: creds.source, msg });
-        results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
-        continue;
-      }
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), PER_COMPANY_TIMEOUT_MS);
+      let session: Session | null = null;
       try {
+        let creds: AdminCreds | null;
+        try { creds = await getAdminCreds(admin, companyDb); }
+        catch (e) {
+          return { companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro ao ler credenciais" };
+        }
+        if (!creds) {
+          return { companyDB: companyDb, displayName, status: "error", message: "Sem credenciais administrativas configuradas" };
+        }
+        let baseUrl: string;
+        try { baseUrl = await getBaseUrl(admin, companyDb); }
+        catch (e) {
+          return { companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro ao ler URL do Service Layer" };
+        }
+        try { session = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password, ctrl.signal); }
+        catch (e) {
+          const suffix = creds.source === "fallback" ? " (usando credenciais padrão)" : "";
+          const raw = e instanceof Error ? e.message : "Falha ao autenticar";
+          const msg = (ctrl.signal.aborted ? `Timeout após ${PER_COMPANY_TIMEOUT_MS}ms no login` : raw) + suffix;
+          console.error(`[sap-change-password] login failed`, { companyDb, sapCompanyDb: creds.sapCompanyDb, source: creds.source, msg });
+          return { companyDB: companyDb, displayName, status: "error", message: msg };
+        }
         const lookup = await sapRequest(
           session,
           `Users?$filter=UserCode eq '${userCode.replace(/'/g, "''")}'&$select=InternalKey,UserCode`,
           "GET",
+          undefined,
+          ctrl.signal,
         );
         if (!lookup.ok) {
           const msg = extractSapError(lookup.data, `HTTP ${lookup.status}`);
           console.error(`[sap-change-password] user lookup failed`, { companyDb, userCode, status: lookup.status, msg });
-          results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
-          continue;
+          return { companyDB: companyDb, displayName, status: "error", message: msg };
         }
         const payload = lookup.data as { value?: Array<{ InternalKey?: number; UserCode?: string }> } | Array<{ InternalKey?: number; UserCode?: string }>;
         const rows = Array.isArray(payload) ? payload : (payload?.value || []);
         if (rows.length === 0 || rows[0].InternalKey == null) {
-          results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Usuário não existe nesta empresa" });
-          continue;
+          return { companyDB: companyDb, displayName, status: "skipped", message: "Usuário não existe nesta empresa" };
         }
-        const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword, Locked: "tNO" });
+        const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword, Locked: "tNO" }, ctrl.signal);
         if (patch.ok) {
-          results.push({ companyDB: companyDb, displayName, status: "success" });
-        } else {
-          const msg = extractSapError(patch.data, `HTTP ${patch.status}`);
-          if (isSamePasswordError(msg)) {
-            results.push({ companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" });
-          } else {
-            console.error(`[sap-change-password] PATCH failed`, { companyDb, userCode, internalKey: rows[0].InternalKey, status: patch.status, msg });
-            results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
-          }
+          return { companyDB: companyDb, displayName, status: "success" };
         }
+        const msg = extractSapError(patch.data, `HTTP ${patch.status}`);
+        if (isSamePasswordError(msg)) {
+          return { companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" };
+        }
+        console.error(`[sap-change-password] PATCH failed`, { companyDb, userCode, internalKey: rows[0].InternalKey, status: patch.status, msg });
+        return { companyDB: companyDb, displayName, status: "error", message: msg };
+      } catch (e) {
+        const aborted = ctrl.signal.aborted;
+        const raw = e instanceof Error ? e.message : "Erro ao alterar senha";
+        const msg = aborted ? `Timeout após ${PER_COMPANY_TIMEOUT_MS}ms` : raw;
+        console.error(`[sap-change-password] exception`, { companyDb, userCode, msg });
+        return { companyDB: companyDb, displayName, status: "error", message: msg };
+      } finally {
+        clearTimeout(timer);
+        if (session) { sapLogout(session); }
+      }
+    }
+
+    const settled = await Promise.allSettled(targets.map((db) => changeForCompany(db)));
+    const results: ResultRow[] = settled.map((r, i) => {
+      if (r.status === "fulfilled") return r.value;
+      const db = targets[i];
+      return {
+        companyDB: db,
+        displayName: nameMap.get(db) || db,
+        status: "error",
+        message: r.reason instanceof Error ? r.reason.message : "Erro inesperado",
+      };
+    });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Erro ao alterar senha";
         console.error(`[sap-change-password] exception`, { companyDb, userCode, msg });
