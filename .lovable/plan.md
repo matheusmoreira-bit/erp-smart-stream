@@ -1,68 +1,87 @@
-# HanaAPI V2 — chamada direta ao servidor de origem
+# Plano — Evolução de Permissões e Segurança do ERP Flow
 
-Nova variante das chamadas HANA que bate direto no servidor de origem, sem passar pelo webhook n8n (`HANA_VIEWS_URL`). V1 permanece funcionando; V2 é opt-in por empresa.
+## Objetivo
+Sair do modelo atual (um grupo global por usuário, controle só de visibilidade de módulo) para um modelo **auditável, granular e ancorado em identidade JumpCloud + grupos SAP**, sem quebrar o funcionamento atual durante a transição.
 
-## Contrato do V2
+## Princípios (decisões já tomadas)
+- **Identidade:** JumpCloud é a fonte única de "quem é o usuário". Login local só sobrevive para admins de backoffice.
+- **Permissão por empresa:** cada empresa (company_db) define, via grupos SAP, o que o usuário pode fazer naquela base.
+- **Escopo do papel do ERP Flow:** continua **global** (um grupo/perfil por usuário vale em todas as empresas), mas o *conjunto de ações permitidas* é derivado do cruzamento com os grupos SAP daquela empresa.
+- **Granularidade:** `módulo + ação` (ver, criar, editar, aprovar, excluir, integrar). Sem filtro por CC/projeto nesta fase.
+- **Provisionamento:** manual sempre. Nenhum usuário JC entra automaticamente — backoffice precisa vincular.
 
+## Arquitetura alvo
+
+```text
+        JumpCloud (identidade)
+                │  (SSO/OIDC login, e-mail canônico)
+                ▼
+        idp_user_mapping ─────── user_group_assignments (grupo GLOBAL ERP Flow)
+                │                            │
+                │                            └─► permission_group_modules
+                │                                (módulo + ação: ver/criar/editar/aprovar/excluir/integrar)
+                ▼
+        sap_group_mapping   (POR EMPRESA: SAP group ↔ módulos+ações liberadas)
+                │
+                ▼
+        Runtime authz:
+        pode(user, empresa, módulo, ação) =
+            grupo_ERPFlow_permite(módulo, ação)
+          ∧ algum_grupo_SAP_do_user_na_empresa_permite(módulo, ação)
+          ∨ user_é_admin_backoffice
 ```
-GET {hana_api_base}/data/{SCHEMA}.{VIEW}
-Headers:
-  dynamictoken: {token}
-  sessionid:    {SAP SessionId}
-```
 
-- `hana_api_base`: URL do servidor de origem por empresa (ex.: `http://201.48.79.205:8001`).
-- Path `/data/{SCHEMA}.{VIEW}` (schema + view separados por ponto). Ex.: `/data/SBO_OPENGAMING.VW_APROVACOES_DETALHADAS`.
-- Headers em lowercase (`dynamictoken`, `sessionid`) — V1 continua com `X-Dynamic-Token` / `X-SessionId` + query string.
-- Sem query string. Sem `X-DB` / `X-View` / `X-Schema`.
-- `dynamictoken`: mesmo algoritmo do V1 (`hex(HMAC_SHA256(SAP_MIDDLEWARE_SECRET, floor(now/3600)))`).
-- `sessionid`: obtido via Login normal do Service Layer (`Apiuser` + `CompanyDB`).
+## Entregas
 
-## Seleção V1 vs V2 (por empresa)
+### 1. Modelo de permissão com ação
+- Nova tabela `permission_actions` (enum-like): `view`, `create`, `edit`, `approve`, `delete`, `integrate`, `export`.
+- Estender `permission_group_modules` com coluna `action` (default `view`) e chave composta `(group_id, module_key, action)`.
+- Migrar registros atuais como `action = 'view'` (comportamento idêntico ao de hoje).
+- Helper SQL `has_module_action(_user_id, _company_db, _module, _action) returns boolean` (security definer) usado em RLS e no cliente via RPC.
 
-Nova entrada em `system_credentials`:
-- `system_name = 'sap'`, `company_db = '<db>'`, `credential_key = 'hana_api_url'`, `credential_value = 'http://IP:PORT'`.
-- Presente e não vazio → V2 nessa empresa.
-- Ausente → mantém V1 (n8n).
+### 2. Mapeamento SAP → ERP Flow por empresa
+- Nova tabela `sap_group_mapping (company_db, sap_group_code, sap_group_name, module_key, action, can boolean)`.
+- Cadastro pelo Backoffice: para cada empresa, lista os grupos do SAP (lidos do `sap_cache.Groups`) e marca em uma matriz `módulo × ação` o que aquele grupo libera.
+- Sincronismo periódico dos grupos SAP em `sap_groups_cache` (por empresa) para o Backoffice montar a UI.
 
-Sem alteração de schema. Zero risco para as empresas atuais até o cadastro ser feito.
+### 3. Amarração JumpCloud
+- `idp_user_mapping` (já existe) vira **obrigatório** para novos usuários: sem vínculo JC = sem login (exceto conta backoffice local).
+- Migração ativa dos usuários existentes: script no Backoffice para revisar/vincular todos antes de ligar o hard-check.
+- Login OMIE via Google continua funcionando, mas será redirecionado para o mesmo `idp_user_mapping` (provider = google), unificando o cadastro.
+- Backoffice ganha aba "Usuários JumpCloud não vinculados" para provisionamento manual explícito.
 
-## Mudanças no código
+### 4. Runtime + hooks
+- `useModuleAccess(module, action?)` substitui o hook atual; retorna `{ canView, canCreate, canEdit, canApprove, canDelete, canIntegrate }`.
+- Componentes de página passam a esconder/desabilitar botões via `canX` em vez de só rota.
+- RLS das tabelas sensíveis (`expenses`, `expense_items`, `advance_payments`, `baixas_recebimento`, `sales…`) reescrita para chamar `has_module_action`.
 
-### 1. Helper compartilhado
-`supabase/functions/_shared/hana-views.ts` — novo:
-- Export `fetchHanaView({ sb, companyDb, schema, view, sessionId })`.
-- Lê `hana_api_url` da `system_credentials`.
-- V2: `GET {url}/data/{schema}.{view}` com headers `dynamictoken` + `sessionid`.
-- V1 (fallback): usa `HANA_VIEWS_URL` + headers `X-*` + query string, como hoje.
-- Parser unificado aceita `[{data:[…]}]`, `[…]`, `{data:[…]}`.
-- Reaproveita `generateDynamicToken` do helper existente.
+### 5. Backoffice — nova tela "Permissões"
+- Aba 1 · **Grupos globais ERP Flow**: matriz módulo × ação por grupo (edita `permission_group_modules`).
+- Aba 2 · **Mapeamento SAP por empresa**: seletor de empresa → tabela `grupo SAP × (módulo × ação)`.
+- Aba 3 · **Usuários**: mostra JC vinculado, grupo global ERP Flow, e o "efetivo" calculado por empresa (view read-only para debug/auditoria).
+- Aba 4 · **Auditoria**: log de toda mudança em grupos, mapeamentos e vínculos (já existe `audit_log`, só formatar).
 
-### 2. Refactor das edge functions HANA para usar o helper
-Trocam `fetchView` local pelo helper (comportamento sem alteração quando `hana_api_url` não está setado):
-- `supabase/functions/sap-suppliers-hana/index.ts`
-- `supabase/functions/sap-purchase-orders-hana/index.ts`
-- `supabase/functions/sap-fluxo-analise-sync/index.ts`
-- `supabase/functions/sap-sl-cache-refresh/index.ts` (se usa view HANA — confirmar no read; caso não use, fica de fora)
+### 6. Segurança & robustez
+- Todas as tabelas novas com RLS estrita (`has_role(auth.uid(),'admin')` para escrita; leitura só para o próprio usuário quando aplicável) + GRANTs corretos.
+- Índices em `(company_db, module_key, action)` e `(sap_email, company_db)`.
+- Feature flag `permissions_v2_enforced` (default off) para virar por empresa/gradual; enquanto off, o novo motor só *loga* o que teria negado.
+- Testes de integração cobrindo: usuário sem JC, usuário com JC mas sem grupo SAP na empresa X, admin backoffice, super-admin SAP, empresa OMIE (mantém regra atual de módulos abertos).
 
-### 3. Cadastrar Open Gaming como primeira empresa V2
-Inserir/atualizar em `system_credentials`:
-- `open_gaming_sa` → `hana_api_url = http://201.48.79.205:8001`.
+## Roll-out sugerido (4 fases, sem downtime)
 
-O override de schema `open_gaming_sa → OPENGAMING` já existe e continua valendo — path fica `/data/OPENGAMING.VW_FORNECEDORES`, `/data/OPENGAMING.VW_PEDIDOS_COMPRA`, etc.
+1. **Fundação (schema + migração idempotente):** cria tabelas, ação `view` para tudo que já existe. Nada muda na UX.
+2. **Backoffice:** libera as 4 abas de gestão. Time começa a preencher grupos SAP × módulo × ação por empresa.
+3. **Shadow mode:** `useModuleAccess` já calcula pelo novo motor, mas apenas registra negativas em `audit_log`. Ajustes finos com base nos logs.
+4. **Enforcement:** liga a flag por empresa; usuários sem vínculo JC são bloqueados; RLS passa a exigir `has_module_action`.
 
-### 4. Documentação
-Criar `docs/hana-api.md` com seções V1 e V2 (algoritmo do token, headers, exemplo curl e Postman).
+## Fora do escopo desta fase
+- Filtros de linha por CC/projeto/filial (fica em backlog para eventual v3).
+- Provisionamento automático a partir de grupos JC (podemos revisitar depois que o cadastro estiver estável).
+- MFA/step-up per-ação sensível (candidato natural para a fase seguinte).
 
-## Fora de escopo desta entrega
-
-- UI em Integrações para editar `hana_api_url` sem SQL (posso incluir num próximo passo).
-- Migração das outras empresas para V2 (feita depois, uma a uma, cadastrando `hana_api_url`).
-
-## Decisões que preciso confirmar antes de construir
-
-1. **Secret do `dynamictoken` no V2**: usar o **mesmo** `SAP_MIDDLEWARE_SECRET` do V1, ou o servidor de origem valida com uma **chave diferente**? Se for diferente, crio o secret `SAP_HANA_API_SECRET` (via `add_secret`) e o helper prioriza ele quando existir.
-2. **HTTP puro (`http://IP:8001`)**: confirmo que o servidor não expõe HTTPS? Edge Functions permitem chamada, mas quero registrar a decisão.
-3. **Endpoint de teste**: posso testar contra `http://201.48.79.205:8001/data/SBO_OPENGAMING.VW_APROVACOES_DETALHADAS` durante a implementação, ou uso outra view/empresa como sanidade?
-
-Confirmando esses três pontos, implemento em modo build.
+## Detalhes técnicos (para desenvolvedores)
+- Migrações Postgres com `GRANT` + `ENABLE RLS` + `CREATE POLICY` na ordem canônica.
+- Função `has_module_action` marcada `SECURITY DEFINER`, `SET search_path = public`, evitando recursão RLS.
+- Cliente lê permissões via RPC única `get_effective_permissions(company_db)` cacheada por sessão + invalidada por Realtime na tabela `permission_group_modules` e `sap_group_mapping` (padrão que já usamos hoje).
+- OMIE mantém bypass explícito documentado (memória `omie-open-modules`).
+- Nenhuma quebra no fluxo atual até a fase 4; rollback = desligar a flag.
