@@ -1,65 +1,68 @@
-## Objetivo
+# HanaAPI V2 — chamada direta ao servidor de origem
 
-Substituir a visualização atual da página `AuditCrossFiscal` (tabela + tabs) por um Kanban de 3 raias, onde cada card é um documento/pagamento e a raia representa o status da conciliação.
+Nova variante das chamadas HANA que bate direto no servidor de origem, sem passar pelo webhook n8n (`HANA_VIEWS_URL`). V1 permanece funcionando; V2 é opt-in por empresa.
 
-## Raias
+## Contrato do V2
 
-```text
-┌─────────────────────┬─────────────────────┬─────────────────────┐
-│  ERP (só pago)      │  AMBOS (conciliado) │  MasterTax (só NF)  │
-│  cenario =          │  cenario =          │  cenario =          │
-│  pago_sem_nota      │  conciliado         │  nota_sem_pagamento │
-├─────────────────────┼─────────────────────┼─────────────────────┤
-│ [Card pagamento]    │ [Card NF ↔ pagto]   │ [Card NF]           │
-│ Fornecedor          │ Fornecedor          │ Fornecedor          │
-│ CNPJ                │ CNPJ                │ CNPJ                │
-│ Valor pago          │ NF nº · valor       │ NF nº · valor       │
-│ Data baixa          │ Pagto · data · valor│ Data emissão        │
-│ Forma pagto         │ Δ R$ · Δ dias       │ Chave acesso        │
-│ [→ ERP]             │ score · status      │                     │
-│                     │ [→ ERP]             │                     │
-└─────────────────────┴─────────────────────┴─────────────────────┘
+```
+GET {hana_api_base}/data/{SCHEMA}.{VIEW}
+Headers:
+  dynamictoken: {token}
+  sessionid:    {SAP SessionId}
 ```
 
-- Contadores no topo de cada raia: quantidade + soma R$.
-- Filtros mantidos: empresa (sessão), período início/fim, botão **Executar cruzamento** e **Atualizar**.
-- Busca por CNPJ/fornecedor/nº NF acima das raias.
-- Filtro por status_match (automatico / ambiguo / confirmado_manual / ignorado) com chips.
+- `hana_api_base`: URL do servidor de origem por empresa (ex.: `http://201.48.79.205:8001`).
+- Path `/data/{SCHEMA}.{VIEW}` (schema + view separados por ponto). Ex.: `/data/SBO_OPENGAMING.VW_APROVACOES_DETALHADAS`.
+- Headers em lowercase (`dynamictoken`, `sessionid`) — V1 continua com `X-Dynamic-Token` / `X-SessionId` + query string.
+- Sem query string. Sem `X-DB` / `X-View` / `X-Schema`.
+- `dynamictoken`: mesmo algoritmo do V1 (`hex(HMAC_SHA256(SAP_MIDDLEWARE_SECRET, floor(now/3600)))`).
+- `sessionid`: obtido via Login normal do Service Layer (`Apiuser` + `CompanyDB`).
 
-## Card
+## Seleção V1 vs V2 (por empresa)
 
-- Componente reutilizável `CruzamentoCard` com 3 variantes visuais (por raia).
-- Cor de borda por raia: destrutivo (ERP), sucesso (AMBOS), aviso (MasterTax).
-- Ações no card (menu ⋯):
-  - Abrir origem no ERP (quando `conta_paga_link_origem` existe).
-  - Confirmar (para status `ambiguo`).
-  - Ignorar (marca `status_match = ignorado`).
-  - Ver detalhes (drawer lateral com JSON completo, candidatos ambíguos, diferenças).
-- Badge de `status_match` no rodapé.
-- Scroll vertical dentro da raia; raias ocupam altura da viewport (`h-[calc(100vh-...)]`).
+Nova entrada em `system_credentials`:
+- `system_name = 'sap'`, `company_db = '<db>'`, `credential_key = 'hana_api_url'`, `credential_value = 'http://IP:PORT'`.
+- Presente e não vazio → V2 nessa empresa.
+- Ausente → mantém V1 (n8n).
 
-## Interações
+Sem alteração de schema. Zero risco para as empresas atuais até o cadastro ser feito.
 
-- Clique no card → abre `Drawer` (shadcn `sheet`) com todos os campos e o histórico da linha.
-- Botão **Exportar CSV** aplicado à raia visível ou ao conjunto filtrado (mantém a lógica existente em `toCsv`).
-- Empty state por raia com CTA para "Executar cruzamento" quando não há dados.
+## Mudanças no código
 
-## Escopo técnico
+### 1. Helper compartilhado
+`supabase/functions/_shared/hana-views.ts` — novo:
+- Export `fetchHanaView({ sb, companyDb, schema, view, sessionId })`.
+- Lê `hana_api_url` da `system_credentials`.
+- V2: `GET {url}/data/{schema}.{view}` com headers `dynamictoken` + `sessionid`.
+- V1 (fallback): usa `HANA_VIEWS_URL` + headers `X-*` + query string, como hoje.
+- Parser unificado aceita `[{data:[…]}]`, `[…]`, `{data:[…]}`.
+- Reaproveita `generateDynamicToken` do helper existente.
 
-Alterações apenas em frontend — motor (`audit-cross-fiscal-run`), hook (`useAuditCrossFiscal`) e schema permanecem inalterados.
+### 2. Refactor das edge functions HANA para usar o helper
+Trocam `fetchView` local pelo helper (comportamento sem alteração quando `hana_api_url` não está setado):
+- `supabase/functions/sap-suppliers-hana/index.ts`
+- `supabase/functions/sap-purchase-orders-hana/index.ts`
+- `supabase/functions/sap-fluxo-analise-sync/index.ts`
+- `supabase/functions/sap-sl-cache-refresh/index.ts` (se usa view HANA — confirmar no read; caso não use, fica de fora)
 
-**Arquivos**:
-- `src/pages/AuditCrossFiscal.tsx` — troca layout de Tabs/Table por Kanban de 3 colunas.
-- `src/components/audit-cross/CruzamentoCard.tsx` (novo) — card individual.
-- `src/components/audit-cross/CruzamentoDetailDrawer.tsx` (novo) — drawer de detalhes.
-- `src/components/audit-cross/KanbanColumn.tsx` (novo) — raia com header (título, contador, total, empty state) e área rolável.
+### 3. Cadastrar Open Gaming como primeira empresa V2
+Inserir/atualizar em `system_credentials`:
+- `open_gaming_sa` → `hana_api_url = http://201.48.79.205:8001`.
 
-**Sem drag & drop**: mover cards entre raias não faz sentido semântico (a raia é derivada do cenário). Ações discretas via menu no card já cobrem os fluxos manuais (`confirmado_manual` / `ignorado`).
+O override de schema `open_gaming_sa → OPENGAMING` já existe e continua valendo — path fica `/data/OPENGAMING.VW_FORNECEDORES`, `/data/OPENGAMING.VW_PEDIDOS_COMPRA`, etc.
 
-**Responsivo**: em telas <lg, colunas empilham verticalmente; em ≥lg, grid 3 colunas.
+### 4. Documentação
+Criar `docs/hana-api.md` com seções V1 e V2 (algoritmo do token, headers, exemplo curl e Postman).
 
-## Fora do escopo
+## Fora de escopo desta entrega
 
-- Rodar o cruzamento nas bases produtivas (`SBO_ANAGAMING`, `SBO_CACTUS`) — hoje sem notas do MasterTax capturadas; tratar em passo separado depois que os pulls estiverem populando.
-- Corrigir as 4 notas com `sap_company_db` nulo — item de saneamento independente.
-- Cron automático do cruzamento.
+- UI em Integrações para editar `hana_api_url` sem SQL (posso incluir num próximo passo).
+- Migração das outras empresas para V2 (feita depois, uma a uma, cadastrando `hana_api_url`).
+
+## Decisões que preciso confirmar antes de construir
+
+1. **Secret do `dynamictoken` no V2**: usar o **mesmo** `SAP_MIDDLEWARE_SECRET` do V1, ou o servidor de origem valida com uma **chave diferente**? Se for diferente, crio o secret `SAP_HANA_API_SECRET` (via `add_secret`) e o helper prioriza ele quando existir.
+2. **HTTP puro (`http://IP:8001`)**: confirmo que o servidor não expõe HTTPS? Edge Functions permitem chamada, mas quero registrar a decisão.
+3. **Endpoint de teste**: posso testar contra `http://201.48.79.205:8001/data/SBO_OPENGAMING.VW_APROVACOES_DETALHADAS` durante a implementação, ou uso outra view/empresa como sanidade?
+
+Confirmando esses três pontos, implemento em modo build.
