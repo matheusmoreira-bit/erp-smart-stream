@@ -37,6 +37,7 @@ import {
   type ModulePerms,
 } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
+import SapGroupMappingManager from "@/components/SapGroupMappingManager";
 
 interface SapCacheUser {
   UserCode: string;
