@@ -169,7 +169,7 @@ async function syncCompany(sb: any, companyDb: string): Promise<{
       view: "VW_FIN_ANALISE_FLUXO",
       sessionId: session.sessionId,
       hanaApiUrl: creds.hana_api_url,
-      useV2: creds.hana_api_v2 === "true",
+      useV2: creds.use_hana_v2 === "true" || creds.hana_api_v2 === "true",
     });
     const seen = new Map<string, ReturnType<typeof mapRow>>();
     for (const r of rawRows) {
