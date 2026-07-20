@@ -534,8 +534,6 @@ async function fetchApprovalsViaServiceLayer(
 
 const APPROVALS_CACHE_KEY = "approvals:detailed";
 const APPROVALS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
-const PENDING_APPROVALS_WEBHOOK_URL =
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
 // Empresas cujo SAP não possui middleware HANA (VW_APROVACOES_DETALHADAS).
 // Para elas, a listagem de pendências é montada 100% via Service Layer.
@@ -577,29 +575,27 @@ export function useApprovals() {
       return fetchApprovalsViaServiceLayer(session as SapSession);
     }
 
-    // Fonte padrão: webhook n8n (middleware HANA). Passamos DB/View/SessionId
-    // via querystring para que o n8n consulte a VW_APROVACOES_DETALHADAS do
-    // schema correto (ANA Gaming, Cactus, etc).
+    // Fonte padrão: edge function `sap-approvals-hana`, que consulta a
+    // VW_APROVACOES_DETALHADAS via HanaAPI V2 usando a sessão SAP do usuário.
     const hanaSchema = HANA_SCHEMA_OVERRIDES[companyDb] || companyDb;
-    const url = new URL(PENDING_APPROVALS_WEBHOOK_URL);
-    url.searchParams.set("SessionId", session.sessionId || "");
-    url.searchParams.set("DB", hanaSchema);
-    url.searchParams.set("Schema", hanaSchema);
-    url.searchParams.set("CompanyDB", companyDb);
-    url.searchParams.set("View", "VW_APROVACOES_DETALHADAS");
-    url.searchParams.set("_t", String(Date.now()));
-
-    const resp = await fetch(url.toString(), {
-      method: "GET",
-      headers: { Accept: "application/json" },
+    const { data, error } = await supabase.functions.invoke("sap-approvals-hana", {
+      body: {
+        company_db: companyDb,
+        session_id: session.sessionId || "",
+        schema: hanaSchema,
+      },
     });
-    if (!resp.ok) {
-      throw new Error(`Webhook de aprovações retornou ${resp.status}`);
+    if (error) {
+      throw new Error(error.message || "Falha ao consultar aprovações (HanaAPI V2)");
     }
-    const payload = (await resp.json()) as
+    if (data && typeof data === "object" && "error" in data && (data as { error?: string }).error) {
+      throw new Error((data as { error: string }).error);
+    }
+    const payload = data as
       | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
-      | { schema?: string; data?: HanaApprovalViewRow[] };
-    const groups = Array.isArray(payload) ? payload : [payload];
+      | { schema?: string; data?: HanaApprovalViewRow[] }
+      | null;
+    const groups = Array.isArray(payload) ? payload : payload ? [payload] : [];
     const expected = hanaSchema.toUpperCase();
     const rows: HanaApprovalViewRow[] = [];
     for (const group of groups) {
@@ -613,6 +609,7 @@ export function useApprovals() {
       .filter((doc) => doc.approvalRequestId > 0);
 
     return hanaDocs;
+
 
   }, [session]);
 
