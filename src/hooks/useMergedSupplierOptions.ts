@@ -185,7 +185,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   //    não-sincronizados (novos, com erro, ou pendentes).
   const merged = useMemo<EnrichedSupplierOption[]>(() => {
     const byCardCode = new Map<string, EnrichedSupplierOption>();
-    for (const o of sapOptions as EnrichedSupplierOption[]) {
+    for (const o of effectiveSapOptions) {
       if (o.code) byCardCode.set(o.code, o);
     }
 
@@ -227,10 +227,11 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       }
     }
 
-    const all = [...(sapOptions as EnrichedSupplierOption[]), ...localOnly];
+    const all = [...effectiveSapOptions, ...localOnly];
     all.sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR"));
     return all;
-  }, [sapOptions, localRows]);
+  }, [effectiveSapOptions, localRows]);
+
 
   // 5) Cross-company: procura em public.suppliers de TODAS as empresas
   //    (respeita RLS) casos onde o termo bate por nome ou CNPJ.
