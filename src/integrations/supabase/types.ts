@@ -5317,6 +5317,10 @@ export type Database = {
         Returns: boolean
       }
       is_idp_linked: { Args: { _email: string }; Returns: boolean }
+      is_sap_code_idp_linked: {
+        Args: { _sap_user_code: string }
+        Returns: boolean
+      }
       is_sap_user_admin: { Args: { _sap_username: string }; Returns: boolean }
       list_baixas_by_invoice: {
         Args: { p_company_db: string; p_invoice_doc_entry: number }
