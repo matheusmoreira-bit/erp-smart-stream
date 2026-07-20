@@ -67,7 +67,7 @@ export async function fetchHanaView(
 ): Promise<Record<string, unknown>[]> {
   const { schema, view, sessionId } = params;
   const dynamicToken = await generateDynamicToken();
-  const useV2 = !!(params.hanaApiUrl && params.hanaApiUrl.trim());
+  const useV2 = !!(params.useV2 && params.hanaApiUrl && params.hanaApiUrl.trim());
 
   let resp: Response;
   if (useV2) {
