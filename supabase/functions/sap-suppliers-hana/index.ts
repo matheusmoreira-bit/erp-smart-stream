@@ -118,7 +118,7 @@ function mapRow(raw: Record<string, unknown>) {
   const code = toStr(pick(raw, "CardCode", "Código", "Codigo", "Código PN", "Codigo PN", "Codigo_PN", "cardcode"));
   const name = toStr(pick(raw, "CardName", "Nome", "Nome do fornecedor", "Nome_PN", "Fornecedor", "Nome do PN", "cardname"));
   const alias = toStr(pick(raw, "AliasName", "Nome Fantasia", "NomeFantasia", "Fantasia", "aliasname"));
-  const taxId = toStr(pick(raw, "FederalTaxID", "CNPJ", "CPF", "CNPJ/CPF", "Documento fiscal", "TaxId", "TaxID", "federaltaxid"));
+  const taxId = toStr(pick(raw, "CNPJ / CPF", "CNPJ/CPF", "CNPJ", "CPF", "FederalTaxID", "Documento fiscal", "TaxId", "TaxID", "federaltaxid"));
   const taxId0 = toStr(pick(raw, "U_FGR_TaxId0", "TaxId0", "u_fgr_taxid0"));
   const currency = toStr(pick(raw, "Currency", "Moeda", "currency"));
   const frozen = isFrozen(pick(raw, "Frozen", "Bloqueado", "frozen"));
