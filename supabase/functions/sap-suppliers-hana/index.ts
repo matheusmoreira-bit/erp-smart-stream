@@ -6,17 +6,13 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+import { fetchHanaView } from "../_shared/hana-views.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-company-db",
 };
-
-const HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 
 // Mapa: companyDB (Service Layer) -> schema HANA onde as views estão publicadas.
 const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
@@ -50,41 +46,6 @@ async function sapLogout(baseUrl: string, s: { sessionId: string; routeId: strin
       headers: { Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}` },
     });
   } catch { /* ignore */ }
-}
-
-async function fetchView(database: string, sessionId: string, view: string): Promise<Record<string, unknown>[]> {
-  const dynamicToken = await generateDynamicToken();
-  const params = new URLSearchParams({
-    SessionId: sessionId,
-    DB: database,
-    Schema: database,
-    View: view,
-    DynamicToken: dynamicToken,
-    _t: String(Date.now()),
-  });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, {
-    headers: {
-      "X-SessionId": sessionId,
-      "X-DB": database,
-      "X-Schema": database,
-      "X-View": view,
-      "X-Dynamic-Token": dynamicToken,
-    },
-  });
-  if (!resp.ok) throw new Error(`HANA view ${view} falhou: ${resp.status} ${await resp.text().catch(() => "")}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  const groups = Array.isArray(payload) ? payload : [payload];
-  const rows: Record<string, unknown>[] = [];
-  for (const g of groups) {
-    if (g && Array.isArray((g as any).data)) rows.push(...((g as any).data as Record<string, unknown>[]));
-    else if (Array.isArray(g)) rows.push(...(g as Record<string, unknown>[]));
-  }
-  if (rows.length === 0 && !Array.isArray(payload) && payload && typeof payload === "object") {
-    // fallback: talvez o próprio objeto seja uma linha (raro)
-  }
-  return rows;
 }
 
 function pick(row: Record<string, unknown>, ...keys: string[]): unknown {
