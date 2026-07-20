@@ -591,34 +591,31 @@ Deno.serve(async (req) => {
         });
       }
 
-      const dynamicToken = await generateDynamicToken();
-      const queryParams = new URLSearchParams({
-        SessionId: sessionId,
-        DB: database,
-        Table: tableName,
-        DynamicToken: dynamicToken,
-        _t: String(Date.now()),
-      });
-
+      // Constrói filtros/limit/offset a partir de `params` para o HanaAPI V2.
+      let limit: number | undefined;
+      let offset: number | undefined;
+      const filters: Record<string, string | number | boolean | Array<string | number>> = {};
       if (params) {
         for (const [key, value] of Object.entries(params)) {
-          if (value !== undefined && value !== null && key !== "SessionId" && key !== "DB" && key !== "Table") {
-            queryParams.set(key, String(value));
-          }
+          if (value === undefined || value === null) continue;
+          if (key === "SessionId" || key === "DB" || key === "Table") continue;
+          const lk = key.toLowerCase();
+          if (lk === "limit") { const n = Number(value); if (Number.isFinite(n)) limit = n; continue; }
+          if (lk === "offset") { const n = Number(value); if (Number.isFinite(n)) offset = n; continue; }
+          filters[key] = value as any;
         }
       }
 
-      let viewResp: Response;
+      let rows: Record<string, unknown>[] = [];
       try {
-        viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "X-SessionId": sessionId,
-            "X-DB": database,
-            "X-Table": tableName,
-            "X-Dynamic-Token": dynamicToken,
-          },
+        rows = await fetchHanaView({
+          schema: resolveHanaSchema(database, database),
+          view: tableName,
+          sessionId,
+          hanaApiUrl,
+          limit,
+          offset,
+          filters,
         });
       } catch (e) {
         if (isAbortError(e)) {
@@ -626,25 +623,12 @@ Deno.serve(async (req) => {
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        throw e;
-      }
-
-      const payload = await parseResponseBody(viewResp);
-
-      if (!viewResp.ok) {
-        const message =
-          payload && typeof payload === "object" && "message" in payload
-            ? String((payload as { message?: string }).message || "Erro na consulta da view HANA")
-            : typeof payload === "string"
-              ? payload
-              : "Erro na consulta da view HANA";
-        console.error("HANA view query error:", viewResp.status, payload);
-        return new Response(JSON.stringify({ error: message }), {
-          status: viewResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        console.error("HANA view query error:", (e as Error).message);
+        return new Response(JSON.stringify({ error: (e as Error).message }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const rows = extractViewRows(payload);
       if (rows.length > 0) setCache(cacheKey, rows);
 
       return new Response(JSON.stringify({ data: rows, fromCache: false }), {
