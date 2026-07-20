@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
-import { filterAndRank } from "@/lib/supplier-search";
+import { filterAndRank, formatCnpjCpf, onlyDigits } from "@/lib/supplier-search";
 
 interface CachedSearchComboboxProps {
   options: SapSearchOption[];
@@ -152,7 +152,7 @@ export function CachedSearchCombobox({
   };
 
   const displayValue = value
-    ? `${value.name} — ${value.code}${value.extra ? ` (${value.extra})` : ""}`
+    ? `${value.name} — ${value.code}${value.extra ? ` (${onlyDigits(value.extra).length >= 11 ? formatCnpjCpf(value.extra) : value.extra})` : ""}`
     : "";
 
   const showResults = isOpen && filtered.length > 0 && dropdownPosition;
@@ -234,10 +234,13 @@ export function CachedSearchCombobox({
         >
           <div className="max-h-56 overflow-y-auto overflow-x-hidden">
             {filtered.map((opt) => {
-              const hasColumns = !!(opt.details?.fantasyName || opt.details?.taxId);
               const badge = renderOptionBadge?.(opt);
               const disabled = !!isOptionDisabled?.(opt);
               const disabledReason = disabled ? getDisabledReason?.(opt) : null;
+              const rawTax = opt.details?.taxId || opt.extra || "";
+              const taxDigits = onlyDigits(rawTax);
+              const taxDisplay = taxDigits.length >= 11 ? formatCnpjCpf(rawTax) : (rawTax || "");
+              const fantasy = opt.details?.fantasyName || "";
               return (
                 <button
                   key={opt.code}
@@ -265,31 +268,29 @@ export function CachedSearchCombobox({
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
                 >
-                  {hasColumns ? (
-                    <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[80px_minmax(0,1fr)_minmax(0,1fr)_120px]">
-                      <span className="text-xs font-mono text-muted-foreground truncate">{opt.code}</span>
-                      <span className="font-medium text-foreground truncate flex items-center gap-1.5" title={opt.name}>
-                        <span className="truncate">{opt.name}</span>
-                        {badge}
-                      </span>
-                      <span className="hidden text-xs text-muted-foreground truncate sm:block" title={opt.details?.fantasyName || ""}>
-                        {opt.details?.fantasyName || "—"}
-                      </span>
-                      <span className="hidden text-xs text-muted-foreground tabular-nums truncate text-right sm:block" title={opt.details?.taxId || ""}>
-                        {opt.details?.taxId || "—"}
-                      </span>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate font-medium text-foreground flex items-center gap-1.5" title={opt.name}>
+                      <span className="truncate">{opt.name}</span>
+                      {badge}
+                    </span>
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span className="font-mono">{opt.code}</span>
+                      {taxDisplay && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="tabular-nums" title={`CNPJ/CPF: ${taxDisplay}`}>
+                            {taxDisplay}
+                          </span>
+                        </>
+                      )}
+                      {fantasy && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="truncate" title={fantasy}>{fantasy}</span>
+                        </>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex min-w-0 flex-col">
-                      <span className="truncate font-medium text-foreground flex items-center gap-1.5">
-                        <span className="truncate">{opt.name}</span>
-                        {badge}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {opt.code}{opt.extra ? ` · ${opt.extra}` : ""}
-                      </span>
-                    </div>
-                  )}
+                  </div>
                   {disabled && disabledReason && (
                     <div className="mt-0.5 text-[11px] text-muted-foreground italic">
                       {disabledReason}
