@@ -1760,9 +1760,13 @@ export function CreateExpenseModal({
         }
         return;
       }
-      // Open Gaming: projeto por linha é obrigatório (política interna).
-      if (sapSession?.companyDB === "open_gaming_sa" && (!it.project || !String(it.project).trim())) {
-        toast.error(`Item ${n}: projeto é obrigatório para Open Gaming`);
+      // Open Gaming / Cactus Tecnologia: projeto por linha é obrigatório (política interna).
+      if (
+        (sapSession?.companyDB === "open_gaming_sa" || sapSession?.companyDB === "SBO_CACTUS") &&
+        (!it.project || !String(it.project).trim())
+      ) {
+        const label = sapSession?.companyDB === "SBO_CACTUS" ? "Cactus Tecnologia" : "Open Gaming";
+        toast.error(`Item ${n}: projeto é obrigatório para ${label}`);
         return;
       }
     }
