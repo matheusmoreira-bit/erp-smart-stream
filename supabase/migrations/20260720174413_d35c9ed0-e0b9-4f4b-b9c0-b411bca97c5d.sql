@@ -1,0 +1,3 @@
+UPDATE public.approval_rule_levels SET approver_name='Ketlhenn Monteiro', approver_email='ketlhenn.monteiro@anagaming.com.br' WHERE approver_name ILIKE 'Kethlenn%' OR approver_email ILIKE 'kethlenn.%';
+UPDATE public.expenses SET current_approver='Ketlhenn Monteiro', updated_at=now() WHERE current_approver ILIKE 'Kethlenn%' AND status='pendente_aprovacao';
+UPDATE public.expenses SET original_approver='Ketlhenn Monteiro' WHERE original_approver ILIKE 'Kethlenn%';
