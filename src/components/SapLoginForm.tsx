@@ -226,6 +226,28 @@ export function SapLoginForm() {
         ? userName.split("@")[0].trim()
         : userName.trim();
       await login(sapUser, password, companyDB, erpType as ErpType);
+
+      // Backoffice admin? Record a `local` bypass so it becomes auditable in idp_user_mapping.
+      // Best-effort — never blocks the login.
+      try {
+        const { data: isAdmin } = await supabase.rpc("is_sap_user_admin", { _sap_username: sapUser });
+        if (isAdmin) {
+          await upsertLocalAdminMapping({ sapUserCode: sapUser });
+        }
+      } catch { /* noop */ }
+
+      // Enforce IdP binding flag (checks by SAP user code and, when available, by email).
+      if (erpType === "sap") {
+        const gate = await assertSapLoginIdpBinding({ sapUserCode: sapUser });
+        if (!gate.ok) {
+          toast.error("Vínculo de identidade obrigatório", { description: gate.reason });
+          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          try { sessionStorage.removeItem("erp_session_v1"); } catch { /* ignore */ }
+          window.dispatchEvent(new CustomEvent("erp:session-expired"));
+          return;
+        }
+      }
+
       // Alerta se o usuário logou com a senha padrão em uma base de produção
       if (needsCredentials && password === "Sap@2025" && !companyDB.toUpperCase().startsWith("TST")) {
         try { sessionStorage.setItem("erp:default-password-warning", "1"); } catch { /* noop */ }
