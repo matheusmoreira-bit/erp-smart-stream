@@ -44,11 +44,12 @@ type View =
   | { name: "root" }
   | { name: "groups" }
   | { name: "group-detail"; groupId: string | null }
-  | { name: "users" };
+  | { name: "users" }
+  | { name: "sap-mapping" };
 
-const FULL: ModulePerms = { view: true, create: true, edit: true, delete: true };
-const VIEW_ONLY: ModulePerms = { view: true, create: false, edit: false, delete: false };
-const NONE: ModulePerms = { view: false, create: false, edit: false, delete: false };
+const FULL: ModulePerms = { view: true, create: true, edit: true, delete: true, approve: true, integrate: true, export: true };
+const VIEW_ONLY: ModulePerms = { view: true, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
+const NONE: ModulePerms = { view: false, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
 
 /* ── iOS-style list building blocks ────────────────────────── */
 
