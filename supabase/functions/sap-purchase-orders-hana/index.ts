@@ -1,7 +1,9 @@
 // Edge function: sap-purchase-orders-hana
-// Lista pedidos de compra a partir da view HANA VW_PEDIDOS_COMPRA_APROVACOES.
-// Autentica como Apiuser da empresa, chama a HANA view, ordena por data de
-// lançamento (mais recente primeiro) e retorna paginado.
+// Lista pedidos de compra a partir da view HANA VW_ACOMPANHAMENTO_PEDIDOS.
+// Autentica como Apiuser da empresa, chama a HANA view, agrega por pedido
+// (uma linha por baixa/pagamento) e retorna paginado ordenado pela data
+// de lançamento do pedido (mais recente primeiro).
+
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
