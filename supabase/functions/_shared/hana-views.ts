@@ -17,11 +17,11 @@ export interface FetchHanaViewParams {
   view: string;
   /** SessionId obtido no Login do Service Layer. */
   sessionId: string;
-  /** URL base do servidor HANA direto (V2). Obrigatória quando useV2=true. */
+  /** URL base do servidor HANA direto (V2). Se omitida, usa o IP primário conhecido. */
   hanaApiUrl?: string | null;
-  /** Força usar V2 (direto). Só entra em V2 quando useV2 === true E hanaApiUrl estiver setada. */
+  /** @deprecated V1 foi descontinuada; o helper sempre usa V2. Mantido para compat. */
   useV2?: boolean;
-  /** Middleware URL (V1). Default = env HANA_VIEWS_URL. */
+  /** @deprecated V1 (middleware n8n) foi descontinuada. Mantido para compat. */
   middlewareUrl?: string;
   /** Paginação (V2 apenas): limita nº de linhas retornadas. Inteiro >= 1. */
   limit?: number;
