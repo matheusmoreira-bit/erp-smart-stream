@@ -230,7 +230,7 @@ function GroupDetail({
       <div>
         <SectionTitle>Módulos — Acesso detalhado</SectionTitle>
         <p className="text-xs text-muted-foreground px-4 pb-2">
-          Para cada módulo, defina o que o grupo pode <strong>ver</strong>, <strong>criar</strong>, <strong>editar</strong> e <strong>excluir</strong>.
+          Para cada módulo, defina o que o grupo pode <strong>ver, criar, editar, excluir, aprovar, integrar</strong> e <strong>exportar</strong>.
         </p>
         <IosList>
           {MODULES.map((m) => {
