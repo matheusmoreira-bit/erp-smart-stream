@@ -268,6 +268,9 @@ export function usePermissionGroups() {
         can_create: !isViewOnlyKey(m),
         can_edit: !isViewOnlyKey(m),
         can_delete: !isViewOnlyKey(m),
+        can_approve: !isViewOnlyKey(m),
+        can_integrate: !isViewOnlyKey(m),
+        can_export: !isViewOnlyKey(m),
       }));
       await supabase.from("permission_group_modules").insert(rows as any);
       await fetch();
