@@ -11,7 +11,15 @@ export interface ModulePerms {
   create: boolean;
   edit: boolean;
   delete: boolean;
+  approve: boolean;
+  integrate: boolean;
+  export: boolean;
 }
+
+export const PERMISSION_ACTIONS = [
+  "view", "create", "edit", "delete", "approve", "integrate", "export",
+] as const;
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
 export interface PermissionGroup {
   id: string;
