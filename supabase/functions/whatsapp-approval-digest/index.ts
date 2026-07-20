@@ -14,9 +14,7 @@ const corsHeaders = {
 const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
 const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 const ERP_FLOW_URL = "https://erp-flow.cactuscorporation.com";
-const HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+// HanaAPI V1 (middleware n8n) foi descontinuada — usamos V2 via fetchHanaView.
 
 // Janela para dedupe do digest.
 const DIGEST_WINDOW_HOURS = 4;
