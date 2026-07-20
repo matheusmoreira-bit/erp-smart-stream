@@ -97,9 +97,26 @@ export async function fetchHanaView(
       bases.push(FALLBACK_BASE);
     }
 
+    // Query string opcional: limit/offset + filtros Campo__op=valor.
+    const qs = new URLSearchParams();
+    if (typeof params.limit === "number" && Number.isFinite(params.limit) && params.limit >= 1) {
+      qs.set("limit", String(Math.floor(params.limit)));
+    }
+    if (typeof params.offset === "number" && Number.isFinite(params.offset) && params.offset >= 0) {
+      qs.set("offset", String(Math.floor(params.offset)));
+    }
+    if (params.filters) {
+      for (const [key, value] of Object.entries(params.filters)) {
+        if (value === undefined || value === null) continue;
+        const v = Array.isArray(value) ? value.join(",") : String(value);
+        qs.set(key, v);
+      }
+    }
+    const queryString = qs.toString();
+
     let lastErr: unknown = null;
     for (const base of bases) {
-      const url = `${base}/data/${encodeURIComponent(schema)}.${encodeURIComponent(view)}`;
+      const url = `${base}/data/${encodeURIComponent(schema)}.${encodeURIComponent(view)}${queryString ? `?${queryString}` : ""}`;
       try {
         const r = await fetch(url, {
           headers: {
@@ -111,6 +128,7 @@ export async function fetchHanaView(
           resp = r;
           break;
         }
+
         // 5xx → tenta próximo IP; 4xx → propaga sem fallback.
         if (r.status >= 500) {
           lastErr = new Error(`HTTP ${r.status} em ${base}`);
