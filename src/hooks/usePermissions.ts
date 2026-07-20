@@ -11,7 +11,15 @@ export interface ModulePerms {
   create: boolean;
   edit: boolean;
   delete: boolean;
+  approve: boolean;
+  integrate: boolean;
+  export: boolean;
 }
+
+export const PERMISSION_ACTIONS = [
+  "view", "create", "edit", "delete", "approve", "integrate", "export",
+] as const;
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
 export interface PermissionGroup {
   id: string;
@@ -117,8 +125,9 @@ const DEFAULT_READ_ONLY_MODULES = new Set<string>([
   "items",
 ]);
 
-const FULL_PERMS: ModulePerms = { view: true, create: true, edit: true, delete: true };
-const VIEW_ONLY_PERMS: ModulePerms = { view: true, create: false, edit: false, delete: false };
+const FULL_PERMS: ModulePerms = { view: true, create: true, edit: true, delete: true, approve: true, integrate: true, export: true };
+const VIEW_ONLY_PERMS: ModulePerms = { view: true, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
+const NONE_PERMS: ModulePerms = { view: false, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
 
 function isViewOnlyKey(key: string): boolean {
   return (
@@ -162,10 +171,13 @@ export function usePermissionGroups() {
       const modulePerms: Record<string, ModulePerms> = {};
       for (const r of rows) {
         modulePerms[r.module_key] = {
-          view:   r.can_view   ?? true,
-          create: r.can_create ?? true,
-          edit:   r.can_edit   ?? true,
-          delete: r.can_delete ?? true,
+          view:      r.can_view      ?? true,
+          create:    r.can_create    ?? true,
+          edit:      r.can_edit      ?? true,
+          delete:    r.can_delete    ?? true,
+          approve:   r.can_approve   ?? true,
+          integrate: r.can_integrate ?? true,
+          export:    r.can_export    ?? true,
         };
       }
       return {
@@ -216,7 +228,7 @@ export function usePermissionGroups() {
 
     await supabase.from("permission_group_modules").delete().eq("group_id", id!);
     const rows = Object.entries(normalized)
-      .filter(([, p]) => p.view || p.create || p.edit || p.delete)
+      .filter(([, p]) => p.view || p.create || p.edit || p.delete || p.approve || p.integrate || p.export)
       .map(([module_key, p]) => ({
         group_id: id!,
         module_key,
@@ -224,6 +236,9 @@ export function usePermissionGroups() {
         can_create: p.create,
         can_edit: p.edit,
         can_delete: p.delete,
+        can_approve: p.approve,
+        can_integrate: p.integrate,
+        can_export: p.export,
       }));
     if (rows.length > 0) {
       await supabase.from("permission_group_modules").insert(rows as any);
@@ -253,6 +268,9 @@ export function usePermissionGroups() {
         can_create: !isViewOnlyKey(m),
         can_edit: !isViewOnlyKey(m),
         can_delete: !isViewOnlyKey(m),
+        can_approve: !isViewOnlyKey(m),
+        can_integrate: !isViewOnlyKey(m),
+        can_export: !isViewOnlyKey(m),
       }));
       await supabase.from("permission_group_modules").insert(rows as any);
       await fetch();
@@ -410,7 +428,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
       const { data: modules } = await supabase
         .from("permission_group_modules")
-        .select("module_key, can_view, can_create, can_edit, can_delete, group_id")
+        .select("module_key, can_view, can_create, can_edit, can_delete, can_approve, can_integrate, can_export, group_id")
         .in("group_id", groupIds);
 
       if (cancelled) return;
@@ -418,12 +436,15 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       // Merge multiple groups via OR
       const merged: Record<string, ModulePerms> = {};
       for (const m of (modules || []) as any[]) {
-        const prev = merged[m.module_key] || { view: false, create: false, edit: false, delete: false };
+        const prev = merged[m.module_key] || { ...NONE_PERMS };
         merged[m.module_key] = {
-          view:   prev.view   || (m.can_view   ?? true),
-          create: prev.create || (m.can_create ?? true),
-          edit:   prev.edit   || (m.can_edit   ?? true),
-          delete: prev.delete || (m.can_delete ?? true),
+          view:      prev.view      || (m.can_view      ?? true),
+          create:    prev.create    || (m.can_create    ?? true),
+          edit:      prev.edit      || (m.can_edit      ?? true),
+          delete:    prev.delete    || (m.can_delete    ?? true),
+          approve:   prev.approve   || (m.can_approve   ?? true),
+          integrate: prev.integrate || (m.can_integrate ?? true),
+          export:    prev.export    || (m.can_export    ?? true),
         };
       }
 
@@ -474,8 +495,8 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
 
   const can: ModulePerms = moduleKey
-    ? (perms[moduleKey] ?? { view: userModules.includes(moduleKey), create: false, edit: false, delete: false })
-    : { view: true, create: false, edit: false, delete: false };
+    ? (perms[moduleKey] ?? { ...NONE_PERMS, view: userModules.includes(moduleKey) })
+    : { ...NONE_PERMS, view: true };
 
   const hasAccess = moduleKey ? (perms[moduleKey]?.view ?? userModules.includes(moduleKey)) : true;
 

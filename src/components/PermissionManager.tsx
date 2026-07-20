@@ -14,6 +14,10 @@ import {
   Eye,
   Pencil,
   FilePlus2,
+  CheckCircle2,
+  Send,
+  Download,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +37,7 @@ import {
   type ModulePerms,
 } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
+import SapGroupMappingManager from "@/components/SapGroupMappingManager";
 
 interface SapCacheUser {
   UserCode: string;
@@ -44,11 +49,12 @@ type View =
   | { name: "root" }
   | { name: "groups" }
   | { name: "group-detail"; groupId: string | null }
-  | { name: "users" };
+  | { name: "users" }
+  | { name: "sap-mapping" };
 
-const FULL: ModulePerms = { view: true, create: true, edit: true, delete: true };
-const VIEW_ONLY: ModulePerms = { view: true, create: false, edit: false, delete: false };
-const NONE: ModulePerms = { view: false, create: false, edit: false, delete: false };
+const FULL: ModulePerms = { view: true, create: true, edit: true, delete: true, approve: true, integrate: true, export: true };
+const VIEW_ONLY: ModulePerms = { view: true, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
+const NONE: ModulePerms = { view: false, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
 
 /* ── iOS-style list building blocks ────────────────────────── */
 
@@ -225,7 +231,7 @@ function GroupDetail({
       <div>
         <SectionTitle>Módulos — Acesso detalhado</SectionTitle>
         <p className="text-xs text-muted-foreground px-4 pb-2">
-          Para cada módulo, defina o que o grupo pode <strong>ver</strong>, <strong>criar</strong>, <strong>editar</strong> e <strong>excluir</strong>.
+          Para cada módulo, defina o que o grupo pode <strong>ver, criar, editar, excluir, aprovar, integrar</strong> e <strong>exportar</strong>.
         </p>
         <IosList>
           {MODULES.map((m) => {
@@ -264,6 +270,24 @@ function GroupDetail({
                       label="Excluir"
                       checked={p.delete}
                       onChange={(v) => setFlag(m.key, "delete", v)}
+                    />
+                    <CrudChip
+                      icon={CheckCircle2}
+                      label="Aprovar"
+                      checked={p.approve}
+                      onChange={(v) => setFlag(m.key, "approve", v)}
+                    />
+                    <CrudChip
+                      icon={Send}
+                      label="Integrar"
+                      checked={p.integrate}
+                      onChange={(v) => setFlag(m.key, "integrate", v)}
+                    />
+                    <CrudChip
+                      icon={Download}
+                      label="Exportar"
+                      checked={p.export}
+                      onChange={(v) => setFlag(m.key, "export", v)}
                     />
                   </div>
                 )}
@@ -656,6 +680,16 @@ export default function PermissionManager() {
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </IosRow>
+            <IosRow onClick={() => setView({ name: "sap-mapping" })}>
+              <div className="w-9 h-9 rounded-xl bg-cactus-amber/15 flex items-center justify-center shrink-0">
+                <Building2 className="w-4 h-4 text-cactus-amber" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Mapeamento SAP × ERP Flow</p>
+                <p className="text-xs text-muted-foreground">Vincular grupos do SAP às ações por empresa</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </IosRow>
           </IosList>
         </div>
       )}
@@ -682,6 +716,8 @@ export default function PermissionManager() {
       )}
 
       {view.name === "users" && <UsersView onBack={goRoot} groups={groups} />}
+
+      {view.name === "sap-mapping" && <SapGroupMappingManager onBack={goRoot} />}
     </div>
   );
 }
