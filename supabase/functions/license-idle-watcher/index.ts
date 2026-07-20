@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
         );
 
         // 2. Carrega USR5 (normalizado para tolerar variações de campos)
-        const rawRecords = await fetchHanaTable<Record<string, unknown>>(dbName, session.sessionId, "USR5");
+        const rawRecords = await fetchHanaTable<Record<string, unknown>>(co.company_db, dbName, session.sessionId, "USR5", creds.hana_api_url);
         const records = rawRecords.map(normalizeUsr5).filter((r) => r.UserCode);
         const lastLoginByUser = new Map<string, Date>();
         for (const r of records) {
