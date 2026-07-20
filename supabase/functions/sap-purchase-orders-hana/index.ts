@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
     try {
       rawRows = await fetchHanaView({
         schema,
-        view: "VW_PEDIDOS_COMPRA_APROVACOES",
+        view: "VW_ACOMPANHAMENTO_PEDIDOS",
         sessionId: session.sessionId,
         hanaApiUrl: creds.hana_api_url,
         useV2: creds.hana_api_v2 === "true",
@@ -243,38 +243,45 @@ Deno.serve(async (req) => {
       .map((r) => mapRow(r, companyDb))
       .filter((r): r is NonNullable<ReturnType<typeof mapRow>> => !!r);
 
-    // Dedup por sap_doc_entry/sap_doc_num — pode haver múltiplas linhas
-    // (uma por aprovador). Mantemos a mais recente por data de aprovação e
-    // concatenamos aprovadores.
-    const byKey = new Map<string, typeof mapped[number]>();
+    // Agrega por pedido de compra — a view retorna uma linha por baixa/pagamento
+    // aplicada. Somamos Valor_Aplicado_Neste_Doc para obter o valor total pago
+    // do pedido e mantemos a última data de pagamento como referência.
+    const byKey = new Map<string, typeof mapped[number] & { _payments: number }>();
     for (const row of mapped) {
-      const key = row.sap_doc_entry != null ? `E${row.sap_doc_entry}` : `N${row.sap_doc_num}`;
+      const key = `N${row.sap_doc_num}`;
       const existing = byKey.get(key);
       if (!existing) {
-        byKey.set(key, row);
+        byKey.set(key, { ...row, _payments: 1 });
         continue;
       }
-      const approvers = new Set(
-        [existing.current_approver, row.current_approver]
-          .filter(Boolean)
-          .flatMap((s) => String(s).split(/[,;/]/).map((p) => p.trim()).filter(Boolean)),
-      );
-      existing.current_approver = approvers.size > 0 ? Array.from(approvers).join(", ") : existing.current_approver;
-      const existingT = existing.hana_approval_date ? new Date(existing.hana_approval_date).getTime() : 0;
-      const rowT = row.hana_approval_date ? new Date(row.hana_approval_date).getTime() : 0;
+      existing._payments += 1;
+      existing.total_amount = Number(existing.total_amount || 0) + Number(row.total_amount || 0);
+      if (row.valor_total_pago != null) {
+        existing.valor_total_pago = Math.max(
+          Number(existing.valor_total_pago || 0),
+          Number(row.valor_total_pago || 0),
+        );
+      }
+      const existingT = existing.payment_date ? new Date(existing.payment_date).getTime() : 0;
+      const rowT = row.payment_date ? new Date(row.payment_date).getTime() : 0;
       if (rowT > existingT) {
-        existing.status = row.status;
+        existing.payment_date = row.payment_date;
         existing.hana_approval_date = row.hana_approval_date;
-        existing.updated_at = row.updated_at;
+        existing.status = row.status;
         existing.sap_purchase_order_status = row.sap_purchase_order_status;
+        existing.numero_pagamento_sap = row.numero_pagamento_sap;
+        existing.updated_at = row.updated_at;
       }
     }
 
-    let rows = Array.from(byKey.values()).sort((a, b) => {
-      const at = new Date(a.doc_date || a.created_at).getTime();
-      const bt = new Date(b.doc_date || b.created_at).getTime();
-      return bt - at;
-    });
+    let rows = Array.from(byKey.values())
+      .map(({ _payments, ...r }) => ({ ...r, payments_count: _payments }))
+      .sort((a, b) => {
+        const at = new Date(a.doc_date || a.created_at).getTime();
+        const bt = new Date(b.doc_date || b.created_at).getTime();
+        return bt - at;
+      });
+
 
 
     const total = rows.length;
