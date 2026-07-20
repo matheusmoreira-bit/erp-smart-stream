@@ -1,7 +1,9 @@
 // Edge function: sap-purchase-orders-hana
-// Lista pedidos de compra a partir da view HANA VW_PEDIDOS_COMPRA_APROVACOES.
-// Autentica como Apiuser da empresa, chama a HANA view, ordena por data de
-// lançamento (mais recente primeiro) e retorna paginado.
+// Lista pedidos de compra a partir da view HANA VW_ACOMPANHAMENTO_PEDIDOS.
+// Autentica como Apiuser da empresa, chama a HANA view, agrega por pedido
+// (uma linha por baixa/pagamento) e retorna paginado ordenado pela data
+// de lançamento do pedido (mais recente primeiro).
+
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -101,72 +103,81 @@ function combineDateHour(date: unknown, hour: unknown): string | null {
   return d.toISOString();
 }
 
-function normalizeStatus(rawStatus: unknown, cancelled: unknown, approvalStatus: unknown): string {
-  const cancel = String(cancelled ?? "").trim().toLowerCase();
-  if (cancel === "y" || cancel === "sim" || cancel === "s" || cancel === "yes" || cancel === "true") {
-    return "cancelado";
-  }
-  const appr = String(approvalStatus ?? "").trim().toLowerCase();
-  if (/rejeit|reprov|negad/.test(appr)) return "rejeitado";
-  if (/pend|aguard/.test(appr)) return "pendente_aprovacao";
-  const st = String(rawStatus ?? "").trim().toLowerCase();
-  if (st === "c" || /fech|encerr|closed/.test(st)) return "encerrado";
-  if (st === "o" || /abert|open|em aberto/.test(st)) return "pc_lancado";
+function normalizeStatus(statusPagamento: unknown, statusDocOrigem: unknown): string {
+  const sp = String(statusPagamento ?? "").trim().toLowerCase();
+  const sd = String(statusDocOrigem ?? "").trim().toLowerCase();
+  if (/cancel/.test(sd) || /cancel/.test(sp)) return "cancelado";
+  if (/(pago|baix|liquid|quit)/.test(sp)) return "encerrado";
+  if (/(pend|aberto|aguard|parcial)/.test(sp)) return "pc_lancado";
+  if (/(ativ|em aberto|aberto)/.test(sd)) return "pc_lancado";
   return "pc_lancado";
 }
 
 function mapRow(raw: Record<string, unknown>, companyDb: string) {
-  const docNum = toInt(pick(raw, "Nº do documento", "N° do documento", "Nº pedido de compra", "N° pedido de compra", "Num_Pedido_Compra", "numPedidoCompra", "DocNum"));
-  const docEntry = toInt(pick(raw, "Draft DocEntry", "Nº do Esboço", "N° do Esboço", "Num_Esboco", "DraftDocEntry", "DocEntry"));
-  const cardCode = toStr(pick(raw, "Código PN/Fornecedor", "Codigo PN/Fornecedor", "Código do fornecedor", "Codigo_PN", "CardCode"));
-  const cardName = toStr(pick(raw, "Fornecedor / Parceiro", "Fornecedor/Parceiro", "Nome do fornecedor", "Nome_PN", "CardName"));
-  const docDate = toIso(pick(raw, "Data do documento", "Data de lançamento", "Data_Lancamento", "DocDate"));
-  const dueDate = toIso(pick(raw, "Data de vencimento", "Data de entrega", "Data_Entrega", "DocDueDate"));
-  const total = toNum(pick(raw, "Valor total", "Valor do documento na moeda original", "Total do documento", "Total_Documento", "DocTotal"));
-  const currency = toStr(pick(raw, "Código da moeda original", "Codigo da moeda original", "Currency", "DocCurrency"));
-  const rawStatus = pick(raw, "Status do pedido", "Status_Pedido", "DocumentStatus");
-  const cancelled = pick(raw, "Cancelado?", "Cancelado", "Cancelled");
-  const solicitante = toStr(pick(raw, "Solicitante", "FGR :: SOLICITANTE", "FGR::SOLICITANTE"));
-  const approver = toStr(pick(raw, "Aprovador", "Aprovador(es)", "Aprovadores"));
-  const flowCreatedAt = combineDateHour(
-    pick(raw, "Data de criação", "Data de criação do fluxo", "Data_Criacao_Fluxo"),
-    pick(raw, "Hora de criação do fluxo", "Hora_Criacao_Fluxo"),
-  );
-  const approvalDate = combineDateHour(
-    pick(raw, "Data de aprovação", "Data_Aprovacao"),
-    pick(raw, "Hora de aprovação", "Hora_Aprovacao"),
-  );
-  const approvalStatus = toStr(pick(raw, "Status da aprovação", "Status_Aprovacao"));
-  const remarks = toStr(pick(raw, "Observações", "Observacoes", "Comments"));
+  const docNum = toInt(pick(raw, "Numero_Pedido_Compra", "Nº pedido de compra", "N° pedido de compra", "DocNum"));
+  if (docNum == null) return null;
 
-  if (docNum == null && docEntry == null) return null;
+  const cardCode = toStr(pick(raw, "Cod_PN", "Código PN/Fornecedor", "CardCode"));
+  const cardName = toStr(pick(raw, "Nome_PN", "Fornecedor / Parceiro", "CardName"));
+  const supplierEmail = toStr(pick(raw, "Email_Fornecedor"));
+  const docDate = toIso(pick(raw, "Data_Lancamento_Pedido", "Data de lançamento", "DocDate"));
+  const nfDate = toIso(pick(raw, "Data_Lancamento_NF"));
+  const dueDate = toIso(pick(raw, "Data_Vencimento_Pagamento", "Data de vencimento", "DocDueDate"));
+  const paymentDate = toIso(pick(raw, "Data_do_Pagamento"));
+  const valorAplicado = toNum(pick(raw, "Valor_Aplicado_Neste_Doc"));
+  const valorTotalPago = toNum(pick(raw, "Valor_Total_Pago"));
+  const currencyRaw = toStr(pick(raw, "Moeda", "Currency"));
+  const statusPagamento = toStr(pick(raw, "Status_Pagamento"));
+  const statusDocOrigem = toStr(pick(raw, "Status_Documento_Origem"));
+  const solicitante = toStr(pick(raw, "Nome_Solicitante", "Solicitante"));
+  const solicitanteEmail = toStr(pick(raw, "Email_Solicitante"));
+  const solicitanteCode = toStr(pick(raw, "UserCode_Solicitante"));
+  const filial = toStr(pick(raw, "Filial"));
+  const numNfRef = toStr(pick(raw, "Num_NF_Referencia"));
+  const numDocOrigem = toStr(pick(raw, "Numero_Documento_Origem"));
+  const numPagamentoSap = toStr(pick(raw, "Numero_Pagamento_SAP"));
 
-  const idKey = docEntry != null ? `E${docEntry}` : `N${docNum}`;
-  const status = normalizeStatus(rawStatus, cancelled, approvalStatus);
+  const status = normalizeStatus(statusPagamento, statusDocOrigem);
+  const currency = currencyRaw && currencyRaw !== "R$" ? currencyRaw : "BRL";
+  const remarksParts: string[] = [];
+  if (statusPagamento) remarksParts.push(statusPagamento);
+  if (numNfRef) remarksParts.push(`NF ${numNfRef}`);
+  if (filial) remarksParts.push(filial);
 
   return {
-    id: `sap-${idKey}`,
+    id: `sap-N${docNum}`,
     company_db: companyDb,
     sap_doc_num: docNum,
-    sap_doc_entry: docEntry,
+    sap_doc_entry: null as number | null,
     supplier_code: cardCode ?? undefined,
     supplier_name: cardName || cardCode || "—",
-    total_amount: total ?? 0,
-    currency: currency && currency !== "R$" ? currency : "BRL",
+    supplier_email: supplierEmail ?? undefined,
+    total_amount: valorAplicado ?? 0,
+    currency,
     status,
     requester_name: solicitante || "(ERP)",
-    current_approver: approver ?? undefined,
+    requester_email: solicitanteEmail ?? undefined,
+    requester_code: solicitanteCode ?? undefined,
+    current_approver: undefined as string | undefined,
     doc_date: docDate ?? undefined,
     due_date: dueDate ?? undefined,
-    remarks: remarks ?? undefined,
-    sap_purchase_order_status: approvalStatus ?? undefined,
-    created_at: docDate || flowCreatedAt || new Date().toISOString(),
-    updated_at: approvalDate || docDate || new Date().toISOString(),
+    nf_date: nfDate ?? undefined,
+    payment_date: paymentDate ?? undefined,
+    remarks: remarksParts.join(" · ") || undefined,
+    sap_purchase_order_status: statusPagamento ?? statusDocOrigem ?? undefined,
+    num_nf_referencia: numNfRef ?? undefined,
+    numero_documento_origem: numDocOrigem ?? undefined,
+    numero_pagamento_sap: numPagamentoSap ?? undefined,
+    branch: filial ?? undefined,
+    valor_total_pago: valorTotalPago ?? undefined,
+    created_at: docDate || new Date().toISOString(),
+    updated_at: paymentDate || nfDate || docDate || new Date().toISOString(),
     origin: "manual" as const,
-    hana_flow_created_at: flowCreatedAt,
-    hana_approval_date: approvalDate,
+    hana_flow_created_at: docDate,
+    hana_approval_date: paymentDate,
   };
 }
+
 
 async function loadCreds(sb: any, companyDb: string): Promise<Record<string, string> | null> {
   const { data, error } = await sb
@@ -219,7 +230,7 @@ Deno.serve(async (req) => {
     try {
       rawRows = await fetchHanaView({
         schema,
-        view: "VW_PEDIDOS_COMPRA_APROVACOES",
+        view: "VW_ACOMPANHAMENTO_PEDIDOS",
         sessionId: session.sessionId,
         hanaApiUrl: creds.hana_api_url,
         useV2: creds.hana_api_v2 === "true",
@@ -232,38 +243,45 @@ Deno.serve(async (req) => {
       .map((r) => mapRow(r, companyDb))
       .filter((r): r is NonNullable<ReturnType<typeof mapRow>> => !!r);
 
-    // Dedup por sap_doc_entry/sap_doc_num — pode haver múltiplas linhas
-    // (uma por aprovador). Mantemos a mais recente por data de aprovação e
-    // concatenamos aprovadores.
-    const byKey = new Map<string, typeof mapped[number]>();
+    // Agrega por pedido de compra — a view retorna uma linha por baixa/pagamento
+    // aplicada. Somamos Valor_Aplicado_Neste_Doc para obter o valor total pago
+    // do pedido e mantemos a última data de pagamento como referência.
+    const byKey = new Map<string, typeof mapped[number] & { _payments: number }>();
     for (const row of mapped) {
-      const key = row.sap_doc_entry != null ? `E${row.sap_doc_entry}` : `N${row.sap_doc_num}`;
+      const key = `N${row.sap_doc_num}`;
       const existing = byKey.get(key);
       if (!existing) {
-        byKey.set(key, row);
+        byKey.set(key, { ...row, _payments: 1 });
         continue;
       }
-      const approvers = new Set(
-        [existing.current_approver, row.current_approver]
-          .filter(Boolean)
-          .flatMap((s) => String(s).split(/[,;/]/).map((p) => p.trim()).filter(Boolean)),
-      );
-      existing.current_approver = approvers.size > 0 ? Array.from(approvers).join(", ") : existing.current_approver;
-      const existingT = existing.hana_approval_date ? new Date(existing.hana_approval_date).getTime() : 0;
-      const rowT = row.hana_approval_date ? new Date(row.hana_approval_date).getTime() : 0;
+      existing._payments += 1;
+      existing.total_amount = Number(existing.total_amount || 0) + Number(row.total_amount || 0);
+      if (row.valor_total_pago != null) {
+        existing.valor_total_pago = Math.max(
+          Number(existing.valor_total_pago || 0),
+          Number(row.valor_total_pago || 0),
+        );
+      }
+      const existingT = existing.payment_date ? new Date(existing.payment_date).getTime() : 0;
+      const rowT = row.payment_date ? new Date(row.payment_date).getTime() : 0;
       if (rowT > existingT) {
-        existing.status = row.status;
+        existing.payment_date = row.payment_date;
         existing.hana_approval_date = row.hana_approval_date;
-        existing.updated_at = row.updated_at;
+        existing.status = row.status;
         existing.sap_purchase_order_status = row.sap_purchase_order_status;
+        existing.numero_pagamento_sap = row.numero_pagamento_sap;
+        existing.updated_at = row.updated_at;
       }
     }
 
-    let rows = Array.from(byKey.values()).sort((a, b) => {
-      const at = new Date(a.doc_date || a.created_at).getTime();
-      const bt = new Date(b.doc_date || b.created_at).getTime();
-      return bt - at;
-    });
+    let rows = Array.from(byKey.values())
+      .map(({ _payments, ...r }) => ({ ...r, payments_count: _payments }))
+      .sort((a, b) => {
+        const at = new Date(a.doc_date || a.created_at).getTime();
+        const bt = new Date(b.doc_date || b.created_at).getTime();
+        return bt - at;
+      });
+
 
 
     const total = rows.length;
