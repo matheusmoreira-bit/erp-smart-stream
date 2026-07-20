@@ -5316,6 +5316,7 @@ export type Database = {
         Args: { _company_db: string }
         Returns: boolean
       }
+      is_idp_linked: { Args: { _email: string }; Returns: boolean }
       is_sap_user_admin: { Args: { _sap_username: string }; Returns: boolean }
       list_baixas_by_invoice: {
         Args: { p_company_db: string; p_invoice_doc_entry: number }
@@ -5380,6 +5381,7 @@ export type Database = {
         Args: { _message?: string; _name: string; _status?: string }
         Returns: undefined
       }
+      require_idp_binding_enabled: { Args: never; Returns: boolean }
       sap_user_has_module: {
         Args: { _module_key: string; _sap_username: string }
         Returns: boolean

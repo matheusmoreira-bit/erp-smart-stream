@@ -13,7 +13,9 @@ import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
+import { assertIdpBinding, upsertGoogleIdpMapping } from "@/lib/idp-binding";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
+
 
 const OMIE_PENDING_KEY = "omie_google_pending_company_db";
 
@@ -147,9 +149,26 @@ export function SapLoginForm() {
           return;
         }
 
+        // Record the Google identity so it counts as a linked IdP user.
+        await upsertGoogleIdpMapping({
+          email,
+          displayName: (authSession?.user?.user_metadata?.full_name as string | undefined) || email,
+          idpUserId: authSession?.user?.id || email,
+        });
+
+        // Enforce IdP binding flag (admins bypass via has_role check on server).
+        const gate = await assertIdpBinding(email);
+        if (!gate.ok) {
+          toast.error("Vínculo de identidade obrigatório", { description: gate.reason });
+          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          sessionStorage.removeItem(OMIE_PENDING_KEY);
+          return;
+        }
+
         await login(email, "", pending, "omie");
         sessionStorage.removeItem(OMIE_PENDING_KEY);
         toast.success("Conectado ao OMIE!");
+
       } catch (err) {
         toast.error("Falha ao completar login OMIE", {
           description: err instanceof Error ? err.message : String(err),
