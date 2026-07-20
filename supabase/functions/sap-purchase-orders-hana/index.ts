@@ -211,11 +211,18 @@ Deno.serve(async (req) => {
 
     const baseUrl = buildBaseUrl(creds.service_layer_url);
     const dbName = creds.company_db || companyDb;
+    const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "OPENGAMING" };
+    const schema = HANA_SCHEMA_OVERRIDES[companyDb] || dbName;
     const session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
 
     let rawRows: Record<string, unknown>[] = [];
     try {
-      rawRows = await fetchView(dbName, session.sessionId, "VW_PEDIDOS_COMPRA_APROVACOES");
+      rawRows = await fetchHanaView({
+        schema,
+        view: "VW_PEDIDOS_COMPRA_APROVACOES",
+        sessionId: session.sessionId,
+        hanaApiUrl: creds.hana_api_url,
+      });
     } finally {
       await sapLogout(baseUrl, session);
     }
