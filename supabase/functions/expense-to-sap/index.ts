@@ -1219,7 +1219,23 @@ Deno.serve(async (req) => {
     // header at insert time.
     let sapResult;
     try {
-      sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+      try {
+        sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+      } catch (e1) {
+        const msg1 = e1 instanceof Error ? e1.message : String(e1);
+        // Fallback: SAP FGR validation "EXISTEM LINHAS MARCA/BRAND (PROJETO)"
+        // (SBO_ANAGAMING requires every line to have ProjectCode). Retry once
+        // forcing ProjectCode = "ANA GAMING" on lines that don't have one.
+        const needsProjectFallback = /MARCA\/BRAND|\(PROJETO\)|-1116/i.test(msg1);
+        if (!needsProjectFallback) throw e1;
+        const lines = (sapPayload as any).DocumentLines as Array<Record<string, unknown>>;
+        for (const line of lines) {
+          if (!line.ProjectCode) line.ProjectCode = "ANA GAMING";
+        }
+        console.log("[expense-to-sap] Retrying PO with ProjectCode=ANA GAMING fallback due to:", msg1.slice(0, 200));
+        lastSapPayload = sapPayload;
+        sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+      }
       lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
       if (attachmentEntry !== null) {
