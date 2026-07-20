@@ -52,7 +52,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   const { session } = useSap();
 
   // 1) Lista SAP — traz todos, incluindo Frozen, para poder marcá-los.
-  const cacheKey = isSales ? "customers_active_v3" : "suppliers_active_v3";
+  const cacheKey = isSales ? "customers_active_v4" : "suppliers_active_v4";
   const cardType = isSales ? "cCustomer" : "cSupplier";
   const {
     options: sapOptions,
