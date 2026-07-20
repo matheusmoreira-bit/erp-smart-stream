@@ -154,7 +154,12 @@ Deno.serve(async (req) => {
     const view = "VW_FORNECEDORES";
     let rawRows: Record<string, unknown>[] = [];
     try {
-      rawRows = await fetchView(schema, session.sessionId, view);
+      rawRows = await fetchHanaView({
+        schema,
+        view,
+        sessionId: session.sessionId,
+        hanaApiUrl: creds.hana_api_url,
+      });
     } finally {
       await sapLogout(baseUrl, session);
     }
