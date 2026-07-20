@@ -57,7 +57,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   //    mais rápida (e completa) do que paginar BusinessPartners via Service
   //    Layer. Em caso de falha ou empresa sem HanaAPI, o hook `useSapCachedList`
   //    abaixo faz o fallback natural para BusinessPartners.
-  const cacheKey = isSales ? "customers_active_v4" : "suppliers_active_v4";
+  const cacheKey = isSales ? "customers_active_v5" : "suppliers_active_v5";
   const cardType = isSales ? "cCustomer" : "cSupplier";
 
   const [hanaLoaded, setHanaLoaded] = useState(false);
@@ -116,7 +116,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     cacheKey,
     endpoint: "BusinessPartners",
     params: {
-      $select: "CardCode,CardName,AliasName,FederalTaxID,U_FGR_TaxId0,Currency,Frozen",
+      $select: "CardCode,CardName,AliasName,FederalTaxID,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
     // Só ativa o fallback via Service Layer se o HANA já respondeu e não
