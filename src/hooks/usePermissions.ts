@@ -171,10 +171,13 @@ export function usePermissionGroups() {
       const modulePerms: Record<string, ModulePerms> = {};
       for (const r of rows) {
         modulePerms[r.module_key] = {
-          view:   r.can_view   ?? true,
-          create: r.can_create ?? true,
-          edit:   r.can_edit   ?? true,
-          delete: r.can_delete ?? true,
+          view:      r.can_view      ?? true,
+          create:    r.can_create    ?? true,
+          edit:      r.can_edit      ?? true,
+          delete:    r.can_delete    ?? true,
+          approve:   r.can_approve   ?? true,
+          integrate: r.can_integrate ?? true,
+          export:    r.can_export    ?? true,
         };
       }
       return {
