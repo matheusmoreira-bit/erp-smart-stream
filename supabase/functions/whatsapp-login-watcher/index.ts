@@ -152,7 +152,7 @@ async function processCompany(
   }
 
   try {
-    const records = await fetchUsr5(dbName, session.sessionId);
+    const records = await fetchUsr5(company.company_db, dbName, session.sessionId, creds.hana_api_url);
     const since = new Date(Date.now() - 6 * 60 * 60 * 1000);
 
     // Filtra ações relevantes e ordena por usuário e timestamp
