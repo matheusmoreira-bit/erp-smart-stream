@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
-import { filterAndRank } from "@/lib/supplier-search";
+import { filterAndRank, formatCnpjCpf, onlyDigits } from "@/lib/supplier-search";
 
 interface CachedSearchComboboxProps {
   options: SapSearchOption[];
