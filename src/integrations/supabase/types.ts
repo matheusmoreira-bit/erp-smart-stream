@@ -2497,6 +2497,36 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_flags: {
+        Row: {
+          company_db: string | null
+          description: string | null
+          enabled: boolean
+          key: string
+          scope: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_db?: string | null
+          description?: string | null
+          enabled?: boolean
+          key: string
+          scope?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_db?: string | null
+          description?: string | null
+          enabled?: boolean
+          key?: string
+          scope?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       fornecedores: {
         Row: {
           api_payload: Json | null
@@ -3825,9 +3855,12 @@ export type Database = {
       }
       permission_group_modules: {
         Row: {
+          can_approve: boolean
           can_create: boolean
           can_delete: boolean
           can_edit: boolean
+          can_export: boolean
+          can_integrate: boolean
           can_view: boolean
           created_at: string
           group_id: string
@@ -3835,9 +3868,12 @@ export type Database = {
           module_key: string
         }
         Insert: {
+          can_approve?: boolean
           can_create?: boolean
           can_delete?: boolean
           can_edit?: boolean
+          can_export?: boolean
+          can_integrate?: boolean
           can_view?: boolean
           created_at?: string
           group_id: string
@@ -3845,9 +3881,12 @@ export type Database = {
           module_key: string
         }
         Update: {
+          can_approve?: boolean
           can_create?: boolean
           can_delete?: boolean
           can_edit?: boolean
+          can_export?: boolean
+          can_integrate?: boolean
           can_view?: boolean
           created_at?: string
           group_id?: string
@@ -4133,6 +4172,90 @@ export type Database = {
           last_run_at?: string | null
           last_status?: string | null
           total_synced?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_group_mapping: {
+        Row: {
+          can_approve: boolean
+          can_create: boolean
+          can_delete: boolean
+          can_edit: boolean
+          can_export: boolean
+          can_integrate: boolean
+          can_view: boolean
+          company_db: string
+          created_at: string
+          created_by: string | null
+          id: string
+          module_key: string
+          sap_group_code: string
+          sap_group_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          can_approve?: boolean
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_export?: boolean
+          can_integrate?: boolean
+          can_view?: boolean
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          module_key: string
+          sap_group_code: string
+          sap_group_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          can_approve?: boolean
+          can_create?: boolean
+          can_delete?: boolean
+          can_edit?: boolean
+          can_export?: boolean
+          can_integrate?: boolean
+          can_view?: boolean
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          module_key?: string
+          sap_group_code?: string
+          sap_group_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_groups_cache: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          last_seen_at: string
+          sap_group_code: string
+          sap_group_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          sap_group_code: string
+          sap_group_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          sap_group_code?: string
+          sap_group_name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -5162,6 +5285,15 @@ export type Database = {
         }[]
       }
       get_sap_sync_health: { Args: { _last_n?: number }; Returns: Json }
+      has_module_action: {
+        Args: {
+          _action: string
+          _company_db: string
+          _module: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
