@@ -75,11 +75,12 @@ async function getAdminCreds(admin: ReturnType<typeof createClient>, companyDB: 
 
 interface Session { baseUrl: string; session: string; route: string }
 
-async function sapLogin(baseUrl: string, companyDB: string, username: string, password: string): Promise<Session> {
+async function sapLogin(baseUrl: string, companyDB: string, username: string, password: string, signal?: AbortSignal): Promise<Session> {
   const resp = await fetch(`${baseUrl}/Login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ CompanyDB: companyDB, UserName: username, Password: password }),
+    signal,
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
@@ -95,15 +96,20 @@ async function sapLogin(baseUrl: string, companyDB: string, username: string, pa
 }
 
 async function sapLogout(s: Session) {
+  // Logout best-effort com timeout curto para não segurar o request.
   try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
     await fetch(`${s.baseUrl}/Logout`, {
       method: "POST",
       headers: { Cookie: `B1SESSION=${s.session}${s.route ? `; ROUTEID=${s.route}` : ""}` },
-    });
+      signal: ctrl.signal,
+    }).catch(() => null);
+    clearTimeout(t);
   } catch { /* noop */ }
 }
 
-async function sapRequest(s: Session, path: string, method: string, body?: unknown) {
+async function sapRequest(s: Session, path: string, method: string, body?: unknown, signal?: AbortSignal) {
   const resp = await fetch(`${s.baseUrl}/${path}`, {
     method,
     headers: {
@@ -111,6 +117,7 @@ async function sapRequest(s: Session, path: string, method: string, body?: unkno
       Cookie: `B1SESSION=${s.session}${s.route ? `; ROUTEID=${s.route}` : ""}`,
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
   const text = await resp.text();
   let data: unknown = null;
