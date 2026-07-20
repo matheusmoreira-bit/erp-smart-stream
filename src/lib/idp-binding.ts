@@ -110,3 +110,25 @@ export async function assertIdpBinding(email: string): Promise<{ ok: boolean; re
       "Sua conta ainda não está vinculada ao JumpCloud. Solicite ao administrador que faça o vínculo antes de acessar.",
   };
 }
+
+/**
+ * SAP-login gate: passes when the flag is off, or when either the SAP user code
+ * or the e-mail already has an active mapping (jumpcloud/google/local).
+ */
+export async function assertSapLoginIdpBinding(params: {
+  sapUserCode: string;
+  email?: string | null;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const required = await isIdpBindingRequired();
+  if (!required) return { ok: true };
+  const [byCode, byEmail] = await Promise.all([
+    isSapCodeIdpLinked(params.sapUserCode),
+    params.email ? isEmailIdpLinked(params.email) : Promise.resolve(false),
+  ]);
+  if (byCode || byEmail) return { ok: true };
+  return {
+    ok: false,
+    reason:
+      "Sua conta SAP ainda não está vinculada ao JumpCloud. Solicite ao administrador que faça o vínculo antes de acessar.",
+  };
+}
