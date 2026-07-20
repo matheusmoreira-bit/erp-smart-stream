@@ -66,9 +66,10 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   useEffect(() => {
     let cancelled = false;
-    if (!companyDb) {
+    if (!companyDb || isSales) {
+      // VW_CLIENTES não existe — para vendas, sempre usamos Service Layer.
       setHanaOptions(null);
-      setHanaLoaded(false);
+      setHanaLoaded(true);
       return;
     }
     setHanaLoaded(false);
