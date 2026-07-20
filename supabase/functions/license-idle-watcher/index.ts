@@ -15,9 +15,7 @@ const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 const WHATSAPP_TO = "5531972665309";
 const EMAIL_TO = "matheus.moreira@anagaming.com.br";
 const IDLE_DAYS = 15;
-const HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+// HanaAPI V1 (middleware n8n) foi descontinuada — usamos V2 via fetchHanaView.
 
 interface Usr5 {
   UserCode: string;
