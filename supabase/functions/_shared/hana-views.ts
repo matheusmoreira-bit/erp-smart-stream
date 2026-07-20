@@ -21,8 +21,10 @@ export interface FetchHanaViewParams {
   view: string;
   /** SessionId obtido no Login do Service Layer. */
   sessionId: string;
-  /** URL base do servidor HANA direto (V2). Se ausente/vazio, cai no V1. */
+  /** URL base do servidor HANA direto (V2). Obrigatória quando useV2=true. */
   hanaApiUrl?: string | null;
+  /** Força usar V2 (direto). Só entra em V2 quando useV2 === true E hanaApiUrl estiver setada. */
+  useV2?: boolean;
   /** Middleware URL (V1). Default = env HANA_VIEWS_URL. */
   middlewareUrl?: string;
 }
@@ -65,7 +67,7 @@ export async function fetchHanaView(
 ): Promise<Record<string, unknown>[]> {
   const { schema, view, sessionId } = params;
   const dynamicToken = await generateDynamicToken();
-  const useV2 = !!(params.hanaApiUrl && params.hanaApiUrl.trim());
+  const useV2 = !!(params.useV2 && params.hanaApiUrl && params.hanaApiUrl.trim());
 
   let resp: Response;
   if (useV2) {

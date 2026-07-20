@@ -57,6 +57,18 @@ export const SYSTEMS: SystemConfig[] = [
         type: "toggle",
         description: "Quando desativado, todas as consultas serão feitas via Service Layer (use para instâncias sem API HANA DB)",
       },
+      {
+        key: "hana_api_url",
+        label: "URL do HanaAPI (V2 direto)",
+        placeholder: "http://servidor:8001",
+        description: "URL base do servidor HanaAPI para acesso direto (V2). Deixe vazio para usar o middleware n8n (V1).",
+      },
+      {
+        key: "hana_api_v2",
+        label: "Usar HanaAPI V2 (direto, sem middleware)",
+        type: "toggle",
+        description: "Quando ativo, as views HANA são consumidas direto no servidor de origem (dynamictoken + sessionid) em vez do middleware n8n. Requer 'URL do HanaAPI'.",
+      },
       { key: "custom_fields", label: "Campos Customizados", type: "custom_fields" },
     ],
   },
