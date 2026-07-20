@@ -679,6 +679,16 @@ export default function PermissionManager() {
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </IosRow>
+            <IosRow onClick={() => setView({ name: "sap-mapping" })}>
+              <div className="w-9 h-9 rounded-xl bg-cactus-amber/15 flex items-center justify-center shrink-0">
+                <Building2 className="w-4 h-4 text-cactus-amber" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Mapeamento SAP × ERP Flow</p>
+                <p className="text-xs text-muted-foreground">Vincular grupos do SAP às ações por empresa</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </IosRow>
           </IosList>
         </div>
       )}
