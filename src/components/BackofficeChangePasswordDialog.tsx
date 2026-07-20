@@ -11,6 +11,8 @@ import {
   type MultiCompanyPasswordResult,
 } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
+import { checkPasswordPolicy } from "@/lib/password-policy";
+import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 
 interface CompanyOption {
   company_db: string;
@@ -61,12 +63,13 @@ export function BackofficeChangePasswordDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      toast.error("A nova senha e a confirmação não coincidem.");
+    const policy = checkPasswordPolicy(newPassword, userCode);
+    if (!policy.valid) {
+      toast.error(`Senha não atende à política: ${policy.failed[0].label}`);
       return;
     }
-    if (newPassword.length < 4) {
-      toast.error("A nova senha deve ter pelo menos 4 caracteres.");
+    if (newPassword !== confirmPassword) {
+      toast.error("A nova senha e a confirmação não coincidem.");
       return;
     }
 
@@ -154,6 +157,7 @@ export function BackofficeChangePasswordDialog({
                 required
                 autoComplete="new-password"
               />
+              <PasswordPolicyChecklist password={newPassword} userCode={userCode} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="bo-confirm-pw">Confirmar Nova Senha</Label>
@@ -190,7 +194,15 @@ export function BackofficeChangePasswordDialog({
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                loading ||
+                !checkPasswordPolicy(newPassword, userCode).valid ||
+                newPassword !== confirmPassword
+              }
+            >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Redefinir senha
             </Button>

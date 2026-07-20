@@ -14,6 +14,8 @@ import {
   type MultiCompanyPasswordResult,
 } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
+import { checkPasswordPolicy } from "@/lib/password-policy";
+import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 
 interface CompanyOption {
   company_db: string;
@@ -97,8 +99,9 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
       return;
     }
 
-    if (newPassword.length < 4) {
-      toast.error("A nova senha deve ter pelo menos 4 caracteres.");
+    const policy = checkPasswordPolicy(newPassword, session.userName);
+    if (!policy.valid) {
+      toast.error(`Senha não atende à política: ${policy.failed[0].label}`);
       return;
     }
 
@@ -237,6 +240,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
                 required
                 autoComplete="new-password"
               />
+              <PasswordPolicyChecklist password={newPassword} userCode={session.userName} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-pw">Confirmar Nova Senha</Label>
@@ -307,7 +311,15 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                loading ||
+                !checkPasswordPolicy(newPassword, session.userName).valid ||
+                newPassword !== confirmPassword
+              }
+            >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Alterar Senha
             </Button>
