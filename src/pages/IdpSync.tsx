@@ -516,6 +516,52 @@ export default function IdpSyncPage() {
             )}
           </div>
         )}
+
+        {/* JumpCloud users without a SAP counterpart */}
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-muted/30">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                JumpCloud sem correspondência no SAP
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Usuários do JumpCloud sem SAP ativo equivalente — provisione manualmente no ERP.
+              </p>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {unmappedJcUsers.length} usuário(s)
+            </span>
+          </div>
+          {isLoadingJc ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" /> Carregando…
+            </div>
+          ) : unmappedJcUsers.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8 text-sm">
+              Todos os usuários do JumpCloud já possuem correspondência.
+            </div>
+          ) : (
+            <div className="divide-y divide-border max-h-96 overflow-y-auto">
+              {unmappedJcUsers.map((jc) => (
+                <div
+                  key={jc._id}
+                  className="grid grid-cols-[1.2fr_1.4fr_1fr] items-center px-6 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-foreground truncate">
+                      {jc.displayname || `${jc.firstname || ""} ${jc.lastname || ""}`.trim() || jc.username}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{jc.username}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{jc.email || "—"}</p>
+                  <p className="text-xs text-muted-foreground truncate text-right">
+                    {(jc as any).department || (jc as any).jobTitle || "—"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );
