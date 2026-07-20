@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
         view: "VW_ACOMPANHAMENTO_PEDIDOS",
         sessionId: session.sessionId,
         hanaApiUrl: creds.hana_api_url,
-        useV2: creds.hana_api_v2 === "true",
+        useV2: creds.use_hana_v2 === "true" || creds.hana_api_v2 === "true",
       });
     } finally {
       await sapLogout(baseUrl, session);
