@@ -13,7 +13,7 @@ import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
-import { assertIdpBinding, upsertGoogleIdpMapping } from "@/lib/idp-binding";
+import { assertIdpBinding, assertSapLoginIdpBinding, upsertGoogleIdpMapping, upsertLocalAdminMapping } from "@/lib/idp-binding";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 
