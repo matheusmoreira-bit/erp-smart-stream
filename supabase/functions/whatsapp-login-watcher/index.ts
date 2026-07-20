@@ -72,7 +72,7 @@ async function sapLogin(baseUrl: string, user: string, pass: string, db: string)
   };
 }
 
-async function fetchUsr5(database: string, sessionId: string): Promise<Usr5[]> {
+
 async function fetchUsr5(
   companyDb: string,
   database: string,
