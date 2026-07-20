@@ -9,12 +9,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
-import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+import { fetchHanaView } from "../_shared/hana-views.ts";
 
-const HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
 const TIME_BUDGET_MS = 90_000;
+
+const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "OPENGAMING" };
 
 function buildBaseUrl(raw: string): string {
   let url = raw.replace(/\/+$/, "");
@@ -43,36 +42,6 @@ async function sapLogout(baseUrl: string, s: { sessionId: string; routeId: strin
       headers: { Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}` },
     });
   } catch { /* ignore */ }
-}
-
-async function fetchView(database: string, sessionId: string, view: string): Promise<Record<string, unknown>[]> {
-  const dynamicToken = await generateDynamicToken();
-  const params = new URLSearchParams({
-    SessionId: sessionId,
-    DB: database,
-    View: view,
-    DynamicToken: dynamicToken,
-    _t: String(Date.now()),
-  });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, {
-    headers: {
-      "X-SessionId": sessionId,
-      "X-DB": database,
-      "X-View": view,
-      "X-Dynamic-Token": dynamicToken,
-    },
-  });
-  if (!resp.ok) throw new Error(`HANA view ${view} falhou: ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && typeof it === "object" && Array.isArray((it as { data?: unknown }).data));
-    if (wrapped) return (wrapped as { data: Record<string, unknown>[] }).data;
-    return payload as Record<string, unknown>[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as Record<string, unknown>[];
-  return [];
 }
 
 function pick(row: Record<string, unknown>, ...keys: string[]): unknown {
