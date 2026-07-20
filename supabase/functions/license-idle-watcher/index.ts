@@ -3,7 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
-import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,9 +15,7 @@ const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 const WHATSAPP_TO = "5531972665309";
 const EMAIL_TO = "matheus.moreira@anagaming.com.br";
 const IDLE_DAYS = 15;
-const HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+// HanaAPI V1 (middleware n8n) foi descontinuada — usamos V2 via fetchHanaView.
 
 interface Usr5 {
   UserCode: string;
@@ -122,35 +120,21 @@ async function sapLogin(baseUrl: string, user: string, pass: string, db: string)
   return { sessionId: json.SessionId as string, routeId: routeMatch?.[1] ?? "" };
 }
 
-async function fetchHanaTable<T = unknown>(database: string, sessionId: string, table: string): Promise<T[]> {
-  const dynamicToken = await generateDynamicToken();
-  const params = new URLSearchParams({
-    SessionId: sessionId, DB: database, Table: table,
-    DynamicToken: dynamicToken, _t: String(Date.now()),
+async function fetchHanaTable<T = unknown>(
+  companyDb: string,
+  database: string,
+  sessionId: string,
+  table: string,
+  hanaApiUrl?: string | null,
+): Promise<T[]> {
+  const rows = await fetchHanaView({
+    schema: resolveHanaSchema(companyDb, database),
+    view: table,
+    sessionId,
+    hanaApiUrl,
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params}`, {
-    method: "GET",
-    headers: {
-      "X-SessionId": sessionId,
-      "X-DB": database,
-      "X-Table": table,
-      "X-Dynamic-Token": dynamicToken,
-    },
-  });
-  if (!resp.ok) throw new Error(`HANA falhou (${table}): ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && Array.isArray(it.data));
-    if (wrapped) return wrapped.data as T[];
-    return payload as T[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as T[];
-  return [];
+  return rows as unknown as T[];
 }
-
-const fetchUsr5 = (db: string, sid: string) => fetchHanaTable<Usr5>(db, sid, "USR5");
 
 interface OusrRow {
   USER_CODE?: string;
@@ -295,7 +279,7 @@ Deno.serve(async (req) => {
         );
 
         // 2. Carrega USR5 (normalizado para tolerar variações de campos)
-        const rawRecords = await fetchHanaTable<Record<string, unknown>>(dbName, session.sessionId, "USR5");
+        const rawRecords = await fetchHanaTable<Record<string, unknown>>(co.company_db, dbName, session.sessionId, "USR5", creds.hana_api_url);
         const records = rawRecords.map(normalizeUsr5).filter((r) => r.UserCode);
         const lastLoginByUser = new Map<string, Date>();
         for (const r of records) {
@@ -309,7 +293,7 @@ Deno.serve(async (req) => {
 
         // 3. Reforça com OUSR.LastLoginDate (USR5 pode estar truncado por retenção)
         try {
-          const ousr = await fetchHanaTable<OusrRow>(dbName, session.sessionId, "OUSR");
+          const ousr = await fetchHanaTable<OusrRow>(co.company_db, dbName, session.sessionId, "OUSR", creds.hana_api_url);
           for (const row of ousr) {
             const { code, date } = parseOusrLastLogin(row);
             if (!code || !date) continue;

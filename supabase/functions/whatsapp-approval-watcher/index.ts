@@ -3,7 +3,7 @@
 // se a aprovação continuar pendente.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
@@ -15,9 +15,7 @@ const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
 const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 const FALLBACK_WHATSAPP_TO = "5531972665309";
 const APPROVAL_APP_URL = "https://sap-b1-approval-hub-761741690592.us-west1.run.app/";
-const HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+// HanaAPI V1 (middleware n8n) foi descontinuada — usamos V2 via fetchHanaView.
 
 interface ApprovalRow {
   Code?: number;
@@ -105,35 +103,19 @@ async function sapFetchAllUsers(
   return all;
 }
 
-async function fetchApprovals(database: string, sessionId: string): Promise<ApprovalRow[]> {
-  const dynamicToken = await generateDynamicToken();
-  const view = "VW_APROVACOES_DETALHADAS";
-  const params = new URLSearchParams({
-    SessionId: sessionId,
-    DB: database,
-    View: view,
-    DynamicToken: dynamicToken,
-    _t: String(Date.now()),
+async function fetchApprovals(
+  companyDb: string,
+  database: string,
+  sessionId: string,
+  hanaApiUrl?: string | null,
+): Promise<ApprovalRow[]> {
+  const rows = await fetchHanaView({
+    schema: resolveHanaSchema(companyDb, database),
+    view: "VW_APROVACOES_DETALHADAS",
+    sessionId,
+    hanaApiUrl,
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, {
-    headers: {
-      "X-SessionId": sessionId,
-      "X-DB": database,
-      "X-View": view,
-      "X-Dynamic-Token": dynamicToken,
-    },
-  });
-  if (!resp.ok) throw new Error(`HANA view falhou: ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && typeof it === "object" && Array.isArray(it.data));
-    if (wrapped) return wrapped.data as ApprovalRow[];
-    return payload as ApprovalRow[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as ApprovalRow[];
-  return [];
+  return rows as unknown as ApprovalRow[];
 }
 
 async function sendWhatsApp(to: string, message: string) {
@@ -213,7 +195,7 @@ async function processCompany(
 
   try {
     const [approvals, sapUsers] = await Promise.all([
-      fetchApprovals(dbName, session.sessionId),
+      fetchApprovals(company.company_db, dbName, session.sessionId, creds.hana_api_url),
       sapFetchAllUsers(baseUrl, session),
     ]);
 

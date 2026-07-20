@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,7 +8,7 @@ const corsHeaders = {
 
 // Use env vars instead of hardcoded URLs
 const DEFAULT_SAP_BASE_URL = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
-const HANA_VIEWS_URL = Deno.env.get("HANA_VIEWS_URL") || "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+
 const APPROVALS_CACHE_KEY = "approvals:detailed";
 const encoder = new TextEncoder();
 
@@ -558,22 +558,27 @@ Deno.serve(async (req) => {
 
       // Respect per-company toggle: when HANA DB queries are disabled, short-circuit with empty result.
       // Hooks that depend on these views already handle empty data gracefully.
+      let hanaApiUrl: string | null = null;
       try {
         const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-        const { data: flag } = await sb
+        const { data: flags } = await sb
           .from("system_credentials")
-          .select("credential_value")
+          .select("credential_key, credential_value")
           .eq("company_db", database)
           .eq("system_name", "sap")
-          .eq("credential_key", "use_hana_db")
-          .maybeSingle();
-        if (flag?.credential_value === "false") {
+          .in("credential_key", ["use_hana_db", "hana_api_url"]);
+        const kv: Record<string, string> = {};
+        for (const r of (flags || []) as Array<{ credential_key: string; credential_value: string }>) {
+          kv[r.credential_key] = r.credential_value ?? "";
+        }
+        if (kv.use_hana_db === "false") {
           return new Response(JSON.stringify({ data: [], fromCache: false, hanaDisabled: true }), {
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
+        hanaApiUrl = kv.hana_api_url || null;
       } catch (e) {
-        console.warn("Could not read use_hana_db flag, defaulting to enabled:", e);
+        console.warn("Could not read HANA flags, defaulting to enabled:", e);
       }
 
       const tableName = extractTableName(table);
@@ -585,34 +590,31 @@ Deno.serve(async (req) => {
         });
       }
 
-      const dynamicToken = await generateDynamicToken();
-      const queryParams = new URLSearchParams({
-        SessionId: sessionId,
-        DB: database,
-        Table: tableName,
-        DynamicToken: dynamicToken,
-        _t: String(Date.now()),
-      });
-
+      // Constrói filtros/limit/offset a partir de `params` para o HanaAPI V2.
+      let limit: number | undefined;
+      let offset: number | undefined;
+      const filters: Record<string, string | number | boolean | Array<string | number>> = {};
       if (params) {
         for (const [key, value] of Object.entries(params)) {
-          if (value !== undefined && value !== null && key !== "SessionId" && key !== "DB" && key !== "Table") {
-            queryParams.set(key, String(value));
-          }
+          if (value === undefined || value === null) continue;
+          if (key === "SessionId" || key === "DB" || key === "Table") continue;
+          const lk = key.toLowerCase();
+          if (lk === "limit") { const n = Number(value); if (Number.isFinite(n)) limit = n; continue; }
+          if (lk === "offset") { const n = Number(value); if (Number.isFinite(n)) offset = n; continue; }
+          filters[key] = value as any;
         }
       }
 
-      let viewResp: Response;
+      let rows: Record<string, unknown>[] = [];
       try {
-        viewResp = await fetchWithTimeout(`${HANA_VIEWS_URL}?${queryParams.toString()}`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "X-SessionId": sessionId,
-            "X-DB": database,
-            "X-Table": tableName,
-            "X-Dynamic-Token": dynamicToken,
-          },
+        rows = await fetchHanaView({
+          schema: resolveHanaSchema(database, database),
+          view: tableName,
+          sessionId,
+          hanaApiUrl,
+          limit,
+          offset,
+          filters,
         });
       } catch (e) {
         if (isAbortError(e)) {
@@ -620,25 +622,12 @@ Deno.serve(async (req) => {
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        throw e;
-      }
-
-      const payload = await parseResponseBody(viewResp);
-
-      if (!viewResp.ok) {
-        const message =
-          payload && typeof payload === "object" && "message" in payload
-            ? String((payload as { message?: string }).message || "Erro na consulta da view HANA")
-            : typeof payload === "string"
-              ? payload
-              : "Erro na consulta da view HANA";
-        console.error("HANA view query error:", viewResp.status, payload);
-        return new Response(JSON.stringify({ error: message }), {
-          status: viewResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        console.error("HANA view query error:", (e as Error).message);
+        return new Response(JSON.stringify({ error: (e as Error).message }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const rows = extractViewRows(payload);
       if (rows.length > 0) setCache(cacheKey, rows);
 
       return new Response(JSON.stringify({ data: rows, fromCache: false }), {

@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
+import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,9 +15,7 @@ const corsHeaders = {
 const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
 const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 const WHATSAPP_TO = "5531972665309";
-const HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+// HanaAPI V1 (middleware n8n) foi descontinuada — usamos V2 via fetchHanaView.
 
 interface Usr5 {
   UserCode: string;
@@ -73,26 +72,20 @@ async function sapLogin(baseUrl: string, user: string, pass: string, db: string)
   };
 }
 
-async function fetchUsr5(database: string, sessionId: string): Promise<Usr5[]> {
-  const params = new URLSearchParams({
-    SessionId: sessionId,
-    DB: database,
-    Table: "USR5",
-    _t: String(Date.now()),
+
+async function fetchUsr5(
+  companyDb: string,
+  database: string,
+  sessionId: string,
+  hanaApiUrl?: string | null,
+): Promise<Usr5[]> {
+  const rows = await fetchHanaView({
+    schema: resolveHanaSchema(companyDb, database),
+    view: "USR5",
+    sessionId,
+    hanaApiUrl,
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, { method: "GET" });
-  if (!resp.ok) throw new Error(`HANA view falhou: ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  // Formato: pode vir como [{data:[...]}], {data:[...]} ou array direto
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && typeof it === "object" && Array.isArray(it.data));
-    if (wrapped) return wrapped.data as Usr5[];
-    return payload as Usr5[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as Usr5[];
-  return [];
+  return rows as unknown as Usr5[];
 }
 
 async function sendWhatsApp(message: string) {
@@ -159,7 +152,7 @@ async function processCompany(
   }
 
   try {
-    const records = await fetchUsr5(dbName, session.sessionId);
+    const records = await fetchUsr5(company.company_db, dbName, session.sessionId, creds.hana_api_url);
     const since = new Date(Date.now() - 6 * 60 * 60 * 1000);
 
     // Filtra ações relevantes e ordena por usuário e timestamp

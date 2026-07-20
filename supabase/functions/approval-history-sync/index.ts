@@ -1,11 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireAdminOrSapAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
-import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+import { fetchHanaView as fetchHanaViewV2, resolveHanaSchema } from "../_shared/hana-views.ts";
 
-const HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+// HanaAPI V1 (middleware n8n) foi descontinuada — HANA queries usam V2 via fetchHanaViewV2.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -237,34 +235,19 @@ async function sapLogoutServiceLayer(
   } catch { /* ignore */ }
 }
 
-async function fetchHanaView(database: string, sessionId: string, view: string): Promise<Record<string, unknown>[]> {
-  const dynamicToken = await generateDynamicToken();
-  const params = new URLSearchParams({
-    SessionId: sessionId,
-    DB: database,
-    View: view,
-    DynamicToken: dynamicToken,
-    _t: String(Date.now()),
+async function fetchHanaView(
+  companyDb: string,
+  database: string,
+  sessionId: string,
+  view: string,
+  hanaApiUrl?: string | null,
+): Promise<Record<string, unknown>[]> {
+  return await fetchHanaViewV2({
+    schema: resolveHanaSchema(companyDb, database),
+    view,
+    sessionId,
+    hanaApiUrl,
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, {
-    headers: {
-      "X-SessionId": sessionId,
-      "X-DB": database,
-      "X-View": view,
-      "X-Dynamic-Token": dynamicToken,
-    },
-  });
-  if (!resp.ok) throw new Error(`HANA view falhou: ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && typeof it === "object" && Array.isArray((it as { data?: unknown }).data));
-    if (wrapped) return (wrapped as { data: Record<string, unknown>[] }).data;
-    return payload as Record<string, unknown>[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as Record<string, unknown>[];
-  return [];
 }
 
 function pickField(row: Record<string, unknown>, ...keys: string[]): unknown {
@@ -386,7 +369,7 @@ async function fetchAndMergeHanaApprovals(
 
     let rows: Record<string, unknown>[] = [];
     try {
-      rows = await fetchHanaView(dbName, session.sessionId, "VW_PEDIDOS_COMPRA_APROVACOES");
+      rows = await fetchHanaView(companyDb, dbName, session.sessionId, "VW_PEDIDOS_COMPRA_APROVACOES", creds.hana_api_url);
     } finally {
       await sapLogoutServiceLayer(baseUrl, session);
     }
