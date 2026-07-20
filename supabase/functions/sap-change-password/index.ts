@@ -300,14 +300,6 @@ Deno.serve(async (req) => {
         message: r.reason instanceof Error ? r.reason.message : "Erro inesperado",
       };
     });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Erro ao alterar senha";
-        console.error(`[sap-change-password] exception`, { companyDb, userCode, msg });
-        results.push({ companyDB: companyDb, displayName, status: "error", message: msg });
-      } finally {
-        await sapLogout(session);
-      }
-    }
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
