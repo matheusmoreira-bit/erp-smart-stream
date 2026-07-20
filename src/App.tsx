@@ -54,6 +54,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <SapProvider>
+          <PermissionsV2Provider>
           <BrowserRouter>
             <StickyHeaderMeasure />
             <Routes>
