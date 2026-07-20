@@ -157,6 +157,7 @@ export function BackofficeChangePasswordDialog({
                 required
                 autoComplete="new-password"
               />
+              <PasswordPolicyChecklist password={newPassword} userCode={userCode} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="bo-confirm-pw">Confirmar Nova Senha</Label>
