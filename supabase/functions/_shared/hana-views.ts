@@ -1,18 +1,14 @@
-// Helper compartilhado para consumir views HANA.
+// Helper compartilhado para consumir views HANA — SEMPRE V2.
 //
-// Suporta duas variantes:
-//   - V1 (default, via middleware n8n): usa HANA_VIEWS_URL + query string + headers X-*.
-//   - V2 (direto no servidor de origem): GET {hanaApiUrl}/data/{SCHEMA}.{VIEW}
-//     com headers `dynamictoken` e `sessionid` (lowercase). Sem query string.
+// V2 (direto no servidor de origem): GET {hanaApiUrl}/data/{SCHEMA}.{VIEW}
+// com headers `dynamictoken` e `sessionid` (lowercase).
 //
-// A escolha é por empresa: quando `hanaApiUrl` é passado (lido de
-// system_credentials.hana_api_url), usa V2. Caso contrário, mantém V1.
+// V1 (middleware n8n) foi descontinuado — todas as bases estão migradas.
+// Se `hanaApiUrl` não vier setado, usa o IP primário conhecido do HanaAPI.
 
 import { generateDynamicToken } from "./sap-middleware-token.ts";
 
-const DEFAULT_HANA_VIEWS_URL =
-  Deno.env.get("HANA_VIEWS_URL") ||
-  "https://anagaming.app.n8n.cloud/webhook/d7c643d9-040c-4e60-aa26-99344e60e89b";
+const DEFAULT_HANA_API_URL = "http://201.48.79.205:8001";
 
 export interface FetchHanaViewParams {
   /** Schema HANA onde a view está publicada (ex.: "SBO_OPENGAMING"). */
