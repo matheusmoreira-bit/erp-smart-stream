@@ -153,6 +153,7 @@ async function syncCompany(sb: any, companyDb: string): Promise<{
 
   const baseUrl = buildBaseUrl(creds.service_layer_url);
   const dbName = creds.company_db || companyDb;
+  const schema = HANA_SCHEMA_OVERRIDES[companyDb] || dbName;
   let session: { sessionId: string; routeId: string };
   try {
     session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
@@ -163,7 +164,12 @@ async function syncCompany(sb: any, companyDb: string): Promise<{
   let synced = 0;
   let lastError: string | null = null;
   try {
-    const rawRows = await fetchView(dbName, session.sessionId, "VW_FIN_ANALISE_FLUXO");
+    const rawRows = await fetchHanaView({
+      schema,
+      view: "VW_FIN_ANALISE_FLUXO",
+      sessionId: session.sessionId,
+      hanaApiUrl: creds.hana_api_url,
+    });
     const seen = new Map<string, ReturnType<typeof mapRow>>();
     for (const r of rawRows) {
       const row = mapRow(r, companyDb);
