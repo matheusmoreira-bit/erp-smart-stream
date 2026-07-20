@@ -293,7 +293,7 @@ Deno.serve(async (req) => {
 
         // 3. Reforça com OUSR.LastLoginDate (USR5 pode estar truncado por retenção)
         try {
-          const ousr = await fetchHanaTable<OusrRow>(dbName, session.sessionId, "OUSR");
+          const ousr = await fetchHanaTable<OusrRow>(co.company_db, dbName, session.sessionId, "OUSR", creds.hana_api_url);
           for (const row of ousr) {
             const { code, date } = parseOusrLastLogin(row);
             if (!code || !date) continue;
