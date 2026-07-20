@@ -311,7 +311,15 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                loading ||
+                !checkPasswordPolicy(newPassword, session.userName).valid ||
+                newPassword !== confirmPassword
+              }
+            >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Alterar Senha
             </Button>
