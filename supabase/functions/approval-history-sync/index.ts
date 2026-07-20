@@ -235,34 +235,19 @@ async function sapLogoutServiceLayer(
   } catch { /* ignore */ }
 }
 
-async function fetchHanaView(database: string, sessionId: string, view: string): Promise<Record<string, unknown>[]> {
-  const dynamicToken = await generateDynamicToken();
-  const params = new URLSearchParams({
-    SessionId: sessionId,
-    DB: database,
-    View: view,
-    DynamicToken: dynamicToken,
-    _t: String(Date.now()),
+async function fetchHanaView(
+  companyDb: string,
+  database: string,
+  sessionId: string,
+  view: string,
+  hanaApiUrl?: string | null,
+): Promise<Record<string, unknown>[]> {
+  return await fetchHanaViewV2({
+    schema: resolveHanaSchema(companyDb, database),
+    view,
+    sessionId,
+    hanaApiUrl,
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, {
-    headers: {
-      "X-SessionId": sessionId,
-      "X-DB": database,
-      "X-View": view,
-      "X-Dynamic-Token": dynamicToken,
-    },
-  });
-  if (!resp.ok) throw new Error(`HANA view falhou: ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && typeof it === "object" && Array.isArray((it as { data?: unknown }).data));
-    if (wrapped) return (wrapped as { data: Record<string, unknown>[] }).data;
-    return payload as Record<string, unknown>[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as Record<string, unknown>[];
-  return [];
 }
 
 function pickField(row: Record<string, unknown>, ...keys: string[]): unknown {
