@@ -11,6 +11,8 @@ import {
   type MultiCompanyPasswordResult,
 } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
+import { checkPasswordPolicy } from "@/lib/password-policy";
+import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 
 interface CompanyOption {
   company_db: string;
