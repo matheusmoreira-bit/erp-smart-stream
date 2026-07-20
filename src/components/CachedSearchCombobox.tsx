@@ -152,7 +152,7 @@ export function CachedSearchCombobox({
   };
 
   const displayValue = value
-    ? `${value.name} — ${value.code}${value.extra ? ` (${value.extra})` : ""}`
+    ? `${value.name} — ${value.code}${value.extra ? ` (${onlyDigits(value.extra).length >= 11 ? formatCnpjCpf(value.extra) : value.extra})` : ""}`
     : "";
 
   const showResults = isOpen && filtered.length > 0 && dropdownPosition;
