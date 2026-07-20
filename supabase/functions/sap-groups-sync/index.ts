@@ -165,16 +165,15 @@ Deno.serve(async (req) => {
       const json = (await resp.json()) as { value?: Array<{ Code: number | string; Name: string }> };
       const rows = (json.value || []).map((g) => ({
         company_db: companyDB,
-        group_code: String(g.Code),
-        group_name: g.Name,
-        source: "service_layer",
-        synced_at: new Date().toISOString(),
+        sap_group_code: String(g.Code),
+        sap_group_name: g.Name,
+        last_seen_at: new Date().toISOString(),
       }));
       if (rows.length > 0) {
         // apaga anteriores desta empresa antes de reinserir para refletir remoções
         await admin.from("sap_groups_cache").delete().eq("company_db", companyDB);
         await admin.from("sap_groups_cache").upsert(rows, {
-          onConflict: "company_db,group_code",
+          onConflict: "company_db,sap_group_code",
         });
       }
       return new Response(

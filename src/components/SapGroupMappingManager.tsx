@@ -50,8 +50,8 @@ const ACTION_LABELS: Record<PermissionAction, string> = {
 const ALL_MODULES = [...MODULES, ...VIEW_ONLY_MODULES];
 
 interface SapGroup {
-  group_code: string;
-  group_name: string;
+  sap_group_code: string;
+  sap_group_name: string | null;
 }
 
 interface Mapping {
@@ -88,9 +88,9 @@ export default function SapGroupMappingManager({ onBack }: { onBack: () => void 
       const [{ data: gs }, { data: ms }] = await Promise.all([
         supabase
           .from("sap_groups_cache")
-          .select("group_code, group_name")
+          .select("sap_group_code, sap_group_name")
           .eq("company_db", companyDb)
-          .order("group_name"),
+          .order("sap_group_name"),
         supabase
           .from("sap_group_mapping")
           .select("*")
@@ -141,9 +141,9 @@ export default function SapGroupMappingManager({ onBack }: { onBack: () => void 
       toast.success(`Sincronizado: ${(data as any)?.count ?? 0} grupos`);
       const { data: gs } = await supabase
         .from("sap_groups_cache")
-        .select("group_code, group_name")
+        .select("sap_group_code, sap_group_name")
         .eq("company_db", companyDb)
-        .order("group_name");
+        .order("sap_group_name");
       setGroups((gs || []) as SapGroup[]);
     } catch (e: any) {
       toast.error(`Falha ao sincronizar: ${e?.message ?? e}`);
@@ -204,8 +204,8 @@ export default function SapGroupMappingManager({ onBack }: { onBack: () => void 
     return {
       id: "",
       company_db: companyDb,
-      sap_group_code: groups[0]?.group_code ?? "",
-      sap_group_name: groups[0]?.group_name ?? null,
+      sap_group_code: groups[0]?.sap_group_code ?? "",
+      sap_group_name: groups[0]?.sap_group_name ?? null,
       module_key: ALL_MODULES[0]?.key ?? "",
       can_view: true,
       can_create: false,
@@ -416,11 +416,11 @@ function MappingDialog({
             <Select
               value={draft.sap_group_code}
               onValueChange={(v) => {
-                const g = groups.find((x) => x.group_code === v);
+                const g = groups.find((x) => x.sap_group_code === v);
                 setDraft({
                   ...draft,
                   sap_group_code: v,
-                  sap_group_name: g?.group_name ?? null,
+                  sap_group_name: g?.sap_group_name ?? null,
                 });
               }}
               disabled={!!draft.id}
@@ -430,8 +430,8 @@ function MappingDialog({
               </SelectTrigger>
               <SelectContent>
                 {groups.map((g) => (
-                  <SelectItem key={g.group_code} value={g.group_code}>
-                    {g.group_name} ({g.group_code})
+                  <SelectItem key={g.sap_group_code} value={g.sap_group_code}>
+                    {g.sap_group_name || g.sap_group_code} ({g.sap_group_code})
                   </SelectItem>
                 ))}
               </SelectContent>
