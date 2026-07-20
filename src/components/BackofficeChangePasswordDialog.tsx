@@ -63,12 +63,13 @@ export function BackofficeChangePasswordDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      toast.error("A nova senha e a confirmação não coincidem.");
+    const policy = checkPasswordPolicy(newPassword, userCode);
+    if (!policy.valid) {
+      toast.error(`Senha não atende à política: ${policy.failed[0].label}`);
       return;
     }
-    if (newPassword.length < 4) {
-      toast.error("A nova senha deve ter pelo menos 4 caracteres.");
+    if (newPassword !== confirmPassword) {
+      toast.error("A nova senha e a confirmação não coincidem.");
       return;
     }
 
