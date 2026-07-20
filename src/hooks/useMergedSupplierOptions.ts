@@ -116,7 +116,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     cacheKey,
     endpoint: "BusinessPartners",
     params: {
-      $select: "CardCode,CardName,AliasName,FederalTaxID,Currency,Frozen",
+      $select: "CardCode,CardName,AliasName,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
     // Só ativa o fallback via Service Layer se o HANA já respondeu e não
@@ -126,13 +126,15 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       ({
         code: row.CardCode,
         name: row.CardName,
-        extra: row.FederalTaxID || row.U_FGR_TaxId0 || undefined,
+        // Sem CNPJ para empresas fora do HanaAPI — só exibimos o documento
+        // fiscal quando vem da view VW_FORNECEDORES (coluna "CNPJ / CPF").
+        extra: undefined,
         currency: row.Currency || "",
         frozen: row.Frozen === "tYES",
         syncStatus: "synced",
         details: {
           fantasyName: row.AliasName || undefined,
-          taxId: row.FederalTaxID || row.U_FGR_TaxId0 || undefined,
+          taxId: undefined,
         },
       } as EnrichedSupplierOption),
   });
