@@ -69,16 +69,51 @@ export async function fetchHanaView(
   const dynamicToken = await generateDynamicToken();
   const useV2 = !!(params.useV2 && params.hanaApiUrl && params.hanaApiUrl.trim());
 
-  let resp: Response;
+  let resp: Response | undefined;
   if (useV2) {
-    const base = params.hanaApiUrl!.replace(/\/+$/, "");
-    const url = `${base}/data/${encodeURIComponent(schema)}.${encodeURIComponent(view)}`;
-    resp = await fetch(url, {
-      headers: {
-        dynamictoken: dynamicToken,
-        sessionid: sessionId,
-      },
-    });
+    const primaryBase = params.hanaApiUrl!.replace(/\/+$/, "");
+    // Fallback secundário: IP alternativo, mesma porta/path.
+    const FALLBACK_BASE = "http://189.91.68.202:8001";
+    const bases: string[] = [primaryBase];
+    try {
+      const primaryHost = new URL(primaryBase).host;
+      const fallbackHost = new URL(FALLBACK_BASE).host;
+      if (primaryHost !== fallbackHost) bases.push(FALLBACK_BASE);
+    } catch {
+      bases.push(FALLBACK_BASE);
+    }
+
+    let lastErr: unknown = null;
+    for (const base of bases) {
+      const url = `${base}/data/${encodeURIComponent(schema)}.${encodeURIComponent(view)}`;
+      try {
+        const r = await fetch(url, {
+          headers: {
+            dynamictoken: dynamicToken,
+            sessionid: sessionId,
+          },
+        });
+        if (r.ok) {
+          resp = r;
+          break;
+        }
+        // 5xx → tenta próximo IP; 4xx → propaga sem fallback.
+        if (r.status >= 500) {
+          lastErr = new Error(`HTTP ${r.status} em ${base}`);
+          continue;
+        }
+        resp = r;
+        break;
+      } catch (e) {
+        lastErr = e;
+        continue;
+      }
+    }
+    if (!resp) {
+      throw new Error(
+        `HANA view ${view} falhou (v2, todos os IPs): ${String((lastErr as Error)?.message || lastErr)}`,
+      );
+    }
   } else {
     const middleware = params.middlewareUrl || DEFAULT_HANA_VIEWS_URL;
     const qs = new URLSearchParams({
