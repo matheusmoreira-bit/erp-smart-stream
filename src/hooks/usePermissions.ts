@@ -422,7 +422,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
       const { data: modules } = await supabase
         .from("permission_group_modules")
-        .select("module_key, can_view, can_create, can_edit, can_delete, group_id")
+        .select("module_key, can_view, can_create, can_edit, can_delete, can_approve, can_integrate, can_export, group_id")
         .in("group_id", groupIds);
 
       if (cancelled) return;
@@ -430,12 +430,15 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       // Merge multiple groups via OR
       const merged: Record<string, ModulePerms> = {};
       for (const m of (modules || []) as any[]) {
-        const prev = merged[m.module_key] || { view: false, create: false, edit: false, delete: false };
+        const prev = merged[m.module_key] || { ...NONE_PERMS };
         merged[m.module_key] = {
-          view:   prev.view   || (m.can_view   ?? true),
-          create: prev.create || (m.can_create ?? true),
-          edit:   prev.edit   || (m.can_edit   ?? true),
-          delete: prev.delete || (m.can_delete ?? true),
+          view:      prev.view      || (m.can_view      ?? true),
+          create:    prev.create    || (m.can_create    ?? true),
+          edit:      prev.edit      || (m.can_edit      ?? true),
+          delete:    prev.delete    || (m.can_delete    ?? true),
+          approve:   prev.approve   || (m.can_approve   ?? true),
+          integrate: prev.integrate || (m.can_integrate ?? true),
+          export:    prev.export    || (m.can_export    ?? true),
         };
       }
 
