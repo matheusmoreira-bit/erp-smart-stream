@@ -120,35 +120,21 @@ async function sapLogin(baseUrl: string, user: string, pass: string, db: string)
   return { sessionId: json.SessionId as string, routeId: routeMatch?.[1] ?? "" };
 }
 
-async function fetchHanaTable<T = unknown>(database: string, sessionId: string, table: string): Promise<T[]> {
-  const dynamicToken = await generateDynamicToken();
-  const params = new URLSearchParams({
-    SessionId: sessionId, DB: database, Table: table,
-    DynamicToken: dynamicToken, _t: String(Date.now()),
+async function fetchHanaTable<T = unknown>(
+  companyDb: string,
+  database: string,
+  sessionId: string,
+  table: string,
+  hanaApiUrl?: string | null,
+): Promise<T[]> {
+  const rows = await fetchHanaView({
+    schema: resolveHanaSchema(companyDb, database),
+    view: table,
+    sessionId,
+    hanaApiUrl,
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params}`, {
-    method: "GET",
-    headers: {
-      "X-SessionId": sessionId,
-      "X-DB": database,
-      "X-Table": table,
-      "X-Dynamic-Token": dynamicToken,
-    },
-  });
-  if (!resp.ok) throw new Error(`HANA falhou (${table}): ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && Array.isArray(it.data));
-    if (wrapped) return wrapped.data as T[];
-    return payload as T[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as T[];
-  return [];
+  return rows as unknown as T[];
 }
-
-const fetchUsr5 = (db: string, sid: string) => fetchHanaTable<Usr5>(db, sid, "USR5");
 
 interface OusrRow {
   USER_CODE?: string;
