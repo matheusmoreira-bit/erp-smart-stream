@@ -69,10 +69,11 @@ Sair do modelo atual (um grupo global por usuário, controle só de visibilidade
 
 ## Roll-out sugerido (4 fases, sem downtime)
 
-1. **Fundação (schema + migração idempotente):** cria tabelas, ação `view` para tudo que já existe. Nada muda na UX.
-2. **Backoffice:** libera as 4 abas de gestão. Time começa a preencher grupos SAP × módulo × ação por empresa.
-3. **Shadow mode:** `useModuleAccess` já calcula pelo novo motor, mas apenas registra negativas em `audit_log`. Ajustes finos com base nos logs.
-4. **Enforcement:** liga a flag por empresa; usuários sem vínculo JC são bloqueados; RLS passa a exigir `has_module_action`.
+1. **Fundação (schema + migração idempotente):** cria tabelas, ação `view` para tudo que já existe. Nada muda na UX. ✅
+2. **Backoffice:** libera as 4 abas de gestão. Time começa a preencher grupos SAP × módulo × ação por empresa. ✅
+3. **Shadow mode (foundation):** identidade JC/local obrigatória (feature flag), gates prontos no login. ✅
+4. **Shadow mode runtime + enforcement gradual:** motor v2 no cliente (`checkModuleAction`), tabela `permission_shadow_log`, toggle `enforce` por empresa em `permissions_enforcement_scope`, tela de admin (Enforcement v2). ✅ (infra)
+   - **Próximo:** aplicar `checkModuleAction` nos botões críticos (aprovação, integração SAP, cancelar), ligar o `permissions_v2` global em shadow para começar a coleta, reescrever RLS de `expenses`/`expense_items`/`baixas_recebimento` para consumir `has_module_action` — feito por módulo, com validação.
 
 ## Fora do escopo desta fase
 - Filtros de linha por CC/projeto/filial (fica em backlog para eventual v3).
