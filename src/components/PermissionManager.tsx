@@ -50,7 +50,9 @@ type View =
   | { name: "groups" }
   | { name: "group-detail"; groupId: string | null }
   | { name: "users" }
-  | { name: "sap-mapping" };
+  | { name: "sap-mapping" }
+  | { name: "enforcement" };
+
 
 const FULL: ModulePerms = { view: true, create: true, edit: true, delete: true, approve: true, integrate: true, export: true };
 const VIEW_ONLY: ModulePerms = { view: true, create: false, edit: false, delete: false, approve: false, integrate: false, export: false };
