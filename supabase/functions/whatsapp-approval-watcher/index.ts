@@ -103,35 +103,19 @@ async function sapFetchAllUsers(
   return all;
 }
 
-async function fetchApprovals(database: string, sessionId: string): Promise<ApprovalRow[]> {
-  const dynamicToken = await generateDynamicToken();
-  const view = "VW_APROVACOES_DETALHADAS";
-  const params = new URLSearchParams({
-    SessionId: sessionId,
-    DB: database,
-    View: view,
-    DynamicToken: dynamicToken,
-    _t: String(Date.now()),
+async function fetchApprovals(
+  companyDb: string,
+  database: string,
+  sessionId: string,
+  hanaApiUrl?: string | null,
+): Promise<ApprovalRow[]> {
+  const rows = await fetchHanaView({
+    schema: resolveHanaSchema(companyDb, database),
+    view: "VW_APROVACOES_DETALHADAS",
+    sessionId,
+    hanaApiUrl,
   });
-  const resp = await fetch(`${HANA_VIEWS_URL}?${params.toString()}`, {
-    headers: {
-      "X-SessionId": sessionId,
-      "X-DB": database,
-      "X-View": view,
-      "X-Dynamic-Token": dynamicToken,
-    },
-  });
-  if (!resp.ok) throw new Error(`HANA view falhou: ${resp.status}`);
-  const text = await resp.text();
-  if (!text) return [];
-  const payload = JSON.parse(text);
-  if (Array.isArray(payload)) {
-    const wrapped = payload.find((it) => it && typeof it === "object" && Array.isArray(it.data));
-    if (wrapped) return wrapped.data as ApprovalRow[];
-    return payload as ApprovalRow[];
-  }
-  if (payload && Array.isArray(payload.data)) return payload.data as ApprovalRow[];
-  return [];
+  return rows as unknown as ApprovalRow[];
 }
 
 async function sendWhatsApp(to: string, message: string) {
