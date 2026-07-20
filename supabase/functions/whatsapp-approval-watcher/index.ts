@@ -195,7 +195,7 @@ async function processCompany(
 
   try {
     const [approvals, sapUsers] = await Promise.all([
-      fetchApprovals(dbName, session.sessionId),
+      fetchApprovals(company.company_db, dbName, session.sessionId, creds.hana_api_url),
       sapFetchAllUsers(baseUrl, session),
     ]);
 
