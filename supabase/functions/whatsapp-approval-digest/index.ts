@@ -3,7 +3,7 @@
 // Inclui empresa, link do erp-flow e a descrição de cada pendência.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { generateDynamicToken } from "../_shared/sap-middleware-token.ts";
+import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
