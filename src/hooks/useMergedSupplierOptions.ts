@@ -62,20 +62,20 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     cacheKey,
     endpoint: "BusinessPartners",
     params: {
-      $select: "CardCode,CardName,AliasName,FederalTaxID,Currency,Frozen",
+      $select: "CardCode,CardName,AliasName,FederalTaxID,U_FGR_TaxId0,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
     mapRow: (row: any) =>
       ({
         code: row.CardCode,
         name: row.CardName,
-        extra: row.FederalTaxID || undefined,
+        extra: row.FederalTaxID || row.U_FGR_TaxId0 || undefined,
         currency: row.Currency || "",
         frozen: row.Frozen === "tYES",
         syncStatus: "synced",
         details: {
           fantasyName: row.AliasName || undefined,
-          taxId: row.FederalTaxID || undefined,
+          taxId: row.FederalTaxID || row.U_FGR_TaxId0 || undefined,
         },
       } as EnrichedSupplierOption),
   });
@@ -92,7 +92,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     const { data, error } = await (supabase as any)
       .from("suppliers")
       .select(
-        "id, card_code, card_name, federal_tax_id, currency, sap_sync_status, sap_sync_error, is_active",
+        "id, card_code, card_name, federal_tax_id, u_fgr_taxid0, currency, sap_sync_status, sap_sync_error, is_active",
       )
       .eq("company_db", companyDb);
     if (!error) setLocalRows(data || []);
@@ -151,14 +151,14 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
         localOnly.push({
           code: r.card_code || `LOCAL:${r.id}`,
           name: r.card_name || "(sem nome)",
-          extra: r.federal_tax_id || undefined,
+          extra: r.federal_tax_id || r.u_fgr_taxid0 || undefined,
           currency: r.currency || "BRL",
           notSynced: true,
           syncStatus: status,
           localId: r.id,
           details: {
             fantasyName: undefined,
-            taxId: r.federal_tax_id || undefined,
+            taxId: r.federal_tax_id || r.u_fgr_taxid0 || undefined,
           },
         });
       }
