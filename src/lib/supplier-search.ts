@@ -24,6 +24,22 @@ export function onlyDigits(s: string | null | undefined): string {
 }
 
 /**
+ * Formata CNPJ (14 dígitos) ou CPF (11 dígitos) com máscara padrão.
+ * Se a string não tiver comprimento esperado, retorna os dígitos originais
+ * (ou o valor cru quando não houver dígitos).
+ */
+export function formatCnpjCpf(raw: string | null | undefined): string {
+  const d = onlyDigits(raw);
+  if (d.length === 14) {
+    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  }
+  if (d.length === 11) {
+    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  }
+  return d || (raw ?? "").toString();
+}
+
+/**
  * Sufixos corporativos comuns que atrapalham a busca por nome.
  * Removidos antes do matching para casos como "Figma Inc." → "figma".
  */
