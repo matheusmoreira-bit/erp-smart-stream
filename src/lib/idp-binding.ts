@@ -23,6 +23,46 @@ export async function isEmailIdpLinked(email: string): Promise<boolean> {
   }
 }
 
+/** True when the given SAP user code has an active identity link. */
+export async function isSapCodeIdpLinked(sapUserCode: string): Promise<boolean> {
+  if (!sapUserCode) return false;
+  try {
+    const { data, error } = await supabase.rpc("is_sap_code_idp_linked", {
+      _sap_user_code: sapUserCode,
+    });
+    if (error) return false;
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
+/** Records a local-admin bypass so it becomes auditable in `idp_user_mapping`. */
+export async function upsertLocalAdminMapping(params: {
+  sapUserCode: string;
+  email?: string | null;
+  displayName?: string | null;
+}): Promise<void> {
+  const code = params.sapUserCode?.trim().toLowerCase();
+  if (!code) return;
+  try {
+    await supabase.from("idp_user_mapping").upsert(
+      {
+        sap_user_code: code,
+        idp_provider: "local",
+        idp_user_id: code,
+        idp_email: params.email ?? code,
+        idp_display_name: params.displayName ?? code,
+        status: "linked",
+        linked_at: new Date().toISOString(),
+      },
+      { onConflict: "sap_user_code,idp_provider" }
+    );
+  } catch {
+    /* best-effort */
+  }
+}
+
 /**
  * After a successful Google sign-in, record the identity in idp_user_mapping so it
  * counts as a linked user. Best-effort: failures don't block the login.
