@@ -3933,6 +3933,69 @@ export type Database = {
         }
         Relationships: []
       }
+      permission_shadow_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_identifier: string | null
+          company_db: string | null
+          context: Json | null
+          decision: string
+          id: number
+          mode: string
+          module_key: string
+          reason: string | null
+          ts: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_identifier?: string | null
+          company_db?: string | null
+          context?: Json | null
+          decision: string
+          id?: number
+          mode: string
+          module_key: string
+          reason?: string | null
+          ts?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_identifier?: string | null
+          company_db?: string | null
+          context?: Json | null
+          decision?: string
+          id?: number
+          mode?: string
+          module_key?: string
+          reason?: string | null
+          ts?: string
+        }
+        Relationships: []
+      }
+      permissions_enforcement_scope: {
+        Row: {
+          company_db: string
+          enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_db: string
+          enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_db?: string
+          enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       po_notification_sent: {
         Row: {
           company_db: string
@@ -5336,6 +5399,19 @@ export type Database = {
           valor_juros_multa: number
         }[]
       }
+      log_permission_shadow: {
+        Args: {
+          _action: string
+          _company_db: string
+          _context?: Json
+          _decision: string
+          _identifier?: string
+          _mode: string
+          _module: string
+          _reason?: string
+        }
+        Returns: undefined
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -5344,6 +5420,10 @@ export type Database = {
           source_queue: string
         }
         Returns: number
+      }
+      permissions_enforcement_mode: {
+        Args: { _company_db?: string }
+        Returns: string
       }
       preview_next_codigo: { Args: { p_item_base_id: string }; Returns: string }
       prune_old_integration_data: { Args: never; Returns: undefined }
