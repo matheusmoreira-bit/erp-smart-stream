@@ -52,8 +52,58 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   const { session } = useSap();
 
   // 1) Lista SAP — traz todos, incluindo Frozen, para poder marcá-los.
+  //    Se a empresa tiver HanaAPI (Apiuser + use_hana_db != false), preferimos
+  //    a view HANA `VW_FORNECEDORES` / `VW_CLIENTES` porque é significativamente
+  //    mais rápida (e completa) do que paginar BusinessPartners via Service
+  //    Layer. Em caso de falha ou empresa sem HanaAPI, o hook `useSapCachedList`
+  //    abaixo faz o fallback natural para BusinessPartners.
   const cacheKey = isSales ? "customers_active_v4" : "suppliers_active_v4";
   const cardType = isSales ? "cCustomer" : "cSupplier";
+
+  const [hanaLoaded, setHanaLoaded] = useState(false);
+  const [hanaOptions, setHanaOptions] = useState<EnrichedSupplierOption[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!companyDb) {
+      setHanaOptions(null);
+      setHanaLoaded(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("sap-suppliers-hana", {
+          body: { company_db: companyDb, is_sales: isSales },
+        });
+        if (cancelled) return;
+        if (error) throw error;
+        if (data?.error === "hana_unavailable" || !Array.isArray(data?.rows)) {
+          setHanaOptions(null);
+        } else {
+          const mapped: EnrichedSupplierOption[] = (data.rows as any[]).map((r) => ({
+            code: r.code,
+            name: r.name,
+            extra: r.extra,
+            currency: r.currency || "BRL",
+            frozen: !!r.frozen,
+            syncStatus: "synced",
+            details: {
+              fantasyName: r.details?.fantasyName,
+              taxId: r.details?.taxId,
+            },
+          }));
+          setHanaOptions(mapped);
+        }
+      } catch (e) {
+        console.warn("[useMergedSupplierOptions] HANA suppliers indisponível, usando Service Layer.", e);
+        if (!cancelled) setHanaOptions(null);
+      } finally {
+        if (!cancelled) setHanaLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [companyDb, isSales]);
+
   const {
     options: sapOptions,
     isLoading: sapLoading,
@@ -65,6 +115,9 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       $select: "CardCode,CardName,AliasName,FederalTaxID,U_FGR_TaxId0,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
+    // Só ativa o fallback via Service Layer se o HANA já respondeu e não
+    // trouxe dados (empresa sem Apiuser, ou erro na view).
+    enabled: hanaLoaded && (hanaOptions === null || hanaOptions.length === 0),
     mapRow: (row: any) =>
       ({
         code: row.CardCode,
@@ -79,6 +132,11 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
         },
       } as EnrichedSupplierOption),
   });
+
+  const effectiveSapOptions = hanaOptions && hanaOptions.length > 0
+    ? hanaOptions
+    : (sapOptions as EnrichedSupplierOption[]);
+
 
   // 2) Linhas locais em public.suppliers da empresa atual — inclui fornecedores
   //    que falharam ou ainda não subiram ao SAP.
