@@ -34,6 +34,7 @@ import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
 import { useSap } from "@/contexts/SapContext";
+import { gateSync } from "@/contexts/PermissionsV2Context";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache, type SapSession } from "@/lib/sap-client";
