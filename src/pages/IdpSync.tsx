@@ -229,6 +229,21 @@ export default function IdpSyncPage() {
     return { total: mergedList.length, linked, pending };
   }, [mergedList]);
 
+  // JumpCloud users that have NO matching SAP user (inverse view — for provisioning).
+  const unmappedJcUsers = useMemo(() => {
+    const sapEmails = new Set(
+      activeUsers.map((u) => (u.eMail || "").toLowerCase()).filter(Boolean)
+    );
+    const mappedJcIds = new Set(mappings.map((m) => (m.idp_user_id || "").toLowerCase()));
+    return jcUsers.filter((jc) => {
+      const email = (jc.email || "").toLowerCase();
+      if (email && sapEmails.has(email)) return false;
+      if (jc._id && mappedJcIds.has(jc._id.toLowerCase())) return false;
+      return true;
+    });
+  }, [jcUsers, activeUsers, mappings]);
+
+
   const isLoading = sapLoading || isLoadingMappings;
 
   return (
