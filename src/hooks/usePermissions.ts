@@ -228,7 +228,7 @@ export function usePermissionGroups() {
 
     await supabase.from("permission_group_modules").delete().eq("group_id", id!);
     const rows = Object.entries(normalized)
-      .filter(([, p]) => p.view || p.create || p.edit || p.delete)
+      .filter(([, p]) => p.view || p.create || p.edit || p.delete || p.approve || p.integrate || p.export)
       .map(([module_key, p]) => ({
         group_id: id!,
         module_key,
@@ -236,6 +236,9 @@ export function usePermissionGroups() {
         can_create: p.create,
         can_edit: p.edit,
         can_delete: p.delete,
+        can_approve: p.approve,
+        can_integrate: p.integrate,
+        can_export: p.export,
       }));
     if (rows.length > 0) {
       await supabase.from("permission_group_modules").insert(rows as any);
