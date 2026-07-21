@@ -1770,12 +1770,9 @@ export function CreateExpenseModal({
         return;
       }
     }
-    // Em pedidos de venda, o centro de custo é propriedade da linha no SAP —
-    // não exigimos CC padrão no cabeçalho (as linhas já foram validadas acima).
-    if (!isSales && !headerCostCenter?.code) {
-      toast.error("Centro de custo (padrão) é obrigatório");
-      return;
-    }
+    // Centro de custo padrão é opcional — se o usuário tiver CC via IdP,
+    // já é pré-preenchido; caso contrário, cada linha pode ter seu próprio CC.
+
     // Guard duro anti-double-submit: `isCreating` (estado) protege a UI, mas
     // um duplo clique rápido cabe na janela entre o clique e o setState —
     // o ref pega isso. Rejeita silenciosamente com log auditável.
@@ -2827,14 +2824,14 @@ export function CreateExpenseModal({
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Padrões para itens</p>
             <div className="grid max-w-full min-w-0 grid-cols-1 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-2.5 sm:grid-cols-2 sm:p-3">
               <CachedSearchCombobox
-                label="Centro de Custo (padrão p/ itens) *"
+                label="Centro de Custo (padrão p/ itens)"
                 options={costCenterOptions}
                 isLoading={costCentersLoading}
                 value={headerCostCenter}
                 onChange={applyHeaderCostCenter}
-                placeholder="Obrigatório — aplica a todos os itens…"
+                placeholder="Opcional — aplica a todos os itens…"
                 portalContainer={dialogContainer}
-                required
+
               />
               <CachedSearchCombobox
                 label="Projeto (padrão p/ itens)"
