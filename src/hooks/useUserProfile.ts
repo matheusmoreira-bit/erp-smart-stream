@@ -4,6 +4,7 @@ import { useSap } from "@/contexts/SapContext";
 
 export interface UserProfile {
   id?: string;
+  /** Mantido apenas para exibição; o cadastro é global por user_code. */
   company_db: string;
   user_code: string;
   display_name: string | null;
@@ -45,27 +46,17 @@ export function useUserProfile() {
       return;
     }
     setLoading(true);
+    const key = session.userName.toLowerCase();
     const { data } = await supabase
-      .from("user_profiles")
+      .from("collaborator_profiles")
       .select("*")
-      .eq("company_db", session.companyDB)
-      .eq("user_code", session.userName)
+      .eq("user_code", key)
       .maybeSingle();
-    // Fallback: também traz telefone salvo em user_phones para migrar.
-    let phone: string | null = (data as UserProfile | null)?.phone ?? null;
-    if (!phone) {
-      const { data: ph } = await supabase
-        .from("user_phones")
-        .select("phone")
-        .eq("company_db", session.companyDB)
-        .eq("user_code", session.userName)
-        .maybeSingle();
-      if (ph?.phone) phone = ph.phone;
-    }
     setProfile({
       ...defaults(session.companyDB, session.userName),
       ...(data as Partial<UserProfile> | null),
-      phone,
+      company_db: session.companyDB,
+      user_code: session.userName,
     } as UserProfile);
     setLoading(false);
   }, [session?.companyDB, session?.userName]);
@@ -87,7 +78,7 @@ export function useUserProfile() {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error || `Falha ao salvar perfil (${res.status})`);
     const data = json.profile as UserProfile;
-    setProfile(data);
+    setProfile({ ...data, company_db: session.companyDB, user_code: session.userName });
     return data;
   }, [session?.companyDB, session?.userName]);
 
