@@ -1,20 +1,24 @@
-// Salva/atualiza o perfil do usuário intercompany. Aceita chamadas de usuários
-// autenticados no Lovable Cloud OU com sessão SAP válida (via headers x-sap-*),
-// já que o app usa login SAP direto sem necessariamente estar autenticado no
-// Lovable Cloud. Usa service_role para escrever contornando o RLS após validar
-// a identidade do chamador.
+// Salva/atualiza o perfil UNIFICADO do colaborador (collaborator_profiles),
+// identificado pelo user_code (lowercase). Um único registro por pessoa se
+// aplica a todas as empresas em que ela existe. O telefone é replicado para
+// user_phones em cada empresa via trigger no banco.
+//
+// Aceita chamadas de usuários autenticados no Lovable Cloud OU com sessão SAP
+// válida (headers x-sap-*). Usa service_role para escrever após validar o
+// chamador; garante que sessão SAP só edita o próprio perfil.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 interface ProfilePatch {
-  company_db?: string;
+  company_db?: string; // informativo — não usado no cadastro unificado
   user_code?: string;
   display_name?: string | null;
   avatar_url?: string | null;
@@ -34,25 +38,23 @@ Deno.serve(async (req) => {
     const caller = await requireUserOrSapSession(req);
     const body = (await req.json().catch(() => ({}))) as ProfilePatch;
 
-    const companyDB = (body.company_db || "").trim();
-    const userCode = (body.user_code || "").trim();
-    if (!companyDB || !userCode) {
-      return new Response(JSON.stringify({ error: "company_db e user_code obrigatórios" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const rawCode = (body.user_code || "").trim();
+    if (!rawCode) {
+      return new Response(JSON.stringify({ error: "user_code obrigatório" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const userCode = rawCode.toLowerCase();
 
-    // Se o chamador vier via sessão SAP, obrigatoriamente só pode salvar o
-    // próprio perfil na empresa da sessão. Chamador via Cloud (admin/user
-    // logado) pode salvar o próprio perfil ou administrar o perfil de outros.
+    // Sessão SAP só pode salvar o próprio user_code.
     const source = (caller as { source?: string }).source;
     if (source === "sap_session") {
-      const sapCompany = (caller as { companyDB?: string }).companyDB || "";
-      const sapUser = (caller as { userName?: string }).userName || "";
-      if (sapCompany.toLowerCase() !== companyDB.toLowerCase() ||
-          sapUser.toLowerCase() !== userCode.toLowerCase()) {
+      const sapUser = ((caller as { userName?: string }).userName || "").toLowerCase();
+      if (sapUser !== userCode) {
         return new Response(JSON.stringify({ error: "Sem permissão para editar este perfil" }), {
-          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
@@ -64,38 +66,32 @@ Deno.serve(async (req) => {
 
     // Merge com registro existente para não sobrescrever campos ausentes.
     const { data: existing } = await admin
-      .from("user_profiles")
+      .from("collaborator_profiles")
       .select("*")
-      .eq("company_db", companyDB)
       .eq("user_code", userCode)
       .maybeSingle();
 
-    const payload: Record<string, unknown> = {
-      ...(existing || {}),
-      ...body,
-      company_db: companyDB,
-      user_code: userCode,
-      updated_at: new Date().toISOString(),
-    };
-    delete (payload as { id?: string }).id;
+    const patch: Record<string, unknown> = { ...(existing || {}) };
+    const allowed: (keyof ProfilePatch)[] = [
+      "display_name", "avatar_url", "email", "phone",
+      "notify_whatsapp_overdue", "notify_whatsapp_approvals",
+      "notify_email_overdue", "notify_email_approvals",
+      "sap_synced_at", "dismissed_until",
+    ];
+    for (const k of allowed) {
+      if (k in body) patch[k] = body[k] as unknown;
+    }
+    patch.user_code = userCode;
+    patch.updated_at = new Date().toISOString();
+    delete (patch as { id?: string }).id;
+    delete (patch as { created_at?: string }).created_at;
 
     const { data, error } = await admin
-      .from("user_profiles")
-      .upsert(payload, { onConflict: "company_db,user_code" })
+      .from("collaborator_profiles")
+      .upsert(patch, { onConflict: "user_code" })
       .select()
       .single();
     if (error) throw error;
-
-    // Espelha telefone em user_phones para compatibilidade com notificações.
-    if (typeof body.phone === "string") {
-      const cleaned = body.phone.trim();
-      if (cleaned) {
-        await admin.from("user_phones").upsert(
-          { company_db: companyDB, user_code: userCode, phone: cleaned, source: "manual" },
-          { onConflict: "company_db,user_code" },
-        );
-      }
-    }
 
     return new Response(JSON.stringify({ ok: true, profile: data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -105,7 +101,8 @@ Deno.serve(async (req) => {
     if (authResp) return authResp;
     console.error("[user-profile-save] error", err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

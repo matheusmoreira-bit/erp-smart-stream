@@ -119,7 +119,7 @@ export default function Profile() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Meu perfil</h1>
             <p className="text-sm text-muted-foreground">
-              Dados usados em notificações e no fluxo intercompany.
+              Cadastro único do colaborador — aplicado a todas as empresas em que você tem acesso.
             </p>
           </div>
         </div>
