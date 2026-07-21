@@ -1014,7 +1014,9 @@ function ApprovalDetailModal({
                         <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
                         <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
                         <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
+                        <th className="text-left py-2 px-3 text-muted-foreground">C. Custo</th>
                         <th className="text-left py-2 px-3 text-muted-foreground">Projeto</th>
+
                       </tr>
                     </thead>
                     <tbody>
