@@ -2862,6 +2862,7 @@ export function CreateExpenseModal({
                     </Button>
                   </div>
                   <CachedSearchCombobox
+                    required
                     options={filteredItemOptions}
                     isLoading={itemsLoading}
                     value={item.sapItem || null}
@@ -2891,9 +2892,8 @@ export function CreateExpenseModal({
                   />
                   <div className="grid min-w-0 grid-cols-1 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-12">
                     <div className="min-w-0 min-[380px]:col-span-3 sm:col-span-6">
-                      <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <span>Descrição</span>
-                        <span className="text-muted-foreground/70">(opcional)</span>
+                      <label className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        Descrição <span className="text-muted-foreground/70">(opcional)</span>
                       </label>
                       <Input
                         value={item.description}
@@ -2903,34 +2903,38 @@ export function CreateExpenseModal({
                       />
                     </div>
                     <div className="min-w-0">
-                      <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <span>Qtd *</span>
-                        {Number(item.quantity) > 0 ? (
-                          <CheckCircle2 className="w-3 h-3 text-green-500" aria-label="Preenchido" />
-                        ) : (
-                          <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
-                        )}
-                      </label>
-                      <DecimalInput
-                        value={item.quantity}
-                        onChange={(v) => updateItem(i, "quantity", v)}
-                        className={`text-sm h-8 ${Number(item.quantity) > 0 ? "bg-green-500/5 border-green-500/50" : "bg-amber-500/5 border-amber-500/50"}`}
-                      />
+                      <label className="text-[10px] text-muted-foreground whitespace-nowrap">Qtd *</label>
+                      <div className="relative">
+                        <DecimalInput
+                          value={item.quantity}
+                          onChange={(v) => updateItem(i, "quantity", v)}
+                          className={`text-sm h-8 pr-7 ${Number(item.quantity) > 0 ? "bg-green-500/5 border-green-500/50" : "bg-amber-500/5 border-amber-500/50"}`}
+                        />
+                        <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                          {Number(item.quantity) > 0 ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                          ) : (
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                          )}
+                        </span>
+                      </div>
                     </div>
                     <div className="min-w-0">
-                      <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <span>Preço Unit. *</span>
-                        {Number(item.unit_price) >= 0.01 ? (
-                          <CheckCircle2 className="w-3 h-3 text-green-500" aria-label="Preenchido" />
-                        ) : (
-                          <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
-                        )}
-                      </label>
-                      <DecimalInput
-                        value={item.unit_price}
-                        onChange={(v) => updateItem(i, "unit_price", v)}
-                        className={`text-sm h-8 ${Number(item.unit_price) >= 0.01 ? "bg-green-500/5 border-green-500/50" : "bg-amber-500/5 border-amber-500/50"}`}
-                      />
+                      <label className="text-[10px] text-muted-foreground whitespace-nowrap">Preço Unit. *</label>
+                      <div className="relative">
+                        <DecimalInput
+                          value={item.unit_price}
+                          onChange={(v) => updateItem(i, "unit_price", v)}
+                          className={`text-sm h-8 pr-7 ${Number(item.unit_price) >= 0.01 ? "bg-green-500/5 border-green-500/50" : "bg-amber-500/5 border-amber-500/50"}`}
+                        />
+                        <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                          {Number(item.unit_price) >= 0.01 ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
+                          ) : (
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                          )}
+                        </span>
+                      </div>
                     </div>
                     <div className="min-w-0">
                       <label className="text-[10px] text-muted-foreground">Total</label>
