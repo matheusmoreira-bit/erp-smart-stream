@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
 
     const baseUrl = buildBaseUrl(creds.service_layer_url);
     const dbName = creds.company_db || companyDb;
-    const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "OPENGAMING" };
+    const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "SBO_OPENGAMING" };
     const schema = HANA_SCHEMA_OVERRIDES[companyDb] || dbName;
     const session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
 
@@ -316,3 +316,4 @@ Deno.serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
+// schema fix: SBO_OPENGAMING 1784592109

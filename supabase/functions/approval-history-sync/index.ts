@@ -791,3 +791,4 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: message }, 500);
   }
 });
+// schema fix: SBO_OPENGAMING 1784592109

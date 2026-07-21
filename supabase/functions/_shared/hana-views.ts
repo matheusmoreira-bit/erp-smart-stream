@@ -16,7 +16,7 @@ const DEFAULT_HANA_API_URL = "http://201.48.79.205:8001";
  * a HanaAPI V2 (todas as bases estão migradas — V1 descontinuada).
  */
 export const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
-  open_gaming_sa: "OPENGAMING",
+  open_gaming_sa: "SBO_OPENGAMING",
 };
 
 /** Resolve o schema HANA para um companyDB. */
@@ -166,7 +166,9 @@ export async function fetchHanaView(
       }
       // 5xx → tenta próximo IP; 4xx → propaga sem fallback.
       if (r.status >= 500) {
-        lastErr = new Error(`HTTP ${r.status} em ${base}`);
+        const bodyText = await r.text().catch(() => "");
+        console.log(`[hana-views] ${r.status} on ${url} body=${bodyText.slice(0, 300)}`);
+        lastErr = new Error(`HTTP ${r.status} em ${base}: ${bodyText.slice(0, 200)}`);
         continue;
       }
       resp = r;

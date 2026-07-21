@@ -13,7 +13,7 @@ const corsHeaders = {
 };
 
 const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
-  open_gaming_sa: "OPENGAMING",
+  open_gaming_sa: "SBO_OPENGAMING",
 };
 
 Deno.serve(async (req) => {
@@ -68,3 +68,4 @@ Deno.serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
+// schema fix: SBO_OPENGAMING 1784592109
