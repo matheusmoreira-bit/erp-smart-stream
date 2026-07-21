@@ -1014,7 +1014,9 @@ function ApprovalDetailModal({
                         <th className="text-right py-2 px-3 text-muted-foreground">Qtd</th>
                         <th className="text-right py-2 px-3 text-muted-foreground">Preço Unit.</th>
                         <th className="text-right py-2 px-3 text-muted-foreground">Total</th>
+                        <th className="text-left py-2 px-3 text-muted-foreground">C. Custo</th>
                         <th className="text-left py-2 px-3 text-muted-foreground">Projeto</th>
+
                       </tr>
                     </thead>
                     <tbody>
@@ -1052,7 +1054,9 @@ function ApprovalDetailModal({
                             <td className={`py-2 px-3 text-right font-mono ${!mine ? "blur-sm select-none" : ""}`}>{line.Quantity}</td>
                             <td className={`py-2 px-3 text-right font-mono ${!mine ? "blur-sm select-none" : ""}`}>{formatCurrency(doc.currency !== "BRL" && line.PriceFC ? line.PriceFC : line.UnitPrice, doc.currency)}</td>
                             <td className={`py-2 px-3 text-right font-mono font-medium ${!mine ? "blur-sm select-none" : ""}`}>{formatCurrency(doc.currency !== "BRL" && line.LineTotalFC ? line.LineTotalFC : line.LineTotal, doc.currency)}</td>
+                            <td className={`py-2 px-3 text-muted-foreground ${!mine ? "blur-sm select-none" : ""}`}>{line.CostingCode ? formatCostCenter(line.CostingCode) : "—"}</td>
                             <td className={`py-2 px-3 text-muted-foreground ${!mine ? "blur-sm select-none" : ""}`}>{line.Project || "—"}</td>
+
                           </tr>
                         );
                       })}
