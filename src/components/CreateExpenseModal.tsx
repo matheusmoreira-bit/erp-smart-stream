@@ -1724,27 +1724,27 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
-    if (items.some((i) => !i.description.trim())) {
-      toast.error("Todos os itens devem ter descrição");
-      return;
-    }
     for (let idx = 0; idx < items.length; idx++) {
       const it = items[idx];
       const n = idx + 1;
       if (!it.item_code || !String(it.item_code).trim()) {
-        toast.error(`Item ${n}: código do item é obrigatório`);
+        toast.error(`Item ${n}: item é obrigatório`);
         return;
       }
       if (!Number(it.quantity) || Number(it.quantity) <= 0) {
         toast.error(`Item ${n}: quantidade deve ser maior que zero`);
         return;
       }
-      if (!Number(it.unit_price) || Number(it.unit_price) <= 0) {
-        toast.error(`Item ${n}: valor unitário deve ser maior que zero`);
+      if (!Number(it.unit_price) || Number(it.unit_price) < 0.01) {
+        toast.error(`Item ${n}: preço unitário deve ser maior ou igual a R$ 0,01`);
         return;
       }
       if (!it.cost_center || !String(it.cost_center).trim()) {
         toast.error(`Item ${n}: centro de custo é obrigatório`);
+        return;
+      }
+      if (!it.project || !String(it.project).trim()) {
+        toast.error(`Item ${n}: projeto é obrigatório`);
         return;
       }
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
@@ -1758,15 +1758,6 @@ export function CreateExpenseModal({
         } else {
           toast.error(`Item ${n}: item não permitido para o seu centro de custo`);
         }
-        return;
-      }
-      // Open Gaming / Cactus Tecnologia: projeto por linha é obrigatório (política interna).
-      if (
-        (sapSession?.companyDB === "open_gaming_sa" || sapSession?.companyDB === "SBO_CACTUS") &&
-        (!it.project || !String(it.project).trim())
-      ) {
-        const label = sapSession?.companyDB === "SBO_CACTUS" ? "Cactus Tecnologia" : "Open Gaming";
-        toast.error(`Item ${n}: projeto é obrigatório para ${label}`);
         return;
       }
     }
