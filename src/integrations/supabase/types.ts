@@ -1500,6 +1500,54 @@ export type Database = {
           },
         ]
       }
+      collaborator_profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          dismissed_until: string | null
+          display_name: string | null
+          email: string | null
+          notify_email_approvals: boolean
+          notify_email_overdue: boolean
+          notify_whatsapp_approvals: boolean
+          notify_whatsapp_overdue: boolean
+          phone: string | null
+          sap_synced_at: string | null
+          updated_at: string
+          user_code: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          dismissed_until?: string | null
+          display_name?: string | null
+          email?: string | null
+          notify_email_approvals?: boolean
+          notify_email_overdue?: boolean
+          notify_whatsapp_approvals?: boolean
+          notify_whatsapp_overdue?: boolean
+          phone?: string | null
+          sap_synced_at?: string | null
+          updated_at?: string
+          user_code: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          dismissed_until?: string | null
+          display_name?: string | null
+          email?: string | null
+          notify_email_approvals?: boolean
+          notify_email_overdue?: boolean
+          notify_whatsapp_approvals?: boolean
+          notify_whatsapp_overdue?: boolean
+          phone?: string | null
+          sap_synced_at?: string | null
+          updated_at?: string
+          user_code?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           company_db: string
