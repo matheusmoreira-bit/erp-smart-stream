@@ -585,11 +585,20 @@ export function useApprovals() {
         schema: hanaSchema,
       },
     });
+    const errPayload = (data && typeof data === "object" ? data : null) as
+      | { error?: string; code?: string }
+      | null;
+    if (errPayload?.code === "SAP_SESSION_EXPIRED" || /SAP_SESSION_EXPIRED|SessionId invalido|SessionId inválido|Sessão SAP/i.test(error?.message || "")) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("erp:session-expired"));
+      }
+      throw new Error("Sessão SAP expirada. Faça login novamente.");
+    }
     if (error) {
       throw new Error(error.message || "Falha ao consultar aprovações (HanaAPI V2)");
     }
-    if (data && typeof data === "object" && "error" in data && (data as { error?: string }).error) {
-      throw new Error((data as { error: string }).error);
+    if (errPayload?.error) {
+      throw new Error(errPayload.error);
     }
     const payload = data as
       | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
