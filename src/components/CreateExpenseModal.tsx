@@ -1724,27 +1724,27 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
-    if (items.some((i) => !i.description.trim())) {
-      toast.error("Todos os itens devem ter descrição");
-      return;
-    }
     for (let idx = 0; idx < items.length; idx++) {
       const it = items[idx];
       const n = idx + 1;
       if (!it.item_code || !String(it.item_code).trim()) {
-        toast.error(`Item ${n}: código do item é obrigatório`);
+        toast.error(`Item ${n}: item é obrigatório`);
         return;
       }
       if (!Number(it.quantity) || Number(it.quantity) <= 0) {
         toast.error(`Item ${n}: quantidade deve ser maior que zero`);
         return;
       }
-      if (!Number(it.unit_price) || Number(it.unit_price) <= 0) {
-        toast.error(`Item ${n}: valor unitário deve ser maior que zero`);
+      if (!Number(it.unit_price) || Number(it.unit_price) < 0.01) {
+        toast.error(`Item ${n}: preço unitário deve ser maior ou igual a R$ 0,01`);
         return;
       }
       if (!it.cost_center || !String(it.cost_center).trim()) {
         toast.error(`Item ${n}: centro de custo é obrigatório`);
+        return;
+      }
+      if (!it.project || !String(it.project).trim()) {
+        toast.error(`Item ${n}: projeto é obrigatório`);
         return;
       }
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
@@ -1758,15 +1758,6 @@ export function CreateExpenseModal({
         } else {
           toast.error(`Item ${n}: item não permitido para o seu centro de custo`);
         }
-        return;
-      }
-      // Open Gaming / Cactus Tecnologia: projeto por linha é obrigatório (política interna).
-      if (
-        (sapSession?.companyDB === "open_gaming_sa" || sapSession?.companyDB === "SBO_CACTUS") &&
-        (!it.project || !String(it.project).trim())
-      ) {
-        const label = sapSession?.companyDB === "SBO_CACTUS" ? "Cactus Tecnologia" : "Open Gaming";
-        toast.error(`Item ${n}: projeto é obrigatório para ${label}`);
         return;
       }
     }
@@ -2901,31 +2892,45 @@ export function CreateExpenseModal({
                   <div className="grid min-w-0 grid-cols-1 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-12">
                     <div className="min-w-0 min-[380px]:col-span-3 sm:col-span-6">
                       <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <span>Descrição *</span>
-                        {(item.description || "").trim() ? (
+                        <span>Descrição</span>
+                        <span className="text-muted-foreground/70">(opcional)</span>
+                      </label>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateItem(i, "description", e.target.value)}
+                        placeholder="Descrição do item (opcional)"
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <span>Qtd *</span>
+                        {Number(item.quantity) > 0 ? (
                           <CheckCircle2 className="w-3 h-3 text-green-500" aria-label="Preenchido" />
                         ) : (
                           <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
                         )}
                       </label>
-                      <Input
-                        value={item.description}
-                        onChange={(e) => updateItem(i, "description", e.target.value)}
-                        placeholder="Descrição do item"
-                        className={`text-sm h-8 ${
-                          (item.description || "").trim()
-                            ? "bg-green-500/5 border-green-500/50"
-                            : "bg-amber-500/5 border-amber-500/50"
-                        }`}
+                      <DecimalInput
+                        value={item.quantity}
+                        onChange={(v) => updateItem(i, "quantity", v)}
+                        className={`text-sm h-8 ${Number(item.quantity) > 0 ? "bg-green-500/5 border-green-500/50" : "bg-amber-500/5 border-amber-500/50"}`}
                       />
                     </div>
                     <div className="min-w-0">
-                      <label className="text-[10px] text-muted-foreground">Qtd</label>
-                      <DecimalInput value={item.quantity} onChange={(v) => updateItem(i, "quantity", v)} className="text-sm h-8" />
-                    </div>
-                    <div className="min-w-0">
-                      <label className="text-[10px] text-muted-foreground">Preço Unit.</label>
-                      <DecimalInput value={item.unit_price} onChange={(v) => updateItem(i, "unit_price", v)} className="text-sm h-8" />
+                      <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <span>Preço Unit. *</span>
+                        {Number(item.unit_price) >= 0.01 ? (
+                          <CheckCircle2 className="w-3 h-3 text-green-500" aria-label="Preenchido" />
+                        ) : (
+                          <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
+                        )}
+                      </label>
+                      <DecimalInput
+                        value={item.unit_price}
+                        onChange={(v) => updateItem(i, "unit_price", v)}
+                        className={`text-sm h-8 ${Number(item.unit_price) >= 0.01 ? "bg-green-500/5 border-green-500/50" : "bg-amber-500/5 border-amber-500/50"}`}
+                      />
                     </div>
                     <div className="min-w-0">
                       <label className="text-[10px] text-muted-foreground">Total</label>
@@ -2934,7 +2939,8 @@ export function CreateExpenseModal({
                   </div>
                   <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                     <CachedSearchCombobox
-                      label="Centro de Custo (Dimensão)"
+                      label="Centro de Custo (Dimensão) *"
+                      required
                       options={costCenterOptions}
                       isLoading={costCentersLoading}
                       value={item.sapCostCenter || null}
@@ -2954,7 +2960,8 @@ export function CreateExpenseModal({
                       portalContainer={dialogContainer}
                     />
                     <CachedSearchCombobox
-                      label="Projeto (Dimensão)"
+                      label="Projeto (Dimensão) *"
+                      required
                       options={projectOptions}
                       isLoading={projectsLoading}
                       value={item.sapProject || null}
