@@ -1770,12 +1770,9 @@ export function CreateExpenseModal({
         return;
       }
     }
-    // Em pedidos de venda, o centro de custo é propriedade da linha no SAP —
-    // não exigimos CC padrão no cabeçalho (as linhas já foram validadas acima).
-    if (!isSales && !headerCostCenter?.code) {
-      toast.error("Centro de custo (padrão) é obrigatório");
-      return;
-    }
+    // Centro de custo padrão é opcional — se o usuário tiver CC via IdP,
+    // já é pré-preenchido; caso contrário, cada linha pode ter seu próprio CC.
+
     // Guard duro anti-double-submit: `isCreating` (estado) protege a UI, mas
     // um duplo clique rápido cabe na janela entre o clique e o setState —
     // o ref pega isso. Rejeita silenciosamente com log auditável.
