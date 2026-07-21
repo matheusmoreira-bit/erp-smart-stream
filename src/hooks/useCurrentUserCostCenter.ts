@@ -24,41 +24,16 @@ export function useCurrentUserCostCenter() {
     (async () => {
       setLoading(true);
       try {
-        const { data: userRes } = await supabase.auth.getUser();
-        const authEmail = userRes?.user?.email?.toLowerCase().trim() || "";
-        const sap = sapUserName.toLowerCase().trim();
-
-        // Build candidate matchers: full email OR local-part (username).
-        const candidates = new Set<string>();
-        if (authEmail) candidates.add(authEmail);
-        if (sap) {
-          candidates.add(sap);
-          if (!sap.includes("@")) {
-            // username only — match sap_email/idp_email starting with "sap@"
-            candidates.add(`${sap}@%`);
-          }
-        }
-
-        if (candidates.size === 0) {
-          if (!cancelled) setCostCenter(null);
-          return;
-        }
-
-        const filters: string[] = [];
-        for (const c of candidates) {
-          filters.push(`sap_email.ilike.${c}`);
-          filters.push(`idp_email.ilike.${c}`);
-        }
-
-        const { data } = await supabase
-          .from("idp_user_mapping")
-          .select("cost_center_code, sap_email, idp_email, attributes_synced_at")
-          .or(filters.join(","))
-          .order("attributes_synced_at", { ascending: false, nullsFirst: false })
-          .limit(10);
+        const { data, error } = await supabase.rpc("get_my_idp_cost_center", {
+          _sap_user_name: sapUserName || null,
+        } as any);
         if (cancelled) return;
-        const row = (data || []).find((r: any) => r.cost_center_code);
-        setCostCenter(row?.cost_center_code || null);
+        if (error) {
+          setCostCenter(null);
+        } else {
+          const cc = typeof data === "string" ? data.trim() : "";
+          setCostCenter(cc || null);
+        }
       } catch {
         if (!cancelled) setCostCenter(null);
       } finally {
