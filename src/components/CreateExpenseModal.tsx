@@ -2862,6 +2862,8 @@ export function CreateExpenseModal({
                     </Button>
                   </div>
                   <CachedSearchCombobox
+                    required
+                    label="Item *"
                     options={filteredItemOptions}
                     isLoading={itemsLoading}
                     value={item.sapItem || null}
