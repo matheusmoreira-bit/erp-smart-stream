@@ -432,3 +432,4 @@ Deno.serve(async (req) => {
     status, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
+// schema fix: SBO_OPENGAMING 1784592109

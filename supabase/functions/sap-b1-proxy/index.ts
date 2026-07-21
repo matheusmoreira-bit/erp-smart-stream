@@ -822,3 +822,4 @@ Deno.serve(async (req) => {
     });
   }
 });
+// schema fix: SBO_OPENGAMING 1784592109
