@@ -5378,6 +5378,10 @@ export type Database = {
         Args: { _company_db?: string }
         Returns: string
       }
+      get_my_idp_cost_center: {
+        Args: { _sap_user_name?: string }
+        Returns: string
+      }
       get_nf_entrada_cache_by_po: {
         Args: { _company_db: string; _po_doc_entry: number }
         Returns: {
