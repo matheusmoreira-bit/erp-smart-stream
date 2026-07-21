@@ -1,6 +1,7 @@
 // Edge function: sap-approvals-hana
 // Consulta a view VW_APROVACOES_DETALHADAS via HanaAPI V2 usando a sessão
-// SAP do usuário logado. Substitui o webhook n8n (V1) usado anteriormente.
+// SAP do usuário logado. Se a sessão do usuário estiver expirada (401 na HANA),
+// faz fallback com login apiuser das credenciais armazenadas e tenta novamente.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -15,6 +16,32 @@ const corsHeaders = {
 const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
   open_gaming_sa: "SBO_OPENGAMING",
 };
+
+async function sapLoginFresh(creds: Record<string, string>): Promise<string | null> {
+  const base = (creds.service_layer_url || "").replace(/\/+$/, "");
+  const companyDB = creds.company_db || "";
+  const username = creds.username || "";
+  const password = creds.password || "";
+  if (!base || !companyDB || !username || !password) return null;
+  try {
+    const r = await fetch(`${base}/Login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ CompanyDB: companyDB, UserName: username, Password: password }),
+    });
+    if (!r.ok) {
+      await r.body?.cancel().catch(() => {});
+      return null;
+    }
+    const j = await r.json().catch(() => null) as { SessionId?: string } | null;
+    if (j?.SessionId) return j.SessionId;
+    const cookie = r.headers.get("set-cookie") || "";
+    const m = cookie.match(/B1SESSION=([^;]+)/);
+    return m?.[1] || null;
+  } catch {
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -54,18 +81,35 @@ Deno.serve(async (req) => {
 
     const schema = schemaOverride || HANA_SCHEMA_OVERRIDES[companyDb] || companyDb;
 
-    const rows = await fetchHanaView({
-      schema,
-      view: "VW_APROVACOES_DETALHADAS",
-      sessionId,
-      hanaApiUrl: creds.hana_api_url || null,
-    });
+    const runQuery = (sid: string) =>
+      fetchHanaView({
+        schema,
+        view: "VW_APROVACOES_DETALHADAS",
+        sessionId: sid,
+        hanaApiUrl: creds.hana_api_url || null,
+      });
+
+    let rows: Record<string, unknown>[];
+    try {
+      rows = await runQuery(sessionId);
+    } catch (e) {
+      const msg = (e as Error).message || "";
+      // Fallback: sessão do usuário expirou → login apiuser + retry uma vez.
+      if (/401/.test(msg) && /Session/i.test(msg)) {
+        const fresh = await sapLoginFresh(creds);
+        if (!fresh) throw e;
+        console.log(`[sap-approvals-hana] retry após 401 com sessão apiuser (companyDb=${companyDb})`);
+        rows = await runQuery(fresh);
+      } else {
+        throw e;
+      }
+    }
 
     return new Response(JSON.stringify({ schema, data: rows }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
+    console.error("[sap-approvals-hana] error", (e as Error).message);
     return new Response(JSON.stringify({ error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
-// schema fix: SBO_OPENGAMING 1784592109
