@@ -1,5 +1,61 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { fetchHanaView, loadHanaCreds, resolveHanaSchema } from "../_shared/hana-views.ts";
+
+function pickStr(...vals: unknown[]): string | undefined {
+  for (const v of vals) {
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s) return s;
+  }
+  return undefined;
+}
+
+function normalizeHanaUserRow(row: Record<string, unknown>): Record<string, unknown> {
+  const lockedRaw = row.Locked ?? row.LOCKED ?? row.locked;
+  const locked = lockedRaw === "tYES" || lockedRaw === "Y" || lockedRaw === 1 || lockedRaw === "1" || lockedRaw === true
+    ? "tYES" : "tNO";
+  const superRaw = row.Superuser ?? row.SUPERUSER ?? row.superuser;
+  const superuser = superRaw === "tYES" || superRaw === "Y" || superRaw === 1 || superRaw === "1" || superRaw === true
+    ? "tYES" : "tNO";
+  const internal = Number(row.InternalKey ?? row.USERID ?? row.userid ?? row.INTERNAL_KEY ?? 0);
+  const dept = row.Department ?? row.DEPARTMENT ?? row.department ?? null;
+  return {
+    InternalKey: internal,
+    UserCode: pickStr(row.UserCode, row.USER_CODE, row.user_code) ?? "",
+    UserName: pickStr(row.UserName, row.U_NAME, row.u_name) ?? "",
+    eMail: pickStr(row.eMail, row.E_Mail, row.EMAIL, row.email),
+    Locked: locked,
+    Superuser: superuser,
+    Department: dept === null || dept === "" ? null : Number(dept) || null,
+    UserPermission: pickStr(row.UserPermission, row.USER_PERMISSION, row.user_permission) ?? null,
+  };
+}
+
+async function listUsersViaHana(
+  admin: ReturnType<typeof createClient>,
+  companyDb: string,
+  sessionId: string,
+): Promise<Record<string, unknown>[] | null> {
+  const hana = await loadHanaCreds(admin as unknown as { from: (t: string) => unknown }, companyDb);
+  if (!hana) return null;
+  try {
+    const schema = resolveHanaSchema(companyDb);
+    const rows = await fetchHanaView({
+      schema,
+      view: "VW_USERS",
+      sessionId,
+      hanaApiUrl: hana.hana_api_url || null,
+    });
+    const normalized = rows.map(normalizeHanaUserRow);
+    // sanity: exige que pelo menos alguns registros tenham UserCode
+    if (!normalized.some((u) => u.UserCode)) return null;
+    return normalized;
+  } catch (e) {
+    console.warn(`[sap-users-admin] HANA VW_USERS falhou (${companyDb}):`, (e as Error).message);
+    return null;
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -165,6 +221,15 @@ Deno.serve(async (req) => {
       const baseUrl = await getSapBaseUrl(admin, companyDb);
       const sapSession = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password);
       try {
+        // Tenta HanaAPI V2 primeiro (VW_USERS). Se não disponível/vazia, cai para Service Layer.
+        const hanaUsers = await listUsersViaHana(admin, companyDb, sapSession.session);
+        if (hanaUsers) {
+          const filtered = hanaUsers.filter((u) => u.Locked !== "tYES");
+          return new Response(JSON.stringify({ users: filtered, source: "hana" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const select = "InternalKey,UserCode,UserName,eMail,Locked";
         const all: Record<string, unknown>[] = [];
         let next: string | null = `Users?$select=${select}&$top=200`;
@@ -176,7 +241,7 @@ Deno.serve(async (req) => {
           next = payload?.["@odata.nextLink"] ?? null;
           if (all.length > 5000) break;
         }
-        return new Response(JSON.stringify({ users: all }), {
+        return new Response(JSON.stringify({ users: all, source: "service_layer" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } finally {
@@ -354,6 +419,14 @@ Deno.serve(async (req) => {
 
     try {
       if (action === "list_users") {
+        // Empresas com HanaAPI → V2 (VW_USERS). Demais → Service Layer.
+        const hanaUsers = await listUsersViaHana(admin, companyDb, session.session);
+        if (hanaUsers) {
+          return new Response(JSON.stringify({ users: hanaUsers, source: "hana" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const select = "InternalKey,UserCode,UserName,eMail,Locked,Superuser,Department,UserPermission";
         const all: Record<string, unknown>[] = [];
         let next: string | null = `Users?$select=${select}&$top=200`;
@@ -365,7 +438,7 @@ Deno.serve(async (req) => {
           next = payload?.["@odata.nextLink"] ?? null;
           if (all.length > 5000) break;
         }
-        return new Response(JSON.stringify({ users: all }), {
+        return new Response(JSON.stringify({ users: all, source: "service_layer" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
