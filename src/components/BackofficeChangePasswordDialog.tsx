@@ -132,34 +132,18 @@ export function BackofficeChangePasswordDialog({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label htmlFor="bo-new-pw">Nova Senha</Label>
-              <Input
-                id="bo-new-pw"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
-              <PasswordPolicyChecklist password={newPassword} userCode={userCode} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bo-confirm-pw">Confirmar Nova Senha</Label>
-              <Input
-                id="bo-confirm-pw"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
+            <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
+              <Label className="text-sm">Nova senha (padrão)</Label>
+              <p className="text-lg font-mono text-foreground">{DEFAULT_RESET_PASSWORD}</p>
+              <p className="text-xs text-muted-foreground">
+                O usuário receberá esta senha temporária e será solicitado a alterá-la no próximo login.
+              </p>
             </div>
 
             <div className="space-y-2 pt-2 border-t border-border">
-              <Label className="text-sm">Aplicar em outras empresas</Label>
+              <Label className="text-sm">Empresas onde a senha será redefinida</Label>
               <p className="text-xs text-muted-foreground">
-                A senha sempre será alterada em <span className="font-medium text-foreground">{currentCompanyName || currentCompanyDb}</span>. Selecione bases adicionais onde o mesmo código de usuário existe. Empresas sem o usuário ou com senha igual à anterior serão ignoradas.
+                A senha sempre será redefinida em <span className="font-medium text-foreground">{currentCompanyName || currentCompanyDb}</span>. Selecione bases adicionais onde o mesmo código de usuário existe. Empresas sem o usuário ou com senha igual à anterior serão ignoradas.
               </p>
               {otherCompanies.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">Nenhuma outra empresa SAP cadastrada.</p>
@@ -179,19 +163,12 @@ export function BackofficeChangePasswordDialog({
               )}
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={
-                loading ||
-                !checkPasswordPolicy(newPassword, userCode).valid ||
-                newPassword !== confirmPassword
-              }
-            >
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Redefinir senha
             </Button>
           </form>
+
         )}
       </DialogContent>
     </Dialog>
