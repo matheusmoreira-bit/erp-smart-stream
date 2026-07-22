@@ -221,6 +221,15 @@ Deno.serve(async (req) => {
       const baseUrl = await getSapBaseUrl(admin, companyDb);
       const sapSession = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password);
       try {
+        // Tenta HanaAPI V2 primeiro (VW_USERS). Se não disponível/vazia, cai para Service Layer.
+        const hanaUsers = await listUsersViaHana(admin, companyDb, sapSession.session);
+        if (hanaUsers) {
+          const filtered = hanaUsers.filter((u) => u.Locked !== "tYES");
+          return new Response(JSON.stringify({ users: filtered, source: "hana" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const select = "InternalKey,UserCode,UserName,eMail,Locked";
         const all: Record<string, unknown>[] = [];
         let next: string | null = `Users?$select=${select}&$top=200`;
@@ -232,7 +241,7 @@ Deno.serve(async (req) => {
           next = payload?.["@odata.nextLink"] ?? null;
           if (all.length > 5000) break;
         }
-        return new Response(JSON.stringify({ users: all }), {
+        return new Response(JSON.stringify({ users: all, source: "service_layer" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } finally {
