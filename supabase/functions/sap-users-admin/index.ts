@@ -419,6 +419,14 @@ Deno.serve(async (req) => {
 
     try {
       if (action === "list_users") {
+        // Empresas com HanaAPI → V2 (VW_USERS). Demais → Service Layer.
+        const hanaUsers = await listUsersViaHana(admin, companyDb, session.session);
+        if (hanaUsers) {
+          return new Response(JSON.stringify({ users: hanaUsers, source: "hana" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const select = "InternalKey,UserCode,UserName,eMail,Locked,Superuser,Department,UserPermission";
         const all: Record<string, unknown>[] = [];
         let next: string | null = `Users?$select=${select}&$top=200`;
@@ -430,7 +438,7 @@ Deno.serve(async (req) => {
           next = payload?.["@odata.nextLink"] ?? null;
           if (all.length > 5000) break;
         }
-        return new Response(JSON.stringify({ users: all }), {
+        return new Response(JSON.stringify({ users: all, source: "service_layer" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
