@@ -44,6 +44,7 @@ import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
 import { TestCompanyBanner } from "./components/TestCompanyBanner.tsx";
 import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx";
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
+import { GoogleGate } from "./components/GoogleGate.tsx";
 
 const queryClient = new QueryClient();
 
