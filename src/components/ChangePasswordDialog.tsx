@@ -107,50 +107,18 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
 
     setLoading(true);
     setSummary(null);
-    const allResults: MultiCompanyPasswordResult[] = [];
-    const currentDisplay = session.companyDB;
     try {
-      // Look up InternalKey for the current user (Users entity key is integer)
-      const lookup = await sapQuery(
-        session,
-        `Users?$filter=UserCode eq '${session.userName.replace(/'/g, "''")}'&$select=InternalKey`,
-        undefined,
-        false,
+      // Roteia TODAS as empresas (inclusive a atual) pela edge function
+      // `sap-change-password`, que executa PATCH atômico + verificação via
+      // login real. Assim garantimos que a nova senha realmente autentica —
+      // um PATCH direto pela sessão do usuário pode retornar 204 mas não
+      // aplicar a senha silenciosamente em algumas bases.
+      const targets = new Set<string>([session.companyDB, ...Array.from(selected)]);
+      const allResults = await changePasswordInCompanies(
+        session.userName,
+        newPassword,
+        Array.from(targets),
       );
-      const rows = Array.isArray(lookup.data)
-        ? (lookup.data as Array<{ InternalKey?: number }>)
-        : (((lookup.data as { value?: Array<{ InternalKey?: number }> })?.value) || []);
-      const internalKey = rows[0]?.InternalKey;
-      if (internalKey == null) throw new Error("Usuário não encontrado no SAP.");
-
-      // Change password in current company (uses the active session — não pede senha atual)
-      try {
-        await sapAction(session, `Users(${internalKey})`, "PATCH", { UserPassword: newPassword });
-        allResults.push({ companyDB: session.companyDB, displayName: currentDisplay, status: "success" });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (isSamePasswordError(msg)) {
-          allResults.push({
-            companyDB: session.companyDB,
-            displayName: currentDisplay,
-            status: "skipped",
-            message: "Senha igual à anterior",
-          });
-        } else {
-          allResults.push({
-            companyDB: session.companyDB,
-            displayName: currentDisplay,
-            status: "error",
-            message: msg,
-          });
-        }
-      }
-
-      // Replicate to additional companies, if any (cada empresa é independente)
-      if (selected.size > 0) {
-        const extra = await changePasswordInCompanies(session.userName, newPassword, Array.from(selected));
-        allResults.push(...extra);
-      }
 
       setSummary(allResults);
 
