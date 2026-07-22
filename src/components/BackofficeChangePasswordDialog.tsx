@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, CheckCircle2, AlertCircle, MinusCircle } from "lucide-react";
@@ -11,8 +10,8 @@ import {
   type MultiCompanyPasswordResult,
 } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
-import { checkPasswordPolicy } from "@/lib/password-policy";
-import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
+
+const DEFAULT_RESET_PASSWORD = "Sap@2025";
 
 interface CompanyOption {
   company_db: string;
