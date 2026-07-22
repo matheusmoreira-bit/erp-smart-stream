@@ -59,7 +59,7 @@ const App = () => (
           <BrowserRouter>
             <StickyHeaderMeasure />
             <Routes>
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<GoogleGate><Index /></GoogleGate>} />
 
               {/* Backoffice */}
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
