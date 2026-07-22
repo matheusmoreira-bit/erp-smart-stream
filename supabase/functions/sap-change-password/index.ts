@@ -267,16 +267,38 @@ Deno.serve(async (req) => {
         if (rows.length === 0 || rows[0].InternalKey == null) {
           return { companyDB: companyDb, displayName, status: "skipped", message: "Usuário não existe nesta empresa" };
         }
-        const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword, Locked: "tNO" }, ctrl.signal);
-        if (patch.ok) {
+        // 1) Desbloquear antes (evita conflitos quando o SAP rejeita alterar
+        // senha e status na mesma chamada).
+        await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { Locked: "tNO" }, ctrl.signal).catch(() => null);
+        // 2) Trocar apenas a senha em uma chamada dedicada.
+        const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword }, ctrl.signal);
+        if (!patch.ok) {
+          const msg = extractSapError(patch.data, `HTTP ${patch.status}`);
+          if (isSamePasswordError(msg)) {
+            return { companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" };
+          }
+          console.error(`[sap-change-password] PATCH failed`, { companyDb, userCode, internalKey: rows[0].InternalKey, status: patch.status, msg });
+          return { companyDB: companyDb, displayName, status: "error", message: msg };
+        }
+        // 3) Verificação: tenta logar como o próprio usuário com a nova senha.
+        // Se o SAP aceitou o PATCH mas não aplicou (ex.: admin sem privilégio
+        // de superuser), o login falha e reportamos como erro real.
+        let verifySession: Session | null = null;
+        try {
+          verifySession = await sapLogin(baseUrl, creds.sapCompanyDb, userCode, newPassword, ctrl.signal);
           return { companyDB: companyDb, displayName, status: "success" };
+        } catch (e) {
+          const raw = e instanceof Error ? e.message : "Falha ao validar nova senha";
+          console.error(`[sap-change-password] verify login failed`, { companyDb, userCode, sapCompanyDb: creds.sapCompanyDb, raw });
+          return {
+            companyDB: companyDb,
+            displayName,
+            status: "error",
+            message: `PATCH aceito, mas login com a nova senha falhou (${raw}). Verifique se o usuário admin tem privilégio de Superuser nesta base.`,
+          };
+        } finally {
+          if (verifySession) sapLogout(verifySession);
         }
-        const msg = extractSapError(patch.data, `HTTP ${patch.status}`);
-        if (isSamePasswordError(msg)) {
-          return { companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" };
-        }
-        console.error(`[sap-change-password] PATCH failed`, { companyDb, userCode, internalKey: rows[0].InternalKey, status: patch.status, msg });
-        return { companyDB: companyDb, displayName, status: "error", message: msg };
       } catch (e) {
         const aborted = ctrl.signal.aborted;
         const raw = e instanceof Error ? e.message : "Erro ao alterar senha";
