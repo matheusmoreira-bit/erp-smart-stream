@@ -202,14 +202,14 @@ async function resolveSettlementAccount(
   sb: ReturnType<typeof createClient>,
   companyDb: string,
   _cardKey: string | null,
-  _currency: string | null,
+  currency: string | null,
   eventClassification: string | null,
 ): Promise<SettlementAccount | null> {
   // Regra: a conta de baixa é decidida pela classificação do evento
-  // retornada pelo PagCorp. Cartão e moeda não participam mais.
-  // Se não houver classificação no payload OU se nenhuma linha específica
-  // bater, cai para a linha "fallback" (event_classification IS NULL)
-  // cadastrada pelo usuário — se existir.
+  // retornada pelo PagCorp. Se o payload não trouxer classificação (integrações
+  // antigas), inferimos por moeda: BRL → "Compra Nacional"; USD → "Compra
+  // Internacional  - Saldo Dolar Utilizado". Como último recurso, cai para a
+  // linha "fallback" (event_classification IS NULL) cadastrada pelo usuário.
   const sel = "settlement_account_code, cost_center, project, currency, event_classification";
   const { data } = await sb
     .from("pagcorp_settlement_accounts")
@@ -218,14 +218,30 @@ async function resolveSettlementAccount(
     .eq("enabled", true);
 
   const rows = (data as SettlementAccount[] | null) || [];
+  const tryMatch = (label: string) => {
+    const t = normalizeClassification(label);
+    return rows.find((r) => r.event_classification && normalizeClassification(r.event_classification) === t) || null;
+  };
+
   if (eventClassification) {
-    const target = normalizeClassification(eventClassification);
-    const exact = rows.find(
-      (r) => r.event_classification && normalizeClassification(r.event_classification) === target,
-    );
+    const exact = tryMatch(eventClassification);
     if (exact) return exact;
   }
-  // Fallback: linha sem classificação específica.
+
+  // Fallback por moeda para logs antigos sem eventClassification.
+  const cur = (currency || "").toUpperCase();
+  if (cur === "BRL") {
+    const m = tryMatch("Compra Nacional");
+    if (m) return m;
+  } else if (cur === "USD") {
+    const m =
+      tryMatch("Compra Internacional  - Saldo Dolar Utilizado") ||
+      tryMatch("Compra Internacional - Saldo Dolar Utilizado") ||
+      tryMatch("Compra Internacional");
+    if (m) return m;
+  }
+
+  // Fallback final: linha sem classificação específica.
   return rows.find((r) => !r.event_classification) || null;
 }
 
