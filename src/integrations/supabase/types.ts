@@ -5345,6 +5345,7 @@ export type Database = {
           reason: string
         }[]
       }
+      copilot_read_query: { Args: { p_sql: string }; Returns: Json }
       create_item_variante: {
         Args: { p_descricao: string; p_item_base_id: string }
         Returns: {

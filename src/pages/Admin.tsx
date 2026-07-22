@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles } from "lucide-react";
 import { RoiAnalysis } from "@/components/RoiAnalysis";
 import {
   Building2,
@@ -681,6 +681,13 @@ export default function Admin() {
               );
             })}
             <div className="ml-auto flex items-center gap-1">
+              <button
+                onClick={() => navigate("/backoffice/copiloto")}
+                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-[hsl(var(--cactus-amber))] hover:text-foreground flex items-center gap-1.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                Copiloto IA
+              </button>
               <button
                 onClick={() => navigate("/backoffice/audit-trail")}
                 className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
