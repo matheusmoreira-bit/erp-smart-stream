@@ -773,7 +773,16 @@ Deno.serve(async (req) => {
                 const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
                 const alreadyClosed = invoice.DocumentStatus === "bost_Close" || openAmount <= 0;
 
-                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invoice.DocCurrency || null, eventClass);
+                // Prioriza a moeda da NF do SAP; se vier vazia ou como símbolo
+                // (ex.: "R$"), cai para a moeda do payload PagCorp (BRL/USD).
+                const payloadCur = (() => {
+                  const p = row.pagcorp_data as Record<string, unknown> | null;
+                  const v = (p?.currency ?? (p?.transaction as Record<string, unknown> | undefined)?.currency) as string | undefined;
+                  return v ? String(v).toUpperCase() : null;
+                })();
+                const invCurRaw = (invoice.DocCurrency || "").toUpperCase();
+                const invCurNorm = invCurRaw === "BRL" || invCurRaw === "USD" ? invCurRaw : (payloadCur || invCurRaw || "BRL");
+                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invCurNorm, eventClass);
                 if (!account) {
                   if (!firstMissingAccountMsg) {
                     firstMissingAccountMsg = eventClass
