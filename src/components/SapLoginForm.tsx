@@ -248,8 +248,8 @@ export function SapLoginForm() {
         }
       }
 
-      // Alerta se o usuário logou com a senha padrão em uma base de produção
-      if (needsCredentials && password === "Sap@2025" && !companyDB.toUpperCase().startsWith("TST")) {
+      // Alerta sempre que o usuário logar com a senha padrão, em qualquer empresa.
+      if (password === "Sap@2025") {
         try { sessionStorage.setItem("erp:default-password-warning", "1"); } catch { /* noop */ }
       }
       toast.success(`Conectado ao ${erpInfo.label}!`);
