@@ -8,6 +8,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireUser, AuthError } from "../_shared/auth.ts";
+import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
