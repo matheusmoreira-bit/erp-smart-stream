@@ -1,0 +1,1 @@
+UPDATE public.expenses SET sap_integration_locked_at=NULL, sap_integration_last_attempt_at=NULL WHERE id='d06797a1-095c-4a28-85b7-858d3822120a'
