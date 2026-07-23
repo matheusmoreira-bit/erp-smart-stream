@@ -73,6 +73,7 @@ const App = () => (
               <Route path="/backoffice/sap-sync" element={<AdminRoute><SapStatusSync /></AdminRoute>} />
               <Route path="/backoffice/sap-sync/execucoes" element={<AdminRoute><SapSyncRuns /></AdminRoute>} />
               <Route path="/backoffice/copiloto" element={<AdminRoute><BackofficeCopilot /></AdminRoute>} />
+              <Route path="/backoffice/infra-health" element={<AdminRoute><InfraHealth /></AdminRoute>} />
 
 
 
