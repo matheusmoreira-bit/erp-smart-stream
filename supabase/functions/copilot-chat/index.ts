@@ -338,6 +338,24 @@ function requireConfirmation(args: any, summary: string) {
   };
 }
 
+async function resolveCompanyDb(sb: SupabaseClient, input?: string): Promise<string | undefined> {
+  if (!input) return undefined;
+  const raw = String(input).trim();
+  const { data: exact } = await sb.from("companies").select("company_db").eq("company_db", raw).maybeSingle();
+  if (exact?.company_db) return exact.company_db;
+  const { data } = await sb.from("companies").select("company_db, name").or(`company_db.ilike.%${raw}%,name.ilike.%${raw}%`).limit(2);
+  if (data && data.length === 1) return data[0].company_db;
+  return raw; // fall back so caller sees empty result rather than silent remap
+}
+
+function ccMatches(pattern: string | null | undefined, input: string): boolean {
+  if (!pattern) return true; // null cost_center = curinga
+  if (pattern === input) return true;
+  // convert SQL LIKE pattern to regex
+  const rx = new RegExp("^" + pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".") + "$");
+  return rx.test(input);
+}
+
 async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor): Promise<unknown> {
   switch (name) {
     // ============ READ ============
@@ -351,7 +369,7 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
         .select("id, doc_entry, company_db, supplier_name, requester_name, requester_email, total_amount, currency, status, current_approver, current_approver_email, created_at, updated_at")
         .order("created_at", { ascending: false })
         .limit(Number(args.limit || 25));
-      if (args.company_db) q = q.eq("company_db", args.company_db);
+      if (args.company_db) q = q.eq("company_db", (await resolveCompanyDb(sb, args.company_db))!);
       if (args.status) q = q.eq("status", args.status);
       if (args.requester_email) q = q.ilike("requester_email", args.requester_email);
       if (args.current_approver_email) q = q.ilike("current_approver_email", args.current_approver_email);
@@ -373,17 +391,26 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
       return { expense: exp, items, history, attachments };
     }
     case "query_approval_rules": {
+      const companyDb = await resolveCompanyDb(sb, args.company_db);
       let q = sb.from("approval_rules").select("*").eq("is_active", true).order("priority", { ascending: false });
-      if (args.company_db) q = q.eq("company_db", args.company_db);
-      if (args.cost_center) q = q.eq("cost_center", args.cost_center);
-      if (args.project) q = q.eq("project", args.project);
-      const { data: rules, error } = await q;
+      if (companyDb) q = q.eq("company_db", companyDb);
+      if (args.project) q = q.ilike("project", `%${args.project}%`);
+      const { data: rulesRaw, error } = await q;
       if (error) throw error;
-      const ids = (rules || []).map((r: any) => r.id);
+      let rules = rulesRaw || [];
+      if (args.cost_center) {
+        const cc = String(args.cost_center).trim();
+        rules = rules.filter((r: any) => ccMatches(r.cost_center, cc));
+      }
+      const ids = rules.map((r: any) => r.id);
       const { data: levels } = ids.length
         ? await sb.from("approval_rule_levels").select("*").in("rule_id", ids).order("level_order")
         : { data: [] as any[] };
-      return (rules || []).map((r: any) => ({ ...r, levels: (levels || []).filter((l: any) => l.rule_id === r.id) }));
+      return {
+        resolved_company_db: companyDb,
+        matched_count: rules.length,
+        rules: rules.map((r: any) => ({ ...r, levels: (levels || []).filter((l: any) => l.rule_id === r.id) })),
+      };
     }
     case "query_pagcorp": {
       let q = sb.from("pagcorp_integration_log")
@@ -589,6 +616,8 @@ Regras críticas:
 5. Para consultas complexas não cobertas por tools específicas, use \`run_sql_read\` com um SELECT bem escrito (uma única sentença).
 6. Toda ação de escrita é auditada (audit_log). Cite o motivo quando o usuário fornecer.
 7. Se algo falhar, mostre a mensagem de erro exata e proponha próximo passo.
+8. Nomes de empresa: o usuário costuma dizer "OpenGaming", "Cactus", etc. O \`company_db\` real é como \`open_gaming_sa\`, \`SBO_CACTUS\`. As tools já resolvem por similaridade, mas se a busca vier vazia, chame \`list_companies\` e reveja.
+9. Centros de custo: regras podem estar como wildcard (ex: \`1.8.%\`) ou exatas. As tools já expandem wildcards — se \`matched_count\` = 0, tente sem \`cost_center\` e filtre manualmente.
 
 Ferramentas de leitura são livres. Ferramentas de escrita mudam o sistema — trate-as com cuidado.`;
 
