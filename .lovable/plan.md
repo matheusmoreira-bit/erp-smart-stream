@@ -1,93 +1,66 @@
+# Fase 2 — Portabilidade para AWS
 
-## Contexto
+Objetivo: preparar o ERP Flow para rodar fora do Lovable Cloud (alvo AWS) com perdas mínimas, mantendo a versão atual 100% funcional. Nada de rewrite — só abstração, documentação e infraestrutura opcional.
 
-Hoje o Cloudflare Access protege o domínio do ERP Flow como primeira barreira. A migração para Okta acontecerá em duas camadas complementares:
+## Escopo
 
-1. **Edge (borda)** — substitui o CF Access. Toda requisição HTTP ao domínio precisa de sessão Okta válida antes de chegar ao app.
-2. **App (dentro do ERP Flow)** — após passar pela borda, o usuário ainda faz login no app via Okta (SSO), em vez de senha SAP/OMIE local.
+### 1. Abstração de dependências Lovable/Supabase
+- Criar `src/lib/backend/` com contratos (`AuthProvider`, `StorageProvider`, `DbProvider`, `FunctionsInvoker`).
+- Implementação default: `supabase-impl.ts` (proxy do client atual — zero mudança de comportamento).
+- Refatorar 3-5 pontos de entrada principais (auth, invoke, storage) para usarem os contratos. Restante segue direto no cliente Supabase por ora (migração incremental futura).
+- Nenhum edge function reescrito. Apenas documentados os `Deno.env` usados.
 
-Login SAP/OMIE atual (email/senha, Google) deixa de existir para usuários normais. Apenas super-admins mantêm um fallback local de emergência.
+### 2. Camada de configuração unificada
+- `src/config/runtime.ts` centraliza URLs/keys lidas de `import.meta.env`.
+- Documenta mapeamento das envs equivalentes na AWS:
+  - `VITE_SUPABASE_URL` → PostgREST/Hasura ou API Gateway
+  - `VITE_SUPABASE_PUBLISHABLE_KEY` → JWT público (Cognito/Auth0)
+  - Edge Functions → Lambda + API Gateway (mesmo path `/functions/v1/<name>`)
 
----
+### 3. Backup automatizado do banco (Lovable Cloud → S3)
+- Nova edge function `db-backup-s3` (agendada via cron diário):
+  - Faz `pg_dump` lógico dos schemas `public` (via SQL `COPY` por tabela — pg_dump não roda em edge).
+  - Alternativa: usar as views/tabelas listadas via `information_schema` e exportar cada uma como JSONL.
+  - Faz upload multipart para bucket S3 (via AWS SDK v3 `npm:@aws-sdk/client-s3`).
+  - Retenção: 30 dias diários + 12 mensais.
+- Segredos novos (build/edge): `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BACKUP_BUCKET`.
+- UI: card em `/backoffice` mostrando último backup (data, tamanho, status) + botão "Rodar agora".
 
-## Camada 1 — Edge (substituir Cloudflare Access por Okta)
+### 4. Export de storage (anexos de despesas)
+- Função `storage-mirror-s3` (agendada semanal): copia buckets Supabase Storage → S3 mantendo prefix por empresa. Idempotente (compara `etag`).
 
-Essa camada **não é código do app** — é infraestrutura. O Lovable não hospeda esse proxy. Precisa ser feito por quem gerencia DNS/edge hoje. Duas opções padrão:
+### 5. Documentação `docs/aws-portability.md`
+- Diagrama alvo (Frontend S3+CloudFront, API Gateway+Lambda, RDS Postgres, Cognito, S3 anexos).
+- Mapeamento 1:1 de cada edge function → Lambda equivalente.
+- Passo a passo do restore: baixar dump do S3, `psql -f`, apontar env vars.
+- Lista de gaps conhecidos (ex: `pg_cron`, `pg_net`, RLS policies — todos portáveis para RDS + Postgres nativo).
 
-- **Okta Access Gateway (OAG)** — appliance da Okta que faz o mesmo papel do CF Access.
-- **Cloudflare Zero Trust + Okta como IdP OIDC** — mantém o CF na frente, mas troca o IdP interno dele para Okta OIDC. Menor esforço se já usam Cloudflare.
+### 6. Health check consolidado
+- Nova rota `/backoffice/infra-health` com status de: DB, Storage, Edge Functions ativas, Backups S3, HanaAPI V2, SAP Service Layer por empresa.
 
-Recomendação: **manter Cloudflare Zero Trust e apenas trocar o IdP de "CF Access built-in" para "Okta OIDC"**. Zero mudança de DNS, zero mudança no app, políticas atuais continuam valendo.
+## Fora de escopo (fica para Fase 3)
+- Docker local / seed sintético.
+- Migração real de auth para Cognito.
+- CI/CD Terraform.
 
-Para essa configuração no Cloudflare Zero Trust → Settings → Authentication → Add OIDC → Okta, o **redirect/callback URI a informar no Okta** é:
+## Detalhes técnicos
 
-```
-https://<seu-team>.cloudflareaccess.com/cdn-cgi/access/callback
-```
+- Backups usam `SUPABASE_SERVICE_ROLE_KEY` já disponível no edge runtime.
+- Tabelas grandes (`expenses`, `expense_items`, `expense_approval_log`, `pagcorp_integration_log`, `sap_integration_log`) exportadas em chunks de 10k linhas via `range()`.
+- Formato JSONL comprimido gzip → `s3://<bucket>/daily/YYYY-MM-DD/<schema>.<table>.jsonl.gz`.
+- Manifest `manifest.json` no mesmo prefix lista tabelas, contagem, checksum sha256.
+- `db-backup-s3` grava resultado em nova tabela `infra_backup_log` (RLS: apenas super-admin lê).
 
-(troque `<seu-team>` pelo team name atual do CF Zero Trust).
+## Ordem de execução
+1. Migration `infra_backup_log` + RLS.
+2. Segredos AWS (via `add_secret` — pediremos ao usuário).
+3. Edge function `db-backup-s3` + agendamento diário 03:00 UTC.
+4. Edge function `storage-mirror-s3` + agendamento semanal.
+5. UI backoffice (card status + botão manual + página health).
+6. Abstração `src/lib/backend/` (refactor não-destrutivo).
+7. Documentação `docs/aws-portability.md`.
 
-Se optarem por OAG puro, o callback é definido pelo próprio OAG na instalação — nesse caso me avisem para eu documentar depois.
-
----
-
-## Camada 2 — App (login do ERP Flow via Okta)
-
-Okta suporta **SAML nativamente** no Supabase Auth (usado pelo Lovable Cloud). É o caminho suportado e sem edge function custom. OIDC "puro" no Supabase não é gerenciado — exigiria uma edge function trocando `code` por sessão, mais frágil.
-
-**Proposta: usar Okta via SAML SSO** (funcionalmente equivalente para o usuário final — botão "Entrar com Okta" → redirect Okta → volta logado).
-
-### Passos
-
-1. **Ativar SAML SSO no Lovable Cloud** via ferramenta `configure_saml_sso`. Ela abre um formulário que já mostra o **ACS URL** e **Entity ID** deste projeto (esses são os valores a colar no Okta ao criar o SAML app).
-2. **Criar SAML app na Okta** com os valores acima e informar domínios de email (`@anagaming.com.br`, `@cactuscorporation.com`, etc.) para roteamento SSO.
-3. **Colar o metadata URL da Okta** de volta no formulário do Lovable — encerra a configuração server-side.
-4. **Refactor de `SapLoginForm.tsx` e `AdminLogin.tsx`**: remover formulário email/senha para usuários normais; substituir por botão único "Entrar com Okta" que dispara `supabase.auth.signInWithSSO({ domain })`. Manter caixa colapsável "Login de emergência (super-admin)" com o fluxo atual.
-5. **`SapContext`**: após sessão Okta hidratada, continuar chamando `sapLogin`/OMIE login com o email do usuário Okta + senha de serviço mapeada (ou sem senha, se migrarmos SAP para JWT via edge function no futuro — fora deste escopo).
-6. **Fluxo pós-login preservando destino**: guardar `next` em `sessionStorage` antes do redirect Okta, aplicar após `onAuthStateChange`.
-
-### URIs geradas por essa camada
-
-A ferramenta `configure_saml_sso` emite os valores exatos. O formato canônico do Supabase é:
-
-```
-ACS URL:    https://<project-ref>.supabase.co/auth/v1/sso/saml/acs
-Entity ID:  https://<project-ref>.supabase.co/auth/v1/sso/saml/metadata
-```
-
-Vou obter o valor real do projeto no momento da configuração — não vou inventar/colar aqui.
-
----
-
-## O que muda no código do app
-
-Arquivos afetados (todos front-end + 1 config server):
-
-- `src/components/SapLoginForm.tsx` — substituir form por botão SSO + fallback super-admin.
-- `src/pages/AdminLogin.tsx` — idem para backoffice.
-- `src/hooks/useAuth.ts` — tratar sessão SSO (já é `session` do Supabase, mudança mínima).
-- `src/contexts/SapContext.tsx` — usar email da sessão Okta como `userName` do SAP.
-- Nada em edge functions muda — elas já validam JWT do Supabase; SAML emite o mesmo JWT.
-
----
-
-## O que **não** vai neste plano
-
-- Não vou instalar/derrubar Cloudflare Access — isso é operação de infra.
-- Não vou implementar OIDC puro (fora de SAML) porque Supabase Auth não expõe isso como provider gerenciado.
-- Não vou migrar autenticação SAP/OMIE em si — continua com o mesmo caminho após o login SSO.
-
----
-
-## Entregáveis desta task
-
-1. URI de callback do CF Zero Trust para o admin colar no Okta agora (acima).
-2. Chamar `configure_saml_sso` para gerar ACS URL + Entity ID reais do projeto e abrir o formulário guiado.
-3. Refactor dos dois formulários de login para SSO-first com fallback super-admin.
-4. Ajuste do `SapContext` para consumir identidade Okta.
-
-## Preciso de você para continuar
-
-- Confirmar a rota do edge: **manter Cloudflare Zero Trust trocando o IdP para Okta**, ou migrar para **Okta Access Gateway**?
-- Team name do Cloudflare Zero Trust (para eu fechar o callback exato acima).
-- Lista de domínios de email corporativos que devem ser roteados para Okta (para o passo SAML).
+## Perguntas antes de começar
+1. Você já tem uma conta AWS + bucket S3 dedicado para backups, ou quero deixar o código pronto e você provisiona depois?
+2. Frequência do backup do banco: diário 03:00 UTC OK, ou prefere outra janela?
+3. Anexos (storage): mirror semanal é suficiente ou quer contínuo (a cada upload)?
