@@ -391,17 +391,26 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
       return { expense: exp, items, history, attachments };
     }
     case "query_approval_rules": {
+      const companyDb = await resolveCompanyDb(sb, args.company_db);
       let q = sb.from("approval_rules").select("*").eq("is_active", true).order("priority", { ascending: false });
-      if (args.company_db) q = q.eq("company_db", args.company_db);
-      if (args.cost_center) q = q.eq("cost_center", args.cost_center);
-      if (args.project) q = q.eq("project", args.project);
-      const { data: rules, error } = await q;
+      if (companyDb) q = q.eq("company_db", companyDb);
+      if (args.project) q = q.ilike("project", `%${args.project}%`);
+      const { data: rulesRaw, error } = await q;
       if (error) throw error;
-      const ids = (rules || []).map((r: any) => r.id);
+      let rules = rulesRaw || [];
+      if (args.cost_center) {
+        const cc = String(args.cost_center).trim();
+        rules = rules.filter((r: any) => ccMatches(r.cost_center, cc));
+      }
+      const ids = rules.map((r: any) => r.id);
       const { data: levels } = ids.length
         ? await sb.from("approval_rule_levels").select("*").in("rule_id", ids).order("level_order")
         : { data: [] as any[] };
-      return (rules || []).map((r: any) => ({ ...r, levels: (levels || []).filter((l: any) => l.rule_id === r.id) }));
+      return {
+        resolved_company_db: companyDb,
+        matched_count: rules.length,
+        rules: rules.map((r: any) => ({ ...r, levels: (levels || []).filter((l: any) => l.rule_id === r.id) })),
+      };
     }
     case "query_pagcorp": {
       let q = sb.from("pagcorp_integration_log")
