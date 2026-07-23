@@ -2761,6 +2761,66 @@ export type Database = {
         }
         Relationships: []
       }
+      infra_backup_log: {
+        Row: {
+          bucket: string | null
+          created_at: string
+          created_by: string | null
+          duration_ms: number | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          manifest: Json | null
+          objects_count: number | null
+          s3_prefix: string | null
+          started_at: string
+          status: string
+          tables_count: number | null
+          total_bytes: number | null
+          trigger: string
+          updated_at: string
+        }
+        Insert: {
+          bucket?: string | null
+          created_at?: string
+          created_by?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          manifest?: Json | null
+          objects_count?: number | null
+          s3_prefix?: string | null
+          started_at?: string
+          status: string
+          tables_count?: number | null
+          total_bytes?: number | null
+          trigger?: string
+          updated_at?: string
+        }
+        Update: {
+          bucket?: string | null
+          created_at?: string
+          created_by?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          manifest?: Json | null
+          objects_count?: number | null
+          s3_prefix?: string | null
+          started_at?: string
+          status?: string
+          tables_count?: number | null
+          total_bytes?: number | null
+          trigger?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       integration_log: {
         Row: {
           action: string
