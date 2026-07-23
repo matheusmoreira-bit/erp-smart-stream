@@ -1,0 +1,1 @@
+UPDATE public.expenses SET sap_purchase_order_status='failed' WHERE id='d06797a1-095c-4a28-85b7-858d3822120a'
