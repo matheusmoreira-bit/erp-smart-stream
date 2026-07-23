@@ -696,6 +696,13 @@ export default function Admin() {
                 Audit Trail
               </button>
               <button
+                onClick={() => navigate("/backoffice/infra-health")}
+                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+              >
+                <FileCheck2 className="w-4 h-4" />
+                Infra & Backups
+              </button>
+              <button
                 onClick={() => navigate("/backoffice/sap-users")}
                 className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
               >
