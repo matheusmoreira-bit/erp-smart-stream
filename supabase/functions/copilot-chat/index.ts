@@ -338,6 +338,24 @@ function requireConfirmation(args: any, summary: string) {
   };
 }
 
+async function resolveCompanyDb(sb: SupabaseClient, input?: string): Promise<string | undefined> {
+  if (!input) return undefined;
+  const raw = String(input).trim();
+  const { data: exact } = await sb.from("companies").select("company_db").eq("company_db", raw).maybeSingle();
+  if (exact?.company_db) return exact.company_db;
+  const { data } = await sb.from("companies").select("company_db, name").or(`company_db.ilike.%${raw}%,name.ilike.%${raw}%`).limit(2);
+  if (data && data.length === 1) return data[0].company_db;
+  return raw; // fall back so caller sees empty result rather than silent remap
+}
+
+function ccMatches(pattern: string | null | undefined, input: string): boolean {
+  if (!pattern) return true; // null cost_center = curinga
+  if (pattern === input) return true;
+  // convert SQL LIKE pattern to regex
+  const rx = new RegExp("^" + pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".") + "$");
+  return rx.test(input);
+}
+
 async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor): Promise<unknown> {
   switch (name) {
     // ============ READ ============
