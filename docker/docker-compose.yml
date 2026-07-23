@@ -1,0 +1,234 @@
+# ============================================================================
+# ERP Flow — Stack QA Local (Supabase self-hosted)
+# ============================================================================
+# Sobe Postgres + PostgREST + GoTrue (Auth) + Storage + Realtime + Edge Runtime
+# + Studio, com dados carregados a partir de um dump JSONL do S3
+# (gerado pela edge function db-backup-s3 em produção).
+#
+# Uso:
+#   cp docker/.env.example docker/.env      # ajuste segredos locais
+#   make qa-up                              # sobe o stack (build + boot)
+#   make qa-seed                            # baixa último dump S3 e importa
+#   make qa-down                            # desliga tudo (mantém volume)
+#   make qa-nuke                            # desliga e apaga o volume
+#
+# IMPORTANTE — Aviso LGPD/segurança:
+# O usuário optou por importar o dump PRODUTIVO SEM MASCARAMENTO.
+# Isto significa que emails, telefones, CPF, valores e credenciais reais
+# estarão na sua máquina local. Consequências obrigatórias:
+#   - NÃO subir este volume para lugar nenhum
+#   - NÃO expor as portas para fora do localhost
+#   - Todas as integrações externas (SAP/OMIE/PagCorp/JumpCloud/Google/SMTP)
+#     ficam DESLIGADAS por default (INTEGRATIONS_MODE=disabled). Nenhuma edge
+#     function local deve conseguir bater em prod.
+# ============================================================================
+
+name: erp-flow-qa
+
+services:
+  # ------------------------------- POSTGRES ---------------------------------
+  db:
+    image: supabase/postgres:15.6.1.146
+    container_name: erp-qa-db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:54322:5432"   # bind localhost apenas
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: 3600
+    volumes:
+      - qa-db-data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - shared_preload_libraries=pg_cron,pg_stat_statements,pgcrypto
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ------------------------------- REST -------------------------------------
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    container_name: erp-qa-rest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:54321:3000"
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_JWT_AUD: authenticated
+      PGRST_APP_SETTINGS_JWT_EXP: 3600
+
+  # ------------------------------- AUTH -------------------------------------
+  auth:
+    image: supabase/gotrue:v2.164.0
+    container_name: erp-qa-auth
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9999:9999"
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: http://localhost:8080
+      GOTRUE_URI_ALLOW_LIST: http://localhost:8080,http://localhost:3000
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_DISABLE_SIGNUP: "true"       # QA: sem self-signup
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"   # QA: sem envio de email
+
+  # ----------------------------- STORAGE ------------------------------------
+  storage:
+    image: supabase/storage-api:v1.11.13
+    container_name: erp-qa-storage
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: qa-local
+      REGION: local
+      GLOBAL_S3_BUCKET: qa-local
+    volumes:
+      - qa-storage-data:/var/lib/storage
+
+  # ---------------------------- EDGE RUNTIME --------------------------------
+  functions:
+    image: supabase/edge-runtime:v1.67.0
+    container_name: erp-qa-functions
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:54325:9000"
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      # Chaves e URLs internas do stack
+      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      # KILL-SWITCH GLOBAL para integrações externas em QA local
+      INTEGRATIONS_MODE: ${INTEGRATIONS_MODE:-disabled}
+      # Segredos placebo — funções que dependem deles devem checar INTEGRATIONS_MODE
+      SAP_MIDDLEWARE_SECRET: qa-placeholder
+      PAGCORP_API_KEY: qa-placeholder
+      OMIE_APP_KEY: qa-placeholder
+      OMIE_APP_SECRET: qa-placeholder
+      JUMPCLOUD_API_KEY: qa-placeholder
+      LOVABLE_API_KEY: qa-placeholder
+      GOOGLE_CLIENT_ID: qa-placeholder
+      GOOGLE_CLIENT_SECRET: qa-placeholder
+      EXTERNAL_APPROVALS_API_KEY: qa-placeholder
+      AWS_ACCESS_KEY_ID: qa-placeholder
+      AWS_SECRET_ACCESS_KEY: qa-placeholder
+      AWS_REGION: us-east-1
+      AWS_S3_BACKUP_BUCKET: qa-placeholder
+    volumes:
+      - ../supabase/functions:/home/deno/functions:ro
+    command:
+      - start
+      - --main-service
+      - /home/deno/functions/_main
+
+  # ------------------------------ REALTIME ----------------------------------
+  realtime:
+    image: supabase/realtime:v2.34.7
+    container_name: erp-qa-realtime
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: postgres
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      APP_NAME: realtime
+      ERL_AFLAGS: "-proto_dist inet_tcp"
+
+  # -------------------------------- KONG ------------------------------------
+  # Proxy que expõe /rest/v1, /auth/v1, /storage/v1, /realtime/v1, /functions/v1
+  # na porta 8000 — mesmo layout do Supabase gerenciado, então o cliente do app
+  # (VITE_SUPABASE_URL=http://localhost:8000) funciona sem alteração.
+  kong:
+    image: kong:3.4
+    container_name: erp-qa-kong
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on: [rest, auth, storage, functions, realtime]
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth
+    volumes:
+      - ./kong.yml:/var/lib/kong/kong.yml:ro
+
+  # -------------------------------- STUDIO ----------------------------------
+  studio:
+    image: supabase/studio:20241202-71dfe10
+    container_name: erp-qa-studio
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:54323:3000"
+    depends_on: [kong]
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEFAULT_ORGANIZATION_NAME: ERP Flow QA
+      DEFAULT_PROJECT_NAME: qa-local
+      SUPABASE_URL: http://localhost:8000
+      SUPABASE_PUBLIC_URL: http://localhost:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+
+  meta:
+    image: supabase/postgres-meta:v0.84.2
+    container_name: erp-qa-meta
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: postgres
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+volumes:
+  qa-db-data:
+  qa-storage-data:
