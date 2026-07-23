@@ -39,6 +39,7 @@ import TransferApprovalsHistory from "./pages/TransferApprovalsHistory.tsx";
 import SapStatusSync from "./pages/SapStatusSync.tsx";
 import SapSyncRuns from "./pages/SapSyncRuns.tsx";
 import BackofficeCopilot from "./pages/BackofficeCopilot.tsx";
+import InfraHealth from "./pages/InfraHealth.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
@@ -72,6 +73,7 @@ const App = () => (
               <Route path="/backoffice/sap-sync" element={<AdminRoute><SapStatusSync /></AdminRoute>} />
               <Route path="/backoffice/sap-sync/execucoes" element={<AdminRoute><SapSyncRuns /></AdminRoute>} />
               <Route path="/backoffice/copiloto" element={<AdminRoute><BackofficeCopilot /></AdminRoute>} />
+              <Route path="/backoffice/infra-health" element={<AdminRoute><InfraHealth /></AdminRoute>} />
 
 
 
