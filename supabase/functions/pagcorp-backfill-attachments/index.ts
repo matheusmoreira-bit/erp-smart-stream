@@ -8,6 +8,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireUser, AuthError } from "../_shared/auth.ts";
+import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,7 +108,7 @@ async function downloadReceipts(receipts: any[]): Promise<{ name: string; blob: 
 async function uploadAttachments(sap: SapSession, files: { name: string; blob: Blob }[]): Promise<number | null> {
   if (!files.length) return null;
   const form = new FormData();
-  for (const f of files) form.append("files", f.blob, f.name);
+  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
   const res = await fetch(`${sap.baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: sap.cookies }, body: form });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Attachments2 HTTP ${res.status}: ${body?.error?.message?.value || JSON.stringify(body)}`);

@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireUserOrSapSession } from "../_shared/auth.ts";
 import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,7 +54,7 @@ async function sapLogin(baseUrl: string, creds: Record<string, string>, companyD
 async function uploadAttachmentsToSap(baseUrl: string, cookies: string, files: { name: string; blob: Blob }[]) {
   if (files.length === 0) return null;
   const form = new FormData();
-  for (const f of files) form.append("files", f.blob, f.name);
+  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
   const res = await fetch(`${baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: cookies }, body: form });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`SAP Attachments2 failed [${res.status}]: ${body?.error?.message?.value || JSON.stringify(body)}`);

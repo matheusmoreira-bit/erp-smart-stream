@@ -13,6 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -140,7 +141,7 @@ async function uploadAttachmentsToSap(
 ): Promise<number | null> {
   if (files.length === 0) return null;
   const form = new FormData();
-  for (const f of files) form.append("files", f.blob, f.name);
+  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
   const res = await fetch(`${sap.baseUrl}/Attachments2`, {
     method: "POST",
     headers: { Cookie: sap.cookies },
