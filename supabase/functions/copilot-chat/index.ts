@@ -369,7 +369,7 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
         .select("id, doc_entry, company_db, supplier_name, requester_name, requester_email, total_amount, currency, status, current_approver, current_approver_email, created_at, updated_at")
         .order("created_at", { ascending: false })
         .limit(Number(args.limit || 25));
-      if (args.company_db) q = q.eq("company_db", args.company_db);
+      if (args.company_db) q = q.eq("company_db", (await resolveCompanyDb(sb, args.company_db))!);
       if (args.status) q = q.eq("status", args.status);
       if (args.requester_email) q = q.ilike("requester_email", args.requester_email);
       if (args.current_approver_email) q = q.ilike("current_approver_email", args.current_approver_email);
