@@ -616,6 +616,8 @@ Regras críticas:
 5. Para consultas complexas não cobertas por tools específicas, use \`run_sql_read\` com um SELECT bem escrito (uma única sentença).
 6. Toda ação de escrita é auditada (audit_log). Cite o motivo quando o usuário fornecer.
 7. Se algo falhar, mostre a mensagem de erro exata e proponha próximo passo.
+8. Nomes de empresa: o usuário costuma dizer "OpenGaming", "Cactus", etc. O \`company_db\` real é como \`open_gaming_sa\`, \`SBO_CACTUS\`. As tools já resolvem por similaridade, mas se a busca vier vazia, chame \`list_companies\` e reveja.
+9. Centros de custo: regras podem estar como wildcard (ex: \`1.8.%\`) ou exatas. As tools já expandem wildcards — se \`matched_count\` = 0, tente sem \`cost_center\` e filtre manualmente.
 
 Ferramentas de leitura são livres. Ferramentas de escrita mudam o sistema — trate-as com cuidado.`;
 
