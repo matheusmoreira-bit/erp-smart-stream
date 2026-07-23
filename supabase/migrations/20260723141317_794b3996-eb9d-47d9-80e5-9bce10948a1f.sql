@@ -1,0 +1,2 @@
+SELECT public.reassign_approval_rule_safe('93c15fe0-d37b-45f6-987d-c51f26588363','df388ae7-729d-46b5-b0f5-92847eb21e14','matheus.moreira@lovable');
+SELECT public.reassign_approval_rule_safe('98fd1bb6-1eea-4f33-b2af-bc113353d407','df388ae7-729d-46b5-b0f5-92847eb21e14','matheus.moreira@lovable');
