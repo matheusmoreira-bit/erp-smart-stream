@@ -409,8 +409,10 @@ async function uploadAttachmentsToSap(
   if (files.length === 0) return null;
   const form = new FormData();
   for (const f of files) {
-    // SAP B1 SL expects files appended as form parts; the field name is the filename
-    form.append("files", f.blob, f.name);
+    // SAP B1 SL expects files appended as form parts; the field name is the filename.
+    // SAP rejeita nomes com espaço/ponto no final ("File name cannot end with space string.").
+    const safeName = sanitizeSapFileName(f.name);
+    form.append("files", f.blob, safeName);
   }
   const res = await fetch(`${sapBaseUrl}/Attachments2`, {
     method: "POST",
