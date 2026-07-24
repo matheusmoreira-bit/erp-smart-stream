@@ -197,8 +197,12 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 - [x] **B1.2 (24/07/2026)** — Dashboard de retries com métricas agregadas:
       taxa de sucesso, recuperados vs esgotados, média de tentativas,
       falhas por categoria e recuperação por doc_type — janelas 1h/24h/7d/30d.
-- [ ] Migrar últimas 6 funções que ainda leem Service Layer diretamente
-      para HanaAPI V2 (audit de `sap-*-cache-sync`, `sap-b1-proxy`).
+- [x] **B1.3 (24/07/2026)** — `expense-sap-status-sync` agora resolve o status
+      do PO via `sap_purchase_order_cache` (freshness ≤ 3h) antes de bater no
+      Service Layer. Reduz drasticamente logins SAP quando o watcher de cache
+      está em dia; SL vira fallback apenas para DocEntry ausentes/velhos.
+- [ ] Auditar `sap-b1-proxy` para roteamento HANA V2 quando possível
+      (cache tables cobrem a maioria dos reads; SL segue como fallback).
 
 ### FASE O1 — Observabilidade
 
