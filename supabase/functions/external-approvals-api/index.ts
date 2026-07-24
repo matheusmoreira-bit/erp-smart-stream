@@ -315,6 +315,15 @@ Deno.serve(async (req) => {
 
     // Allowlist + circuit breaker check
     const admin = sb();
+
+    // Rate limit: 30 chamadas/min por (company_db × user_code × IP).
+    const rl = await enforceRateLimit(admin, {
+      scope: `external-approvals-api:${op}`,
+      identifier: `${companyDB}:${userCode}:${clientIpFrom(req)}`,
+      max: 30,
+      windowSeconds: 60,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl, corsHeaders);
     const { data: accessRows, error: accessErr } = await admin.rpc("check_external_api_access", {
       _company_db: companyDB,
       _user_code: userCode,
