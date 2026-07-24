@@ -249,6 +249,17 @@ export function SapLoginForm() {
       toast.error("Selecione a empresa");
       return;
     }
+    if (isManagedSap) {
+      try {
+        await loginManaged(companyDB);
+        toast.success(`Conectado ao ${erpInfo.label}!`);
+      } catch (err) {
+        toast.error("Não foi possível entrar", {
+          description: err instanceof Error ? err.message : "Falha no login gerenciado.",
+        });
+      }
+      return;
+    }
     if (needsCredentials && (!userName || !password)) {
       toast.error("Preencha todos os campos");
       return;
