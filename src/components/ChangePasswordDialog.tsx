@@ -122,6 +122,23 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
 
       setSummary(allResults);
 
+      if (managed) {
+        const okDbs = allResults
+          .filter((r) => r.status === "success" || r.status === "skipped")
+          .map((r) => r.companyDB);
+        const saveResults = await Promise.allSettled(
+          okDbs.map((db) => saveUserSapCredential(db, session.userName, newPassword)),
+        );
+        const savedOk = saveResults.filter((r) => r.status === "fulfilled").length;
+        const savedFail = saveResults.length - savedOk;
+        if (savedOk > 0) {
+          toast.success(`Login gerenciado salvo em ${savedOk} empresa(s).`);
+        }
+        if (savedFail > 0) {
+          toast.warning(`Falha ao salvar login gerenciado em ${savedFail} empresa(s).`);
+        }
+      }
+
       const successes = allResults.filter((r) => r.status === "success").length;
       const skipped = allResults.filter((r) => r.status === "skipped").length;
       const failures = allResults.filter((r) => r.status === "error").length;
