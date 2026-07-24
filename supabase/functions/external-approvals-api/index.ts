@@ -213,7 +213,7 @@ async function fetchDraftBrief(s: SapSession, draftEntry: number): Promise<SLDra
   try {
     return (await sapGet(
       s,
-      `Drafts(${draftEntry})?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate,Comments`,
+      `Drafts(${draftEntry})?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate,DocDueDate,TaxDate,Project,Comments,DocumentLines,DocumentInstallments`,
     )) as SLDraft;
   } catch {
     return null;
