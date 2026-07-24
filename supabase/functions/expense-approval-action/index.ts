@@ -210,6 +210,19 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // Rate limit: 12 ações por 60s por (expense × IP) — protege contra spam
+  // de aprovação em loop e limita brute force sobre a mesma despesa.
+  const rl = await enforceRateLimit(admin, {
+    scope: "expense-approval-action",
+    identifier: `${expenseId}:${clientIpFrom(req)}`,
+    max: 12,
+    windowSeconds: 60,
+  });
+  if (!rl.allowed) {
+    stageLog("rate_limit", "warn", { requestId, expenseId, retryAfter: rl.retryAfter });
+    return rateLimitResponse(rl, corsHeaders);
+  }
+
   // ── Idempotência ───────────────────────────────────────────────────────
   // Aceita `Idempotency-Key` ou `x-idempotency-key`. Se a mesma chave já
   // teve resposta gravada, replicamos a resposta original. Se está em
