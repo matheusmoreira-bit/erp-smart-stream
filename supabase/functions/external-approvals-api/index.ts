@@ -374,42 +374,58 @@ Deno.serve(async (req) => {
       return json(400, { error: "op deve ser 'list', 'approve' ou 'reject'" });
     }
     if (!companyDB) return json(400, { error: "company_db é obrigatório" });
-    if (!userCode) return json(400, { error: "user_code é obrigatório" });
+    // user_code é opcional apenas para op=list (retorna todas as pendências da empresa).
+    // approve/reject continuam exigindo user_code (a decisão é registrada em nome dele).
+    if (op !== "list" && !userCode) {
+      return json(400, { error: "user_code é obrigatório para approve/reject" });
+    }
 
-    // Allowlist + circuit breaker check
     const admin = sb();
 
-    // Rate limit: 30 chamadas/min por (company_db × user_code × IP).
+    // Rate limit: 30 chamadas/min por (company_db × user_code|* × IP).
     const rl = await enforceRateLimit(admin, {
       scope: `external-approvals-api:${op}`,
-      identifier: `${companyDB}:${userCode}:${clientIpFrom(req)}`,
+      identifier: `${companyDB}:${userCode || "*"}:${clientIpFrom(req)}`,
       max: 30,
       windowSeconds: 60,
     });
     if (!rl.allowed) return rateLimitResponse(rl, corsHeaders);
-    const { data: accessRows, error: accessErr } = await admin.rpc("check_external_api_access", {
-      _company_db: companyDB,
-      _user_code: userCode,
-    });
-    if (accessErr) {
-      console.error("check_external_api_access error:", accessErr);
-      return json(500, { error: "Falha ao validar allowlist" });
-    }
-    const access = Array.isArray(accessRows) ? accessRows[0] : accessRows;
-    if (!access?.allowed) {
-      return json(403, { error: access?.reason || "Acesso negado" });
+
+    // Allowlist: só faz sentido quando há user_code. Para list-all, a própria
+    // API key já autoriza (chave é compartilhada só com sistemas de confiança).
+    if (userCode) {
+      const { data: accessRows, error: accessErr } = await admin.rpc("check_external_api_access", {
+        _company_db: companyDB,
+        _user_code: userCode,
+      });
+      if (accessErr) {
+        console.error("check_external_api_access error:", accessErr);
+        return json(500, { error: "Falha ao validar allowlist" });
+      }
+      const access = Array.isArray(accessRows) ? accessRows[0] : accessRows;
+      if (!access?.allowed) {
+        return json(403, { error: access?.reason || "Acesso negado" });
+      }
     }
 
     const cfg = await getCompanyConfig(companyDB);
     const session = await sapLogin(cfg);
 
     try {
-      const userKey = await getUserKey(session, userCode);
+      const userKey = userCode ? await getUserKey(session, userCode) : null;
 
       if (op === "list") {
-        const docs = await listPendingForUser(session, userKey, userCode);
-        await admin.rpc("register_external_api_success", { _company_db: companyDB, _user_code: userCode });
-        return json(200, { company_db: companyDB, user_code: userCode, count: docs.length, documents: docs });
+        const docs = await listPending(session, userKey, userCode);
+        if (userCode) {
+          await admin.rpc("register_external_api_success", { _company_db: companyDB, _user_code: userCode });
+        }
+        return json(200, {
+          company_db: companyDB,
+          user_code: userCode || null,
+          scope: userCode ? "user" : "company",
+          count: docs.length,
+          documents: docs,
+        });
       }
 
       const approvalRequestId = Number(body.approval_request_id);
