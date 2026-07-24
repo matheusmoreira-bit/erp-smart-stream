@@ -207,7 +207,7 @@ async function getConfiguredSapCompanyDb(companyDB: string): Promise<string> {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -215,6 +215,8 @@ Deno.serve(async (req) => {
   try {
     const reqBody = await req.json();
     const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
+    metricsCtx.companyDb = companyDB || credentials?.CompanyDB || null;
+    metricsCtx.meta = { action };
 
     // Authentication is handled by SAP session (B1SESSION cookie).
     // Each action validates its own required params (sessionId, etc.).
