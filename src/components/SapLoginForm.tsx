@@ -60,7 +60,7 @@ function getErpBadge(erpType: string): string {
 }
 
 export function SapLoginForm() {
-  const { login, isLoading } = useSap();
+  const { login, loginManaged, isLoading } = useSap();
   const navigate = useNavigate();
   const { enabledNames, isLoading: erpLoading } = useEnabledErpTypes();
   const [userName, setUserName] = useState("");
@@ -70,6 +70,8 @@ export function SapLoginForm() {
   const [companiesLoading, setCompaniesLoading] = useState(true);
   const [companiesError, setCompaniesError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [managedCompanyDbs, setManagedCompanyDbs] = useState<Set<string>>(new Set());
+  const [cloudEmail, setCloudEmail] = useState<string | null>(null);
 
   // Filter only when we know which ERPs are enabled; otherwise show all active companies
   // so a slow/failing enabled_erp_types query never blocks the login list.
@@ -80,7 +82,8 @@ export function SapLoginForm() {
   const selectedCompany = databases.find((d) => d.value === companyDB);
   const erpType = selectedCompany?.erp_type || "sap";
   const isOmie = erpType === "omie";
-  const needsCredentials = erpType === "sap"; // Only SAP B1 requires user/pass at login
+  const isManagedSap = erpType === "sap" && !!cloudEmail && managedCompanyDbs.has(companyDB);
+  const needsCredentials = erpType === "sap" && !isManagedSap; // Only SAP B1 without managed creds requires user/pass at login
   const isStateless = (erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite");
   const [googleLoading, setGoogleLoading] = useState(false);
   const postRedirectHandledRef = useRef(false);
@@ -119,6 +122,32 @@ export function SapLoginForm() {
   useEffect(() => {
     loadCompanies();
   }, [loadCompanies]);
+
+  // Detect Cloud (Supabase Auth) session and load managed SAP credentials for
+  // this user so we can hide user/password fields whenever the selected
+  // company has a stored ERP-Flow-managed password.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        const email = authSession?.user?.email || null;
+        if (cancelled) return;
+        setCloudEmail(email);
+        if (!authSession) {
+          setManagedCompanyDbs(new Set());
+          return;
+        }
+        const { listUserSapCredentials } = await import("@/lib/user-sap-credentials");
+        const creds = await listUserSapCredentials();
+        if (cancelled) return;
+        setManagedCompanyDbs(new Set(creds.map((c) => c.company_db)));
+      } catch {
+        if (!cancelled) setManagedCompanyDbs(new Set());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Post Google redirect: if there's a pending OMIE company + a Supabase session,
   // verify access via user_group_assignments and complete the ERP login.
