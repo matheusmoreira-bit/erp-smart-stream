@@ -234,6 +234,7 @@ async function processMilestone(
   po: any,
   milestone: string,
   linkedDoc?: any,
+  userEmailMap?: Map<string, string>,
 ): Promise<{ status: "skipped" | "sent" | "error"; reason?: string }> {
   if (await alreadyNotified(supabase, companyDb, po.DocEntry, milestone)) {
     return { status: "skipped", reason: "duplicate" };
@@ -241,7 +242,7 @@ async function processMilestone(
   const meta = MILESTONE_LABELS[milestone];
   const subject = `[${companyDb}] ${meta.subject} — PO #${po.DocNum}`;
   const html = renderEmailHtml({ milestone, po, companyDb, linkedDoc });
-  const recipient = await resolveRequesterEmail(baseUrl, cookies, po);
+  const recipient = await resolveRequesterEmail(baseUrl, cookies, po, userEmailMap);
 
   if (!recipient) {
     await recordNotification(supabase, {
