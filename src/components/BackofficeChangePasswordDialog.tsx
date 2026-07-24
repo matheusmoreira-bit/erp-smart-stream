@@ -79,11 +79,15 @@ export function BackofficeChangePasswordDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!policy.valid) {
+      toast.error(`Senha não atende à política: ${policy.failed[0]?.label || "revise os requisitos"}`);
+      return;
+    }
     setLoading(true);
     setSummary(null);
     try {
       const targets = [currentCompanyDb, ...Array.from(selected)];
-      const results = await changePasswordInCompanies(userCode, DEFAULT_RESET_PASSWORD, targets);
+      const results = await changePasswordInCompanies(userCode, password, targets);
       const fixed = results.map((r) =>
         r.companyDB === currentCompanyDb && currentCompanyName
           ? { ...r, displayName: currentCompanyName }
