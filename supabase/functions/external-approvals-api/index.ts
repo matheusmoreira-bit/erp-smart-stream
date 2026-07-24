@@ -61,6 +61,18 @@ interface SLApprovalRequest {
   ApprovalRequestDecisions?: SLDecision[];
   ApprovalRequestLines?: SLRequestLine[];
 }
+interface SLDocumentLine {
+  CostingCode?: string;
+  CostingCode2?: string;
+  CostingCode3?: string;
+  CostingCode4?: string;
+  CostingCode5?: string;
+  ProjectCode?: string;
+}
+interface SLInstallment {
+  DueDate?: string;
+  Total?: number;
+}
 interface SLDraft {
   DocEntry?: number;
   DocNum?: number;
@@ -69,7 +81,12 @@ interface SLDraft {
   CardCode?: string;
   CardName?: string;
   DocDate?: string;
+  DocDueDate?: string;
+  TaxDate?: string;
+  Project?: string;
   Comments?: string;
+  DocumentLines?: SLDocumentLine[];
+  DocumentInstallments?: SLInstallment[];
 }
 
 const OBJECT_CODE_TO_NAME: Record<string, string> = {
