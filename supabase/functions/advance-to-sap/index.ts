@@ -264,6 +264,16 @@ Deno.serve(async (req) => {
         .update({ status: "failed", sap_integration_status: "error", sap_integration_error: msg })
         .eq("id", advanceId)
         .catch(() => {});
+      try {
+        const { classifyAndEnqueue } = await import("../_shared/sap-retry.ts");
+        await classifyAndEnqueue(supabase, {
+          doc_type: "advance",
+          ref_id: advanceId,
+          errorBody: msg,
+        });
+      } catch (retryErr) {
+        console.warn("advance-to-sap enqueueRetry failed:", (retryErr as Error).message);
+      }
     }
     return new Response(JSON.stringify({ success: false, error: msg }), {
       status: 500,
