@@ -14,6 +14,9 @@ import { RefreshCw, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SapSyncHealthCard } from "@/components/SapSyncHealthCard";
 import { EdgeFunctionMetricsCard } from "@/components/EdgeFunctionMetricsCard";
+import { SystemActivityCard } from "@/components/SystemActivityCard";
+import { EmptyState } from "@/components/EmptyState";
+import { Inbox } from "lucide-react";
 
 interface SyncRun {
   id: string;
@@ -109,6 +112,8 @@ export default function SapSyncRuns() {
 
       <SapSyncHealthCard />
 
+      <SystemActivityCard />
+
       <EdgeFunctionMetricsCard />
 
       <Card>
@@ -169,7 +174,11 @@ export default function SapSyncRuns() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma execução no período selecionado.</p>
+            <EmptyState
+              icon={<Inbox className="h-5 w-5" aria-hidden="true" />}
+              title="Nenhuma execução no período"
+              description="Ajuste os filtros de data e status ou acione uma nova sincronia."
+            />
           ) : (
             <div className="rounded-md border overflow-hidden">
               <Table>
