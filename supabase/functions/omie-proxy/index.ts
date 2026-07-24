@@ -78,6 +78,44 @@ Deno.serve(async (req) => {
     }
 
     if (action === "login") {
+      // S4.3 — server-side allowlist. Login exige usuário Cloud autenticado
+      // (Google OAuth) e o e-mail precisa estar mapeado em user_group_assignments
+      // para a empresa OMIE. Antes: proteção existia só no cliente.
+      let callerEmail: string | null = null;
+      try {
+        const caller = await requireUser(req);
+        callerEmail = caller.email;
+      } catch (authErr) {
+        const resp = authErrorResponse(authErr, corsHeaders);
+        if (resp) return resp;
+        throw authErr;
+      }
+      if (!callerEmail) {
+        return new Response(
+          JSON.stringify({ error: "Sessão sem e-mail — refaça o login com Google" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const { data: allowed, error: allowErr } = await supabase.rpc(
+        "is_email_allowed_for_omie_company",
+        { _email: callerEmail, _company_db: company_db }
+      );
+      if (allowErr) {
+        console.error("[omie-proxy] allowlist rpc failed:", allowErr);
+        return new Response(
+          JSON.stringify({ error: "Falha ao validar autorização" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (allowed !== true) {
+        return new Response(
+          JSON.stringify({
+            error: `Sua conta ${callerEmail} não está autorizada para esta empresa OMIE. Contate o administrador.`,
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       const omieRes = await fetch("https://app.omie.com.br/api/v1/geral/empresas/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
