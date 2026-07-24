@@ -76,16 +76,11 @@ async function notifyExhausted(admin: any, row: any) {
     <p><b>Último erro:</b><br><code>${String(row.last_error || "").slice(0, 800)}</code></p>
     <p><a href="${link}">Abrir na fila de retries</a></p>
   `;
-  // Email via transactional
+  // Email via existing SMTP function
   for (const to of ADMIN_EMAILS) {
     try {
-      await admin.functions.invoke("send-transactional-email", {
-        body: {
-          templateName: "generic-html",
-          recipientEmail: to,
-          idempotencyKey: `sap-retry-exhausted-${row.id}`,
-          templateData: { subject, html_content: html },
-        },
+      await admin.functions.invoke("send-smtp-email", {
+        body: { to, subject, html, text: `Retry esgotado: ${row.doc_type} ${row.ref_id} - ${row.last_error || ""}` },
       });
     } catch (e) {
       console.warn("[sap-retry-worker] email failed:", (e as Error).message);
