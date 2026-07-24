@@ -154,7 +154,12 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 
 - [ ] MFA obrigatório para role `admin` (usar Supabase Auth MFA nativo).
 - [ ] Bloqueio de brute force no login SAP (rate limit + captcha após 3 falhas).
-- [ ] Revisão do fluxo Google OAuth (empresas OMIE) — validar allowlist de e-mails.
+- [x] **S4.3 (24/07/2026)** — Revisão do fluxo Google OAuth (empresas OMIE). Criada
+      RPC `is_email_allowed_for_omie_company` (SECURITY DEFINER, EXECUTE só para
+      `authenticated`/`service_role`). Cliente parou de ler `user_group_assignments`
+      inteira só para checar allowlist. `omie-proxy` action=login agora exige
+      `requireUser()` + revalida allowlist server-side (403 se não autorizado) —
+      antes a proteção existia só no cliente e podia ser burlada.
 - [ ] Remover sessão SAP do `localStorage` em favor de cookie `HttpOnly` gerado por
       edge function (backlog longo — projeto separado; não bloqueia S1–S3).
 

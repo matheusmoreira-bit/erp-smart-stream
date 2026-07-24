@@ -20,17 +20,17 @@ import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 const OMIE_PENDING_KEY = "omie_google_pending_company_db";
 
 async function isEmailAllowedForOmieCompany(email: string, companyDb: string): Promise<boolean> {
-  const local = email.split("@")[0].toLowerCase();
-  const full = email.toLowerCase();
-  const { data, error } = await supabase
-    .from("user_group_assignments")
-    .select("sap_email, company_db")
-    .or(`company_db.eq.${companyDb},company_db.is.null`);
-  if (error || !data) return false;
-  return data.some((row: any) => {
-    const e = (row.sap_email || "").toLowerCase();
-    return e === full || e === local || e.startsWith(local + "@");
+  // Server-side check via SECURITY DEFINER RPC — the client no longer reads
+  // the full user_group_assignments table just to answer this question.
+  const { data, error } = await supabase.rpc("is_email_allowed_for_omie_company", {
+    _email: email,
+    _company_db: companyDb,
   });
+  if (error) {
+    console.error("[omie-allowlist] rpc failed:", error);
+    return false;
+  }
+  return data === true;
 }
 
 interface CompanyOption {
