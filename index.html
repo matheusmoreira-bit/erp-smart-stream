@@ -8,6 +8,12 @@
     <meta name="author" content="Cactus Corporation" />
     <link rel="icon" href="/favicon.png" type="image/png" />
 
+    <!-- Security headers (S1.3). HSTS/X-Frame-Options ideais em header HTTP,
+         mas o hosting Lovable já força HTTPS; mantemos aqui as travas que o
+         browser respeita via <meta http-equiv>. -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
     <meta property="og:type" content="website" />
     <meta property="og:title" content="ERP Flow — Gestão Corporativa" />
     <meta property="og:description" content="Aprovações, compras, vendas, cartões corporativos, adiantamentos e auditoria integrados ao SAP Business One." />
