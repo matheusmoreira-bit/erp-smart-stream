@@ -42,6 +42,18 @@ Deno.serve(async (req) => {
     // don't have Supabase Auth sessions. We accept any caller with the project
     // anon key (enforced by Supabase platform). No user JWT validation here.
 
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const rl = await enforceRateLimit(admin, {
+      scope: "supplier-ai-extract",
+      identifier: clientIpFrom(req),
+      max: 15,
+      windowSeconds: 60,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl, corsHeaders);
+
     const body = (await req.json()) as ExtractionPayload;
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) throw new Error("LOVABLE_API_KEY ausente");
