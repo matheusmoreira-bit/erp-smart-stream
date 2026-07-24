@@ -48,8 +48,10 @@ function fmtDate(iso: string | null) {
 
 export default function BackofficeRetryQueue() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [metrics, setMetrics] = useState<MetricsRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [windowHours, setWindowHours] = useState<number>(24);
 
   const load = async () => {
     setLoading(true);
@@ -59,10 +61,28 @@ export default function BackofficeRetryQueue() {
     const { data, error } = await q;
     if (error) toast.error(error.message);
     else setRows((data as Row[]) || []);
+
+    // Métricas agregadas na janela (últimas N horas por updated_at).
+    const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
+    const { data: mdata } = await supabase
+      .from("sap_retry_queue")
+      .select("doc_type, error_category, status, attempts")
+      .gte("updated_at", since)
+      .limit(5000);
+    const agg = new Map<string, MetricsRow>();
+    for (const r of (mdata || []) as { doc_type: string; error_category: string | null; status: string; attempts: number }[]) {
+      const k = `${r.doc_type}|${r.error_category || "-"}|${r.status}`;
+      const cur = agg.get(k) || { doc_type: r.doc_type, error_category: r.error_category, status: r.status, total: 0, avg_attempts: 0 };
+      cur.total += 1;
+      cur.avg_attempts = (cur.avg_attempts * (cur.total - 1) + (r.attempts || 0)) / cur.total;
+      agg.set(k, cur);
+    }
+    setMetrics(Array.from(agg.values()).sort((a, b) => b.total - a.total));
+
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [statusFilter, windowHours]);
 
   useEffect(() => {
     const channel = supabase
