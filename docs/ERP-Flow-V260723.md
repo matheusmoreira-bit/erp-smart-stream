@@ -201,8 +201,23 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
       do PO via `sap_purchase_order_cache` (freshness ≤ 3h) antes de bater no
       Service Layer. Reduz drasticamente logins SAP quando o watcher de cache
       está em dia; SL vira fallback apenas para DocEntry ausentes/velhos.
-- [ ] Auditar `sap-b1-proxy` para roteamento HANA V2 quando possível
-      (cache tables cobrem a maioria dos reads; SL segue como fallback).
+- [x] **B1.4 (24/07/2026)** — Auditoria de `sap-b1-proxy` para roteamento HANA V2.
+      Inventário das 4 actions de leitura:
+      • `queryView` — **já roteado 100% via HANA V2** (`fetchHanaView`) com toggle
+        `use_hana_db` por empresa e fallback vazio (não SL) por design.
+      • `query` — leituras pontuais por ID (`ApprovalTemplates(x)`, `ApprovalStages(y)`,
+        `Users?$filter=UserCode eq 'X'&$select=Superuser`, `Departments(cc)` etc.).
+        HANA views atuais (VW_USERS, VW_FORNECEDORES, VW_ACOMPANHAMENTO_PEDIDOS)
+        **não expõem** os campos consultados (Superuser, template metadata),
+        então roteamento HANA quebraria contrato do cliente. Mantido no SL.
+      • `queryAll` — usado só para paginar `BusinessPartners`, `Items` e
+        `ChartOfAccounts` quando o cliente ignora as tabelas de cache
+        (`sap_cache`, `suppliers`, `sap_items_cache`). Recomendação registrada:
+        migrar callers para as caches (já feito em `useSuppliers`/`useItems`);
+        `queryAll` fica como fallback para empresas sem HANA.
+      • `sapAction` — writes (POST/PATCH). Não elegível para HANA.
+      Conclusão: as leituras HANA-eligíveis **já estão migradas** (via `queryView`
+      ou watchers de cache). SL segue como fallback correto para o restante.
 
 ### FASE O1 — Observabilidade
 
