@@ -156,10 +156,18 @@ Deno.serve(async (req) => {
     const attempts = (row.attempts || 0) + 1;
     const dispatch = buildDispatch(row.doc_type, row.ref_id, row.payload || {});
     if (!dispatch) {
-      await admin.from("sap_retry_queue").update({
-        status: "exhausted", attempts, last_error: "unknown doc_type",
-      }).eq("id", row.id);
-      results.push({ id: row.id, ok: false, action: "unknown_doc_type" });
+      // Auto-retry not supported for this doc_type (e.g. baixa needs live SAP session).
+      // Mark as exhausted so admins are notified once and can retry manually via UI.
+      const { data: exhausted } = await admin.from("sap_retry_queue").update({
+        status: "exhausted", attempts,
+        last_error: (row.last_error || "") + " [auto-retry indisponível para este tipo — retry manual necessário]",
+      }).eq("id", row.id).select("*").maybeSingle();
+      if (exhausted && !exhausted.notified_exhausted_at) {
+        await notifyExhausted(admin, exhausted);
+        await admin.from("sap_retry_queue")
+          .update({ notified_exhausted_at: new Date().toISOString() }).eq("id", row.id);
+      }
+      results.push({ id: row.id, ok: false, action: "manual_required" });
       continue;
     }
 
