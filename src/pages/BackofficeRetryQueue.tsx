@@ -155,6 +155,15 @@ export default function BackofficeRetryQueue() {
           </p>
         </div>
         <div className="flex gap-2 items-center">
+          <Select value={String(windowHours)} onValueChange={(v) => setWindowHours(Number(v))}>
+            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">Última hora</SelectItem>
+              <SelectItem value="24">Últimas 24h</SelectItem>
+              <SelectItem value="168">Últimos 7 dias</SelectItem>
+              <SelectItem value="720">Últimos 30 dias</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -174,6 +183,92 @@ export default function BackofficeRetryQueue() {
         </div>
       </div>
 
+      {/* Métricas agregadas na janela selecionada */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="p-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase">
+            <TrendingUp className="h-3 w-3" /> Taxa de sucesso
+          </div>
+          <div className="text-2xl font-bold">
+            {summary.successRate.toFixed(1)}<span className="text-sm font-normal text-muted-foreground">%</span>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {summary.succeeded} recuperados / {summary.succeeded + summary.exhausted} finalizados
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase">
+            <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Recuperados
+          </div>
+          <div className="text-2xl font-bold text-emerald-700">{summary.succeeded}</div>
+          <div className="text-xs text-muted-foreground">média {summary.avgAttempts.toFixed(1)} tentativas</div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase">
+            <AlertTriangle className="h-3 w-3 text-red-600" /> Esgotados
+          </div>
+          <div className="text-2xl font-bold text-red-700">{summary.exhausted}</div>
+          <div className="text-xs text-muted-foreground">exigem ação manual</div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase">
+            <Clock className="h-3 w-3 text-amber-600" /> Em andamento
+          </div>
+          <div className="text-2xl font-bold text-amber-700">{summary.pending}</div>
+          <div className="text-xs text-muted-foreground">pendente + em execução</div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Card className="p-4">
+          <div className="text-sm font-semibold mb-3">Falhas por categoria</div>
+          {summary.topCategories.length === 0 ? (
+            <div className="text-xs text-muted-foreground">Sem dados na janela</div>
+          ) : (
+            <div className="space-y-2">
+              {summary.topCategories.map(([cat, total]) => {
+                const pct = summary.total > 0 ? (total / summary.total) * 100 : 0;
+                return (
+                  <div key={cat}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-mono">{cat}</span>
+                      <span className="text-muted-foreground">{total} ({pct.toFixed(0)}%)</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded overflow-hidden">
+                      <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+        <Card className="p-4">
+          <div className="text-sm font-semibold mb-3">Recuperação por tipo de documento</div>
+          {summary.byDocType.length === 0 ? (
+            <div className="text-xs text-muted-foreground">Sem dados na janela</div>
+          ) : (
+            <div className="space-y-2">
+              {summary.byDocType.map(([dt, agg]) => {
+                const finalized = agg.succeeded + agg.exhausted;
+                const rate = finalized > 0 ? (agg.succeeded / finalized) * 100 : 0;
+                return (
+                  <div key={dt} className="flex items-center justify-between text-xs">
+                    <span className="font-mono">{dt}</span>
+                    <div className="flex gap-3 text-muted-foreground">
+                      <span>{agg.total} total</span>
+                      <span className="text-emerald-700">{agg.succeeded} ok</span>
+                      <span className="text-red-700">{agg.exhausted} falha</span>
+                      <span className="font-semibold text-foreground w-12 text-right">{rate.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {["pending", "in_flight", "exhausted", "succeeded", "cancelled"].map(s => (
           <Card key={s} className="p-3">
@@ -182,6 +277,7 @@ export default function BackofficeRetryQueue() {
           </Card>
         ))}
       </div>
+
 
       <Card className="overflow-x-auto">
         <Table>
