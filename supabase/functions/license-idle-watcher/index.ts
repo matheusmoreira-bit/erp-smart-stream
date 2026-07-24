@@ -265,11 +265,14 @@ Deno.serve(async (req) => {
       catch (e) { console.error(`SAP login ${co.company_db}:`, (e as Error).message); continue; }
 
       try {
-        // 1. Limpa cache de usuários e recarrega lista fresca via Service Layer
+        // 1. Limpa cache de usuários e recarrega lista fresca (HanaAPI V2 quando disponível, fallback SL)
         let freshUsers: Array<{ UserCode: string; UserName?: string; Locked?: string }> = [];
         try {
           await sb.from("sap_cache").delete().eq("cache_key", "users").eq("company_db", co.company_db);
-          freshUsers = await fetchSapUsersFresh(baseUrl, session);
+          const usersResp = await listSapUsersHybrid({
+            sb, companyDb: co.company_db, baseUrl, sapSession: session, database: dbName,
+          });
+          freshUsers = usersResp.users.map((u) => ({ UserCode: u.UserCode, UserName: u.UserName, Locked: u.Locked }));
           await refreshUsersCache(sb, co.company_db, freshUsers);
         } catch (e) {
           console.warn(`Refresh users ${co.company_db} falhou, prosseguindo com user_licenses:`, (e as Error).message);
