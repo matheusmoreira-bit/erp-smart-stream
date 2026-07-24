@@ -63,7 +63,7 @@ Respostas de erro de autenticação:
 > Aprovações originadas diretamente no SAP B1, fora do fluxo do ERP Flow,
 > **não** aparecem nas respostas de `list`, mesmo estando pendentes no SAP.
 
-
+### 3.1 Listar documentos pendentes
 
 Há dois modos:
 
