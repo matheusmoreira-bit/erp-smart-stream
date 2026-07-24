@@ -374,6 +374,12 @@ Deno.serve(async (req) => {
       SBO_OPENGAMING: "open_gaming_sa",
       SBO_TST_OPENGAMING: "tst_open_gaming",
       TST_OPENGAMING: "tst_open_gaming",
+      SBO_HOLDING_PRD: "cactus_providers",
+      SBO_TST_HOLDING_PRD: "tst_cactus_providers",
+      TST_HOLDING_PRD: "tst_cactus_providers",
+      // ANA Gaming, Cactus Tecnologia e Instituto Cactus já usam o próprio
+      // nome do schema SAP como slug interno (SBO_ANAGAMING, SBO_CACTUS,
+      // SBO_INSTITUTO_ANA) — não precisam de alias.
     };
     const companyDB = COMPANY_DB_ALIASES[rawCompanyDB.toUpperCase()] || rawCompanyDB;
     const userCode = String(body.user_code || "").trim();
