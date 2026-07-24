@@ -1,0 +1,253 @@
+# ERP Flow — Plano Unificado de Otimização (V260723)
+
+> Documento vivo. Baseado em: `security--run_security_scan` (155 achados),
+> `supabase--linter` (140 issues), inventário de 84 edge functions, memórias
+> do projeto e histórico de sessões.
+>
+> **Sequência de execução aprovada pelo usuário:**
+> Segurança → Backend/Integrações → Observabilidade → Refatorações → **UI/UX por último.**
+
+---
+
+## 0. Contexto de arquitetura (leitura obrigatória antes de "consertar" achados)
+
+O ERP Flow **não usa Supabase Auth como identidade principal**. O login real
+acontece contra o SAP B1 (Service Layer / HanaAPI) e a sessão SAP fica em
+`localStorage`. Como consequência:
+
+1. Todas as leituras do PostgREST feitas pela SPA saem com a **chave anon**.
+2. Muitas políticas RLS `USING(true)` para `anon` são **intencionais** —
+   protegem-se via edge functions + validação SAP, não via `auth.uid()`.
+3. Vários `SECURITY DEFINER` são **anon-callable de propósito** (ex.: `has_role`,
+   `permissions_enforcement_mode`, `get_my_idp_cost_center`).
+4. O arquivo `src/test/rls-permissions.integration.test.ts` documenta e
+   protege esse contrato — qualquer mudança de RLS **precisa** manter esse
+   teste verde ou substituí-lo.
+
+Isso muda o que é achado do linter que é **real gap** vs **falso positivo por design**.
+O plano abaixo separa os dois.
+
+---
+
+## 1. Diagnóstico consolidado (dados concretos)
+
+### 1.1 Linter Supabase — 140 issues
+
+| Categoria | Qtd | Nível | Ação |
+|---|---:|---|---|
+| Function Search Path Mutable | **5** | WARN | **Fix mecânico** (Fase S1) |
+| Extension in Public (`pg_trgm`) | 1 | WARN | Aceitar (mover extensão quebra índices trgm existentes) |
+| RLS Policy Always True | **37** | WARN | Triagem por tabela (Fase S2) |
+| Public (anon) can EXECUTE SECURITY DEFINER | **89** | WARN | Triagem por função (Fase S3) |
+| Authenticated can EXECUTE SECURITY DEFINER | 7 | WARN | Revisar EXECUTE de `authenticated` (Fase S3) |
+| RLS Enabled No Policy | 1 | INFO | Adicionar policy ou remover RLS (Fase S2) |
+
+**Funções `public` sem `search_path`:**
+`_audit_guard`, `delete_email`, `enqueue_email`, `move_to_dlq`, `read_email_batch`.
+(as demais 30 funções sem search_path são do `pg_trgm` — ignoradas.)
+
+**Tabelas com policy `USING(true)`/`WITH CHECK(true)` para anon em INSERT/UPDATE/DELETE:**
+`approval_rules`, `approval_rule_levels`, `sap_cache`.
+(Nas demais — `pagcorp_*`, `suppliers`, `user_profiles`, `sap_fluxo_analise_*`,
+`expense_action_idempotency`, `pagcorp_settlement_accounts` — o alvo é
+`authenticated`, `App`, ou `service_role`; ainda merecem estreitamento,
+mas não expõem via anon.)
+
+### 1.2 Edge functions — 84 no total
+
+- **21** com `verify_jwt = false` em `supabase/config.toml` (declarado).
+- **63** restantes: assumem `verify_jwt = true` **ou** validam por outros meios
+  (`x-sap-session`, HMAC, cron, secret compartilhado). Nenhuma usa `getClaims`.
+- **Padrão dominante** hoje: `requireAdminOrSapSessionHeaders` / `requireAdmin`
+  em `_shared/auth.ts`. Isso funciona mas não segue o guideline oficial
+  Supabase pós-signing-keys. **Não é regressão de segurança** — é dívida.
+
+### 1.3 Achados fora do linter (histórico + code review)
+
+- **HIBP / password strength** — nunca ativado no Auth (fluxo principal é SAP,
+  mas o admin panel usa Supabase Auth).
+- **MFA** — não obrigatório para admins do Backoffice.
+- **`localStorage` guarda sessão SAP** com credenciais criptografadas no cliente.
+  Vetor de XSS ainda que baixo (CSP não está declarado no `index.html`).
+- **CSP / HSTS / X-Frame-Options** — ausentes no `index.html`.
+- **Rate limiting** — nenhum em `sap-change-password`, `expense-*`, `copilot-chat`.
+- **Source maps** — ativos no build de preview (verificar prod).
+- **Segredos em Edge Functions** — OK (`SUPABASE_SERVICE_ROLE_KEY` só server).
+- **`external_api_allowlist`** — tem RLS estrita, mas endpoint público (`external-approvals-api`) precisa auditoria da assinatura.
+
+---
+
+## 2. Roadmap por fase
+
+Cada fase entrega valor sozinha e é reversível. Nada bloqueia deploy.
+
+### FASE S1 — Fixes mecânicos (baixíssimo risco) — **INICIAR AGORA**
+
+Objetivo: eliminar warnings triviais e liberar o painel de segurança.
+
+- [x] **S1.1** Migração: `SET search_path = public, pg_temp` nas 5 funções
+      próprias do projeto (`_audit_guard`, `delete_email`, `enqueue_email`,
+      `move_to_dlq`, `read_email_batch`). *— aplicado nesta rodada.*
+- [ ] **S1.2** Ativar HIBP / política de senha forte no Supabase Auth
+      (`configure_auth password_hibp_enabled=true`, min length 12).
+      *Impacto: usuários do Backoffice ao trocar senha.*
+- [ ] **S1.3** Adicionar CSP, HSTS, X-Content-Type-Options, Referrer-Policy
+      no `index.html` (via `<meta http-equiv>`) e nos headers CORS das edge
+      functions (`X-Frame-Options: DENY`, `Strict-Transport-Security`).
+- [ ] **S1.4** Confirmar `build.sourcemap=false` em `vite.config.ts` para produção.
+
+### FASE S2 — RLS: fechar escritas anônimas legítimas de admin
+
+37 políticas `USING(true)`. Triagem:
+
+| Tabela | Ação proposta |
+|---|---|
+| `approval_rules`, `approval_rule_levels` | Escrita apenas via `Admin` app-role **ou** via edge function `service_role`. Anon lê. |
+| `sap_cache` | Anon escreve porque hoje o cache é populado a partir do cliente. **Migrar populate para edge function** `sap-*-cache-sync` e revogar INSERT/UPDATE/DELETE anon. |
+| `pagcorp_*` (target `authenticated`) | Estreitar por posse (`created_by=auth.uid()` ou `has_role('admin')`). |
+| `suppliers`, `user_profiles` | Estreitar por posse. |
+| `sap_fluxo_analise_*` (`service_role`) | Aceitar — só edge functions escrevem. |
+| `expense_action_idempotency` (`service_role only`) | Aceitar. |
+
+Cada fix acompanha:
+- Migração com `DROP POLICY` + `CREATE POLICY` escopada.
+- Atualização do teste `rls-permissions.integration.test.ts`.
+- Verificação em staging antes de prod.
+
+### FASE S3 — SECURITY DEFINER: revogar EXECUTE onde não é necessário
+
+96 funções (89 anon + 7 auth). Estratégia:
+
+1. Listar cada função e classificar em 3 baldes:
+   - **PÚBLICA por design** (`has_role`, `permissions_enforcement_mode`,
+     `get_my_idp_cost_center`, `has_module_action`, `log_permission_shadow`)
+     → aceitar, documentar em `security-memory`.
+   - **Uso interno de edge function** → `REVOKE EXECUTE FROM anon, authenticated;
+     GRANT EXECUTE TO service_role;`
+   - **Convertível a SECURITY INVOKER** → converter.
+
+Entregável: uma migração com blocos `REVOKE`/`GRANT` por função.
+
+### FASE S4 — Autenticação e admin panel
+
+- [ ] MFA obrigatório para role `admin` (usar Supabase Auth MFA nativo).
+- [ ] Bloqueio de brute force no login SAP (rate limit + captcha após 3 falhas).
+- [ ] Revisão do fluxo Google OAuth (empresas OMIE) — validar allowlist de e-mails.
+- [ ] Remover sessão SAP do `localStorage` em favor de cookie `HttpOnly` gerado por
+      edge function (backlog longo — projeto separado; não bloqueia S1–S3).
+
+### FASE S5 — Edge functions: padronizar auth + rate limit
+
+- [ ] Introduzir helper `withRateLimit(fn, { key, max, windowMs })` em `_shared`.
+- [ ] Aplicar em: `sap-change-password`, `expense-approval-action`,
+      `copilot-chat`, `report-ai-chat`, `external-approvals-api`,
+      `cnpj-lookup`, `supplier-ai-extract`.
+- [ ] Migrar 63 funções sem `getClaims` para o padrão oficial **quando** exigirem
+      identidade de usuário Supabase (não SAP). A maioria continua legítima com
+      `requireAdminOrSapSessionHeaders`.
+- [ ] Validar assinatura HMAC no webhook `external-approvals-api`.
+
+### FASE B1 — Backend / integrações (dívida técnica de médio prazo)
+
+- [ ] Consolidar 4 caches SAP (`sap_cache`, `sap_purchase_order_cache`,
+      `sap_nf_entrada_cache`, `sap_vendor_payment_cache`) sob helper único.
+- [ ] `sap-retry-worker` já existe — adicionar dashboard de retries
+      (hoje só `BackofficeRetryQueue.tsx` lista, sem métricas agregadas).
+- [ ] Migrar últimas 6 funções que ainda leem Service Layer diretamente
+      para HanaAPI V2 (audit de `sap-*-cache-sync`, `sap-b1-proxy`).
+
+### FASE O1 — Observabilidade
+
+- [ ] Ativar `analytics--read_project_analytics` como fonte no Backoffice.
+- [ ] Dashboard "Saúde do SAP" (já parcial em `SapSyncHealthCard.tsx`) —
+      agregar latência p50/p95 por função, taxa de erro, sessões ativas.
+- [ ] Alertas WhatsApp para p95 > 10s ou taxa de erro > 5%/5min.
+
+### FASE R1 — Refatoração / dívida
+
+- [ ] Deduplicar hubs (`ApprovalsHub`, `AuditHub`, `IntegrationsHub`,
+      `UsersHub`) — hoje há divergência de padrões de layout.
+- [ ] Remover páginas órfãs após auditoria de rotas em `App.tsx`.
+
+### FASE UX — UI/UX (executar por último, conforme solicitado)
+
+- [ ] Unificar tokens de design (`index.css`) — hoje há mix de cores hardcoded
+      em `src/pages/*` (rodar `rg "text-\[#|bg-\[#" src/`).
+- [ ] Padronizar `PageHeader` em todas as rotas.
+- [ ] Revisão de responsividade mobile (Bottom Nav já existe, mas várias
+      tabelas ficam sem scroll horizontal).
+- [ ] Acessibilidade (foco, contraste, labels de ícone).
+- [ ] Empty states e loaders coerentes.
+
+---
+
+## 3. Priorização (Risco × Esforço × Impacto)
+
+```text
+    Alto impacto
+        │
+   S2 ──┼── S1  ← começar aqui
+    │   │
+   S4   │  S3
+    │   │
+   S5 ──┼── B1
+    │   │
+   O1   │  R1
+        │
+        └────── UX  (por último)
+    Baixo esforço →
+```
+
+**Sprints sugeridos (2 semanas cada):**
+1. **Sprint 1** — S1 completo + início de S2 (approval_rules, sap_cache).
+2. **Sprint 2** — S2 restante + S3 triagem completa.
+3. **Sprint 3** — S4 (MFA + rate limit login) + S5 rate limit.
+4. **Sprint 4** — B1 + O1.
+5. **Sprint 5** — R1 + início UX.
+6. **Sprint 6** — UX.
+
+---
+
+## 4. Checklist de segurança — status atual
+
+| Item | Status | Fase |
+|---|---|---|
+| RLS habilitado em todas tabelas `public` | ✅ (INFO só 1 tabela sem policy) | — |
+| Nenhuma policy `USING(true)` sem escopo | ⚠️ 37 casos | S2 |
+| Service_role só em edge functions | ✅ | — |
+| Segredos de terceiros fora do front | ✅ | — |
+| HIBP / senha forte | ❌ | S1.2 |
+| MFA para admin | ❌ | S4 |
+| Rate limit em login/reset | ❌ | S4/S5 |
+| Rate limit em IA caras | ❌ | S5 |
+| Webhook signature validada | ⚠️ auditar | S5 |
+| HTTPS + HSTS | ⚠️ HSTS ausente | S1.3 |
+| CSP + headers de segurança | ❌ | S1.3 |
+| Source maps de prod desativados | ❓ verificar | S1.4 |
+| Nenhum segredo em URL | ✅ | — |
+| PII sensível criptografada | N/A (não há PII financeira além de CNPJ) | — |
+| Input validado no servidor | ✅ (zod nas edge functions críticas) | — |
+| Auditoria de decisões | ✅ (`audit_log`, `expense_audit_log`) | — |
+| GHAS / CodeQL no repo GitHub | ❓ verificar sync | S4 |
+
+---
+
+## 5. Riscos & mitigações
+
+| Risco | Mitigação |
+|---|---|
+| Estreitar RLS quebra fluxos anon-legítimos | Rodar `rls-permissions.integration.test.ts` antes/depois; feature flag por tabela |
+| Revogar EXECUTE de anon quebra RPCs consumidas pela SPA | Auditar `rg "supabase.rpc\("` antes de cada revoke |
+| MFA obrigatório trava admin sem MFA configurado | Rollout: enrollment forçado no 1º login, 30 dias de grace |
+| CSP quebra scripts externos (Google, WhatsApp) | Começar em `report-only`, medir, então enforce |
+
+---
+
+## 6. Próximas ações imediatas
+
+1. ✅ **S1.1 aplicado nesta rodada** (migração de `search_path`).
+2. **Aguardando decisão** para:
+   - S1.2 (HIBP) — 1 chamada de tool, zero código.
+   - S1.3 (CSP/HSTS) — edita `index.html` + `_shared` cors.
+   - S1.4 (sourcemap) — 1 linha em `vite.config.ts`.
+3. Depois S2 (RLS) — precisa validação sua tabela a tabela porque envolve mudança de comportamento.
