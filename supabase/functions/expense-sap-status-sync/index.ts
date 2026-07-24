@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
       }
 
       try {
-        for (const row of list) {
+        for (const row of pending) {
           const docEntry = Number(row.sap_doc_entry);
           try {
             const r = await fetch(
@@ -254,7 +254,6 @@ Deno.serve(async (req) => {
             const now = new Date().toISOString();
 
             if (r.status === 404) {
-              // 404 é resposta válida do SAP — não é falha de sincronia; zera contadores.
               const changed404 = row.sap_purchase_order_status !== "not_found";
               const patch404: Record<string, unknown> = {
                 sap_purchase_order_status: "not_found",
@@ -272,38 +271,7 @@ Deno.serve(async (req) => {
             if (!r.ok) throw new Error(`PO fetch ${r.status}: ${(await r.text()).slice(0, 200)}`);
 
             const po = await r.json();
-            const cancelled = po.Cancelled === "tYES";
-            const closed = po.DocumentStatus === "bost_Close";
-            const poStatus = cancelled ? "cancelled" : closed ? "closed" : "open";
-
-            const patch: Record<string, unknown> = {
-              sap_purchase_order_status: poStatus,
-              sap_status_last_check_at: now,
-              sap_integration_error: null,
-              // Sucesso: limpa estado de erro e reseta backoff.
-              sap_sync_state: "ok",
-              sap_sync_attempts: 0,
-              sap_sync_next_retry_at: null,
-            };
-
-            let newExpenseStatus: string | undefined;
-            if (cancelled && row.status !== "cancelado") {
-              patch.status = "cancelado";
-              newExpenseStatus = "cancelado";
-            } else if (closed && (row.status === "pc_lancado" || row.status === "aprovado")) {
-              patch.status = "nf_entrada";
-              newExpenseStatus = "nf_entrada";
-            }
-
-            // Só marca "última tentativa" quando algo realmente mudou.
-            const poStatusChanged = row.sap_purchase_order_status !== poStatus;
-            if (poStatusChanged || newExpenseStatus) {
-              patch.sap_integration_last_attempt_at = now;
-            }
-
-
-            await sb.from("expenses").update(patch).eq("id", row.id);
-            results.push({ id: row.id, docEntry, poStatus, expenseStatus: newExpenseStatus });
+            await applyStatus(row, docEntry, po.DocumentStatus ?? null, po.Cancelled ?? null, "sl");
           } catch (e) {
             const msg = (e as Error).message;
             const info = await recordFailure(row, msg);
@@ -320,6 +288,7 @@ Deno.serve(async (req) => {
         await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
       }
     }
+
 
     const errors = results.filter((r) => r.error);
     const updated = results.filter((r) => r.expenseStatus);
