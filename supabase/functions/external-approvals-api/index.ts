@@ -307,6 +307,15 @@ async function listPending(
     const objCode = String(r.ObjectType || "");
     const pendingApprovers = userKey == null ? pendingApproversFromRequest(r, usersMap) : undefined;
 
+    const uniq = (arr: Array<string | undefined | null>) =>
+      Array.from(new Set(arr.map((v) => (v ?? "").toString().trim()).filter((v) => v.length > 0)));
+    const lines = draft?.DocumentLines || [];
+    const costCenters = uniq(lines.map((l) => l.CostingCode));
+    const departments = uniq(lines.map((l) => l.CostingCode2));
+    const projects = uniq([draft?.Project, ...lines.map((l) => l.ProjectCode)]);
+    const installments = draft?.DocumentInstallments || [];
+    const paymentDate = installments[0]?.DueDate || draft?.DocDueDate || "";
+
     result.push({
       approval_request_id: Number(r.Code || 0),
       step: myStep ?? (pendingApprovers?.[0]?.step ?? 1),
@@ -321,6 +330,16 @@ async function listPending(
       remarks: r.RemarksFromOriginator || draft?.Comments || "",
       creation_date: r.CreationDate || "",
       update_date: r.UpdateDate || "",
+      due_date: draft?.DocDueDate || "",
+      payment_date: paymentDate,
+      doc_date: draft?.DocDate || "",
+      tax_date: draft?.TaxDate || "",
+      cost_center: costCenters[0] || "",
+      cost_centers: costCenters,
+      department: departments[0] || "",
+      departments: departments,
+      project: projects[0] || "",
+      projects: projects,
       originator_id: r.OriginatorID || null,
       approver_user_code: userKey != null ? userCode : "",
       ...(pendingApprovers ? { pending_approvers: pendingApprovers } : {}),
