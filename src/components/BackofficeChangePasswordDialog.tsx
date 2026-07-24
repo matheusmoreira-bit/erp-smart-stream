@@ -1,17 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, CheckCircle2, AlertCircle, MinusCircle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, MinusCircle, RefreshCw } from "lucide-react";
 import {
   listSapTargetCompanies,
   changePasswordInCompanies,
   type MultiCompanyPasswordResult,
 } from "@/lib/sap-multi-password";
+import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
+import { checkPasswordPolicy } from "@/lib/password-policy";
 import { toast } from "sonner";
 
 const DEFAULT_RESET_PASSWORD = "Sap@2025";
+
+// Gera senha única forte para contornar o histórico de senhas do SAP
+// quando "Sap@2025" já tiver sido usada no passado pelo usuário.
+function generateUniquePassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const specials = "!@#$%&*?";
+  const pick = (src: string) => src[Math.floor(Math.random() * src.length)];
+  const rand = [pick(upper), pick(lower), pick(digits), pick(specials)];
+  const all = upper + lower + digits + specials;
+  for (let i = 0; i < 6; i++) rand.push(pick(all));
+  return rand.sort(() => Math.random() - 0.5).join("");
+}
 
 interface CompanyOption {
   company_db: string;
@@ -35,9 +52,12 @@ export function BackofficeChangePasswordDialog({
   const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
+  const [password, setPassword] = useState<string>(DEFAULT_RESET_PASSWORD);
+  const policy = useMemo(() => checkPasswordPolicy(password, userCode), [password, userCode]);
 
   useEffect(() => {
     if (!open) return;
+    setPassword(DEFAULT_RESET_PASSWORD);
     listSapTargetCompanies(currentCompanyDb).then((cs) => {
       setOtherCompanies(cs.map((c) => ({ company_db: c.company_db, display_name: c.display_name })));
     });
@@ -46,6 +66,7 @@ export function BackofficeChangePasswordDialog({
   const reset = () => {
     setSelected(new Set());
     setSummary(null);
+    setPassword(DEFAULT_RESET_PASSWORD);
   };
 
   const toggle = (db: string) => {
@@ -58,11 +79,15 @@ export function BackofficeChangePasswordDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!policy.valid) {
+      toast.error(`Senha não atende à política: ${policy.failed[0]?.label || "revise os requisitos"}`);
+      return;
+    }
     setLoading(true);
     setSummary(null);
     try {
       const targets = [currentCompanyDb, ...Array.from(selected)];
-      const results = await changePasswordInCompanies(userCode, DEFAULT_RESET_PASSWORD, targets);
+      const results = await changePasswordInCompanies(userCode, password, targets);
       const fixed = results.map((r) =>
         r.companyDB === currentCompanyDb && currentCompanyName
           ? { ...r, displayName: currentCompanyName }
@@ -133,12 +158,32 @@ export function BackofficeChangePasswordDialog({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
-              <Label className="text-sm">Nova senha (padrão)</Label>
-              <p className="text-lg font-mono text-foreground">{DEFAULT_RESET_PASSWORD}</p>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="new-password" className="text-sm">Nova senha temporária</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setPassword(generateUniquePassword())}
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" /> Gerar única
+                </Button>
+              </div>
+              <Input
+                id="new-password"
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="font-mono"
+                autoComplete="off"
+              />
+              <PasswordPolicyChecklist password={password} userCode={userCode} />
               <p className="text-xs text-muted-foreground">
-                O usuário receberá esta senha temporária e será solicitado a alterá-la no próximo login.
+                Padrão: <span className="font-mono">{DEFAULT_RESET_PASSWORD}</span>. Se o SAP recusar por "senha igual à anterior" (histórico de senhas), clique em <span className="font-medium">Gerar única</span> para uma senha nova, ou digite uma manualmente. O usuário será solicitado a alterá-la no próximo login.
               </p>
             </div>
+
 
             <div className="space-y-2 pt-2 border-t border-border">
               <Label className="text-sm">Empresas onde a senha será redefinida</Label>
@@ -163,7 +208,7 @@ export function BackofficeChangePasswordDialog({
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !policy.valid}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Redefinir senha
             </Button>
