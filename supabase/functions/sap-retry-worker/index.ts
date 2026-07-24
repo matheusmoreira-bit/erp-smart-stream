@@ -42,18 +42,27 @@ interface Dispatch {
   body: Record<string, unknown>;
 }
 
+// Payload conventions:
+//   - Optional `__endpoint`/`__body` fully override dispatch (used by flows
+//     that need extra fields, like pagcorp/synapse).
+//   - Otherwise we use a doc-type default that just passes the ref_id.
 function buildDispatch(docType: SapRetryDocType, refId: string, payload: Record<string, unknown>): Dispatch | null {
+  if (typeof payload.__endpoint === "string" && payload.__body && typeof payload.__body === "object") {
+    return { path: payload.__endpoint as string, body: payload.__body as Record<string, unknown> };
+  }
   switch (docType) {
     case "expense":
-      return { path: "expense-to-sap", body: { expense_id: refId, use_service_account: true, ...payload } };
+      return { path: "expense-to-sap", body: { expense_id: refId, use_service_account: true } };
     case "advance":
-      return { path: "advance-to-sap", body: { advance_id: refId, use_service_account: true, ...payload } };
+      return { path: "advance-to-sap", body: { advance_id: refId, use_service_account: true } };
     case "baixa":
-      return { path: "baixa-recebimento", body: { baixa_id: refId, ...payload } };
+      // baixa-recebimento requires a live SAP session; auto-retry not supported.
+      // Row stays in queue for visibility + manual "retry agora" via UI.
+      return null;
     case "pagcorp":
-      return { path: "pagcorp-to-sap", body: { doc_id: refId, ...payload } };
     case "synapse_pagcorp":
-      return { path: "synapse-pagcorp-sync", body: { transaction_id: refId, ...payload } };
+      // These require full body; caller must supply __endpoint/__body.
+      return null;
     default:
       return null;
   }
