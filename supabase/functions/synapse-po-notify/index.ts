@@ -2,6 +2,7 @@
 // Marcos: approved, grpo (NF entrada), ap_invoice (contas a pagar), ap_paid (baixado)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
+import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,18 +102,25 @@ async function resolveRequesterEmail(
   baseUrl: string,
   cookies: string,
   po: any,
+  userEmailMap?: Map<string, string>,
 ): Promise<string | null> {
   if (po.RequesterEmail && /\S+@\S+/.test(po.RequesterEmail)) return po.RequesterEmail;
-  if (po.RequesterCode) {
+  const code = po.RequesterCode ? String(po.RequesterCode) : "";
+  if (code && userEmailMap) {
+    const hit = userEmailMap.get(code.toLowerCase());
+    if (hit) return hit;
+  }
+  if (code) {
+    // Fallback (SL): usado apenas se o pré-carregamento hybrid não trouxe o usuário.
     try {
-      const u = await sapGet(baseUrl, cookies, `/Users('${po.RequesterCode}')?$select=EMail,UserCode`);
+      const u = await sapGet(baseUrl, cookies, `/Users('${code}')?$select=EMail,UserCode`);
       if (u?.EMail) return u.EMail;
     } catch (_) { /* ignore */ }
     try {
       const u2 = await sapGet(
         baseUrl,
         cookies,
-        `/Users?$filter=${encodeURIComponent(`UserCode eq '${po.RequesterCode}'`)}&$select=EMail&$top=1`,
+        `/Users?$filter=${encodeURIComponent(`UserCode eq '${code}'`)}&$select=EMail&$top=1`,
       );
       const v = (u2.value || [])[0];
       if (v?.EMail) return v.EMail;
@@ -226,6 +234,7 @@ async function processMilestone(
   po: any,
   milestone: string,
   linkedDoc?: any,
+  userEmailMap?: Map<string, string>,
 ): Promise<{ status: "skipped" | "sent" | "error"; reason?: string }> {
   if (await alreadyNotified(supabase, companyDb, po.DocEntry, milestone)) {
     return { status: "skipped", reason: "duplicate" };
@@ -233,7 +242,7 @@ async function processMilestone(
   const meta = MILESTONE_LABELS[milestone];
   const subject = `[${companyDb}] ${meta.subject} — PO #${po.DocNum}`;
   const html = renderEmailHtml({ milestone, po, companyDb, linkedDoc });
-  const recipient = await resolveRequesterEmail(baseUrl, cookies, po);
+  const recipient = await resolveRequesterEmail(baseUrl, cookies, po, userEmailMap);
 
   if (!recipient) {
     await recordNotification(supabase, {
@@ -276,13 +285,31 @@ async function processCompany(
   const sapCreds = await getSapCreds(supabase, companyDb);
   const { baseUrl, cookies } = await loginSap(sapCreds);
 
+  // Pré-carrega e-mails de usuários (HanaAPI V2 quando disponível, fallback SL).
+  const userEmailMap = new Map<string, string>();
+  try {
+    const sessionId = (cookies.match(/B1SESSION=([^;]+)/) || [])[1] || "";
+    const routeId = (cookies.match(/B1ROUTEID=([^;]+)/) || [])[1] || "";
+    if (sessionId) {
+      const usersResp = await listSapUsersHybrid({
+        sb: supabase, companyDb, baseUrl, sapSession: { sessionId, routeId },
+        database: (sapCreds.company_db || companyDb),
+      });
+      for (const u of usersResp.users) {
+        if (u.UserCode && u.eMail) userEmailMap.set(u.UserCode.toLowerCase(), u.eMail);
+      }
+    }
+  } catch (e) {
+    console.warn(`[synapse-po-notify] listSapUsersHybrid falhou (${companyDb}):`, (e as Error).message);
+  }
+
   // 1) Aprovados (todo PO existente é considerado aprovado)
   const pos = await fetchPurchaseOrders(baseUrl, cookies, daysBack);
   const posByEntry = new Map<number, any>();
   for (const po of pos) posByEntry.set(po.DocEntry, po);
 
   for (const po of pos) {
-    const r = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "approved");
+    const r = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "approved", undefined, userEmailMap);
     if (r.status === "sent") summary.approved++;
     else if (r.status === "error") { summary.errors++; errors.push(`approved/${po.DocEntry}: ${r.reason}`); }
     else summary.skipped++;
@@ -301,7 +328,7 @@ async function processCompany(
     for (const entry of linkedEntries) {
       const po = posByEntry.get(entry);
       if (!po) continue;
-      const r = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "grpo", doc);
+      const r = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "grpo", doc, userEmailMap);
       if (r.status === "sent") summary.grpo++;
       else if (r.status === "error") { summary.errors++; errors.push(`grpo/${po.DocEntry}: ${r.reason}`); }
       else summary.skipped++;
@@ -324,13 +351,13 @@ async function processCompany(
       const po = posByEntry.get(entry);
       if (!po) continue;
       // ap_invoice
-      const ri = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "ap_invoice", doc);
+      const ri = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "ap_invoice", doc, userEmailMap);
       if (ri.status === "sent") summary.ap_invoice++;
       else if (ri.status === "error") { summary.errors++; errors.push(`ap_invoice/${po.DocEntry}: ${ri.reason}`); }
       else summary.skipped++;
       // ap_paid
       if (closed) {
-        const rp = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "ap_paid", doc);
+        const rp = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "ap_paid", doc, userEmailMap);
         if (rp.status === "sent") summary.ap_paid++;
         else if (rp.status === "error") { summary.errors++; errors.push(`ap_paid/${po.DocEntry}: ${rp.reason}`); }
         else summary.skipped++;

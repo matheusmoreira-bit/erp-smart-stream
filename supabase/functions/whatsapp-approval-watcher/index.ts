@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
+import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
@@ -78,30 +79,8 @@ async function sapLogout(baseUrl: string, s: { sessionId: string; routeId: strin
   } catch { /* ignore */ }
 }
 
-async function sapFetchAllUsers(
-  baseUrl: string,
-  s: { sessionId: string; routeId: string },
-): Promise<SapUserMini[]> {
-  const all: SapUserMini[] = [];
-  let skip = 0;
-  const pageSize = 100;
-  for (let page = 0; page < 50; page++) {
-    const url = `${baseUrl}/Users?$select=UserCode,eMail,MobilePhoneNumber&$top=${pageSize}&$skip=${skip}`;
-    const resp = await fetch(url, {
-      headers: {
-        Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}`,
-        Prefer: "odata.maxpagesize=" + pageSize,
-      },
-    });
-    if (!resp.ok) break;
-    const json = await resp.json().catch(() => null);
-    const rows: SapUserMini[] = json?.value || [];
-    all.push(...rows);
-    if (rows.length < pageSize) break;
-    skip += pageSize;
-  }
-  return all;
-}
+// (removido) sapFetchAllUsers — a listagem de usuários agora usa
+// `listSapUsersHybrid` (HanaAPI V2 quando disponível, com fallback ao SL).
 
 async function fetchApprovals(
   companyDb: string,
@@ -194,10 +173,18 @@ async function processCompany(
   }
 
   try {
-    const [approvals, sapUsers] = await Promise.all([
+    const [approvals, usersResp] = await Promise.all([
       fetchApprovals(company.company_db, dbName, session.sessionId, creds.hana_api_url),
-      sapFetchAllUsers(baseUrl, session),
+      listSapUsersHybrid({
+        sb,
+        companyDb: company.company_db,
+        baseUrl,
+        sapSession: session,
+        database: dbName,
+        needsPhone: true,
+      }),
     ]);
+    const sapUsers = usersResp.users;
 
     // mapas auxiliares
     const usersByEmail = new Map<string, SapUserMini>();

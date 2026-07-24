@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+import { findSapUserHybrid } from "../_shared/sap-users-hybrid.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -136,7 +137,16 @@ Deno.serve(async (req) => {
         const baseUrl = await getBaseUrl(sb, c.company_db);
         const sess = await sapLogin(baseUrl, creds.sapCompanyDb, creds.username, creds.password);
         try {
-          const row = await findUser(sess, userCode, emailHint);
+          // HanaAPI V2 (VW_USERS) quando a empresa tem HanaAPI habilitada; senão SL.
+          const row = await findSapUserHybrid({
+            sb,
+            companyDb: c.company_db,
+            baseUrl,
+            sapSession: { sessionId: sess.s, routeId: sess.r },
+            database: creds.sapCompanyDb,
+            userCode,
+            email: emailHint,
+          });
           if (row?.UserCode) {
             hits.push({
               company_db: c.company_db,
