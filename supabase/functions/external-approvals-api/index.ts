@@ -147,7 +147,7 @@ async function getCompanyConfig(companyDB: string) {
   return { baseUrl: url, username, password, sapCompanyDb };
 }
 
-async function sapLogin(cfg: { baseUrl: string; username: string; password: string; sapCompanyDb: string }): Promise<SapSession> {
+async function sapLoginOnce(cfg: { baseUrl: string; username: string; password: string; sapCompanyDb: string }): Promise<SapSession> {
   const resp = await fetch(`${cfg.baseUrl}/Login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -155,13 +155,35 @@ async function sapLogin(cfg: { baseUrl: string; username: string; password: stri
   });
   if (!resp.ok) {
     const t = await resp.text();
-    throw new Error(`Falha no login SAP (${resp.status}): ${t.slice(0, 300)}`);
+    const err = new Error(`Falha no login SAP (${resp.status}): ${t.slice(0, 300)}`);
+    // deno-lint-ignore no-explicit-any
+    (err as any).body = t;
+    // deno-lint-ignore no-explicit-any
+    (err as any).status = resp.status;
+    throw err;
   }
   const data = await resp.json();
   const setCookie = resp.headers.get("set-cookie") || "";
   const sId = setCookie.match(/B1SESSION=([^;]+)/)?.[1] || data.SessionId;
   const rId = setCookie.match(/ROUTEID=([^;]+)/)?.[1] || "";
   return { sessionId: sId, routeId: rId, baseUrl: cfg.baseUrl };
+}
+
+async function sapLogin(cfg: { baseUrl: string; username: string; password: string; sapCompanyDb: string }): Promise<SapSession> {
+  try {
+    return await sapLoginOnce(cfg);
+  } catch (e) {
+    // deno-lint-ignore no-explicit-any
+    const body = String((e as any)?.body || (e instanceof Error ? e.message : ""));
+    const looksSaml = /SAML Login Failed|SSO|user.*disabled|password.*expired|Invalid.*credentials/i.test(body);
+    const fbUser = Deno.env.get("SAP_FALLBACK_ADMIN_USERNAME");
+    const fbPass = Deno.env.get("SAP_FALLBACK_ADMIN_PASSWORD");
+    if (looksSaml && fbUser && fbPass && (fbUser !== cfg.username || fbPass !== cfg.password)) {
+      console.warn(`[external-approvals-api] SAP login falhou para ${cfg.username}@${cfg.sapCompanyDb} (${body.slice(0, 120)}). Tentando fallback admin.`);
+      return await sapLoginOnce({ ...cfg, username: fbUser, password: fbPass });
+    }
+    throw e;
+  }
 }
 
 async function sapLogout(s: SapSession) {
