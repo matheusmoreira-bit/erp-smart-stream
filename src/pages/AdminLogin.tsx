@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Shield, Lock, LogIn, Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { lovable } from "@/integrations/lovable/index";
+import { supabase } from "@/integrations/supabase/client";
 import { PageTitle } from "@/components/PageTitle";
 
 export default function BackofficeLogin() {
@@ -18,6 +19,14 @@ export default function BackofficeLogin() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [existingEmail, setExistingEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setExistingEmail(session?.user?.email ?? null);
+    });
+  }, []);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +93,17 @@ export default function BackofficeLogin() {
         </div>
 
         <div className="glass-card p-6 space-y-5">
+          {existingEmail && (
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => navigate("/backoffice")}
+            >
+              <LogIn className="w-4 h-4 mr-2" />
+              Continuar como {existingEmail}
+            </Button>
+          )}
+
           {/* Google Login */}
           <Button
             type="button"
@@ -102,8 +122,9 @@ export default function BackofficeLogin() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
             )}
-            Entrar com Google
+            {existingEmail ? "Entrar com outra conta Google" : "Entrar com Google"}
           </Button>
+
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
