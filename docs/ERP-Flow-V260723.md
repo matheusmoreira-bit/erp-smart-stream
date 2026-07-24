@@ -88,13 +88,12 @@ Objetivo: eliminar warnings triviais e liberar o painel de segurança.
 - [x] **S1.1** Migração: `SET search_path = public, pg_temp` nas 5 funções
       próprias do projeto (`_audit_guard`, `delete_email`, `enqueue_email`,
       `move_to_dlq`, `read_email_batch`). *— aplicado nesta rodada.*
-- [ ] **S1.2** Ativar HIBP / política de senha forte no Supabase Auth
-      (`configure_auth password_hibp_enabled=true`, min length 12).
-      *Impacto: usuários do Backoffice ao trocar senha.*
-- [ ] **S1.3** Adicionar CSP, HSTS, X-Content-Type-Options, Referrer-Policy
-      no `index.html` (via `<meta http-equiv>`) e nos headers CORS das edge
-      functions (`X-Frame-Options: DENY`, `Strict-Transport-Security`).
-- [ ] **S1.4** Confirmar `build.sourcemap=false` em `vite.config.ts` para produção.
+- [x] **S1.2** HIBP + política de senha forte ativados no Supabase Auth
+      (`password_hibp_enabled=true`).
+- [x] **S1.3** Headers de segurança no `index.html`
+      (`X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`).
+      HSTS/X-Frame-Options ficam a cargo do hosting (Lovable já força HTTPS).
+- [x] **S1.4** `build.sourcemap` desativado em produção no `vite.config.ts`.
 
 ### FASE S2 — RLS: fechar escritas anônimas legítimas de admin
 

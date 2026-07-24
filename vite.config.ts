@@ -19,4 +19,8 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },
+  build: {
+    // S1.4 — não publicar source maps em produção (evita expor código-fonte).
+    sourcemap: mode === "development",
+  },
 }));
