@@ -84,6 +84,11 @@ export function SapLoginForm() {
   const isStateless = (erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite");
   const [googleLoading, setGoogleLoading] = useState(false);
   const postRedirectHandledRef = useRef(false);
+  // Contador de tentativas com credenciais inválidas por (empresa|usuário).
+  // Após 2 falhas consecutivas exibimos aviso de que a próxima trava o usuário
+  // no SAP B1 (política padrão bloqueia após 3 tentativas).
+  const failedAttemptsRef = useRef<Map<string, number>>(new Map());
+  const attemptKey = (db: string, user: string) => `${db}::${user.trim().toLowerCase()}`;
   const erpInfo = ERP_LABELS[erpType] || ERP_LABELS.sap;
   const ErpIcon = erpInfo.icon;
 
