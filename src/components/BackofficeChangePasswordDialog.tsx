@@ -52,9 +52,12 @@ export function BackofficeChangePasswordDialog({
   const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
+  const [password, setPassword] = useState<string>(DEFAULT_RESET_PASSWORD);
+  const policy = useMemo(() => checkPasswordPolicy(password, userCode), [password, userCode]);
 
   useEffect(() => {
     if (!open) return;
+    setPassword(DEFAULT_RESET_PASSWORD);
     listSapTargetCompanies(currentCompanyDb).then((cs) => {
       setOtherCompanies(cs.map((c) => ({ company_db: c.company_db, display_name: c.display_name })));
     });
@@ -63,6 +66,7 @@ export function BackofficeChangePasswordDialog({
   const reset = () => {
     setSelected(new Set());
     setSummary(null);
+    setPassword(DEFAULT_RESET_PASSWORD);
   };
 
   const toggle = (db: string) => {
