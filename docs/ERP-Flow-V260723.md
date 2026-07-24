@@ -221,7 +221,14 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 
 ### FASE O1 — Observabilidade
 
-- [ ] Ativar `analytics--read_project_analytics` como fonte no Backoffice.
+- [x] **O1.1 (24/07/2026)** — Card "Atividade do sistema" no Backoffice
+      (`/backoffice/sap-sync-runs`) agregando janelas 24h/7d/30d: despesas
+      criadas/integradas, decisões de aprovação, solicitantes e aprovadores
+      ativos, execuções e erros de sync SAP, integrações PagCorp/NF, chamadas
+      e erros de edge functions, e fila de retry pendente. Backend: RPC
+      `get_system_activity(_hours)` SECURITY DEFINER, `SET search_path`,
+      EXECUTE só para `authenticated`/`service_role` (bloqueia leitura
+      se não for admin via `has_role`).
 - [x] **O1.2 (24/07/2026)** — Dashboard "Latência de Edge Functions" com p50/p95/p99,
       taxa de erro e contagem por função em janelas 1h/24h/7d. Infra:
       tabela `edge_function_metrics` (RLS admin-only, service_role write),
@@ -259,8 +266,17 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 - [x] Responsividade mobile de tabelas — `src/components/ui/table.tsx` já
       envolve toda tabela em `overflow-auto`; nenhuma tabela shadcn quebra
       layout em telas pequenas.
-- [ ] Acessibilidade (foco, contraste, labels de ícone).
-- [ ] Empty states e loaders coerentes.
+- [x] **Acessibilidade (24/07/2026)** — todos os botões ghost `size="icon"`
+      de voltar (`navigate(...)`) receberam `aria-label="Voltar"` em 17 páginas
+      (Users, IdpSync, NfEntrada, Synapse, LicenseImport, IntegrationsMonitor,
+      IntegrationHistory, FiscalAudit, PagCorp, PagCorpMapping,
+      PagCorpNondeductible, FinancialReview, UserActivity, UserProductivity,
+      LicenseAnalysis, AuditTrail, AuditLog). Radix/shadcn primitives já
+      cobrem o restante do ARIA (Dialog, DropdownMenu, Popover).
+- [x] **Empty states coerentes (24/07/2026)** — novo `src/components/EmptyState.tsx`
+      (ícone + título + descrição + ação opcional, `role="status"`).
+      Aplicado em `SapSyncRuns` como referência; deve ser reutilizado nas
+      próximas telas que ainda mostram texto solto quando vazias.
 
 ---
 
