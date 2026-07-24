@@ -203,28 +203,90 @@ async function fetchDraftBrief(s: SapSession, draftEntry: number): Promise<SLDra
   }
 }
 
-async function listPendingForUser(s: SapSession, userKey: number, userCode: string) {
+async function fetchAllUsersMap(s: SapSession): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  try {
+    const data = (await sapGet(
+      s,
+      `Users?$select=InternalKey,UserCode&$top=2000`,
+    )) as { value?: Array<{ InternalKey?: number; UserCode?: string }> };
+    for (const u of data?.value || []) {
+      if (u.InternalKey != null) map.set(Number(u.InternalKey), String(u.UserCode || ""));
+    }
+  } catch (e) {
+    console.warn("fetchAllUsersMap falhou:", e);
+  }
+  return map;
+}
+
+function pendingApproversFromRequest(
+  r: SLApprovalRequest,
+  usersMap: Map<number, string>,
+): Array<{ user_id: number; user_code: string; step: number }> {
+  const seen = new Set<string>();
+  const out: Array<{ user_id: number; user_code: string; step: number }> = [];
+  const push = (uid: number | undefined, step: number | undefined) => {
+    if (!uid) return;
+    const s = Number(step || 1);
+    const key = `${uid}:${s}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ user_id: Number(uid), user_code: usersMap.get(Number(uid)) || "", step: s });
+  };
+  for (const d of r.ApprovalRequestDecisions || []) {
+    if (d.Status === "ardPending" || d.Status === "asWithoutDecision" || !d.Status) {
+      push(d.UserID, d.ApprovalRequestStep);
+    }
+  }
+  for (const l of r.ApprovalRequestLines || []) {
+    if (l.Status === "asPending" || l.Status === "ardPending" || !l.Status) {
+      push(l.UserID, l.ApprovalRequestStep);
+    }
+  }
+  return out;
+}
+
+/**
+ * Lista aprovações pendentes.
+ * - Se `userKey` for `null` → lista TODAS pendentes da empresa e anexa
+ *   `pending_approvers` (lista de aprovadores atuais com step).
+ * - Se `userKey` for informado → filtra apenas os documentos onde o usuário
+ *   tem pendência.
+ */
+async function listPending(
+  s: SapSession,
+  userKey: number | null,
+  userCode: string,
+) {
   const data = (await sapGet(
     s,
     `ApprovalRequests?$filter=Status eq 'arsPending'&$orderby=CreationDate desc&$top=200`,
   )) as { value?: SLApprovalRequest[] };
   const raw = data?.value || [];
 
+  const usersMap = userKey == null ? await fetchAllUsersMap(s) : new Map<number, string>();
+
   const result: Array<Record<string, unknown>> = [];
   for (const r of raw) {
-    const myLine = (r.ApprovalRequestLines || []).find(
-      (l) => Number(l.UserID) === userKey && (l.Status === "asPending" || l.Status === "ardPending" || !l.Status),
-    );
-    const myPendingDecision = (r.ApprovalRequestDecisions || []).find(
-      (d) => Number(d.UserID) === userKey && (d.Status === "ardPending" || d.Status === "asWithoutDecision" || !d.Status),
-    );
-    if (!myLine && !myPendingDecision) continue;
+    let myStep: number | null = null;
+    if (userKey != null) {
+      const myLine = (r.ApprovalRequestLines || []).find(
+        (l) => Number(l.UserID) === userKey && (l.Status === "asPending" || l.Status === "ardPending" || !l.Status),
+      );
+      const myPendingDecision = (r.ApprovalRequestDecisions || []).find(
+        (d) => Number(d.UserID) === userKey && (d.Status === "ardPending" || d.Status === "asWithoutDecision" || !d.Status),
+      );
+      if (!myLine && !myPendingDecision) continue;
+      myStep = Number((myPendingDecision?.ApprovalRequestStep ?? myLine?.ApprovalRequestStep) || 1);
+    }
 
     const draft = r.DraftEntry ? await fetchDraftBrief(s, Number(r.DraftEntry)) : null;
     const objCode = String(r.ObjectType || "");
+    const pendingApprovers = userKey == null ? pendingApproversFromRequest(r, usersMap) : undefined;
+
     result.push({
       approval_request_id: Number(r.Code || 0),
-      step: Number((myPendingDecision?.ApprovalRequestStep ?? myLine?.ApprovalRequestStep) || 1),
+      step: myStep ?? (pendingApprovers?.[0]?.step ?? 1),
       doc_object_type: objCode,
       doc_type_name: OBJECT_CODE_TO_NAME[objCode] || `Documento (${objCode})`,
       doc_entry: Number(r.DraftEntry || draft?.DocEntry || 0),
@@ -237,7 +299,8 @@ async function listPendingForUser(s: SapSession, userKey: number, userCode: stri
       creation_date: r.CreationDate || "",
       update_date: r.UpdateDate || "",
       originator_id: r.OriginatorID || null,
-      approver_user_code: userCode,
+      approver_user_code: userKey != null ? userCode : "",
+      ...(pendingApprovers ? { pending_approvers: pendingApprovers } : {}),
     });
   }
   return result;
