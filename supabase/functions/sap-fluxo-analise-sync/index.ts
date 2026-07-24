@@ -1,48 +1,21 @@
 // Edge function: sap-fluxo-analise-sync
 // Sincroniza a view HANA VW_FIN_ANALISE_FLUXO em public.sap_fluxo_analise_cache
 // para cada empresa SAP com credenciais Apiuser configuradas.
-//
-// A view retorna uma linha por documento do fluxo financeiro, com as datas
-// de atualização do esboço, aprovação, lançamento, vencimento e pagamento,
-// além dos IDs que amarram Esboço → Pedido → NF → CP.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { fetchHanaView } from "../_shared/hana-views.ts";
-
-const TIME_BUDGET_MS = 90_000;
+import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
+import {
+  buildSapBaseUrl,
+  loadSapCreds,
+  runSapCacheWatcher,
+  sapLogoutSession,
+  sapSessionLogin,
+  type RunnerOpts,
+  type Sb,
+  type WatcherResult,
+} from "../_shared/sap-cache.ts";
 
 const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "SBO_OPENGAMING" };
-
-function buildBaseUrl(raw: string): string {
-  let url = raw.replace(/\/+$/, "");
-  if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
-  else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
-  return url;
-}
-
-async function sapLogin(baseUrl: string, u: string, p: string, db: string) {
-  const r = await fetch(`${baseUrl}/Login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ UserName: u, Password: p, CompanyDB: db }),
-  });
-  if (!r.ok) throw new Error(`Login SAP falhou ${r.status}: ${await r.text().catch(() => "")}`);
-  const json = await r.json();
-  const cookies = r.headers.get("set-cookie") || "";
-  const routeMatch = cookies.match(/B1ROUTEID=([^;]+)/);
-  return { sessionId: json.SessionId as string, routeId: routeMatch?.[1] ?? "" };
-}
-
-async function sapLogout(baseUrl: string, s: { sessionId: string; routeId: string }) {
-  try {
-    await fetch(`${baseUrl}/Logout`, {
-      method: "POST",
-      headers: { Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}` },
-    });
-  } catch { /* ignore */ }
-}
 
 function pick(row: Record<string, unknown>, ...keys: string[]): unknown {
   for (const k of keys) {
@@ -127,36 +100,18 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
   };
 }
 
-async function loadCreds(sb: any, companyDb: string): Promise<Record<string, string> | null> {
-  const { data, error } = await sb
-    .from("system_credentials")
-    .select("credential_key, credential_value")
-    .eq("system_name", "sap")
-    .eq("company_db", companyDb);
-  if (error) throw new Error(`Credenciais SAP erro: ${error.message}`);
-  const kv: Record<string, string> = {};
-  for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
-    kv[r.credential_key] = r.credential_value ?? "";
-  }
-  if (!kv.service_layer_url || !kv.username || !kv.password) return null;
-  if (kv.use_hana_db === "false") return null;
-  if ((kv.username || "").trim().toLowerCase() !== "apiuser") return null;
-  return kv;
-}
-
-async function syncCompany(sb: any, companyDb: string): Promise<{
-  companyDb: string; synced: number; skipped?: string; error?: string;
-}> {
+async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promise<WatcherResult> {
   if (isTestCompanyDb(companyDb)) return { companyDb, synced: 0, skipped: "test_base" };
-  const creds = await loadCreds(sb, companyDb);
+  const creds = await loadSapCreds(sb, companyDb, { requireApiuser: true, requireHana: true });
   if (!creds) return { companyDb, synced: 0, skipped: "no_credentials_or_not_apiuser" };
 
-  const baseUrl = buildBaseUrl(creds.service_layer_url);
+  const baseUrl = buildSapBaseUrl(creds.service_layer_url);
   const dbName = creds.company_db || companyDb;
   const schema = HANA_SCHEMA_OVERRIDES[companyDb] || dbName;
+
   let session: { sessionId: string; routeId: string };
   try {
-    session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
+    session = await sapSessionLogin(baseUrl, dbName, creds.username, creds.password);
   } catch (e) {
     return { companyDb, synced: 0, error: (e as Error).message };
   }
@@ -191,7 +146,7 @@ async function syncCompany(sb: any, companyDb: string): Promise<{
   } catch (e) {
     lastError = (e as Error).message;
   } finally {
-    await sapLogout(baseUrl, session);
+    await sapLogoutSession(baseUrl, session);
   }
 
   const { data: prev } = await sb
@@ -213,57 +168,8 @@ async function syncCompany(sb: any, companyDb: string): Promise<{
   return { companyDb, synced, error: lastError ?? undefined };
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const gotLock = await tryWatcherLock(sb, "sap-fluxo-analise-sync", 10);
-  if (!gotLock) {
-    return new Response(JSON.stringify({ ok: true, skipped: "another_run_in_progress" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
-
-  const startedAt = Date.now();
-  const results: Array<{ companyDb: string; synced: number; skipped?: string; error?: string }> = [];
-
-  let onlyCompany: string | undefined;
-  try {
-    const url = new URL(req.url);
-    onlyCompany = url.searchParams.get("company_db") || undefined;
-    if (req.method === "POST") {
-      const body = await req.json().catch(() => ({}));
-      if (body?.company_db) onlyCompany = body.company_db;
-    }
-  } catch { /* ignore */ }
-
-  try {
-    const { data: creds, error } = await sb
-      .from("system_credentials")
-      .select("company_db")
-      .eq("system_name", "sap");
-    if (error) throw new Error(error.message);
-    let companyDbs = Array.from(new Set((creds || [])
-      .map((c: { company_db: string }) => c.company_db)
-      .filter(Boolean))) as string[];
-    if (onlyCompany) companyDbs = companyDbs.filter((c) => c === onlyCompany);
-
-    for (const companyDb of companyDbs) {
-      if (Date.now() - startedAt > TIME_BUDGET_MS) {
-        results.push({ companyDb, synced: 0, skipped: "time_budget_exceeded" });
-        continue;
-      }
-      try { results.push(await syncCompany(sb, companyDb)); }
-      catch (e) { results.push({ companyDb, synced: 0, error: (e as Error).message }); }
-    }
-
-    const totalSynced = results.reduce((s, r) => s + (r.synced || 0), 0);
-    await releaseWatcherLock(sb, "sap-fluxo-analise-sync", "ok", `synced=${totalSynced} companies=${companyDbs.length}`);
-    return new Response(JSON.stringify({ ok: true, total_synced: totalSynced, results }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  } catch (e) {
-    await releaseWatcherLock(sb, "sap-fluxo-analise-sync", "error", (e as Error).message);
-    return new Response(JSON.stringify({ error: (e as Error).message, results }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
-});
-// schema fix: SBO_OPENGAMING 1784592109
+Deno.serve((req) => runSapCacheWatcher(req, {
+  watcherName: "sap-fluxo-analise-sync",
+  supportBackfill: false,
+  syncCompany,
+}));

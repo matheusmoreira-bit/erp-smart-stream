@@ -186,8 +186,14 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 
 ### FASE B1 — Backend / integrações (dívida técnica de médio prazo)
 
-- [ ] Consolidar 4 caches SAP (`sap_cache`, `sap_purchase_order_cache`,
-      `sap_nf_entrada_cache`, `sap_vendor_payment_cache`) sob helper único.
+- [x] **B1.1 (24/07/2026)** — Consolidados 4 watchers de cache SAP
+      (`sap-po-cache-sync`, `sap-nf-entrada-sync`, `sap-vendor-payment-cache-sync`,
+      `sap-fluxo-analise-sync`) sob `supabase/functions/_shared/sap-cache.ts`:
+      helpers únicos de `buildSapBaseUrl` / `sapCookieLogin` / `sapSessionLogin` /
+      `sapLogout` / `loadSapCreds` / `toIsoTimestamp`, runner `runSapCacheWatcher`
+      (lock + parse + iteração por company_db + time budget) e pager OData
+      incremental `runIncrementalPager` (cursor UpdateDate + DocEntry, upsert +
+      state). Reduziu ~1000 → ~380 linhas de código específico.
 - [x] **B1.2 (24/07/2026)** — Dashboard de retries com métricas agregadas:
       taxa de sucesso, recuperados vs esgotados, média de tentativas,
       falhas por categoria e recuperação por doc_type — janelas 1h/24h/7d/30d.
