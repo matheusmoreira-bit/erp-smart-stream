@@ -25,6 +25,7 @@ interface ErpContextType {
   isLoading: boolean;
   error: string | null;
   login: (userName: string, password: string, companyDB: string, erpType?: ErpType) => Promise<void>;
+  loginManaged: (companyDB: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -160,6 +161,37 @@ export function SapProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginManaged = useCallback(async (companyDB: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { sapAutoLogin } = await import("@/lib/user-sap-credentials");
+      const result = await sapAutoLogin(companyDB);
+      const timeoutMin = Math.min(Math.max(result.sessionTimeout || 30, 1), 30);
+      setSession({
+        erpType: "sap",
+        companyDB: result.companyDB,
+        userName: result.sapUser,
+        sessionId: result.sessionId,
+        routeId: result.routeId,
+        expiresAt: Date.now() + timeoutMin * 60 * 1000,
+      });
+      const { logAuditAction } = await import("@/hooks/useAuditLog");
+      await logAuditAction({
+        action: "sap_managed_login",
+        entity_type: "erp_session",
+        actor_email: result.sapUser,
+        company_db: companyDB,
+        details: { companyDB },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao conectar");
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setSession]);
+
   const logout = useCallback(async () => {
     if (session?.erpType === "sap" && session.sessionId) {
       await sapLogout({
@@ -236,7 +268,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
   }, [session?.erpType, session?.sessionId, session?.sapAuthToken, session?.routeId, session?.companyDB, session?.userName, session?.isSuperUser, session?.expiresAt, setSession]);
 
   return (
-    <ErpContext.Provider value={{ session, isLoading, error, login, logout }}>
+    <ErpContext.Provider value={{ session, isLoading, error, login, loginManaged, logout }}>
       {children}
     </ErpContext.Provider>
   );
@@ -278,6 +310,7 @@ export function useSap() {
     isLoading: ctx.isLoading,
     error: ctx.error,
     login: ctx.login,
+    loginManaged: ctx.loginManaged,
     logout: ctx.logout,
   };
 }
