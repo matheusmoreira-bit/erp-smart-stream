@@ -33,11 +33,11 @@ type Row = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-blue-100 text-blue-800",
-  in_flight: "bg-amber-100 text-amber-800",
-  succeeded: "bg-green-100 text-green-800",
-  exhausted: "bg-red-100 text-red-800",
-  cancelled: "bg-gray-100 text-gray-800",
+  pending: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  in_flight: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  succeeded: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  exhausted: "bg-destructive/15 text-destructive",
+  cancelled: "bg-muted text-muted-foreground",
 };
 
 function fmtDate(iso: string | null) {

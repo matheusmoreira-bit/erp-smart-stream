@@ -250,11 +250,15 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 
 ### FASE UX — UI/UX (executar por último, conforme solicitado)
 
-- [ ] Unificar tokens de design (`index.css`) — hoje há mix de cores hardcoded
-      em `src/pages/*` (rodar `rg "text-\[#|bg-\[#" src/`).
+- [x] Unificar tokens de design — varredura em `src/` não encontrou `text-[#...]`
+      nem `bg-[#...]` hardcoded. Cores literais restantes (`emerald/amber/red`
+      em Approvals/TestCompanyBanner) são semânticas intencionais (aprovar,
+      rejeitar, alerta) e permanecem. `BackofficeRetryQueue` migrado para
+      paleta compatível com dark mode (`bg-*-500/15` + tokens).
 - [ ] Padronizar `PageHeader` em todas as rotas.
-- [ ] Revisão de responsividade mobile (Bottom Nav já existe, mas várias
-      tabelas ficam sem scroll horizontal).
+- [x] Responsividade mobile de tabelas — `src/components/ui/table.tsx` já
+      envolve toda tabela em `overflow-auto`; nenhuma tabela shadcn quebra
+      layout em telas pequenas.
 - [ ] Acessibilidade (foco, contraste, labels de ícone).
 - [ ] Empty states e loaders coerentes.
 
