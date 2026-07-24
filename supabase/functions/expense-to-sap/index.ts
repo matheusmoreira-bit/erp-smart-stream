@@ -1209,7 +1209,11 @@ Deno.serve(async (req) => {
         // Open Gaming: se o projeto não vier preenchido na linha nem no cabeçalho,
         // aplica fallback fixo "OPEN GAMING" (política interna da empresa).
         const projectFallback = expense.company_db === "open_gaming_sa" ? "OPEN GAMING" : "";
-        const resolvedProject = it.project || expense.project || projectFallback;
+        // Empresas sem cadastro de projetos no SAP: integrar sempre com ProjectCode = null.
+        const companiesWithoutProjects = new Set(["cactus_providers"]);
+        const resolvedProject = companiesWithoutProjects.has(expense.company_db)
+          ? ""
+          : (it.project || expense.project || projectFallback);
         if (resolvedProject) line.ProjectCode = resolvedProject;
         for (const k of Object.keys(line)) if (line[k] === undefined) delete line[k];
         return line;
