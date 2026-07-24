@@ -56,6 +56,13 @@ Respostas de erro de autenticação:
 
 ## 3. Operações
 
+> 🔎 **Escopo dos documentos retornados**
+>
+> A API retorna **apenas** aprovações cujo Draft foi criado pelo próprio
+> ERP Flow (despesas com `sap_doc_entry` registrado na base do ERP Flow).
+> Aprovações originadas diretamente no SAP B1, fora do fluxo do ERP Flow,
+> **não** aparecem nas respostas de `list`, mesmo estando pendentes no SAP.
+
 ### 3.1 Listar documentos pendentes
 
 Há dois modos:
