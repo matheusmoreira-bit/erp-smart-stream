@@ -1,0 +1,46 @@
+import { useNavigate } from "react-router-dom";
+import { useModuleAccess } from "@/hooks/usePermissions";
+import { HubTabs } from "@/components/HubTabs";
+
+export interface HubTabDef<K extends string> {
+  key: K;
+  label: string;
+  module: string;
+  path: string;
+  render: () => JSX.Element;
+}
+
+interface TabsHubProps<K extends string> {
+  tabs: readonly HubTabDef<K>[];
+  active: K;
+}
+
+/**
+ * Shared layout for hub pages (Auditoria, Integrações, Usuários).
+ * Filters tabs by module access, renders the sticky tab strip and the active body.
+ */
+export function TabsHub<K extends string>({ tabs, active }: TabsHubProps<K>) {
+  const navigate = useNavigate();
+  const { userModules } = useModuleAccess();
+
+  const visible = tabs.filter(
+    (t) => userModules.length === 0 || userModules.includes(t.module),
+  );
+
+  const activeTab = tabs.find((t) => t.key === active) ?? tabs[0];
+  const Body = activeTab?.render() ?? null;
+
+  return (
+    <div>
+      <HubTabs
+        tabs={visible.map((t) => ({ key: t.key, label: t.label }))}
+        active={active}
+        onChange={(key) => {
+          const target = tabs.find((t) => t.key === key);
+          if (target) navigate(target.path);
+        }}
+      />
+      {Body}
+    </div>
+  );
+}
