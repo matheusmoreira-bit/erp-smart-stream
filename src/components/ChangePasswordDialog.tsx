@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { checkPasswordPolicy } from "@/lib/password-policy";
 import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
+import { saveUserSapCredential } from "@/lib/user-sap-credentials";
 
 interface CompanyOption {
   company_db: string;
@@ -42,6 +43,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
   const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customPick, setCustomPick] = useState(false);
+  const [managed, setManaged] = useState(false);
   const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
 
   const isTest = (db: string) => db.toUpperCase().startsWith("TST");
@@ -119,6 +121,23 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
       );
 
       setSummary(allResults);
+
+      if (managed) {
+        const okDbs = allResults
+          .filter((r) => r.status === "success" || r.status === "skipped")
+          .map((r) => r.companyDB);
+        const saveResults = await Promise.allSettled(
+          okDbs.map((db) => saveUserSapCredential(db, session.userName, newPassword)),
+        );
+        const savedOk = saveResults.filter((r) => r.status === "fulfilled").length;
+        const savedFail = saveResults.length - savedOk;
+        if (savedOk > 0) {
+          toast.success(`Login gerenciado salvo em ${savedOk} empresa(s).`);
+        }
+        if (savedFail > 0) {
+          toast.warning(`Falha ao salvar login gerenciado em ${savedFail} empresa(s).`);
+        }
+      }
 
       const successes = allResults.filter((r) => r.status === "success").length;
       const skipped = allResults.filter((r) => r.status === "skipped").length;
@@ -276,6 +295,23 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
                 )}
               </div>
             )}
+
+            <div className="rounded-md border border-border p-3 space-y-1.5">
+              <label className="flex items-start gap-2 cursor-pointer text-sm">
+                <Checkbox
+                  checked={managed}
+                  onCheckedChange={(v) => setManaged(v === true)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-foreground">Tornar esta senha gerenciada pelo ERP Flow</div>
+                  <div className="text-xs text-muted-foreground">
+                    A senha será salva criptografada e vinculada às empresas selecionadas acima. Nos próximos logins você não precisará digitá-la — basta escolher a empresa.
+                  </div>
+                </div>
+              </label>
+            </div>
+
 
             <Button
               type="submit"
