@@ -815,14 +815,16 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
     });
   } catch (e) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
+      metricsCtx.errorCode = "UNAUTHORIZED";
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    metricsCtx.errorCode = e instanceof Error ? e.name : "unknown";
     console.error("sap-b1-proxy error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));
 // schema fix: SBO_OPENGAMING 1784592109
