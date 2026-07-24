@@ -137,11 +137,6 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
             Entrar com Google
           </Button>
 
-          <div className="text-[11px] text-muted-foreground text-center leading-relaxed">
-            Domínios permitidos:
-            <br />
-            {ALLOWED_DOMAINS.join(" · ")}
-          </div>
         </div>
       </motion.div>
     </div>
