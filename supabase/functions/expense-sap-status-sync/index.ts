@@ -158,7 +158,75 @@ Deno.serve(async (req) => {
       return { attempts, nextRetryAt };
     };
 
+    // Freshness do cache PO: 3h. Watcher sap-po-cache-sync roda a cada minuto (delta por
+    // UpdateDate), então em condições normais os dados estarão a segundos. Usamos margem
+    // ampla para tolerar janelas em que o cache está atrasado.
+    const CACHE_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+    const cacheCutoffIso = new Date(Date.now() - CACHE_MAX_AGE_MS).toISOString();
+
+    // Aplica um resultado de status (vindo de cache OU do SL) na expense.
+    const applyStatus = async (
+      row: ExpenseRow,
+      docEntry: number,
+      documentStatus: string | null,
+      cancelledRaw: string | null,
+      source: "cache" | "sl",
+    ) => {
+      const now = new Date().toISOString();
+      const cancelled = cancelledRaw === "tYES";
+      const closed = documentStatus === "bost_Close";
+      const poStatus = cancelled ? "cancelled" : closed ? "closed" : "open";
+      const patch: Record<string, unknown> = {
+        sap_purchase_order_status: poStatus,
+        sap_status_last_check_at: now,
+        sap_integration_error: null,
+        sap_sync_state: "ok",
+        sap_sync_attempts: 0,
+        sap_sync_next_retry_at: null,
+      };
+      let newExpenseStatus: string | undefined;
+      if (cancelled && row.status !== "cancelado") {
+        patch.status = "cancelado";
+        newExpenseStatus = "cancelado";
+      } else if (closed && (row.status === "pc_lancado" || row.status === "aprovado")) {
+        patch.status = "nf_entrada";
+        newExpenseStatus = "nf_entrada";
+      }
+      const poStatusChanged = row.sap_purchase_order_status !== poStatus;
+      if (poStatusChanged || newExpenseStatus) patch.sap_integration_last_attempt_at = now;
+      await sb.from("expenses").update(patch).eq("id", row.id);
+      results.push({ id: row.id, docEntry, poStatus, expenseStatus: newExpenseStatus, source } as typeof results[number] & { source?: string });
+    };
+
     for (const [companyDb, list] of byCompany) {
+      // 1) Cache-first: tenta resolver via sap_purchase_order_cache para evitar login SAP.
+      const docEntries = list
+        .map((r) => Number(r.sap_doc_entry))
+        .filter((n) => Number.isFinite(n));
+      const cacheMap = new Map<number, { document_status: string | null; cancelled: string | null }>();
+      if (docEntries.length) {
+        const { data: cacheRows } = await sb
+          .from("sap_purchase_order_cache")
+          .select("doc_entry, document_status, cancelled")
+          .eq("company_db", companyDb)
+          .in("doc_entry", docEntries)
+          .gte("synced_at", cacheCutoffIso);
+        for (const c of (cacheRows || []) as Array<{ doc_entry: number; document_status: string | null; cancelled: string | null }>) {
+          cacheMap.set(Number(c.doc_entry), { document_status: c.document_status, cancelled: c.cancelled });
+        }
+      }
+
+      const pending: ExpenseRow[] = [];
+      for (const row of list) {
+        const de = Number(row.sap_doc_entry);
+        const hit = cacheMap.get(de);
+        if (hit) await applyStatus(row, de, hit.document_status, hit.cancelled, "cache");
+        else pending.push(row);
+      }
+
+      if (pending.length === 0) continue;
+
+      // 2) Restantes → Service Layer (comportamento anterior).
       let cookie = "";
       let baseUrl = "";
       try {
@@ -167,8 +235,7 @@ Deno.serve(async (req) => {
         cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
       } catch (e) {
         const msg = (e as Error).message;
-        // Falha ao logar afeta todas as linhas dessa base; grava sync_error com backoff.
-        for (const row of list) {
+        for (const row of pending) {
           const info = await recordFailure(row, `SAP login: ${msg}`);
           results.push({ id: row.id, error: msg, attempts: info.attempts, nextRetryAt: info.nextRetryAt });
         }
