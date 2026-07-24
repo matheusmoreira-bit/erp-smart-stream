@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, RefreshCw, Lock, Unlock, KeyRound, Pencil, Search, Users, Copy } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, Lock, Unlock, KeyRound, Pencil, Search, Users, Copy, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useSapUsersAdmin, type SapAdminUser } from "@/hooks/useSapUsersAdmin";
 import { PageTitle } from "@/components/PageTitle";
 import { BackofficeChangePasswordDialog } from "@/components/BackofficeChangePasswordDialog";
+import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog";
 
 export default function SapUsersAdmin() {
   const navigate = useNavigate();
@@ -27,6 +28,7 @@ export default function SapUsersAdmin() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [pwdUser, setPwdUser] = useState<SapAdminUser | null>(null);
+  const [provisionUser, setProvisionUser] = useState<SapAdminUser | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -185,6 +187,15 @@ export default function SapUsersAdmin() {
                           <Button size="icon" variant="ghost" disabled={busy} onClick={() => handleResetPassword(u)} title="Redefinir senha">
                             <KeyRound className="w-4 h-4" />
                           </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            disabled={busy || !u.eMail}
+                            onClick={() => setProvisionUser(u)}
+                            title={u.eMail ? "Provisionar acesso gerenciado (senha aleatória em todas as empresas SAP)" : "Cadastre um e-mail para provisionar"}
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </Button>
                           <Button size="icon" variant="ghost" disabled={busy} onClick={() => handleToggleLock(u)} title={isLocked ? "Desbloquear" : "Bloquear"}>
                             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : isLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                           </Button>
@@ -241,6 +252,16 @@ export default function SapUsersAdmin() {
           currentCompanyDb={companyDb}
           currentCompanyName={companies.find((c) => c.company_db === companyDb)?.display_name}
           onDone={refresh}
+        />
+      )}
+
+      {provisionUser && provisionUser.eMail && (
+        <ProvisionSapAccessDialog
+          open={!!provisionUser}
+          onOpenChange={(v) => { if (!v) setProvisionUser(null); }}
+          targetEmail={provisionUser.eMail}
+          initialSapUser={provisionUser.UserCode}
+          initialCompanyDbs={[companyDb]}
         />
       )}
     </div>
