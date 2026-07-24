@@ -283,9 +283,21 @@ export function SapLoginForm() {
         lower.includes("getaddrinfo");
 
       if (isInvalidCreds) {
-        toast.error("Usuário ou senha incorretos", {
-          description: "Verifique suas credenciais e tente novamente.",
-        });
+        const key = attemptKey(companyDB, userName);
+        const prev = failedAttemptsRef.current.get(key) || 0;
+        const next = prev + 1;
+        failedAttemptsRef.current.set(key, next);
+        if (next >= 2) {
+          toast.error("Usuário ou senha incorretos", {
+            description:
+              "Atenção: mais uma tentativa incorreta irá bloquear o usuário no SAP. Se não lembrar a senha, contate o administrador para redefinir.",
+            duration: 8000,
+          });
+        } else {
+          toast.error("Usuário ou senha incorretos", {
+            description: "Verifique suas credenciais e tente novamente.",
+          });
+        }
       } else if (isLocked) {
         toast.error("Usuário bloqueado no ERP", {
           description: "Procure o administrador para desbloquear seu acesso.",
