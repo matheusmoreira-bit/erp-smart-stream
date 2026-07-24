@@ -128,6 +128,15 @@ Cada fix acompanha:
 
 Entregável: uma migração com blocos `REVOKE`/`GRANT` por função.
 
+**S3.1 aplicado (24/07/2026)** — 13 funções internas com `EXECUTE` revogado
+de PUBLIC/anon/authenticated (mantido apenas `service_role`):
+`archive_audit_trail`, `audit_trigger`, `cascade_delete_company_credentials`,
+`check_expense_action_idempotency_consistency`, `companies_auto_flag_test`,
+`copilot_read_query`, `delete_email`, `email_queue_dispatch`, `email_queue_wake`,
+`enable_audit_on`, `enqueue_email`, `move_to_dlq`, `read_email_batch`.
+Linter: **99 → 73 warnings**.
+
+
 ### FASE S4 — Autenticação e admin panel
 
 - [ ] MFA obrigatório para role `admin` (usar Supabase Auth MFA nativo).
