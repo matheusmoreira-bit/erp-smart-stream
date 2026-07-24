@@ -473,6 +473,19 @@ export function SapLoginForm() {
             </>
           )}
 
+          {/* Managed SAP login — password stored & rotated by ERP Flow */}
+          {isManagedSap && companyDB && (
+            <div className="text-xs text-muted-foreground p-3 rounded-lg bg-primary/5 border border-primary/30 space-y-1">
+              <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-primary" /> Login gerenciado pelo ERP Flow
+              </div>
+              <div>
+                Sua senha SAP é armazenada de forma criptografada e rotacionada pelo ERP Flow.
+                {cloudEmail ? <> Autenticado como <span className="font-medium text-foreground">{cloudEmail}</span>.</> : null}
+              </div>
+            </div>
+          )}
+
           {/* Stateless ERP info */}
           {isStateless && companyDB && !isOmie && (
             <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/20 border border-border">
