@@ -2,6 +2,7 @@
 // Marcos: approved, grpo (NF entrada), ap_invoice (contas a pagar), ap_paid (baixado)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
+import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
