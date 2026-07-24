@@ -61,6 +61,18 @@ interface SLApprovalRequest {
   ApprovalRequestDecisions?: SLDecision[];
   ApprovalRequestLines?: SLRequestLine[];
 }
+interface SLDocumentLine {
+  CostingCode?: string;
+  CostingCode2?: string;
+  CostingCode3?: string;
+  CostingCode4?: string;
+  CostingCode5?: string;
+  ProjectCode?: string;
+}
+interface SLInstallment {
+  DueDate?: string;
+  Total?: number;
+}
 interface SLDraft {
   DocEntry?: number;
   DocNum?: number;
@@ -69,7 +81,12 @@ interface SLDraft {
   CardCode?: string;
   CardName?: string;
   DocDate?: string;
+  DocDueDate?: string;
+  TaxDate?: string;
+  Project?: string;
   Comments?: string;
+  DocumentLines?: SLDocumentLine[];
+  DocumentInstallments?: SLInstallment[];
 }
 
 const OBJECT_CODE_TO_NAME: Record<string, string> = {
@@ -196,7 +213,7 @@ async function fetchDraftBrief(s: SapSession, draftEntry: number): Promise<SLDra
   try {
     return (await sapGet(
       s,
-      `Drafts(${draftEntry})?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate,Comments`,
+      `Drafts(${draftEntry})?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate,DocDueDate,TaxDate,Project,Comments,DocumentLines,DocumentInstallments`,
     )) as SLDraft;
   } catch {
     return null;
@@ -290,6 +307,15 @@ async function listPending(
     const objCode = String(r.ObjectType || "");
     const pendingApprovers = userKey == null ? pendingApproversFromRequest(r, usersMap) : undefined;
 
+    const uniq = (arr: Array<string | undefined | null>) =>
+      Array.from(new Set(arr.map((v) => (v ?? "").toString().trim()).filter((v) => v.length > 0)));
+    const lines = draft?.DocumentLines || [];
+    const costCenters = uniq(lines.map((l) => l.CostingCode));
+    const departments = uniq(lines.map((l) => l.CostingCode2));
+    const projects = uniq([draft?.Project, ...lines.map((l) => l.ProjectCode)]);
+    const installments = draft?.DocumentInstallments || [];
+    const paymentDate = installments[0]?.DueDate || draft?.DocDueDate || "";
+
     result.push({
       approval_request_id: Number(r.Code || 0),
       step: myStep ?? (pendingApprovers?.[0]?.step ?? 1),
@@ -304,6 +330,16 @@ async function listPending(
       remarks: r.RemarksFromOriginator || draft?.Comments || "",
       creation_date: r.CreationDate || "",
       update_date: r.UpdateDate || "",
+      due_date: draft?.DocDueDate || "",
+      payment_date: paymentDate,
+      doc_date: draft?.DocDate || "",
+      tax_date: draft?.TaxDate || "",
+      cost_center: costCenters[0] || "",
+      cost_centers: costCenters,
+      department: departments[0] || "",
+      departments: departments,
+      project: projects[0] || "",
+      projects: projects,
       originator_id: r.OriginatorID || null,
       approver_user_code: userKey != null ? userCode : "",
       ...(pendingApprovers ? { pending_approvers: pendingApprovers } : {}),
