@@ -141,14 +141,38 @@ export function useSapCachedList({
         }
       }
 
-      // 2. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP
+      // 2. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP.
+      //    Prefer the server-side Apiuser route (edge function sap-list-service)
+      //    so that results are consistent regardless of the currently signed-in
+      //    SAP user's authorizations. Fall back to the direct Service Layer call
+      //    (via the user session) only when Apiuser is unavailable.
       if (!session || session.erpType !== "sap" || !companyDB) {
         setIsLoading(false);
         return;
       }
 
-      const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
-      let rows: any[] = data?.value || [];
+      let rows: any[] | null = null;
+      try {
+        const { data: svcData, error: svcErr } = await supabase.functions.invoke(
+          "sap-list-service",
+          { body: { company_db: companyDB, endpoint, params: paramsRef.current } },
+        );
+        if (svcErr) throw svcErr;
+        if (svcData && Array.isArray(svcData.rows)) {
+          rows = svcData.rows as any[];
+        } else if (svcData?.code === "no_apiuser") {
+          rows = null; // fall through to user-session SL below
+        }
+      } catch (e) {
+        console.warn(`[useSapCachedList/${cacheKey}] sap-list-service falhou, usando SL do usuário:`, e);
+        rows = null;
+      }
+
+      if (rows === null) {
+        const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
+        rows = data?.value || [];
+      }
+
       // Filtra centros de custo auto-gerados pelo SAP (prefixo "Centr_")
       if (endpoint === "CostCenters" || endpoint === "ProfitCenters") {
         rows = rows.filter((r: any) => !String(r?.CenterCode || "").startsWith("Centr_"));
@@ -169,6 +193,7 @@ export function useSapCachedList({
             { onConflict: "cache_key,company_db" }
           );
       }
+
 
       setOptions(rows.map(mapRowRef.current));
     } catch (e) {

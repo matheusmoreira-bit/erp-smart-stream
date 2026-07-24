@@ -1,0 +1,1 @@
+DELETE FROM public.sap_cache WHERE cache_key LIKE 'items_%' OR cache_key LIKE 'suppliers_%' OR cache_key LIKE 'customers_%' OR cache_key LIKE 'items_all:%' OR cache_key IN ('cost_centers','cost_centers_all','projects','item_groups');
