@@ -35,7 +35,7 @@ function defaultSapUser(email: string): string {
 }
 
 export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, targetEmail, initialSapUser, initialCompanyDbs }: Props) {
-  const { companies, isLoading: loadingCompanies } = useCompanies(true);
+  const { companies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = companies.filter((c) => c.erp_type === "sap");
   const [selected, setSelected] = useState<Set<string>>(new Set(initialCompanyDbs || []));
   const [sapUser, setSapUser] = useState<string>(initialSapUser || defaultSapUser(targetEmail));
