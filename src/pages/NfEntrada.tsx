@@ -221,7 +221,7 @@ export default function NfEntrada() {
       <header className="sticky top-0 z-40 bg-card border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+            <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div>

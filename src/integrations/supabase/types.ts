@@ -5642,6 +5642,13 @@ export type Database = {
         }[]
       }
       get_sap_sync_health: { Args: { _last_n?: number }; Returns: Json }
+      get_system_activity: {
+        Args: { _hours?: number }
+        Returns: {
+          metric: string
+          value: number
+        }[]
+      }
       has_module_action: {
         Args: {
           _action: string

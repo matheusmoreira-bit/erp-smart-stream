@@ -330,7 +330,7 @@ export default function IntegrationsMonitor() {
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+            <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div className="flex items-center gap-3">
