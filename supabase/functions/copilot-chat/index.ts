@@ -1,6 +1,7 @@
 // Copilot IA (Backoffice) — chat com acesso ao banco + ações operacionais auditadas.
 // Baseado no padrão ai-assistant + report-ai-chat (SSE streaming da resposta final).
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { enforceRateLimit, rateLimitResponse } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
