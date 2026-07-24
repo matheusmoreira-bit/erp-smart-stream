@@ -4650,6 +4650,60 @@ export type Database = {
         }
         Relationships: []
       }
+      sap_retry_queue: {
+        Row: {
+          attempts: number
+          company_db: string | null
+          created_at: string
+          doc_type: string
+          error_category: string | null
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          max_attempts: number
+          next_attempt_at: string
+          notified_exhausted_at: string | null
+          payload: Json
+          ref_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          company_db?: string | null
+          created_at?: string
+          doc_type: string
+          error_category?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          notified_exhausted_at?: string | null
+          payload?: Json
+          ref_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          company_db?: string | null
+          created_at?: string
+          doc_type?: string
+          error_category?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          notified_exhausted_at?: string | null
+          payload?: Json
+          ref_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sap_vendor_payment_cache: {
         Row: {
           cancelled: string | null
