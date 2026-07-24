@@ -97,16 +97,17 @@ Objetivo: eliminar warnings triviais e liberar o painel de segurança.
 
 ### FASE S2 — RLS: fechar escritas anônimas legítimas de admin
 
-37 políticas `USING(true)`. Triagem:
+**Status: parcialmente concluída — linter 140 → 99 issues.**
 
-| Tabela | Ação proposta |
-|---|---|
-| `approval_rules`, `approval_rule_levels` | Escrita apenas via `Admin` app-role **ou** via edge function `service_role`. Anon lê. |
-| `sap_cache` | Anon escreve porque hoje o cache é populado a partir do cliente. **Migrar populate para edge function** `sap-*-cache-sync` e revogar INSERT/UPDATE/DELETE anon. |
-| `pagcorp_*` (target `authenticated`) | Estreitar por posse (`created_by=auth.uid()` ou `has_role('admin')`). |
-| `suppliers`, `user_profiles` | Estreitar por posse. |
-| `sap_fluxo_analise_*` (`service_role`) | Aceitar — só edge functions escrevem. |
-| `expense_action_idempotency` (`service_role only`) | Aceitar. |
+| Tabela | Status | Nota |
+|---|---|---|
+| `approval_rules`, `approval_rule_levels` | ✅ S2.1 | Escrita só admin/service_role |
+| `suppliers`, `user_profiles` | ✅ S2.2 | Escrita só admin/service_role |
+| `sap_cache` | ✅ S2.2 | INSERT/UPDATE só service_role; DELETE anon mantido (cache invalidation) |
+| `pagcorp_settlement_accounts`, `pagcorp_supplier_links`, `pagcorp_card_mapping`, `pagcorp_cards`, `pagcorp_nondeductible_expenses`, `pagcorp_integration_log` | ✅ S2.2 | Escrita só admin/service_role |
+| `sap_fluxo_analise_*` (`service_role`) | ⚠️ pendente | Aceitar — só edge functions escrevem |
+| `expense_action_idempotency` (`service_role only`) | ⚠️ pendente | Aceitar |
+| Remanescentes `USING(true)` para `authenticated` | ⚠️ triagem | Ver linter |
 
 Cada fix acompanha:
 - Migração com `DROP POLICY` + `CREATE POLICY` escopada.
