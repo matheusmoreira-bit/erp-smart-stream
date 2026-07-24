@@ -175,7 +175,10 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
       • `expense-approval-action`: 12/60s por (expense × IP).
       • `copilot-chat`: 20/60s por admin.
       • `external-approvals-api`: 30/60s por (company_db × user_code × IP).
-- [ ] Aplicar em: `report-ai-chat`, `cnpj-lookup`, `supplier-ai-extract`.
+- [x] **S5.3 (24/07/2026)** — Rate limit adicionado nos endpoints de IA/consulta:
+      • `report-ai-chat`: 20/60s por IP.
+      • `cnpj-lookup`: 30/60s por IP.
+      • `supplier-ai-extract`: 15/60s por IP.
 - [ ] Migrar 63 funções sem `getClaims` para o padrão oficial **quando** exigirem
       identidade de usuário Supabase (não SAP). A maioria continua legítima com
       `requireAdminOrSapSessionHeaders`.
