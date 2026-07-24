@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+import { findSapUserHybrid } from "../_shared/sap-users-hybrid.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
