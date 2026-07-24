@@ -1209,7 +1209,11 @@ Deno.serve(async (req) => {
         // Open Gaming: se o projeto não vier preenchido na linha nem no cabeçalho,
         // aplica fallback fixo "OPEN GAMING" (política interna da empresa).
         const projectFallback = expense.company_db === "open_gaming_sa" ? "OPEN GAMING" : "";
-        const resolvedProject = it.project || expense.project || projectFallback;
+        // Empresas sem cadastro de projetos no SAP: integrar sempre com ProjectCode = null.
+        const companiesWithoutProjects = new Set(["cactus_providers"]);
+        const resolvedProject = companiesWithoutProjects.has(expense.company_db)
+          ? ""
+          : (it.project || expense.project || projectFallback);
         if (resolvedProject) line.ProjectCode = resolvedProject;
         for (const k of Object.keys(line)) if (line[k] === undefined) delete line[k];
         return line;
@@ -1230,12 +1234,23 @@ Deno.serve(async (req) => {
         // (SBO_ANAGAMING requires every line to have ProjectCode). Retry once
         // forcing ProjectCode = "ANA GAMING" on lines that don't have one.
         const needsProjectFallback = /MARCA\/BRAND|\(PROJETO\)|-1116/i.test(msg1);
-        if (!needsProjectFallback) throw e1;
+        // Project "X does not exist" error → strip ProjectCode from all lines (company has no projects registered).
+        const projectDoesNotExist = /Project .* does not exist|540000156/i.test(msg1);
+        if (!needsProjectFallback && !projectDoesNotExist) throw e1;
         const lines = (sapPayload as any).DocumentLines as Array<Record<string, unknown>>;
-        for (const line of lines) {
-          if (!line.ProjectCode) line.ProjectCode = "ANA GAMING";
+        // Companies without a project registry (e.g. cactus_providers) must integrate with ProjectCode = null.
+        const companiesWithoutProjects = new Set(["cactus_providers"]);
+        const stripProjects = projectDoesNotExist || companiesWithoutProjects.has(expense.company_db);
+        if (stripProjects) {
+          for (const line of lines) delete line.ProjectCode;
+          if ((sapPayload as any).ProjectCode) delete (sapPayload as any).ProjectCode;
+          console.log("[expense-to-sap] Retrying PO with ProjectCode stripped due to:", msg1.slice(0, 200));
+        } else {
+          for (const line of lines) {
+            if (!line.ProjectCode) line.ProjectCode = "ANA GAMING";
+          }
+          console.log("[expense-to-sap] Retrying PO with ProjectCode=ANA GAMING fallback due to:", msg1.slice(0, 200));
         }
-        console.log("[expense-to-sap] Retrying PO with ProjectCode=ANA GAMING fallback due to:", msg1.slice(0, 200));
         lastSapPayload = sapPayload;
         sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
       }
