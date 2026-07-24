@@ -328,7 +328,7 @@ async function processCompany(
     for (const entry of linkedEntries) {
       const po = posByEntry.get(entry);
       if (!po) continue;
-      const r = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "grpo", doc);
+      const r = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "grpo", doc, userEmailMap);
       if (r.status === "sent") summary.grpo++;
       else if (r.status === "error") { summary.errors++; errors.push(`grpo/${po.DocEntry}: ${r.reason}`); }
       else summary.skipped++;
@@ -351,13 +351,13 @@ async function processCompany(
       const po = posByEntry.get(entry);
       if (!po) continue;
       // ap_invoice
-      const ri = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "ap_invoice", doc);
+      const ri = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "ap_invoice", doc, userEmailMap);
       if (ri.status === "sent") summary.ap_invoice++;
       else if (ri.status === "error") { summary.errors++; errors.push(`ap_invoice/${po.DocEntry}: ${ri.reason}`); }
       else summary.skipped++;
       // ap_paid
       if (closed) {
-        const rp = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "ap_paid", doc);
+        const rp = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "ap_paid", doc, userEmailMap);
         if (rp.status === "sent") summary.ap_paid++;
         else if (rp.status === "error") { summary.errors++; errors.push(`ap_paid/${po.DocEntry}: ${rp.reason}`); }
         else summary.skipped++;
