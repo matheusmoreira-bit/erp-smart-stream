@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
+import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
