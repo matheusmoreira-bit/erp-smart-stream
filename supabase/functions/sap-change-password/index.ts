@@ -159,6 +159,16 @@ Deno.serve(async (req) => {
       || (caller as { email?: string }).email
       || "";
 
+    // Rate limit: 5 tentativas de troca de senha por 5 min por usuário/IP.
+    const rlAdmin = service();
+    const rl = await enforceRateLimit(rlAdmin, {
+      scope: "sap-change-password",
+      identifier: callerUserCode || clientIpFrom(req),
+      max: 5,
+      windowSeconds: 300,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl, corsHeaders);
+
     const body = await req.json().catch(() => ({}));
     const userCode = String(body.user_code || callerUserCode || "").trim();
     const newPassword = String(body.new_password || "");
