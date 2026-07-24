@@ -128,13 +128,26 @@ Cada fix acompanha:
 
 Entregável: uma migração com blocos `REVOKE`/`GRANT` por função.
 
-**S3.1 aplicado (24/07/2026)** — 13 funções internas com `EXECUTE` revogado
-de PUBLIC/anon/authenticated (mantido apenas `service_role`):
-`archive_audit_trail`, `audit_trigger`, `cascade_delete_company_credentials`,
-`check_expense_action_idempotency_consistency`, `companies_auto_flag_test`,
-`copilot_read_query`, `delete_email`, `email_queue_dispatch`, `email_queue_wake`,
-`enable_audit_on`, `enqueue_email`, `move_to_dlq`, `read_email_batch`.
 Linter: **99 → 73 warnings**.
+
+**S3.2 aplicado (24/07/2026)** — 12 funções internas + `verify_audit_chain`:
+triggers (`sync_user_license_across_companies`, `notifications_skip_test_companies`,
+`sync_collab_phone_to_companies`, `set_baixa_criado_por`), helpers de edge
+(`register_external_api_success/failure`, `check_external_api_access`,
+`try_watcher_lock`, `release_watcher_lock`, `prune_old_integration_data`,
+`_run_pagcorp_attachment_backfill`, `create_item_variante`).
+`verify_audit_chain` restrito a `authenticated + service_role`.
+Linter: **73 → 50 warnings**.
+
+**S3.3 aplicado (24/07/2026)** — última rodada: `preview_next_codigo` e
+`purge_expense_action_idempotency` → só `service_role`; `can_access_audit_console`
+e `can_manage_employee_integration` → `authenticated + service_role`.
+Linter: **50 → 44 warnings**.
+
+**Fase S3 concluída.** As ~19 funções `SECURITY DEFINER` ainda anon-executáveis
+são **públicas por design** (a SPA usa chave anon; validam autorização
+internamente). Documentadas em `security-memory` para o scanner não reabrir.
+
 
 
 ### FASE S4 — Autenticação e admin panel
