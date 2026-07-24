@@ -7,7 +7,7 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
 const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 
-const DEFAULT_PHONES = ["5531999474353"]; // Douglas Ferreira (admin infra)
+const DEFAULT_PHONES: string[] = []; // configure via EDGE_METRICS_ALERT_PHONES
 
 const P95_THRESHOLD_MS = 10_000;
 const ERROR_RATE_THRESHOLD = 5; // percentual

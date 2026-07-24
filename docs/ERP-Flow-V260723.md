@@ -240,9 +240,13 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 
 ### FASE R1 — Refatoração / dívida
 
-- [ ] Deduplicar hubs (`ApprovalsHub`, `AuditHub`, `IntegrationsHub`,
-      `UsersHub`) — hoje há divergência de padrões de layout.
-- [ ] Remover páginas órfãs após auditoria de rotas em `App.tsx`.
+- [x] Deduplicar hubs (`AuditHub`, `IntegrationsHub`, `UsersHub`) — extraído
+      `src/components/TabsHub.tsx` com layout único (tabs + filtro por módulo +
+      roteamento). `ApprovalsHub` mantém lógica própria (sem tabs, apenas
+      chaveia via query param).
+- [x] Auditoria de rotas em `App.tsx`: nenhuma página órfã encontrada — todas
+      as `src/pages/*.tsx` estão referenciadas por `App.tsx` ou por um hub.
+
 
 ### FASE UX — UI/UX (executar por último, conforme solicitado)
 
