@@ -221,6 +221,36 @@ export function SapLoginForm() {
     }
     try {
       setGoogleLoading(true);
+
+      // Reuse existing Google session (from the gate) when available.
+      const { data: { session: existing } } = await supabase.auth.getSession();
+      if (existing?.user?.email) {
+        const email = existing.user.email;
+        const allowed = await isEmailAllowedForOmieCompany(email, companyDB);
+        if (!allowed) {
+          toast.error("Acesso não liberado", {
+            description: `Sua conta ${email} não está autorizada para esta empresa OMIE. Contate o administrador.`,
+          });
+          setGoogleLoading(false);
+          return;
+        }
+        await upsertGoogleIdpMapping({
+          email,
+          displayName: (existing.user.user_metadata?.full_name as string | undefined) || email,
+          idpUserId: existing.user.id || email,
+        });
+        const gate = await assertIdpBinding(email);
+        if (!gate.ok) {
+          toast.error("Vínculo de identidade obrigatório", { description: gate.reason });
+          setGoogleLoading(false);
+          return;
+        }
+        await login(email, "", companyDB, "omie");
+        toast.success("Conectado ao OMIE!");
+        setGoogleLoading(false);
+        return;
+      }
+
       sessionStorage.setItem(OMIE_PENDING_KEY, companyDB);
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin,
@@ -241,6 +271,7 @@ export function SapLoginForm() {
       });
     }
   };
+
 
 
   const handleSubmit = async (e: React.FormEvent) => {
