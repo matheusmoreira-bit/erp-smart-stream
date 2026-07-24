@@ -79,8 +79,8 @@ export function BackofficeChangePasswordDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!policy.valid) {
-      toast.error(`Senha não atende à política: ${policy.failed[0]?.label || "revise os requisitos"}`);
+    if (!password) {
+      toast.error("Informe uma senha");
       return;
     }
     setLoading(true);
