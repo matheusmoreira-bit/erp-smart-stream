@@ -188,8 +188,9 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 
 - [ ] Consolidar 4 caches SAP (`sap_cache`, `sap_purchase_order_cache`,
       `sap_nf_entrada_cache`, `sap_vendor_payment_cache`) sob helper único.
-- [ ] `sap-retry-worker` já existe — adicionar dashboard de retries
-      (hoje só `BackofficeRetryQueue.tsx` lista, sem métricas agregadas).
+- [x] **B1.2 (24/07/2026)** — Dashboard de retries com métricas agregadas:
+      taxa de sucesso, recuperados vs esgotados, média de tentativas,
+      falhas por categoria e recuperação por doc_type — janelas 1h/24h/7d/30d.
 - [ ] Migrar últimas 6 funções que ainda leem Service Layer diretamente
       para HanaAPI V2 (audit de `sap-*-cache-sync`, `sap-b1-proxy`).
 
