@@ -26,8 +26,12 @@ async function sendWhatsApp(to: string, message: string) {
   return { ok: resp.ok, status: resp.status, body: await resp.text().catch(() => "") };
 }
 
+import { weekendBlockResponse } from "../_shared/weekend-guard.ts";
+
 Deno.serve(withEdgeMetrics("edge-metrics-alerts", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const weekendBlock = await weekendBlockResponse(req, corsHeaders);
+  if (weekendBlock) return weekendBlock;
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
