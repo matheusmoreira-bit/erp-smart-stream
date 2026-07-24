@@ -642,6 +642,15 @@ Deno.serve(async (req) => {
     const { data: isAdmin } = await sbAdmin.rpc("has_role", { _user_id: userData.user.id, _role: "admin" });
     if (!isAdmin) return json({ error: "Acesso restrito a administradores." }, 403);
 
+    // Rate limit: IA é cara — 20 requisições/min por admin.
+    const rl = await enforceRateLimit(sbAdmin, {
+      scope: "copilot-chat",
+      identifier: userData.user.id,
+      max: 20,
+      windowSeconds: 60,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl, { ...corsHeaders, "Content-Type": "application/json" });
+
     const actor: Actor = { userId: userData.user.id, email: userData.user.email || "" };
 
     const { messages } = await req.json() as { messages: any[] };
