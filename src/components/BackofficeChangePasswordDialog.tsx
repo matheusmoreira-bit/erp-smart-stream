@@ -208,7 +208,7 @@ export function BackofficeChangePasswordDialog({
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !policy.valid}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Redefinir senha
             </Button>
