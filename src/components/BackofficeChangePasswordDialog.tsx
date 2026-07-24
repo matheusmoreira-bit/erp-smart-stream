@@ -1,17 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, CheckCircle2, AlertCircle, MinusCircle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, MinusCircle, RefreshCw } from "lucide-react";
 import {
   listSapTargetCompanies,
   changePasswordInCompanies,
   type MultiCompanyPasswordResult,
 } from "@/lib/sap-multi-password";
+import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
+import { checkPasswordPolicy } from "@/lib/password-policy";
 import { toast } from "sonner";
 
 const DEFAULT_RESET_PASSWORD = "Sap@2025";
+
+// Gera senha única forte para contornar o histórico de senhas do SAP
+// quando "Sap@2025" já tiver sido usada no passado pelo usuário.
+function generateUniquePassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const specials = "!@#$%&*?";
+  const pick = (src: string) => src[Math.floor(Math.random() * src.length)];
+  const rand = [pick(upper), pick(lower), pick(digits), pick(specials)];
+  const all = upper + lower + digits + specials;
+  for (let i = 0; i < 6; i++) rand.push(pick(all));
+  return rand.sort(() => Math.random() - 0.5).join("");
+}
 
 interface CompanyOption {
   company_db: string;
