@@ -285,13 +285,31 @@ async function processCompany(
   const sapCreds = await getSapCreds(supabase, companyDb);
   const { baseUrl, cookies } = await loginSap(sapCreds);
 
+  // Pré-carrega e-mails de usuários (HanaAPI V2 quando disponível, fallback SL).
+  const userEmailMap = new Map<string, string>();
+  try {
+    const sessionId = (cookies.match(/B1SESSION=([^;]+)/) || [])[1] || "";
+    const routeId = (cookies.match(/B1ROUTEID=([^;]+)/) || [])[1] || "";
+    if (sessionId) {
+      const usersResp = await listSapUsersHybrid({
+        sb: supabase, companyDb, baseUrl, sapSession: { sessionId, routeId },
+        database: (sapCreds.company_db || companyDb),
+      });
+      for (const u of usersResp.users) {
+        if (u.UserCode && u.eMail) userEmailMap.set(u.UserCode.toLowerCase(), u.eMail);
+      }
+    }
+  } catch (e) {
+    console.warn(`[synapse-po-notify] listSapUsersHybrid falhou (${companyDb}):`, (e as Error).message);
+  }
+
   // 1) Aprovados (todo PO existente é considerado aprovado)
   const pos = await fetchPurchaseOrders(baseUrl, cookies, daysBack);
   const posByEntry = new Map<number, any>();
   for (const po of pos) posByEntry.set(po.DocEntry, po);
 
   for (const po of pos) {
-    const r = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "approved");
+    const r = await processMilestone(supabase, baseUrl, cookies, companyDb, po, "approved", undefined, userEmailMap);
     if (r.status === "sent") summary.approved++;
     else if (r.status === "error") { summary.errors++; errors.push(`approved/${po.DocEntry}: ${r.reason}`); }
     else summary.skipped++;
