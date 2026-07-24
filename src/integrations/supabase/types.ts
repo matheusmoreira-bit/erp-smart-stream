@@ -5372,6 +5372,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_sap_credentials: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          sap_password_encrypted: string
+          sap_user: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          sap_password_encrypted: string
+          sap_user: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          sap_password_encrypted?: string
+          sap_user?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       watcher_runs: {
         Row: {
           last_finished_at: string | null

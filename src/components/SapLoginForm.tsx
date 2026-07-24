@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers, Eye, EyeOff } from "lucide-react";
+import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -60,7 +60,7 @@ function getErpBadge(erpType: string): string {
 }
 
 export function SapLoginForm() {
-  const { login, isLoading } = useSap();
+  const { login, loginManaged, isLoading } = useSap();
   const navigate = useNavigate();
   const { enabledNames, isLoading: erpLoading } = useEnabledErpTypes();
   const [userName, setUserName] = useState("");
@@ -70,6 +70,8 @@ export function SapLoginForm() {
   const [companiesLoading, setCompaniesLoading] = useState(true);
   const [companiesError, setCompaniesError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [managedCompanyDbs, setManagedCompanyDbs] = useState<Set<string>>(new Set());
+  const [cloudEmail, setCloudEmail] = useState<string | null>(null);
 
   // Filter only when we know which ERPs are enabled; otherwise show all active companies
   // so a slow/failing enabled_erp_types query never blocks the login list.
@@ -80,7 +82,8 @@ export function SapLoginForm() {
   const selectedCompany = databases.find((d) => d.value === companyDB);
   const erpType = selectedCompany?.erp_type || "sap";
   const isOmie = erpType === "omie";
-  const needsCredentials = erpType === "sap"; // Only SAP B1 requires user/pass at login
+  const isManagedSap = erpType === "sap" && !!cloudEmail && managedCompanyDbs.has(companyDB);
+  const needsCredentials = erpType === "sap" && !isManagedSap; // Only SAP B1 without managed creds requires user/pass at login
   const isStateless = (erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite");
   const [googleLoading, setGoogleLoading] = useState(false);
   const postRedirectHandledRef = useRef(false);
@@ -119,6 +122,32 @@ export function SapLoginForm() {
   useEffect(() => {
     loadCompanies();
   }, [loadCompanies]);
+
+  // Detect Cloud (Supabase Auth) session and load managed SAP credentials for
+  // this user so we can hide user/password fields whenever the selected
+  // company has a stored ERP-Flow-managed password.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        const email = authSession?.user?.email || null;
+        if (cancelled) return;
+        setCloudEmail(email);
+        if (!authSession) {
+          setManagedCompanyDbs(new Set());
+          return;
+        }
+        const { listUserSapCredentials } = await import("@/lib/user-sap-credentials");
+        const creds = await listUserSapCredentials();
+        if (cancelled) return;
+        setManagedCompanyDbs(new Set(creds.map((c) => c.company_db)));
+      } catch {
+        if (!cancelled) setManagedCompanyDbs(new Set());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Post Google redirect: if there's a pending OMIE company + a Supabase session,
   // verify access via user_group_assignments and complete the ERP login.
@@ -218,6 +247,17 @@ export function SapLoginForm() {
     e.preventDefault();
     if (!companyDB) {
       toast.error("Selecione a empresa");
+      return;
+    }
+    if (isManagedSap) {
+      try {
+        await loginManaged(companyDB);
+        toast.success(`Conectado ao ${erpInfo.label}!`);
+      } catch (err) {
+        toast.error("Não foi possível entrar", {
+          description: err instanceof Error ? err.message : "Falha no login gerenciado.",
+        });
+      }
       return;
     }
     if (needsCredentials && (!userName || !password)) {
@@ -431,6 +471,19 @@ export function SapLoginForm() {
                 </div>
               </div>
             </>
+          )}
+
+          {/* Managed SAP login — password stored & rotated by ERP Flow */}
+          {isManagedSap && companyDB && (
+            <div className="text-xs text-muted-foreground p-3 rounded-lg bg-primary/5 border border-primary/30 space-y-1">
+              <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-primary" /> Login gerenciado pelo ERP Flow
+              </div>
+              <div>
+                Sua senha SAP é armazenada de forma criptografada e rotacionada pelo ERP Flow.
+                {cloudEmail ? <> Autenticado como <span className="font-medium text-foreground">{cloudEmail}</span>.</> : null}
+              </div>
+            </div>
           )}
 
           {/* Stateless ERP info */}
