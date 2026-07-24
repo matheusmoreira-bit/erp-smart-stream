@@ -222,9 +222,17 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 ### FASE O1 — Observabilidade
 
 - [ ] Ativar `analytics--read_project_analytics` como fonte no Backoffice.
-- [ ] Dashboard "Saúde do SAP" (já parcial em `SapSyncHealthCard.tsx`) —
-      agregar latência p50/p95 por função, taxa de erro, sessões ativas.
-- [ ] Alertas WhatsApp para p95 > 10s ou taxa de erro > 5%/5min.
+- [x] **O1.2 (24/07/2026)** — Dashboard "Latência de Edge Functions" com p50/p95/p99,
+      taxa de erro e contagem por função em janelas 1h/24h/7d. Infra:
+      tabela `edge_function_metrics` (RLS admin-only, service_role write),
+      RPC `get_edge_function_metrics(_hours)`, prune de 14 dias e helper
+      `_shared/edge-metrics.ts` (`withEdgeMetrics` — fire-and-forget, nunca
+      derruba o request). Instrumentadas 8 funções críticas: `sap-b1-proxy`,
+      `expense-approval-action`, `expense-to-sap`, `sap-approvals-hana`,
+      `baixa-recebimento`, `sap-users-admin`, `sap-change-password`,
+      `copilot-chat`. Card exposto em `/backoffice/sap-sync-runs`.
+- [ ] Alertas WhatsApp para p95 > 10s ou taxa de erro > 5%/5min (usa
+      `get_edge_function_metrics` como fonte).
 
 ### FASE R1 — Refatoração / dívida
 
