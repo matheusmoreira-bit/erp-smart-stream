@@ -319,6 +319,22 @@ Deno.serve(async (req) => {
 
     return json(400, { ok: false, errorMessage: "Ação inválida." });
   } catch (e) {
-    return json(500, { ok: false, errorMessage: e instanceof Error ? e.message : "Falha ao lançar baixa." });
+    const msg = e instanceof Error ? e.message : "Falha ao lançar baixa.";
+    // Best-effort: enqueue for visibility in the retry panel (auto-retry disabled
+    // for baixa since it needs a live SAP session — admin retries via UI).
+    try {
+      const body = await req.clone().json().catch(() => ({}));
+      const baixaId = String((body?.baixaId ?? body?.input?.id) || "");
+      if (baixaId) {
+        const sb = adminClient();
+        const { classifyAndEnqueue } = await import("../_shared/sap-retry.ts");
+        await classifyAndEnqueue(sb, {
+          doc_type: "baixa",
+          ref_id: baixaId,
+          errorBody: msg,
+        });
+      }
+    } catch (_) { /* silent */ }
+    return json(500, { ok: false, errorMessage: msg });
   }
 });
