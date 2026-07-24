@@ -1,6 +1,7 @@
 // Copilot IA (Backoffice) — chat com acesso ao banco + ações operacionais auditadas.
 // Baseado no padrão ai-assistant + report-ai-chat (SSE streaming da resposta final).
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { enforceRateLimit, rateLimitResponse } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -640,6 +641,15 @@ Deno.serve(async (req) => {
     // Gate admin
     const { data: isAdmin } = await sbAdmin.rpc("has_role", { _user_id: userData.user.id, _role: "admin" });
     if (!isAdmin) return json({ error: "Acesso restrito a administradores." }, 403);
+
+    // Rate limit: IA é cara — 20 requisições/min por admin.
+    const rl = await enforceRateLimit(sbAdmin, {
+      scope: "copilot-chat",
+      identifier: userData.user.id,
+      max: 20,
+      windowSeconds: 60,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl, { ...corsHeaders, "Content-Type": "application/json" });
 
     const actor: Actor = { userId: userData.user.id, email: userData.user.email || "" };
 

@@ -22,6 +22,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
+import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,6 +209,19 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // Rate limit: 12 ações por 60s por (expense × IP) — protege contra spam
+  // de aprovação em loop e limita brute force sobre a mesma despesa.
+  const rl = await enforceRateLimit(admin, {
+    scope: "expense-approval-action",
+    identifier: `${expenseId}:${clientIpFrom(req)}`,
+    max: 12,
+    windowSeconds: 60,
+  });
+  if (!rl.allowed) {
+    stageLog("rate_limit", "warn", { requestId, expenseId, retryAfter: rl.retryAfter });
+    return rateLimitResponse(rl, corsHeaders);
+  }
 
   // ── Idempotência ───────────────────────────────────────────────────────
   // Aceita `Idempotency-Key` ou `x-idempotency-key`. Se a mesma chave já

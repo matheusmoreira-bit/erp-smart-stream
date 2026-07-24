@@ -13,6 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -157,6 +158,16 @@ Deno.serve(async (req) => {
     const callerUserCode = (caller as { userName?: string; email?: string }).userName
       || (caller as { email?: string }).email
       || "";
+
+    // Rate limit: 5 tentativas de troca de senha por 5 min por usuário/IP.
+    const rlAdmin = service();
+    const rl = await enforceRateLimit(rlAdmin, {
+      scope: "sap-change-password",
+      identifier: callerUserCode || clientIpFrom(req),
+      max: 5,
+      windowSeconds: 300,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl, corsHeaders);
 
     const body = await req.json().catch(() => ({}));
     const userCode = String(body.user_code || callerUserCode || "").trim();

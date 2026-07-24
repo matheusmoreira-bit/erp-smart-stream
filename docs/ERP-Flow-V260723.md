@@ -165,10 +165,17 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
 
 ### FASE S5 — Edge functions: padronizar auth + rate limit
 
-- [ ] Introduzir helper `withRateLimit(fn, { key, max, windowMs })` em `_shared`.
-- [ ] Aplicar em: `sap-change-password`, `expense-approval-action`,
-      `copilot-chat`, `report-ai-chat`, `external-approvals-api`,
-      `cnpj-lookup`, `supplier-ai-extract`.
+- [x] **S5.1 (24/07/2026)** — Helper `_shared/rate-limit.ts` + tabela
+      `edge_rate_limits` + RPC atômica `check_and_increment_rate_limit`
+      (service_role only, `SET search_path`). Falha silenciosa: se o DB
+      recusar, libera a chamada — o objetivo é conter abuso, não introduzir
+      novo ponto de falha.
+- [x] **S5.2 (24/07/2026)** — Rate limit aplicado nos endpoints de risco:
+      • `sap-change-password`: 5/5min por usuário/IP.
+      • `expense-approval-action`: 12/60s por (expense × IP).
+      • `copilot-chat`: 20/60s por admin.
+      • `external-approvals-api`: 30/60s por (company_db × user_code × IP).
+- [ ] Aplicar em: `report-ai-chat`, `cnpj-lookup`, `supplier-ai-extract`.
 - [ ] Migrar 63 funções sem `getClaims` para o padrão oficial **quando** exigirem
       identidade de usuário Supabase (não SAP). A maioria continua legítima com
       `requireAdminOrSapSessionHeaders`.

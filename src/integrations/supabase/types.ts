@@ -1647,6 +1647,27 @@ export type Database = {
         }
         Relationships: []
       }
+      edge_rate_limits: {
+        Row: {
+          count: number
+          key: string
+          updated_at: string
+          window_started_at: string
+        }
+        Insert: {
+          count?: number
+          key: string
+          updated_at?: string
+          window_started_at?: string
+        }
+        Update: {
+          count?: number
+          key?: string
+          updated_at?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
       email_send_log: {
         Row: {
           created_at: string
@@ -5413,6 +5434,14 @@ export type Database = {
       can_manage_employee_integration: {
         Args: { _user_id: string }
         Returns: boolean
+      }
+      check_and_increment_rate_limit: {
+        Args: { _key: string; _max: number; _window_seconds: number }
+        Returns: {
+          allowed: boolean
+          current_count: number
+          retry_after: number
+        }[]
       }
       check_applicable_approval_rules:
         | {
