@@ -748,6 +748,22 @@ Deno.serve(async (req) => {
         } as any)
         .in("id", consolidatedLogIds);
     }
+    // Enqueue for automatic retry (transient errors only).
+    try {
+      if (supabase && snapshot.txIds.length > 0) {
+        const originalBody = await req.clone().json().catch(() => ({}));
+        const { classifyAndEnqueue } = await import("../_shared/sap-retry.ts");
+        await classifyAndEnqueue(supabase, {
+          doc_type: "pagcorp",
+          ref_id: String(snapshot.txIds[0]),
+          company_db: snapshot.companyDb ?? null,
+          payload: { __endpoint: "pagcorp-to-sap", __body: originalBody },
+          errorBody: msg,
+        });
+      }
+    } catch (retryErr) {
+      console.warn("pagcorp-to-sap enqueueRetry failed:", (retryErr as Error).message);
+    }
     await notifyErpIntegration({
       status: "error",
       entityIds: snapshot.txIds,

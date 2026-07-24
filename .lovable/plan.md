@@ -1,66 +1,120 @@
-# Fase 2 — Portabilidade para AWS
 
-Objetivo: preparar o ERP Flow para rodar fora do Lovable Cloud (alvo AWS) com perdas mínimas, mantendo a versão atual 100% funcional. Nada de rewrite — só abstração, documentação e infraestrutura opcional.
+# Fila de retry automático para integrações SAP
 
-## Escopo
+## Objetivo
+Substituir o retry manual e o watcher genérico de 30 min por uma fila unificada que reagenda automaticamente integrações que falharem com erros 400 classificados como recuperáveis, respeitando backoff exponencial e limite por documento. Ao esgotar tentativas, notificar por e-mail + WhatsApp.
 
-### 1. Abstração de dependências Lovable/Supabase
-- Criar `src/lib/backend/` com contratos (`AuthProvider`, `StorageProvider`, `DbProvider`, `FunctionsInvoker`).
-- Implementação default: `supabase-impl.ts` (proxy do client atual — zero mudança de comportamento).
-- Refatorar 3-5 pontos de entrada principais (auth, invoke, storage) para usarem os contratos. Restante segue direto no cliente Supabase por ora (migração incremental futura).
-- Nenhum edge function reescrito. Apenas documentados os `Deno.env` usados.
+## Escopo confirmado com o usuário
+- **Erros elegíveis** (retryable): transientes (session expired, timeout, lock/`in-use`, BPLID/`branch`, `Specify a date within the permissible range`), anexos (`Attachments2` — nome inválido, path), projeto/marca (`-1116` fallback ANA GAMING).
+- **Não retryable** (sem re-tentativa): `not authorized`, `approver`, `budget`, permissões, `duplicate`, campos obrigatórios de negócio (fornecedor inexistente, etc.). Vão direto para “ação manual”.
+- **Política**: 5 tentativas, backoff **2m → 4m → 8m → 16m → 32m** (~62min de janela).
+- **Ao esgotar**: marca `retry_exhausted`, envia e-mail (via `send-transactional-email`) + WhatsApp para admins, lista no painel do Backoffice.
+- **Cobertura**: `expense-to-sap`, `advance-to-sap`, `baixa-recebimento`, `pagcorp-to-sap` + `synapse-pagcorp-sync` + `pagcorp-settlement-watcher`.
 
-### 2. Camada de configuração unificada
-- `src/config/runtime.ts` centraliza URLs/keys lidas de `import.meta.env`.
-- Documenta mapeamento das envs equivalentes na AWS:
-  - `VITE_SUPABASE_URL` → PostgREST/Hasura ou API Gateway
-  - `VITE_SUPABASE_PUBLISHABLE_KEY` → JWT público (Cognito/Auth0)
-  - Edge Functions → Lambda + API Gateway (mesmo path `/functions/v1/<name>`)
+## Arquitetura
 
-### 3. Backup automatizado do banco (Lovable Cloud → S3)
-- Nova edge function `db-backup-s3` (agendada via cron diário):
-  - Faz `pg_dump` lógico dos schemas `public` (via SQL `COPY` por tabela — pg_dump não roda em edge).
-  - Alternativa: usar as views/tabelas listadas via `information_schema` e exportar cada uma como JSONL.
-  - Faz upload multipart para bucket S3 (via AWS SDK v3 `npm:@aws-sdk/client-s3`).
-  - Retenção: 30 dias diários + 12 mensais.
-- Segredos novos (build/edge): `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BACKUP_BUCKET`.
-- UI: card em `/backoffice` mostrando último backup (data, tamanho, status) + botão "Rodar agora".
+```text
+Integração falha 400
+        │
+        ▼
+classifyError() ──► retryable? ──sim──► enqueue em sap_retry_queue (next_attempt_at = now + backoff)
+        │                                              │
+        └── não ──► marca error final, notifica         ▼
+                                       cron 1min ──► sap-retry-worker
+                                                       │
+                                                       ▼
+                                   despacha para função original (por doc_type)
+                                                       │
+                        ┌──────────────┬───────────────┼──────────────┬─────────────┐
+                        ▼              ▼               ▼              ▼             ▼
+                 expense-to-sap  advance-to-sap  baixa-recebimento  pagcorp-to-sap  synapse-pagcorp-sync
+                                                       │
+                                          sucesso ──► delete queue row
+                                          falha retryable ──► ++attempts, reagenda
+                                          attempts >= 5 ──► status='exhausted', notifica
+```
 
-### 4. Export de storage (anexos de despesas)
-- Função `storage-mirror-s3` (agendada semanal): copia buckets Supabase Storage → S3 mantendo prefix por empresa. Idempotente (compara `etag`).
+## Componentes
 
-### 5. Documentação `docs/aws-portability.md`
-- Diagrama alvo (Frontend S3+CloudFront, API Gateway+Lambda, RDS Postgres, Cognito, S3 anexos).
-- Mapeamento 1:1 de cada edge function → Lambda equivalente.
-- Passo a passo do restore: baixar dump do S3, `psql -f`, apontar env vars.
-- Lista de gaps conhecidos (ex: `pg_cron`, `pg_net`, RLS policies — todos portáveis para RDS + Postgres nativo).
+### 1. Tabela `public.sap_retry_queue` (migração)
+Campos-chave:
+- `doc_type` (`expense` | `advance` | `baixa` | `pagcorp` | `synapse_pagcorp`)
+- `ref_id` (uuid/text do doc), `company_db`, `payload` (jsonb — parâmetros para reinvocar a função)
+- `attempts` (int, default 0), `max_attempts` (int, default 5)
+- `next_attempt_at` (timestamptz), `last_attempt_at`
+- `last_error` (text), `error_category` (`session`|`branch`|`date`|`attachment`|`project`|`lock`|`other`)
+- `status` (`pending`|`in_flight`|`succeeded`|`exhausted`|`cancelled`)
+- `notified_exhausted_at`
+- **Unique** `(doc_type, ref_id)` com `status IN ('pending','in_flight')` (parcial) — evita duplicidade.
+- RLS: só admin lê/altera; edge functions usam service_role.
 
-### 6. Health check consolidado
-- Nova rota `/backoffice/infra-health` com status de: DB, Storage, Edge Functions ativas, Backups S3, HanaAPI V2, SAP Service Layer por empresa.
+### 2. Helper `_shared/sap-retry.ts`
+- `classifySapError(status, body): { retryable, category, backoffMinutes? }` — reconhece as mensagens do escopo.
+- `enqueueRetry(admin, { doc_type, ref_id, company_db, payload, error, category })` — upsert com backoff progressivo baseado em `attempts` (2/4/8/16/32).
+- Substitui a lógica atual do watcher fixo de 30 min naquilo que já cobrimos.
 
-## Fora de escopo (fica para Fase 3)
-- Docker local / seed sintético.
-- Migração real de auth para Cognito.
-- CI/CD Terraform.
+### 3. Integração no ponto de falha
+Nos 5 fluxos, dentro do `catch` que hoje persiste `sap_integration_error`:
+```ts
+const cls = classifySapError(status, body);
+if (cls.retryable) await enqueueRetry(admin, {...});
+```
+Sem alterar contrato de resposta ao cliente — apenas garante que a fila cuide do próximo pedaço.
+
+### 4. Edge function `sap-retry-worker`
+- Cron pg_cron a cada **1 minuto**.
+- Seleciona até 20 linhas com `status='pending' AND next_attempt_at <= now()` (locking por `UPDATE ... SET status='in_flight'`).
+- Para cada linha, dispara a função de origem via `fetch` interno (mesmo padrão do `expense-integration-retry`).
+- Sucesso → `status='succeeded'`, remove após 24h (housekeeping).
+- Nova falha retryable → `attempts++`, `next_attempt_at = now + backoff(attempts)`. Se `attempts >= max_attempts` → `status='exhausted'` + notifica.
+- Nova falha NÃO retryable → `status='exhausted'` imediato + notifica.
+
+### 5. Notificação ao esgotar
+- E-mail via template novo `sap-integration-exhausted` (`send-transactional-email`) para lista de admins (`ADMIN_EMAILS` configurável — inicialmente `matheus.moreira`).
+- WhatsApp reaproveitando o helper já existente do `expense-integration-retry`.
+- Registra em `expense_audit_log` / `pagcorp_integration_log` conforme doc_type.
+- Cooldown já garantido por `notified_exhausted_at` (não notifica duas vezes o mesmo doc).
+
+### 6. Ajustes no watcher atual
+- `expense-integration-retry` continua existindo para casos legados (aprovados sem `sap_doc_entry` que nunca entraram na fila), mas passa a **primeiro enfileirar** em `sap_retry_queue` em vez de reprocessar diretamente. Evita duplicação de lógica.
+
+### 7. UI mínima (Backoffice)
+Nova aba **Integrações → Fila de Retries**:
+- Colunas: Empresa · Doc · Tipo · Tentativas · Próxima em · Última falha · Status.
+- Ações: **Retry agora** (zera `next_attempt_at`), **Cancelar**, **Ver detalhes**.
+- Filtra por status (padrão: `pending` + `exhausted`).
+- Realtime via Supabase Realtime na tabela.
 
 ## Detalhes técnicos
 
-- Backups usam `SUPABASE_SERVICE_ROLE_KEY` já disponível no edge runtime.
-- Tabelas grandes (`expenses`, `expense_items`, `expense_approval_log`, `pagcorp_integration_log`, `sap_integration_log`) exportadas em chunks de 10k linhas via `range()`.
-- Formato JSONL comprimido gzip → `s3://<bucket>/daily/YYYY-MM-DD/<schema>.<table>.jsonl.gz`.
-- Manifest `manifest.json` no mesmo prefix lista tabelas, contagem, checksum sha256.
-- `db-backup-s3` grava resultado em nova tabela `infra_backup_log` (RLS: apenas super-admin lê).
+**Backoff**: `next_attempt_at = now() + interval '2 minutes' * pow(2, attempts)` limitado a 32 min.
 
-## Ordem de execução
-1. Migration `infra_backup_log` + RLS.
-2. Segredos AWS (via `add_secret` — pediremos ao usuário).
-3. Edge function `db-backup-s3` + agendamento diário 03:00 UTC.
-4. Edge function `storage-mirror-s3` + agendamento semanal.
-5. UI backoffice (card status + botão manual + página health).
-6. Abstração `src/lib/backend/` (refactor não-destrutivo).
-7. Documentação `docs/aws-portability.md`.
+**Classificação (regex nos textos SAP)**:
+| categoria | pattern |
+|---|---|
+| session | `SessionId invalido`, `session.*expir`, `-1200` |
+| branch | `branch`, `BPLID`, `not assigned to selected branch` |
+| date | `Specify a date within the permissible range` |
+| attachment | `Attachments2 failed`, `File name`, `space string` |
+| project | `-1116`, `LINHAS MARCA/BRAND` |
+| lock | `in use`, `blocked`, `locked` |
 
-## Perguntas antes de começar
-1. Você já tem uma conta AWS + bucket S3 dedicado para backups, ou quero deixar o código pronto e você provisiona depois?
-2. Frequência do backup do banco: diário 03:00 UTC OK, ou prefere outra janela?
-3. Anexos (storage): mirror semanal é suficiente ou quer contínuo (a cada upload)?
+**Não retryable (blocklist explícita)**: `not authorized`, `insufficient`, `approver`, `budget`, `duplicate`, `already exists`, `foreign key`, `-2035` (validation de conta contábil), `Business Partner is on hold`.
+
+**Idempotência**: chave `(doc_type, ref_id)`. Se novo erro chegar antes de reprocessar, apenas atualiza `last_error`.
+
+**Segurança**: RLS restrita a admins; worker usa `SUPABASE_SERVICE_ROLE_KEY`; nenhum segredo exposto no front.
+
+## Fora do escopo (deste ciclo)
+- Retries para erros NON-400 (5xx já retryable no HTTP client atual).
+- Fila para fluxos de leitura (NF entrada, PO cache) — só integrações de escrita.
+- Retries para MasterTax / JumpCloud.
+
+## Entregáveis
+1. Migração `sap_retry_queue` + RLS + índice + trigger `updated_at`.
+2. `supabase/functions/_shared/sap-retry.ts` (classifier + enqueue).
+3. `supabase/functions/sap-retry-worker/index.ts` + cron.
+4. Alteração nos 5 fluxos para enfileirar em erros retryable.
+5. Template `sap-integration-exhausted` + wiring.
+6. Página `src/pages/BackofficeRetryQueue.tsx` + rota `/backoffice/retry-queue` + link no menu.
+7. Ajuste no `expense-integration-retry` para delegar à fila.

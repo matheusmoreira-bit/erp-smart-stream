@@ -703,6 +703,13 @@ export default function Admin() {
                 Infra & Backups
               </button>
               <button
+                onClick={() => navigate("/backoffice/retry-queue")}
+                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+              >
+                <FileCheck2 className="w-4 h-4" />
+                Retries SAP
+              </button>
+              <button
                 onClick={() => navigate("/backoffice/sap-users")}
                 className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
               >
