@@ -118,6 +118,33 @@ export default function BackofficeRetryQueue() {
     return c;
   }, [rows]);
 
+  const summary = useMemo(() => {
+    const total = metrics.reduce((s, m) => s + m.total, 0);
+    const succeeded = metrics.filter(m => m.status === "succeeded").reduce((s, m) => s + m.total, 0);
+    const exhausted = metrics.filter(m => m.status === "exhausted").reduce((s, m) => s + m.total, 0);
+    const pending = metrics.filter(m => m.status === "pending" || m.status === "in_flight").reduce((s, m) => s + m.total, 0);
+    const recovered = succeeded + exhausted;
+    const successRate = recovered > 0 ? (succeeded / recovered) * 100 : 0;
+    const avgAttempts = total > 0
+      ? metrics.reduce((s, m) => s + m.avg_attempts * m.total, 0) / total
+      : 0;
+    const byCategory = new Map<string, number>();
+    for (const m of metrics) {
+      const k = m.error_category || "outros";
+      byCategory.set(k, (byCategory.get(k) || 0) + m.total);
+    }
+    const topCategories = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const byDocType = new Map<string, { total: number; succeeded: number; exhausted: number }>();
+    for (const m of metrics) {
+      const cur = byDocType.get(m.doc_type) || { total: 0, succeeded: 0, exhausted: 0 };
+      cur.total += m.total;
+      if (m.status === "succeeded") cur.succeeded += m.total;
+      if (m.status === "exhausted") cur.exhausted += m.total;
+      byDocType.set(m.doc_type, cur);
+    }
+    return { total, succeeded, exhausted, pending, successRate, avgAttempts, topCategories, byDocType: Array.from(byDocType.entries()) };
+  }, [metrics]);
+
   return (
     <div className="container mx-auto p-6 space-y-4">
       <div className="flex items-center justify-between">
