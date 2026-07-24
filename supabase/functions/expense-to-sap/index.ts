@@ -1362,6 +1362,20 @@ Deno.serve(async (req) => {
     // Best-effort: persist whatever stage statuses we collected before the throw.
     await persistStatus({ sap_integration_error: msg });
     await writePagCorpLog("error", msg, undefined, undefined, lastSapPayload, lastSapResponse);
+    // Enqueue for automatic retry when the error is classified as transient.
+    try {
+      if (supabase && expenseId) {
+        const { classifyAndEnqueue } = await import("../_shared/sap-retry.ts");
+        await classifyAndEnqueue(supabase, {
+          doc_type: "expense",
+          ref_id: expenseId,
+          company_db: expenseSnapshot?.company_db ?? null,
+          errorBody: msg,
+        });
+      }
+    } catch (retryErr) {
+      console.warn("expense-to-sap enqueueRetry failed:", (retryErr as Error).message);
+    }
     await notifyErpIntegration({
       status: "error",
       source: "expense",
