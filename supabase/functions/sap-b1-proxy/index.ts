@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
