@@ -1,3 +1,4 @@
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Edge function: authorize + execute internal expense approval / rejection.
 //
 // The client (React app) previously wrote directly to `public.expenses` via
@@ -167,7 +168,7 @@ async function isSapSuperuser(
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   const t0 = Date.now();
   const requestId =
     req.headers.get("x-request-id") ||
@@ -893,4 +894,4 @@ Deno.serve(async (req) => {
       company_db: (exp as any).company_db,
     },
   });
-});
+}));

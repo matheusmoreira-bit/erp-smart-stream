@@ -1,3 +1,4 @@
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Server-side batch password change across SAP B1 companies.
 //
 // Motivação: usuários normais não têm acesso às credenciais administrativas
@@ -150,7 +151,7 @@ function isSamePasswordError(message: string): boolean {
 
 interface ResultRow { companyDB: string; displayName: string; status: "success" | "error" | "skipped"; message?: string }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -345,4 +346,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

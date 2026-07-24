@@ -1,3 +1,4 @@
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Edge function: post an internal approved expense as a Purchase Order in SAP B1
 // Endpoint: POST /functions/v1/expense-to-sap
 // Body: { expense_id: string }
@@ -678,7 +679,7 @@ async function buildApprovalReportPdf(
 
 
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
@@ -1423,4 +1424,4 @@ Deno.serve(async (req) => {
       await releaseIntegrationLock(supabase, "expenses", expenseId);
     }
   }
-});
+}));

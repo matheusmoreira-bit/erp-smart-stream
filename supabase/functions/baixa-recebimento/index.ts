@@ -1,3 +1,4 @@
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { parseSapHeaders, requireUser, validateSapSession } from "../_shared/auth.ts";
 
@@ -231,7 +232,7 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
   return json(200, { ok: true, baixaId, sapDocEntry });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("baixa-recebimento", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { ok: false, errorMessage: "Método não permitido." });
 
@@ -337,4 +338,4 @@ Deno.serve(async (req) => {
     } catch (_) { /* silent */ }
     return json(500, { ok: false, errorMessage: msg });
   }
-});
+}));

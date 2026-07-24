@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -206,7 +207,7 @@ async function getConfiguredSapCompanyDb(companyDB: string): Promise<string> {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -214,6 +215,8 @@ Deno.serve(async (req) => {
   try {
     const reqBody = await req.json();
     const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
+    metricsCtx.companyDb = companyDB || credentials?.CompanyDB || null;
+    metricsCtx.meta = { action };
 
     // Authentication is handled by SAP session (B1SESSION cookie).
     // Each action validates its own required params (sessionId, etc.).
@@ -812,14 +815,16 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
+      metricsCtx.errorCode = "UNAUTHORIZED";
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    metricsCtx.errorCode = e instanceof Error ? e.name : "unknown";
     console.error("sap-b1-proxy error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));
 // schema fix: SBO_OPENGAMING 1784592109

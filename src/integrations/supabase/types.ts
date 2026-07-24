@@ -1647,6 +1647,42 @@ export type Database = {
         }
         Relationships: []
       }
+      edge_function_metrics: {
+        Row: {
+          company_db: string | null
+          duration_ms: number
+          error_code: string | null
+          function_name: string
+          id: number
+          meta: Json | null
+          ok: boolean
+          started_at: string
+          status_code: number | null
+        }
+        Insert: {
+          company_db?: string | null
+          duration_ms: number
+          error_code?: string | null
+          function_name: string
+          id?: number
+          meta?: Json | null
+          ok?: boolean
+          started_at?: string
+          status_code?: number | null
+        }
+        Update: {
+          company_db?: string | null
+          duration_ms?: number
+          error_code?: string | null
+          function_name?: string
+          id?: number
+          meta?: Json | null
+          ok?: boolean
+          started_at?: string
+          status_code?: number | null
+        }
+        Relationships: []
+      }
       edge_rate_limits: {
         Row: {
           count: number
@@ -5522,6 +5558,20 @@ export type Database = {
         Args: { _company_db?: string }
         Returns: string
       }
+      get_edge_function_metrics: {
+        Args: { _hours?: number }
+        Returns: {
+          avg_ms: number
+          error_rate: number
+          errors: number
+          function_name: string
+          last_at: string
+          p50_ms: number
+          p95_ms: number
+          p99_ms: number
+          total: number
+        }[]
+      }
       get_my_idp_cost_center: {
         Args: { _sap_user_name?: string }
         Returns: string
@@ -5626,6 +5676,7 @@ export type Database = {
         Returns: string
       }
       preview_next_codigo: { Args: { p_item_base_id: string }; Returns: string }
+      prune_edge_function_metrics: { Args: never; Returns: undefined }
       prune_old_integration_data: { Args: never; Returns: undefined }
       purge_expense_action_idempotency: {
         Args: {

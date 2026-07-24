@@ -1,3 +1,4 @@
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { fetchHanaView, loadHanaCreds, resolveHanaSchema } from "../_shared/hana-views.ts";
@@ -173,7 +174,7 @@ function extractSapError(payload: unknown, fallback: string): string {
   return fallback;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -506,4 +507,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));
