@@ -78,13 +78,21 @@ Deno.serve(async (req) => {
     const cnpj = digits(String(body?.cnpj ?? ""));
     if (cnpj.length !== 14) return json({ error: "CNPJ inválido (deve ter 14 dígitos)" }, 400);
 
-
-
     // Duplicate check
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Rate limit: 30 consultas/min por IP — evita varredura de CNPJs.
+    const rl = await enforceRateLimit(admin, {
+      scope: "cnpj-lookup",
+      identifier: clientIpFrom(req),
+      max: 30,
+      windowSeconds: 60,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl, corsHeaders);
+
     const { data: existing } = await admin
       .from("fornecedores")
       .select("id, razao_social, nome_fantasia, cnpj")
