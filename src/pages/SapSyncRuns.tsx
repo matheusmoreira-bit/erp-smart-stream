@@ -109,6 +109,8 @@ export default function SapSyncRuns() {
 
       <SapSyncHealthCard />
 
+      <EdgeFunctionMetricsCard />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Filtros</CardTitle>
