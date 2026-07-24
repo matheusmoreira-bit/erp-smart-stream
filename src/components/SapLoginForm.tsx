@@ -84,6 +84,11 @@ export function SapLoginForm() {
   const isStateless = (erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite");
   const [googleLoading, setGoogleLoading] = useState(false);
   const postRedirectHandledRef = useRef(false);
+  // Contador de tentativas com credenciais inválidas por (empresa|usuário).
+  // Após 2 falhas consecutivas exibimos aviso de que a próxima trava o usuário
+  // no SAP B1 (política padrão bloqueia após 3 tentativas).
+  const failedAttemptsRef = useRef<Map<string, number>>(new Map());
+  const attemptKey = (db: string, user: string) => `${db}::${user.trim().toLowerCase()}`;
   const erpInfo = ERP_LABELS[erpType] || ERP_LABELS.sap;
   const ErpIcon = erpInfo.icon;
 
@@ -252,6 +257,7 @@ export function SapLoginForm() {
       if (password === "Sap@2025") {
         try { sessionStorage.setItem("erp:default-password-warning", "1"); } catch { /* noop */ }
       }
+      failedAttemptsRef.current.delete(attemptKey(companyDB, userName));
       toast.success(`Conectado ao ${erpInfo.label}!`);
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error ?? "");
@@ -278,9 +284,21 @@ export function SapLoginForm() {
         lower.includes("getaddrinfo");
 
       if (isInvalidCreds) {
-        toast.error("Usuário ou senha incorretos", {
-          description: "Verifique suas credenciais e tente novamente.",
-        });
+        const key = attemptKey(companyDB, userName);
+        const prev = failedAttemptsRef.current.get(key) || 0;
+        const next = prev + 1;
+        failedAttemptsRef.current.set(key, next);
+        if (next >= 2) {
+          toast.error("Usuário ou senha incorretos", {
+            description:
+              "Atenção: mais uma tentativa incorreta irá bloquear o usuário no SAP. Se não lembrar a senha, contate o administrador para redefinir.",
+            duration: 8000,
+          });
+        } else {
+          toast.error("Usuário ou senha incorretos", {
+            description: "Verifique suas credenciais e tente novamente.",
+          });
+        }
       } else if (isLocked) {
         toast.error("Usuário bloqueado no ERP", {
           description: "Procure o administrador para desbloquear seu acesso.",
