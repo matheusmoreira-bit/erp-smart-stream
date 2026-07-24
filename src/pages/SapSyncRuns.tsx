@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { RefreshCw, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SapSyncHealthCard } from "@/components/SapSyncHealthCard";
+import { EdgeFunctionMetricsCard } from "@/components/EdgeFunctionMetricsCard";
 
 interface SyncRun {
   id: string;
