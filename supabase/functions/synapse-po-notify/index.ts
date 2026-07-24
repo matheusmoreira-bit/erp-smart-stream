@@ -368,12 +368,24 @@ async function processCompany(
   return { ...summary, errors_sample: errors.slice(0, 10) };
 }
 
+import { weekendBlockResponse } from "../_shared/weekend-guard.ts";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = svc();
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }
+  const weekendBlock = await weekendBlockResponse(req, corsHeaders, body);
+  if (weekendBlock) {
+    await supabase.from("synapse_execution_log").insert({
+      integration_key: INTEGRATION_KEY,
+      status: "skipped",
+      affected_count: 0,
+      details: { reason: "weekend_pause" },
+    } as any).then(() => {}, () => {});
+    return weekendBlock;
+  }
   const requestedCompany: string | undefined = body?.company_db;
 
   // Global config check
