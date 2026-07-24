@@ -257,6 +257,7 @@ export function SapLoginForm() {
       if (password === "Sap@2025") {
         try { sessionStorage.setItem("erp:default-password-warning", "1"); } catch { /* noop */ }
       }
+      failedAttemptsRef.current.delete(attemptKey(companyDB, userName));
       toast.success(`Conectado ao ${erpInfo.label}!`);
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error ?? "");
