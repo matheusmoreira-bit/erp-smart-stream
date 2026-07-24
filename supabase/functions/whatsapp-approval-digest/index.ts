@@ -79,23 +79,8 @@ async function sapLogout(baseUrl: string, s: { sessionId: string; routeId: strin
     });
   } catch { /* ignore */ }
 }
-async function sapFetchAllUsers(baseUrl: string, s: { sessionId: string; routeId: string }) {
-  const all: SapUserMini[] = [];
-  let skip = 0; const pageSize = 100;
-  for (let page = 0; page < 50; page++) {
-    const url = `${baseUrl}/Users?$select=UserCode,eMail,MobilePhoneNumber&$top=${pageSize}&$skip=${skip}`;
-    const resp = await fetch(url, {
-      headers: { Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}`, Prefer: `odata.maxpagesize=${pageSize}` },
-    });
-    if (!resp.ok) break;
-    const json = await resp.json().catch(() => null);
-    const rows: SapUserMini[] = json?.value || [];
-    all.push(...rows);
-    if (rows.length < pageSize) break;
-    skip += pageSize;
-  }
-  return all;
-}
+// (removido) sapFetchAllUsers — a listagem de usuários agora usa
+// `listSapUsersHybrid` (HanaAPI V2 quando disponível, com fallback ao SL).
 async function fetchApprovals(
   companyDb: string,
   database: string,
