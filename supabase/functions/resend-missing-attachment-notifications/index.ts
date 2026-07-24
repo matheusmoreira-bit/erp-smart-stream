@@ -53,11 +53,15 @@ async function getSignedLinks(
   return out;
 }
 
+import { weekendBlockResponse } from "../_shared/weekend-guard.ts";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const body = await req.json().catch(() => ({}));
+    const weekendBlock = await weekendBlockResponse(req, corsHeaders, body);
+    if (weekendBlock) return weekendBlock;
     const dryRun = Boolean(body.dry_run);
     const recipients: string[] = Array.isArray(body.recipients) && body.recipients.length > 0
       ? body.recipients
