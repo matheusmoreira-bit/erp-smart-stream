@@ -257,6 +257,7 @@ async function listPending(
   s: SapSession,
   userKey: number | null,
   userCode: string,
+  erpFlowDraftEntries: Set<number>,
 ) {
   const data = (await sapGet(
     s,
@@ -268,6 +269,10 @@ async function listPending(
 
   const result: Array<Record<string, unknown>> = [];
   for (const r of raw) {
+    // Filtra: só retorna aprovações cujo Draft foi criado pelo ERP Flow.
+    const draftEntry = Number(r.DraftEntry || 0);
+    if (!draftEntry || !erpFlowDraftEntries.has(draftEntry)) continue;
+
     let myStep: number | null = null;
     if (userKey != null) {
       const myLine = (r.ApprovalRequestLines || []).find(
@@ -280,7 +285,7 @@ async function listPending(
       myStep = Number((myPendingDecision?.ApprovalRequestStep ?? myLine?.ApprovalRequestStep) || 1);
     }
 
-    const draft = r.DraftEntry ? await fetchDraftBrief(s, Number(r.DraftEntry)) : null;
+    const draft = await fetchDraftBrief(s, draftEntry);
     const objCode = String(r.ObjectType || "");
     const pendingApprovers = userKey == null ? pendingApproversFromRequest(r, usersMap) : undefined;
 
@@ -289,7 +294,7 @@ async function listPending(
       step: myStep ?? (pendingApprovers?.[0]?.step ?? 1),
       doc_object_type: objCode,
       doc_type_name: OBJECT_CODE_TO_NAME[objCode] || `Documento (${objCode})`,
-      doc_entry: Number(r.DraftEntry || draft?.DocEntry || 0),
+      doc_entry: draftEntry || Number(draft?.DocEntry || 0),
       doc_num: Number(draft?.DocNum || 0),
       doc_total: Number(draft?.DocTotal || 0),
       currency: draft?.DocCurrency || "BRL",
@@ -304,6 +309,25 @@ async function listPending(
     });
   }
   return result;
+}
+
+async function loadErpFlowDraftEntries(companyDB: string): Promise<Set<number>> {
+  const client = sb();
+  const { data, error } = await client
+    .from("expenses")
+    .select("sap_doc_entry")
+    .eq("company_db", companyDB)
+    .not("sap_doc_entry", "is", null);
+  if (error) {
+    console.warn("loadErpFlowDraftEntries falhou:", error.message);
+    return new Set();
+  }
+  const out = new Set<number>();
+  for (const row of data || []) {
+    const n = Number((row as { sap_doc_entry: number | null }).sap_doc_entry);
+    if (Number.isFinite(n) && n > 0) out.add(n);
+  }
+  return out;
 }
 
 async function decideApproval(
