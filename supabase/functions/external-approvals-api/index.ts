@@ -367,7 +367,15 @@ Deno.serve(async (req) => {
     try { body = await req.json(); } catch { return json(400, { error: "JSON inválido" }); }
 
     const op = String(body.op || "").toLowerCase();
-    const companyDB = String(body.company_db || "").trim();
+    const rawCompanyDB = String(body.company_db || "").trim();
+    // Alias: nomes de schema SAP → slug interno do ERP Flow.
+    // Mantém compatibilidade com sistemas externos que enviam o CompanyDB do SAP B1.
+    const COMPANY_DB_ALIASES: Record<string, string> = {
+      SBO_OPENGAMING: "open_gaming_sa",
+      SBO_TST_OPENGAMING: "tst_open_gaming",
+      TST_OPENGAMING: "tst_open_gaming",
+    };
+    const companyDB = COMPANY_DB_ALIASES[rawCompanyDB.toUpperCase()] || rawCompanyDB;
     const userCode = String(body.user_code || "").trim();
 
     if (!op || !["list", "approve", "reject"].includes(op)) {
