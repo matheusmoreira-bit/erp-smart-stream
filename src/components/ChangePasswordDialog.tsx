@@ -43,6 +43,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
   const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customPick, setCustomPick] = useState(false);
+  const [managed, setManaged] = useState(false);
   const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
 
   const isTest = (db: string) => db.toUpperCase().startsWith("TST");
