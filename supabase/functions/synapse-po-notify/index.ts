@@ -102,18 +102,25 @@ async function resolveRequesterEmail(
   baseUrl: string,
   cookies: string,
   po: any,
+  userEmailMap?: Map<string, string>,
 ): Promise<string | null> {
   if (po.RequesterEmail && /\S+@\S+/.test(po.RequesterEmail)) return po.RequesterEmail;
-  if (po.RequesterCode) {
+  const code = po.RequesterCode ? String(po.RequesterCode) : "";
+  if (code && userEmailMap) {
+    const hit = userEmailMap.get(code.toLowerCase());
+    if (hit) return hit;
+  }
+  if (code) {
+    // Fallback (SL): usado apenas se o pré-carregamento hybrid não trouxe o usuário.
     try {
-      const u = await sapGet(baseUrl, cookies, `/Users('${po.RequesterCode}')?$select=EMail,UserCode`);
+      const u = await sapGet(baseUrl, cookies, `/Users('${code}')?$select=EMail,UserCode`);
       if (u?.EMail) return u.EMail;
     } catch (_) { /* ignore */ }
     try {
       const u2 = await sapGet(
         baseUrl,
         cookies,
-        `/Users?$filter=${encodeURIComponent(`UserCode eq '${po.RequesterCode}'`)}&$select=EMail&$top=1`,
+        `/Users?$filter=${encodeURIComponent(`UserCode eq '${code}'`)}&$select=EMail&$top=1`,
       );
       const v = (u2.value || [])[0];
       if (v?.EMail) return v.EMail;
