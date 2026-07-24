@@ -1,3 +1,4 @@
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Edge function: sap-approvals-hana
 // Consulta a view VW_APROVACOES_DETALHADAS via HanaAPI V2 usando a sessão
 // SAP do usuário logado. Se a sessão do usuário estiver expirada (401 na HANA),
@@ -18,7 +19,7 @@ const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
   open_gaming_sa: "SBO_OPENGAMING",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -81,4 +82,4 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-});
+}));

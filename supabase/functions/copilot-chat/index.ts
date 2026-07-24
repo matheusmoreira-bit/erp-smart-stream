@@ -1,3 +1,4 @@
+import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Copilot IA (Backoffice) — chat com acesso ao banco + ações operacionais auditadas.
 // Baseado no padrão ai-assistant + report-ai-chat (SSE streaming da resposta final).
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -625,7 +626,7 @@ Ferramentas de leitura são livres. Ferramentas de escrita mudam o sistema — t
 // ============================================================
 // Server
 // ============================================================
-Deno.serve(async (req) => {
+Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -711,7 +712,7 @@ Deno.serve(async (req) => {
     console.error("copilot-chat error:", e);
     return json({ error: e instanceof Error ? e.message : "Erro" }, 500);
   }
-});
+}));
 
 function json(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
