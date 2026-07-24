@@ -231,8 +231,12 @@ internamente). Documentadas em `security-memory` para o scanner não reabrir.
       `expense-approval-action`, `expense-to-sap`, `sap-approvals-hana`,
       `baixa-recebimento`, `sap-users-admin`, `sap-change-password`,
       `copilot-chat`. Card exposto em `/backoffice/sap-sync-runs`.
-- [ ] Alertas WhatsApp para p95 > 10s ou taxa de erro > 5%/5min (usa
-      `get_edge_function_metrics` como fonte).
+- [x] **O1.3 (24/07/2026)** — Alertas WhatsApp automáticos via
+      `edge-metrics-alerts` (cron `*/5min`). Dispara quando, na janela
+      de 5min com ≥10 execuções, `p95 > 10s` ou `error_rate > 5%`.
+      Dedup por `(function_name, kind, window_bucket)` na tabela
+      `edge_metrics_alerts`. Telefones em `EDGE_METRICS_ALERT_PHONES`
+      (fallback: Douglas Ferreira). Reusa gateway WhatsApp existente.
 
 ### FASE R1 — Refatoração / dívida
 
