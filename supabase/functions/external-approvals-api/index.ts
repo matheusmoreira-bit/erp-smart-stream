@@ -437,8 +437,7 @@ Deno.serve(async (req) => {
       const userKey = userCode ? await getUserKey(session, userCode) : null;
 
       if (op === "list") {
-        const erpFlowDrafts = await loadErpFlowDraftEntries(companyDB);
-        const docs = await listPending(session, userKey, userCode, erpFlowDrafts);
+        const docs = await listPending(session, userKey, userCode);
         if (userCode) {
           await admin.rpc("register_external_api_success", { _company_db: companyDB, _user_code: userCode });
         }
