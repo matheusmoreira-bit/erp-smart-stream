@@ -158,12 +158,32 @@ export function BackofficeChangePasswordDialog({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
-              <Label className="text-sm">Nova senha (padrão)</Label>
-              <p className="text-lg font-mono text-foreground">{DEFAULT_RESET_PASSWORD}</p>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="new-password" className="text-sm">Nova senha temporária</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setPassword(generateUniquePassword())}
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" /> Gerar única
+                </Button>
+              </div>
+              <Input
+                id="new-password"
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="font-mono"
+                autoComplete="off"
+              />
+              <PasswordPolicyChecklist password={password} userCode={userCode} />
               <p className="text-xs text-muted-foreground">
-                O usuário receberá esta senha temporária e será solicitado a alterá-la no próximo login.
+                Padrão: <span className="font-mono">{DEFAULT_RESET_PASSWORD}</span>. Se o SAP recusar por "senha igual à anterior" (histórico de senhas), clique em <span className="font-medium">Gerar única</span> para uma senha nova, ou digite uma manualmente. O usuário será solicitado a alterá-la no próximo login.
               </p>
             </div>
+
 
             <div className="space-y-2 pt-2 border-t border-border">
               <Label className="text-sm">Empresas onde a senha será redefinida</Label>
