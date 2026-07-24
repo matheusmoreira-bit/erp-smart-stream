@@ -140,10 +140,18 @@ async function processCompany(
   catch (e) { result.status = "error"; result.error = (e as Error).message; return result; }
 
   try {
-    const [approvals, sapUsers] = await Promise.all([
+    const [approvals, usersResp] = await Promise.all([
       fetchApprovals(company.company_db, dbName, session.sessionId, creds.hana_api_url),
-      sapFetchAllUsers(baseUrl, session),
+      listSapUsersHybrid({
+        sb,
+        companyDb: company.company_db,
+        baseUrl,
+        sapSession: session,
+        database: dbName,
+        needsPhone: true,
+      }),
     ]);
+    const sapUsers = usersResp.users;
 
     const usersByEmail = new Map<string, SapUserMini>();
     const usersByCode = new Map<string, SapUserMini>();
