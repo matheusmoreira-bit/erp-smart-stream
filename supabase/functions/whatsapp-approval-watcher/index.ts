@@ -173,10 +173,18 @@ async function processCompany(
   }
 
   try {
-    const [approvals, sapUsers] = await Promise.all([
+    const [approvals, usersResp] = await Promise.all([
       fetchApprovals(company.company_db, dbName, session.sessionId, creds.hana_api_url),
-      sapFetchAllUsers(baseUrl, session),
+      listSapUsersHybrid({
+        sb,
+        companyDb: company.company_db,
+        baseUrl,
+        sapSession: session,
+        database: dbName,
+        needsPhone: true,
+      }),
     ]);
+    const sapUsers = usersResp.users;
 
     // mapas auxiliares
     const usersByEmail = new Map<string, SapUserMini>();
