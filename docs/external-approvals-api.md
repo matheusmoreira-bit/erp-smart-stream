@@ -56,9 +56,12 @@ Respostas de erro de autenticação:
 
 ## 3. Operações
 
-### 3.1 Listar documentos pendentes para um usuário
+### 3.1 Listar documentos pendentes
 
-**Request**
+Há dois modos:
+
+**a) Pendências de UM usuário** (informe `user_code`):
+
 ```http
 POST /functions/v1/external-approvals-api
 X-API-Key: ...
@@ -71,11 +74,27 @@ Content-Type: application/json
 }
 ```
 
-**Response 200**
+**b) TODAS as pendências da empresa** (omita `user_code`):
+
+```json
+{
+  "op": "list",
+  "company_db": "SBO_EMPRESA_X"
+}
+```
+
+Nesse modo, cada documento traz `pending_approvers` com os aprovadores atuais
+(útil quando o sistema externo quer roteirizar/exibir tudo por conta própria).
+A allowlist por `user_code` **não** é aplicada — a `X-API-Key` já autoriza a
+leitura no nível da empresa; compartilhe a chave apenas com sistemas de
+confiança.
+
+**Response 200** (modo b, `scope: "company"`):
 ```json
 {
   "company_db": "SBO_EMPRESA_X",
-  "user_code": "joao.silva",
+  "user_code": null,
+  "scope": "company",
   "count": 2,
   "documents": [
     {
@@ -93,15 +112,22 @@ Content-Type: application/json
       "creation_date": "2026-05-22T14:33:00Z",
       "update_date": "2026-05-23T09:10:00Z",
       "originator_id": 47,
-      "approver_user_code": "joao.silva"
+      "approver_user_code": "",
+      "pending_approvers": [
+        { "user_id": 112, "user_code": "joao.silva", "step": 1 },
+        { "user_id": 118, "user_code": "maria.santos", "step": 2 }
+      ]
     }
   ]
 }
 ```
 
+No modo (a), a resposta traz `scope: "user"`, `user_code` preenchido e cada
+item já vem filtrado pelas pendências do próprio usuário (sem `pending_approvers`).
+
 Campos importantes:
 - `approval_request_id` — usar nas chamadas `approve` / `reject`.
-- `step` — passo de aprovação do usuário; também usado nas decisões.
+- `step` — passo de aprovação; no modo empresa, use o `step` do aprovador dentro de `pending_approvers`.
 - `doc_object_type` — código SAP do objeto (22 = Pedido de Compra, 18 = NF de Entrada, etc.).
 - `doc_total` / `currency` — valor e moeda do documento original (Draft).
 
