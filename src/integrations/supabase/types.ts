@@ -1683,6 +1683,54 @@ export type Database = {
         }
         Relationships: []
       }
+      edge_metrics_alerts: {
+        Row: {
+          created_at: string
+          error_rate: number | null
+          errors: number | null
+          function_name: string
+          id: string
+          kind: string
+          message: string | null
+          ok: boolean | null
+          p95_ms: number | null
+          response: string | null
+          sent_to: string | null
+          total: number | null
+          window_bucket: string
+        }
+        Insert: {
+          created_at?: string
+          error_rate?: number | null
+          errors?: number | null
+          function_name: string
+          id?: string
+          kind: string
+          message?: string | null
+          ok?: boolean | null
+          p95_ms?: number | null
+          response?: string | null
+          sent_to?: string | null
+          total?: number | null
+          window_bucket: string
+        }
+        Update: {
+          created_at?: string
+          error_rate?: number | null
+          errors?: number | null
+          function_name?: string
+          id?: string
+          kind?: string
+          message?: string | null
+          ok?: boolean | null
+          p95_ms?: number | null
+          response?: string | null
+          sent_to?: string | null
+          total?: number | null
+          window_bucket?: string
+        }
+        Relationships: []
+      }
       edge_rate_limits: {
         Row: {
           count: number
