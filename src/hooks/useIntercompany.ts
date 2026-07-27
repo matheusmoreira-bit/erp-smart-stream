@@ -44,6 +44,14 @@ export interface SapItemRow {
   Frozen?: string;
 }
 
+export interface SapProjectRow {
+  Code: string;
+  Name: string;
+  Active?: string;
+  ValidFrom?: string;
+  ValidTo?: string;
+}
+
 export interface SapUserRow {
   UserCode: string;
   UserName: string;
