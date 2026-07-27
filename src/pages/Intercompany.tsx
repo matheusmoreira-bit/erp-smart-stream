@@ -892,7 +892,7 @@ export default function Intercompany() {
     [allCompanies],
   );
 
-  const [tab, setTab] = useState<"accounts" | "centers" | "bps" | "items" | "users">("accounts");
+  const [tab, setTab] = useState<"accounts" | "centers" | "projects" | "bps" | "items" | "users">("accounts");
   const [search, setSearch] = useState("");
   const [selectedDbs, setSelectedDbs] = useState<string[]>(() => {
     try {
@@ -1034,7 +1034,7 @@ export default function Intercompany() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as "accounts" | "centers" | "bps" | "items" | "users")}>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as "accounts" | "centers" | "projects" | "bps" | "items" | "users")}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <TabsList>
                 <TabsTrigger value="accounts">Plano de Contas</TabsTrigger>
