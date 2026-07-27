@@ -986,6 +986,12 @@ export default function Intercompany() {
     () => consolidateUsers(userResults),
     [userResults],
   );
+  const { rows: projectRows, companies: projectCompanies } = useMemo(
+    () => consolidateProjects(projectResults),
+    [projectResults],
+  );
+
+
 
   // Floating notification (15s) for companies that failed
   const lastErrorKeyRef = useRef<string>("");
