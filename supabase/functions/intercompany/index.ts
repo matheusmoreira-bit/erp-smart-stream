@@ -298,6 +298,17 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
+    if (action === "list-projects") {
+      const results = await forEachCompany(sb, body.company_dbs, async (_c, cookies) => {
+        return await sapGetAll(_c.baseUrl, cookies, "Projects", {
+          $select: "Code,Name,Active,ValidFrom,ValidTo",
+        });
+      });
+      return json({ results });
+    }
+
+
+
     if (action === "create-account") {
       const { code, name, account_type, active_account } = body;
       if (!code || !name) return json({ error: "code e name são obrigatórios" }, 400);
