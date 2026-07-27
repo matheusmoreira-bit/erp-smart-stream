@@ -1051,6 +1051,8 @@ export default function Intercompany() {
               <TabsList>
                 <TabsTrigger value="accounts">Plano de Contas</TabsTrigger>
                 <TabsTrigger value="centers">Centros de Custo</TabsTrigger>
+                <TabsTrigger value="projects">Projetos</TabsTrigger>
+
                 <TabsTrigger value="bps">Parceiros de Negócios</TabsTrigger>
                 <TabsTrigger value="items">Itens</TabsTrigger>
                 <TabsTrigger value="users">Usuários</TabsTrigger>
