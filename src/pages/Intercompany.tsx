@@ -1305,7 +1305,44 @@ export default function Intercompany() {
               )}
             </TabsContent>
 
+            <TabsContent value="projects" className="space-y-3 mt-4">
+              {loadingProjects && projectResults.length === 0 ? (
+                <div className="text-center text-muted-foreground py-12 text-sm">
+                  Carregando projetos de todas as empresas…
+                </div>
+              ) : (
+                <ConsolidatedTable
+                  rows={projectRows}
+                  companies={projectCompanies}
+                  search={search}
+                  readOnly
+                  onReplicate={async (code, _name, targetDb) => {
+                    const row = projectRows.find((r) => r.code === code);
+                    const sourceDb = row ? Array.from(row.presence.keys())[0] : undefined;
+                    if (!sourceDb) {
+                      toast.error("Não foi possível identificar a empresa de origem");
+                      return;
+                    }
+                    try {
+                      const { results } = await replicateProject({
+                        code,
+                        source_company_db: sourceDb,
+                        target_company_db: targetDb,
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
+                      toast.success(`Projeto ${code} replicado nesta empresa`);
+                      await reloadProjects();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao replicar");
+                    }
+                  }}
+                />
+              )}
+            </TabsContent>
+
             <TabsContent value="bps" className="space-y-3 mt-4">
+
               {loadingBPs && bpResults.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12 text-sm">
                   Carregando parceiros de negócios de todas as empresas…
