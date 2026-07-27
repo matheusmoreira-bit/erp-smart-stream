@@ -55,6 +55,8 @@ import {
   type SapBusinessPartnerRow,
   type SapItemRow,
   type SapUserRow,
+  type SapProjectRow,
+
 } from "@/hooks/useIntercompany";
 import { PageTitle } from "@/components/PageTitle";
 
