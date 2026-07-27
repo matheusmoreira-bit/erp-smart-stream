@@ -298,6 +298,17 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
+    if (action === "list-projects") {
+      const results = await forEachCompany(sb, body.company_dbs, async (_c, cookies) => {
+        return await sapGetAll(_c.baseUrl, cookies, "Projects", {
+          $select: "Code,Name,Active,ValidFrom,ValidTo",
+        });
+      });
+      return json({ results });
+    }
+
+
+
     if (action === "create-account") {
       const { code, name, account_type, active_account } = body;
       if (!code || !name) return json({ error: "code e name são obrigatórios" }, 400);
@@ -399,7 +410,11 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
-    if (action === "replicate-account" || action === "replicate-cost-center") {
+    if (
+      action === "replicate-account" ||
+      action === "replicate-cost-center" ||
+      action === "replicate-project"
+    ) {
       const { code, source_company_db, target_company_db } = body;
       if (!code || !source_company_db || !target_company_db) {
         return json(
@@ -412,9 +427,13 @@ Deno.serve(async (req) => {
       }
 
       const isAccount = action === "replicate-account";
-      const endpoint = isAccount ? "ChartOfAccounts" : "ProfitCenters";
-      const keyField = isAccount ? "Code" : "CenterCode";
-      const allowedFields = isAccount
+      const isProject = action === "replicate-project";
+      const endpoint = isAccount ? "ChartOfAccounts" : isProject ? "Projects" : "ProfitCenters";
+      const keyField = isAccount || isProject ? "Code" : "CenterCode";
+      const allowedFields = isProject
+        ? ["Code", "Name", "Active", "ValidFrom", "ValidTo"]
+        : isAccount
+
         ? [
             "Code",
             "Name",

@@ -55,6 +55,8 @@ import {
   type SapBusinessPartnerRow,
   type SapItemRow,
   type SapUserRow,
+  type SapProjectRow,
+
 } from "@/hooks/useIntercompany";
 import { PageTitle } from "@/components/PageTitle";
 
@@ -215,6 +217,36 @@ function consolidateCenters(
   const rows = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
   return { rows, companies };
 }
+
+function consolidateProjects(
+  results: PerCompanyResult<SapProjectRow[]>[],
+): { rows: UnifiedCenterRow[]; companies: { db: string; name: string }[] } {
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
+  const map = new Map<string, UnifiedCenterRow>();
+  for (const r of results) {
+    if (!r.ok || !r.data) continue;
+    for (const p of r.data) {
+      const code = String(p.Code || "").trim();
+      if (!code) continue;
+      let row = map.get(code);
+      if (!row) {
+        row = { code, names: new Set(), presence: new Map() };
+        map.set(code, row);
+      }
+      row.names.add(p.Name || "");
+      row.presence.set(r.company_db, {
+        name: p.Name || "",
+        active: p.Active !== "tNO",
+      });
+    }
+  }
+  const rows = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  return { rows, companies };
+}
+
+
 
 
 
@@ -829,16 +861,19 @@ export default function Intercompany() {
     loadingBPs,
     loadingItems,
     loadingUsers,
+    loadingProjects,
     accountResults,
     centerResults,
     bpResults,
     itemResults,
     userResults,
+    projectResults,
     loadAccounts,
     loadCostCenters,
     loadBusinessPartners,
     loadItems,
     loadUsers,
+    loadProjects,
     toggleAccount,
     toggleCostCenter,
     createAccount,
@@ -848,6 +883,8 @@ export default function Intercompany() {
     replicateUser,
     replicateAccount,
     replicateCostCenter,
+    replicateProject,
+
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = useMemo(
@@ -855,7 +892,7 @@ export default function Intercompany() {
     [allCompanies],
   );
 
-  const [tab, setTab] = useState<"accounts" | "centers" | "bps" | "items" | "users">("accounts");
+  const [tab, setTab] = useState<"accounts" | "centers" | "projects" | "bps" | "items" | "users">("accounts");
   const [search, setSearch] = useState("");
   const [selectedDbs, setSelectedDbs] = useState<string[]>(() => {
     try {
@@ -907,6 +944,10 @@ export default function Intercompany() {
     () => () => loadUsers(selectedDbs),
     [loadUsers, selectedDbs],
   );
+  const reloadProjects = useMemo(
+    () => () => loadProjects(selectedDbs),
+    [loadProjects, selectedDbs],
+  );
 
   // Load accounts/centers eagerly; BPs/items/users only on tab access (datasets podem ser grandes)
   useEffect(() => {
@@ -920,6 +961,8 @@ export default function Intercompany() {
     if (tab === "bps" && bpResults.length === 0 && !loadingBPs) reloadBPs();
     if (tab === "items" && itemResults.length === 0 && !loadingItems) reloadItems();
     if (tab === "users" && userResults.length === 0 && !loadingUsers) reloadUsers();
+    if (tab === "projects" && projectResults.length === 0 && !loadingProjects) reloadProjects();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, selectedDbs]);
 
@@ -943,6 +986,12 @@ export default function Intercompany() {
     () => consolidateUsers(userResults),
     [userResults],
   );
+  const { rows: projectRows, companies: projectCompanies } = useMemo(
+    () => consolidateProjects(projectResults),
+    [projectResults],
+  );
+
+
 
   // Floating notification (15s) for companies that failed
   const lastErrorKeyRef = useRef<string>("");
@@ -997,11 +1046,13 @@ export default function Intercompany() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as "accounts" | "centers" | "bps" | "items" | "users")}>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as "accounts" | "centers" | "projects" | "bps" | "items" | "users")}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <TabsList>
                 <TabsTrigger value="accounts">Plano de Contas</TabsTrigger>
                 <TabsTrigger value="centers">Centros de Custo</TabsTrigger>
+                <TabsTrigger value="projects">Projetos</TabsTrigger>
+
                 <TabsTrigger value="bps">Parceiros de Negócios</TabsTrigger>
                 <TabsTrigger value="items">Itens</TabsTrigger>
                 <TabsTrigger value="users">Usuários</TabsTrigger>
@@ -1108,7 +1159,20 @@ export default function Intercompany() {
                     <CreateCostCenterDialog onCreated={reloadCenters} companyDbs={selectedDbs} />
                   </>
                 )}
+                {tab === "projects" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={reloadProjects}
+                    disabled={loadingProjects || selectedDbs.length === 0}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingProjects ? "animate-spin" : ""}`} />
+                    Atualizar
+                  </Button>
+                )}
                 {tab === "bps" && (
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -1241,7 +1305,44 @@ export default function Intercompany() {
               )}
             </TabsContent>
 
+            <TabsContent value="projects" className="space-y-3 mt-4">
+              {loadingProjects && projectResults.length === 0 ? (
+                <div className="text-center text-muted-foreground py-12 text-sm">
+                  Carregando projetos de todas as empresas…
+                </div>
+              ) : (
+                <ConsolidatedTable
+                  rows={projectRows}
+                  companies={projectCompanies}
+                  search={search}
+                  readOnly
+                  onReplicate={async (code, _name, targetDb) => {
+                    const row = projectRows.find((r) => r.code === code);
+                    const sourceDb = row ? Array.from(row.presence.keys())[0] : undefined;
+                    if (!sourceDb) {
+                      toast.error("Não foi possível identificar a empresa de origem");
+                      return;
+                    }
+                    try {
+                      const { results } = await replicateProject({
+                        code,
+                        source_company_db: sourceDb,
+                        target_company_db: targetDb,
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao replicar");
+                      toast.success(`Projeto ${code} replicado nesta empresa`);
+                      await reloadProjects();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao replicar");
+                    }
+                  }}
+                />
+              )}
+            </TabsContent>
+
             <TabsContent value="bps" className="space-y-3 mt-4">
+
               {loadingBPs && bpResults.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12 text-sm">
                   Carregando parceiros de negócios de todas as empresas…

@@ -44,6 +44,14 @@ export interface SapItemRow {
   Frozen?: string;
 }
 
+export interface SapProjectRow {
+  Code: string;
+  Name: string;
+  Active?: string;
+  ValidFrom?: string;
+  ValidTo?: string;
+}
+
 export interface SapUserRow {
   UserCode: string;
   UserName: string;
@@ -77,6 +85,9 @@ export function useIntercompany() {
   const [itemResults, setItemResults] = useState<PerCompanyResult<SapItemRow[]>[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [userResults, setUserResults] = useState<PerCompanyResult<SapUserRow[]>[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectResults, setProjectResults] = useState<PerCompanyResult<SapProjectRow[]>[]>([]);
+
 
   const loadAccounts = useCallback(async (company_dbs?: string[]) => {
     setLoadingAccounts(true);
@@ -253,22 +264,48 @@ export function useIntercompany() {
     [],
   );
 
+  const loadProjects = useCallback(async (company_dbs?: string[]) => {
+    setLoadingProjects(true);
+    try {
+      const r = await callIntercompany<{ results: PerCompanyResult<SapProjectRow[]>[] }>({
+        action: "list-projects",
+        company_dbs,
+      });
+      setProjectResults(r.results || []);
+    } finally {
+      setLoadingProjects(false);
+    }
+  }, []);
+
+  const replicateProject = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-project",
+        ...input,
+      });
+    },
+    [],
+  );
+
   return {
     loadingAccounts,
     loadingCenters,
     loadingBPs,
     loadingItems,
     loadingUsers,
+    loadingProjects,
     accountResults,
     centerResults,
     bpResults,
     itemResults,
     userResults,
+    projectResults,
     loadAccounts,
     loadCostCenters,
     loadBusinessPartners,
     loadItems,
     loadUsers,
+    loadProjects,
     createAccount,
     createCostCenter,
     renameAccount,
@@ -280,5 +317,7 @@ export function useIntercompany() {
     replicateUser,
     replicateAccount,
     replicateCostCenter,
+    replicateProject,
   };
+
 }
