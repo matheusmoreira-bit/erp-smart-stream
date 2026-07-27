@@ -1159,7 +1159,20 @@ export default function Intercompany() {
                     <CreateCostCenterDialog onCreated={reloadCenters} companyDbs={selectedDbs} />
                   </>
                 )}
+                {tab === "projects" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={reloadProjects}
+                    disabled={loadingProjects || selectedDbs.length === 0}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingProjects ? "animate-spin" : ""}`} />
+                    Atualizar
+                  </Button>
+                )}
                 {tab === "bps" && (
+
                   <Button
                     variant="outline"
                     size="sm"
