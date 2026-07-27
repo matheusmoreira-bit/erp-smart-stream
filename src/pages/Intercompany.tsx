@@ -944,6 +944,10 @@ export default function Intercompany() {
     () => () => loadUsers(selectedDbs),
     [loadUsers, selectedDbs],
   );
+  const reloadProjects = useMemo(
+    () => () => loadProjects(selectedDbs),
+    [loadProjects, selectedDbs],
+  );
 
   // Load accounts/centers eagerly; BPs/items/users only on tab access (datasets podem ser grandes)
   useEffect(() => {
@@ -957,6 +961,8 @@ export default function Intercompany() {
     if (tab === "bps" && bpResults.length === 0 && !loadingBPs) reloadBPs();
     if (tab === "items" && itemResults.length === 0 && !loadingItems) reloadItems();
     if (tab === "users" && userResults.length === 0 && !loadingUsers) reloadUsers();
+    if (tab === "projects" && projectResults.length === 0 && !loadingProjects) reloadProjects();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, selectedDbs]);
 
