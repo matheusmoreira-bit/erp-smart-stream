@@ -218,6 +218,36 @@ function consolidateCenters(
   return { rows, companies };
 }
 
+function consolidateProjects(
+  results: PerCompanyResult<SapProjectRow[]>[],
+): { rows: UnifiedCenterRow[]; companies: { db: string; name: string }[] } {
+  const companies = results
+    .filter((r) => r.ok && r.data)
+    .map((r) => ({ db: r.company_db, name: r.display_name }));
+  const map = new Map<string, UnifiedCenterRow>();
+  for (const r of results) {
+    if (!r.ok || !r.data) continue;
+    for (const p of r.data) {
+      const code = String(p.Code || "").trim();
+      if (!code) continue;
+      let row = map.get(code);
+      if (!row) {
+        row = { code, names: new Set(), presence: new Map() };
+        map.set(code, row);
+      }
+      row.names.add(p.Name || "");
+      row.presence.set(r.company_db, {
+        name: p.Name || "",
+        active: p.Active !== "tNO",
+      });
+    }
+  }
+  const rows = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  return { rows, companies };
+}
+
+
+
 
 
 function ResultReportDialog({
