@@ -85,6 +85,9 @@ export function useIntercompany() {
   const [itemResults, setItemResults] = useState<PerCompanyResult<SapItemRow[]>[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [userResults, setUserResults] = useState<PerCompanyResult<SapUserRow[]>[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectResults, setProjectResults] = useState<PerCompanyResult<SapProjectRow[]>[]>([]);
+
 
   const loadAccounts = useCallback(async (company_dbs?: string[]) => {
     setLoadingAccounts(true);
