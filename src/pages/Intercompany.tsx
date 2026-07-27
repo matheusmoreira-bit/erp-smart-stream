@@ -861,16 +861,19 @@ export default function Intercompany() {
     loadingBPs,
     loadingItems,
     loadingUsers,
+    loadingProjects,
     accountResults,
     centerResults,
     bpResults,
     itemResults,
     userResults,
+    projectResults,
     loadAccounts,
     loadCostCenters,
     loadBusinessPartners,
     loadItems,
     loadUsers,
+    loadProjects,
     toggleAccount,
     toggleCostCenter,
     createAccount,
@@ -880,6 +883,8 @@ export default function Intercompany() {
     replicateUser,
     replicateAccount,
     replicateCostCenter,
+    replicateProject,
+
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
   const sapCompanies = useMemo(
