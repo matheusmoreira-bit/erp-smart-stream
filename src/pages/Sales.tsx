@@ -59,6 +59,8 @@ interface SapInvoice {
   DocEntry: number;
   DocNum: number;
   FolioNumber: number | null;
+  FolioPrefixString: string | null;
+  SeriesString: string | null;
   CardCode: string;
   CardName: string;
   DocDate: string;
@@ -75,7 +77,12 @@ interface InvoiceRow {
   docNum: number;
   /** Número da NFSE / folio fiscal (SAP FolioNumber). */
   folioNumber: number | null;
+  /** Prefixo/tipo da NFSE (SAP FolioPrefixString), ex.: NFSe_CAC. */
+  folioPrefix: string | null;
+  /** Série da NFSE (SAP SeriesString), ex.: 1. */
+  folioSeries: string | null;
   cardCode: string;
+
   cardName: string;
   docDate: string;
   docDueDate: string | null;
