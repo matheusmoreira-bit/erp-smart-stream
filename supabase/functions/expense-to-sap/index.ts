@@ -803,6 +803,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const body = await req.json();
     expenseId = body.expense_id;
     pagcorpLog = body.pagcorp_log || null;
+    skipAttachments = body.skip_attachments === true;
     if (!expenseId) throw new Error("expense_id obrigatório");
 
     supabase = createClient(
