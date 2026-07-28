@@ -1360,7 +1360,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         supplier: expenseSnapshot?.supplier_name,
         amount: expenseSnapshot?.total_amount,
         currency: expenseSnapshot?.currency,
-        reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+        reason: skipAttachments ? "manual_skip_attachment" : integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
         attachments: attachmentLinks,
       });
       await notifyMissingAttachmentEmail({
@@ -1374,7 +1374,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         supplier: expenseSnapshot?.supplier_name,
         amount: expenseSnapshot?.total_amount,
         currency: expenseSnapshot?.currency,
-        reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+        reason: skipAttachments ? "manual_skip_attachment" : integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
         attachments: attachmentLinks,
       });
     }
