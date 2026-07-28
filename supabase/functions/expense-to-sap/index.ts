@@ -103,7 +103,7 @@ async function notifyMissingAttachmentWhatsApp(params: {
   supplier?: string | null;
   amount?: number | null;
   currency?: string | null;
-  reason: "no_attachment_uploaded" | "integration_attachments_disabled";
+  reason: "no_attachment_uploaded" | "integration_attachments_disabled" | "manual_skip_attachment";
   attachments?: Array<{ file_name: string; url: string }>;
 }): Promise<void> {
   try {
@@ -119,6 +119,8 @@ async function notifyMissingAttachmentWhatsApp(params: {
     }
     const reasonLabel = params.reason === "integration_attachments_disabled"
       ? "Integração de anexos desligada para a empresa"
+      : params.reason === "manual_skip_attachment"
+      ? "Integração reprocessada manualmente SEM anexo (falha de anexo no SAP)"
       : "Pedido aprovado sem nenhum anexo vinculado no SAP";
     const lines = [
       "🚨 *Contingência — Anexo pendente no SAP*",
@@ -164,12 +166,25 @@ async function notifyMissingAttachmentWhatsApp(params: {
 }
 
 // Fire-and-forget: envia email da contingência (sem anexo) para o time
-// fiscal e responsáveis (Leonardo). Inclui os links assinados dos anexos
-// internos, quando existirem, para lançamento manual no ERP.
+// fiscal da empresa (fiscal@<domínio do solicitante>) e responsáveis.
+// Inclui os anexos internos (arquivo + link assinado) para lançamento manual.
 const MISSING_ATTACHMENT_EMAIL_TO = [
   "fiscal@anagaming.com.br",
   "leonardo.oliveira@anagaming.com.br",
 ];
+
+// fiscal@{dominio_da_empresa} — derivado do email do solicitante.
+function fiscalRecipients(requesterEmail?: string | null): string[] {
+  const domain = String(requesterEmail || "").split("@")[1]?.trim().toLowerCase();
+  const list = [...MISSING_ATTACHMENT_EMAIL_TO];
+  if (domain && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) list.unshift(`fiscal@${domain}`);
+  return Array.from(new Set(list));
+}
+
+type MissingAttachmentReason =
+  | "no_attachment_uploaded"
+  | "integration_attachments_disabled"
+  | "manual_skip_attachment";
 
 async function notifyMissingAttachmentEmail(params: {
   supabase: ReturnType<typeof createClient>;
@@ -182,7 +197,7 @@ async function notifyMissingAttachmentEmail(params: {
   supplier?: string | null;
   amount?: number | null;
   currency?: string | null;
-  reason: "no_attachment_uploaded" | "integration_attachments_disabled";
+  reason: MissingAttachmentReason;
   attachments?: Array<{ file_name: string; url: string }>;
 }): Promise<void> {
   try {
@@ -198,6 +213,8 @@ async function notifyMissingAttachmentEmail(params: {
     }
     const reasonLabel = params.reason === "integration_attachments_disabled"
       ? "Integração de anexos desligada para a empresa"
+      : params.reason === "manual_skip_attachment"
+      ? "Integração reprocessada manualmente SEM anexo (falha de anexo no SAP) — anexo segue neste email"
       : "Pedido aprovado sem nenhum anexo vinculado no SAP";
 
     const esc = (s: string) =>
@@ -249,11 +266,12 @@ async function notifyMissingAttachmentEmail(params: {
 
     const { error } = await params.supabase.functions.invoke("send-smtp-email", {
       body: {
-        to: MISSING_ATTACHMENT_EMAIL_TO,
+        to: fiscalRecipients(params.requesterEmail),
         replyTo: params.requesterEmail || undefined,
         subject,
         html,
         text: textLines.join("\n"),
+        attachments: atts.map((a) => ({ filename: a.file_name, url: a.url })),
       },
     });
     if (error) console.warn("notifyMissingAttachmentEmail send failed:", error);
@@ -713,6 +731,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
   let supabase: ReturnType<typeof createClient> | null = null;
   let pagcorpLog: any = null;
   let pagcorpLogWritten = false;
+  // Reprocessamento manual "integrar sem anexo": ignora o estágio de anexos
+  // no SAP e envia o arquivo por email para o fiscal da empresa.
+  let skipAttachments = false;
   let expenseSnapshot: any = null;
   // Captured outside the try/catch so the error path can return the same
   // payload that was actually sent to SAP (used by the integration log UI).
@@ -782,6 +803,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const body = await req.json();
     expenseId = body.expense_id;
     pagcorpLog = body.pagcorp_log || null;
+    skipAttachments = body.skip_attachments === true;
     if (!expenseId) throw new Error("expense_id obrigatório");
 
     supabase = createClient(
@@ -1026,8 +1048,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     // 3.1 Attachments stage — upload first and link via AttachmentEntry.
     // Reuse sap_attachment_entry if a previous attempt already uploaded them
     // to avoid duplicating attachments in SAP when retrying after a failure.
-    let attachmentEntry: number | null = expense.sap_attachment_entry ?? null;
-    const integrateAttachments = (sapCreds.integrate_attachments || "").toLowerCase() === "true";
+    let attachmentEntry: number | null = skipAttachments ? null : (expense.sap_attachment_entry ?? null);
+    const integrateAttachments = !skipAttachments
+      && (sapCreds.integrate_attachments || "").toLowerCase() === "true";
 
     if (integrateAttachments) {
       if (attachmentEntry !== null) {
@@ -1337,7 +1360,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         supplier: expenseSnapshot?.supplier_name,
         amount: expenseSnapshot?.total_amount,
         currency: expenseSnapshot?.currency,
-        reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+        reason: skipAttachments ? "manual_skip_attachment" : integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
         attachments: attachmentLinks,
       });
       await notifyMissingAttachmentEmail({
@@ -1351,7 +1374,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         supplier: expenseSnapshot?.supplier_name,
         amount: expenseSnapshot?.total_amount,
         currency: expenseSnapshot?.currency,
-        reason: integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
+        reason: skipAttachments ? "manual_skip_attachment" : integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
         attachments: attachmentLinks,
       });
     }
