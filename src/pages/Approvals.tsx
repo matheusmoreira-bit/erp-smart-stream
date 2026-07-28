@@ -511,7 +511,12 @@ function ApprovalDetailModal({
   // segmentos que lhe cabem; as demais aparecem borradas com aviso.
   const restrictToMySegments =
     segmented && !specialRateio && !isAdmin && !isSuperUser && mySegments.length > 0 && !showAllLines;
+  // Máscara visual (blur) das partes de outros aprovadores — vale também para
+  // admins/super, que podem alternar para o documento completo quando precisarem.
+  const maskOtherSegments =
+    segmented && !specialRateio && mySegments.length > 0 && !showAllLines;
   const visibleLines = doc?.documentLines || [];
+
   // Mapeia CostingCode → segmento (para saber a qual aprovador cada linha
   // pertence quando exibimos com blur).
   const segmentByCC = useMemo(() => {
