@@ -507,11 +507,13 @@ function ApprovalDetailModal({
   // Documentos com Tipo de Rateio ≠ "Não" (folha/imposto/reembolso/viagens)
   // são rateios sistêmicos; TODOS os aprovadores veem o documento completo.
   const specialRateio = !!(doc?.rateioType && doc.rateioType !== "padrao");
-  // Aprovador comum (não admin, não super) só vê CLARAMENTE as linhas dos
-  // segmentos que lhe cabem; as demais aparecem borradas com aviso.
-  const restrictToMySegments =
-    segmented && !specialRateio && !isAdmin && !isSuperUser && mySegments.length > 0 && !showAllLines;
+  // Máscara visual (blur) das partes de outros aprovadores — vale também para
+  // admins/super, que podem alternar para o documento completo quando precisarem.
+  const maskOtherSegments =
+    segmented && !specialRateio && mySegments.length > 0 && !showAllLines;
+
   const visibleLines = doc?.documentLines || [];
+
   // Mapeia CostingCode → segmento (para saber a qual aprovador cada linha
   // pertence quando exibimos com blur).
   const segmentByCC = useMemo(() => {
@@ -528,15 +530,16 @@ function ApprovalDetailModal({
   );
   const isLineMine = useCallback(
     (line: DocumentLine): boolean => {
-      if (!restrictToMySegments) return true;
+      if (!maskOtherSegments) return true;
       const key = (line.CostingCode || "").trim() || "__no_cc__";
       return myCCs.has(key);
     },
-    [restrictToMySegments, myCCs],
+    [maskOtherSegments, myCCs],
   );
-  const visibleTotal = restrictToMySegments
+  const visibleTotal = maskOtherSegments
     ? mySegments.reduce((s, seg) => s + (doc?.currency !== "BRL" ? seg.amountFC : seg.amount), 0)
     : (doc?.docTotal || 0);
+
 
   // Sempre que troca de documento, pré-seleciona CCs mapeados (ou nenhum se não houver mapping)
   // e limpa o campo de Observação para não vazar texto do card anterior.
@@ -851,14 +854,23 @@ function ApprovalDetailModal({
                 <div className="space-y-1.5">
                   {rateio.info.byCC.map((cc) => {
                     const checked = selectedCCs.has(cc.code);
+                    const ccKey = (cc.code || "").trim() || "__no_cc__";
+                    const mineCC = !maskOtherSegments || myCCs.has(ccKey);
                     return (
                       <label
                         key={cc.code}
-                        className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-background/40 hover:bg-background/70 cursor-pointer transition-colors"
+                        title={!mineCC ? "Centro de custo da alçada de outro aprovador" : undefined}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg border border-border transition-colors ${
+                          mineCC
+                            ? "bg-background/40 hover:bg-background/70 cursor-pointer"
+                            : "bg-muted/10 cursor-not-allowed"
+                        }`}
                       >
                         <Checkbox
-                          checked={checked}
+                          checked={mineCC ? checked : false}
+                          disabled={!mineCC}
                           onCheckedChange={(v) => {
+                            if (!mineCC) return;
                             setSelectedCCs((prev) => {
                               const next = new Set(prev);
                               if (v) next.add(cc.code);
@@ -867,19 +879,20 @@ function ApprovalDetailModal({
                             });
                           }}
                         />
-                        <div className="flex-1 min-w-0">
+                        <div className={`flex-1 min-w-0 ${!mineCC ? "blur-sm select-none" : ""}`}>
                           <p className="text-sm text-foreground font-medium truncate">{formatCostCenter(cc.code)}</p>
                           <p className="text-[11px] text-muted-foreground">
                             {cc.pct.toFixed(1)}% do documento
                           </p>
                         </div>
-                        <span className="text-sm font-mono font-semibold text-foreground">
+                        <span className={`text-sm font-mono font-semibold text-foreground ${!mineCC ? "blur-sm select-none" : ""}`}>
                           {formatCurrency(cc.amount, doc.currency)}
                         </span>
                       </label>
                     );
                   })}
                 </div>
+
                 <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20">
                   <span className="text-xs uppercase tracking-wider text-muted-foreground">
                     Sua alçada de aprovação para este documento
@@ -902,11 +915,12 @@ function ApprovalDetailModal({
                   <Badge variant="outline" className="text-[10px]">
                     {segments.length} segmentos
                   </Badge>
-                  {restrictToMySegments && (
+                  {maskOtherSegments && (
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">
                       Vendo só sua parte
                     </span>
                   )}
+
                 </div>
                 <p className="text-xs text-muted-foreground">
                   As linhas deste documento caem em regras de aprovação diferentes. Cada aprovador
@@ -915,16 +929,18 @@ function ApprovalDetailModal({
                 <div className="space-y-1.5">
                   {segments.map((seg) => {
                     const isMine = mySegments.some((m) => m.costCenter === seg.costCenter);
+                    const masked = maskOtherSegments && !isMine;
                     return (
                       <div
                         key={seg.costCenter}
+                        title={masked ? "Segmento da alçada de outro aprovador" : undefined}
                         className={`rounded-lg border p-2.5 text-xs ${
                           isMine
                             ? "border-emerald-500/40 bg-emerald-500/5"
                             : "border-border bg-background/40"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className={`flex items-center justify-between gap-2 flex-wrap ${masked ? "blur-sm select-none" : ""}`}>
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="font-medium text-foreground truncate">
                               {seg.costCenter === "__no_cc__"
@@ -947,7 +963,7 @@ function ApprovalDetailModal({
                             </span>
                           </span>
                         </div>
-                        <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-muted-foreground">
+                        <div className={`mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-muted-foreground ${masked ? "blur-sm select-none" : ""}`}>
                           <span className="font-medium text-foreground">
                             {seg.rule?.name || "Sem regra correspondente"}
                           </span>
@@ -964,7 +980,7 @@ function ApprovalDetailModal({
                     );
                   })}
                 </div>
-                {segmented && !isAdmin && !isSuperUser && mySegments.length > 0 && (
+                {segmented && mySegments.length > 0 && (
                   <div className="pt-2 border-t border-primary/20 flex items-center justify-between gap-2">
                     <span className="text-[11px] text-muted-foreground">
                       Total dos seus segmentos:{" "}
@@ -972,16 +988,19 @@ function ApprovalDetailModal({
                         {formatCurrency(visibleTotal, doc.currency)}
                       </span>
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setShowAllLines((v) => !v)}
-                    >
-                      {showAllLines ? "Ver só minha parte" : "Ver documento completo"}
-                    </Button>
+                    {(isAdmin || isSuperUser) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setShowAllLines((v) => !v)}
+                      >
+                        {showAllLines ? "Ver só minha parte" : "Ver documento completo"}
+                      </Button>
+                    )}
                   </div>
                 )}
+
                 {segmented && mySegments.length === 0 && !isAdmin && !isSuperUser && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
                     Nenhum segmento deste documento aponta para você como aprovador — pode ser
@@ -997,7 +1016,7 @@ function ApprovalDetailModal({
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Itens do Documento
-                    {restrictToMySegments && (
+                    {maskOtherSegments && (
                       <span className="ml-2 normal-case tracking-normal text-[10px] text-muted-foreground">
                         (linhas de outros aprovadores estão borradas)
                       </span>
