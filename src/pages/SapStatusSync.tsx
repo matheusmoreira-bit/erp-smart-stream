@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { RefreshCw, Play, AlertTriangle } from "lucide-react";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 const DEFAULT_IDS = [
   "fe1df950-9751-4c33-86c9-1789251007ce",
