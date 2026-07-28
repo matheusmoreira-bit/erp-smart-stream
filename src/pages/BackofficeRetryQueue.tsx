@@ -53,8 +53,11 @@ export default function BackofficeRetryQueue() {
   const [rows, setRows] = useState<Row[]>([]);
   const [metrics, setMetrics] = useState<MetricsRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [windowHours, setWindowHours] = useState<number>(24);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [dispatching, setDispatching] = useState(false);
 
   const load = async () => {
     setLoading(true);
