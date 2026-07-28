@@ -231,11 +231,18 @@ async function resolveRootFolder(log: (m: string) => void, supabase: Sup): Promi
   return id;
 }
 
+async function setRunState(supabase: Sup, patch: Record<string, unknown>) {
+  try {
+    await supabase.from("gdrive_backup_settings").update(patch).eq("singleton", true);
+  } catch (_) { /* ignore */ }
+}
+
 async function runBackup(supabase: Sup, log: (m: string) => void) {
   try {
     if (!LOVABLE_API_KEY || !GD_KEY) throw new Error("Credenciais do Google Drive ausentes");
 
-    const rootId = await resolveRootFolder(log);
+    const rootId = await resolveRootFolder(log, supabase);
+
 
     const dataRootId = await findOrCreateFolder(DATA_FOLDER_NAME, rootId);
     const attachId = await findOrCreateFolder(ATTACH_FOLDER_NAME, rootId);
