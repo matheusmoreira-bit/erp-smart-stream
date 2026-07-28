@@ -3,10 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, RotateCw } from "lucide-react";
+import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 type MetricsRow = {
@@ -51,8 +53,11 @@ export default function BackofficeRetryQueue() {
   const [rows, setRows] = useState<Row[]>([]);
   const [metrics, setMetrics] = useState<MetricsRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [windowHours, setWindowHours] = useState<number>(24);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [dispatching, setDispatching] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -113,6 +118,50 @@ export default function BackofficeRetryQueue() {
     else toast.success("Cancelado");
   };
 
+  const visibleRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [r.doc_type, r.company_db, r.ref_id, r.error_category, r.last_error]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(term)),
+    );
+  }, [rows, search]);
+
+  const dispatchableIds = useMemo(
+    () => visibleRows.filter((r) => r.status === "pending" || r.status === "exhausted" || r.status === "cancelled").map((r) => r.id),
+    [visibleRows],
+  );
+
+  const selectedDispatchable = useMemo(
+    () => selected.filter((id) => dispatchableIds.includes(id)),
+    [selected, dispatchableIds],
+  );
+
+  const toggleRow = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const toggleAll = () =>
+    setSelected((prev) => (dispatchableIds.every((id) => prev.includes(id)) ? [] : dispatchableIds));
+
+  const dispatchSelected = async () => {
+    if (selectedDispatchable.length === 0) return;
+    setDispatching(true);
+    const { error } = await supabase
+      .from("sap_retry_queue")
+      .update({ status: "pending", next_attempt_at: new Date().toISOString(), notified_exhausted_at: null })
+      .in("id", selectedDispatchable);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`${selectedDispatchable.length} item(ns) reenviado(s) para integração`);
+      setSelected([]);
+      await supabase.functions.invoke("sap-retry-worker").catch(() => {});
+      load();
+    }
+    setDispatching(false);
+  };
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     rows.forEach(r => { c[r.status] = (c[r.status] || 0) + 1; });
@@ -149,39 +198,50 @@ export default function BackofficeRetryQueue() {
   return (
     <div className="container mx-auto p-6 space-y-4">
       <BackofficePageHeader
-        title="Fila de Retries SAP"
-        description="Reintegrações automáticas para falhas 400 classificadas como transientes."
-        icon={<RotateCw className="h-5 w-5 text-muted-foreground" />}
+        title="Histórico de Integrações SAP"
+        description="Histórico de tentativas de integração com o SAP e reenvio manual em lote."
+        icon={<History className="h-5 w-5 text-muted-foreground" />}
       />
-      <div className="flex items-center justify-end">
-        <div></div>
-        <div className="flex gap-2 items-center">
-          <Select value={String(windowHours)} onValueChange={(v) => setWindowHours(Number(v))}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">Última hora</SelectItem>
-              <SelectItem value="24">Últimas 24h</SelectItem>
-              <SelectItem value="168">Últimos 7 dias</SelectItem>
-              <SelectItem value="720">Últimos 30 dias</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Ativos (pendente + esgotado)</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
-              <SelectItem value="in_flight">Em execução</SelectItem>
-              <SelectItem value="exhausted">Esgotado</SelectItem>
-              <SelectItem value="succeeded">Sucesso</SelectItem>
-              <SelectItem value="cancelled">Cancelado</SelectItem>
-              <SelectItem value="all">Todos</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Atualizar
-          </Button>
+      <div className="flex flex-wrap items-center gap-2 justify-end">
+        <div className="relative mr-auto w-full sm:w-72">
+          <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Buscar empresa, documento ou erro"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Buscar no histórico de integrações"
+          />
         </div>
+        <Button onClick={dispatchSelected} disabled={selectedDispatchable.length === 0 || dispatching}>
+          <Send className="h-4 w-4 mr-2" />
+          Reenviar selecionados{selectedDispatchable.length > 0 ? ` (${selectedDispatchable.length})` : ""}
+        </Button>
+        <Select value={String(windowHours)} onValueChange={(v) => setWindowHours(Number(v))}>
+          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">Última hora</SelectItem>
+            <SelectItem value="24">Últimas 24h</SelectItem>
+            <SelectItem value="168">Últimos 7 dias</SelectItem>
+            <SelectItem value="720">Últimos 30 dias</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todo o histórico</SelectItem>
+            <SelectItem value="active">Ativos (pendente + esgotado)</SelectItem>
+            <SelectItem value="pending">Pendente</SelectItem>
+            <SelectItem value="in_flight">Em execução</SelectItem>
+            <SelectItem value="exhausted">Esgotado</SelectItem>
+            <SelectItem value="succeeded">Sucesso</SelectItem>
+            <SelectItem value="cancelled">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" onClick={load} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          Atualizar
+        </Button>
       </div>
 
       {/* Métricas agregadas na janela selecionada */}
@@ -284,10 +344,19 @@ export default function BackofficeRetryQueue() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  aria-label="Selecionar todos"
+                  checked={dispatchableIds.length > 0 && dispatchableIds.every((id) => selected.includes(id))}
+                  onCheckedChange={toggleAll}
+                  disabled={dispatchableIds.length === 0}
+                />
+              </TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Empresa</TableHead>
               <TableHead>Documento</TableHead>
               <TableHead>Tentativas</TableHead>
+              <TableHead>Última tentativa</TableHead>
               <TableHead>Próxima</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Status</TableHead>
@@ -296,37 +365,48 @@ export default function BackofficeRetryQueue() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.length === 0 && (
-              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                {loading ? "Carregando..." : "Nenhum item"}
+            {visibleRows.length === 0 && (
+              <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                {loading ? "Carregando..." : "Nenhum registro de integração no período"}
               </TableCell></TableRow>
             )}
-            {rows.map(r => (
-              <TableRow key={r.id}>
+            {visibleRows.map(r => {
+              const canDispatch = r.status === "pending" || r.status === "exhausted" || r.status === "cancelled";
+              return (
+              <TableRow key={r.id} data-state={selected.includes(r.id) ? "selected" : undefined}>
+                <TableCell>
+                  <Checkbox
+                    aria-label={`Selecionar ${r.ref_id}`}
+                    checked={selected.includes(r.id)}
+                    onCheckedChange={() => toggleRow(r.id)}
+                    disabled={!canDispatch}
+                  />
+                </TableCell>
                 <TableCell className="font-mono text-xs">{r.doc_type}</TableCell>
                 <TableCell>{r.company_db || "-"}</TableCell>
                 <TableCell className="font-mono text-xs">{r.ref_id.slice(0, 12)}…</TableCell>
                 <TableCell>{r.attempts}/{r.max_attempts}</TableCell>
+                <TableCell className="text-xs">{fmtDate(r.last_attempt_at)}</TableCell>
                 <TableCell className="text-xs">{fmtDate(r.next_attempt_at)}</TableCell>
                 <TableCell><Badge variant="outline">{r.error_category || "-"}</Badge></TableCell>
                 <TableCell><Badge className={STATUS_COLORS[r.status]}>{r.status}</Badge></TableCell>
-                <TableCell className="max-w-md truncate text-xs text-red-700" title={r.last_error || ""}>
+                <TableCell className="max-w-md truncate text-xs text-destructive" title={r.last_error || ""}>
                   {r.last_error || "-"}
                 </TableCell>
                 <TableCell className="text-right space-x-1 whitespace-nowrap">
-                  {(r.status === "pending" || r.status === "exhausted") && (
+                  {canDispatch && (
                     <Button size="sm" variant="outline" onClick={() => retryNow(r.id)}>
-                      <PlayCircle className="h-3 w-3 mr-1" />Retry
+                      <PlayCircle className="h-3 w-3 mr-1" />Reenviar
                     </Button>
                   )}
                   {r.status !== "cancelled" && r.status !== "succeeded" && (
-                    <Button size="sm" variant="ghost" onClick={() => cancel(r.id)}>
+                    <Button size="sm" variant="ghost" onClick={() => cancel(r.id)} aria-label="Cancelar">
                       <X className="h-3 w-3" />
                     </Button>
                   )}
                 </TableCell>
               </TableRow>
-            ))}
+            );})}
           </TableBody>
         </Table>
       </Card>
