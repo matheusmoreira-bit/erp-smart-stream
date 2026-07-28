@@ -162,20 +162,52 @@ export default function BackofficeRetryQueue() {
   const dispatchSelected = async () => {
     if (selectedDispatchable.length === 0) return;
     setDispatching(true);
-    const { error } = await supabase
-      .from("sap_retry_queue")
-      .update({ status: "pending", next_attempt_at: new Date().toISOString(), notified_exhausted_at: null })
-      .in("id", selectedDispatchable);
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`${selectedDispatchable.length} item(ns) reenviado(s) para integração`);
+
+    // Evita violar o índice único parcial (doc_type, ref_id) WHERE status IN (pending, in_flight):
+    // 1 item por documento e nunca se já houver tentativa ativa.
+    const seen = new Set<string>();
+    const toDispatch: string[] = [];
+    let skipped = 0;
+    for (const id of selectedDispatchable) {
+      const row = rows.find((r) => r.id === id);
+      if (!row) continue;
+      const key = `${row.doc_type}::${row.ref_id}`;
+      const alreadyActive = row.status === "pending" || row.status === "in_flight";
+      if (seen.has(key) || (!alreadyActive && activeKeys.has(key))) { skipped++; continue; }
+      seen.add(key);
+      toDispatch.push(id);
+    }
+
+    if (toDispatch.length === 0) {
+      toast.error("Todos os itens selecionados já possuem uma tentativa ativa");
+      setDispatching(false);
+      return;
+    }
+
+    // Atualiza em blocos individuais para que uma falha não derrube o lote inteiro.
+    let ok = 0;
+    let failed = 0;
+    for (const id of toDispatch) {
+      const { error } = await supabase
+        .from("sap_retry_queue")
+        .update({ status: "pending", next_attempt_at: new Date().toISOString(), notified_exhausted_at: null })
+        .eq("id", id);
+      if (error) failed++; else ok++;
+    }
+
+    if (ok > 0) {
+      toast.success(
+        `${ok} item(ns) reenviado(s)${skipped ? ` · ${skipped} ignorado(s) (duplicado/ativo)` : ""}${failed ? ` · ${failed} com erro` : ""}`,
+      );
       setSelected([]);
       await supabase.functions.invoke("sap-retry-worker").catch(() => {});
       load();
+    } else {
+      toast.error("Não foi possível reenviar os itens selecionados");
     }
     setDispatching(false);
   };
+
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
