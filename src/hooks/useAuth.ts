@@ -9,17 +9,24 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Returns false ONLY when we could decode the JWT payload and it truly
+    // has no `sub`. Any decode failure is treated as "assume valid" so we never
+    // destroy a working session because of encoding quirks (accents, etc).
     const tokenHasSub = (token?: string | null) => {
       if (!token) return false;
       try {
         const rawPayload = token.split(".")[1] || "";
         const base64 = rawPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
-        const payload = JSON.parse(atob(base64));
+        const binary = atob(base64);
+        const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+        const json = new TextDecoder("utf-8").decode(bytes);
+        const payload = JSON.parse(json);
         return typeof payload?.sub === "string" && payload.sub.length > 0;
       } catch {
-        return false;
+        return true;
       }
     };
+
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
