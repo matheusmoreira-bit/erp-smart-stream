@@ -3,10 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, RotateCw } from "lucide-react";
+import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 type MetricsRow = {
