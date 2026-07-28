@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search } from "lucide-react";
+import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search, Paperclip } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 type MetricsRow = {
