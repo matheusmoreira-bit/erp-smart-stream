@@ -75,6 +75,7 @@ export default function BackofficeRetryQueue() {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [groupByDoc, setGroupByDoc] = useState(true);
   const [windowHours, setWindowHours] = useState<number>(24);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -211,9 +212,28 @@ export default function BackofficeRetryQueue() {
     return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
   }, [rows]);
 
+  // O histórico guarda uma linha por tentativa de enfileiramento, então o mesmo
+  // documento pode aparecer dezenas de vezes. Agrupamos por (doc_type, ref_id)
+  // exibindo a tentativa mais recente + a contagem de registros.
+  const displayRows = useMemo(() => {
+    if (!groupByDoc) return visibleRows.map((r) => ({ row: r, occurrences: 1 }));
+    const map = new Map<string, { row: Row; occurrences: number }>();
+    for (const r of visibleRows) {
+      const key = `${r.doc_type}::${r.ref_id}`;
+      const cur = map.get(key);
+      if (!cur) { map.set(key, { row: r, occurrences: 1 }); continue; }
+      cur.occurrences += 1;
+      const isNewer = new Date(r.updated_at).getTime() > new Date(cur.row.updated_at).getTime();
+      const curActive = cur.row.status === "pending" || cur.row.status === "in_flight";
+      const rActive = r.status === "pending" || r.status === "in_flight";
+      if ((rActive && !curActive) || (rActive === curActive && isNewer)) cur.row = r;
+    }
+    return Array.from(map.values());
+  }, [visibleRows, groupByDoc]);
+
   const dispatchableIds = useMemo(
-    () => visibleRows.filter((r) => r.status === "pending" || r.status === "exhausted" || r.status === "cancelled").map((r) => r.id),
-    [visibleRows],
+    () => displayRows.map((d) => d.row).filter((r) => r.status === "pending" || r.status === "exhausted" || r.status === "cancelled").map((r) => r.id),
+    [displayRows],
   );
 
   const selectedDispatchable = useMemo(
@@ -366,6 +386,14 @@ export default function BackofficeRetryQueue() {
             <SelectItem value="cancelled">Cancelado</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant={groupByDoc ? "secondary" : "outline"}
+          onClick={() => setGroupByDoc((v) => !v)}
+          aria-pressed={groupByDoc}
+          title="Agrupa várias tentativas do mesmo documento em uma única linha"
+        >
+          {groupByDoc ? "Agrupado por documento" : "Todas as tentativas"}
+        </Button>
         <Button variant="outline" onClick={load} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           Atualizar
@@ -502,12 +530,12 @@ export default function BackofficeRetryQueue() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleRows.length === 0 && (
+            {displayRows.length === 0 && (
               <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                 {loading ? "Carregando..." : "Nenhum registro de integração no período"}
               </TableCell></TableRow>
             )}
-            {visibleRows.map(r => {
+            {displayRows.map(({ row: r, occurrences }) => {
               const canDispatch = r.status === "pending" || r.status === "exhausted" || r.status === "cancelled";
               return (
               <TableRow key={r.id} data-state={selected.includes(r.id) ? "selected" : undefined}>
@@ -519,7 +547,14 @@ export default function BackofficeRetryQueue() {
                     disabled={!canDispatch}
                   />
                 </TableCell>
-                <TableCell className="font-mono text-xs">{r.doc_type}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  {r.doc_type}
+                  {occurrences > 1 && (
+                    <Badge variant="secondary" className="ml-1 text-[10px]" title={`${occurrences} registros deste documento no histórico`}>
+                      {occurrences}×
+                    </Badge>
+                  )}
+                </TableCell>
                 <TableCell>{r.company_db || "-"}</TableCell>
                 <TableCell className="font-mono text-xs">{r.ref_id.slice(0, 12)}…</TableCell>
                 <TableCell>{r.attempts}/{r.max_attempts}</TableCell>

@@ -103,25 +103,40 @@ export interface EnqueueRetryParams {
 // deno-lint-ignore no-explicit-any
 export async function enqueueRetry(admin: any, params: EnqueueRetryParams): Promise<{ enqueued: boolean; id?: string }> {
   try {
-    // Look for existing active row.
-    const { data: existing } = await admin
+    // Look for an existing row for this document (any state except succeeded).
+    // Reusing it keeps ONE row per documento — antes cada nova falha após
+    // "exhausted" criava uma linha nova e poluía o histórico com dezenas de
+    // duplicatas do mesmo pedido.
+    const { data: existingRows } = await admin
       .from("sap_retry_queue")
       .select("id,attempts,status")
       .eq("doc_type", params.doc_type)
       .eq("ref_id", params.ref_id)
-      .in("status", ["pending", "in_flight"])
-      .maybeSingle();
+      .neq("status", "succeeded")
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    const existing = Array.isArray(existingRows) ? existingRows[0] : null;
 
     if (existing?.id) {
-      await admin
-        .from("sap_retry_queue")
-        .update({
-          last_error: params.error.slice(0, 2000),
-          error_category: params.category ?? "other",
-        })
-        .eq("id", existing.id);
-      return { enqueued: false, id: existing.id };
+      const isActive = existing.status === "pending" || existing.status === "in_flight";
+      const patch: Record<string, unknown> = {
+        last_error: params.error.slice(0, 2000),
+        error_category: params.category ?? "other",
+      };
+      if (!isActive) {
+        // Reabre a linha existente (exhausted/cancelled) em vez de inserir outra.
+        patch.status = "pending";
+        patch.attempts = 0;
+        patch.notified_exhausted_at = null;
+        patch.max_attempts = params.max_attempts ?? 5;
+        patch.company_db = params.company_db ?? null;
+        patch.payload = params.payload ?? {};
+        patch.next_attempt_at = new Date(Date.now() + backoffMinutes(1) * 60_000).toISOString();
+      }
+      await admin.from("sap_retry_queue").update(patch).eq("id", existing.id);
+      return { enqueued: !isActive, id: existing.id };
     }
+
 
     const nextAt = new Date(Date.now() + backoffMinutes(1) * 60_000).toISOString();
     const { data: inserted, error: iErr } = await admin
