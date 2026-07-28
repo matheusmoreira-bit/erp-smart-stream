@@ -417,18 +417,27 @@ export default function BackofficeRetryQueue() {
             <div className="space-y-2">
               {summary.topCategories.map(([cat, total]) => {
                 const pct = summary.total > 0 ? (total / summary.total) * 100 : 0;
+                const value = cat === "outros" ? "other" : cat;
+                const active = categoryFilter === value;
                 return (
-                  <div key={cat}>
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategoryFilter(active ? "all" : value)}
+                    className="w-full text-left rounded px-1 py-0.5 hover:bg-muted/60 transition-colors"
+                    aria-pressed={active}
+                  >
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="font-mono">{cat}</span>
+                      <span className={active ? "font-semibold text-primary" : ""}>{categoryLabel(cat)}</span>
                       <span className="text-muted-foreground">{total} ({pct.toFixed(0)}%)</span>
                     </div>
                     <div className="h-1.5 bg-muted rounded overflow-hidden">
                       <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
                     </div>
-                  </div>
+                  </button>
                 );
               })}
+
             </div>
           )}
         </Card>
