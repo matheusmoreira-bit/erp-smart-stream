@@ -2794,6 +2794,42 @@ export type Database = {
         }
         Relationships: []
       }
+      gdrive_backup_settings: {
+        Row: {
+          created_at: string
+          folder_id: string | null
+          folder_name: string | null
+          folder_path: string | null
+          folder_url: string | null
+          id: string
+          singleton: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          folder_id?: string | null
+          folder_name?: string | null
+          folder_path?: string | null
+          folder_url?: string | null
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          folder_id?: string | null
+          folder_name?: string | null
+          folder_path?: string | null
+          folder_url?: string | null
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       idp_user_mapping: {
         Row: {
           attributes_synced_at: string | null
