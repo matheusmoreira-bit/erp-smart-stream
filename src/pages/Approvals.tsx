@@ -507,14 +507,11 @@ function ApprovalDetailModal({
   // Documentos com Tipo de Rateio ≠ "Não" (folha/imposto/reembolso/viagens)
   // são rateios sistêmicos; TODOS os aprovadores veem o documento completo.
   const specialRateio = !!(doc?.rateioType && doc.rateioType !== "padrao");
-  // Aprovador comum (não admin, não super) só vê CLARAMENTE as linhas dos
-  // segmentos que lhe cabem; as demais aparecem borradas com aviso.
-  const restrictToMySegments =
-    segmented && !specialRateio && !isAdmin && !isSuperUser && mySegments.length > 0 && !showAllLines;
   // Máscara visual (blur) das partes de outros aprovadores — vale também para
   // admins/super, que podem alternar para o documento completo quando precisarem.
   const maskOtherSegments =
     segmented && !specialRateio && mySegments.length > 0 && !showAllLines;
+
   const visibleLines = doc?.documentLines || [];
 
   // Mapeia CostingCode → segmento (para saber a qual aprovador cada linha
