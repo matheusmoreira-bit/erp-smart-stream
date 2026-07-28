@@ -75,6 +75,7 @@ export default function BackofficeRetryQueue() {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [groupByDoc, setGroupByDoc] = useState(true);
   const [windowHours, setWindowHours] = useState<number>(24);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -211,9 +212,28 @@ export default function BackofficeRetryQueue() {
     return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
   }, [rows]);
 
+  // O histórico guarda uma linha por tentativa de enfileiramento, então o mesmo
+  // documento pode aparecer dezenas de vezes. Agrupamos por (doc_type, ref_id)
+  // exibindo a tentativa mais recente + a contagem de registros.
+  const displayRows = useMemo(() => {
+    if (!groupByDoc) return visibleRows.map((r) => ({ row: r, occurrences: 1 }));
+    const map = new Map<string, { row: Row; occurrences: number }>();
+    for (const r of visibleRows) {
+      const key = `${r.doc_type}::${r.ref_id}`;
+      const cur = map.get(key);
+      if (!cur) { map.set(key, { row: r, occurrences: 1 }); continue; }
+      cur.occurrences += 1;
+      const isNewer = new Date(r.updated_at).getTime() > new Date(cur.row.updated_at).getTime();
+      const curActive = cur.row.status === "pending" || cur.row.status === "in_flight";
+      const rActive = r.status === "pending" || r.status === "in_flight";
+      if ((rActive && !curActive) || (rActive === curActive && isNewer)) cur.row = r;
+    }
+    return Array.from(map.values());
+  }, [visibleRows, groupByDoc]);
+
   const dispatchableIds = useMemo(
-    () => visibleRows.filter((r) => r.status === "pending" || r.status === "exhausted" || r.status === "cancelled").map((r) => r.id),
-    [visibleRows],
+    () => displayRows.map((d) => d.row).filter((r) => r.status === "pending" || r.status === "exhausted" || r.status === "cancelled").map((r) => r.id),
+    [displayRows],
   );
 
   const selectedDispatchable = useMemo(
