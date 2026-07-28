@@ -240,20 +240,46 @@ Deno.serve(async (req) => {
     }
 
     let rawRows: Record<string, unknown>[] = [];
+    let slRows: ReturnType<typeof mapSlRow>[] = [];
+    let source: "hana" | "service_layer" = "hana";
     try {
-      rawRows = await fetchHanaView({
-        schema,
-        view: "VW_ACOMPANHAMENTO_PEDIDOS",
-        sessionId: session.sessionId,
-        hanaApiUrl: creds.hana_api_url,
-        useV2: creds.use_hana_v2 === "true" || creds.hana_api_v2 === "true",
-        limit,
-        offset,
-        filters,
-      });
+      try {
+        rawRows = await fetchHanaView({
+          schema,
+          view: "VW_ACOMPANHAMENTO_PEDIDOS",
+          sessionId: session.sessionId,
+          hanaApiUrl: creds.hana_api_url,
+          useV2: creds.use_hana_v2 === "true" || creds.hana_api_v2 === "true",
+          limit,
+          offset,
+          filters,
+        });
+      } catch (e) {
+        const msg = String((e as Error)?.message || e);
+        // View não publicada nesta base → cai para o Service Layer.
+        if (isViewMissing(msg)) {
+          console.log(`[sap-purchase-orders-hana] view ausente em ${schema}; fallback Service Layer`);
+          source = "service_layer";
+          slRows = await fetchServiceLayerOrders(baseUrl, session, companyDb, limit, offset);
+        } else {
+          throw e;
+        }
+      }
     } finally {
       await sapLogout(baseUrl, session);
     }
+
+    if (source === "service_layer") {
+      return new Response(JSON.stringify({
+        rows: slRows,
+        total: slRows.length,
+        offset,
+        limit,
+        has_more: slRows.length === limit,
+        source,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
 
 
     const mapped = rawRows
