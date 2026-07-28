@@ -12,11 +12,15 @@ const GATEWAY = "https://connector-gateway.lovable.dev/google_drive";
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const GD_KEY = Deno.env.get("GOOGLE_DRIVE_API_KEY")!;
 
-const ROOT_FOLDER_ID = "1zFQ5jphDXUsYCNYn4tT1sqVSs5TS_AvZ";
+// Pasta raiz: usa GDRIVE_BACKUP_FOLDER_ID se configurado; caso contrário
+// resolve/cria "ERP-Flow-Backups" no Drive da conta conectada.
+const ROOT_FOLDER_ID = Deno.env.get("GDRIVE_BACKUP_FOLDER_ID") || "";
+const ROOT_FOLDER_NAME = "ERP-Flow-Backups";
 const DATA_FOLDER_NAME = "data";
 const ATTACH_FOLDER_NAME = "attachments-expenses";
 const NF_FOLDER_NAME = "attachments-nf-entrada";
 const RETENTION_DAYS = 90;
+
 
 const WATCHER_NAME = "backup-to-gdrive";
 
@@ -198,11 +202,27 @@ async function cleanupOldSnapshots(dataFolderId: string): Promise<number> {
   return removed;
 }
 
+async function resolveRootFolder(log: (m: string) => void): Promise<string> {
+  if (ROOT_FOLDER_ID) {
+    try {
+      const f = await gdJson(`/drive/v3/files/${ROOT_FOLDER_ID}?fields=id,trashed`);
+      if (f?.id && !f.trashed) return f.id;
+      log(`pasta configurada ${ROOT_FOLDER_ID} está na lixeira — usando fallback`);
+    } catch (e) {
+      log(`pasta configurada inacessível (${(e as Error).message.slice(0, 120)}) — usando fallback`);
+    }
+  }
+  const id = await findOrCreateFolder(ROOT_FOLDER_NAME);
+  log(`pasta raiz de backup: ${ROOT_FOLDER_NAME} (${id})`);
+  return id;
+}
+
 async function runBackup(supabase: Sup, log: (m: string) => void) {
   try {
     if (!LOVABLE_API_KEY || !GD_KEY) throw new Error("Credenciais do Google Drive ausentes");
 
-    const rootId = ROOT_FOLDER_ID;
+    const rootId = await resolveRootFolder(log);
+
     const dataRootId = await findOrCreateFolder(DATA_FOLDER_NAME, rootId);
     const attachId = await findOrCreateFolder(ATTACH_FOLDER_NAME, rootId);
     const nfId = await findOrCreateFolder(NF_FOLDER_NAME, rootId);
