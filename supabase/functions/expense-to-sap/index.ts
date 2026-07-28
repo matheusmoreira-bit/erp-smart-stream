@@ -213,6 +213,8 @@ async function notifyMissingAttachmentEmail(params: {
     }
     const reasonLabel = params.reason === "integration_attachments_disabled"
       ? "Integração de anexos desligada para a empresa"
+      : params.reason === "manual_skip_attachment"
+      ? "Integração reprocessada manualmente SEM anexo (falha de anexo no SAP) — anexo segue neste email"
       : "Pedido aprovado sem nenhum anexo vinculado no SAP";
 
     const esc = (s: string) =>
