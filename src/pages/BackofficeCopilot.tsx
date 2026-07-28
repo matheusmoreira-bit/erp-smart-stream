@@ -115,20 +115,12 @@ export default function BackofficeCopilot() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 flex flex-col h-[calc(100vh-4rem)]">
-      <header className="flex items-center gap-3 mb-4">
-        <div className="p-2 rounded-xl bg-primary/10">
-          <Sparkles className="w-6 h-6 text-primary" />
-        </div>
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold flex items-center gap-2">
-            Copiloto Operacional
-            <Badge variant="secondary" className="text-xs">Backoffice</Badge>
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Consulte o banco, diagnostique fluxos e execute ações operacionais com confirmação.
-          </p>
-        </div>
-      </header>
+      <BackofficePageHeader
+        title="Copiloto Operacional"
+        description="Consulte o banco, diagnostique fluxos e execute ações operacionais com confirmação."
+        icon={<Sparkles className="h-5 w-5 text-primary" />}
+        actions={<Badge variant="secondary" className="text-xs">Backoffice</Badge>}
+      />
 
       <Card className="flex-1 flex flex-col overflow-hidden">
         <div className="px-4 py-2 border-b bg-amber-500/5 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
