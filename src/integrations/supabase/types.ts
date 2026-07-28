@@ -2802,6 +2802,13 @@ export type Database = {
           folder_path: string | null
           folder_url: string | null
           id: string
+          last_snapshot: string | null
+          run_error: string | null
+          run_finished_at: string | null
+          run_progress: string | null
+          run_started_at: string | null
+          run_status: string | null
+          run_trigger: string | null
           singleton: boolean
           updated_at: string
           updated_by: string | null
@@ -2813,6 +2820,13 @@ export type Database = {
           folder_path?: string | null
           folder_url?: string | null
           id?: string
+          last_snapshot?: string | null
+          run_error?: string | null
+          run_finished_at?: string | null
+          run_progress?: string | null
+          run_started_at?: string | null
+          run_status?: string | null
+          run_trigger?: string | null
           singleton?: boolean
           updated_at?: string
           updated_by?: string | null
@@ -2824,6 +2838,13 @@ export type Database = {
           folder_path?: string | null
           folder_url?: string | null
           id?: string
+          last_snapshot?: string | null
+          run_error?: string | null
+          run_finished_at?: string | null
+          run_progress?: string | null
+          run_started_at?: string | null
+          run_status?: string | null
+          run_trigger?: string | null
           singleton?: boolean
           updated_at?: string
           updated_by?: string | null
