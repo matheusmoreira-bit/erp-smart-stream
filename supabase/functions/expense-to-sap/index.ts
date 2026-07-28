@@ -103,7 +103,7 @@ async function notifyMissingAttachmentWhatsApp(params: {
   supplier?: string | null;
   amount?: number | null;
   currency?: string | null;
-  reason: "no_attachment_uploaded" | "integration_attachments_disabled";
+  reason: "no_attachment_uploaded" | "integration_attachments_disabled" | "manual_skip_attachment";
   attachments?: Array<{ file_name: string; url: string }>;
 }): Promise<void> {
   try {
