@@ -918,11 +918,12 @@ function ApprovalDetailModal({
                   <Badge variant="outline" className="text-[10px]">
                     {segments.length} segmentos
                   </Badge>
-                  {restrictToMySegments && (
+                  {maskOtherSegments && (
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">
                       Vendo só sua parte
                     </span>
                   )}
+
                 </div>
                 <p className="text-xs text-muted-foreground">
                   As linhas deste documento caem em regras de aprovação diferentes. Cada aprovador
