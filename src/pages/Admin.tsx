@@ -43,6 +43,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -649,76 +657,79 @@ export default function Admin() {
           </Button>
         </div>
 
-        {/* Desktop tabs */}
-        <div className="hidden md:block max-w-7xl mx-auto px-6">
-          <div className="flex items-center gap-x-1 gap-y-1 flex-wrap">
-            {[
-              { key: "companies", label: "Empresas", icon: Building2 },
-              { key: "permissions", label: "Permissões", icon: Users },
-              { key: "integrations", label: "Integrações", icon: Key },
-              { key: "audit", label: "Logs", icon: ScrollText },
-              { key: "admin_users", label: "Admins", icon: ShieldCheck },
-              { key: "tools", label: "Ferramentas", icon: Wrench },
-              { key: "roi", label: "ROI", icon: TrendingUp },
-            ].map((t) => {
-              const Icon = t.icon;
-              const isActive = activeTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setActiveTab(t.key as typeof activeTab)}
-                  className={cn(
-                    "relative px-2.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5",
-                    isActive ? "text-[hsl(var(--cactus-amber))]" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  {t.label}
-                  {isActive && (
-                    <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[hsl(var(--cactus-amber))]" />
-                  )}
-                </button>
-              );
-            })}
-            <div className="ml-auto flex items-center gap-1">
-              <button
+        {/* Desktop nav */}
+        <div className="hidden md:block max-w-7xl mx-auto px-6 pb-3">
+          <div className="flex items-center gap-3">
+            <nav className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/60">
+              {[
+                { key: "companies", label: "Empresas", icon: Building2 },
+                { key: "permissions", label: "Permissões", icon: Users },
+                { key: "integrations", label: "Integrações", icon: Key },
+                { key: "audit", label: "Logs", icon: ScrollText },
+                { key: "admin_users", label: "Admins", icon: ShieldCheck },
+                { key: "tools", label: "Ferramentas", icon: Wrench },
+                { key: "roi", label: "ROI", icon: TrendingUp },
+              ].map((t) => {
+                const Icon = t.icon;
+                const isActive = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setActiveTab(t.key as typeof activeTab)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5",
+                      isActive
+                        ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                        : "text-muted-foreground hover:text-foreground hover:bg-card/50",
+                    )}
+                  >
+                    <Icon className={cn("w-4 h-4", isActive && "text-[hsl(var(--cactus-amber))]")} />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() => navigate("/backoffice/copiloto")}
-                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-[hsl(var(--cactus-amber))] hover:text-foreground flex items-center gap-1.5"
+                className="border-[hsl(var(--cactus-amber))]/40 text-[hsl(var(--cactus-amber))] hover:text-[hsl(var(--cactus-amber))] hover:bg-[hsl(var(--cactus-amber))]/10"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-4 h-4 mr-1.5" />
                 Copiloto IA
-              </button>
-              <button
-                onClick={() => navigate("/backoffice/audit-trail")}
-                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
-              >
-                <FileCheck2 className="w-4 h-4" />
-                Audit Trail
-              </button>
-              <button
-                onClick={() => navigate("/backoffice/infra-health")}
-                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
-              >
-                <FileCheck2 className="w-4 h-4" />
-                Infra & Backups
-              </button>
-              <button
-                onClick={() => navigate("/backoffice/retry-queue")}
-                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
-              >
-                <FileCheck2 className="w-4 h-4" />
-                Retries SAP
-              </button>
-              <button
-                onClick={() => navigate("/backoffice/sap-users")}
-                className="px-2.5 py-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground flex items-center gap-1.5"
-              >
-                <Users className="w-4 h-4" />
-                Usuários SAP
-              </button>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost" className="text-muted-foreground">
+                    <MoreHorizontal className="w-4 h-4 mr-1.5" />
+                    Mais
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel>Ferramentas avançadas</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {[
+                    { label: "Audit Trail", icon: FileCheck2, to: "/backoffice/audit-trail" },
+                    { label: "Infra & Backups", icon: Server, to: "/backoffice/infra-health" },
+                    { label: "Retries SAP", icon: RefreshCw, to: "/backoffice/retry-queue" },
+                    { label: "Usuários SAP", icon: Users, to: "/backoffice/sap-users" },
+                  ].map((it) => {
+                    const Icon = it.icon;
+                    return (
+                      <DropdownMenuItem key={it.to} onSelect={() => navigate(it.to)}>
+                        <Icon className="w-4 h-4 mr-2 text-muted-foreground" />
+                        {it.label}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
+
       </header>
 
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 md:pb-8">
