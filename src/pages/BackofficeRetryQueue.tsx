@@ -43,6 +43,26 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-muted text-muted-foreground",
 };
 
+// Categorias de falha gravadas por `_shared/sap-retry.ts`.
+const CATEGORY_LABELS: Record<string, string> = {
+  attachment: "Anexo",
+  session: "Sessão / usuário",
+  branch: "Filial (BPL)",
+  date: "Data / período contábil",
+  project: "Projeto / marca",
+  lock: "Documento bloqueado",
+  timeout: "Timeout / indisponibilidade",
+  network: "Rede",
+  business: "Regra de negócio",
+  other: "Outros",
+};
+
+function categoryLabel(cat: string | null): string {
+  if (!cat) return "Sem categoria";
+  return CATEGORY_LABELS[cat] || cat;
+}
+
+
 function fmtDate(iso: string | null) {
   if (!iso) return "-";
   const d = new Date(iso);
