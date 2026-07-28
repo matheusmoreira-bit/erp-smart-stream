@@ -533,15 +533,16 @@ function ApprovalDetailModal({
   );
   const isLineMine = useCallback(
     (line: DocumentLine): boolean => {
-      if (!restrictToMySegments) return true;
+      if (!maskOtherSegments) return true;
       const key = (line.CostingCode || "").trim() || "__no_cc__";
       return myCCs.has(key);
     },
-    [restrictToMySegments, myCCs],
+    [maskOtherSegments, myCCs],
   );
-  const visibleTotal = restrictToMySegments
+  const visibleTotal = maskOtherSegments
     ? mySegments.reduce((s, seg) => s + (doc?.currency !== "BRL" ? seg.amountFC : seg.amount), 0)
     : (doc?.docTotal || 0);
+
 
   // Sempre que troca de documento, pré-seleciona CCs mapeados (ou nenhum se não houver mapping)
   // e limpa o campo de Observação para não vazar texto do card anterior.
