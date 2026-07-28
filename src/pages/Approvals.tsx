@@ -857,14 +857,23 @@ function ApprovalDetailModal({
                 <div className="space-y-1.5">
                   {rateio.info.byCC.map((cc) => {
                     const checked = selectedCCs.has(cc.code);
+                    const ccKey = (cc.code || "").trim() || "__no_cc__";
+                    const mineCC = !maskOtherSegments || myCCs.has(ccKey);
                     return (
                       <label
                         key={cc.code}
-                        className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-background/40 hover:bg-background/70 cursor-pointer transition-colors"
+                        title={!mineCC ? "Centro de custo da alçada de outro aprovador" : undefined}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg border border-border transition-colors ${
+                          mineCC
+                            ? "bg-background/40 hover:bg-background/70 cursor-pointer"
+                            : "bg-muted/10 cursor-not-allowed"
+                        }`}
                       >
                         <Checkbox
-                          checked={checked}
+                          checked={mineCC ? checked : false}
+                          disabled={!mineCC}
                           onCheckedChange={(v) => {
+                            if (!mineCC) return;
                             setSelectedCCs((prev) => {
                               const next = new Set(prev);
                               if (v) next.add(cc.code);
@@ -873,19 +882,20 @@ function ApprovalDetailModal({
                             });
                           }}
                         />
-                        <div className="flex-1 min-w-0">
+                        <div className={`flex-1 min-w-0 ${!mineCC ? "blur-sm select-none" : ""}`}>
                           <p className="text-sm text-foreground font-medium truncate">{formatCostCenter(cc.code)}</p>
                           <p className="text-[11px] text-muted-foreground">
                             {cc.pct.toFixed(1)}% do documento
                           </p>
                         </div>
-                        <span className="text-sm font-mono font-semibold text-foreground">
+                        <span className={`text-sm font-mono font-semibold text-foreground ${!mineCC ? "blur-sm select-none" : ""}`}>
                           {formatCurrency(cc.amount, doc.currency)}
                         </span>
                       </label>
                     );
                   })}
                 </div>
+
                 <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20">
                   <span className="text-xs uppercase tracking-wider text-muted-foreground">
                     Sua alçada de aprovação para este documento
