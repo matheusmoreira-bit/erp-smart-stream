@@ -80,18 +80,17 @@ export default function InfraHealth() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            <Cloud className="w-6 h-6" /> Infra & Backups (AWS S3)
-          </h1>
-          <p className="text-sm text-muted-foreground">Backups do banco e storage espelhados para S3 (portabilidade AWS).</p>
-        </div>
-        <Button variant="outline" onClick={load} disabled={loading}>
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          <span className="ml-2">Atualizar</span>
-        </Button>
-      </div>
+      <BackofficePageHeader
+        title="Infra & Backups (AWS S3)"
+        description="Backups do banco e storage espelhados para S3 (portabilidade AWS)."
+        icon={<Cloud className="h-5 w-5 text-muted-foreground" />}
+        actions={
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            <span className="ml-2">Atualizar</span>
+          </Button>
+        }
+      />
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
