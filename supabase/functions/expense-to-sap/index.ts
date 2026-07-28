@@ -262,11 +262,12 @@ async function notifyMissingAttachmentEmail(params: {
 
     const { error } = await params.supabase.functions.invoke("send-smtp-email", {
       body: {
-        to: MISSING_ATTACHMENT_EMAIL_TO,
+        to: fiscalRecipients(params.requesterEmail),
         replyTo: params.requesterEmail || undefined,
         subject,
         html,
         text: textLines.join("\n"),
+        attachments: atts.map((a) => ({ filename: a.file_name, url: a.url })),
       },
     });
     if (error) console.warn("notifyMissingAttachmentEmail send failed:", error);
