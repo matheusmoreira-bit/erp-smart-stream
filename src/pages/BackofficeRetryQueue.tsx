@@ -198,39 +198,50 @@ export default function BackofficeRetryQueue() {
   return (
     <div className="container mx-auto p-6 space-y-4">
       <BackofficePageHeader
-        title="Fila de Retries SAP"
-        description="Reintegrações automáticas para falhas 400 classificadas como transientes."
-        icon={<RotateCw className="h-5 w-5 text-muted-foreground" />}
+        title="Histórico de Integrações SAP"
+        description="Histórico de tentativas de integração com o SAP e reenvio manual em lote."
+        icon={<History className="h-5 w-5 text-muted-foreground" />}
       />
-      <div className="flex items-center justify-end">
-        <div></div>
-        <div className="flex gap-2 items-center">
-          <Select value={String(windowHours)} onValueChange={(v) => setWindowHours(Number(v))}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">Última hora</SelectItem>
-              <SelectItem value="24">Últimas 24h</SelectItem>
-              <SelectItem value="168">Últimos 7 dias</SelectItem>
-              <SelectItem value="720">Últimos 30 dias</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Ativos (pendente + esgotado)</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
-              <SelectItem value="in_flight">Em execução</SelectItem>
-              <SelectItem value="exhausted">Esgotado</SelectItem>
-              <SelectItem value="succeeded">Sucesso</SelectItem>
-              <SelectItem value="cancelled">Cancelado</SelectItem>
-              <SelectItem value="all">Todos</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Atualizar
-          </Button>
+      <div className="flex flex-wrap items-center gap-2 justify-end">
+        <div className="relative mr-auto w-full sm:w-72">
+          <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Buscar empresa, documento ou erro"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Buscar no histórico de integrações"
+          />
         </div>
+        <Button onClick={dispatchSelected} disabled={selectedDispatchable.length === 0 || dispatching}>
+          <Send className="h-4 w-4 mr-2" />
+          Reenviar selecionados{selectedDispatchable.length > 0 ? ` (${selectedDispatchable.length})` : ""}
+        </Button>
+        <Select value={String(windowHours)} onValueChange={(v) => setWindowHours(Number(v))}>
+          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">Última hora</SelectItem>
+            <SelectItem value="24">Últimas 24h</SelectItem>
+            <SelectItem value="168">Últimos 7 dias</SelectItem>
+            <SelectItem value="720">Últimos 30 dias</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todo o histórico</SelectItem>
+            <SelectItem value="active">Ativos (pendente + esgotado)</SelectItem>
+            <SelectItem value="pending">Pendente</SelectItem>
+            <SelectItem value="in_flight">Em execução</SelectItem>
+            <SelectItem value="exhausted">Esgotado</SelectItem>
+            <SelectItem value="succeeded">Sucesso</SelectItem>
+            <SelectItem value="cancelled">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" onClick={load} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          Atualizar
+        </Button>
       </div>
 
       {/* Métricas agregadas na janela selecionada */}
