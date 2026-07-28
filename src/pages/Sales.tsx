@@ -61,6 +61,7 @@ interface SapInvoice {
   FolioNumber: number | null;
   FolioPrefixString: string | null;
   SeriesString: string | null;
+  SequenceSerial?: string | number | null;
   CardCode: string;
   CardName: string;
   DocDate: string;
@@ -75,8 +76,9 @@ interface SapInvoice {
 interface InvoiceRow {
   docEntry: number;
   docNum: number;
-  /** Número da NFSE / folio fiscal (SAP FolioNumber). */
+  /** Número da NFSE / folio fiscal, priorizando campos brasileiros do SAP. */
   folioNumber: number | null;
+  nfseNumber: string | null;
   /** Prefixo/tipo da NFSE (SAP FolioPrefixString), ex.: NFSe_CAC. */
   folioPrefix: string | null;
   /** Série da NFSE (SAP SeriesString), ex.: 1. */
@@ -107,6 +109,17 @@ interface ClientGroup {
   totalSaldo: number;
   totalDocs: number;
   qtdAbertas: number;
+}
+
+function cleanSapText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text && text !== "0" ? text : null;
+}
+
+function formatNfseLabel(row: Pick<InvoiceRow, "nfseNumber" | "folioPrefix" | "folioSeries">) {
+  if (!row.nfseNumber) return null;
+  return `NFS-e ${row.folioPrefix ? `${row.folioPrefix} ` : ""}${row.nfseNumber}${row.folioSeries ? ` · Série ${row.folioSeries}` : ""}`;
 }
 
 /* ─────────────────────────── Page ─────────────────────────── */
@@ -171,7 +184,7 @@ function SalesPageInner() {
         const cutoffIso = cutoff.toISOString().slice(0, 10);
         const invoiceParams: Record<string, string> = {
           $select:
-            "DocEntry,DocNum,FolioNumber,FolioPrefixString,SeriesString,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
+            "DocEntry,DocNum,SequenceSerial,FolioNumber,FolioPrefixString,SeriesString,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
           $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
           $orderby: "DocDate desc",
         };
@@ -244,12 +257,16 @@ function SalesPageInner() {
           const saldo = Math.max(0, +(total - paid - pending).toFixed(2));
           const cancelled = inv.Cancelled === "tYES";
           const closed = inv.DocumentStatus === "bost_Close";
+          const folioNumber = inv.FolioNumber != null ? Number(inv.FolioNumber) : null;
+          const sequenceSerial = cleanSapText(inv.SequenceSerial);
+          const nfseNumber = sequenceSerial || (folioNumber != null ? String(folioNumber) : null);
           return {
             docEntry: inv.DocEntry,
             docNum: inv.DocNum,
-            folioNumber: inv.FolioNumber != null ? Number(inv.FolioNumber) : null,
-            folioPrefix: inv.FolioPrefixString ? String(inv.FolioPrefixString).trim() : null,
-            folioSeries: inv.SeriesString ? String(inv.SeriesString).trim() : null,
+            folioNumber,
+            nfseNumber,
+            folioPrefix: cleanSapText(inv.FolioPrefixString),
+            folioSeries: cleanSapText(inv.SeriesString),
             cardCode: inv.CardCode || "—",
             cardName: inv.CardName || "—",
             docDate: inv.DocDate,
@@ -317,6 +334,7 @@ function SalesPageInner() {
               docEntry: jdt,
               docNum: jdt,
               folioNumber: null,
+              nfseNumber: null,
               folioPrefix: null,
               folioSeries: null,
               cardCode,
@@ -373,7 +391,7 @@ function SalesPageInner() {
         r.cardName.toLowerCase().includes(q) ||
         r.cardCode.toLowerCase().includes(q) ||
         String(r.docNum).includes(q) ||
-        (r.folioNumber != null && String(r.folioNumber).includes(q)) ||
+        (r.nfseNumber ? r.nfseNumber.toLowerCase().includes(q) : false) ||
         (r.folioPrefix ? r.folioPrefix.toLowerCase().includes(q) : false)
       );
     });
@@ -649,6 +667,7 @@ function SalesPageInner() {
                             const rowClash =
                               selectionCardCode && selectionCardCode !== r.cardCode;
                             const isSI = r.docType === "journal_entry";
+                            const nfseLabel = formatNfseLabel(r);
                             return (
                               <tr
                                 key={rk}
@@ -686,18 +705,16 @@ function SalesPageInner() {
                                   ) : (
                                     <div className="flex flex-col leading-tight">
                                       <span title="DocEntry / DocNum no SAP">{r.docNum}</span>
-                                      {r.folioNumber != null ? (
+                                      {nfseLabel ? (
                                         <span
                                           className="text-[10px] text-muted-foreground"
-                                          title={`NFS-e ${r.folioPrefix ? `${r.folioPrefix} ` : ""}${r.folioNumber}${r.folioSeries ? ` · Série ${r.folioSeries}` : ""}`}
+                                          title={nfseLabel}
                                         >
-                                          NFS-e {r.folioPrefix ? `${r.folioPrefix} ` : ""}
-                                          {r.folioNumber}
-                                          {r.folioSeries ? ` · Série ${r.folioSeries}` : ""}
+                                          {nfseLabel}
                                         </span>
                                       ) : (
                                         <span className="text-[10px] text-muted-foreground/60">
-                                          NFS-e —
+                                          Sem NFS-e vinculada
                                         </span>
                                       )}
                                     </div>

@@ -36,6 +36,7 @@ interface Props {
     docEntry: number;
     docNum: number;
     folioNumber?: number | null;
+    nfseNumber?: string | null;
     folioPrefix?: string | null;
     folioSeries?: string | null;
     cardCode: string;
@@ -90,6 +91,11 @@ function formatTime(iso?: string | null) {
   } catch {
     return "—";
   }
+}
+
+function formatNfseLabel(invoice: Pick<NonNullable<Props["invoice"]>, "nfseNumber" | "folioPrefix" | "folioSeries">) {
+  if (!invoice.nfseNumber) return null;
+  return `NFS-e ${invoice.folioPrefix ? `${invoice.folioPrefix} ` : ""}${invoice.nfseNumber}${invoice.folioSeries ? ` · Série ${invoice.folioSeries}` : ""}`;
 }
 
 
@@ -309,6 +315,8 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
 
   if (!invoice) return null;
 
+  const nfseLabel = formatNfseLabel(invoice);
+
   // ── Linhas normalizadas para exportação (CSV/PDF) ───────────────
   function buildRows() {
     if (!invoice) return [] as string[][];
@@ -464,11 +472,9 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
           </DialogTitle>
           <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
             <span>{invoice.cardName}</span>
-            {invoice.folioNumber != null && (
+            {nfseLabel && (
               <span className="font-mono">
-                NFS-e {invoice.folioPrefix ? `${invoice.folioPrefix} ` : ""}
-                {invoice.folioNumber}
-                {invoice.folioSeries ? ` · Série ${invoice.folioSeries}` : ""}
+                {nfseLabel}
               </span>
             )}
             <span className="font-mono">{invoice.cardCode}</span>
@@ -530,10 +536,10 @@ export function SalesRelationsMap({ open, onClose, session, invoice }: Props) {
                     <p className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
                       NF #{invoice.docNum}
                       <IdBadge label="DocEntry" value={String(invoice.docEntry)} />
-                      {invoice.folioNumber != null && (
+                      {nfseLabel && (
                         <IdBadge
                           label="NFS-e"
-                          value={`${invoice.folioPrefix ? `${invoice.folioPrefix} ` : ""}${invoice.folioNumber}${invoice.folioSeries ? ` / Série ${invoice.folioSeries}` : ""}`}
+                          value={nfseLabel.replace(/^NFS-e\s*/, "")}
                         />
                       )}
                     </p>
