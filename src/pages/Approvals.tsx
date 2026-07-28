@@ -1019,7 +1019,7 @@ function ApprovalDetailModal({
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Itens do Documento
-                    {restrictToMySegments && (
+                    {maskOtherSegments && (
                       <span className="ml-2 normal-case tracking-normal text-[10px] text-muted-foreground">
                         (linhas de outros aprovadores estão borradas)
                       </span>
