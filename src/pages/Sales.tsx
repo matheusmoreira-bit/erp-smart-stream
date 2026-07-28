@@ -64,7 +64,6 @@ interface SapInvoice {
   FiscalDocNum?: string | number | null;
   SequenceSerial?: string | number | null;
   SequenceCode?: string | number | null;
-  SequenceModel?: string | number | null;
   CardCode: string;
   CardName: string;
   DocDate: string;
@@ -187,7 +186,7 @@ function SalesPageInner() {
         const cutoffIso = cutoff.toISOString().slice(0, 10);
         const invoiceParams: Record<string, string> = {
           $select:
-            "DocEntry,DocNum,FiscalDocNum,SequenceSerial,SequenceCode,SequenceModel,FolioNumber,FolioPrefixString,SeriesString,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
+            "DocEntry,DocNum,FiscalDocNum,SequenceSerial,SequenceCode,FolioNumber,FolioPrefixString,SeriesString,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
           $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
           $orderby: "DocDate desc",
         };
