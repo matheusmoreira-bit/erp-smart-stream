@@ -300,11 +300,24 @@ async function runBackup(supabase: Sup, log: (m: string) => void) {
       complete ? "ok" : "partial",
       complete ? `snapshot ${stamp}` : `snapshot ${stamp} parcial — próxima execução continua`,
     );
+    await setRunState(supabase, {
+      run_status: complete ? "ok" : "partial",
+      run_progress: `Concluído: ${Object.keys(tableStats).length} tabelas, ${expenseAttach.copied + nfAttach.copied} anexos novos`,
+      run_finished_at: new Date().toISOString(),
+      last_snapshot: stamp,
+      run_error: null,
+    });
     log(`FIM snapshot ${stamp} (complete=${complete})`);
   } catch (e) {
     const msg = (e as Error).message;
     log(`ERRO: ${msg}`);
     await releaseWatcherLock(supabase, WATCHER_NAME, "error", msg);
+    await setRunState(supabase, {
+      run_status: "error",
+      run_progress: "Falhou",
+      run_finished_at: new Date().toISOString(),
+      run_error: msg,
+    });
   }
 
 }
@@ -312,27 +325,119 @@ async function runBackup(supabase: Sup, log: (m: string) => void) {
 // @ts-ignore - EdgeRuntime é disponível no runtime Deno da Supabase
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
+async function requireAdmin(req: Request): Promise<boolean> {
+  const auth = req.headers.get("Authorization") || "";
+  const token = auth.replace(/^Bearer\s+/i, "");
+  if (!token) return false;
+  const client = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } },
+  );
+  const { data: userData } = await client.auth.getUser();
+  if (!userData?.user) return false;
+  const { data: isAdmin } = await client.rpc("has_role", { _user_id: userData.user.id, _role: "admin" });
+  return isAdmin === true;
+}
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = svc();
-  const locked = await tryWatcherLock(supabase, WATCHER_NAME, 60);
-  if (!locked) {
-    return new Response(
-      JSON.stringify({ skipped: true, reason: "another run in progress" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+
+  let body: any = {};
+  try { body = await req.json(); } catch (_) { body = {}; }
+  const action = String(body?.action || "run");
+
+  // Ações administrativas (consulta e configuração de pasta)
+  if (action !== "run") {
+    if (!(await requireAdmin(req))) return json({ error: "Acesso restrito a administradores" }, 403);
+
+    if (action === "status") {
+      const { data: settings } = await supabase
+        .from("gdrive_backup_settings").select("*").eq("singleton", true).maybeSingle();
+      const { data: run } = await supabase
+        .from("watcher_runs").select("*").eq("watcher_name", WATCHER_NAME).maybeSingle();
+      return json({ settings, run });
+    }
+
+    if (action === "list_folders") {
+      if (!LOVABLE_API_KEY || !GD_KEY) return json({ error: "Google Drive não conectado" }, 400);
+      const parentId = typeof body.parent_id === "string" && body.parent_id ? body.parent_id : "root";
+      const search = typeof body.search === "string" ? body.search.trim().slice(0, 100) : "";
+      const esc = (s: string) => s.replace(/['\\]/g, "\\$&");
+      const q = search
+        ? `mimeType='application/vnd.google-apps.folder' and trashed=false and name contains '${esc(search)}'`
+        : `mimeType='application/vnd.google-apps.folder' and trashed=false and '${esc(parentId)}' in parents`;
+      try {
+        const list = await gdJson(
+          `/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,webViewLink,parents)&pageSize=100&orderBy=name`,
+        );
+        return json({ folders: list.files || [], parent_id: parentId });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 502);
+      }
+    }
+
+    if (action === "create_folder") {
+      if (!LOVABLE_API_KEY || !GD_KEY) return json({ error: "Google Drive não conectado" }, 400);
+      const name = String(body.name || "").trim().slice(0, 120);
+      if (!name) return json({ error: "Informe o nome da pasta" }, 400);
+      const parentId = typeof body.parent_id === "string" && body.parent_id ? body.parent_id : undefined;
+      try {
+        const id = await findOrCreateFolder(name, parentId);
+        return json({ id, name });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 502);
+      }
+    }
+
+    if (action === "validate_folder") {
+      const folderId = String(body.folder_id || "").trim();
+      if (!folderId) return json({ error: "Informe o ID da pasta" }, 400);
+      try {
+        const f = await gdJson(`/drive/v3/files/${encodeURIComponent(folderId)}?fields=id,name,mimeType,trashed,webViewLink`);
+        if (f.mimeType !== "application/vnd.google-apps.folder") return json({ error: "O ID informado não é uma pasta" }, 400);
+        if (f.trashed) return json({ error: "A pasta está na lixeira" }, 400);
+        return json({ folder: f });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 502);
+      }
+    }
+
+    return json({ error: "Ação inválida" }, 400);
   }
 
-  const log = (m: string) => console.log(m);
+  const locked = await tryWatcherLock(supabase, WATCHER_NAME, 60);
+  if (!locked) {
+    return json({ skipped: true, reason: "another run in progress", message: "Já existe um backup em execução." });
+  }
+
+  const trigger = body?.manual === true ? "manual" : "cron";
+  await setRunState(supabase, {
+    run_status: "running",
+    run_progress: "Iniciando…",
+    run_started_at: new Date().toISOString(),
+    run_finished_at: null,
+    run_trigger: trigger,
+    run_error: null,
+  });
+
+  const log = (m: string) => {
+    console.log(m);
+    setRunState(supabase, { run_progress: m.slice(0, 500) });
+  };
   const task = runBackup(supabase, log);
 
   // roda em background para não estourar o timeout de 150s da resposta HTTP
   if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(task);
 
-  return new Response(
-    JSON.stringify({ ok: true, started: true, message: "Backup em execução em segundo plano. Acompanhe pelos logs." }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-  );
+  return json({ ok: true, started: true, trigger, message: "Backup em execução em segundo plano." });
 });
 
