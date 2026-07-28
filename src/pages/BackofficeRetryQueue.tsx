@@ -133,6 +133,38 @@ export default function BackofficeRetryQueue() {
     else toast.success("Cancelado");
   };
 
+  // Contingência para falhas de anexo: integra o documento no SAP sem o anexo
+  // e envia o arquivo por email para o fiscal da empresa.
+  const integrateWithoutAttachment = async (row: Row) => {
+    setSkippingId(row.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("expense-to-sap", {
+        body: { expense_id: row.ref_id, use_service_account: true, skip_attachments: true },
+      });
+      const failed = error || (data && (data as { success?: boolean }).success === false);
+      if (failed) {
+        const msg = (data as { error?: string })?.error || error?.message || "Falha na integração";
+        toast.error(msg);
+        return;
+      }
+      await supabase
+        .from("sap_retry_queue")
+        .update({
+          status: "succeeded",
+          last_error: "Integrado sem anexo (anexo enviado por email ao fiscal)",
+        })
+        .eq("id", row.id);
+      toast.success("Integrado sem anexo — arquivo enviado por email ao fiscal");
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha na integração sem anexo");
+    } finally {
+      setSkippingId(null);
+    }
+  };
+
+
+
   const visibleRows = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
