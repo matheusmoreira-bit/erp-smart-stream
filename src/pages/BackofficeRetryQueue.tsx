@@ -386,6 +386,14 @@ export default function BackofficeRetryQueue() {
             <SelectItem value="cancelled">Cancelado</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant={groupByDoc ? "secondary" : "outline"}
+          onClick={() => setGroupByDoc((v) => !v)}
+          aria-pressed={groupByDoc}
+          title="Agrupa várias tentativas do mesmo documento em uma única linha"
+        >
+          {groupByDoc ? "Agrupado por documento" : "Todas as tentativas"}
+        </Button>
         <Button variant="outline" onClick={load} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           Atualizar
