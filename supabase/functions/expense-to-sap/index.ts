@@ -731,6 +731,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
   let supabase: ReturnType<typeof createClient> | null = null;
   let pagcorpLog: any = null;
   let pagcorpLogWritten = false;
+  // Reprocessamento manual "integrar sem anexo": ignora o estágio de anexos
+  // no SAP e envia o arquivo por email para o fiscal da empresa.
+  let skipAttachments = false;
   let expenseSnapshot: any = null;
   // Captured outside the try/catch so the error path can return the same
   // payload that was actually sent to SAP (used by the integration log UI).
