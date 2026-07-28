@@ -99,7 +99,21 @@ export default function BackofficeRetryQueue() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Só pode existir 1 item ativo (pending/in_flight) por doc_type+ref_id (índice único parcial).
+  const activeKeys = useMemo(() => {
+    const s = new Set<string>();
+    rows.forEach((r) => {
+      if (r.status === "pending" || r.status === "in_flight") s.add(`${r.doc_type}::${r.ref_id}`);
+    });
+    return s;
+  }, [rows]);
+
   const retryNow = async (id: string) => {
+    const row = rows.find((r) => r.id === id);
+    if (row && row.status !== "pending" && row.status !== "in_flight" && activeKeys.has(`${row.doc_type}::${row.ref_id}`)) {
+      toast.error("Já existe uma tentativa ativa para este documento");
+      return;
+    }
     const { error } = await supabase
       .from("sap_retry_queue")
       .update({ status: "pending", next_attempt_at: new Date().toISOString(), notified_exhausted_at: null })
@@ -111,6 +125,7 @@ export default function BackofficeRetryQueue() {
       await supabase.functions.invoke("sap-retry-worker").catch(() => {});
     }
   };
+
 
   const cancel = async (id: string) => {
     const { error } = await supabase.from("sap_retry_queue").update({ status: "cancelled" }).eq("id", id);
