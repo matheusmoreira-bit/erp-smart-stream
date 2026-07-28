@@ -344,10 +344,19 @@ export default function BackofficeRetryQueue() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  aria-label="Selecionar todos"
+                  checked={dispatchableIds.length > 0 && dispatchableIds.every((id) => selected.includes(id))}
+                  onCheckedChange={toggleAll}
+                  disabled={dispatchableIds.length === 0}
+                />
+              </TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Empresa</TableHead>
               <TableHead>Documento</TableHead>
               <TableHead>Tentativas</TableHead>
+              <TableHead>Última tentativa</TableHead>
               <TableHead>Próxima</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Status</TableHead>
@@ -356,37 +365,48 @@ export default function BackofficeRetryQueue() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.length === 0 && (
-              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                {loading ? "Carregando..." : "Nenhum item"}
+            {visibleRows.length === 0 && (
+              <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                {loading ? "Carregando..." : "Nenhum registro de integração no período"}
               </TableCell></TableRow>
             )}
-            {rows.map(r => (
-              <TableRow key={r.id}>
+            {visibleRows.map(r => {
+              const canDispatch = r.status === "pending" || r.status === "exhausted" || r.status === "cancelled";
+              return (
+              <TableRow key={r.id} data-state={selected.includes(r.id) ? "selected" : undefined}>
+                <TableCell>
+                  <Checkbox
+                    aria-label={`Selecionar ${r.ref_id}`}
+                    checked={selected.includes(r.id)}
+                    onCheckedChange={() => toggleRow(r.id)}
+                    disabled={!canDispatch}
+                  />
+                </TableCell>
                 <TableCell className="font-mono text-xs">{r.doc_type}</TableCell>
                 <TableCell>{r.company_db || "-"}</TableCell>
                 <TableCell className="font-mono text-xs">{r.ref_id.slice(0, 12)}…</TableCell>
                 <TableCell>{r.attempts}/{r.max_attempts}</TableCell>
+                <TableCell className="text-xs">{fmtDate(r.last_attempt_at)}</TableCell>
                 <TableCell className="text-xs">{fmtDate(r.next_attempt_at)}</TableCell>
                 <TableCell><Badge variant="outline">{r.error_category || "-"}</Badge></TableCell>
                 <TableCell><Badge className={STATUS_COLORS[r.status]}>{r.status}</Badge></TableCell>
-                <TableCell className="max-w-md truncate text-xs text-red-700" title={r.last_error || ""}>
+                <TableCell className="max-w-md truncate text-xs text-destructive" title={r.last_error || ""}>
                   {r.last_error || "-"}
                 </TableCell>
                 <TableCell className="text-right space-x-1 whitespace-nowrap">
-                  {(r.status === "pending" || r.status === "exhausted") && (
+                  {canDispatch && (
                     <Button size="sm" variant="outline" onClick={() => retryNow(r.id)}>
-                      <PlayCircle className="h-3 w-3 mr-1" />Retry
+                      <PlayCircle className="h-3 w-3 mr-1" />Reenviar
                     </Button>
                   )}
                   {r.status !== "cancelled" && r.status !== "succeeded" && (
-                    <Button size="sm" variant="ghost" onClick={() => cancel(r.id)}>
+                    <Button size="sm" variant="ghost" onClick={() => cancel(r.id)} aria-label="Cancelar">
                       <X className="h-3 w-3" />
                     </Button>
                   )}
                 </TableCell>
               </TableRow>
-            ))}
+            );})}
           </TableBody>
         </Table>
       </Card>
