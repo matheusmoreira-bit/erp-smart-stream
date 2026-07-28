@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, RefreshCw, Database, HardDrive, Cloud, AlertTriangle } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
+import { GDriveBackupPanel } from "@/components/GDriveBackupPanel";
 import { toast } from "sonner";
 
 type BackupRow = {
