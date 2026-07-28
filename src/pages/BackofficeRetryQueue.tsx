@@ -148,13 +148,13 @@ export default function BackofficeRetryQueue() {
 
   return (
     <div className="container mx-auto p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Fila de Retries SAP</h1>
-          <p className="text-sm text-muted-foreground">
-            Reintegrações automáticas para falhas 400 classificadas como transientes.
-          </p>
-        </div>
+      <BackofficePageHeader
+        title="Fila de Retries SAP"
+        description="Reintegrações automáticas para falhas 400 classificadas como transientes."
+        icon={<RotateCw className="h-5 w-5 text-muted-foreground" />}
+      />
+      <div className="flex items-center justify-end">
+        <div></div>
         <div className="flex gap-2 items-center">
           <Select value={String(windowHours)} onValueChange={(v) => setWindowHours(Number(v))}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
