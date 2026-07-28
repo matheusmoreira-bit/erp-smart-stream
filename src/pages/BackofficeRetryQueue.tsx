@@ -479,6 +479,19 @@ export default function BackofficeRetryQueue() {
                       <PlayCircle className="h-3 w-3 mr-1" />Reenviar
                     </Button>
                   )}
+                  {canDispatch && r.doc_type === "expense" && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={skippingId === r.id}
+                      title="Integra o pedido no SAP sem anexo e envia o arquivo por email para o fiscal da empresa"
+                      onClick={() => integrateWithoutAttachment(r)}
+                    >
+                      <Paperclip className="h-3 w-3 mr-1" />
+                      {skippingId === r.id ? "Integrando..." : "Integrar sem anexo"}
+                    </Button>
+                  )}
+
                   {r.status !== "cancelled" && r.status !== "succeeded" && (
                     <Button size="sm" variant="ghost" onClick={() => cancel(r.id)} aria-label="Cancelar">
                       <X className="h-3 w-3" />
