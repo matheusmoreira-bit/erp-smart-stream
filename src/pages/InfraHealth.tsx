@@ -142,6 +142,9 @@ export default function InfraHealth() {
         </Card>
       </div>
 
+      <GDriveBackupPanel />
+
+
       <Card>
         <CardHeader><CardTitle className="text-base">Histórico</CardTitle></CardHeader>
         <CardContent>
