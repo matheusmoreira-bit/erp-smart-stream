@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { RefreshCw, Play, AlertTriangle } from "lucide-react";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 const DEFAULT_IDS = [
   "fe1df950-9751-4c33-86c9-1789251007ce",
@@ -128,15 +129,19 @@ export default function SapStatusSync() {
 
   return (
     <div className="container max-w-5xl py-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <PageTitle title="Sincronia de Status SAP" />
-        <a
-          href="/backoffice/sap-sync/execucoes"
-          className="text-sm text-primary hover:underline"
-        >
-          Ver histórico de execuções →
-        </a>
-      </div>
+      <BackofficePageHeader
+        title="Sincronia de Status SAP"
+        description="Force e acompanhe a sincronização de status das despesas com o SAP."
+        icon={<RefreshCw className="h-5 w-5 text-muted-foreground" />}
+        actions={
+          <a
+            href="/backoffice/sap-sync/execucoes"
+            className="text-sm text-primary hover:underline"
+          >
+            Ver histórico de execuções →
+          </a>
+        }
+      />
 
       <Card>
         <CardHeader>

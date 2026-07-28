@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTitle } from "@/components/PageTitle";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,15 +101,18 @@ export default function SapSyncRuns() {
 
   return (
     <div className="container max-w-6xl py-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <PageTitle title="Execuções da Sincronia SAP" />
-        <Button asChild variant="outline" size="sm">
-          <Link to="/backoffice/sap-sync">
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Forçar sincronia
-          </Link>
-        </Button>
-      </div>
+      <BackofficePageHeader
+        title="Execuções da Sincronia SAP"
+        description="Histórico e métricas das execuções de sincronização."
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link to="/backoffice/sap-sync">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Forçar sincronia
+            </Link>
+          </Button>
+        }
+      />
 
       <SapSyncHealthCard />
 
