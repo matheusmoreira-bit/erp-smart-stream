@@ -202,11 +202,27 @@ async function cleanupOldSnapshots(dataFolderId: string): Promise<number> {
   return removed;
 }
 
+async function resolveRootFolder(log: (m: string) => void): Promise<string> {
+  if (ROOT_FOLDER_ID) {
+    try {
+      const f = await gdJson(`/drive/v3/files/${ROOT_FOLDER_ID}?fields=id,trashed`);
+      if (f?.id && !f.trashed) return f.id;
+      log(`pasta configurada ${ROOT_FOLDER_ID} está na lixeira — usando fallback`);
+    } catch (e) {
+      log(`pasta configurada inacessível (${(e as Error).message.slice(0, 120)}) — usando fallback`);
+    }
+  }
+  const id = await findOrCreateFolder(ROOT_FOLDER_NAME);
+  log(`pasta raiz de backup: ${ROOT_FOLDER_NAME} (${id})`);
+  return id;
+}
+
 async function runBackup(supabase: Sup, log: (m: string) => void) {
   try {
     if (!LOVABLE_API_KEY || !GD_KEY) throw new Error("Credenciais do Google Drive ausentes");
 
-    const rootId = ROOT_FOLDER_ID;
+    const rootId = await resolveRootFolder(log);
+
     const dataRootId = await findOrCreateFolder(DATA_FOLDER_NAME, rootId);
     const attachId = await findOrCreateFolder(ATTACH_FOLDER_NAME, rootId);
     const nfId = await findOrCreateFolder(NF_FOLDER_NAME, rootId);
