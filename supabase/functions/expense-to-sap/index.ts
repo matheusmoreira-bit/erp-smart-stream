@@ -1048,8 +1048,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     // 3.1 Attachments stage — upload first and link via AttachmentEntry.
     // Reuse sap_attachment_entry if a previous attempt already uploaded them
     // to avoid duplicating attachments in SAP when retrying after a failure.
-    let attachmentEntry: number | null = expense.sap_attachment_entry ?? null;
-    const integrateAttachments = (sapCreds.integrate_attachments || "").toLowerCase() === "true";
+    let attachmentEntry: number | null = skipAttachments ? null : (expense.sap_attachment_entry ?? null);
+    const integrateAttachments = !skipAttachments
+      && (sapCreds.integrate_attachments || "").toLowerCase() === "true";
 
     if (integrateAttachments) {
       if (attachmentEntry !== null) {
