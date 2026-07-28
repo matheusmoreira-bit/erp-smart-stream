@@ -12,11 +12,15 @@ const GATEWAY = "https://connector-gateway.lovable.dev/google_drive";
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const GD_KEY = Deno.env.get("GOOGLE_DRIVE_API_KEY")!;
 
-const ROOT_FOLDER_ID = "1zFQ5jphDXUsYCNYn4tT1sqVSs5TS_AvZ";
+// Pasta raiz: usa GDRIVE_BACKUP_FOLDER_ID se configurado; caso contrário
+// resolve/cria "ERP-Flow-Backups" no Drive da conta conectada.
+const ROOT_FOLDER_ID = Deno.env.get("GDRIVE_BACKUP_FOLDER_ID") || "";
+const ROOT_FOLDER_NAME = "ERP-Flow-Backups";
 const DATA_FOLDER_NAME = "data";
 const ATTACH_FOLDER_NAME = "attachments-expenses";
 const NF_FOLDER_NAME = "attachments-nf-entrada";
 const RETENTION_DAYS = 90;
+
 
 const WATCHER_NAME = "backup-to-gdrive";
 
