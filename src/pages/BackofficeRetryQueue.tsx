@@ -74,6 +74,7 @@ export default function BackofficeRetryQueue() {
   const [metrics, setMetrics] = useState<MetricsRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [windowHours, setWindowHours] = useState<number>(24);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -188,13 +189,27 @@ export default function BackofficeRetryQueue() {
 
   const visibleRows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((r) =>
-      [r.doc_type, r.company_db, r.ref_id, r.error_category, r.last_error]
+    return rows.filter((r) => {
+      if (categoryFilter !== "all") {
+        const cat = r.error_category || "none";
+        if (categoryFilter === "none" ? r.error_category : cat !== categoryFilter) return false;
+      }
+      if (!term) return true;
+      return [r.doc_type, r.company_db, r.ref_id, r.error_category, categoryLabel(r.error_category), r.last_error]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(term)),
-    );
-  }, [rows, search]);
+        .some((v) => String(v).toLowerCase().includes(term));
+    });
+  }, [rows, search, categoryFilter]);
+
+  // Categorias presentes no histórico carregado (ordenadas por volume).
+  const categoryOptions = useMemo(() => {
+    const c = new Map<string, number>();
+    rows.forEach((r) => {
+      const k = r.error_category || "none";
+      c.set(k, (c.get(k) || 0) + 1);
+    });
+    return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
+  }, [rows]);
 
   const dispatchableIds = useMemo(
     () => visibleRows.filter((r) => r.status === "pending" || r.status === "exhausted" || r.status === "cancelled").map((r) => r.id),
@@ -324,6 +339,19 @@ export default function BackofficeRetryQueue() {
             <SelectItem value="24">Últimas 24h</SelectItem>
             <SelectItem value="168">Últimos 7 dias</SelectItem>
             <SelectItem value="720">Últimos 30 dias</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-56" aria-label="Filtrar por tipo de falha">
+            <SelectValue placeholder="Tipo de falha" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os tipos de falha</SelectItem>
+            {categoryOptions.map(([cat, total]) => (
+              <SelectItem key={cat} value={cat}>
+                {cat === "none" ? "Sem categoria" : categoryLabel(cat)} ({total})
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -488,7 +516,7 @@ export default function BackofficeRetryQueue() {
                 <TableCell>{r.attempts}/{r.max_attempts}</TableCell>
                 <TableCell className="text-xs">{fmtDate(r.last_attempt_at)}</TableCell>
                 <TableCell className="text-xs">{fmtDate(r.next_attempt_at)}</TableCell>
-                <TableCell><Badge variant="outline">{r.error_category || "-"}</Badge></TableCell>
+                <TableCell><Badge variant="outline">{categoryLabel(r.error_category)}</Badge></TableCell>
                 <TableCell><Badge className={STATUS_COLORS[r.status]}>{r.status}</Badge></TableCell>
                 <TableCell className="max-w-md truncate text-xs text-destructive" title={r.last_error || ""}>
                   {r.last_error || "-"}
