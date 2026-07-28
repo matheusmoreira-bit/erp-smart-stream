@@ -61,9 +61,7 @@ interface SapInvoice {
   FolioNumber: number | null;
   FolioPrefixString: string | null;
   SeriesString: string | null;
-  FiscalDocNum?: string | number | null;
   SequenceSerial?: string | number | null;
-  SequenceCode?: string | number | null;
   CardCode: string;
   CardName: string;
   DocDate: string;
@@ -186,7 +184,7 @@ function SalesPageInner() {
         const cutoffIso = cutoff.toISOString().slice(0, 10);
         const invoiceParams: Record<string, string> = {
           $select:
-            "DocEntry,DocNum,FiscalDocNum,SequenceSerial,SequenceCode,FolioNumber,FolioPrefixString,SeriesString,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
+            "DocEntry,DocNum,SequenceSerial,FolioNumber,FolioPrefixString,SeriesString,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
           $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
           $orderby: "DocDate desc",
         };
@@ -261,8 +259,7 @@ function SalesPageInner() {
           const closed = inv.DocumentStatus === "bost_Close";
           const folioNumber = inv.FolioNumber != null ? Number(inv.FolioNumber) : null;
           const sequenceSerial = cleanSapText(inv.SequenceSerial);
-          const fiscalDocNum = cleanSapText(inv.FiscalDocNum);
-          const nfseNumber = fiscalDocNum || sequenceSerial || (folioNumber != null ? String(folioNumber) : null);
+          const nfseNumber = sequenceSerial || (folioNumber != null ? String(folioNumber) : null);
           return {
             docEntry: inv.DocEntry,
             docNum: inv.DocNum,
