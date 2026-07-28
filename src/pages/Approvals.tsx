@@ -932,16 +932,18 @@ function ApprovalDetailModal({
                 <div className="space-y-1.5">
                   {segments.map((seg) => {
                     const isMine = mySegments.some((m) => m.costCenter === seg.costCenter);
+                    const masked = maskOtherSegments && !isMine;
                     return (
                       <div
                         key={seg.costCenter}
+                        title={masked ? "Segmento da alçada de outro aprovador" : undefined}
                         className={`rounded-lg border p-2.5 text-xs ${
                           isMine
                             ? "border-emerald-500/40 bg-emerald-500/5"
                             : "border-border bg-background/40"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className={`flex items-center justify-between gap-2 flex-wrap ${masked ? "blur-sm select-none" : ""}`}>
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="font-medium text-foreground truncate">
                               {seg.costCenter === "__no_cc__"
@@ -964,7 +966,7 @@ function ApprovalDetailModal({
                             </span>
                           </span>
                         </div>
-                        <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-muted-foreground">
+                        <div className={`mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-muted-foreground ${masked ? "blur-sm select-none" : ""}`}>
                           <span className="font-medium text-foreground">
                             {seg.rule?.name || "Sem regra correspondente"}
                           </span>
@@ -981,7 +983,7 @@ function ApprovalDetailModal({
                     );
                   })}
                 </div>
-                {segmented && !isAdmin && !isSuperUser && mySegments.length > 0 && (
+                {segmented && mySegments.length > 0 && (
                   <div className="pt-2 border-t border-primary/20 flex items-center justify-between gap-2">
                     <span className="text-[11px] text-muted-foreground">
                       Total dos seus segmentos:{" "}
@@ -989,16 +991,19 @@ function ApprovalDetailModal({
                         {formatCurrency(visibleTotal, doc.currency)}
                       </span>
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setShowAllLines((v) => !v)}
-                    >
-                      {showAllLines ? "Ver só minha parte" : "Ver documento completo"}
-                    </Button>
+                    {(isAdmin || isSuperUser) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setShowAllLines((v) => !v)}
+                      >
+                        {showAllLines ? "Ver só minha parte" : "Ver documento completo"}
+                      </Button>
+                    )}
                   </div>
                 )}
+
                 {segmented && mySegments.length === 0 && !isAdmin && !isSuperUser && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
                     Nenhum segmento deste documento aponta para você como aprovador — pode ser
