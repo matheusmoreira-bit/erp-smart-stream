@@ -202,12 +202,26 @@ async function cleanupOldSnapshots(dataFolderId: string): Promise<number> {
   return removed;
 }
 
-async function resolveRootFolder(log: (m: string) => void): Promise<string> {
-  if (ROOT_FOLDER_ID) {
+async function getConfiguredFolderId(supabase: Sup): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from("gdrive_backup_settings")
+      .select("folder_id")
+      .eq("singleton", true)
+      .maybeSingle();
+    return ((data as any)?.folder_id as string) || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+async function resolveRootFolder(log: (m: string) => void, supabase: Sup): Promise<string> {
+  const configured = (await getConfiguredFolderId(supabase)) || ROOT_FOLDER_ID;
+  if (configured) {
     try {
-      const f = await gdJson(`/drive/v3/files/${ROOT_FOLDER_ID}?fields=id,trashed`);
+      const f = await gdJson(`/drive/v3/files/${configured}?fields=id,trashed`);
       if (f?.id && !f.trashed) return f.id;
-      log(`pasta configurada ${ROOT_FOLDER_ID} está na lixeira — usando fallback`);
+      log(`pasta configurada ${configured} está na lixeira — usando fallback`);
     } catch (e) {
       log(`pasta configurada inacessível (${(e as Error).message.slice(0, 120)}) — usando fallback`);
     }
