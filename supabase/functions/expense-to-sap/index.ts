@@ -164,12 +164,25 @@ async function notifyMissingAttachmentWhatsApp(params: {
 }
 
 // Fire-and-forget: envia email da contingência (sem anexo) para o time
-// fiscal e responsáveis (Leonardo). Inclui os links assinados dos anexos
-// internos, quando existirem, para lançamento manual no ERP.
+// fiscal da empresa (fiscal@<domínio do solicitante>) e responsáveis.
+// Inclui os anexos internos (arquivo + link assinado) para lançamento manual.
 const MISSING_ATTACHMENT_EMAIL_TO = [
   "fiscal@anagaming.com.br",
   "leonardo.oliveira@anagaming.com.br",
 ];
+
+// fiscal@{dominio_da_empresa} — derivado do email do solicitante.
+function fiscalRecipients(requesterEmail?: string | null): string[] {
+  const domain = String(requesterEmail || "").split("@")[1]?.trim().toLowerCase();
+  const list = [...MISSING_ATTACHMENT_EMAIL_TO];
+  if (domain && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) list.unshift(`fiscal@${domain}`);
+  return Array.from(new Set(list));
+}
+
+type MissingAttachmentReason =
+  | "no_attachment_uploaded"
+  | "integration_attachments_disabled"
+  | "manual_skip_attachment";
 
 async function notifyMissingAttachmentEmail(params: {
   supabase: ReturnType<typeof createClient>;
@@ -182,7 +195,7 @@ async function notifyMissingAttachmentEmail(params: {
   supplier?: string | null;
   amount?: number | null;
   currency?: string | null;
-  reason: "no_attachment_uploaded" | "integration_attachments_disabled";
+  reason: MissingAttachmentReason;
   attachments?: Array<{ file_name: string; url: string }>;
 }): Promise<void> {
   try {
