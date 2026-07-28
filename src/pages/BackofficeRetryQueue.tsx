@@ -43,6 +43,26 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-muted text-muted-foreground",
 };
 
+// Categorias de falha gravadas por `_shared/sap-retry.ts`.
+const CATEGORY_LABELS: Record<string, string> = {
+  attachment: "Anexo",
+  session: "Sessão / usuário",
+  branch: "Filial (BPL)",
+  date: "Data / período contábil",
+  project: "Projeto / marca",
+  lock: "Documento bloqueado",
+  timeout: "Timeout / indisponibilidade",
+  network: "Rede",
+  business: "Regra de negócio",
+  other: "Outros",
+};
+
+function categoryLabel(cat: string | null): string {
+  if (!cat) return "Sem categoria";
+  return CATEGORY_LABELS[cat] || cat;
+}
+
+
 function fmtDate(iso: string | null) {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -54,6 +74,7 @@ export default function BackofficeRetryQueue() {
   const [metrics, setMetrics] = useState<MetricsRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [windowHours, setWindowHours] = useState<number>(24);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -168,13 +189,27 @@ export default function BackofficeRetryQueue() {
 
   const visibleRows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((r) =>
-      [r.doc_type, r.company_db, r.ref_id, r.error_category, r.last_error]
+    return rows.filter((r) => {
+      if (categoryFilter !== "all") {
+        const cat = r.error_category || "none";
+        if (categoryFilter === "none" ? r.error_category : cat !== categoryFilter) return false;
+      }
+      if (!term) return true;
+      return [r.doc_type, r.company_db, r.ref_id, r.error_category, categoryLabel(r.error_category), r.last_error]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(term)),
-    );
-  }, [rows, search]);
+        .some((v) => String(v).toLowerCase().includes(term));
+    });
+  }, [rows, search, categoryFilter]);
+
+  // Categorias presentes no histórico carregado (ordenadas por volume).
+  const categoryOptions = useMemo(() => {
+    const c = new Map<string, number>();
+    rows.forEach((r) => {
+      const k = r.error_category || "none";
+      c.set(k, (c.get(k) || 0) + 1);
+    });
+    return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
+  }, [rows]);
 
   const dispatchableIds = useMemo(
     () => visibleRows.filter((r) => r.status === "pending" || r.status === "exhausted" || r.status === "cancelled").map((r) => r.id),
@@ -306,6 +341,19 @@ export default function BackofficeRetryQueue() {
             <SelectItem value="720">Últimos 30 dias</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-56" aria-label="Filtrar por tipo de falha">
+            <SelectValue placeholder="Tipo de falha" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os tipos de falha</SelectItem>
+            {categoryOptions.map(([cat, total]) => (
+              <SelectItem key={cat} value={cat}>
+                {cat === "none" ? "Sem categoria" : categoryLabel(cat)} ({total})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -369,18 +417,27 @@ export default function BackofficeRetryQueue() {
             <div className="space-y-2">
               {summary.topCategories.map(([cat, total]) => {
                 const pct = summary.total > 0 ? (total / summary.total) * 100 : 0;
+                const value = cat === "outros" ? "other" : cat;
+                const active = categoryFilter === value;
                 return (
-                  <div key={cat}>
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategoryFilter(active ? "all" : value)}
+                    className="w-full text-left rounded px-1 py-0.5 hover:bg-muted/60 transition-colors"
+                    aria-pressed={active}
+                  >
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="font-mono">{cat}</span>
+                      <span className={active ? "font-semibold text-primary" : ""}>{categoryLabel(cat)}</span>
                       <span className="text-muted-foreground">{total} ({pct.toFixed(0)}%)</span>
                     </div>
                     <div className="h-1.5 bg-muted rounded overflow-hidden">
                       <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
                     </div>
-                  </div>
+                  </button>
                 );
               })}
+
             </div>
           )}
         </Card>
@@ -468,7 +525,7 @@ export default function BackofficeRetryQueue() {
                 <TableCell>{r.attempts}/{r.max_attempts}</TableCell>
                 <TableCell className="text-xs">{fmtDate(r.last_attempt_at)}</TableCell>
                 <TableCell className="text-xs">{fmtDate(r.next_attempt_at)}</TableCell>
-                <TableCell><Badge variant="outline">{r.error_category || "-"}</Badge></TableCell>
+                <TableCell><Badge variant="outline">{categoryLabel(r.error_category)}</Badge></TableCell>
                 <TableCell><Badge className={STATUS_COLORS[r.status]}>{r.status}</Badge></TableCell>
                 <TableCell className="max-w-md truncate text-xs text-destructive" title={r.last_error || ""}>
                   {r.last_error || "-"}
