@@ -118,6 +118,50 @@ export default function BackofficeRetryQueue() {
     else toast.success("Cancelado");
   };
 
+  const visibleRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [r.doc_type, r.company_db, r.ref_id, r.error_category, r.last_error]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(term)),
+    );
+  }, [rows, search]);
+
+  const dispatchableIds = useMemo(
+    () => visibleRows.filter((r) => r.status === "pending" || r.status === "exhausted" || r.status === "cancelled").map((r) => r.id),
+    [visibleRows],
+  );
+
+  const selectedDispatchable = useMemo(
+    () => selected.filter((id) => dispatchableIds.includes(id)),
+    [selected, dispatchableIds],
+  );
+
+  const toggleRow = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const toggleAll = () =>
+    setSelected((prev) => (dispatchableIds.every((id) => prev.includes(id)) ? [] : dispatchableIds));
+
+  const dispatchSelected = async () => {
+    if (selectedDispatchable.length === 0) return;
+    setDispatching(true);
+    const { error } = await supabase
+      .from("sap_retry_queue")
+      .update({ status: "pending", next_attempt_at: new Date().toISOString(), notified_exhausted_at: null })
+      .in("id", selectedDispatchable);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`${selectedDispatchable.length} item(ns) reenviado(s) para integração`);
+      setSelected([]);
+      await supabase.functions.invoke("sap-retry-worker").catch(() => {});
+      load();
+    }
+    setDispatching(false);
+  };
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     rows.forEach(r => { c[r.status] = (c[r.status] || 0) + 1; });
