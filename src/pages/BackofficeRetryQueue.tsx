@@ -58,6 +58,7 @@ export default function BackofficeRetryQueue() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [dispatching, setDispatching] = useState(false);
+  const [skippingId, setSkippingId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
