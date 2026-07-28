@@ -179,6 +179,74 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
 }
 
 
+/** Detecta "view não publicada nesta base" (404 do HanaAPI). */
+function isViewMissing(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return m.includes("404") || m.includes("nao encontrado") || m.includes("não encontrado") || m.includes("not found");
+}
+
+/** Mapeia um pedido de compra do Service Layer para o mesmo shape da view HANA. */
+function mapSlRow(o: Record<string, unknown>, companyDb: string) {
+  const docNum = toInt(o.DocNum);
+  const docDate = toIso(o.DocDate);
+  const statusRaw = toStr(o.DocumentStatus);
+  const cancelled = String(o.Cancelled ?? "").toLowerCase() === "tyes";
+  const status = cancelled ? "cancelado" : statusRaw === "bost_Close" ? "encerrado" : "pc_lancado";
+  return {
+    id: `sap-N${docNum ?? o.DocEntry}`,
+    company_db: companyDb,
+    sap_doc_num: docNum,
+    sap_doc_entry: toInt(o.DocEntry),
+    supplier_code: toStr(o.CardCode) ?? undefined,
+    supplier_name: toStr(o.CardName) || toStr(o.CardCode) || "—",
+    supplier_email: undefined as string | undefined,
+    total_amount: toNum(o.DocTotal) ?? 0,
+    currency: toStr(o.DocCurrency) || "BRL",
+    status,
+    requester_name: toStr(o.RequesterName) || "(ERP)",
+    requester_email: toStr(o.RequesterEmail) ?? undefined,
+    current_approver: undefined as string | undefined,
+    doc_date: docDate ?? undefined,
+    due_date: toIso(o.DocDueDate) ?? undefined,
+    remarks: toStr(o.Comments) ?? undefined,
+    sap_purchase_order_status: statusRaw ?? undefined,
+    created_at: docDate || new Date().toISOString(),
+    updated_at: toIso(o.UpdateDate) || docDate || new Date().toISOString(),
+    origin: "manual" as const,
+    payments_count: 0,
+  };
+}
+
+/** Fallback: lista pedidos de compra direto do Service Layer (bases sem a view HANA). */
+async function fetchServiceLayerOrders(
+  baseUrl: string,
+  session: { sessionId: string; routeId: string },
+  companyDb: string,
+  limit: number,
+  offset: number,
+) {
+  const select = [
+    "DocEntry", "DocNum", "CardCode", "CardName", "DocDate", "DocDueDate",
+    "DocTotal", "DocCurrency", "DocumentStatus", "Cancelled", "Comments",
+    "UpdateDate", "RequesterName", "RequesterEmail",
+  ].join(",");
+  const url =
+    `${baseUrl}/PurchaseOrders?$select=${select}&$orderby=DocDate desc,DocNum desc&$top=${limit}&$skip=${offset}`;
+  const r = await fetch(url, {
+    headers: {
+      Cookie: `B1SESSION=${session.sessionId}${session.routeId ? `; B1ROUTEID=${session.routeId}` : ""}`,
+      Prefer: "odata.maxpagesize=0",
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`Service Layer PurchaseOrders falhou ${r.status}: ${(await r.text().catch(() => "")).slice(0, 300)}`);
+  }
+  const json = await r.json().catch(() => ({}));
+  const list = Array.isArray(json?.value) ? json.value as Record<string, unknown>[] : [];
+  return list.map((o) => mapSlRow(o, companyDb));
+}
+
+
 async function loadCreds(sb: any, companyDb: string): Promise<Record<string, string> | null> {
   const { data, error } = await sb
     .from("system_credentials")
