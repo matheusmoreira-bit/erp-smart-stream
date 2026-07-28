@@ -522,12 +522,12 @@ export default function BackofficeRetryQueue() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleRows.length === 0 && (
+            {displayRows.length === 0 && (
               <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                 {loading ? "Carregando..." : "Nenhum registro de integração no período"}
               </TableCell></TableRow>
             )}
-            {visibleRows.map(r => {
+            {displayRows.map(({ row: r, occurrences }) => {
               const canDispatch = r.status === "pending" || r.status === "exhausted" || r.status === "cancelled";
               return (
               <TableRow key={r.id} data-state={selected.includes(r.id) ? "selected" : undefined}>
@@ -539,7 +539,14 @@ export default function BackofficeRetryQueue() {
                     disabled={!canDispatch}
                   />
                 </TableCell>
-                <TableCell className="font-mono text-xs">{r.doc_type}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  {r.doc_type}
+                  {occurrences > 1 && (
+                    <Badge variant="secondary" className="ml-1 text-[10px]" title={`${occurrences} registros deste documento no histórico`}>
+                      {occurrences}×
+                    </Badge>
+                  )}
+                </TableCell>
                 <TableCell>{r.company_db || "-"}</TableCell>
                 <TableCell className="font-mono text-xs">{r.ref_id.slice(0, 12)}…</TableCell>
                 <TableCell>{r.attempts}/{r.max_attempts}</TableCell>
