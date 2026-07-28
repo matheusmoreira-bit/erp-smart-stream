@@ -59,6 +59,8 @@ interface SapInvoice {
   DocEntry: number;
   DocNum: number;
   FolioNumber: number | null;
+  FolioPrefixString: string | null;
+  SeriesString: string | null;
   CardCode: string;
   CardName: string;
   DocDate: string;
@@ -75,7 +77,12 @@ interface InvoiceRow {
   docNum: number;
   /** Número da NFSE / folio fiscal (SAP FolioNumber). */
   folioNumber: number | null;
+  /** Prefixo/tipo da NFSE (SAP FolioPrefixString), ex.: NFSe_CAC. */
+  folioPrefix: string | null;
+  /** Série da NFSE (SAP SeriesString), ex.: 1. */
+  folioSeries: string | null;
   cardCode: string;
+
   cardName: string;
   docDate: string;
   docDueDate: string | null;
@@ -164,7 +171,7 @@ function SalesPageInner() {
         const cutoffIso = cutoff.toISOString().slice(0, 10);
         const invoiceParams: Record<string, string> = {
           $select:
-            "DocEntry,DocNum,FolioNumber,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
+            "DocEntry,DocNum,FolioNumber,FolioPrefixString,SeriesString,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,DocCurrency,Cancelled",
           $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
           $orderby: "DocDate desc",
         };
@@ -241,6 +248,8 @@ function SalesPageInner() {
             docEntry: inv.DocEntry,
             docNum: inv.DocNum,
             folioNumber: inv.FolioNumber != null ? Number(inv.FolioNumber) : null,
+            folioPrefix: inv.FolioPrefixString ? String(inv.FolioPrefixString).trim() : null,
+            folioSeries: inv.SeriesString ? String(inv.SeriesString).trim() : null,
             cardCode: inv.CardCode || "—",
             cardName: inv.CardName || "—",
             docDate: inv.DocDate,
@@ -308,6 +317,8 @@ function SalesPageInner() {
               docEntry: jdt,
               docNum: jdt,
               folioNumber: null,
+              folioPrefix: null,
+              folioSeries: null,
               cardCode,
               cardName: cardCode, // preenchido a partir das NFs abaixo, se houver
               docDate: je.ReferenceDate || "",
@@ -362,7 +373,8 @@ function SalesPageInner() {
         r.cardName.toLowerCase().includes(q) ||
         r.cardCode.toLowerCase().includes(q) ||
         String(r.docNum).includes(q) ||
-        (r.folioNumber != null && String(r.folioNumber).includes(q))
+        (r.folioNumber != null && String(r.folioNumber).includes(q)) ||
+        (r.folioPrefix ? r.folioPrefix.toLowerCase().includes(q) : false)
       );
     });
   }, [invoices, onlyOpen, search]);
@@ -677,13 +689,15 @@ function SalesPageInner() {
                                       {r.folioNumber != null ? (
                                         <span
                                           className="text-[10px] text-muted-foreground"
-                                          title="Número da NFSE (FolioNumber)"
+                                          title={`NFS-e ${r.folioPrefix ? `${r.folioPrefix} ` : ""}${r.folioNumber}${r.folioSeries ? ` · Série ${r.folioSeries}` : ""}`}
                                         >
-                                          NFSE {r.folioNumber}
+                                          NFS-e {r.folioPrefix ? `${r.folioPrefix} ` : ""}
+                                          {r.folioNumber}
+                                          {r.folioSeries ? ` · Série ${r.folioSeries}` : ""}
                                         </span>
                                       ) : (
                                         <span className="text-[10px] text-muted-foreground/60">
-                                          NFSE —
+                                          NFS-e —
                                         </span>
                                       )}
                                     </div>
