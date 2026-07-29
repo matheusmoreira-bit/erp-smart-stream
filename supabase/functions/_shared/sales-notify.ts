@@ -121,7 +121,9 @@ export async function notifySalesMilestone(admin: any, input: SalesNotifyInput):
       ...(input.recipientsOnly ? [] : SALES_WATCHER_EMAILS),
     ]
       .map((r) => (r ? String(r).trim() : ""))
-      .filter(Boolean);
+      .filter(Boolean)
+      // Nomes completos (com espaço) não são identificadores válidos.
+      .filter((r) => isEmail(r) || !/\s/.test(r));
     const unique = Array.from(new Set(raw.map((r) => r.toLowerCase())));
     if (unique.length === 0) return;
 
