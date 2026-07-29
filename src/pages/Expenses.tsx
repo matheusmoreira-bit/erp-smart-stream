@@ -923,9 +923,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
   const [sapHasMore, setSapHasMore] = useState(false);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
-  const showSourceToggle = mode === "purchase" && session?.erpType === "sap";
+  const showSourceToggle = session?.erpType === "sap";
   const SAP_PAGE_STEP = 100;
-  const SAP_CACHE_KEY = "purchase_orders_hana_v1";
+  const SAP_CACHE_KEY = isSales ? "sales_orders_sl_v1" : "purchase_orders_hana_v1";
 
 
   // Migração: usuários com preferência antiga "flow" salva no localStorage
@@ -935,7 +935,41 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchSapPage = useCallback(
+  /** Pedidos de venda direto do SAP Service Layer (histórico completo). */
+  const fetchSapSalesPage = useCallback(
+    async (skip: number): Promise<Expense[]> => {
+      if (!session) return [];
+      const { sapQuery } = await import("@/lib/sap-client");
+      const endpoint =
+        "Orders?$select=DocEntry,DocNum,CardCode,CardName,DocTotal,DocCurrency,DocDate,DocDueDate,Comments,DocumentStatus,CreationDate,UpdateDate" +
+        `&$orderby=DocEntry desc&$top=${SAP_PAGE_STEP}&$skip=${skip}`;
+      const { data } = await sapQuery(session, endpoint, undefined, false);
+      const rows: any[] = Array.isArray(data) ? data : ((data as any)?.value ?? []);
+      return rows.map((r) => ({
+        id: `sap-order-${r.DocEntry}`,
+        supplier_code: r.CardCode || undefined,
+        supplier_name: r.CardName || r.CardCode || "—",
+        total_amount: Number(r.DocTotal || 0),
+        currency: r.DocCurrency || "BRL",
+        status: "pc_lancado" as ExpenseStatus,
+        requester_name: "(ERP)",
+        sap_doc_entry: r.DocEntry ?? undefined,
+        sap_doc_num: r.DocNum ?? undefined,
+        sap_purchase_order_status:
+          r.DocumentStatus === "bost_Close" ? "Fechado" : r.DocumentStatus === "bost_Open" ? "Aberto" : undefined,
+        company_db: session.companyDB,
+        doc_date: r.DocDate || undefined,
+        due_date: r.DocDueDate || undefined,
+        remarks: r.Comments || undefined,
+        created_at: r.CreationDate || r.DocDate || new Date().toISOString(),
+        updated_at: r.UpdateDate || r.DocDate || new Date().toISOString(),
+        origin: "manual",
+      })) as Expense[];
+    },
+    [session],
+  );
+
+  const fetchSapPurchasePage = useCallback(
     async (skip: number): Promise<Expense[]> => {
       if (!session) return [];
       const { sapFunctionFetch } = await import("@/lib/auth-fetch");
@@ -973,6 +1007,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         updated_at: r.updated_at || r.doc_date || new Date().toISOString(),
         origin: "manual",
       }));
+
     },
     [session],
   );
