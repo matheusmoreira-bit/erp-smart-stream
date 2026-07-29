@@ -277,6 +277,16 @@ export function useIntercompany() {
     }
   }, []);
 
+  const createProject = useCallback(
+    async (input: { code: string; name: string; valid_from?: string; valid_to?: string; company_dbs?: string[] }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "create-project",
+        ...input,
+      });
+    },
+    [],
+  );
+
   const replicateProject = useCallback(
     async (input: { code: string; source_company_db: string; target_company_db: string }) => {
       return await callIntercompany<{ results: PerCompanyResult[] }>({
