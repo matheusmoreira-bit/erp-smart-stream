@@ -238,12 +238,24 @@ export function CreateExpenseModal({
   );
 
   const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
-  const { options: projectOptions, isLoading: projectsLoading } = useSapCachedList({
+  const { options: rawProjectOptions, isLoading: projectsLoading } = useSapCachedList({
     cacheKey: "projects",
     endpoint: "Projects",
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: projectMapRow,
   });
+
+  // Vendas: cada cliente libera apenas as marcas vinculadas (até 3) ou o
+  // projeto homônimo ao cliente. Sem mapeamento, mantém a lista integral.
+  const { brandsForCustomer } = useCustomerBrandMap();
+  const projectOptions = useMemo(() => {
+    if (!isSales) return rawProjectOptions;
+    return filterProjectsForCustomer(
+      rawProjectOptions,
+      supplier ? { code: supplier.code, name: supplier.name } : null,
+      brandsForCustomer(supplier?.code),
+    );
+  }, [isSales, rawProjectOptions, supplier, brandsForCustomer]);
 
   // ---- Alerta de casamento Centro de Custo × Projeto (auditável) ----
   const ccAlertEnabled = !isSales && projectOptions.length > 1;
