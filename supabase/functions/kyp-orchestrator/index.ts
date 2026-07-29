@@ -301,6 +301,97 @@ async function avaliarFornecedor(
 
 /* --------------------------------- handler -------------------------------- */
 
+async function executar(
+  sb: Sb,
+  opts: { mode: string; documentoAlvo: string; limit: number; disparadoPor: string },
+) {
+  const { mode, documentoAlvo, limit, disparadoPor } = opts;
+  const { data: companiesRaw } = await sb
+    .from("companies")
+    .select("id, company_db, erp_type, display_name, is_active, is_test");
+  const companies = ((companiesRaw ?? []) as unknown as CompanyRow[])
+    .filter((c) => c.is_active !== false && !c.is_test && !isTestCompanyDb(c.company_db));
+
+  // Provedor por empresa (default BECOMPLIANCE já garantido no banco)
+  const { data: cfgRaw } = await sb
+    .from("empresa_kyp_config")
+    .select("company_id, kyp_provider_id, ativo, config, kyp_providers(code, ativo)");
+  const cfgByCompany = new Map<string, {
+    providerId: string;
+    code: string;
+    extra: Record<string, unknown>;
+    ativo: boolean;
+  }>();
+  for (const row of (cfgRaw ?? []) as Array<Record<string, unknown>>) {
+    const prov = row.kyp_providers as { code?: string; ativo?: boolean } | null;
+    cfgByCompany.set(String(row.company_id), {
+      providerId: String(row.kyp_provider_id),
+      code: String(prov?.code ?? "BECOMPLIANCE"),
+      extra: (row.config ?? {}) as Record<string, unknown>,
+      ativo: row.ativo !== false && prov?.ativo !== false,
+    });
+  }
+
+  const empresasHabilitadas = companies.filter((c) => cfgByCompany.get(c.id)?.ativo !== false);
+
+  let documentosUnicos = 0;
+  const errosColeta: Array<{ company_db: string; error: string }> = [];
+  if (mode === "full") {
+    const { encontrados, erros } = await coletarFornecedores(sb, empresasHabilitadas);
+    errosColeta.push(...erros);
+    documentosUnicos = await upsertFornecedores(sb, encontrados, empresasHabilitadas);
+  }
+
+  // Fornecedores a avaliar
+  let query = sb
+    .from("kyp_fornecedores")
+    .select("id, documento, tipo_pessoa, nome")
+    .order("ultima_avaliacao_em", { ascending: true, nullsFirst: true })
+    .limit(mode === "single" ? 1 : limit);
+  if (mode === "single") {
+    query = query.eq("documento", documentoAlvo);
+  } else {
+    const agora = new Date().toISOString();
+    query = query.or(
+      `ultima_avaliacao_em.is.null,proxima_expiracao_em.lt.${agora},status_atual.eq.PENDENTE,status_atual.eq.ERRO`,
+    );
+  }
+  const { data: fornRaw, error: fornErr } = await query;
+  if (fornErr) throw fornErr;
+  const fornecedores = (fornRaw ?? []) as unknown as FornecedorRow[];
+
+  // Sessão do provedor (credenciais únicas do backend)
+  const primeiro = cfgByCompany.values().next().value;
+  const providerCode = primeiro?.code ?? "BECOMPLIANCE";
+  const providerId = primeiro?.providerId ?? "";
+  const adapter = KYP_ADAPTERS[providerCode];
+  if (!adapter) throw new Error(`Provedor KYP não suportado: ${providerCode}`);
+  const config = providerConfig(providerCode, primeiro?.extra ?? {});
+  if (!config) throw new Error("Credenciais do provedor KYP não configuradas.");
+  const session = await adapter.authenticate(config);
+
+  const resumo: Record<string, number> = { NOOP: 0, CREATE: 0, DEACTIVATE: 0, ERRO: 0 };
+  for (const forn of fornecedores) {
+    const acao = await avaliarFornecedor(sb, forn, {
+      adapter,
+      session,
+      providerId,
+      providerCode,
+      disparadoPor,
+    });
+    resumo[acao] = (resumo[acao] ?? 0) + 1;
+  }
+
+  return {
+    mode,
+    empresas: empresasHabilitadas.length,
+    documentos_unicos: documentosUnicos,
+    avaliados: fornecedores.length,
+    resumo,
+    erros_coleta: errosColeta,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -309,108 +400,41 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const mode = String(body.mode ?? "full");
   const documentoAlvo = typeof body.documento === "string" ? body.documento.replace(/\D+/g, "") : "";
-  const disparadoPor = mode === "single" ? "manual" : "cron";
+  const limit = Number(body.limit ?? 150);
   const lockName = "kyp-orchestrator";
 
-  if (mode === "full" && !(await tryWatcherLock(sb, lockName, 55))) {
+  // Modo single: reprocessa um documento e responde de forma síncrona.
+  if (mode === "single") {
+    if (!documentoAlvo) return json({ error: "documento obrigatório no modo single" }, 400);
+    try {
+      const result = await executar(sb, { mode, documentoAlvo, limit: 1, disparadoPor: "manual" });
+      return json({ ok: true, ...result });
+    } catch (e) {
+      console.error("[kyp-orchestrator][single]", e);
+      return json({ error: (e as Error).message }, 500);
+    }
+  }
+
+  // Modo full: varredura longa — roda em segundo plano com lock de execução.
+  if (!(await tryWatcherLock(sb, lockName, 55))) {
     return json({ ok: true, skipped: "already_running" });
   }
 
-  try {
-    const { data: companiesRaw } = await sb
-      .from("companies")
-      .select("id, company_db, erp_type, display_name, is_active, is_test");
-    const companies = ((companiesRaw ?? []) as unknown as CompanyRow[])
-      .filter((c) => c.is_active !== false && !c.is_test && !isTestCompanyDb(c.company_db));
-
-    // Provedor por empresa (default BECOMPLIANCE já garantido no banco)
-    const { data: cfgRaw } = await sb
-      .from("empresa_kyp_config")
-      .select("company_id, kyp_provider_id, ativo, config, kyp_providers(code, ativo)");
-    const cfgByCompany = new Map<string, {
-      providerId: string;
-      code: string;
-      extra: Record<string, unknown>;
-      ativo: boolean;
-    }>();
-    for (const row of (cfgRaw ?? []) as Array<Record<string, unknown>>) {
-      const prov = row.kyp_providers as { code?: string; ativo?: boolean } | null;
-      cfgByCompany.set(String(row.company_id), {
-        providerId: String(row.kyp_provider_id),
-        code: String(prov?.code ?? "BECOMPLIANCE"),
-        extra: (row.config ?? {}) as Record<string, unknown>,
-        ativo: row.ativo !== false && prov?.ativo !== false,
-      });
+  const job = (async () => {
+    try {
+      const result = await executar(sb, { mode: "full", documentoAlvo: "", limit, disparadoPor: "cron" });
+      console.log("[kyp-orchestrator] concluído", JSON.stringify(result));
+      await releaseWatcherLock(sb, lockName, "ok");
+    } catch (e) {
+      console.error("[kyp-orchestrator]", e);
+      await releaseWatcherLock(sb, lockName, "error", (e as Error).message);
     }
+  })();
 
-    const empresasHabilitadas = companies.filter((c) => cfgByCompany.get(c.id)?.ativo !== false);
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(job);
+  else await job;
 
-    let documentosUnicos = 0;
-    const errosColeta: Array<{ company_db: string; error: string }> = [];
-    if (mode === "full") {
-      const { encontrados, erros } = await coletarFornecedores(sb, empresasHabilitadas);
-      errosColeta.push(...erros);
-      documentosUnicos = await upsertFornecedores(sb, encontrados, empresasHabilitadas);
-    }
-
-    // Fornecedores a avaliar
-    let query = sb
-      .from("kyp_fornecedores")
-      .select("id, documento, tipo_pessoa, nome")
-      .order("ultima_avaliacao_em", { ascending: true, nullsFirst: true })
-      .limit(mode === "single" ? 1 : Number(body.limit ?? 150));
-    if (mode === "single") {
-      if (!documentoAlvo) return json({ error: "documento obrigatório no modo single" }, 400);
-      query = query.eq("documento", documentoAlvo);
-    } else {
-      const agora = new Date().toISOString();
-      query = query.or(
-        `ultima_avaliacao_em.is.null,proxima_expiracao_em.lt.${agora},status_atual.eq.PENDENTE,status_atual.eq.ERRO`,
-      );
-    }
-    const { data: fornRaw, error: fornErr } = await query;
-    if (fornErr) throw fornErr;
-    const fornecedores = (fornRaw ?? []) as unknown as FornecedorRow[];
-
-    // Sessão do provedor (credenciais únicas do backend)
-    const primeiro = cfgByCompany.values().next().value;
-    const providerCode = primeiro?.code ?? "BECOMPLIANCE";
-    const providerId = primeiro?.providerId ?? "";
-    const adapter = KYP_ADAPTERS[providerCode];
-    if (!adapter) throw new Error(`Provedor KYP não suportado: ${providerCode}`);
-    const config = providerConfig(providerCode, primeiro?.extra ?? {});
-    if (!config) {
-      return json({
-        error: "Credenciais do provedor KYP não configuradas (BECOMPLIANCE_CLIENT_ID/EMAIL/PASSWORD).",
-      }, 428);
-    }
-    const session = await adapter.authenticate(config);
-
-    const resumo: Record<string, number> = { NOOP: 0, CREATE: 0, DEACTIVATE: 0, ERRO: 0 };
-    for (const forn of fornecedores) {
-      const acao = await avaliarFornecedor(sb, forn, {
-        adapter,
-        session,
-        providerId,
-        providerCode,
-        disparadoPor,
-      });
-      resumo[acao] = (resumo[acao] ?? 0) + 1;
-    }
-
-    if (mode === "full") await releaseWatcherLock(sb, lockName, "ok");
-    return json({
-      ok: true,
-      mode,
-      empresas: empresasHabilitadas.length,
-      documentos_unicos: documentosUnicos,
-      avaliados: fornecedores.length,
-      resumo,
-      erros_coleta: errosColeta,
-    });
-  } catch (e) {
-    console.error("[kyp-orchestrator]", e);
-    if (mode === "full") await releaseWatcherLock(sb, lockName, "error", (e as Error).message);
-    return json({ error: (e as Error).message }, 500);
-  }
+  return json({ ok: true, mode: "full", started: true }, 202);
 });
+
