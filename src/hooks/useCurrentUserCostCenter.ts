@@ -74,6 +74,28 @@ export function isItemAllowedForCostCenter(
 }
 
 /**
+ * Mesma regra dos itens IMP%/FOL%, aplicada ao **tipo de rateio**:
+ * - "imposto" → apenas CC 1.2.2.%
+ * - "folha"   → apenas Pessoas e Cultura (1.5.1.3)
+ * - CC vazio (sem vínculo no IdP) ou `bypass` (super-user / grupos com visão
+ *   total) não bloqueiam.
+ */
+export function isRateioTypeAllowedForCostCenter(
+  rateioType: string | null | undefined,
+  costCenter: string | null | undefined,
+  bypass?: boolean,
+): boolean {
+  if (bypass) return true;
+  const t = String(rateioType || "").toLowerCase().trim();
+  const cc = String(costCenter || "").trim();
+  if (!cc) return true;
+  if (t === "imposto") return cc.startsWith("1.2.2.");
+  if (t === "folha") return cc === "1.5.1.3" || cc.startsWith("1.5.1.3.");
+  return true;
+}
+
+
+/**
  * Ramo (alçada) de centros de custo do usuário: os dois primeiros níveis do
  * código. Ex.: "1.6.1.2" → "1.6". Retorna null quando não há CC definido ou
  * quando o código não tem o formato esperado.
