@@ -122,3 +122,45 @@ Cookie: B1SESSION={SessionId}; B1ROUTEID={B1ROUTEID}
 - **401/403 no middleware ou servidor** → token fora do bloco de hora, secret errado, usuário ≠ `Apiuser`.
 - **Empresa cai em `hana_unavailable`** → não tem `use_hana_db=true` ou `username=Apiuser` em `system_credentials`.
 - **`value: []`** → view ou coluna inexistente naquele schema; conferir override de schema.
+
+## Sondagem do gateway (jul/2026) — acesso a qualquer schema/tabela
+
+O HanaAPI é um "Universal Database Gateway" (FastAPI). `GET /openapi.json` expõe:
+`/health`, `/metrics`, `/databases`, `/data/{object}`, `/data/{db}/{object}`,
+`/execution-logs`, `/executions`. Parâmetros de `/data`: `schema`, `limit`,
+`offset`, `CampoData`/`DataInicio`/`DataFim` e filtros livres `Campo__op`.
+
+Confirmado: **não há allowlist de tabelas**. Qualquer schema/tabela é legível,
+inclusive `SYS.TABLES`, `SYS.M_TABLES` e `SYS.TABLE_COLUMNS` (ótimos para
+descobrir estrutura). Não existe seleção de colunas nem SQL livre.
+
+### Limitação encontrada: colunas BLOB
+
+- Colunas **NCLOB** retornam normalmente (ex.: `TX_RNF_*.XmlDeEnvio`).
+- Qualquer linha com coluna **BLOB** faz o gateway responder **HTTP 500**.
+  É o caso de `SBO_TaxOne.DocHist` (`XmlFile`, `XmlEnvio`, `XmlRetorno`),
+  que é onde ficam os XMLs autorizados da NFS-e.
+
+### Sobre o PDF da NFS-e
+
+- Não existe nenhuma tabela de PDF/DANFSe no `SBO_TaxOne` (busca por
+  `%pdf%`, `%danf%`, `%arquiv%`, `%anexo%` → nada).
+- `Doc.LinkImpressao` está nulo em todas as notas.
+- Os arquivos vão para um share Windows: `SettingEntityEnv."PathXml "`
+  (ex.: `\\wy-db-hana\B1_SHF\SHARED_SAP\CACTUS\Fiscal\NFSe\XML`).
+
+### Como destravar (pedido para a infra)
+
+Criar uma view no HANA convertendo o BLOB em texto, que o gateway já sabe
+serializar:
+
+```sql
+CREATE VIEW SBO_TaxOne.VW_NFSE_XML_AUTORIZADO AS
+SELECT BatchId, KeyNfe, SerialNfSe, Evento, StatusId, DateReturn,
+       BINTOSTR(XmlFile)  AS XmlFileTexto,
+       BINTOSTR(XmlRetorno) AS XmlRetornoTexto
+  FROM SBO_TaxOne.DocHist;
+```
+
+Com essa view, o ERP Flow lê o XML autorizado direto pelo HanaAPI V2 e passa a
+gerar/anexar o documento no fluxo de e-mail da NFS-e sem upload manual.
