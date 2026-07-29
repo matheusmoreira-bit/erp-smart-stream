@@ -983,6 +983,7 @@ export default function Intercompany() {
     replicateAccount,
     replicateCostCenter,
     replicateProject,
+    toggleProject,
 
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
