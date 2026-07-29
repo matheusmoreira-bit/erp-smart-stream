@@ -4445,6 +4445,7 @@ export type Database = {
       }
       registration_request_events: {
         Row: {
+          attachments: Json
           author_email: string
           author_name: string | null
           created_at: string
@@ -4456,6 +4457,7 @@ export type Database = {
           to_status: string | null
         }
         Insert: {
+          attachments?: Json
           author_email: string
           author_name?: string | null
           created_at?: string
@@ -4467,6 +4469,7 @@ export type Database = {
           to_status?: string | null
         }
         Update: {
+          attachments?: Json
           author_email?: string
           author_name?: string | null
           created_at?: string
@@ -5982,6 +5985,10 @@ export type Database = {
       }
       can_access_audit_console: {
         Args: { _company_db: string }
+        Returns: boolean
+      }
+      can_access_registration_attachment: {
+        Args: { _object_name: string }
         Returns: boolean
       }
       can_manage_employee_integration: {
