@@ -120,9 +120,11 @@ function cleanSapText(value: unknown): string | null {
   return text && text !== "0" ? text : null;
 }
 
-function formatNfseLabel(row: Pick<InvoiceRow, "nfseNumber" | "folioPrefix" | "folioSeries">) {
+function formatNfseLabel(row: Pick<InvoiceRow, "nfseNumber" | "folioPrefix" | "folioSeries" | "rpsNumber">) {
   if (!row.nfseNumber) return null;
-  return `NFS-e ${row.folioPrefix ? `${row.folioPrefix} ` : ""}${row.nfseNumber}${row.folioSeries ? ` · Série ${row.folioSeries}` : ""}`;
+  const serie = row.folioSeries ? ` · Série ${row.folioSeries}` : "";
+  const rps = row.rpsNumber && row.rpsNumber !== row.nfseNumber ? ` · RPS ${row.rpsNumber}` : "";
+  return `NFS-e ${row.folioPrefix ? `${row.folioPrefix} ` : ""}${row.nfseNumber}${serie}${rps}`;
 }
 
 /**
