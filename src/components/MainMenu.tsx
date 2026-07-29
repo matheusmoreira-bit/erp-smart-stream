@@ -198,7 +198,7 @@ const modules: Record<string, ModuleCard> = {
     color: "text-sky-400",
     bgGlow: "from-sky-500/20 to-sky-500/5",
     moduleKey: "",
-    subModuleKeys: ["audit_console", "fiscal_audit", "audit_log"],
+    subModuleKeys: ["audit_console", "fiscal_audit", "audit_log", "kyp"],
   },
 };
 
