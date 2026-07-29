@@ -520,50 +520,53 @@ export function PagCorpIntegrateDialog({
                 <div className="flex-1">
                   <p>{aiNotice}</p>
                   {aiResult && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="mt-2 gap-1.5"
-                      onClick={async () => {
-                        try {
-                          await requestSupplierRegistration({
-                            cardName: aiResult.card_name,
-                            federalTaxId: aiResult.federal_tax_id,
-                            email: aiResult.email,
-                            phone1: aiResult.phone1,
-                            phone2: aiResult.phone2,
-                            currency: aiResult.currency,
-                            address: {
-                              street: aiResult.bill_to_street,
-                              zip: aiResult.bill_to_zip,
-                              city: aiResult.bill_to_city,
-                              state: aiResult.bill_to_state,
-                              country: aiResult.bill_to_country,
-                              block: aiResult.bill_to_block,
-                              building: aiResult.bill_to_building,
-                            },
-                            companyDb,
-                            context: "PagCorp — Integração",
-                            transaction: transaction ? {
-                              id: (transaction as any).id ?? (transaction as any).transactionId ?? null,
-                              description: transaction.description,
-                              amount: Number(transaction.amount),
-                              currency: transaction.currency,
-                              date: transaction.date,
-                              accountAlias: (transaction as any).accountAlias,
-                              accountName: (transaction as any).accountName,
-                            } : undefined,
-                            attachments: attachmentList.map((a) => ({ name: a.name, url: a.url })),
-                          });
-                          toast.success("Solicitação enviada para compras@anagaming.com.br");
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : "Falha ao enviar solicitação");
-                        }
-                      }}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Solicitar cadastro de fornecedor
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="mt-2 gap-1.5"
+                        onClick={() => setSupplierRequestOpen(true)}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Solicitar cadastro de fornecedor
+                      </Button>
+                      <RegistrationRequestModal
+                        open={supplierRequestOpen}
+                        onOpenChange={setSupplierRequestOpen}
+                        type="supplier"
+                        defaults={{
+                          cardName: aiResult.card_name,
+                          federalTaxId: aiResult.federal_tax_id,
+                          email: aiResult.email,
+                          phone1: aiResult.phone1,
+                          phone2: aiResult.phone2,
+                          currency: aiResult.currency,
+                          address: {
+                            street: aiResult.bill_to_street,
+                            zip: aiResult.bill_to_zip,
+                            city: aiResult.bill_to_city,
+                            state: aiResult.bill_to_state,
+                            country: aiResult.bill_to_country,
+                            block: aiResult.bill_to_block,
+                            building: aiResult.bill_to_building,
+                          },
+                          companyDb,
+                          context: "PagCorp — Integração",
+                          transaction: transaction
+                            ? {
+                                id: (transaction as any).id ?? (transaction as any).transactionId ?? null,
+                                description: transaction.description,
+                                amount: Number(transaction.amount),
+                                currency: transaction.currency,
+                                date: transaction.date,
+                                accountAlias: (transaction as any).accountAlias,
+                                accountName: (transaction as any).accountName,
+                              }
+                            : undefined,
+                          attachments: attachmentList.map((a) => ({ name: a.name, url: a.url })),
+                        }}
+                      />
+                    </>
                   )}
                 </div>
               </div>
