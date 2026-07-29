@@ -2472,6 +2472,42 @@ export type Database = {
           },
         ]
       }
+      expense_create_idempotency: {
+        Row: {
+          caller_identity: string
+          company_db: string | null
+          completed_at: string | null
+          created_at: string
+          expense_id: string | null
+          fingerprint: string
+          idempotency_key: string
+          response: Json | null
+          status_code: number | null
+        }
+        Insert: {
+          caller_identity: string
+          company_db?: string | null
+          completed_at?: string | null
+          created_at?: string
+          expense_id?: string | null
+          fingerprint: string
+          idempotency_key: string
+          response?: Json | null
+          status_code?: number | null
+        }
+        Update: {
+          caller_identity?: string
+          company_db?: string | null
+          completed_at?: string | null
+          created_at?: string
+          expense_id?: string | null
+          fingerprint?: string
+          idempotency_key?: string
+          response?: Json | null
+          status_code?: number | null
+        }
+        Relationships: []
+      }
       expense_items: {
         Row: {
           cost_center: string | null
