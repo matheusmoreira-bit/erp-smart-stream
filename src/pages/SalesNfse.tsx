@@ -552,7 +552,23 @@ export default function SalesNfse() {
                                 )}
                                 {hasPdf ? "Substituir" : "Anexar"}
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 gap-1 px-2 text-xs"
+                                disabled={!inv?.sap_invoice_doc_entry || xmlLoadingFor === o.id}
+                                title="Baixar XML autorizado direto do addon fiscal"
+                                onClick={() => void fetchXml(o, inv ?? null)}
+                              >
+                                {xmlLoadingFor === o.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <FileCode className="w-3.5 h-3.5" />
+                                )}
+                                XML
+                              </Button>
                             </div>
+
                           );
                         })()}
                       </td>
