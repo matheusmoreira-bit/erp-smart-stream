@@ -3022,7 +3022,9 @@ export function CreateExpenseModal({
                           updated[i] = { ...updated[i], sapCostCenter: val, cost_center: val?.code || "" };
                           return updated;
                         });
+                        maybeTriggerCcAlert(i, val, item.sapProject || null);
                       }}
+
                       placeholder={
                         origin === "pagcorp" && mappingInfo?.missingFields.includes("Centro de Custo")
                           ? "Sem mapeamento — selecione manualmente"
