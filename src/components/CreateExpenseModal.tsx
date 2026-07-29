@@ -85,6 +85,7 @@ import {
   ALLOWED_ATTACHMENT_HINT,
 } from "@/lib/attachment-validation";
 import { useCurrentUserCostCenter, isItemAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
+import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
@@ -237,7 +238,9 @@ export function CreateExpenseModal({
 
   // Filtro de alçada: itens IMP% só para CC 1.2.2.%; itens FOL% só para CC 1.6.%.
   // Vale só no fluxo de compras — vendas mantém a lista integral.
-  const bypassCcItemRules = !!sapSession?.isSuperUser;
+  // Facilities e admins veem/selecionam todos os centros de custo e itens.
+  const { canSeeAll: canSeeAllCostCenters } = useCanSeeAllCostCenters();
+  const bypassCcItemRules = !!sapSession?.isSuperUser || canSeeAllCostCenters;
   const filteredItemOptions = useMemo(() => {
     if (isSales) return itemOptions;
     return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
