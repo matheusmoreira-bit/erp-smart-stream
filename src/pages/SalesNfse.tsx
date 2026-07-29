@@ -100,6 +100,33 @@ export default function SalesNfse() {
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
   const [emitting, setEmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [pdfFiles, setPdfFiles] = useState<Set<string>>(new Set());
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // envio de e-mail
+  const [mailOrder, setMailOrder] = useState<SalesOrderRow | null>(null);
+  const [mailInvoice, setMailInvoice] = useState<NfseRow | null>(null);
+  const [mailTo, setMailTo] = useState("");
+  const [mailCc, setMailCc] = useState("");
+  const [mailSubject, setMailSubject] = useState("");
+  const [mailMessage, setMailMessage] = useState("");
+  const [mailSenderOk, setMailSenderOk] = useState(true);
+  const [mailLoading, setMailLoading] = useState(false);
+  const [mailSending, setMailSending] = useState(false);
+
+  const pdfPathFor = useCallback(
+    (order: SalesOrderRow, inv: NfseRow | null) =>
+      `${companyDb}/${inv?.sap_invoice_doc_entry ?? `pedido-${order.sap_doc_entry ?? order.id}`}.pdf`,
+    [companyDb],
+  );
+
+  const loadPdfIndex = useCallback(async () => {
+    if (!companyDb) return;
+    const { data } = await supabase.storage.from(PDF_BUCKET).list(companyDb, { limit: 1000 });
+    setPdfFiles(new Set((data || []).map((f) => `${companyDb}/${f.name}`)));
+  }, [companyDb]);
 
   const load = useCallback(async () => {
     if (!companyDb) return;
@@ -126,16 +153,131 @@ export default function SalesNfse() {
       if (e2) throw e2;
       setOrders((exp || []) as SalesOrderRow[]);
       setInvoices((inv || []) as NfseRow[]);
+      await loadPdfIndex();
     } catch (e) {
       setError((e as Error).message || "Falha ao carregar pedidos de venda");
     } finally {
       setLoading(false);
     }
-  }, [companyDb]);
+  }, [companyDb, loadPdfIndex]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const pickPdf = useCallback((order: SalesOrderRow, inv: NfseRow | null) => {
+    uploadTargetRef.current = { order, inv };
+    fileInputRef.current?.click();
+  }, []);
+
+  const onPdfSelected = useCallback(
+    async (file: File | undefined) => {
+      const target = uploadTargetRef.current;
+      if (!file || !target) return;
+      if (file.type !== "application/pdf") {
+        toast.error("Envie um arquivo PDF.");
+        return;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error("PDF acima do limite de 15MB.");
+        return;
+      }
+      const path = pdfPathFor(target.order, target.inv);
+      setUploadingFor(target.order.id);
+      try {
+        const { error } = await supabase.storage
+          .from(PDF_BUCKET)
+          .upload(path, file, { upsert: true, contentType: "application/pdf" });
+        if (error) throw error;
+        toast.success("PDF da NFS-e anexado.");
+        await loadPdfIndex();
+      } catch (e) {
+        toast.error((e as Error).message);
+      } finally {
+        setUploadingFor(null);
+        uploadTargetRef.current = null;
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [pdfPathFor, loadPdfIndex],
+  );
+
+  const viewPdf = useCallback(
+    async (order: SalesOrderRow, inv: NfseRow | null) => {
+      const path = pdfPathFor(order, inv);
+      const { data, error } = await supabase.storage.from(PDF_BUCKET).createSignedUrl(path, 300);
+      if (error || !data?.signedUrl) {
+        toast.error("Não foi possível abrir o PDF.");
+        return;
+      }
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    },
+    [pdfPathFor],
+  );
+
+  const openMail = useCallback(
+    async (order: SalesOrderRow, inv: NfseRow | null) => {
+      setMailOrder(order);
+      setMailInvoice(inv);
+      setMailTo("");
+      setMailCc("");
+      setMailSubject(`NFS-e ${inv?.nfse_number ? `nº ${inv.nfse_number} ` : ""}- ${getLabel(companyDb)}`);
+      setMailMessage(
+        `Segue em anexo a nota fiscal de serviço${inv?.nfse_number ? ` nº ${inv.nfse_number}` : ""}.`,
+      );
+      setMailSenderOk(true);
+      setMailLoading(true);
+      try {
+        const res = await authFetch("nfse-send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "resolve", company_db: companyDb, project_code: "" }),
+        });
+        const b = await res.json().catch(() => ({}));
+        if (res.ok && !b?.error) {
+          setMailTo((b.to || []).join(", "));
+          setMailCc((b.cc || []).join(", "));
+          setMailSenderOk(!!b.sender?.configured);
+        }
+      } finally {
+        setMailLoading(false);
+      }
+    },
+    [companyDb, getLabel],
+  );
+
+  const sendMail = useCallback(async () => {
+    if (!mailOrder) return;
+    const path = pdfPathFor(mailOrder, mailInvoice);
+    setMailSending(true);
+    try {
+      const res = await authFetch("nfse-send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send",
+          company_db: companyDb,
+          expense_id: mailOrder.id,
+          invoice_doc_entry: mailInvoice?.sap_invoice_doc_entry ?? null,
+          nfse_number: mailInvoice?.nfse_number ?? null,
+          customer_name: mailOrder.supplier_name,
+          to: mailTo,
+          cc: mailCc,
+          subject: mailSubject,
+          message: mailMessage,
+          attachment_path: pdfFiles.has(path) ? path : "",
+        }),
+      });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok || b?.error) throw new Error(b?.error || `Falha no envio (${res.status})`);
+      toast.success(`E-mail enviado para ${(b.to || []).join(", ")}`);
+      setMailOrder(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setMailSending(false);
+    }
+  }, [mailOrder, mailInvoice, companyDb, mailTo, mailCc, mailSubject, mailMessage, pdfFiles, pdfPathFor]);
 
   const invoiceByExpense = useMemo(() => {
     const map = new Map<string, NfseRow>();
