@@ -131,7 +131,7 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
       const expAll: { company_db: string; sap_doc_entry: number }[] = [];
       let expOffset = 0;
       while (true) {
-        let eq = expenseRead("expenses")
+        let eq = expenseRead("expenses").viewAll()
           .select("company_db, sap_doc_entry")
           .not("sap_doc_entry", "is", null)
           .range(expOffset, expOffset + PAGE_SIZE - 1);

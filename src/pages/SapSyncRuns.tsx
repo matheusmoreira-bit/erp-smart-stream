@@ -260,7 +260,7 @@ function RunDetailDialog({ run, onClose }: { run: SyncRun | null; onClose: () =>
     if (!run) return;
     const ids = (run.results as unknown as ResultItem[]).map((r) => r.id).filter(Boolean);
     if (ids.length === 0) { setSupplierMap({}); return; }
-    voidexpenseRead("expenses")
+    voidexpenseRead("expenses").viewAll()
       .select("id, supplier_name")
       .in("id", ids)
       .then(({ data }) => {
