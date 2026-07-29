@@ -1,120 +1,61 @@
+# Ciclo de Vendas completo
 
-# Fila de retry automático para integrações SAP
-
-## Objetivo
-Substituir o retry manual e o watcher genérico de 30 min por uma fila unificada que reagenda automaticamente integrações que falharem com erros 400 classificados como recuperáveis, respeitando backoff exponencial e limite por documento. Ao esgotar tentativas, notificar por e-mail + WhatsApp.
-
-## Escopo confirmado com o usuário
-- **Erros elegíveis** (retryable): transientes (session expired, timeout, lock/`in-use`, BPLID/`branch`, `Specify a date within the permissible range`), anexos (`Attachments2` — nome inválido, path), projeto/marca (`-1116` fallback ANA GAMING).
-- **Não retryable** (sem re-tentativa): `not authorized`, `approver`, `budget`, permissões, `duplicate`, campos obrigatórios de negócio (fornecedor inexistente, etc.). Vão direto para “ação manual”.
-- **Política**: 5 tentativas, backoff **2m → 4m → 8m → 16m → 32m** (~62min de janela).
-- **Ao esgotar**: marca `retry_exhausted`, envia e-mail (via `send-transactional-email`) + WhatsApp para admins, lista no painel do Backoffice.
-- **Cobertura**: `expense-to-sap`, `advance-to-sap`, `baixa-recebimento`, `pagcorp-to-sap` + `synapse-pagcorp-sync` + `pagcorp-settlement-watcher`.
-
-## Arquitetura
+Hoje `/vendas` é uma tela única de baixas de recebimento. Vamos transformá-la em um hub com três submódulos, cobrindo o ciclo: **Pedido de Venda → NFS-e → Contas a Receber**.
 
 ```text
-Integração falha 400
-        │
-        ▼
-classifyError() ──► retryable? ──sim──► enqueue em sap_retry_queue (next_attempt_at = now + backoff)
-        │                                              │
-        └── não ──► marca error final, notifica         ▼
-                                       cron 1min ──► sap-retry-worker
-                                                       │
-                                                       ▼
-                                   despacha para função original (por doc_type)
-                                                       │
-                        ┌──────────────┬───────────────┼──────────────┬─────────────┐
-                        ▼              ▼               ▼              ▼             ▼
-                 expense-to-sap  advance-to-sap  baixa-recebimento  pagcorp-to-sap  synapse-pagcorp-sync
-                                                       │
-                                          sucesso ──► delete queue row
-                                          falha retryable ──► ++attempts, reagenda
-                                          attempts >= 5 ──► status='exhausted', notifica
+Pedido de Venda  →  Aprovação (motor atual)  →  SAP /Orders
+        ↓
+      NFS-e       →  SAP /Invoices  →  TaxOne autoriza  →  nº NFS-e
+        ↓
+ Contas a Receber →  baixa do recebimento (fluxo atual)
 ```
 
-## Componentes
+## 1. Navegação
 
-### 1. Tabela `public.sap_retry_queue` (migração)
-Campos-chave:
-- `doc_type` (`expense` | `advance` | `baixa` | `pagcorp` | `synapse_pagcorp`)
-- `ref_id` (uuid/text do doc), `company_db`, `payload` (jsonb — parâmetros para reinvocar a função)
-- `attempts` (int, default 0), `max_attempts` (int, default 5)
-- `next_attempt_at` (timestamptz), `last_attempt_at`
-- `last_error` (text), `error_category` (`session`|`branch`|`date`|`attachment`|`project`|`lock`|`other`)
-- `status` (`pending`|`in_flight`|`succeeded`|`exhausted`|`cancelled`)
-- `notified_exhausted_at`
-- **Unique** `(doc_type, ref_id)` com `status IN ('pending','in_flight')` (parcial) — evita duplicidade.
-- RLS: só admin lê/altera; edge functions usam service_role.
+- `/vendas` passa a ser um hub com três abas/rotas:
+  - `/vendas/pedidos` — Pedido de Venda
+  - `/vendas/nfse` — Emissão e acompanhamento de NFS-e
+  - `/vendas/recebimentos` — visão atual (contas a receber / baixas)
+- `/vendas` redireciona para a aba padrão conforme permissão; `/vendas/historico` permanece.
+- Controle de acesso continua via `useModuleAccess` (grupo Financeiro - Contas a Receber + super-admin), com uma ação nova por submódulo para permitir, por exemplo, comercial criando pedido sem acessar baixas.
 
-### 2. Helper `_shared/sap-retry.ts`
-- `classifySapError(status, body): { retryable, category, backoffMinutes? }` — reconhece as mensagens do escopo.
-- `enqueueRetry(admin, { doc_type, ref_id, company_db, payload, error, category })` — upsert com backoff progressivo baseado em `attempts` (2/4/8/16/32).
-- Substitui a lógica atual do watcher fixo de 30 min naquilo que já cobrimos.
+## 2. Pedido de Venda
 
-### 3. Integração no ponto de falha
-Nos 5 fluxos, dentro do `catch` que hoje persiste `sap_integration_error`:
-```ts
-const cls = classifySapError(status, body);
-if (cls.retryable) await enqueueRetry(admin, {...});
-```
-Sem alterar contrato de resposta ao cliente — apenas garante que a fila cuide do próximo pedaço.
+- Novo formulário `CreateSalesOrderModal`, espelhando o layout e a ergonomia do formulário de pedido de compras (cabeçalho, itens, rateio por CC/projeto, anexos, totais, impostos), trocando fornecedor por **cliente**.
+- Cliente: busca no SAP `BusinessPartners` com `CardType eq 'cCustomer'`, mostrando código, nome e CNPJ/CPF.
+- Itens: reaproveita a busca de itens já usada nas despesas, com preço unitário e quantidade editáveis.
+- Rascunho salvo no ERP Flow; submissão dispara o fluxo de aprovação.
 
-### 4. Edge function `sap-retry-worker`
-- Cron pg_cron a cada **1 minuto**.
-- Seleciona até 20 linhas com `status='pending' AND next_attempt_at <= now()` (locking por `UPDATE ... SET status='in_flight'`).
-- Para cada linha, dispara a função de origem via `fetch` interno (mesmo padrão do `expense-integration-retry`).
-- Sucesso → `status='succeeded'`, remove após 24h (housekeeping).
-- Nova falha retryable → `attempts++`, `next_attempt_at = now + backoff(attempts)`. Se `attempts >= max_attempts` → `status='exhausted'` + notifica.
-- Nova falha NÃO retryable → `status='exhausted'` imediato + notifica.
+## 3. Aprovação
 
-### 5. Notificação ao esgotar
-- E-mail via template novo `sap-integration-exhausted` (`send-transactional-email`) para lista de admins (`ADMIN_EMAILS` configurável — inicialmente `matheus.moreira`).
-- WhatsApp reaproveitando o helper já existente do `expense-integration-retry`.
-- Registra em `expense_audit_log` / `pagcorp_integration_log` conforme doc_type.
-- Cooldown já garantido por `notified_exhausted_at` (não notifica duas vezes o mesmo doc).
+- Reutiliza o motor atual (`approval_rules` / `approval_rule_levels`, substitutos, histórico, notificações), com os pedidos de venda entrando como um novo tipo de documento.
+- As telas de Aprovações e Histórico passam a exibir também pedidos de venda, com filtro por tipo.
+- Só após aprovação total o pedido é integrado ao SAP em `/Orders` (por edge function), gravando `DocEntry`/`DocNum` de volta.
 
-### 6. Ajustes no watcher atual
-- `expense-integration-retry` continua existindo para casos legados (aprovados sem `sap_doc_entry` que nunca entraram na fila), mas passa a **primeiro enfileirar** em `sap_retry_queue` em vez de reprocessar diretamente. Evita duplicação de lógica.
+## 4. NFS-e
 
-### 7. UI mínima (Backoffice)
-Nova aba **Integrações → Fila de Retries**:
-- Colunas: Empresa · Doc · Tipo · Tentativas · Próxima em · Última falha · Status.
-- Ações: **Retry agora** (zera `next_attempt_at`), **Cancelar**, **Ver detalhes**.
-- Filtra por status (padrão: `pending` + `exhausted`).
-- Realtime via Supabase Realtime na tabela.
+- Lista os pedidos aprovados e já integrados, com saldo ainda não faturado.
+- Ação "Emitir NFS-e": cria `Invoices` no SAP a partir do pedido (`BaseType 17`, `BaseEntry`, `BaseLine`), respeitando filial (BPLID) e série, com faturamento total ou parcial por linha.
+- Após criar, acompanha a autorização consultando `SBO_TaxOne` (mesma lógica já usada em `sap-nfse-lookup`): status, número da NFS-e, RPS, série e data de autorização, com atualização por polling e reprocessamento manual em caso de rejeição.
+- Modal de confirmação antes da emissão, no padrão já adotado nas baixas.
+
+## 5. Contas a Receber
+
+- Mantém integralmente o comportamento atual (listagem de faturas em aberto, saldos iniciais SI, mapa de relações, baixas), apenas movida para a nova rota/aba.
 
 ## Detalhes técnicos
 
-**Backoff**: `next_attempt_at = now() + interval '2 minutes' * pow(2, attempts)` limitado a 32 min.
+- **Banco**: novas tabelas `sales_orders`, `sales_order_items` (rateio por CC/projeto), `sales_order_attachments` e `sales_order_invoices` (vínculo pedido ↔ NFS-e ↔ status TaxOne). RLS por empresa/criador/aprovador, seguindo a regra de visibilidade já vigente (usuário vê o que criou ou aprova; admin com toggle "Ver todos"), com GRANTs explícitos.
+- **Edge functions** (service role, validação de JWT e de empresa em código):
+  - `sales-order-mutation` — criar/editar/submeter rascunho.
+  - `sales-order-to-sap` — integra o pedido aprovado em `/Orders`, com retry na fila existente.
+  - `sales-nfse-emit` — cria a Invoice a partir do pedido.
+  - `sales-nfse-status` — consulta TaxOne/`sap-nfse-lookup` e atualiza status.
+- Nenhum segredo no front; toda chamada ao SAP/HanaAPI continua server-side.
+- Estados de loading, vazio, erro, dados insuficientes e sem permissão em todas as telas novas.
 
-**Classificação (regex nos textos SAP)**:
-| categoria | pattern |
-|---|---|
-| session | `SessionId invalido`, `session.*expir`, `-1200` |
-| branch | `branch`, `BPLID`, `not assigned to selected branch` |
-| date | `Specify a date within the permissible range` |
-| attachment | `Attachments2 failed`, `File name`, `space string` |
-| project | `-1116`, `LINHAS MARCA/BRAND` |
-| lock | `in use`, `blocked`, `locked` |
+## Entrega sugerida em fases
 
-**Não retryable (blocklist explícita)**: `not authorized`, `insufficient`, `approver`, `budget`, `duplicate`, `already exists`, `foreign key`, `-2035` (validation de conta contábil), `Business Partner is on hold`.
-
-**Idempotência**: chave `(doc_type, ref_id)`. Se novo erro chegar antes de reprocessar, apenas atualiza `last_error`.
-
-**Segurança**: RLS restrita a admins; worker usa `SUPABASE_SERVICE_ROLE_KEY`; nenhum segredo exposto no front.
-
-## Fora do escopo (deste ciclo)
-- Retries para erros NON-400 (5xx já retryable no HTTP client atual).
-- Fila para fluxos de leitura (NF entrada, PO cache) — só integrações de escrita.
-- Retries para MasterTax / JumpCloud.
-
-## Entregáveis
-1. Migração `sap_retry_queue` + RLS + índice + trigger `updated_at`.
-2. `supabase/functions/_shared/sap-retry.ts` (classifier + enqueue).
-3. `supabase/functions/sap-retry-worker/index.ts` + cron.
-4. Alteração nos 5 fluxos para enfileirar em erros retryable.
-5. Template `sap-integration-exhausted` + wiring.
-6. Página `src/pages/BackofficeRetryQueue.tsx` + rota `/backoffice/retry-queue` + link no menu.
-7. Ajuste no `expense-integration-retry` para delegar à fila.
+1. Hub de navegação + mover a visão atual para Contas a Receber (sem mudança funcional).
+2. Pedido de Venda (tabelas, formulário, aprovação, integração SAP).
+3. NFS-e (emissão + acompanhamento TaxOne).
