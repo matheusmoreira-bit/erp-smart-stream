@@ -579,6 +579,70 @@ export default function SalesNfse() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => void onPdfSelected(e.target.files?.[0])}
+      />
+
+      <Dialog open={!!mailOrder} onOpenChange={(v) => !v && setMailOrder(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Enviar NFS-e por e-mail</DialogTitle>
+            <DialogDescription>
+              {mailInvoice?.nfse_number
+                ? `Nota nº ${mailInvoice.nfse_number} · ${mailOrder?.supplier_name || ""}`
+                : mailOrder?.supplier_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {mailLoading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : (
+            <div className="space-y-3">
+              {!mailSenderOk && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+                  Remetente de e-mail não configurado para esta empresa (Backoffice → E-mail NFS-e).
+                </div>
+              )}
+              {mailOrder && !pdfFiles.has(pdfPathFor(mailOrder, mailInvoice)) && (
+                <div className="rounded-md border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
+                  Nenhum PDF anexado a esta nota — o e-mail será enviado sem anexo.
+                </div>
+              )}
+              <div>
+                <Label className="text-xs text-muted-foreground">Para</Label>
+                <Input value={mailTo} onChange={(e) => setMailTo(e.target.value)} placeholder="cliente@dominio.com" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Cópia</Label>
+                <Input value={mailCc} onChange={(e) => setMailCc(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Assunto</Label>
+                <Input value={mailSubject} onChange={(e) => setMailSubject(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Mensagem</Label>
+                <Textarea rows={4} value={mailMessage} onChange={(e) => setMailMessage(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMailOrder(null)} disabled={mailSending}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void sendMail()} disabled={mailSending || !mailTo.trim()} className="gap-2">
+              {mailSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              Enviar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
