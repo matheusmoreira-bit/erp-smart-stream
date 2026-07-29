@@ -1,61 +1,52 @@
-# Ciclo de Vendas completo
+## Contexto
 
-Hoje `/vendas` é uma tela única de baixas de recebimento. Vamos transformá-la em um hub com três submódulos, cobrindo o ciclo: **Pedido de Venda → NFS-e → Contas a Receber**.
+Pentest whitebox em `erp-flow.cactuscorporation.com` apontou 3 achados: 1 baixo (vazamento do histórico de compras durante o carregamento), 2 médios (CSRF/replay na troca de senha e race condition na criação de pedidos).
 
-```text
-Pedido de Venda  →  Aprovação (motor atual)  →  SAP /Orders
-        ↓
-      NFS-e       →  SAP /Invoices  →  TaxOne autoriza  →  nº NFS-e
-        ↓
- Contas a Receber →  baixa do recebimento (fluxo atual)
-```
+Ao investigar, confirmei um agravante do achado 3.2: hoje as políticas de leitura de `public.expenses`, `expense_items` e `expense_attachments` são `USING (true)` para `anon` e `authenticated`. O filtro "só vejo o que é meu" é aplicado **apenas no frontend** (`src/pages/Expenses.tsx`, linha 1236). Ou seja, não é só um "delay de renderização": qualquer portador da chave pública consegue ler todos os pedidos direto da API. A correção precisa ser server-side.
 
-## 1. Navegação
+Também confirmei que `expense-mutation` (criação de pedido) **não tem rate limit nem idempotência**, e que `sap-change-password` **não exige a senha atual** (mínimo de 4 caracteres) e aceita CORS `*`.
 
-- `/vendas` passa a ser um hub com três abas/rotas:
-  - `/vendas/pedidos` — Pedido de Venda
-  - `/vendas/nfse` — Emissão e acompanhamento de NFS-e
-  - `/vendas/recebimentos` — visão atual (contas a receber / baixas)
-- `/vendas` redireciona para a aba padrão conforme permissão; `/vendas/historico` permanece.
-- Controle de acesso continua via `useModuleAccess` (grupo Financeiro - Contas a Receber + super-admin), com uma ação nova por submódulo para permitir, por exemplo, comercial criando pedido sem acessar baixas.
+---
 
-## 2. Pedido de Venda
+## Fase 1 — Leitura de compras escopada no servidor (achado 3.2)
 
-- Novo formulário `CreateSalesOrderModal`, espelhando o layout e a ergonomia do formulário de pedido de compras (cabeçalho, itens, rateio por CC/projeto, anexos, totais, impostos), trocando fornecedor por **cliente**.
-- Cliente: busca no SAP `BusinessPartners` com `CardType eq 'cCustomer'`, mostrando código, nome e CNPJ/CPF.
-- Itens: reaproveita a busca de itens já usada nas despesas, com preço unitário e quantidade editáveis.
-- Rascunho salvo no ERP Flow; submissão dispara o fluxo de aprovação.
+1. Criar edge function `expense-read` (autorizada pela sessão SAP, igual a `expense-mutation`) que resolve no servidor: identidade do usuário, grupo de permissão, alçada de centro de custo e flag "Ver todos", e retorna **apenas** as linhas permitidas, já paginadas.
+2. Reaproveitar a lógica existente de `_shared/permission-groups.ts` e `user-aliases.ts` para o escopo (dono, aprovador atual, grupos privilegiados, super-admin).
+3. Revogar as políticas permissivas: remover `SELECT USING (true)` de `expenses`, `expense_items` e `expense_attachments` para `anon` e `authenticated`; manter acesso por `service_role` (edge functions) e a política de admin autenticado.
+4. Migrar as telas que hoje leem essas tabelas direto pelo cliente (Compras/Despesas, Aprovações, Histórico, Vendas) para a nova função, com estados de loading/empty/error e sem renderizar linha alguma antes do escopo estar resolvido.
+5. Aplicar o mesmo escopo às linhas vindas do ERP/HanaAPI, para não reabrir o vazamento por outra origem.
 
-## 3. Aprovação
+## Fase 2 — Troca de senha: CSRF/replay (achado 3.3)
 
-- Reutiliza o motor atual (`approval_rules` / `approval_rule_levels`, substitutos, histórico, notificações), com os pedidos de venda entrando como um novo tipo de documento.
-- As telas de Aprovações e Histórico passam a exibir também pedidos de venda, com filtro por tipo.
-- Só após aprovação total o pedido é integrado ao SAP em `/Orders` (por edge function), gravando `DocEntry`/`DocNum` de volta.
+1. Exigir a **senha atual** em `sap-change-password`: validar com um login real no SAP antes do PATCH; sem isso, 401.
+2. Política de senha forte: mínimo 12 caracteres, bloqueio de senhas triviais e checagem de vazamento (HIBP habilitado no Auth), substituindo o mínimo atual de 4.
+3. CORS restrito por allowlist de origens (domínio de produção + preview), removendo `Access-Control-Allow-Origin: *` nas funções sensíveis — isso já quebra o cenário do HTML malicioso.
+4. Exigir um token anti-CSRF de uso único, emitido pela sessão e ligado ao usuário, obrigatório na troca de senha (defesa em profundidade, conforme a recomendação do relatório).
+5. Manter/reforçar o rate limit existente (ex.: 5 tentativas por usuário/IP a cada 15 min) e registrar cada troca (sucesso e falha) na auditoria.
+6. Invalidar as sessões SAP/ERP ativas do usuário após a troca.
 
-## 4. NFS-e
+## Fase 3 — Race condition na criação de pedidos (achado 3.4)
 
-- Lista os pedidos aprovados e já integrados, com saldo ainda não faturado.
-- Ação "Emitir NFS-e": cria `Invoices` no SAP a partir do pedido (`BaseType 17`, `BaseEntry`, `BaseLine`), respeitando filial (BPLID) e série, com faturamento total ou parcial por linha.
-- Após criar, acompanha a autorização consultando `SBO_TaxOne` (mesma lógica já usada em `sap-nfse-lookup`): status, número da NFS-e, RPS, série e data de autorização, com atualização por polling e reprocessamento manual em caso de rejeição.
-- Modal de confirmação antes da emissão, no padrão já adotado nas baixas.
+1. Idempotência: o cliente envia um `Idempotency-Key`; a função grava a chave e devolve o mesmo resultado para repetições, em vez de criar N pedidos.
+2. Trava por usuário/empresa durante a criação (lock advisory no Postgres, no padrão já usado em `_shared/watcher-lock.ts`), serializando requisições paralelas do mesmo usuário.
+3. Deduplicação por assinatura de negócio: mesmo fornecedor + valor + data + itens dentro de uma janela curta é rejeitado como duplicata, com mensagem clara.
+4. Rate limit em `expense-mutation` (`enforceRateLimit`), separado por ação (create mais restrito).
+5. No frontend, desabilitar o botão de envio durante o request (não é a correção, é só higiene de UX).
 
-## 5. Contas a Receber
+## Fase 4 — Endurecimento geral e validação
 
-- Mantém integralmente o comportamento atual (listagem de faturas em aberto, saldos iniciais SI, mapa de relações, baixas), apenas movida para a nova rota/aba.
+1. Cabeçalhos de segurança na aplicação publicada: CSP, HSTS, `X-Content-Type-Options`, `frame-ancestors`, `Referrer-Policy`.
+2. Varredura das demais edge functions para aplicar o mesmo padrão de CORS por allowlist e rate limit nas rotas sensíveis.
+3. Revisão de RLS das demais tabelas com `USING (true)` de leitura, mesmo escopo de raciocínio da Fase 1.
+4. Rodar o linter/scanner de segurança e atualizar a memória de segurança do projeto.
+5. Reteste dos 3 cenários do relatório: leitura da lista com usuário restrito (via API, não só na tela), replay do HTML de troca de senha e envio paralelo em grupo no Burp.
 
 ## Detalhes técnicos
 
-- **Banco**: novas tabelas `sales_orders`, `sales_order_items` (rateio por CC/projeto), `sales_order_attachments` e `sales_order_invoices` (vínculo pedido ↔ NFS-e ↔ status TaxOne). RLS por empresa/criador/aprovador, seguindo a regra de visibilidade já vigente (usuário vê o que criou ou aprova; admin com toggle "Ver todos"), com GRANTs explícitos.
-- **Edge functions** (service role, validação de JWT e de empresa em código):
-  - `sales-order-mutation` — criar/editar/submeter rascunho.
-  - `sales-order-to-sap` — integra o pedido aprovado em `/Orders`, com retry na fila existente.
-  - `sales-nfse-emit` — cria a Invoice a partir do pedido.
-  - `sales-nfse-status` — consulta TaxOne/`sap-nfse-lookup` e atualiza status.
-- Nenhum segredo no front; toda chamada ao SAP/HanaAPI continua server-side.
-- Estados de loading, vazio, erro, dados insuficientes e sem permissão em todas as telas novas.
+- Arquivos principais: `supabase/functions/expense-mutation/index.ts`, `supabase/functions/sap-change-password/index.ts`, `supabase/functions/_shared/{auth,rate-limit,permission-groups,user-aliases}.ts`, `src/pages/Expenses.tsx`, `src/pages/Approvals.tsx`, nova função `expense-read`, nova migração de RLS.
+- A Fase 1 é a de maior risco de regressão, pois muda a origem dos dados de várias telas; será feita mantendo o contrato de dados atual para minimizar impacto.
+- Nenhuma credencial nova é necessária.
 
-## Entrega sugerida em fases
+## Ordem sugerida
 
-1. Hub de navegação + mover a visão atual para Contas a Receber (sem mudança funcional).
-2. Pedido de Venda (tabelas, formulário, aprovação, integração SAP).
-3. NFS-e (emissão + acompanhamento TaxOne).
+Fase 1 → Fase 3 → Fase 2 → Fase 4. As fases 1 e 3 fecham o risco de exposição de dados e de indisponibilidade; a 2 depende de decidir a política de senha com o time.
