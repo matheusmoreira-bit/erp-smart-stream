@@ -189,6 +189,7 @@ export function CreateExpenseModal({
   const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
   const [headerProject, setHeaderProject] = useState<SapSearchOption | null>(null);
   const [rateioType, setRateioType] = useState<RateioType>("padrao");
+  const [nfseSplitMode, setNfseSplitMode] = useState<"unified" | "per_brand">("unified");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
 
@@ -1959,6 +1960,7 @@ export function CreateExpenseModal({
         doc_date: docDate || undefined,
         due_date: dueDate || undefined,
         rateio_type: !isSales ? rateioType : undefined,
+        nfse_split_mode: isSales ? nfseSplitMode : undefined,
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });
@@ -2931,6 +2933,27 @@ export function CreateExpenseModal({
                   {rateioType === "viagens" && " Viagens seguem o fluxo de Reembolso."}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Vendas — define se a NFS-e sai unificada ou uma por marca/projeto */}
+          {isSales && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Emissão da NFS-e</label>
+              <Select value={nfseSplitMode} onValueChange={(v) => setNfseSplitMode(v as "unified" | "per_brand")}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unified">Unificada (uma nota para o pedido)</SelectItem>
+                  <SelectItem value="per_brand">Separada por marca/projeto</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {nfseSplitMode === "per_brand"
+                  ? "Cada marca gera uma NFS-e e recebe apenas os destinatários mapeados para ela."
+                  : "Nota única enviada para a união dos destinatários das marcas do cliente."}
+              </p>
             </div>
           )}
 
