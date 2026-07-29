@@ -23,6 +23,18 @@ function isAllowedEmail(email: string | null | undefined): boolean {
   return !!domain && ALLOWED_DOMAINS.includes(domain);
 }
 
+// A sessão Google sobrevive ao "Sair" da empresa, mas com validade máxima de 24h.
+const GOOGLE_SESSION_MAX_MS = 24 * 60 * 60 * 1000;
+
+function sessionAgeMs(user: { last_sign_in_at?: string | null; created_at?: string | null } | undefined): number | null {
+  const iso = user?.last_sign_in_at || user?.created_at;
+  if (!iso) return null;
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return null;
+  return Date.now() - ts;
+}
+
+
 export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
@@ -30,34 +42,61 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    const evaluate = async (email: string | null | undefined) => {
+    let expiryTimer: number | undefined;
+
+    const evaluate = async (user: { email?: string | null; last_sign_in_at?: string | null; created_at?: string | null } | undefined) => {
+      const email = user?.email;
       if (!email) {
         if (!cancelled) { setAllowed(false); setChecking(false); }
         return;
       }
-      if (isAllowedEmail(email)) {
-        if (!cancelled) { setAllowed(true); setChecking(false); }
-      } else {
+      if (!isAllowedEmail(email)) {
         toast.error("Acesso não autorizado", {
           description: `O domínio de ${email} não está liberado para acessar o sistema.`,
         });
         try { await supabase.auth.signOut(); } catch { /* ignore */ }
         if (!cancelled) { setAllowed(false); setChecking(false); }
+        return;
       }
+
+      // Validade máxima de 24h para a sessão Google.
+      const age = sessionAgeMs(user);
+      if (age !== null && age >= GOOGLE_SESSION_MAX_MS) {
+        toast.message("Sessão expirada", {
+          description: "Sua autenticação Google passou de 24h. Entre novamente.",
+        });
+        try { await supabase.auth.signOut(); } catch { /* ignore */ }
+        if (!cancelled) { setAllowed(false); setChecking(false); }
+        return;
+      }
+
+      if (window.clearTimeout && expiryTimer) window.clearTimeout(expiryTimer);
+      if (age !== null) {
+        expiryTimer = window.setTimeout(() => {
+          void supabase.auth.signOut().catch(() => {});
+        }, Math.max(GOOGLE_SESSION_MAX_MS - age, 1000));
+      }
+
+      if (!cancelled) { setAllowed(true); setChecking(false); }
     };
 
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      await evaluate(session?.user?.email);
+      await evaluate(session?.user);
     })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setChecking(true);
-      evaluate(session?.user?.email);
+      evaluate(session?.user);
     });
 
-    return () => { cancelled = true; subscription.unsubscribe(); };
+    return () => {
+      cancelled = true;
+      if (expiryTimer) window.clearTimeout(expiryTimer);
+      subscription.unsubscribe();
+    };
   }, []);
+
 
   const handleGoogle = async () => {
     setSigningIn(true);

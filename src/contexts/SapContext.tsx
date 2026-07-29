@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { sapLogin, sapLogout, ensureSapAuthToken, type SapSession, clearClientCache } from "@/lib/sap-client";
+import { sapLogin, sapLogout, ensureSapAuthToken, sapKeepAlive, type SapSession, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearErpLocalState } from "@/lib/clear-erp-local-state";
@@ -226,15 +226,16 @@ export function SapProvider({ children }: { children: ReactNode }) {
     // reload em "/" não reaproveite dados do usuário/empresa anterior.
     try { queryClient.clear(); } catch { /* ignore */ }
     clearErpLocalState();
-    // Also sign out any lingering Supabase Auth session — otherwise the next
-    // user to log in via SAP inherits the previous user's Supabase identity
-    // (isAdmin, role-scoped permissions, "Ver todas as aprovações", etc.).
-    try { await supabase.auth.signOut(); } catch { /* ignore */ }
-    toast.success("Sessão encerrada", {
-      description: "Você saiu com segurança. Redirecionando para o login…",
+    // A sessão do Google (Lovable Cloud) NÃO é encerrada aqui: o "Sair" apenas
+    // desconecta da empresa/ERP. A identidade Google segue válida por até 24h
+    // (limite aplicado no GoogleAuthGate). Ao logar em outra empresa com outro
+    // usuário SAP, `login()` já derruba a sessão Supabase anterior.
+    toast.success("Empresa desconectada", {
+      description: "Você saiu da empresa. Sua conta Google continua conectada.",
     });
     // Volta para a raiz e força reload para garantir a tela de login limpa.
     window.setTimeout(() => window.location.replace("/"), 900);
+
   }, [session, queryClient, setSession]);
 
   // `logout` agora apenas solicita a confirmação — o encerramento real
@@ -253,10 +254,9 @@ export function SapProvider({ children }: { children: ReactNode }) {
       setSession(null);
       try { queryClient.clear(); } catch { /* ignore */ }
       clearErpLocalState();
-      setError("Sua sessão expirou. Faça login novamente.");
-      // Same reasoning as logout(): drop the Supabase Auth session so a fresh
-      // SAP login can't inherit stale admin/role state.
-      void supabase.auth.signOut().catch(() => {});
+      setError("Sua sessão com o ERP expirou. Faça login na empresa novamente.");
+      // A sessão Google permanece — o usuário só precisa reconectar à empresa.
+
     };
     window.addEventListener("erp:session-expired", handler);
     return () => window.removeEventListener("erp:session-expired", handler);
@@ -280,6 +280,49 @@ export function SapProvider({ children }: { children: ReactNode }) {
     }, ms);
     return () => window.clearTimeout(t);
   }, [session?.expiresAt]);
+
+  // Keep-alive: enquanto houver sessão SAP ativa, faz um ping leve periódico no
+  // Service Layer para impedir que o SessionTimeout derrube o usuário no meio
+  // do trabalho. Cada ping bem-sucedido renova a janela de 30 min (rolling).
+  useEffect(() => {
+    if (session?.erpType !== "sap" || !session.sessionId) return;
+    const snapshot = {
+      sessionId: session.sessionId,
+      routeId: session.routeId || "",
+      companyDB: session.companyDB,
+      userName: session.userName,
+      isSuperUser: !!session.isSuperUser,
+      erpType: "sap" as const,
+    };
+
+    let cancelled = false;
+    const ping = async () => {
+      if (cancelled || document.visibilityState === "hidden") return;
+      const alive = await sapKeepAlive(snapshot);
+      if (cancelled) return;
+      if (!alive) {
+        window.dispatchEvent(new CustomEvent("erp:session-expired"));
+        return;
+      }
+      setSession((prev) => (
+        prev?.erpType === "sap" && prev.sessionId === snapshot.sessionId
+          ? { ...prev, expiresAt: Date.now() + 30 * 60 * 1000 }
+          : prev
+      ));
+    };
+
+    // Ping a cada 5 minutos + ao voltar para a aba.
+    const interval = window.setInterval(() => { void ping(); }, 5 * 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === "visible") void ping(); };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [session?.erpType, session?.sessionId, session?.routeId, session?.companyDB, session?.userName, session?.isSuperUser, setSession]);
+
 
   useEffect(() => {
     if (session?.erpType !== "sap" || !session.sessionId || session.sapAuthToken) return;
@@ -309,11 +352,11 @@ export function SapProvider({ children }: { children: ReactNode }) {
       <AlertDialog open={confirmLogoutOpen} onOpenChange={(open) => { if (!loggingOut) setConfirmLogoutOpen(open); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Encerrar sessão?</AlertDialogTitle>
+            <AlertDialogTitle>Sair da empresa?</AlertDialogTitle>
             <AlertDialogDescription>
               {session?.userName
-                ? `Você será desconectado de ${session.userName} (${session.companyDB}) e voltará para a tela de login.`
-                : "Você será desconectado e voltará para a tela de login."}
+                ? `Você será desconectado de ${session.userName} (${session.companyDB}). Sua conta Google continua conectada para escolher outra empresa.`
+                : "Você será desconectado da empresa. Sua conta Google continua conectada."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
