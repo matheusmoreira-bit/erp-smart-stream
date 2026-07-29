@@ -31,6 +31,7 @@ import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
+import { publicFunctionFetch } from "@/lib/auth-fetch";
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
 import { PageHeader } from "@/components/PageHeader";
@@ -79,6 +80,8 @@ interface InvoiceRow {
   /** Número da NFSE / folio fiscal, priorizando campos brasileiros do SAP. */
   folioNumber: number | null;
   nfseNumber: string | null;
+  /** Número do RPS (preenchido só quando temos a NFS-e autorizada separada). */
+  rpsNumber?: string | null;
   /** Prefixo/tipo da NFSE (SAP FolioPrefixString), ex.: NFSe_CAC. */
   folioPrefix: string | null;
   /** Série da NFSE (SAP SeriesString), ex.: 1. */
@@ -117,9 +120,37 @@ function cleanSapText(value: unknown): string | null {
   return text && text !== "0" ? text : null;
 }
 
-function formatNfseLabel(row: Pick<InvoiceRow, "nfseNumber" | "folioPrefix" | "folioSeries">) {
+function formatNfseLabel(row: Pick<InvoiceRow, "nfseNumber" | "folioPrefix" | "folioSeries" | "rpsNumber">) {
   if (!row.nfseNumber) return null;
-  return `NFS-e ${row.folioPrefix ? `${row.folioPrefix} ` : ""}${row.nfseNumber}${row.folioSeries ? ` · Série ${row.folioSeries}` : ""}`;
+  const serie = row.folioSeries ? ` · Série ${row.folioSeries}` : "";
+  const rps = row.rpsNumber && row.rpsNumber !== row.nfseNumber ? ` · RPS ${row.rpsNumber}` : "";
+  return `NFS-e ${row.folioPrefix ? `${row.folioPrefix} ` : ""}${row.nfseNumber}${serie}${rps}`;
+}
+
+/**
+ * Busca o número REAL da NFS-e (autorizado pela prefeitura) no addon fiscal.
+ * O Service Layer só expõe o número do RPS (`SequenceSerial`), por isso a
+ * consulta é feita na edge function `sap-nfse-lookup`. Falhas são silenciosas:
+ * a tela continua exibindo o número do RPS como fallback.
+ */
+async function fetchNfseMap(
+  companyDb: string,
+  docEntries: number[],
+): Promise<Record<string, { nfse: string | null; rps: string | null; serie: string | null }>> {
+  if (!companyDb || docEntries.length === 0) return {};
+  try {
+    const resp = await publicFunctionFetch("sap-nfse-lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_db: companyDb, doc_entries: docEntries }),
+    });
+    if (!resp.ok) return {};
+    const json = await resp.json().catch(() => null);
+    return (json?.map ?? {}) as Record<string, { nfse: string | null; rps: string | null; serie: string | null }>;
+  } catch (e) {
+    console.warn("sap-nfse-lookup indisponível:", (e as Error).message);
+    return {};
+  }
 }
 
 /* ─────────────────────────── Page ─────────────────────────── */
@@ -211,7 +242,7 @@ function SalesPageInner() {
 
         // Build cross-references
         const docEntries = rawList.map((r) => r.DocEntry).filter((n) => Number.isFinite(n));
-        const [pedidosRes, baixasRes, bpNamesRes] = await Promise.all([
+        const [pedidosRes, baixasRes, bpNamesRes, nfseMap] = await Promise.all([
           docEntries.length
             ? supabase
                 .from("pedidos_venda_erp")
@@ -227,6 +258,8 @@ function SalesPageInner() {
             .eq("baixas_recebimento.company_db", companyDb)
             .eq("baixas_recebimento.status", "pendente_sincronizacao"),
           Promise.resolve({ data: [] as { CardCode: string; CardName: string }[] }),
+          // Número real da NFS-e (addon fiscal) por DocEntry.
+          fetchNfseMap(companyDb, docEntries),
         ]);
 
         if (pedidosRes.error) console.warn("pedidos_venda_erp:", pedidosRes.error.message);
@@ -259,14 +292,20 @@ function SalesPageInner() {
           const closed = inv.DocumentStatus === "bost_Close";
           const folioNumber = inv.FolioNumber != null ? Number(inv.FolioNumber) : null;
           const sequenceSerial = cleanSapText(inv.SequenceSerial);
-          const nfseNumber = sequenceSerial || (folioNumber != null ? String(folioNumber) : null);
+          const fiscal = nfseMap[String(inv.DocEntry)];
+          // Prioridade: número autorizado pela prefeitura (addon fiscal) →
+          // RPS (SequenceSerial) → folio nativo do SAP.
+          const nfseNumber =
+            cleanSapText(fiscal?.nfse) || sequenceSerial || (folioNumber != null ? String(folioNumber) : null);
+          const rpsNumber = cleanSapText(fiscal?.rps) || sequenceSerial;
           return {
             docEntry: inv.DocEntry,
             docNum: inv.DocNum,
             folioNumber,
             nfseNumber,
+            rpsNumber: fiscal?.nfse ? rpsNumber : null,
             folioPrefix: cleanSapText(inv.FolioPrefixString),
-            folioSeries: cleanSapText(inv.SeriesString),
+            folioSeries: cleanSapText(fiscal?.serie) || cleanSapText(inv.SeriesString),
             cardCode: inv.CardCode || "—",
             cardName: inv.CardName || "—",
             docDate: inv.DocDate,

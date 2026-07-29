@@ -37,6 +37,7 @@ interface Props {
     docNum: number;
     folioNumber?: number | null;
     nfseNumber?: string | null;
+    rpsNumber?: string | null;
     folioPrefix?: string | null;
     folioSeries?: string | null;
     cardCode: string;
@@ -93,9 +94,13 @@ function formatTime(iso?: string | null) {
   }
 }
 
-function formatNfseLabel(invoice: Pick<NonNullable<Props["invoice"]>, "nfseNumber" | "folioPrefix" | "folioSeries">) {
+function formatNfseLabel(
+  invoice: Pick<NonNullable<Props["invoice"]>, "nfseNumber" | "folioPrefix" | "folioSeries" | "rpsNumber">,
+) {
   if (!invoice.nfseNumber) return null;
-  return `NFS-e ${invoice.folioPrefix ? `${invoice.folioPrefix} ` : ""}${invoice.nfseNumber}${invoice.folioSeries ? ` · Série ${invoice.folioSeries}` : ""}`;
+  const serie = invoice.folioSeries ? ` · Série ${invoice.folioSeries}` : "";
+  const rps = invoice.rpsNumber && invoice.rpsNumber !== invoice.nfseNumber ? ` · RPS ${invoice.rpsNumber}` : "";
+  return `NFS-e ${invoice.folioPrefix ? `${invoice.folioPrefix} ` : ""}${invoice.nfseNumber}${serie}${rps}`;
 }
 
 
