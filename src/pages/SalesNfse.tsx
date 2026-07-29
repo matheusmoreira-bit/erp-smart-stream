@@ -41,7 +41,13 @@ function formatDate(value?: string | null) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : value;
 }
 
-const APPROVED_STATUSES = ["aprovado", "pc_lancado", "nf_entrada", "pagamento", "finalizado"];
+const APPROVED_STATUSES = [
+  "aprovado",
+  "pc_lancado",
+  "nf_entrada",
+  "pagamento",
+  "finalizado",
+] as const;
 
 interface SalesOrderRow {
   id: string;
