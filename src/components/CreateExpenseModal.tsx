@@ -2939,9 +2939,11 @@ export function CreateExpenseModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(RATEIO_TYPE_LABELS) as RateioType[]).map((k) => (
-                    <SelectItem key={k} value={k}>{RATEIO_TYPE_LABELS[k]}</SelectItem>
-                  ))}
+                  {(Object.keys(RATEIO_TYPE_LABELS) as RateioType[])
+                    .filter((k) => isRateioTypeAllowedForCostCenter(k, userCostCenter, bypassCcItemRules))
+                    .map((k) => (
+                      <SelectItem key={k} value={k}>{RATEIO_TYPE_LABELS[k]}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               {rateioType !== "padrao" && (
