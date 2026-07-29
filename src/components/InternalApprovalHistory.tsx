@@ -133,7 +133,7 @@ export function InternalApprovalHistory({ expenseId }: Props) {
             "id, level_order, approver_name, approver_email, decision, remarks, decided_at, created_at, substituted_for_email, substituted_for_name, action_role",
           )
           .eq("expense_id", expenseId)
-          .order("created_at", { ascending: true }),expenseRead("expenses")
+          .order("created_at", { ascending: true }), expenseRead("expenses")
           .select("status")
           .eq("id", expenseId)
           .maybeSingle(),

@@ -493,7 +493,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         return;
       }
 
-      const { data, error: err } = await expenseRead("expenses") as any)
+      const { data, error: err } = await expenseRead("expenses")
         .select("*")
         .eq("company_db", activeCompanyDb)
         .eq("doc_type", docType)
@@ -505,7 +505,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       let itemsMap: Record<string, ExpenseItem[]> = {};
       let attachmentsMap: Record<string, ExpenseAttachment[]> = {};
       if (expenseIds.length > 0) {
-        const [{ data: items }, { data: atts }] = await Promise.all([expenseRead("expense_items").select("*").in("expense_id", expenseIds),expenseRead("expense_attachments").select("*").in("expense_id", expenseIds),
+        const [{ data: items }, { data: atts }] = await Promise.all([expenseRead("expense_items").select("*").in("expense_id", expenseIds), expenseRead("expense_attachments").select("*").in("expense_id", expenseIds),
         ]);
         if (items) {
           for (const item of items as any[]) {
@@ -883,7 +883,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       let forcedApprover: string | null | undefined;
       let rateioChanged = false;
       if (input.rateio_type !== undefined) {
-        const { data: cur } = awaitexpenseRead("expenses")
+        const { data: cur } = await expenseRead("expenses")
           .select("rateio_type")
           .eq("id", expenseId)
           .maybeSingle();
@@ -993,7 +993,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       let approverToNotify: string | null = null;
       let notifyPayload: any = null;
       try {
-        const { data: exp } = awaitexpenseRead("expenses")
+        const { data: exp } = await expenseRead("expenses")
           .select("total_amount, cost_center, company_db, current_approver, supplier_name, currency")
           .eq("id", expenseId)
           .maybeSingle();
@@ -1174,7 +1174,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           let alreadyInErp = false;
           let originFromErp = false;
           for (let attempt = 0; attempt < 5; attempt++) {
-            const { data: fresh } = awaitexpenseRead("expenses")
+            const { data: fresh } = await expenseRead("expenses")
               .select("status,sap_doc_entry,origin")
               .eq("id", expenseId)
               .maybeSingle();

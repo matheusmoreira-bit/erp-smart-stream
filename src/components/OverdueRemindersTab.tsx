@@ -187,7 +187,7 @@ export function OverdueRemindersTab() {
     setTestLoading(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const { data: expRows } = awaitexpenseRead("expenses")
+      const { data: expRows } = await expenseRead("expenses")
         .select("id, doc_type, supplier_name, requester_name, current_approver, total_amount, currency, due_date")
         .eq("status", "pendente_aprovacao")
         .lt("due_date", today)

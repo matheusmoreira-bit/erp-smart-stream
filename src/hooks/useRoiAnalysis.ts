@@ -204,7 +204,7 @@ export function useRoiAnalysis(opts: Options) {
       }
 
       const buildExpenses = () => {
-        let q =expenseRead("expenses")
+        let q = expenseRead("expenses")
           .select("id, company_db, requester_email, created_at, doc_date, due_date, total_amount, sap_doc_entry, status")
           .order("created_at", { ascending: true });
         if (!consolidated && companyDb) q = q.eq("company_db", companyDb);

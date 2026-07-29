@@ -192,7 +192,7 @@ export function useApprovalHistory(
       );
       let expensesById = new Map<string, any>();
       if (expenseIds.length > 0) {
-        let expensesQ =expenseRead("expenses")
+        let expensesQ = expenseRead("expenses")
           .select(
             "id, supplier_code, supplier_name, total_amount, currency, sap_doc_entry, sap_doc_num, doc_type, requester_name, requester_email, company_db, created_at",
           )

@@ -124,7 +124,7 @@ export function useTemporalAnalysis(opts: Options) {
       }
 
       const buildExp = () => {
-        let q =expenseRead("expenses").select("id, company_db, created_at, sap_doc_entry").order("created_at", { ascending: true });
+        let q = expenseRead("expenses").select("id, company_db, created_at, sap_doc_entry").order("created_at", { ascending: true });
         if (!consolidated && companyDb) q = q.eq("company_db", companyDb);
         if (fromIso) q = q.gte("created_at", fromIso);
         if (toIso) q = q.lte("created_at", toIso);
