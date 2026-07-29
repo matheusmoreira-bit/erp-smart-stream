@@ -15,6 +15,8 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
+import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,10 +209,22 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     if (callerSource === "cloud_admin" || callerSource === "sap_admin") isAdmin = true;
 
     if (!isAdmin && callerUserCode && userCode.toLowerCase() !== callerUserCode.toLowerCase()) {
-      return new Response(JSON.stringify({ error: "Só é permitido alterar a própria senha" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Identidade flexível: e-mail pode mudar ao longo do tempo, enquanto o
+      // UserCode do SAP é imutável. Verifica aliases (IdP, credenciais
+      // gerenciadas, perfil de colaborador) antes de negar.
+      const owns = await callerOwnsUserCode(
+        adminSvc,
+        { id: callerId, email: (caller as { email?: string }).email, userName: (caller as { userName?: string }).userName },
+        userCode,
+      );
+      if (!owns) {
+        console.warn("[sap-change-password] identity mismatch", { callerUserCode, userCode });
+        return new Response(JSON.stringify({ error: "Só é permitido alterar a própria senha" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
+
     if (!newPassword || newPassword.length < 4) {
       return new Response(JSON.stringify({ error: "new_password inválido (mínimo 4 caracteres)" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
