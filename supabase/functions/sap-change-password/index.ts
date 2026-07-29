@@ -16,6 +16,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
+import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
 
 
 const corsHeaders = {
@@ -306,6 +307,14 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
           console.error(`[sap-change-password] PATCH failed`, { companyDb, userCode, internalKey: rows[0].InternalKey, status: patch.status, msg });
           return { companyDB: companyDb, displayName, status: "error", message: msg };
         }
+        // 2.1) Garante "Senha nunca expira" no SAP (best-effort) para que a
+        // nova senha não caduque e derrube o usuário/integrações.
+        await ensurePasswordNeverExpires(
+          (path, method, b) => sapRequest(session!, path, method, b, ctrl.signal),
+          rows[0].InternalKey!,
+          { companyDb, userCode },
+        );
+
         // 3) Verificação: tenta logar como o próprio usuário com a nova senha.
         // Se o SAP aceitou o PATCH mas não aplicou (ex.: admin sem privilégio
         // de superuser), o login falha e reportamos como erro real.
