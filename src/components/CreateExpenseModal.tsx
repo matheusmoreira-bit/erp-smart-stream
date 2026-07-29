@@ -613,15 +613,36 @@ export function CreateExpenseModal({
   ]);
 
   // Pré-preenche o CC do cabeçalho com o centro de custo do usuário logado
-  // (via mapeamento IdP), apenas em compras e quando ainda não há CC definido.
+  // (via mapeamento IdP), apenas em compras.
+  // Regras:
+  // - Só ocorre UMA vez por abertura do modal: se o usuário limpar ou trocar
+  //   o CC, a escolha dele é respeitada (não é reaplicado).
+  // - Usuários com visão total de centros de custo (Contábil, Fiscal,
+  //   Financeiro, Facilities, CFO, admins/super-usuário) NÃO recebem CC
+  //   pré-vinculado — o campo fica livre para escolher qualquer CC.
+  const ccPrefillDoneRef = useRef(false);
+  useEffect(() => {
+    if (!open) ccPrefillDoneRef.current = false;
+  }, [open]);
   useEffect(() => {
     if (!open || isSales) return;
-    if (headerCostCenter) return;
+    if (ccPrefillDoneRef.current) return;
+    // Aguarda o carregamento dos grupos para não vincular CC indevidamente.
+    if (canSeeAllLoading) return;
+    if (bypassCcItemRules) {
+      ccPrefillDoneRef.current = true;
+      return;
+    }
+    if (headerCostCenter) {
+      ccPrefillDoneRef.current = true;
+      return;
+    }
     if (!userCostCenter) return;
     if (!costCenterOptions.length) return;
     const opt =
       costCenterOptions.find((o) => o.code === userCostCenter) ||
       { code: userCostCenter, name: userCostCenter, extra: "" };
+    ccPrefillDoneRef.current = true;
     setHeaderCostCenter(opt);
     setItems((prev) =>
       prev.map((it) => ({
@@ -630,7 +651,7 @@ export function CreateExpenseModal({
         cost_center: it.cost_center || opt.code,
       })),
     );
-  }, [open, isSales, userCostCenter, costCenterOptions, headerCostCenter]);
+  }, [open, isSales, userCostCenter, costCenterOptions, headerCostCenter, bypassCcItemRules, canSeeAllLoading]);
 
 
   // Apply prefill when modal opens
