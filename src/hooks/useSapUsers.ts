@@ -310,12 +310,25 @@ export function useSapUsers() {
 
     for (const company of targets) {
       try {
-        const { authFetch } = await import("@/lib/auth-fetch");
-        const credsRes = await authFetch(`credentials?system=${erpType}&company_db=${company.company_db}`);
+        const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+        const params = new URLSearchParams({
+          system: erpType,
+          company_db: company.company_db,
+          keys: "username,password",
+        });
+        const credsRes = await sapFunctionFetch(`credentials?${params.toString()}`);
 
-        if (!credsRes.ok) throw new Error("Sem credenciais configuradas");
+        if (!credsRes.ok) {
+          const detail = await credsRes.json().catch(() => null);
+          throw new Error(
+            credsRes.status === 401 || credsRes.status === 403
+              ? "Sem permissão para ler as credenciais desta empresa"
+              : (detail?.error as string) || `Falha ao ler credenciais (${credsRes.status})`,
+          );
+        }
         const credsData = await credsRes.json();
         const creds = credsData.credentials || [];
+
 
         if (erpType === "sap") {
           const getCredVal = (key: string) => creds.find((c: { credential_key: string; credential_value?: string }) => c.credential_key === key)?.credential_value;
