@@ -1,6 +1,7 @@
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { parseSapHeaders, requireUser, validateSapSession } from "../_shared/auth.ts";
+import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -228,6 +229,23 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
     sap_incoming_payment_doc_entry: sapDocEntry,
     sap_error_message: null,
   }).eq("id", baixaId);
+
+  const b = baixa as Record<string, unknown>;
+  await notifySalesMilestone(sb, {
+    milestone: "nfse_settled",
+    companyDb: headers.companyDB,
+    refId: baixaId,
+    link: "/sales/receivables",
+    summary: "Uma baixa de recebimento foi registrada no ERP.",
+    details: [
+      { label: "Cliente", value: (b.card_name as string) || (b.card_code as string) },
+      { label: "Valor", value: `BRL ${Number(b.valor_total || 0).toFixed(2)}` },
+      { label: "Data", value: b.data_recebimento as string },
+      { label: "Documento SAP", value: sapDocEntry },
+      { label: "Empresa", value: headers.companyDB },
+      { label: "Usuário", value: (b.criado_por_nome as string) || (b.criado_por_user_code as string) },
+    ],
+  });
 
   return json(200, { ok: true, baixaId, sapDocEntry });
 }
