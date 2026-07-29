@@ -891,6 +891,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [statusFilter, setStatusFilter] = usePersistedState<string>(filterKey("status"), "all");
 
   const isSales = mode === "sales";
+  const statusLabel = useStatusLabel();
+
   const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Compras";
   const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Compra";
   const emptyLabel = isSales ? "Nenhum pedido de venda encontrado" : "Nenhuma compra encontrada";
