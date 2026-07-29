@@ -72,6 +72,7 @@ import { useAuditLog } from "@/hooks/useAuditLog";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import AuditLogTable from "@/components/AuditLogTable";
 import IntegrationsTab from "@/components/IntegrationsTab";
+import NfseEmailSettingsTab from "@/components/NfseEmailSettingsTab";
 import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import TransferApprovalsTool from "@/components/TransferApprovalsTool";
