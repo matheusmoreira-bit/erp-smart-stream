@@ -1,9 +1,23 @@
-import { Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, loading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Reage à perda de sessão enquanto a rota já está montada (expiração/logout
+  // em outra aba): redireciona imediatamente para o login do backoffice.
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/backoffice/login", {
+        replace: true,
+        state: { from: location.pathname + location.search },
+      });
+    }
+  }, [loading, user, navigate, location.pathname, location.search]);
 
   if (loading) {
     return (
@@ -14,7 +28,13 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to="/backoffice/login" replace />;
+    return (
+      <Navigate
+        to="/backoffice/login"
+        replace
+        state={{ from: location.pathname + location.search }}
+      />
+    );
   }
 
   if (!isAdmin) {
