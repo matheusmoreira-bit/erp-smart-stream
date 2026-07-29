@@ -305,6 +305,46 @@ export async function sapQuery(
   return { data: result.data, fromCache: result.fromCache };
 }
 
+/**
+ * Ping leve para manter a sessão do SAP Service Layer viva.
+ *
+ * Não usa `callProxy` de propósito: evita toasts de "carregando"/retry e
+ * mantém o keep-alive totalmente silencioso. Retorna `true` se a sessão
+ * continua válida, `false` se expirou (o chamador decide o que fazer).
+ */
+export async function sapKeepAlive(session: SapSession): Promise<boolean> {
+  if (session.erpType && session.erpType !== "sap") return true;
+  if (!session.sessionId) return false;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const resp = await publicFunctionFetch(FUNCTION_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "query",
+        sessionId: session.sessionId,
+        routeId: session.routeId,
+        companyDB: session.companyDB,
+        endpoint: "Users?$top=1&$select=UserCode",
+      }),
+      signal: controller.signal,
+    });
+    let data: { sapStatus?: number; warning?: string; error?: string } | null = null;
+    try { data = await resp.json(); } catch { data = null; }
+    if (looksLikeSessionExpired(data)) return false;
+    // Erros de rede/5xx não significam sessão inválida — tentamos de novo depois.
+    return true;
+  } catch {
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
+
 export async function sapAction(
   session: SapSession,
   endpoint: string,
