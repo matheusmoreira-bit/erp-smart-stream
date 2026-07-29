@@ -989,6 +989,8 @@ export default function Intercompany() {
 
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
+  const { session } = useSap();
+
   const sapCompanies = useMemo(
     () => allCompanies.filter((c) => (c.erp_type || "sap") === "sap"),
     [allCompanies],
