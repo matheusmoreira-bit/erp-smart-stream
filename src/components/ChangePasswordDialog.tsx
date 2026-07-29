@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { checkPasswordPolicy } from "@/lib/password-policy";
 import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 import { saveUserSapCredential } from "@/lib/user-sap-credentials";
+import { clearErpLocalState } from "@/lib/clear-erp-local-state";
+
 
 interface CompanyOption {
   company_db: string;
