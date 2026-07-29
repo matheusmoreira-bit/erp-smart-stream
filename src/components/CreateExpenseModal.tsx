@@ -2973,7 +2973,8 @@ export function CreateExpenseModal({
             <div className="grid max-w-full min-w-0 grid-cols-1 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-2.5 sm:grid-cols-2 sm:p-3">
               <CachedSearchCombobox
                 label="Centro de Custo (padrão p/ itens)"
-                options={costCenterOptions}
+                options={allowedCostCenterOptions}
+
                 isLoading={costCentersLoading}
                 value={headerCostCenter}
                 onChange={applyHeaderCostCenter}
