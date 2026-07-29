@@ -297,6 +297,18 @@ export function useIntercompany() {
     [],
   );
 
+  const toggleProject = useCallback(
+    async (input: { code: string; active: boolean; company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "toggle-project",
+        ...input,
+      });
+    },
+    [],
+  );
+
+
+
   return {
     loadingAccounts,
     loadingCenters,
@@ -330,6 +342,8 @@ export function useIntercompany() {
     replicateAccount,
     replicateCostCenter,
     replicateProject,
+    toggleProject,
+
   };
 
 }

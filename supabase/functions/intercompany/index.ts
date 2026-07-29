@@ -427,6 +427,24 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
+    if (action === "toggle-project") {
+      const { code, active, company_db } = body;
+      if (!code || typeof active !== "boolean" || !company_db) {
+        return json({ error: "code, active e company_db são obrigatórios" }, 400);
+      }
+      const results = await forEachCompany(sb, [String(company_db)], async (creds, cookies) => {
+        const encoded = encodeURIComponent(String(code));
+        const r = await sapPatch(creds.baseUrl, cookies, `Projects('${encoded}')`, {
+          Active: active ? "tYES" : "tNO",
+        });
+        if (!r.ok) throw new Error(r.error);
+        return { Code: code, Active: active };
+      });
+      return json({ results });
+    }
+
+
+
     if (
       action === "replicate-account" ||
       action === "replicate-cost-center" ||
