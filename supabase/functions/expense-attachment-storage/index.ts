@@ -162,14 +162,16 @@ function canWriteOwned(caller: Caller, owned: Owned): boolean {
   );
 }
 
-function canReadOwned(caller: Caller, owned: Owned): boolean {
+async function canReadOwned(admin: SupabaseClient, caller: Caller, owned: Owned): Promise<boolean> {
   if (canWriteOwned(caller, owned)) return true;
   const row = owned.row;
   if (owned.kind === "expense") {
     // Approvers of the current level should also be able to open attachments.
     if (callerMatches(caller.identity || "", row.current_approver)) return true;
   }
-  return false;
+  // Grupos de permissão que veem todos os documentos (todos menos "Usuário")
+  // também podem abrir todos os anexos.
+  return await canViewAllDocuments(admin, [caller.identity, caller.email]);
 }
 
 /* ─────────────── Actions ─────────────── */
