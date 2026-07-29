@@ -1,0 +1,381 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FileText,
+  Loader2,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  CheckCircle2,
+  AlertTriangle,
+  Receipt,
+} from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { useSap } from "@/contexts/SapContext";
+import { useCompanies } from "@/hooks/useCompanies";
+import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+/* ── helpers ─────────────────────────────────────────────── */
+
+function formatCurrency(value: number, currency = "BRL") {
+  const valid = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: valid }).format(value || 0);
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : value;
+}
+
+const APPROVED_STATUSES = ["aprovado", "pc_lancado", "nf_entrada", "pagamento", "finalizado"];
+
+interface SalesOrderRow {
+  id: string;
+  supplier_code: string | null;
+  supplier_name: string;
+  total_amount: number;
+  currency: string;
+  status: string;
+  doc_date: string | null;
+  requester_name: string | null;
+  sap_doc_entry: number | null;
+  sap_doc_num: number | null;
+}
+
+interface NfseRow {
+  id: string;
+  expense_id: string;
+  sap_invoice_doc_entry: number | null;
+  sap_invoice_doc_num: number | null;
+  nfse_number: string | null;
+  rps_number: string | null;
+  series: string | null;
+  status: string;
+  authorized_at: string | null;
+  total_amount: number;
+  currency: string;
+  last_error: string | null;
+  created_at: string;
+}
+
+/* ── página ──────────────────────────────────────────────── */
+
+export default function SalesNfse() {
+  const { session, logout } = useSap();
+  const { getLabel } = useCompanies();
+  const companyDb = session?.companyDB || "";
+
+  const [orders, setOrders] = useState<SalesOrderRow[]>([]);
+  const [invoices, setInvoices] = useState<NfseRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
+  const [emitting, setEmitting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!companyDb) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [{ data: exp, error: e1 }, { data: inv, error: e2 }] = await Promise.all([
+        supabase
+          .from("expenses")
+          .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num")
+          .eq("company_db", companyDb)
+          .eq("doc_type", "sales")
+          .in("status", APPROVED_STATUSES)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabase
+          .from("sales_order_invoices")
+          .select("*")
+          .eq("company_db", companyDb)
+          .order("created_at", { ascending: false })
+          .limit(500),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      setOrders((exp || []) as SalesOrderRow[]);
+      setInvoices((inv || []) as NfseRow[]);
+    } catch (e) {
+      setError((e as Error).message || "Falha ao carregar pedidos de venda");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyDb]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const invoiceByExpense = useMemo(() => {
+    const map = new Map<string, NfseRow>();
+    for (const row of invoices) {
+      const current = map.get(row.expense_id);
+      // prioriza a nota válida mais recente sobre tentativas com falha
+      if (!current || (current.status === "failed" && row.status !== "failed")) {
+        map.set(row.expense_id, row);
+      }
+    }
+    return map;
+  }, [invoices]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return orders;
+    return orders.filter((o) => {
+      const inv = invoiceByExpense.get(o.id);
+      return (
+        o.supplier_name.toLowerCase().includes(q) ||
+        (o.supplier_code || "").toLowerCase().includes(q) ||
+        String(o.sap_doc_num || "").includes(q) ||
+        (inv?.nfse_number || "").toLowerCase().includes(q)
+      );
+    });
+  }, [orders, search, invoiceByExpense]);
+
+  const pendentes = filtered.filter((o) => !invoiceByExpense.get(o.id)?.sap_invoice_doc_entry);
+
+  const emit = useCallback(async () => {
+    if (!confirmOrder) return;
+    setEmitting(true);
+    try {
+      const res = await sapFunctionFetch("sales-nfse-emit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "emit", expense_id: confirmOrder.id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao emitir (${res.status})`);
+      toast.success(`NFS-e criada no ERP — documento ${body.doc_num}`);
+      setConfirmOrder(null);
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setEmitting(false);
+    }
+  }, [confirmOrder, load]);
+
+  const syncStatus = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const res = await sapFunctionFetch("sales-nfse-emit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync-status", company_db: companyDb }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.error) throw new Error(body?.error || `Falha na consulta (${res.status})`);
+      toast.success(`Status fiscal atualizado (${body.updated ?? 0} nota[s]).`);
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  }, [companyDb, load]);
+
+  if (!session) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-6">
+        <div className="max-w-md text-center space-y-3">
+          <ShieldAlert className="w-10 h-10 mx-auto text-muted-foreground" />
+          <h1 className="text-xl font-semibold">Sessão do ERP necessária</h1>
+          <p className="text-sm text-muted-foreground">
+            Faça login no ERP para emitir notas fiscais de serviço.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col">
+      <PageHeader
+        icon={<FileText className="w-5 h-5 text-primary" />}
+        title="Vendas"
+        titleAccent="NFS-e"
+        subtitle="Emissão da nota fiscal de serviço a partir dos pedidos de venda aprovados"
+        companyLabel={getLabel(companyDb)}
+        userName={session?.userName}
+        onLogout={logout}
+        actions={
+          <>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => void syncStatus()} disabled={syncing}>
+              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
+              Atualizar status fiscal
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => void load()} disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Atualizar
+            </Button>
+          </>
+        }
+      />
+
+      <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 p-3">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por cliente, pedido ou nº da NFS-e"
+              className="pl-8 h-9 text-sm"
+            />
+          </div>
+          <div className="ml-auto text-xs text-muted-foreground">
+            {filtered.length} pedido(s) · {pendentes.length} aguardando emissão
+          </div>
+        </div>
+
+        {error && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        {loading && orders.length === 0 ? (
+          <div className="space-y-2">
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            Nenhum pedido de venda aprovado encontrado para esta empresa.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border overflow-hidden bg-card">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Pedido</th>
+                  <th className="text-left px-3 py-2 font-medium">Cliente</th>
+                  <th className="text-left px-3 py-2 font-medium">Data</th>
+                  <th className="text-right px-3 py-2 font-medium">Valor</th>
+                  <th className="text-left px-3 py-2 font-medium">NFS-e</th>
+                  <th className="text-right px-3 py-2 font-medium">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((o) => {
+                  const inv = invoiceByExpense.get(o.id);
+                  const emitted = !!inv?.sap_invoice_doc_entry;
+                  return (
+                    <tr key={o.id} className="border-t border-border/60">
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {o.sap_doc_num ? `#${o.sap_doc_num}` : "—"}
+                        {!o.sap_doc_entry && (
+                          <span className="ml-2 text-[11px] text-muted-foreground">não integrado</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{o.supplier_name}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{o.supplier_code || "—"}</div>
+                      </td>
+                      <td className="px-3 py-2 text-xs">{formatDate(o.doc_date)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                        {formatCurrency(Number(o.total_amount), o.currency)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {inv?.status === "authorized" ? (
+                          <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500">
+                            <CheckCircle2 className="w-3 h-3" />
+                            NFS-e {inv.nfse_number}
+                            {inv.rps_number ? ` · RPS ${inv.rps_number}` : ""}
+                          </Badge>
+                        ) : emitted ? (
+                          <Badge variant="outline" className="gap-1">
+                            <Loader2 className="w-3 h-3" />
+                            Emitida (doc {inv?.sap_invoice_doc_num}) · aguardando autorização
+                          </Badge>
+                        ) : inv?.status === "failed" ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-destructive">
+                            <AlertTriangle className="w-3 h-3" />
+                            {inv.last_error?.slice(0, 80) || "Falha na emissão"}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Aguardando emissão</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          size="sm"
+                          variant={emitted ? "ghost" : "default"}
+                          disabled={emitted || !o.sap_doc_entry}
+                          onClick={() => setConfirmOrder(o)}
+                        >
+                          {emitted ? "Emitida" : "Emitir NFS-e"}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={!!confirmOrder} onOpenChange={(v) => !v && setConfirmOrder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar emissão de NFS-e</DialogTitle>
+            <DialogDescription>
+              A nota será criada no ERP a partir do pedido de venda e enviada ao addon fiscal.
+            </DialogDescription>
+          </DialogHeader>
+          {confirmOrder && (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Pedido</span>
+                <span className="font-mono">#{confirmOrder.sap_doc_num}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Cliente</span>
+                <span className="text-right">{confirmOrder.supplier_name}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Valor</span>
+                <span className="font-mono">
+                  {formatCurrency(Number(confirmOrder.total_amount), confirmOrder.currency)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Solicitante</span>
+                <span>{confirmOrder.requester_name || "—"}</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmOrder(null)} disabled={emitting}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void emit()} disabled={emitting} className="gap-2">
+              {emitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              Emitir NFS-e
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
