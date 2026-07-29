@@ -3121,6 +3121,13 @@ export function CreateExpenseModal({
       </DialogContent>
     </Dialog>
 
+    <CcProjectAlertDialog
+      info={ccAlert}
+      onConfirm={handleCcAlertConfirm}
+      onChange={handleCcAlertChange}
+    />
+
+
     <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
       <AlertDialogContent
         role="alertdialog"
