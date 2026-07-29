@@ -427,6 +427,7 @@ export default function SalesNfse() {
                   <th className="text-left px-3 py-2 font-medium">Data</th>
                   <th className="text-right px-3 py-2 font-medium">Valor</th>
                   <th className="text-left px-3 py-2 font-medium">NFS-e</th>
+                  <th className="text-left px-3 py-2 font-medium">PDF</th>
                   <th className="text-right px-3 py-2 font-medium">Ação</th>
                 </tr>
               </thead>
