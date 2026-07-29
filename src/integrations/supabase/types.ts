@@ -4443,6 +4443,143 @@ export type Database = {
         }
         Relationships: []
       }
+      registration_request_events: {
+        Row: {
+          author_email: string
+          author_name: string | null
+          created_at: string
+          event_type: string
+          from_status: string | null
+          id: string
+          message: string | null
+          request_id: string
+          to_status: string | null
+        }
+        Insert: {
+          author_email: string
+          author_name?: string | null
+          created_at?: string
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          message?: string | null
+          request_id: string
+          to_status?: string | null
+        }
+        Update: {
+          author_email?: string
+          author_name?: string | null
+          created_at?: string
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          message?: string | null
+          request_id?: string
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registration_request_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "registration_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registration_requests: {
+        Row: {
+          address: Json
+          assignee_email: string | null
+          attachments: Json
+          bank_details: Json
+          company_db: string | null
+          contact_email: string | null
+          context: string | null
+          created_at: string
+          currency: string | null
+          due_at: string
+          federal_tax_id: string | null
+          id: string
+          notes: string | null
+          payment_method: string | null
+          phone1: string | null
+          phone2: string | null
+          registration_mode: string
+          request_type: string
+          requester_email: string
+          requester_name: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          sap_card_code: string | null
+          status: string
+          title: string
+          transaction: Json | null
+          updated_at: string
+        }
+        Insert: {
+          address?: Json
+          assignee_email?: string | null
+          attachments?: Json
+          bank_details?: Json
+          company_db?: string | null
+          contact_email?: string | null
+          context?: string | null
+          created_at?: string
+          currency?: string | null
+          due_at?: string
+          federal_tax_id?: string | null
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          phone1?: string | null
+          phone2?: string | null
+          registration_mode?: string
+          request_type?: string
+          requester_email: string
+          requester_name?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          sap_card_code?: string | null
+          status?: string
+          title: string
+          transaction?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          address?: Json
+          assignee_email?: string | null
+          attachments?: Json
+          bank_details?: Json
+          company_db?: string | null
+          contact_email?: string | null
+          context?: string | null
+          created_at?: string
+          currency?: string | null
+          due_at?: string
+          federal_tax_id?: string | null
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          phone1?: string | null
+          phone2?: string | null
+          registration_mode?: string
+          request_type?: string
+          requester_email?: string
+          requester_name?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          sap_card_code?: string | null
+          status?: string
+          title?: string
+          transaction?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       roi_parameters: {
         Row: {
           company_db: string | null
@@ -5801,6 +5938,10 @@ export type Database = {
           cutoff: string
         }[]
       }
+      business_hours_deadline: {
+        Args: { _hours?: number; _start: string }
+        Returns: string
+      }
       can_access_audit_console: {
         Args: { _company_db: string }
         Returns: boolean
@@ -5882,6 +6023,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      current_auth_email: { Args: never; Returns: string }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -5975,6 +6117,7 @@ export type Database = {
         Returns: boolean
       }
       is_idp_linked: { Args: { _email: string }; Returns: boolean }
+      is_registration_agent: { Args: never; Returns: boolean }
       is_sap_code_idp_linked: {
         Args: { _sap_user_code: string }
         Returns: boolean
