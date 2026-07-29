@@ -4580,6 +4580,44 @@ export type Database = {
         }
         Relationships: []
       }
+      registration_sla_reminder_log: {
+        Row: {
+          created_at: string
+          detail: string | null
+          id: string
+          kind: string
+          recipients: string[]
+          request_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          kind: string
+          recipients?: string[]
+          request_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          kind?: string
+          recipients?: string[]
+          request_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registration_sla_reminder_log_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "registration_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roi_parameters: {
         Row: {
           company_db: string | null
