@@ -92,7 +92,7 @@ import {
   ALLOWED_ATTACHMENT_ACCEPT,
   ALLOWED_ATTACHMENT_HINT,
 } from "@/lib/attachment-validation";
-import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch } from "@/hooks/useCurrentUserCostCenter";
+import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
 
@@ -364,6 +364,14 @@ export function CreateExpenseModal({
     return costCenterOptions.filter((o) => isCostCenterAllowedForUser(o.code, userCostCenter, false));
   }, [costCenterOptions, userCostCenter, ccBranch, bypassCcItemRules]);
 
+
+  // Se o usuário perder a alçada do tipo de rateio selecionado, volta ao padrão.
+  useEffect(() => {
+    if (isSales) return;
+    if (!isRateioTypeAllowedForCostCenter(rateioType, userCostCenter, bypassCcItemRules)) {
+      setRateioType("padrao");
+    }
+  }, [rateioType, userCostCenter, bypassCcItemRules, isSales]);
 
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
@@ -1851,6 +1859,17 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
+    // Alçada por CC no tipo de rateio: "imposto" só para 1.2.2.%; "folha" só para 1.5.1.3.
+    if (!isSales && !isRateioTypeAllowedForCostCenter(rateioType, userCostCenter, bypassCcItemRules)) {
+      toast.error(
+        rateioType === "imposto"
+          ? "Rateio de Imposto é restrito a usuários do CC 1.2.2.%"
+          : "Rateio de Folha é restrito a usuários de Pessoas e Cultura (CC 1.5.1.3)",
+      );
+      return;
+    }
+
+
     for (let idx = 0; idx < items.length; idx++) {
       const it = items[idx];
       const n = idx + 1;
@@ -2939,9 +2958,11 @@ export function CreateExpenseModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(RATEIO_TYPE_LABELS) as RateioType[]).map((k) => (
-                    <SelectItem key={k} value={k}>{RATEIO_TYPE_LABELS[k]}</SelectItem>
-                  ))}
+                  {(Object.keys(RATEIO_TYPE_LABELS) as RateioType[])
+                    .filter((k) => isRateioTypeAllowedForCostCenter(k, userCostCenter, bypassCcItemRules))
+                    .map((k) => (
+                      <SelectItem key={k} value={k}>{RATEIO_TYPE_LABELS[k]}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               {rateioType !== "padrao" && (
