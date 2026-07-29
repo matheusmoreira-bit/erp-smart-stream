@@ -307,6 +307,23 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
+    if (action === "create-project") {
+      const { code, name, valid_from, valid_to } = body;
+      if (!code || !name) return json({ error: "code e name são obrigatórios" }, 400);
+      const payload: Record<string, unknown> = {
+        Code: String(code),
+        Name: String(name),
+        Active: "tYES",
+      };
+      if (valid_from) payload.ValidFrom = String(valid_from);
+      if (valid_to) payload.ValidTo = String(valid_to);
+      const results = await forEachCompany(sb, body.company_dbs, async (creds, cookies) => {
+        const r = await sapPost(creds.baseUrl, cookies, "Projects", payload);
+        if (!r.ok) throw new Error(r.error);
+        return r.data;
+      });
+      return json({ results });
+    }
 
 
     if (action === "create-account") {
