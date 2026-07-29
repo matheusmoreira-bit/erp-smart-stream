@@ -233,6 +233,58 @@ export function CreateExpenseModal({
     mapRow: projectMapRow,
   });
 
+  // ---- Alerta de casamento Centro de Custo × Projeto (auditável) ----
+  const ccAlertEnabled = !isSales && projectOptions.length > 1;
+  const [ccAlert, setCcAlert] = useState<CcProjectAlertInfo | null>(null);
+  const ccAlertIdRef = useRef<string | null>(null);
+
+  const maybeTriggerCcAlert = useCallback(
+    (lineIndex: number, cc: SapSearchOption | null, project: SapSearchOption | null) => {
+      if (!ccAlertEnabled) return;
+      if (!costCenterNeedsAlert(cc?.code)) return;
+      const info: CcProjectAlertInfo = {
+        lineIndex,
+        costCenterCode: cc?.code || "",
+        costCenterName: cc?.name || null,
+        projectCode: project?.code || null,
+        projectName: project?.name || null,
+        isInstitutional: isInstitutionalProject(project?.name || project?.code),
+      };
+      ccAlertIdRef.current = null;
+      setCcAlert(info);
+      logCcProjectAlert({
+        companyDb: sapSession?.companyDB ?? null,
+        sapUserName: sapSession?.userName ?? null,
+        lineIndex,
+        costCenterCode: info.costCenterCode,
+        costCenterName: info.costCenterName,
+        projectCode: info.projectCode,
+        projectName: info.projectName,
+      }).then((id) => { ccAlertIdRef.current = id; });
+    },
+    [ccAlertEnabled, sapSession?.companyDB, sapSession?.userName],
+  );
+
+  const handleCcAlertConfirm = useCallback(() => {
+    recordCcProjectAlertDecision(ccAlertIdRef.current, "confirmed", ccAlert?.projectCode ?? null);
+    setCcAlert(null);
+  }, [ccAlert]);
+
+  const handleCcAlertChange = useCallback(() => {
+    const idx = ccAlert?.lineIndex ?? -1;
+    recordCcProjectAlertDecision(ccAlertIdRef.current, "changed", null);
+    if (idx >= 0) {
+      setItems((prev) => {
+        const updated = [...prev];
+        if (updated[idx]) updated[idx] = { ...updated[idx], sapProject: null, project: "" };
+        return updated;
+      });
+      toast.info("Selecione o projeto/marca correto para este item.");
+    }
+    setCcAlert(null);
+  }, [ccAlert]);
+
+
   // Centro de custo do usuário logado (via mapeamento IdP). Usado para
   // pré-preencher o CC padrão em compras e restringir itens IMP%/FOL%.
   const { costCenter: userCostCenter } = useCurrentUserCostCenter();
