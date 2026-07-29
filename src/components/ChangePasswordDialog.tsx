@@ -159,6 +159,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
           `Senha alterada em ${successes} empresa(s)${skipped ? ` (${skipped} ignorada(s))` : ""}.`,
         );
       } else if (failures === 0 && successes === 0) {
+
         toast.info(`Nenhuma alteração aplicada (${skipped} ignorada(s)).`);
       } else if (successes > 0) {
         toast.warning(`Concluído com falhas: ${successes} sucesso(s), ${skipped} ignorada(s), ${failures} erro(s).`);
