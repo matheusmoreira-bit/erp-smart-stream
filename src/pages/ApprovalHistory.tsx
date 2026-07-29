@@ -177,8 +177,10 @@ export default function ApprovalHistory() {
       const r = await sync();
       toast.success(`Sincronizado: ${r.upserted} registros`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao sincronizar");
+      console.error("[ApprovalHistory] sync failed:", e);
+      toast.error("Não foi possível sincronizar com o SAP agora. Tente novamente em alguns minutos.");
     }
+
   };
 
   return (
@@ -382,11 +384,13 @@ export default function ApprovalHistory() {
           })()}
         </div>
 
-        {syncState?.last_status === "error" && (
-          <div className="mb-4 p-3 rounded-lg border border-destructive/40 bg-destructive/10 text-sm text-destructive">
-            Última sincronização falhou: {syncState.last_message}
+{syncState?.last_status === "error" && (
+          <div className="mb-4 p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-sm text-amber-600 dark:text-amber-400">
+            Não foi possível atualizar as decisões feitas direto no SAP agora. O histórico do ERP Flow
+            continua disponível abaixo. Tente novamente em alguns minutos.
           </div>
         )}
+
 
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Carregando histórico...</div>
