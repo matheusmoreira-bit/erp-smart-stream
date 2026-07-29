@@ -2,7 +2,7 @@ import { List, type RowComponentProps } from "react-window";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Building2, Eye, Network } from "lucide-react";
-import { type Expense, STATUS_COLORS, STATUS_LABELS } from "@/hooks/useExpenses";
+import { type Expense, STATUS_COLORS, useStatusLabel } from "@/hooks/useExpenses";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -41,6 +41,7 @@ function VirtualRowComponent({
   onOpen,
   onRelations,
 }: RowComponentProps<RowProps>) {
+  const statusLabel = useStatusLabel();
   const row = items[index];
   if (!row) return null;
   const { exp, origin } = row;
@@ -59,7 +60,7 @@ function VirtualRowComponent({
       className={`grid ${GRID_COLS} items-center gap-x-3 border-t border-border/60 hover:bg-muted/30 focus-visible:bg-muted/40 focus-visible:outline-none cursor-pointer transition-colors px-4 text-sm`}
     >
       <div role="cell" className="flex flex-wrap items-center gap-1.5 min-w-0">
-        <Badge className={STATUS_COLORS[exp.status]}>{STATUS_LABELS[exp.status]}</Badge>
+        <Badge className={STATUS_COLORS[exp.status]}>{statusLabel(exp.status)}</Badge>
         {origin === "erp_flow" && (
           <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
         )}

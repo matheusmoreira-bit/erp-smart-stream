@@ -82,6 +82,7 @@ import { RelationsMap } from "@/components/RelationsMap";
 import {
   useExpenses,
   STATUS_LABELS,
+  useStatusLabel,
   STATUS_COLORS,
   type Expense,
   type ExpenseStatus,
@@ -197,6 +198,8 @@ function ExpenseDetailModal({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const statusLabel = useStatusLabel();
+  const isSalesDoc = mode === "sales";
   if (!expense) return null;
 
   const showSubmit = expense.status === "rascunho";
@@ -225,7 +228,7 @@ function ExpenseDetailModal({
           <DialogHeader className="space-y-2">
             <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-6">
               <span className="text-foreground font-semibold">Despesa</span>
-              <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
+              <Badge className={STATUS_COLORS[expense.status]}>{statusLabel(expense.status)}</Badge>
               {originBadge === "erp_flow" && (
                 <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
               )}
@@ -281,7 +284,7 @@ function ExpenseDetailModal({
               size="sm"
               className="gap-1.5 text-xs"
               onClick={() => void exportExpenseDetailPdf(expense, {
-                statusLabel: STATUS_LABELS[expense.status] || expense.status,
+                statusLabel: statusLabel(expense.status),
                 mode,
               })}
             >
@@ -498,7 +501,7 @@ function ExpenseDetailModal({
                   )}
                   {expense.sap_purchase_order_status && (
                     <div className="space-y-0.5">
-                      <p className="text-muted-foreground">Status PC</p>
+                      <p className="text-muted-foreground">{isSalesDoc ? "Status PV" : "Status PC"}</p>
                       <p className="text-foreground">{expense.sap_purchase_order_status}</p>
                     </div>
                   )}
@@ -725,6 +728,7 @@ function ExpenseCard({
   erpLabel?: string;
   onRelationsMap?: () => void;
 }) {
+  const statusLabel = useStatusLabel();
   const erpLbl = erpLabel || "ERP";
   const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? ` · ${erpLbl}` : "";
   const projectCodes = Array.from(new Set(
@@ -740,7 +744,7 @@ function ExpenseCard({
       animate={{ opacity: 1, y: 0 }}
       role="button"
       tabIndex={0}
-      aria-label={`Abrir lançamento ${expense.supplier_name}, solicitante ${expense.requester_name}, valor ${formatCurrency(expense.total_amount, expense.currency)}, status ${STATUS_LABELS[expense.status] || expense.status}${originLabel}`}
+      aria-label={`Abrir lançamento ${expense.supplier_name}, solicitante ${expense.requester_name}, valor ${formatCurrency(expense.total_amount, expense.currency)}, status ${statusLabel(expense.status)}${originLabel}`}
       className="glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all"
       onClick={onOpen}
       onKeyDown={(e) => {
@@ -752,7 +756,7 @@ function ExpenseCard({
     >
       <div className="flex items-start justify-between">
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge className={STATUS_COLORS[expense.status]}>{STATUS_LABELS[expense.status]}</Badge>
+          <Badge className={STATUS_COLORS[expense.status]}>{statusLabel(expense.status)}</Badge>
           {originBadge === "erp_flow" && (
             <Badge variant="outline" className="text-[10px] gap-1 border-primary/40 text-primary">
               ERP Flow
@@ -887,6 +891,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [statusFilter, setStatusFilter] = usePersistedState<string>(filterKey("status"), "all");
 
   const isSales = mode === "sales";
+  const statusLabel = useStatusLabel();
+
   const pageTitle = isSales ? "Gestão de Vendas" : "Gestão de Compras";
   const newButtonLabel = isSales ? "Novo Pedido de Venda" : "Nova Compra";
   const emptyLabel = isSales ? "Nenhum pedido de venda encontrado" : "Nenhuma compra encontrada";
@@ -1299,7 +1305,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     const dir = sortDir === "asc" ? 1 : -1;
     const va = (() => {
       switch (sortKey) {
-        case "status": return STATUS_LABELS[a.exp.status] || a.exp.status;
+        case "status": return statusLabel(a.exp.status);
         case "supplier": return (a.exp.supplier_name || "").toLowerCase();
         case "requester": return (a.exp.requester_name || "").toLowerCase();
         case "created": return new Date(a.exp.created_at).getTime();
@@ -1311,7 +1317,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     })();
     const vb = (() => {
       switch (sortKey) {
-        case "status": return STATUS_LABELS[b.exp.status] || b.exp.status;
+        case "status": return statusLabel(b.exp.status);
         case "supplier": return (b.exp.supplier_name || "").toLowerCase();
         case "requester": return (b.exp.requester_name || "").toLowerCase();
         case "created": return new Date(b.exp.created_at).getTime();
@@ -1483,7 +1489,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     { value: "rascunho", label: "Rascunho" },
     { value: "pendente_aprovacao", label: "Pendente" },
     { value: "aprovado", label: "Aprovado" },
-    { value: "pc_lancado", label: "PC Lançado" },
+    { value: "pc_lancado", label: isSales ? "PV Lançado" : "PC Lançado" },
     { value: "finalizado", label: "Finalizado" },
   ];
 
@@ -1599,7 +1605,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 ],
                 columns: [
                   { header: "Fornecedor/Cliente", cell: (r: typeof filtered[number]) => r.exp.supplier_name },
-                  { header: "Status", cell: (r: typeof filtered[number]) => STATUS_LABELS[r.exp.status] || r.exp.status },
+                  { header: "Status", cell: (r: typeof filtered[number]) => statusLabel(r.exp.status) },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => r.exp.requester_name || "—" },
                   { header: "Aprovador atual", cell: (r: typeof filtered[number]) => (isPendingApproval(r.exp.status) ? (r.exp.current_approver || "—") : "—") },
                   { header: "Data doc.", cell: (r: typeof filtered[number]) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
@@ -1973,7 +1979,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                       >
                         <td className="px-4 py-2.5">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <Badge className={STATUS_COLORS[exp.status]}>{STATUS_LABELS[exp.status]}</Badge>
+                            <Badge className={STATUS_COLORS[exp.status]}>{statusLabel(exp.status)}</Badge>
                             {origin === "erp_flow" && (
                               <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
                             )}
