@@ -92,7 +92,7 @@ import {
   ALLOWED_ATTACHMENT_ACCEPT,
   ALLOWED_ATTACHMENT_HINT,
 } from "@/lib/attachment-validation";
-import { useCurrentUserCostCenter, isItemAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
+import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
 
@@ -354,6 +354,16 @@ export function CreateExpenseModal({
     if (isSales) return itemOptions;
     return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
   }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
+
+  // Alçada de CC: quem é do 1.6.1.2 pode lançar em qualquer 1.6.%.
+  // Grupos com visão total (Facilities, Contábil, Fiscal, Financeiro, CFO,
+  // admins/super-usuário) continuam vendo todos os centros de custo.
+  const ccBranch = costCenterBranch(userCostCenter);
+  const allowedCostCenterOptions = useMemo(() => {
+    if (bypassCcItemRules || !ccBranch) return costCenterOptions;
+    return costCenterOptions.filter((o) => isCostCenterAllowedForUser(o.code, userCostCenter, false));
+  }, [costCenterOptions, userCostCenter, ccBranch, bypassCcItemRules]);
+
 
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
@@ -1881,7 +1891,14 @@ export function CreateExpenseModal({
         }
         return;
       }
+
+      // Alçada de CC: usuário do 1.6.1.2 só lança em 1.6.% (salvo grupos com visão total).
+      if (!isSales && !isCostCenterAllowedForUser(it.cost_center, userCostCenter, bypassCcItemRules)) {
+        toast.error(`Item ${n}: centro de custo fora da sua alçada (${ccBranch}.%)`);
+        return;
+      }
     }
+
     // Centro de custo padrão é opcional — se o usuário tiver CC via IdP,
     // já é pré-preenchido; caso contrário, cada linha pode ter seu próprio CC.
 
@@ -2963,7 +2980,8 @@ export function CreateExpenseModal({
             <div className="grid max-w-full min-w-0 grid-cols-1 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-2.5 sm:grid-cols-2 sm:p-3">
               <CachedSearchCombobox
                 label="Centro de Custo (padrão p/ itens)"
-                options={costCenterOptions}
+                options={allowedCostCenterOptions}
+
                 isLoading={costCentersLoading}
                 value={headerCostCenter}
                 onChange={applyHeaderCostCenter}
@@ -3096,7 +3114,7 @@ export function CreateExpenseModal({
                       label={`Centro de Custo (Dimensão)${isSales ? "" : " *"}`}
                       required={!isSales}
 
-                      options={costCenterOptions}
+                      options={allowedCostCenterOptions}
                       isLoading={costCentersLoading}
                       value={item.sapCostCenter || null}
                       onChange={(val) => {
