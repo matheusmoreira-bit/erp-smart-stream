@@ -304,8 +304,8 @@ export function CreateExpenseModal({
 
   const handleCcAlertConfirm = useCallback(() => {
     recordCcProjectAlertDecision(ccAlertIdRef.current, "confirmed", ccAlert?.projectCode ?? null);
-    setCcAlert(null);
-  }, [ccAlert]);
+    advanceCcAlertQueue();
+  }, [ccAlert, advanceCcAlertQueue]);
 
   const handleCcAlertChange = useCallback(() => {
     const idx = ccAlert?.lineIndex ?? -1;
@@ -316,10 +316,11 @@ export function CreateExpenseModal({
         if (updated[idx]) updated[idx] = { ...updated[idx], sapProject: null, project: "" };
         return updated;
       });
-      toast.info("Selecione o projeto/marca correto para este item.");
+      toast.info(`Item ${idx + 1}: selecione o projeto/marca correto.`);
     }
-    setCcAlert(null);
-  }, [ccAlert]);
+    advanceCcAlertQueue();
+  }, [ccAlert, advanceCcAlertQueue]);
+
 
 
   // Centro de custo do usuário logado (via mapeamento IdP). Usado para
