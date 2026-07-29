@@ -24,6 +24,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
+import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -491,7 +492,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   // ── Load expense ───────────────────────────────────────────────────────
   const { data: exp, error: expErr } = await admin
     .from("expenses")
-    .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db")
+    .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db, doc_type")
     .eq("id", expenseId)
     .maybeSingle();
   if (expErr) {
@@ -878,6 +879,22 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     });
   }
   stageLog("update_final_approve", "info", { requestId, expenseId, currentLevel });
+
+  if (String((exp as any).doc_type) === "sales") {
+    await notifySalesMilestone(admin, {
+      milestone: "approved",
+      companyDb: (exp as any).company_db,
+      refId: expenseId,
+      link: "/vendas/pedidos",
+      summary: "Um pedido de venda foi aprovado e está pronto para emissão de NFS-e.",
+      details: [
+        { label: "Cliente", value: (exp as any).supplier_name },
+        { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
+        { label: "Empresa", value: (exp as any).company_db },
+        { label: "Solicitante", value: (exp as any).requester_name },
+      ],
+    });
+  }
 
   return await respond(200, {
     ok: true,
