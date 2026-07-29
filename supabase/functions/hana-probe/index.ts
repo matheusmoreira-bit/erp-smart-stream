@@ -84,7 +84,12 @@ Deno.serve(async (req) => {
           ok: true,
           count: rows.length,
           columns: rows[0] ? Object.keys(rows[0]) : [],
-          sample: rows.slice(0, Number(body?.sample ?? 1)),
+          sample: (() => {
+            const slice = rows.slice(0, Number(body?.sample ?? 1));
+            const fields = Array.isArray(body?.fields) ? body.fields.map(String) : null;
+            if (!fields) return slice;
+            return slice.map((r) => Object.fromEntries(fields.map((f) => [f, (r as Record<string, unknown>)[f]])));
+          })(),
         };
       } catch (e) {
         results[`${schema}.${table}`] = { ok: false, error: String((e as Error)?.message || e).slice(0, 400) };
