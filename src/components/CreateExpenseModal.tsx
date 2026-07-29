@@ -28,6 +28,14 @@ import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { DecimalInput } from "@/components/DecimalInput";
 import { DateInputBR } from "@/components/DateInputBR";
 import { sapQuery } from "@/lib/sap-client";
+import {
+  costCenterNeedsAlert,
+  isInstitutionalProject,
+  logCcProjectAlert,
+  recordCcProjectAlertDecision,
+} from "@/lib/cc-project-alert";
+import { CcProjectAlertDialog, type CcProjectAlertInfo } from "@/components/CcProjectAlertDialog";
+
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
   Dialog,
