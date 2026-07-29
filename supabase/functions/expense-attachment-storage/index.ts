@@ -24,6 +24,7 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
+import { canViewAllDocuments } from "../_shared/permission-groups.ts";
 
 const BUCKET = "expense-attachments";
 const SIGN_TTL_SECONDS = 300;
@@ -162,14 +163,16 @@ function canWriteOwned(caller: Caller, owned: Owned): boolean {
   );
 }
 
-function canReadOwned(caller: Caller, owned: Owned): boolean {
+async function canReadOwned(admin: SupabaseClient, caller: Caller, owned: Owned): Promise<boolean> {
   if (canWriteOwned(caller, owned)) return true;
   const row = owned.row;
   if (owned.kind === "expense") {
     // Approvers of the current level should also be able to open attachments.
     if (callerMatches(caller.identity || "", row.current_approver)) return true;
   }
-  return false;
+  // Grupos de permissão que veem todos os documentos (todos menos "Usuário")
+  // também podem abrir todos os anexos.
+  return await canViewAllDocuments(admin, [caller.identity, caller.email]);
 }
 
 /* ─────────────── Actions ─────────────── */
@@ -236,7 +239,7 @@ async function actionSign(admin: SupabaseClient, caller: Caller, body: any) {
 
   const owned = await loadOwnedByPath(admin, filePath);
   if ("error" in owned) return json(owned.status, { error: owned.error });
-  if (!canReadOwned(caller, owned)) {
+  if (!(await canReadOwned(admin, caller, owned))) {
     return json(403, { error: "Sem permissão para abrir este anexo" });
   }
 

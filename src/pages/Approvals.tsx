@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { motion } from "framer-motion";
 import {
@@ -1928,9 +1929,11 @@ export default function ApprovalsPage() {
   const isSuperUser = session?.isSuperUser ?? false;
   const isAdmin = isLovableAdmin || isSuperUser;
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
+  const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
   // "Ver todas as aprovações" começa DESMARCADO por padrão para todos —
   // inclusive super-usuários/admins. Quem tem permissão pode ligar manualmente.
-  const canToggleShowAll = isAdmin || canViewAllApprovals;
+  // Apenas o grupo "Usuário" não enxerga a opção.
+  const canToggleShowAll = isAdmin || canViewAllApprovals || canViewAllByGroup;
   const [showAll, setShowAll] = useState<boolean>(false);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [isDelegating, setIsDelegating] = useState(false);
