@@ -15,6 +15,8 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
+import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
