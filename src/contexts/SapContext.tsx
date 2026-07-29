@@ -254,10 +254,9 @@ export function SapProvider({ children }: { children: ReactNode }) {
       setSession(null);
       try { queryClient.clear(); } catch { /* ignore */ }
       clearErpLocalState();
-      setError("Sua sessão expirou. Faça login novamente.");
-      // Same reasoning as logout(): drop the Supabase Auth session so a fresh
-      // SAP login can't inherit stale admin/role state.
-      void supabase.auth.signOut().catch(() => {});
+      setError("Sua sessão com o ERP expirou. Faça login na empresa novamente.");
+      // A sessão Google permanece — o usuário só precisa reconectar à empresa.
+
     };
     window.addEventListener("erp:session-expired", handler);
     return () => window.removeEventListener("erp:session-expired", handler);
