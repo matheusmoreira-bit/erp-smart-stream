@@ -4,6 +4,8 @@ import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
+import { identityMatches } from "@/lib/permission-group-utils";
+
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -1147,13 +1149,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const isMine = (e: Expense) => {
     const owner = (e.created_by_email || e.requester_email || e.requester_name || "").toLowerCase();
     const approver = (e.current_approver || "").toLowerCase();
+    if (!userIdentifier) return false;
     return (
       owner === userIdentifier ||
       owner.startsWith(userIdentifier + "@") ||
       approver === userIdentifier ||
-      approver.includes(userIdentifier)
+      approver.includes(userIdentifier) ||
+      identityMatches(owner, userIdentifier) ||
+      identityMatches(approver, userIdentifier)
     );
   };
+
 
   const canCancel = (expense: Expense) => {
     if (isAdmin) return true;
@@ -1287,7 +1293,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   };
 
   const flowFiltered = expenses.filter((e) => applyFilters(e, true, "erp_flow"));
-  const sapFiltered = sapOnly.filter((e) => applyFilters(e, false, "erp"));
+  // Registros vindos do ERP (HanaAPI/Service Layer) também respeitam o escopo:
+  // sem "Ver todos", o usuário só vê o que solicitou ou aprova.
+  const sapFiltered = sapOnly.filter((e) => applyFilters(e, true, "erp"));
+
   const filtered: Array<{ exp: Expense; origin: "erp_flow" | "erp" }> = [
     ...flowFiltered.map((exp) => ({ exp, origin: "erp_flow" as const })),
     ...sapFiltered.map((exp) => ({ exp, origin: "erp" as const })),
