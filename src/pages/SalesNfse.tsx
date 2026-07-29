@@ -102,8 +102,11 @@ export default function SalesNfse() {
   const [syncing, setSyncing] = useState(false);
   const [pdfFiles, setPdfFiles] = useState<Set<string>>(new Set());
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [xmlPaths, setXmlPaths] = useState<Record<string, string>>({});
+  const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
 
   // envio de e-mail
   const [mailOrder, setMailOrder] = useState<SalesOrderRow | null>(null);
