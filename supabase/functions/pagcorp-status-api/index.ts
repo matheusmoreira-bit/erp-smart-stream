@@ -3,6 +3,8 @@
 // Exposes the minimum necessary: transaction id, status, ERP stage and doc numbers.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.23.8";
+import { openapiSpec } from "./openapi.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
