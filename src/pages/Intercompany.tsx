@@ -1008,14 +1008,18 @@ export default function Intercompany() {
     kind: "account" | "center";
   }>({ open: false, code: "", names: [], kind: "account" });
 
-  // Default to all SAP companies on first load when nothing is persisted
+  // Default: only the current company; the user adds others manually
   useEffect(() => {
     if (loadingCompanies) return;
-    if (selectedDbs.length === 0 && sapCompanies.length > 0) {
-      setSelectedDbs(sapCompanies.map((c) => c.company_db));
+    if (selectedDbs.length === 0) {
+      const current = session?.companyDB;
+      if (current && sapCompanies.some((c) => c.company_db === current)) {
+        setSelectedDbs([current]);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingCompanies, sapCompanies.length]);
+  }, [loadingCompanies, sapCompanies.length, session?.companyDB]);
+
 
   // Persist selection
   useEffect(() => {
