@@ -220,18 +220,25 @@ function DetailDialog({
             <div className="space-y-2">
               {events.length === 0 && <p className="text-sm text-muted-foreground">Sem movimentações ainda.</p>}
               {events.map((ev) => (
-                <div key={ev.id} className="rounded-md border border-border px-3 py-2 text-sm">
+                <div
+                  key={ev.id}
+                  className={`rounded-md border px-3 py-2 text-sm ${ev.event_type === "audit" ? "border-dashed border-border bg-muted/30" : "border-border"}`}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">
                       {ev.event_type === "status"
                         ? `Status: ${STATUS_LABELS[(ev.to_status as RegistrationStatus) ?? "aberto"] || ev.to_status}`
                         : ev.event_type === "attachment"
                           ? "Anexos"
-                          : "Comentário"}
+                          : ev.event_type === "audit"
+                            ? "Trilha de auditoria"
+                            : "Comentário"}
                     </span>
                     <span className="text-xs text-muted-foreground">{fmt(ev.created_at)}</span>
                   </div>
-                  {ev.message && <p className="text-muted-foreground mt-1">{ev.message}</p>}
+                  {ev.message && (
+                    <p className="text-muted-foreground mt-1 whitespace-pre-line">{ev.message}</p>
+                  )}
                   {ev.attachments?.length > 0 && (
                     <RegistrationAttachmentList attachments={ev.attachments} compact />
                   )}

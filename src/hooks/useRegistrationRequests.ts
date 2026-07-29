@@ -259,7 +259,7 @@ export function useRegistrationRequestEvents(requestId: string | null) {
       .select("*")
       .eq("request_id", requestId)
       .order("created_at", { ascending: true });
-    setEvents((data || []) as RegistrationRequestEvent[]);
+    setEvents((data || []) as unknown as RegistrationRequestEvent[]);
     setLoading(false);
   }, [requestId]);
 
