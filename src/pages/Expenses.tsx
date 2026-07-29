@@ -4,6 +4,8 @@ import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
+import { identityMatches } from "@/lib/permission-group-utils";
+
 import { motion } from "framer-motion";
 import {
   Plus,
