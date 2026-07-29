@@ -48,7 +48,7 @@ import {
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
-import { requestSupplierRegistration } from "@/lib/supplier-request-email";
+import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { UserPlus, RefreshCw, Building2 } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
