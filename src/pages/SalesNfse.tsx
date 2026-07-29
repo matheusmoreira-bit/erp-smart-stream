@@ -295,6 +295,9 @@ export default function SalesNfse() {
     const path = pdfPathFor(mailOrder, mailInvoice);
     setMailSending(true);
     try {
+      // XML autorizado: usa o já baixado ou tenta buscar no addon fiscal na hora.
+      const xmlPath =
+        xmlPaths[mailOrder.id] || (await fetchXml(mailOrder, mailInvoice, false)) || "";
       const res = await authFetch("nfse-send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,8 +313,10 @@ export default function SalesNfse() {
           subject: mailSubject,
           message: mailMessage,
           attachment_path: pdfFiles.has(path) ? path : "",
+          attachment_xml_path: xmlPath,
         }),
       });
+
       const b = await res.json().catch(() => ({}));
       if (!res.ok || b?.error) throw new Error(b?.error || `Falha no envio (${res.status})`);
       toast.success(`E-mail enviado para ${(b.to || []).join(", ")}`);
