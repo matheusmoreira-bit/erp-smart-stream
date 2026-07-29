@@ -13,7 +13,9 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BUCKET = "nfse-pdfs";
+const XML_BUCKET = "nfse-xmls";
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -220,6 +222,8 @@ Deno.serve(async (req) => {
     const expenseId = typeof body?.expense_id === "string" ? body.expense_id : null;
     const customerName = String(body?.customer_name || "").trim();
     const attachmentPath = String(body?.attachment_path || "").trim();
+    const attachmentXmlPath = String(body?.attachment_xml_path || "").trim();
+
 
     const subject =
       String(body?.subject || "").trim() ||
@@ -243,6 +247,20 @@ Deno.serve(async (req) => {
         content: bytesToBase64(buf),
       });
     }
+    if (attachmentXmlPath) {
+      if (attachmentXmlPath.includes("..")) return json({ error: "caminho de anexo inválido" }, 400);
+      const { data: file, error: dlErr } = await admin.storage.from(XML_BUCKET).download(attachmentXmlPath);
+      if (dlErr || !file) return json({ error: `Falha ao ler o XML da nota: ${dlErr?.message}` }, 400);
+      const buf = new Uint8Array(await file.arrayBuffer());
+      if (buf.byteLength > MAX_ATTACHMENT_BYTES) return json({ error: "XML acima do limite de 15MB" }, 400);
+      attachments.push({
+        filename: `NFSe-${nfseNumber || invoiceDocEntry || "documento"}.xml`,
+        contentType: "application/xml",
+        encoding: "base64",
+        content: bytesToBase64(buf),
+      });
+    }
+
 
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">
       <p>Olá${customerName ? ` ${esc(customerName)}` : ""},</p>

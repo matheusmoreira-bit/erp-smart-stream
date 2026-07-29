@@ -10,7 +10,9 @@ import {
   Receipt,
   Upload,
   Eye,
+  FileCode,
   Mail,
+
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -102,8 +104,11 @@ export default function SalesNfse() {
   const [syncing, setSyncing] = useState(false);
   const [pdfFiles, setPdfFiles] = useState<Set<string>>(new Set());
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [xmlPaths, setXmlPaths] = useState<Record<string, string>>({});
+  const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
 
   // envio de e-mail
   const [mailOrder, setMailOrder] = useState<SalesOrderRow | null>(null);
@@ -215,6 +220,47 @@ export default function SalesNfse() {
     [pdfPathFor],
   );
 
+  const XML_REASONS: Record<string, string> = {
+    hana_indisponivel: "Esta empresa não tem HanaAPI habilitada.",
+    entidade_fiscal_nao_encontrada: "Entidade fiscal (TaxOne) não encontrada para esta base.",
+    documento_fiscal_nao_encontrado: "Nota ainda não registrada no addon fiscal.",
+    view_xml_nao_publicada: "View de XML autorizado ainda não criada nesta base.",
+    xml_nao_encontrado: "XML autorizado ainda não disponível para esta nota.",
+    xml_vazio: "XML autorizado veio vazio no addon fiscal.",
+  };
+
+  const fetchXml = useCallback(
+    async (order: SalesOrderRow, inv: NfseRow | null, openAfter = true) => {
+      if (!inv?.sap_invoice_doc_entry) return null;
+      setXmlLoadingFor(order.id);
+      try {
+        const res = await authFetch("nfse-xml-fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_db: companyDb, doc_entry: inv.sap_invoice_doc_entry }),
+        });
+        const b = await res.json().catch(() => ({}));
+        if (!res.ok || b?.error) throw new Error(b?.error || `Falha ao buscar XML (${res.status})`);
+        if (b?.unavailable) {
+          toast.info(XML_REASONS[b.reason] || "XML autorizado indisponível.");
+          return null;
+        }
+        setXmlPaths((prev) => ({ ...prev, [order.id]: b.path }));
+        if (openAfter && b.signed_url) window.open(b.signed_url, "_blank", "noopener,noreferrer");
+        return b.path as string;
+      } catch (e) {
+        toast.error((e as Error).message);
+        return null;
+      } finally {
+        setXmlLoadingFor(null);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [companyDb],
+  );
+
+
+
   const openMail = useCallback(
     async (order: SalesOrderRow, inv: NfseRow | null) => {
       setMailOrder(order);
@@ -251,6 +297,9 @@ export default function SalesNfse() {
     const path = pdfPathFor(mailOrder, mailInvoice);
     setMailSending(true);
     try {
+      // XML autorizado: usa o já baixado ou tenta buscar no addon fiscal na hora.
+      const xmlPath =
+        xmlPaths[mailOrder.id] || (await fetchXml(mailOrder, mailInvoice, false)) || "";
       const res = await authFetch("nfse-send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -266,8 +315,10 @@ export default function SalesNfse() {
           subject: mailSubject,
           message: mailMessage,
           attachment_path: pdfFiles.has(path) ? path : "",
+          attachment_xml_path: xmlPath,
         }),
       });
+
       const b = await res.json().catch(() => ({}));
       if (!res.ok || b?.error) throw new Error(b?.error || `Falha no envio (${res.status})`);
       toast.success(`E-mail enviado para ${(b.to || []).join(", ")}`);
@@ -277,7 +328,7 @@ export default function SalesNfse() {
     } finally {
       setMailSending(false);
     }
-  }, [mailOrder, mailInvoice, companyDb, mailTo, mailCc, mailSubject, mailMessage, pdfFiles, pdfPathFor]);
+  }, [mailOrder, mailInvoice, companyDb, mailTo, mailCc, mailSubject, mailMessage, pdfFiles, pdfPathFor, xmlPaths, fetchXml]);
 
   const invoiceByExpense = useMemo(() => {
     const map = new Map<string, NfseRow>();
@@ -503,7 +554,23 @@ export default function SalesNfse() {
                                 )}
                                 {hasPdf ? "Substituir" : "Anexar"}
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 gap-1 px-2 text-xs"
+                                disabled={!inv?.sap_invoice_doc_entry || xmlLoadingFor === o.id}
+                                title="Baixar XML autorizado direto do addon fiscal"
+                                onClick={() => void fetchXml(o, inv ?? null)}
+                              >
+                                {xmlLoadingFor === o.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <FileCode className="w-3.5 h-3.5" />
+                                )}
+                                XML
+                              </Button>
                             </div>
+
                           );
                         })()}
                       </td>
