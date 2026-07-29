@@ -255,7 +255,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       refId: expenseId,
       recipients: [resolvedApproverEmail, resolvedApprover],
       recipientsOnly: true,
-      link: "/approvals",
+      link: "/aprovacoes",
       summary: `Um pedido de venda de ${requesterName || "um solicitante"} aguarda sua aprovação.`,
       details: [
         { label: "Cliente", value: input.supplier_name || input.supplier_code },
