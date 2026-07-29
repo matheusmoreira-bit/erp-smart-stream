@@ -2,6 +2,7 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { fetchHanaView, loadHanaCreds, resolveHanaSchema } from "../_shared/hana-views.ts";
+import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
 
 function pickStr(...vals: unknown[]): string | undefined {
   for (const v of vals) {
@@ -371,7 +372,13 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
           if (includeSuperusers && u.Superuser === "tYES") payload.Superuser = "tYES";
 
           const r = await sapRequest(tSession, "Users", "POST", payload);
-          if (r.ok) created.push(code);
+          if (r.ok) {
+            created.push(code);
+            const key = (r.data as { InternalKey?: number } | null)?.InternalKey;
+            if (key != null) {
+              await ensurePasswordNeverExpires((path, method, b) => sapRequest(tSession, path, method, b), key, { code });
+            }
+          }
           else failed.push({ code, error: extractSapError(r.data, `HTTP ${r.status}`) });
         }
       } finally { await sapLogout(tSession); }
@@ -474,6 +481,15 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
             });
           }
           throw new Error(sapMsg);
+        }
+
+        // Toda definição de senha vem com "Senha nunca expira" ativo.
+        if (Object.prototype.hasOwnProperty.call(safe, "UserPassword")) {
+          await ensurePasswordNeverExpires(
+            (path, method, b) => sapRequest(session, path, method, b),
+            internalKey,
+            { companyDb, internalKey },
+          );
         }
 
         await admin.rpc("insert_audit_log", {

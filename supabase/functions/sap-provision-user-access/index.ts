@@ -1,11 +1,11 @@
 // Admin-only: gera senha aleatória forte, aplica no SAP e guarda criptografada
-import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
 // em user_sap_credentials do usuário-alvo. O usuário nunca conhece a senha —
 // o login vira transparente (Cloud auth → seleciona empresa → auto-login).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
 import { encryptSecret } from "../_shared/sap-cred-crypto.ts";
+import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
