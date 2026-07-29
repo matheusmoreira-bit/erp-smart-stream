@@ -59,6 +59,8 @@ import {
 
 } from "@/hooks/useIntercompany";
 import { PageTitle } from "@/components/PageTitle";
+import { useSap } from "@/contexts/SapContext";
+
 
 interface UnifiedAccountRow {
   code: string;
@@ -987,6 +989,8 @@ export default function Intercompany() {
 
   } = useIntercompany();
   const { companies: allCompanies, loading: loadingCompanies } = useCompanies(true);
+  const { session } = useSap();
+
   const sapCompanies = useMemo(
     () => allCompanies.filter((c) => (c.erp_type || "sap") === "sap"),
     [allCompanies],
@@ -994,13 +998,7 @@ export default function Intercompany() {
 
   const [tab, setTab] = useState<"accounts" | "centers" | "projects" | "bps" | "items" | "users">("accounts");
   const [search, setSearch] = useState("");
-  const [selectedDbs, setSelectedDbs] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem("intercompany.selectedDbs");
-      if (raw) return JSON.parse(raw) as string[];
-    } catch { /* noop */ }
-    return [];
-  });
+  const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
   const [conflict, setConflict] = useState<{
     open: boolean;
     code: string;
@@ -1008,21 +1006,34 @@ export default function Intercompany() {
     kind: "account" | "center";
   }>({ open: false, code: "", names: [], kind: "account" });
 
-  // Default to all SAP companies on first load when nothing is persisted
+  const storageKey = session?.companyDB
+    ? `intercompany.selectedDbs.v2:${session.companyDB}`
+    : null;
+
+  // Default: only the current company; the user adds others manually
   useEffect(() => {
-    if (loadingCompanies) return;
-    if (selectedDbs.length === 0 && sapCompanies.length > 0) {
-      setSelectedDbs(sapCompanies.map((c) => c.company_db));
-    }
+    if (loadingCompanies || !storageKey) return;
+    let restored: string[] | null = null;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) restored = parsed;
+      }
+    } catch { /* noop */ }
+    const current = session?.companyDB as string;
+    setSelectedDbs(restored ?? (sapCompanies.some((c) => c.company_db === current) ? [current] : []));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingCompanies, sapCompanies.length]);
+  }, [loadingCompanies, sapCompanies.length, storageKey]);
 
   // Persist selection
   useEffect(() => {
+    if (!storageKey) return;
     try {
-      localStorage.setItem("intercompany.selectedDbs", JSON.stringify(selectedDbs));
+      localStorage.setItem(storageKey, JSON.stringify(selectedDbs));
     } catch { /* noop */ }
-  }, [selectedDbs]);
+  }, [selectedDbs, storageKey]);
+
 
   const reloadAccounts = useMemo(
     () => () => loadAccounts(selectedDbs),
