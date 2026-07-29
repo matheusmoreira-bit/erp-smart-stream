@@ -259,6 +259,23 @@ const STATUS_COLORS: Record<ExpenseStatus, string> = {
 
 export { STATUS_LABELS, STATUS_COLORS };
 
+/**
+ * Rótulo de status sensível ao tipo de documento.
+ * Compras usam "PC" (Pedido de Compra); vendas usam "PV" (Pedido de Venda).
+ */
+export function getStatusLabel(status: string, isSales = false): string {
+  const label = STATUS_LABELS[status as ExpenseStatus] ?? status;
+  return isSales ? label.replace(/\bPC\b/g, "PV") : label;
+}
+
+/** Retorna um formatador de status já ciente da rota (vendas x compras). */
+export function useStatusLabel() {
+  const { pathname } = useLocation();
+  const isSales = pathname.startsWith("/vendas");
+  return useCallback((status: string) => getStatusLabel(status, isSales), [isSales]);
+}
+
+
 async function invokeExpenseToSap(body: Record<string, unknown>) {
   const res = await sapFunctionFetch("expense-to-sap", {
     method: "POST",
