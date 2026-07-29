@@ -169,6 +169,17 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
           `Falhou em todas as empresas (${failures})${firstError ? `: ${firstError}` : ""}. Veja o resumo abaixo.`,
         );
       }
+
+      // Sessões ERP ativas são revogadas no servidor após a troca de senha:
+      // encerramos o estado local e pedimos novo login.
+      if (successes > 0) {
+        toast.info("Por segurança, sua sessão foi encerrada. Faça login novamente com a nova senha.");
+        setTimeout(() => {
+          clearErpLocalState();
+          window.location.replace("/");
+        }, 2500);
+      }
+
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao alterar senha";
       toast.error(msg);
