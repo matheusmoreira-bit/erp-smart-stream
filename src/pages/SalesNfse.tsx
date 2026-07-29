@@ -20,6 +20,8 @@ import { sapFunctionFetch, authFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageHeader } from "@/components/PageHeader";
+import { NfseReconcilePanel } from "@/components/NfseReconcilePanel";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
