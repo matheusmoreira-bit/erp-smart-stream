@@ -37,6 +37,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
     if (!isControlled) setOpenState(v);
     onOpenChange?.(v);
   };
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -62,6 +63,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
   }, [open, session]);
 
   const reset = () => {
+    setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setSelected(new Set(otherCompanies.map((o) => o.company_db)));
@@ -94,6 +96,14 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
     e.preventDefault();
     if (!session) return;
 
+    if (!currentPassword) {
+      toast.error("Informe a senha atual para confirmar a alteração.");
+      return;
+    }
+    if (currentPassword === newPassword) {
+      toast.error("A nova senha deve ser diferente da senha atual.");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       toast.error("A nova senha e a confirmação não coincidem.");
       return;
@@ -118,6 +128,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
         session.userName,
         newPassword,
         Array.from(targets),
+        currentPassword,
       );
 
       setSummary(allResults);
@@ -215,6 +226,17 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label htmlFor="current-pw">Senha Atual</Label>
+              <Input
+                id="current-pw"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="new-pw">Nova Senha</Label>
               <Input
@@ -318,6 +340,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
               className="w-full"
               disabled={
                 loading ||
+                !currentPassword ||
                 !checkPasswordPolicy(newPassword, session.userName).valid ||
                 newPassword !== confirmPassword
               }
