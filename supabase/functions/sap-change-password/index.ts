@@ -471,9 +471,26 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
       };
     });
 
-    return new Response(JSON.stringify({ results }), {
+    // Invalidação das sessões ERP ativas do usuário após a troca de senha.
+    // O B1SESSION apresentado na requisição é revogado no gateway (o Service
+    // Layer continuaria aceitando-o por até 30 min).
+    const changedAny = results.some((r) => r.status === "success");
+    if (changedAny) {
+      const sidHeader = req.headers.get("x-sap-session") || "";
+      if (sidHeader) {
+        await revokeErpSession(adminSvc, {
+          sapSession: sidHeader,
+          userKey: userCode,
+          companyDb: req.headers.get("x-company-db"),
+          reason: "password_change",
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ results, session_revoked: changedAny }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (err) {
     console.error("[sap-change-password] error:", err instanceof Error ? err.message : String(err));
     const authResp = authErrorResponse(err, corsHeaders);
