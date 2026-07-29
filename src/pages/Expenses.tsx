@@ -3,6 +3,7 @@ import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
+import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { motion } from "framer-motion";
 import {
   Plus,
