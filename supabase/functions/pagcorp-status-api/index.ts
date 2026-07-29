@@ -64,6 +64,11 @@ function shape(r: Row) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
+  // Documentação OpenAPI: pública (não expõe dados, apenas o contrato).
+  if (new URL(req.url).searchParams.get("spec") === "openapi") return json(openapiSpec);
+
+
+
   const expected = Deno.env.get("PAGCORP_STATUS_API_KEY");
   if (!expected) return json({ error: "API not configured" }, 503);
   const provided = req.headers.get("x-api-key") ?? "";
