@@ -92,7 +92,7 @@ import {
   ALLOWED_ATTACHMENT_ACCEPT,
   ALLOWED_ATTACHMENT_HINT,
 } from "@/lib/attachment-validation";
-import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch } from "@/hooks/useCurrentUserCostCenter";
+import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
 
