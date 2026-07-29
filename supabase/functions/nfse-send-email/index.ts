@@ -156,26 +156,58 @@ Deno.serve(async (req) => {
       if (rules.length === 0) return json({ error: "Nenhum destinatário encontrado no XML" }, 400);
       const { error } = await admin.from("nfse_email_recipients").upsert(
         rules.map((r) => ({ ...r, source: "xml", is_active: true })),
-        { onConflict: "company_db,project_code" },
+        { onConflict: "company_db,customer_code,project_code" },
       );
       if (error) return json({ error: error.message }, 500);
       return json({ ok: true, imported: rules.length, rules });
     }
 
     // ── Resolve destinatários para uma nota ─────────────────────────────
+    // Regra: casamento por (cliente + marca/projeto). Quando a emissão é
+    // unificada, usa a UNIÃO dos destinatários de todas as marcas do cliente.
     const projectCode = String(body?.project_code || "").trim();
+    const customerCode = String(body?.customer_code || "").trim();
+    const splitMode = body?.split_mode === "per_brand" ? "per_brand" : "unified";
 
     const { data: rules } = await admin
       .from("nfse_email_recipients")
-      .select("project_code, brand, to_emails, cc_emails")
+      .select("customer_code, project_code, brand, to_emails, cc_emails")
       .eq("company_db", companyDb)
       .eq("is_active", true);
 
-    const exact = (rules || []).find(
-      (r) => (r.project_code || "").toLowerCase() === projectCode.toLowerCase() && projectCode !== "",
-    );
-    const fallback = (rules || []).find((r) => (r.project_code || "") === "");
-    const matched = exact || fallback || null;
+    const all = rules || [];
+    const eq = (a: unknown, b: string) => String(a || "").trim().toLowerCase() === b.toLowerCase();
+    const customerRules = customerCode ? all.filter((r) => eq(r.customer_code, customerCode)) : [];
+
+    const exact =
+      (projectCode
+        ? customerRules.find((r) => eq(r.project_code, projectCode)) ||
+          all.find((r) => eq(r.project_code, projectCode) && !r.customer_code)
+        : null) || null;
+
+    const union = (rows: typeof all) => ({
+      to: normalizeEmails(rows.flatMap((r) => r.to_emails || [])),
+      cc: normalizeEmails(rows.flatMap((r) => r.cc_emails || [])),
+    });
+
+    const fallback = all.find((r) => !r.project_code && !r.customer_code) || null;
+
+    let matched: { to_emails: string[]; cc_emails: string[] } | null = null;
+    let matchedLabel: string | null = null;
+    if (splitMode === "per_brand" && exact) {
+      matched = { to_emails: exact.to_emails || [], cc_emails: exact.cc_emails || [] };
+      matchedLabel = exact.brand || projectCode;
+    } else if (splitMode === "unified" && customerRules.length > 0) {
+      const u = union(customerRules);
+      matched = { to_emails: u.to, cc_emails: u.cc };
+      matchedLabel = `${customerCode} (todas as marcas)`;
+    } else if (exact) {
+      matched = { to_emails: exact.to_emails || [], cc_emails: exact.cc_emails || [] };
+      matchedLabel = exact.brand || projectCode;
+    } else if (fallback) {
+      matched = { to_emails: fallback.to_emails || [], cc_emails: fallback.cc_emails || [] };
+      matchedLabel = "(padrão da empresa)";
+    }
 
     const { data: settings } = await admin
       .from("nfse_email_settings")
@@ -187,7 +219,7 @@ Deno.serve(async (req) => {
     if (action === "resolve") {
       return json({
         ok: true,
-        matched_project: matched ? (exact ? projectCode : "(padrão da empresa)") : null,
+        matched_project: matchedLabel,
         to: matched?.to_emails || [],
         cc: matched?.cc_emails || [],
         sender: settings
