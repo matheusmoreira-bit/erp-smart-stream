@@ -1,0 +1,176 @@
+// Adapter do provedor BeCompliance para o módulo KYP.
+// Credenciais nunca ficam em código: chegam via KYPProviderConfig, montado a
+// partir de secrets do backend (BECOMPLIANCE_*) e de empresa_kyp_config.config.
+
+import {
+  formatCPF,
+  maisRecente,
+  onlyDigits,
+  type KYPDiligenciaResult,
+  type KYPFornecedorInput,
+  type KYPProviderAdapter,
+  type KYPProviderConfig,
+  type KYPSession,
+  type TipoPessoa,
+} from "./types.ts";
+
+async function request(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 30_000,
+): Promise<{ status: number; body: unknown }> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new Error("timeout")), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: ctrl.signal });
+    const text = await res.text();
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch { /* mantém texto */ }
+    return { status: res.status, body };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function asArray(payload: unknown): Record<string, unknown>[] {
+  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+  if (payload && typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    for (const key of ["data", "results", "items", "content"]) {
+      if (Array.isArray(obj[key])) return obj[key] as Record<string, unknown>[];
+    }
+    if (obj.id || obj.status) return [obj];
+  }
+  return [];
+}
+
+function normalize(row: Record<string, unknown> | null): KYPDiligenciaResult | null {
+  if (!row) return null;
+  const providerRefId = String(row.id ?? row.uuid ?? row.np_id ?? row.analysis_id ?? "");
+  const status = String(row.status ?? row.result ?? row.situation ?? "pending").toLowerCase();
+  const expiry = (row.expiry_date ?? row.expiration_date ?? row.valid_until ?? null) as string | null;
+  const updated = (row.updated_at ?? row.created_at ?? null) as string | null;
+  return { providerRefId, status, expiryDate: expiry, updatedAt: updated, raw: row };
+}
+
+export const BeComplianceAdapter: KYPProviderAdapter = {
+  code: "BECOMPLIANCE",
+
+  async authenticate(config: KYPProviderConfig): Promise<KYPSession> {
+    const url = `${config.baseUrl.replace(/\/+$/, "")}/ext/v1/${config.clientId}/auth/login`;
+    const { status, body } = await request(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ email: config.email, password: config.password }),
+    });
+    if (status < 200 || status >= 300) {
+      throw new Error(`BeCompliance login falhou (HTTP ${status})`);
+    }
+    const obj = (body ?? {}) as Record<string, unknown>;
+    const token = String(
+      obj.token ?? obj.access_token ?? obj.accessToken ??
+        ((obj.data as Record<string, unknown> | undefined)?.token ?? ""),
+    );
+    if (!token) throw new Error("BeCompliance login não retornou token");
+    return { token, config };
+  },
+
+  async consultarDiligencia(
+    session: KYPSession,
+    documento: string,
+    tipoPessoa: TipoPessoa,
+  ): Promise<KYPDiligenciaResult | null> {
+    const { baseUrl, clientId } = session.config;
+    const base = baseUrl.replace(/\/+$/, "");
+    const headers = {
+      Accept: "application/json",
+      Authorization: `Bearer ${session.token}`,
+    };
+
+    const url = tipoPessoa === "PF"
+      ? `${base}/${clientId}/due_diligence?document_number=${encodeURIComponent(formatCPF(documento))}` +
+        `&archived=false&np_type=external&module=compliance`
+      : `${base}/ext/v1/${clientId}/third-party-analysis?cnpj=${encodeURIComponent(onlyDigits(documento))}`;
+
+    const { status, body } = await request(url, { method: "GET", headers });
+    if (status === 404) return null;
+    if (status < 200 || status >= 300) {
+      throw new Error(`BeCompliance consulta ${tipoPessoa} falhou (HTTP ${status})`);
+    }
+    const rows = asArray(body);
+    if (!rows.length) return null;
+    return normalize(maisRecente(rows));
+  },
+
+  async criarDiligencia(
+    session: KYPSession,
+    fornecedor: KYPFornecedorInput,
+  ): Promise<KYPDiligenciaResult> {
+    const { baseUrl, clientId, email } = session.config;
+    const base = baseUrl.replace(/\/+$/, "");
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.token}`,
+    };
+    const empresas = fornecedor.empresas.filter(Boolean);
+
+    if (fornecedor.tipoPessoa === "PF") {
+      const { status, body } = await request(`${base}/ext/${clientId}/np`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          cpf: formatCPF(fornecedor.documento),
+          type: "OUTROS",
+          np_type: "external",
+          notes: `${empresas.join(", ")} - Diligência de avaliação de fornecedor`,
+        }),
+      });
+      if (status < 200 || status >= 300) {
+        throw new Error(`BeCompliance criação PF falhou (HTTP ${status})`);
+      }
+      const created = normalize(asArray(body)[0] ?? (body as Record<string, unknown>));
+      return created ?? {
+        providerRefId: "",
+        status: "pending",
+        expiryDate: null,
+        updatedAt: new Date().toISOString(),
+        raw: body,
+      };
+    }
+
+    const { status, body } = await request(`${base}/ext/v1/${clientId}/third-party-analysis`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        alternative_names: [fornecedor.nome].filter(Boolean),
+        cnpj: onlyDigits(fornecedor.documento),
+        name: fornecedor.nome,
+        tags: empresas,
+        solicitation_areas: ["Compras"],
+        solicitation_user_email: email,
+        search_courts_of_justice: true,
+        search_international: true,
+        notes: `${empresas.join(", ")} - Diligência de avaliação de fornecedor`,
+      }),
+    });
+    if (status < 200 || status >= 300) {
+      throw new Error(`BeCompliance criação PJ falhou (HTTP ${status})`);
+    }
+    const created = normalize(asArray(body)[0] ?? (body as Record<string, unknown>));
+    return created ?? {
+      providerRefId: "",
+      status: "pending",
+      expiryDate: null,
+      updatedAt: new Date().toISOString(),
+      raw: body,
+    };
+  },
+};
+
+/** Registry extensível: novo provedor = nova entrada aqui + linha em kyp_providers. */
+export const KYP_ADAPTERS: Record<string, KYPProviderAdapter> = {
+  BECOMPLIANCE: BeComplianceAdapter,
+};
