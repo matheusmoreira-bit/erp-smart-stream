@@ -107,6 +107,7 @@ export function PagCorpIntegrateDialog({
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const [supplierRequestOpen, setSupplierRequestOpen] = useState(false);
   const [supplierFormOpen, setSupplierFormOpen] = useState(false);
 
   const ccMap = (row: any) => ({ code: row.CenterCode, name: row.CenterName });
