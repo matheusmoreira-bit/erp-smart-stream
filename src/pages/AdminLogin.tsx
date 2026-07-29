@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Shield, Lock, LogIn, Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,7 +54,7 @@ export default function BackofficeLogin() {
           : error.message
       );
     } else {
-      navigate("/backoffice");
+      navigate(redirectTo);
     }
     setLoading(false);
   };
@@ -63,7 +63,7 @@ export default function BackofficeLogin() {
     setGoogleLoading(true);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin + "/backoffice",
+        redirect_uri: window.location.origin + redirectTo,
       });
 
       if (result.error) {
@@ -75,7 +75,7 @@ export default function BackofficeLogin() {
         return;
       }
 
-      navigate("/backoffice");
+      navigate(redirectTo);
     } catch {
       toast.error("Erro ao fazer login com Google");
     } finally {
