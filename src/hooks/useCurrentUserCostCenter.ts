@@ -72,3 +72,36 @@ export function isItemAllowedForCostCenter(
   if (code.startsWith("FOL")) return cc === "1.5.1.3" || cc.startsWith("1.5.1.3.");
   return true;
 }
+
+/**
+ * Ramo (alçada) de centros de custo do usuário: os dois primeiros níveis do
+ * código. Ex.: "1.6.1.2" → "1.6". Retorna null quando não há CC definido ou
+ * quando o código não tem o formato esperado.
+ */
+export function costCenterBranch(costCenter: string | null | undefined): string | null {
+  const cc = String(costCenter || "").trim();
+  if (!cc) return null;
+  const parts = cc.split(".").filter(Boolean);
+  if (parts.length < 2) return null;
+  return `${parts[0]}.${parts[1]}`;
+}
+
+/**
+ * Alçada de lançamento por centro de custo:
+ * - Usuário do CC 1.6.1.2 pode lançar em qualquer CC 1.6.%
+ * - `bypass` (super-user/admin ou grupos com visão total: Facilities,
+ *   Contábil, Fiscal, Financeiro, Contas a Pagar, CFO...) libera todos.
+ * - Usuário sem CC vinculado no IdP não é bloqueado (evita falso negativo).
+ */
+export function isCostCenterAllowedForUser(
+  targetCostCenter: string | null | undefined,
+  userCostCenter: string | null | undefined,
+  bypass?: boolean,
+): boolean {
+  if (bypass) return true;
+  const branch = costCenterBranch(userCostCenter);
+  if (!branch) return true;
+  const target = String(targetCostCenter || "").trim();
+  if (!target) return true;
+  return target === branch || target.startsWith(`${branch}.`);
+}
