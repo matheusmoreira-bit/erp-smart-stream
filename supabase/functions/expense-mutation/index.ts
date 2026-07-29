@@ -197,6 +197,8 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     doc_date: input.doc_date || null,
     due_date: input.due_date || null,
     rateio_type: input.rateio_type || null,
+    nfse_split_mode:
+      (input as { nfse_split_mode?: string }).nfse_split_mode === "per_brand" ? "per_brand" : "unified",
     current_level_order: resolvedLevel || 1,
   };
 

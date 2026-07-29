@@ -221,6 +221,8 @@ export interface CreateExpenseInput {
   doc_date?: string;
   due_date?: string;
   rateio_type?: RateioType | null;
+  /** Vendas: emitir NFS-e unificada ou uma nota por marca/projeto. */
+  nfse_split_mode?: "unified" | "per_brand";
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
 }
@@ -698,6 +700,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           doc_date: input.doc_date || null,
           due_date: input.due_date || null,
           rateio_type: input.rateio_type || null,
+          nfse_split_mode: input.nfse_split_mode || "unified",
           items: enrichedItems,
         },
       });
