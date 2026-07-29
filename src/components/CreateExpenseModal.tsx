@@ -245,33 +245,62 @@ export function CreateExpenseModal({
   const ccAlertEnabled = !isSales && projectOptions.length > 1;
   const [ccAlert, setCcAlert] = useState<CcProjectAlertInfo | null>(null);
   const ccAlertIdRef = useRef<string | null>(null);
+  const ccAlertQueueRef = useRef<CcProjectAlertInfo[]>([]);
+
+  const openCcAlert = useCallback((info: CcProjectAlertInfo) => {
+    ccAlertIdRef.current = null;
+    setCcAlert(info);
+    logCcProjectAlert({
+      companyDb: sapSession?.companyDB ?? null,
+      sapUserName: sapSession?.userName ?? null,
+      lineIndex: info.lineIndex,
+      costCenterCode: info.costCenterCode,
+      costCenterName: info.costCenterName,
+      projectCode: info.projectCode,
+      projectName: info.projectName,
+    }).then((id) => { ccAlertIdRef.current = id; });
+  }, [sapSession?.companyDB, sapSession?.userName]);
+
+  const buildCcAlertInfo = useCallback(
+    (lineIndex: number, cc: SapSearchOption | null, project: SapSearchOption | null): CcProjectAlertInfo => ({
+      lineIndex,
+      costCenterCode: cc?.code || "",
+      costCenterName: cc?.name || null,
+      projectCode: project?.code || null,
+      projectName: project?.name || null,
+      isInstitutional: isInstitutionalProject(project?.name || project?.code),
+    }),
+    [],
+  );
 
   const maybeTriggerCcAlert = useCallback(
     (lineIndex: number, cc: SapSearchOption | null, project: SapSearchOption | null) => {
       if (!ccAlertEnabled) return;
       if (!costCenterNeedsAlert(cc?.code)) return;
-      const info: CcProjectAlertInfo = {
-        lineIndex,
-        costCenterCode: cc?.code || "",
-        costCenterName: cc?.name || null,
-        projectCode: project?.code || null,
-        projectName: project?.name || null,
-        isInstitutional: isInstitutionalProject(project?.name || project?.code),
-      };
-      ccAlertIdRef.current = null;
-      setCcAlert(info);
-      logCcProjectAlert({
-        companyDb: sapSession?.companyDB ?? null,
-        sapUserName: sapSession?.userName ?? null,
-        lineIndex,
-        costCenterCode: info.costCenterCode,
-        costCenterName: info.costCenterName,
-        projectCode: info.projectCode,
-        projectName: info.projectName,
-      }).then((id) => { ccAlertIdRef.current = id; });
+      openCcAlert(buildCcAlertInfo(lineIndex, cc, project));
     },
-    [ccAlertEnabled, sapSession?.companyDB, sapSession?.userName],
+    [ccAlertEnabled, openCcAlert, buildCcAlertInfo],
   );
+
+  /** Enfileira um alerta por linha (usado quando o CC padrão do cabeçalho cascateia). */
+  const maybeTriggerCcAlertForAllLines = useCallback(
+    (cc: SapSearchOption | null, lines: Array<{ sapProject?: SapSearchOption | null }>) => {
+      if (!ccAlertEnabled) return;
+      if (!costCenterNeedsAlert(cc?.code)) return;
+      const infos = lines.map((l, i) => buildCcAlertInfo(i, cc, l.sapProject || null));
+      if (!infos.length) return;
+      ccAlertQueueRef.current = infos.slice(1);
+      openCcAlert(infos[0]);
+    },
+    [ccAlertEnabled, openCcAlert, buildCcAlertInfo],
+  );
+
+  const advanceCcAlertQueue = useCallback(() => {
+    const next = ccAlertQueueRef.current.shift();
+    if (next) openCcAlert(next);
+    else setCcAlert(null);
+  }, [openCcAlert]);
+
 
   const handleCcAlertConfirm = useCallback(() => {
     recordCcProjectAlertDecision(ccAlertIdRef.current, "confirmed", ccAlert?.projectCode ?? null);
