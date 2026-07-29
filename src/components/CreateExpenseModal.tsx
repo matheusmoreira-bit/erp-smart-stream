@@ -1728,12 +1728,17 @@ export function CreateExpenseModal({
 
   const applyHeaderCostCenter = (val: SapSearchOption | null) => {
     setHeaderCostCenter(val);
-    setItems((prev) => prev.map((it) => ({
-      ...it,
-      sapCostCenter: val,
-      cost_center: val?.code || "",
-    })));
+    setItems((prev) => {
+      const updated = prev.map((it) => ({
+        ...it,
+        sapCostCenter: val,
+        cost_center: val?.code || "",
+      }));
+      maybeTriggerCcAlertForAllLines(val, updated);
+      return updated;
+    });
   };
+
 
   const applyHeaderProject = (val: SapSearchOption | null) => {
     setHeaderProject(val);
