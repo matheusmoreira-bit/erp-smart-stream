@@ -355,6 +355,16 @@ export function CreateExpenseModal({
     return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
   }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
 
+  // Alçada de CC: quem é do 1.6.1.2 pode lançar em qualquer 1.6.%.
+  // Grupos com visão total (Facilities, Contábil, Fiscal, Financeiro, CFO,
+  // admins/super-usuário) continuam vendo todos os centros de custo.
+  const ccBranch = costCenterBranch(userCostCenter);
+  const allowedCostCenterOptions = useMemo(() => {
+    if (bypassCcItemRules || !ccBranch) return costCenterOptions;
+    return costCenterOptions.filter((o) => isCostCenterAllowedForUser(o.code, userCostCenter, false));
+  }, [costCenterOptions, userCostCenter, ccBranch, bypassCcItemRules]);
+
+
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
