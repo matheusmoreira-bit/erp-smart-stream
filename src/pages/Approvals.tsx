@@ -2047,7 +2047,7 @@ export default function ApprovalsPage() {
           description: `Abrindo em ${salesHit ? "Vendas" : "Compras"}…`,
         });
         setDocParam(null);
-        navigate(`${salesHit ? "/vendas" : "/compras"}?doc=${encodeURIComponent(rawId)}`);
+        navigate(`${salesHit ? "/vendas/pedidos" : "/compras"}?doc=${encodeURIComponent(rawId)}`);
       } else {
         // Documento não existe (id inválido, empresa diferente ou sem permissão
         // de visualização). Limpa o `?doc=` e mantém o usuário na listagem.

@@ -63,7 +63,7 @@ const modules: Record<string, ModuleCard> = {
   },
   sales: {
     title: "Vendas",
-    description: "Crie e acompanhe pedidos de venda com fluxo de aprovação e integração SAP.",
+    description: "Ciclo completo: pedido de venda, emissão de NFS-e e contas a receber.",
     icon: Wallet,
     path: "/vendas",
     color: "text-emerald-400",
