@@ -28,6 +28,14 @@ import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { DecimalInput } from "@/components/DecimalInput";
 import { DateInputBR } from "@/components/DateInputBR";
 import { sapQuery } from "@/lib/sap-client";
+import {
+  costCenterNeedsAlert,
+  isInstitutionalProject,
+  logCcProjectAlert,
+  recordCcProjectAlertDecision,
+} from "@/lib/cc-project-alert";
+import { CcProjectAlertDialog, type CcProjectAlertInfo } from "@/components/CcProjectAlertDialog";
+
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import {
   Dialog,
@@ -232,6 +240,88 @@ export function CreateExpenseModal({
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: projectMapRow,
   });
+
+  // ---- Alerta de casamento Centro de Custo × Projeto (auditável) ----
+  const ccAlertEnabled = !isSales && projectOptions.length > 1;
+  const [ccAlert, setCcAlert] = useState<CcProjectAlertInfo | null>(null);
+  const ccAlertIdRef = useRef<string | null>(null);
+  const ccAlertQueueRef = useRef<CcProjectAlertInfo[]>([]);
+
+  const openCcAlert = useCallback((info: CcProjectAlertInfo) => {
+    ccAlertIdRef.current = null;
+    setCcAlert(info);
+    logCcProjectAlert({
+      companyDb: sapSession?.companyDB ?? null,
+      sapUserName: sapSession?.userName ?? null,
+      lineIndex: info.lineIndex,
+      costCenterCode: info.costCenterCode,
+      costCenterName: info.costCenterName,
+      projectCode: info.projectCode,
+      projectName: info.projectName,
+    }).then((id) => { ccAlertIdRef.current = id; });
+  }, [sapSession?.companyDB, sapSession?.userName]);
+
+  const buildCcAlertInfo = useCallback(
+    (lineIndex: number, cc: SapSearchOption | null, project: SapSearchOption | null): CcProjectAlertInfo => ({
+      lineIndex,
+      costCenterCode: cc?.code || "",
+      costCenterName: cc?.name || null,
+      projectCode: project?.code || null,
+      projectName: project?.name || null,
+      isInstitutional: isInstitutionalProject(project?.name || project?.code),
+    }),
+    [],
+  );
+
+  const maybeTriggerCcAlert = useCallback(
+    (lineIndex: number, cc: SapSearchOption | null, project: SapSearchOption | null) => {
+      if (!ccAlertEnabled) return;
+      if (!costCenterNeedsAlert(cc?.code)) return;
+      openCcAlert(buildCcAlertInfo(lineIndex, cc, project));
+    },
+    [ccAlertEnabled, openCcAlert, buildCcAlertInfo],
+  );
+
+  /** Enfileira um alerta por linha (usado quando o CC padrão do cabeçalho cascateia). */
+  const maybeTriggerCcAlertForAllLines = useCallback(
+    (cc: SapSearchOption | null, lines: Array<{ sapProject?: SapSearchOption | null }>) => {
+      if (!ccAlertEnabled) return;
+      if (!costCenterNeedsAlert(cc?.code)) return;
+      const infos = lines.map((l, i) => buildCcAlertInfo(i, cc, l.sapProject || null));
+      if (!infos.length) return;
+      ccAlertQueueRef.current = infos.slice(1);
+      openCcAlert(infos[0]);
+    },
+    [ccAlertEnabled, openCcAlert, buildCcAlertInfo],
+  );
+
+  const advanceCcAlertQueue = useCallback(() => {
+    const next = ccAlertQueueRef.current.shift();
+    if (next) openCcAlert(next);
+    else setCcAlert(null);
+  }, [openCcAlert]);
+
+
+  const handleCcAlertConfirm = useCallback(() => {
+    recordCcProjectAlertDecision(ccAlertIdRef.current, "confirmed", ccAlert?.projectCode ?? null);
+    advanceCcAlertQueue();
+  }, [ccAlert, advanceCcAlertQueue]);
+
+  const handleCcAlertChange = useCallback(() => {
+    const idx = ccAlert?.lineIndex ?? -1;
+    recordCcProjectAlertDecision(ccAlertIdRef.current, "changed", null);
+    if (idx >= 0) {
+      setItems((prev) => {
+        const updated = [...prev];
+        if (updated[idx]) updated[idx] = { ...updated[idx], sapProject: null, project: "" };
+        return updated;
+      });
+      toast.info(`Item ${idx + 1}: selecione o projeto/marca correto.`);
+    }
+    advanceCcAlertQueue();
+  }, [ccAlert, advanceCcAlertQueue]);
+
+
 
   // Centro de custo do usuário logado (via mapeamento IdP). Usado para
   // pré-preencher o CC padrão em compras e restringir itens IMP%/FOL%.
@@ -1638,12 +1728,17 @@ export function CreateExpenseModal({
 
   const applyHeaderCostCenter = (val: SapSearchOption | null) => {
     setHeaderCostCenter(val);
-    setItems((prev) => prev.map((it) => ({
-      ...it,
-      sapCostCenter: val,
-      cost_center: val?.code || "",
-    })));
+    setItems((prev) => {
+      const updated = prev.map((it) => ({
+        ...it,
+        sapCostCenter: val,
+        cost_center: val?.code || "",
+      }));
+      maybeTriggerCcAlertForAllLines(val, updated);
+      return updated;
+    });
   };
+
 
   const applyHeaderProject = (val: SapSearchOption | null) => {
     setHeaderProject(val);
@@ -2962,7 +3057,9 @@ export function CreateExpenseModal({
                           updated[i] = { ...updated[i], sapCostCenter: val, cost_center: val?.code || "" };
                           return updated;
                         });
+                        maybeTriggerCcAlert(i, val, item.sapProject || null);
                       }}
+
                       placeholder={
                         origin === "pagcorp" && mappingInfo?.missingFields.includes("Centro de Custo")
                           ? "Sem mapeamento — selecione manualmente"
@@ -3023,6 +3120,13 @@ export function CreateExpenseModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <CcProjectAlertDialog
+      info={ccAlert}
+      onConfirm={handleCcAlertConfirm}
+      onChange={handleCcAlertChange}
+    />
+
 
     <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
       <AlertDialogContent
