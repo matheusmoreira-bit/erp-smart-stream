@@ -208,6 +208,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
     // user to log in via SAP inherits the previous user's Supabase identity
     // (isAdmin, role-scoped permissions, "Ver todas as aprovações", etc.).
     try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    // Volta para a raiz e força reload para garantir a tela de login limpa.
+    window.location.replace("/");
   }, [session]);
 
   // Listen for SAP Service Layer session-expired events emitted by sap-client.
