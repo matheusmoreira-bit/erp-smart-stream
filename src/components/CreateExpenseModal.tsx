@@ -3078,8 +3078,9 @@ export function CreateExpenseModal({
                       portalContainer={dialogContainer}
                     />
                     <CachedSearchCombobox
-                      label="Projeto (Dimensão) *"
-                      required
+                      label={`Projeto (Dimensão)${isSales ? "" : " *"}`}
+                      required={!isSales}
+
                       options={projectOptions}
                       isLoading={projectsLoading}
                       value={item.sapProject || null}
