@@ -424,6 +424,7 @@ export default function SalesNfse() {
         onLogout={logout}
         actions={
           <>
+            <NfseReconcilePanel companyDb={companyDb} />
             <Button variant="outline" size="sm" className="gap-2" onClick={() => void syncStatus()} disabled={syncing}>
               {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
               Atualizar status fiscal
@@ -434,6 +435,7 @@ export default function SalesNfse() {
             </Button>
           </>
         }
+
       />
 
       <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 space-y-4">
