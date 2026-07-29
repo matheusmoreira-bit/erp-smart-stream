@@ -1,0 +1,1 @@
+create policy "Authenticated can delete sap_cache" on public.sap_cache for delete to authenticated using (true);
