@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
+
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
