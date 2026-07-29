@@ -1417,7 +1417,21 @@ export default function Intercompany() {
                   rows={projectRows}
                   companies={projectCompanies}
                   search={search}
-                  readOnly
+                  onToggleActive={async (code, companyDb, nextActive) => {
+                    try {
+                      const { results } = await toggleProject({
+                        code,
+                        active: nextActive,
+                        company_db: companyDb,
+                      });
+                      const r = results[0];
+                      if (!r?.ok) throw new Error(r?.error || "Falha ao atualizar projeto");
+                      toast.success(`Projeto ${code} ${nextActive ? "ativado" : "inativado"}`);
+                      await reloadProjects();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao atualizar projeto");
+                    }
+                  }}
                   onReplicate={async (code, _name, targetDb) => {
                     const row = projectRows.find((r) => r.code === code);
                     const sourceDb = row ? Array.from(row.presence.keys())[0] : undefined;
