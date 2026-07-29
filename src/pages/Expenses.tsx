@@ -1293,7 +1293,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   };
 
   const flowFiltered = expenses.filter((e) => applyFilters(e, true, "erp_flow"));
-  const sapFiltered = sapOnly.filter((e) => applyFilters(e, false, "erp"));
+  // Registros vindos do ERP (HanaAPI/Service Layer) também respeitam o escopo:
+  // sem "Ver todos", o usuário só vê o que solicitou ou aprova.
+  const sapFiltered = sapOnly.filter((e) => applyFilters(e, true, "erp"));
+
   const filtered: Array<{ exp: Expense; origin: "erp_flow" | "erp" }> = [
     ...flowFiltered.map((exp) => ({ exp, origin: "erp_flow" as const })),
     ...sapFiltered.map((exp) => ({ exp, origin: "erp" as const })),
