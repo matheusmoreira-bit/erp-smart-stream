@@ -1012,6 +1012,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     [session],
   );
 
+  const fetchSapPage = isSales ? fetchSapSalesPage : fetchSapPurchasePage;
+
+
+
   const refreshSapNowRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
