@@ -226,15 +226,16 @@ export function SapProvider({ children }: { children: ReactNode }) {
     // reload em "/" não reaproveite dados do usuário/empresa anterior.
     try { queryClient.clear(); } catch { /* ignore */ }
     clearErpLocalState();
-    // Also sign out any lingering Supabase Auth session — otherwise the next
-    // user to log in via SAP inherits the previous user's Supabase identity
-    // (isAdmin, role-scoped permissions, "Ver todas as aprovações", etc.).
-    try { await supabase.auth.signOut(); } catch { /* ignore */ }
-    toast.success("Sessão encerrada", {
-      description: "Você saiu com segurança. Redirecionando para o login…",
+    // A sessão do Google (Lovable Cloud) NÃO é encerrada aqui: o "Sair" apenas
+    // desconecta da empresa/ERP. A identidade Google segue válida por até 24h
+    // (limite aplicado no GoogleAuthGate). Ao logar em outra empresa com outro
+    // usuário SAP, `login()` já derruba a sessão Supabase anterior.
+    toast.success("Empresa desconectada", {
+      description: "Você saiu da empresa. Sua conta Google continua conectada.",
     });
     // Volta para a raiz e força reload para garantir a tela de login limpa.
     window.setTimeout(() => window.location.replace("/"), 900);
+
   }, [session, queryClient, setSession]);
 
   // `logout` agora apenas solicita a confirmação — o encerramento real
