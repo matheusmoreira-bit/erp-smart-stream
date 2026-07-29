@@ -318,6 +318,8 @@ export function useIntercompany() {
     loadProjects,
     createAccount,
     createCostCenter,
+    createProject,
+
     renameAccount,
     renameCostCenter,
     toggleAccount,
