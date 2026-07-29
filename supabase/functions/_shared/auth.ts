@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
+import { isErpSessionRevoked } from "./session-revocation.ts";
+
 
 export class AuthError extends Error {
   status: number;
