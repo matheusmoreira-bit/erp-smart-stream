@@ -128,6 +128,7 @@ const App = () => (
               <Route path="/cadastros/fornecedores" element={<Suppliers />} />
               
               <Route path="/cadastros/itens" element={<Items />} />
+              <Route path="/cadastros/solicitacoes" element={<RegistrationRequests />} />
               <Route path="/cadastros/intercompany" element={<Intercompany />} />
 
               {/* Financeiro */}
