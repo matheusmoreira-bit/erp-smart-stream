@@ -3054,8 +3054,9 @@ export function CreateExpenseModal({
                   </div>
                   <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                     <CachedSearchCombobox
-                      label="Centro de Custo (Dimensão) *"
-                      required
+                      label={`Centro de Custo (Dimensão)${isSales ? "" : " *"}`}
+                      required={!isSales}
+
                       options={costCenterOptions}
                       isLoading={costCentersLoading}
                       value={item.sapCostCenter || null}
