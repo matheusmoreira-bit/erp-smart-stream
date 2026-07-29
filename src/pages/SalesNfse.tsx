@@ -10,7 +10,9 @@ import {
   Receipt,
   Upload,
   Eye,
+  FileCode,
   Mail,
+
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
