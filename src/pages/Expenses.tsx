@@ -1147,13 +1147,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const isMine = (e: Expense) => {
     const owner = (e.created_by_email || e.requester_email || e.requester_name || "").toLowerCase();
     const approver = (e.current_approver || "").toLowerCase();
+    if (!userIdentifier) return false;
     return (
       owner === userIdentifier ||
       owner.startsWith(userIdentifier + "@") ||
       approver === userIdentifier ||
-      approver.includes(userIdentifier)
+      approver.includes(userIdentifier) ||
+      identityMatches(owner, userIdentifier) ||
+      identityMatches(approver, userIdentifier)
     );
   };
+
 
   const canCancel = (expense: Expense) => {
     if (isAdmin) return true;
