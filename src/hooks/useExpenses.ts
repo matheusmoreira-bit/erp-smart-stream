@@ -1101,7 +1101,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // Server-side authorization: the edge function verifies that the caller
       // (SAP session or Cloud admin) is the designated approver for the
       // CURRENT level before flipping the status. This is the security
-      // boundary — do NOT bypass it with a directexpenseRead("expenses")
+      // boundary — do NOT bypass it with a direct supabase read
       // update, or any signed-in user could approve someone else's document.
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
