@@ -40,7 +40,8 @@ export default function ApprovalHistory() {
   const { isAdmin: isLovableAdmin } = useAuth();
   const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
-  const canViewAll = isAdmin || canViewAllApprovals;
+  const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
+  const canViewAll = isAdmin || canViewAllApprovals || canViewAllByGroup;
   const { getLabel } = useCompanies(true);
   const PAGE_SIZE = 50;
   const [page, setPage] = useState(1);
