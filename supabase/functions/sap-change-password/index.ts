@@ -154,8 +154,71 @@ function isSamePasswordError(message: string): boolean {
 
 interface ResultRow { companyDB: string; displayName: string; status: "success" | "error" | "skipped"; message?: string }
 
+const TRIVIAL_PASSWORDS = [
+  "123456", "12345678", "123456789", "1234567890", "password", "senha", "qwerty",
+  "abc123", "111111", "000000", "sap", "manager", "admin", "cactus", "mudar123",
+];
+
+/** Retorna a mensagem de erro quando a senha é fraca; null quando aceitável. */
+function isWeakPassword(pwd: string, userCode: string): string | null {
+  if (!pwd || pwd.length < 12) return "A senha deve ter no mínimo 12 caracteres.";
+  if (pwd.length > 128) return "A senha deve ter no máximo 128 caracteres.";
+  const lower = pwd.toLowerCase();
+  if (TRIVIAL_PASSWORDS.some((t) => lower.includes(t))) {
+    return "A senha contém um termo comum/previsível. Escolha outra.";
+  }
+  const user = (userCode || "").toLowerCase().split("@")[0];
+  if (user.length >= 4 && lower.includes(user)) {
+    return "A senha não pode conter o seu nome de usuário.";
+  }
+  if (/^(.)\1+$/.test(pwd)) return "A senha não pode ser formada por um único caractere repetido.";
+  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(pwd)).length;
+  if (classes < 3) {
+    return "Use ao menos três tipos de caractere (maiúscula, minúscula, número e símbolo).";
+  }
+  return null;
+}
+
+/**
+ * Valida a senha atual fazendo login real no Service Layer com as credenciais
+ * do próprio usuário, na primeira empresa alvo onde ele exista.
+ */
+async function verifyCurrentPassword(
+  admin: ReturnType<typeof service>,
+  targets: string[],
+  userCode: string,
+  currentPassword: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  let lastReason = "Não foi possível validar a senha atual.";
+  for (const companyDb of targets.slice(0, 5)) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const creds = await getAdminCreds(admin, companyDb).catch(() => null);
+      if (!creds) continue;
+      const baseUrl = await getBaseUrl(admin, companyDb).catch(() => null);
+      if (!baseUrl) continue;
+      try {
+        const s = await sapLogin(baseUrl, creds.sapCompanyDb, userCode, currentPassword, ctrl.signal);
+        if (s) return { ok: true };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // Usuário inexistente nesta empresa → tenta a próxima.
+        if (/user.*not|inexist|invalid company/i.test(msg)) { lastReason = msg; continue; }
+        return { ok: false, reason: "Senha atual incorreta." };
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { ok: false, reason: lastReason };
+}
+
 Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
+
 
   try {
     const caller = await requireUserOrSapSession(req);
