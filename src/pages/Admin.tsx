@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles, Mail } from "lucide-react";
 import { RoiAnalysis } from "@/components/RoiAnalysis";
 import {
   Building2,
@@ -72,6 +72,7 @@ import { useAuditLog } from "@/hooks/useAuditLog";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import AuditLogTable from "@/components/AuditLogTable";
 import IntegrationsTab from "@/components/IntegrationsTab";
+import NfseEmailSettingsTab from "@/components/NfseEmailSettingsTab";
 import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import TransferApprovalsTool from "@/components/TransferApprovalsTool";
@@ -389,7 +390,7 @@ export default function Admin() {
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   // Audit log
-  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions" | "admin_users" | "tools" | "roi">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "nfse_email" | "audit" | "permissions" | "admin_users" | "tools" | "roi">("companies");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
@@ -694,6 +695,7 @@ export default function Admin() {
                 { key: "companies", label: "Empresas", icon: Building2 },
                 { key: "permissions", label: "Permissões", icon: Users },
                 { key: "integrations", label: "Integrações", icon: Key },
+                { key: "nfse_email", label: "E-mail NFS-e", icon: Mail },
                 { key: "audit", label: "Logs", icon: ScrollText },
                 { key: "admin_users", label: "Admins", icon: ShieldCheck },
                 { key: "tools", label: "Ferramentas", icon: Wrench },
@@ -916,6 +918,8 @@ export default function Admin() {
         )}
 
         {activeTab === "integrations" && <IntegrationsTab />}
+
+        {activeTab === "nfse_email" && <NfseEmailSettingsTab />}
 
         {activeTab === "permissions" && <PermissionManager />}
 

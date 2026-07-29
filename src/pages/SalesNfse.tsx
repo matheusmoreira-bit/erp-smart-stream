@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FileText,
   Loader2,
@@ -8,15 +8,20 @@ import {
   CheckCircle2,
   AlertTriangle,
   Receipt,
+  Upload,
+  Eye,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { sapFunctionFetch, authFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -27,6 +32,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+const PDF_BUCKET = "nfse-pdfs";
 
 /* ── helpers ─────────────────────────────────────────────── */
 
@@ -93,6 +100,33 @@ export default function SalesNfse() {
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
   const [emitting, setEmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [pdfFiles, setPdfFiles] = useState<Set<string>>(new Set());
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // envio de e-mail
+  const [mailOrder, setMailOrder] = useState<SalesOrderRow | null>(null);
+  const [mailInvoice, setMailInvoice] = useState<NfseRow | null>(null);
+  const [mailTo, setMailTo] = useState("");
+  const [mailCc, setMailCc] = useState("");
+  const [mailSubject, setMailSubject] = useState("");
+  const [mailMessage, setMailMessage] = useState("");
+  const [mailSenderOk, setMailSenderOk] = useState(true);
+  const [mailLoading, setMailLoading] = useState(false);
+  const [mailSending, setMailSending] = useState(false);
+
+  const pdfPathFor = useCallback(
+    (order: SalesOrderRow, inv: NfseRow | null) =>
+      `${companyDb}/${inv?.sap_invoice_doc_entry ?? `pedido-${order.sap_doc_entry ?? order.id}`}.pdf`,
+    [companyDb],
+  );
+
+  const loadPdfIndex = useCallback(async () => {
+    if (!companyDb) return;
+    const { data } = await supabase.storage.from(PDF_BUCKET).list(companyDb, { limit: 1000 });
+    setPdfFiles(new Set((data || []).map((f) => `${companyDb}/${f.name}`)));
+  }, [companyDb]);
 
   const load = useCallback(async () => {
     if (!companyDb) return;
@@ -119,16 +153,131 @@ export default function SalesNfse() {
       if (e2) throw e2;
       setOrders((exp || []) as SalesOrderRow[]);
       setInvoices((inv || []) as NfseRow[]);
+      await loadPdfIndex();
     } catch (e) {
       setError((e as Error).message || "Falha ao carregar pedidos de venda");
     } finally {
       setLoading(false);
     }
-  }, [companyDb]);
+  }, [companyDb, loadPdfIndex]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const pickPdf = useCallback((order: SalesOrderRow, inv: NfseRow | null) => {
+    uploadTargetRef.current = { order, inv };
+    fileInputRef.current?.click();
+  }, []);
+
+  const onPdfSelected = useCallback(
+    async (file: File | undefined) => {
+      const target = uploadTargetRef.current;
+      if (!file || !target) return;
+      if (file.type !== "application/pdf") {
+        toast.error("Envie um arquivo PDF.");
+        return;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error("PDF acima do limite de 15MB.");
+        return;
+      }
+      const path = pdfPathFor(target.order, target.inv);
+      setUploadingFor(target.order.id);
+      try {
+        const { error } = await supabase.storage
+          .from(PDF_BUCKET)
+          .upload(path, file, { upsert: true, contentType: "application/pdf" });
+        if (error) throw error;
+        toast.success("PDF da NFS-e anexado.");
+        await loadPdfIndex();
+      } catch (e) {
+        toast.error((e as Error).message);
+      } finally {
+        setUploadingFor(null);
+        uploadTargetRef.current = null;
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [pdfPathFor, loadPdfIndex],
+  );
+
+  const viewPdf = useCallback(
+    async (order: SalesOrderRow, inv: NfseRow | null) => {
+      const path = pdfPathFor(order, inv);
+      const { data, error } = await supabase.storage.from(PDF_BUCKET).createSignedUrl(path, 300);
+      if (error || !data?.signedUrl) {
+        toast.error("Não foi possível abrir o PDF.");
+        return;
+      }
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    },
+    [pdfPathFor],
+  );
+
+  const openMail = useCallback(
+    async (order: SalesOrderRow, inv: NfseRow | null) => {
+      setMailOrder(order);
+      setMailInvoice(inv);
+      setMailTo("");
+      setMailCc("");
+      setMailSubject(`NFS-e ${inv?.nfse_number ? `nº ${inv.nfse_number} ` : ""}- ${getLabel(companyDb)}`);
+      setMailMessage(
+        `Segue em anexo a nota fiscal de serviço${inv?.nfse_number ? ` nº ${inv.nfse_number}` : ""}.`,
+      );
+      setMailSenderOk(true);
+      setMailLoading(true);
+      try {
+        const res = await authFetch("nfse-send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "resolve", company_db: companyDb, project_code: "" }),
+        });
+        const b = await res.json().catch(() => ({}));
+        if (res.ok && !b?.error) {
+          setMailTo((b.to || []).join(", "));
+          setMailCc((b.cc || []).join(", "));
+          setMailSenderOk(!!b.sender?.configured);
+        }
+      } finally {
+        setMailLoading(false);
+      }
+    },
+    [companyDb, getLabel],
+  );
+
+  const sendMail = useCallback(async () => {
+    if (!mailOrder) return;
+    const path = pdfPathFor(mailOrder, mailInvoice);
+    setMailSending(true);
+    try {
+      const res = await authFetch("nfse-send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send",
+          company_db: companyDb,
+          expense_id: mailOrder.id,
+          invoice_doc_entry: mailInvoice?.sap_invoice_doc_entry ?? null,
+          nfse_number: mailInvoice?.nfse_number ?? null,
+          customer_name: mailOrder.supplier_name,
+          to: mailTo,
+          cc: mailCc,
+          subject: mailSubject,
+          message: mailMessage,
+          attachment_path: pdfFiles.has(path) ? path : "",
+        }),
+      });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok || b?.error) throw new Error(b?.error || `Falha no envio (${res.status})`);
+      toast.success(`E-mail enviado para ${(b.to || []).join(", ")}`);
+      setMailOrder(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setMailSending(false);
+    }
+  }, [mailOrder, mailInvoice, companyDb, mailTo, mailCc, mailSubject, mailMessage, pdfFiles, pdfPathFor]);
 
   const invoiceByExpense = useMemo(() => {
     const map = new Map<string, NfseRow>();
@@ -278,6 +427,7 @@ export default function SalesNfse() {
                   <th className="text-left px-3 py-2 font-medium">Data</th>
                   <th className="text-right px-3 py-2 font-medium">Valor</th>
                   <th className="text-left px-3 py-2 font-medium">NFS-e</th>
+                  <th className="text-left px-3 py-2 font-medium">PDF</th>
                   <th className="text-right px-3 py-2 font-medium">Ação</th>
                 </tr>
               </thead>
@@ -322,15 +472,62 @@ export default function SalesNfse() {
                           <span className="text-xs text-muted-foreground">Aguardando emissão</span>
                         )}
                       </td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          const path = pdfPathFor(o, inv ?? null);
+                          const hasPdf = pdfFiles.has(path);
+                          return (
+                            <div className="flex items-center gap-1">
+                              {hasPdf && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 gap-1 px-2 text-xs"
+                                  onClick={() => void viewPdf(o, inv ?? null)}
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  Ver
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 gap-1 px-2 text-xs"
+                                disabled={uploadingFor === o.id}
+                                onClick={() => pickPdf(o, inv ?? null)}
+                              >
+                                {uploadingFor === o.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Upload className="w-3.5 h-3.5" />
+                                )}
+                                {hasPdf ? "Substituir" : "Anexar"}
+                              </Button>
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-3 py-2 text-right">
-                        <Button
-                          size="sm"
-                          variant={emitted ? "ghost" : "default"}
-                          disabled={emitted || !o.sap_doc_entry}
-                          onClick={() => setConfirmOrder(o)}
-                        >
-                          {emitted ? "Emitida" : "Emitir NFS-e"}
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1"
+                            disabled={!emitted}
+                            onClick={() => void openMail(o, inv ?? null)}
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            Enviar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={emitted ? "ghost" : "default"}
+                            disabled={emitted || !o.sap_doc_entry}
+                            onClick={() => setConfirmOrder(o)}
+                          >
+                            {emitted ? "Emitida" : "Emitir NFS-e"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -378,6 +575,70 @@ export default function SalesNfse() {
             <Button onClick={() => void emit()} disabled={emitting} className="gap-2">
               {emitting && <Loader2 className="w-4 h-4 animate-spin" />}
               Emitir NFS-e
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => void onPdfSelected(e.target.files?.[0])}
+      />
+
+      <Dialog open={!!mailOrder} onOpenChange={(v) => !v && setMailOrder(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Enviar NFS-e por e-mail</DialogTitle>
+            <DialogDescription>
+              {mailInvoice?.nfse_number
+                ? `Nota nº ${mailInvoice.nfse_number} · ${mailOrder?.supplier_name || ""}`
+                : mailOrder?.supplier_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {mailLoading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : (
+            <div className="space-y-3">
+              {!mailSenderOk && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+                  Remetente de e-mail não configurado para esta empresa (Backoffice → E-mail NFS-e).
+                </div>
+              )}
+              {mailOrder && !pdfFiles.has(pdfPathFor(mailOrder, mailInvoice)) && (
+                <div className="rounded-md border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
+                  Nenhum PDF anexado a esta nota — o e-mail será enviado sem anexo.
+                </div>
+              )}
+              <div>
+                <Label className="text-xs text-muted-foreground">Para</Label>
+                <Input value={mailTo} onChange={(e) => setMailTo(e.target.value)} placeholder="cliente@dominio.com" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Cópia</Label>
+                <Input value={mailCc} onChange={(e) => setMailCc(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Assunto</Label>
+                <Input value={mailSubject} onChange={(e) => setMailSubject(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Mensagem</Label>
+                <Textarea rows={4} value={mailMessage} onChange={(e) => setMailMessage(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMailOrder(null)} disabled={mailSending}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void sendMail()} disabled={mailSending || !mailTo.trim()} className="gap-2">
+              {mailSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              Enviar
             </Button>
           </DialogFooter>
         </DialogContent>
