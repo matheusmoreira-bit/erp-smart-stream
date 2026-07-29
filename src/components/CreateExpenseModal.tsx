@@ -3107,7 +3107,7 @@ export function CreateExpenseModal({
                       label={`Centro de Custo (Dimensão)${isSales ? "" : " *"}`}
                       required={!isSales}
 
-                      options={costCenterOptions}
+                      options={allowedCostCenterOptions}
                       isLoading={costCentersLoading}
                       value={item.sapCostCenter || null}
                       onChange={(val) => {
