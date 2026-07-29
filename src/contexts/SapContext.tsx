@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo, t
 import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, ensureSapAuthToken, type SapSession, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { clearErpLocalState } from "@/lib/clear-erp-local-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,6 +78,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<ErpSession | null>(() => loadStoredSession());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -217,6 +220,12 @@ export function SapProvider({ children }: { children: ReactNode }) {
     }
     clearClientCache();
     setSession(null);
+    setError(null);
+    setIsLoading(false);
+    // Zera o cache do React Query e todo o estado local persistido para que um
+    // reload em "/" não reaproveite dados do usuário/empresa anterior.
+    try { queryClient.clear(); } catch { /* ignore */ }
+    clearErpLocalState();
     // Also sign out any lingering Supabase Auth session — otherwise the next
     // user to log in via SAP inherits the previous user's Supabase identity
     // (isAdmin, role-scoped permissions, "Ver todas as aprovações", etc.).
@@ -226,7 +235,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
     });
     // Volta para a raiz e força reload para garantir a tela de login limpa.
     window.setTimeout(() => window.location.replace("/"), 900);
-  }, [session]);
+  }, [session, queryClient, setSession]);
 
   // `logout` agora apenas solicita a confirmação — o encerramento real
   // acontece no diálogo renderizado pelo provider.
@@ -242,6 +251,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
     const handler = () => {
       clearClientCache();
       setSession(null);
+      try { queryClient.clear(); } catch { /* ignore */ }
+      clearErpLocalState();
       setError("Sua sessão expirou. Faça login novamente.");
       // Same reasoning as logout(): drop the Supabase Auth session so a fresh
       // SAP login can't inherit stale admin/role state.
@@ -249,7 +260,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("erp:session-expired", handler);
     return () => window.removeEventListener("erp:session-expired", handler);
-  }, [setSession]);
+  }, [setSession, queryClient]);
 
   // Hard cap: any user session expires after at most 30 minutes (matching SAP
   // Service Layer's SessionTimeout). Once that window elapses, dispatch the
