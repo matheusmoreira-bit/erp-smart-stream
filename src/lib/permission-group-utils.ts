@@ -42,5 +42,13 @@ export function isBasicGroup(name: unknown): boolean {
 /** Grupos que sempre veem/selecionam todos os centros de custo. */
 export function isFullCostCenterGroup(name: unknown): boolean {
   const n = normalizeGroupName(name);
-  return n === "admin" || n.includes("facilities");
+  return (
+    n === "admin" ||
+    n.includes("facilities") ||
+    n.includes("contabil") ||
+    n.includes("fiscal") ||
+    n.includes("financeiro") ||
+    n.includes("contas a pagar") ||
+    n === "cfo"
+  );
 }
