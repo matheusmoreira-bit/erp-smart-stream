@@ -57,6 +57,7 @@ export async function changePasswordInCompanies(
   userCode: string,
   newPassword: string,
   companyDbs: string[],
+  currentPassword?: string,
 ): Promise<MultiCompanyPasswordResult[]> {
   if (companyDbs.length === 0) return [];
 
@@ -70,6 +71,7 @@ export async function changePasswordInCompanies(
       body: JSON.stringify({
         user_code: userCode,
         new_password: newPassword,
+        ...(currentPassword ? { current_password: currentPassword } : {}),
         company_dbs: companyDbs,
       }),
     });
