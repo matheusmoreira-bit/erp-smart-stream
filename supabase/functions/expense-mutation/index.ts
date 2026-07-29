@@ -21,6 +21,8 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { enforceRateLimit } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
