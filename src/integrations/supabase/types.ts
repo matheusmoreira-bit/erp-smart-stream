@@ -4365,6 +4365,74 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_order_invoices: {
+        Row: {
+          authorized_at: string | null
+          company_db: string
+          created_at: string
+          created_by_email: string | null
+          currency: string
+          expense_id: string
+          id: string
+          last_error: string | null
+          nfse_number: string | null
+          rps_number: string | null
+          sap_invoice_doc_entry: number | null
+          sap_invoice_doc_num: number | null
+          sap_order_doc_entry: number | null
+          series: string | null
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          authorized_at?: string | null
+          company_db: string
+          created_at?: string
+          created_by_email?: string | null
+          currency?: string
+          expense_id: string
+          id?: string
+          last_error?: string | null
+          nfse_number?: string | null
+          rps_number?: string | null
+          sap_invoice_doc_entry?: number | null
+          sap_invoice_doc_num?: number | null
+          sap_order_doc_entry?: number | null
+          series?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          authorized_at?: string | null
+          company_db?: string
+          created_at?: string
+          created_by_email?: string | null
+          currency?: string
+          expense_id?: string
+          id?: string
+          last_error?: string | null
+          nfse_number?: string | null
+          rps_number?: string | null
+          sap_invoice_doc_entry?: number | null
+          sap_invoice_doc_num?: number | null
+          sap_order_doc_entry?: number | null
+          series?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_order_invoices_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sap_cache: {
         Row: {
           cache_key: string
