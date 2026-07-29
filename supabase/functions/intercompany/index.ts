@@ -4,6 +4,7 @@
 // per-company report.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 
 const corsHeaders = {
@@ -251,6 +252,8 @@ async function forEachCompany<T>(
 }
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,6 +37,8 @@ async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>
 }
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

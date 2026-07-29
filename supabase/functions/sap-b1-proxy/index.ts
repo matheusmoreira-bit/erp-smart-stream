@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,6 +209,8 @@ async function getConfiguredSapCompanyDb(companyDB: string): Promise<string> {
 }
 
 Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

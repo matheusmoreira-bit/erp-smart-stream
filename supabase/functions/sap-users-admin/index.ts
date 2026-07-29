@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { fetchHanaView, loadHanaCreds, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 function pickStr(...vals: unknown[]): string | undefined {
   for (const v of vals) {
@@ -176,6 +177,8 @@ function extractSapError(payload: unknown, fallback: string): string {
 }
 
 Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {

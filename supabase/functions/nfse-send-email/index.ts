@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { parse as parseXml } from "https://deno.land/x/xml@2.1.3/mod.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,6 +120,8 @@ function parseRecipientsXml(xml: string): RecipientRule[] {
 }
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 

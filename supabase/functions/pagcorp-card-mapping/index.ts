@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { requireUserOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +36,8 @@ function serializeError(e: unknown) {
 }
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   if (req.method !== "POST") {

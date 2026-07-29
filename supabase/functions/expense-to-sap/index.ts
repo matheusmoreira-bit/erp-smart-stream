@@ -8,6 +8,7 @@ import { requireUserOrSapSession } from "../_shared/auth.ts";
 import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 
 const corsHeaders = {
@@ -698,6 +699,8 @@ async function buildApprovalReportPdf(
 
 
 Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 

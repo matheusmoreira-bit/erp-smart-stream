@@ -25,6 +25,7 @@ import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -176,6 +177,8 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     req.headers.get("cf-ray") ||
     crypto.randomUUID();
 
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") {
     stageLog("cors", "info", { requestId, method: "OPTIONS" });
     return new Response(null, { headers: corsHeaders });

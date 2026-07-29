@@ -25,6 +25,7 @@
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { canViewAllDocuments } from "../_shared/permission-groups.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const BUCKET = "expense-attachments";
 const SIGN_TTL_SECONDS = 300;
@@ -268,6 +269,8 @@ async function actionRemove(admin: SupabaseClient, caller: Caller, body: any) {
 /* ─────────────── HTTP entry ─────────────── */
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
 
