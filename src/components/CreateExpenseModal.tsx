@@ -3002,7 +3002,7 @@ export function CreateExpenseModal({
                     portalContainer={dialogContainer}
                   />
                   <div className="grid min-w-0 grid-cols-1 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-12">
-                    <div className="min-w-0 min-[380px]:col-span-3 sm:col-span-6">
+                    <div className="min-w-0 min-[380px]:col-span-3 sm:col-span-4">
                       <label className="text-[10px] text-muted-foreground whitespace-nowrap">
                         Descrição <span className="text-muted-foreground/70">(opcional)</span>
                       </label>
@@ -3013,7 +3013,8 @@ export function CreateExpenseModal({
                         className="text-sm h-8"
                       />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 sm:col-span-2">
+
                       <label className="text-[10px] text-muted-foreground whitespace-nowrap">Qtd *</label>
                       <div className="relative">
                         <DecimalInput
@@ -3030,7 +3031,8 @@ export function CreateExpenseModal({
                         </span>
                       </div>
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 sm:col-span-3">
+
                       <label className="text-[10px] text-muted-foreground whitespace-nowrap">Preço Unit. *</label>
                       <div className="relative">
                         <DecimalInput
@@ -3047,9 +3049,10 @@ export function CreateExpenseModal({
                         </span>
                       </div>
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 sm:col-span-3">
                       <label className="text-[10px] text-muted-foreground">Total</label>
-                      <Input value={formatCurrency(item.line_total)} readOnly className="h-8 min-w-0 px-2 text-sm bg-muted/30 font-mono" />
+                      <Input value={formatCurrency(item.line_total)} readOnly className="h-8 w-full min-w-0 px-2 text-sm bg-muted/30 font-mono" />
+
                     </div>
                   </div>
                   <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
