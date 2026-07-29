@@ -21,6 +21,7 @@ import {
   FileInput,
   Radar,
   UserCog,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
