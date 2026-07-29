@@ -23,6 +23,18 @@ function isAllowedEmail(email: string | null | undefined): boolean {
   return !!domain && ALLOWED_DOMAINS.includes(domain);
 }
 
+// A sessão Google sobrevive ao "Sair" da empresa, mas com validade máxima de 24h.
+const GOOGLE_SESSION_MAX_MS = 24 * 60 * 60 * 1000;
+
+function sessionAgeMs(user: { last_sign_in_at?: string | null; created_at?: string | null } | undefined): number | null {
+  const iso = user?.last_sign_in_at || user?.created_at;
+  if (!iso) return null;
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return null;
+  return Date.now() - ts;
+}
+
+
 export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
