@@ -238,7 +238,7 @@ function SalesPageInner() {
 
         // Build cross-references
         const docEntries = rawList.map((r) => r.DocEntry).filter((n) => Number.isFinite(n));
-        const [pedidosRes, baixasRes, bpNamesRes] = await Promise.all([
+        const [pedidosRes, baixasRes, bpNamesRes, nfseMap] = await Promise.all([
           docEntries.length
             ? supabase
                 .from("pedidos_venda_erp")
@@ -254,6 +254,8 @@ function SalesPageInner() {
             .eq("baixas_recebimento.company_db", companyDb)
             .eq("baixas_recebimento.status", "pendente_sincronizacao"),
           Promise.resolve({ data: [] as { CardCode: string; CardName: string }[] }),
+          // Número real da NFS-e (addon fiscal) por DocEntry.
+          fetchNfseMap(companyDb, docEntries),
         ]);
 
         if (pedidosRes.error) console.warn("pedidos_venda_erp:", pedidosRes.error.message);
