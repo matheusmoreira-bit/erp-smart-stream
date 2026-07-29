@@ -24,6 +24,7 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
+import { canViewAllDocuments } from "../_shared/permission-groups.ts";
 
 const BUCKET = "expense-attachments";
 const SIGN_TTL_SECONDS = 300;
@@ -238,7 +239,7 @@ async function actionSign(admin: SupabaseClient, caller: Caller, body: any) {
 
   const owned = await loadOwnedByPath(admin, filePath);
   if ("error" in owned) return json(owned.status, { error: owned.error });
-  if (!canReadOwned(caller, owned)) {
+  if (!(await canReadOwned(admin, caller, owned))) {
     return json(403, { error: "Sem permissão para abrir este anexo" });
   }
 
