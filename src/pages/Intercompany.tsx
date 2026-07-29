@@ -501,6 +501,105 @@ function CreateCostCenterDialog({ onCreated, companyDbs }: { onCreated: () => vo
   );
 }
 
+function CreateProjectDialog({ onCreated, companyDbs }: { onCreated: () => void; companyDbs: string[] }) {
+  const { createProject } = useIntercompany();
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [validFrom, setValidFrom] = useState("");
+  const [validTo, setValidTo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [report, setReport] = useState<PerCompanyResult[] | null>(null);
+
+  const submit = async () => {
+    if (!code.trim() || !name.trim()) {
+      toast.error("Preencha código e nome");
+      return;
+    }
+    if (companyDbs.length === 0) {
+      toast.error("Selecione ao menos uma empresa");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { results } = await createProject({
+        code: code.trim(),
+        name: name.trim(),
+        valid_from: validFrom || undefined,
+        valid_to: validTo || undefined,
+        company_dbs: companyDbs,
+      });
+      setReport(results);
+      setOpen(false);
+      setCode("");
+      setName("");
+      setValidFrom("");
+      setValidTo("");
+      onCreated();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar projeto");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button size="sm" className="gap-2">
+            <Plus className="w-4 h-4" /> Novo Projeto
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Projeto</DialogTitle>
+            <DialogDescription>
+              Será criado nas empresas SAP selecionadas (best-effort).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Código</Label>
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ex: DONALD BET" />
+            </div>
+            <div>
+              <Label>Nome</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: DONALD BET" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Válido de (opcional)</Label>
+                <Input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+              </div>
+              <div>
+                <Label>Válido até (opcional)</Label>
+                <Input type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={submit} disabled={submitting}>
+              {submitting ? "Criando..." : "Criar nas empresas selecionadas"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {report && (
+        <ResultReportDialog
+          open={!!report}
+          onOpenChange={(v) => !v && setReport(null)}
+          results={report}
+          title="Relatório de criação — Projeto"
+        />
+      )}
+    </>
+  );
+}
+
 function ResolveConflictDialog({
   open,
   onOpenChange,
