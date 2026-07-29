@@ -18,6 +18,9 @@ import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/ra
 import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
 import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { consumeCsrfToken, CSRF_HEADER } from "../_shared/csrf.ts";
+import { revokeErpSession } from "../_shared/session-revocation.ts";
+
 
 
 const corsHeaders = {
