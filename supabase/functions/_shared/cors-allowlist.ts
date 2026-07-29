@@ -14,8 +14,8 @@ const STATIC_ALLOWED = [
 
 const ALLOWED_PATTERNS: RegExp[] = [
   // Previews do Lovable do próprio projeto.
-  /^https:\/\/[a-z0-9-]+\.lovable\.app$/i,
-  /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/i,
+  /^https:\/\/([a-z0-9-]+\.)*lovable\.app$/i,
+  /^https:\/\/([a-z0-9-]+\.)*lovableproject\.com$/i,
 ];
 
 const ALLOW_HEADERS =
