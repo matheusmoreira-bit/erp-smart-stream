@@ -265,7 +265,7 @@ function BaixasHistoryInner() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Button asChild variant="ghost" size="sm" className="gap-1.5">
-              <Link to="/vendas">
+              <Link to="/vendas/recebimentos">
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Voltar
               </Link>
