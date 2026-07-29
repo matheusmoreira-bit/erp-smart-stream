@@ -192,7 +192,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
     }
   }, [setSession]);
 
-  const logout = useCallback(async () => {
+  const performLogout = useCallback(async () => {
     if (session?.erpType === "sap" && session.sessionId) {
       await sapLogout({
         sessionId: session.sessionId,
@@ -208,9 +208,19 @@ export function SapProvider({ children }: { children: ReactNode }) {
     // user to log in via SAP inherits the previous user's Supabase identity
     // (isAdmin, role-scoped permissions, "Ver todas as aprovações", etc.).
     try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    toast.success("Sessão encerrada", {
+      description: "Você saiu com segurança. Redirecionando para o login…",
+    });
     // Volta para a raiz e força reload para garantir a tela de login limpa.
-    window.location.replace("/");
+    window.setTimeout(() => window.location.replace("/"), 900);
   }, [session]);
+
+  // `logout` agora apenas solicita a confirmação — o encerramento real
+  // acontece no diálogo renderizado pelo provider.
+  const logout = useCallback(async () => {
+    setConfirmLogoutOpen(true);
+  }, []);
+
 
   // Listen for SAP Service Layer session-expired events emitted by sap-client.
   // Don't try to silently relogin with cached credentials — clear state so the
