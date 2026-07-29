@@ -41,6 +41,7 @@ function VirtualRowComponent({
   onOpen,
   onRelations,
 }: RowComponentProps<RowProps>) {
+  const statusLabel = useStatusLabel();
   const row = items[index];
   if (!row) return null;
   const { exp, origin } = row;
