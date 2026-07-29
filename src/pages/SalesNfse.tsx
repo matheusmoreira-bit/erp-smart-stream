@@ -71,6 +71,8 @@ interface SalesOrderRow {
   requester_name: string | null;
   sap_doc_entry: number | null;
   sap_doc_num: number | null;
+  project: string | null;
+  nfse_split_mode: string | null;
 }
 
 interface NfseRow {
@@ -143,7 +145,7 @@ export default function SalesNfse() {
       const [{ data: exp, error: e1 }, { data: inv, error: e2 }] = await Promise.all([
         supabase
           .from("expenses")
-          .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num")
+          .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode")
           .eq("company_db", companyDb)
           .eq("doc_type", "sales")
           .in("status", APPROVED_STATUSES)
