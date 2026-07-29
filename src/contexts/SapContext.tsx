@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { sapLogin, sapLogout, ensureSapAuthToken, type SapSession, clearClientCache } from "@/lib/sap-client";
+import { sapLogin, sapLogout, ensureSapAuthToken, sapKeepAlive, type SapSession, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearErpLocalState } from "@/lib/clear-erp-local-state";
