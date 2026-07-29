@@ -1,4 +1,5 @@
 // Admin-only: gera senha aleatória forte, aplica no SAP e guarda criptografada
+import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
 // em user_sap_credentials do usuário-alvo. O usuário nunca conhece a senha —
 // o login vira transparente (Cloud auth → seleciona empresa → auto-login).
 
@@ -255,6 +256,12 @@ Deno.serve(async (req) => {
           results.push({ companyDB: companyDb, displayName, status: "error", message: extractSapError(patch.data, `HTTP ${patch.status}`) });
           continue;
         }
+        // Senha de serviço não pode expirar — ativa o flag no SAP (best-effort).
+        await ensurePasswordNeverExpires(
+          (path, method, b) => sapRequest(session, path, method, b),
+          rows[0].InternalKey!,
+          { companyDb, sapUser },
+        );
         const encrypted = await encryptSecret(newPassword);
         const { error: upsertErr } = await admin.from("user_sap_credentials").upsert({
           user_id: targetUserId,
