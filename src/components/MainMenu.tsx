@@ -21,6 +21,7 @@ import {
   FileInput,
   Radar,
   UserCog,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -124,6 +125,15 @@ const modules: Record<string, ModuleCard> = {
     color: "text-indigo-400",
     bgGlow: "from-indigo-500/20 to-indigo-500/5",
     moduleKey: "items",
+  },
+  registration_requests: {
+    title: "Solicitações de cadastro",
+    description: "Chamados de cadastro de fornecedores e itens, com SLA de 48h úteis e acompanhamento por status.",
+    icon: ClipboardList,
+    path: "/cadastros/solicitacoes",
+    color: "text-indigo-400",
+    bgGlow: "from-indigo-500/20 to-indigo-500/5",
+    moduleKey: "",
   },
   integracoes: {
     title: "Integrações",

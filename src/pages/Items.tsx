@@ -12,6 +12,7 @@ import {
   XCircle,
   AlertCircle,
   LogOut,
+  ClipboardList,
   CloudUpload,
   Upload,
   Loader2,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -99,6 +101,7 @@ export default function Items() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<SapItem | null>(null);
   const [creating, setCreating] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -347,6 +350,19 @@ export default function Items() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
+          <Button variant="outline" onClick={() => setRequestOpen(true)} className="gap-2">
+            <ClipboardList className="w-4 h-4" />
+            Solicitar cadastro de item
+          </Button>
+          <Button variant="ghost" onClick={() => navigate("/cadastros/solicitacoes")} className="gap-2">
+            Minhas solicitações
+          </Button>
+          <RegistrationRequestModal
+            open={requestOpen}
+            onOpenChange={setRequestOpen}
+            type="item"
+            defaults={{ companyDb: session?.companyDB, context: "Cadastros — Itens", requesterName: session?.userName }}
+          />
           {canWrite && (
             <>
               <Button

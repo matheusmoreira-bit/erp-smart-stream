@@ -48,7 +48,7 @@ import {
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
-import { requestSupplierRegistration } from "@/lib/supplier-request-email";
+import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { UserPlus, RefreshCw, Building2 } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
@@ -174,6 +174,7 @@ export function CreateExpenseModal({
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
   const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [supplierRequestOpen, setSupplierRequestOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
   const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
@@ -2587,46 +2588,7 @@ export function CreateExpenseModal({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={async () => {
-                    try {
-                      const prefillAtts = (prefill?.receipts || []).flatMap((r: any) => {
-                        const url = typeof r === "string" ? r : r?.url || r?.fileUrl || r?.href;
-                        if (!url) return [];
-                        const name = (typeof r === "object" && (r.name || r.filename)) || url.split("/").pop()?.split("?")[0] || "anexo";
-                        return [{ name, url }];
-                      });
-                      await requestSupplierRegistration({
-                        cardName: aiSupplierData?.card_name || suggestedSupplierName || undefined,
-                        federalTaxId: aiSupplierData?.federal_tax_id,
-                        email: aiSupplierData?.email,
-                        phone1: aiSupplierData?.phone1,
-                        phone2: aiSupplierData?.phone2,
-                        currency: aiSupplierData?.currency,
-                        address: {
-                          street: aiSupplierData?.bill_to_street,
-                          zip: aiSupplierData?.bill_to_zip,
-                          city: aiSupplierData?.bill_to_city,
-                          state: aiSupplierData?.bill_to_state,
-                          country: aiSupplierData?.bill_to_country,
-                          block: aiSupplierData?.bill_to_block,
-                          building: aiSupplierData?.bill_to_building,
-                        },
-                        companyDb: sapSession?.companyDB,
-                        context: `Compras — Criação de despesa (${bpLabel})`,
-                        transaction: prefill ? {
-                          description: prefill.description,
-                          amount: prefill.amount,
-                          currency: prefill.currency,
-                          accountAlias: prefill.accountAlias,
-                        } : undefined,
-                        attachments: prefillAtts,
-                        requesterName: sapSession?.userName,
-                      });
-                      toast.success("Solicitação enviada para compras@anagaming.com.br");
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Falha ao enviar solicitação");
-                    }
-                  }}
+                  onClick={() => setSupplierRequestOpen(true)}
                   className="h-8 w-full gap-1.5 text-xs sm:h-7 sm:w-auto sm:shrink-0"
                 >
                   <UserPlus className="w-3.5 h-3.5" /> Solicitar cadastro
@@ -2634,6 +2596,49 @@ export function CreateExpenseModal({
               </div>
             )}
           </div>
+
+          <RegistrationRequestModal
+            open={supplierRequestOpen}
+            onOpenChange={setSupplierRequestOpen}
+            type="supplier"
+            defaults={{
+              cardName: aiSupplierData?.card_name || suggestedSupplierName || undefined,
+              federalTaxId: aiSupplierData?.federal_tax_id,
+              email: aiSupplierData?.email,
+              phone1: aiSupplierData?.phone1,
+              phone2: aiSupplierData?.phone2,
+              currency: aiSupplierData?.currency,
+              address: {
+                street: aiSupplierData?.bill_to_street,
+                zip: aiSupplierData?.bill_to_zip,
+                city: aiSupplierData?.bill_to_city,
+                state: aiSupplierData?.bill_to_state,
+                country: aiSupplierData?.bill_to_country,
+                block: aiSupplierData?.bill_to_block,
+                building: aiSupplierData?.bill_to_building,
+              },
+              companyDb: sapSession?.companyDB,
+              context: `Compras — Criação de despesa (${bpLabel})`,
+              transaction: prefill
+                ? {
+                    description: prefill.description,
+                    amount: prefill.amount,
+                    currency: prefill.currency,
+                    accountAlias: prefill.accountAlias,
+                  }
+                : undefined,
+              attachments: (prefill?.receipts || []).flatMap((r: any) => {
+                const url = typeof r === "string" ? r : r?.url || r?.fileUrl || r?.href;
+                if (!url) return [];
+                const name =
+                  (typeof r === "object" && (r.name || r.filename)) ||
+                  url.split("/").pop()?.split("?")[0] ||
+                  "anexo";
+                return [{ name, url }];
+              }),
+              requesterName: sapSession?.userName,
+            }}
+          />
 
           {/* Supplier creation modal — pre-filled with AI extracted data */}
           <SupplierFormModal
