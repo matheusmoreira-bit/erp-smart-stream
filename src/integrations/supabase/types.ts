@@ -2549,6 +2549,7 @@ export type Database = {
           doc_type: string
           due_date: string | null
           id: string
+          nfse_split_mode: string
           origin: string
           original_approver: string | null
           project: string | null
@@ -2589,6 +2590,7 @@ export type Database = {
           doc_type?: string
           due_date?: string | null
           id?: string
+          nfse_split_mode?: string
           origin?: string
           original_approver?: string | null
           project?: string | null
@@ -2629,6 +2631,7 @@ export type Database = {
           doc_type?: string
           due_date?: string | null
           id?: string
+          nfse_split_mode?: string
           origin?: string
           original_approver?: string | null
           project?: string | null
