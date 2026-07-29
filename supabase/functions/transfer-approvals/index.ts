@@ -4,6 +4,7 @@
 // aprovador e registra audit_log. Apenas admins podem invocar.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +15,8 @@ const corsHeaders = {
 const norm = (v: string | null | undefined) => (v || "").trim().toLowerCase();
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   let caller;

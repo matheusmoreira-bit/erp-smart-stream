@@ -3,6 +3,7 @@
 // Uses system_credentials for the company.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +43,8 @@ async function login(creds: Record<string, string>) {
 }
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const { companyDb, docEntries, reason } = await req.json();
