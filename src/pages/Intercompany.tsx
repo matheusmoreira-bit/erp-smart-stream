@@ -1259,16 +1259,19 @@ export default function Intercompany() {
                   </>
                 )}
                 {tab === "projects" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={reloadProjects}
-                    disabled={loadingProjects || selectedDbs.length === 0}
-                    className="gap-2"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${loadingProjects ? "animate-spin" : ""}`} />
-                    Atualizar
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={reloadProjects}
+                      disabled={loadingProjects || selectedDbs.length === 0}
+                      className="gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loadingProjects ? "animate-spin" : ""}`} />
+                      Atualizar
+                    </Button>
+                    <CreateProjectDialog onCreated={reloadProjects} companyDbs={selectedDbs} />
+                  </>
                 )}
                 {tab === "bps" && (
 
