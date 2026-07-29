@@ -123,6 +123,32 @@ function formatNfseLabel(row: Pick<InvoiceRow, "nfseNumber" | "folioPrefix" | "f
   return `NFS-e ${row.folioPrefix ? `${row.folioPrefix} ` : ""}${row.nfseNumber}${row.folioSeries ? ` · Série ${row.folioSeries}` : ""}`;
 }
 
+/**
+ * Busca o número REAL da NFS-e (autorizado pela prefeitura) no addon fiscal.
+ * O Service Layer só expõe o número do RPS (`SequenceSerial`), por isso a
+ * consulta é feita na edge function `sap-nfse-lookup`. Falhas são silenciosas:
+ * a tela continua exibindo o número do RPS como fallback.
+ */
+async function fetchNfseMap(
+  companyDb: string,
+  docEntries: number[],
+): Promise<Record<string, { nfse: string | null; rps: string | null; serie: string | null }>> {
+  if (!companyDb || docEntries.length === 0) return {};
+  try {
+    const resp = await publicFunctionFetch("sap-nfse-lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_db: companyDb, doc_entries: docEntries }),
+    });
+    if (!resp.ok) return {};
+    const json = await resp.json().catch(() => null);
+    return (json?.map ?? {}) as Record<string, { nfse: string | null; rps: string | null; serie: string | null }>;
+  } catch (e) {
+    console.warn("sap-nfse-lookup indisponível:", (e as Error).message);
+    return {};
+  }
+}
+
 /* ─────────────────────────── Page ─────────────────────────── */
 
 export default function SalesPage() {
