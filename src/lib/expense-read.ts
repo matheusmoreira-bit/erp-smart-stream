@@ -51,7 +51,7 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
   lte(column: string, value: unknown) { return this.push("lte", column, value); }
   like(column: string, value: unknown) { return this.push("like", column, value); }
   ilike(column: string, value: unknown) { return this.push("ilike", column, value); }
-  in(column: string, values: unknown[]) { return this.push("in", column, values); }
+  in(column: string, values: readonly unknown[]) { return this.push("in", column, values); }
   is(column: string, value: unknown) { return this.push("is", column, value); }
   not(column: string, op: string, value: unknown) {
     if (op !== "is") throw new Error(`expense-read: not(${op}) não suportado`);
