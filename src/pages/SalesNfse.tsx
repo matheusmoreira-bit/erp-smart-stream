@@ -218,6 +218,47 @@ export default function SalesNfse() {
     [pdfPathFor],
   );
 
+  const XML_REASONS: Record<string, string> = {
+    hana_indisponivel: "Esta empresa não tem HanaAPI habilitada.",
+    entidade_fiscal_nao_encontrada: "Entidade fiscal (TaxOne) não encontrada para esta base.",
+    documento_fiscal_nao_encontrado: "Nota ainda não registrada no addon fiscal.",
+    view_xml_nao_publicada: "View de XML autorizado ainda não criada nesta base.",
+    xml_nao_encontrado: "XML autorizado ainda não disponível para esta nota.",
+    xml_vazio: "XML autorizado veio vazio no addon fiscal.",
+  };
+
+  const fetchXml = useCallback(
+    async (order: SalesOrderRow, inv: NfseRow | null, openAfter = true) => {
+      if (!inv?.sap_invoice_doc_entry) return null;
+      setXmlLoadingFor(order.id);
+      try {
+        const res = await authFetch("nfse-xml-fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_db: companyDb, doc_entry: inv.sap_invoice_doc_entry }),
+        });
+        const b = await res.json().catch(() => ({}));
+        if (!res.ok || b?.error) throw new Error(b?.error || `Falha ao buscar XML (${res.status})`);
+        if (b?.unavailable) {
+          toast.info(XML_REASONS[b.reason] || "XML autorizado indisponível.");
+          return null;
+        }
+        setXmlPaths((prev) => ({ ...prev, [order.id]: b.path }));
+        if (openAfter && b.signed_url) window.open(b.signed_url, "_blank", "noopener,noreferrer");
+        return b.path as string;
+      } catch (e) {
+        toast.error((e as Error).message);
+        return null;
+      } finally {
+        setXmlLoadingFor(null);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [companyDb],
+  );
+
+
+
   const openMail = useCallback(
     async (order: SalesOrderRow, inv: NfseRow | null) => {
       setMailOrder(order);
