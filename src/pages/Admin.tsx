@@ -390,7 +390,7 @@ export default function Admin() {
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   // Audit log
-  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "audit" | "permissions" | "admin_users" | "tools" | "roi">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "nfse_email" | "audit" | "permissions" | "admin_users" | "tools" | "roi">("companies");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
