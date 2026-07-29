@@ -37,6 +37,7 @@ interface Props {
     docNum: number;
     folioNumber?: number | null;
     nfseNumber?: string | null;
+    rpsNumber?: string | null;
     folioPrefix?: string | null;
     folioSeries?: string | null;
     cardCode: string;
