@@ -174,6 +174,7 @@ export function CreateExpenseModal({
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
   const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [supplierRequestOpen, setSupplierRequestOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
   const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
