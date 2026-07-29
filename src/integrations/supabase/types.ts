@@ -3418,6 +3418,141 @@ export type Database = {
         }
         Relationships: []
       }
+      nfse_email_log: {
+        Row: {
+          attachment_path: string | null
+          cc_emails: string[]
+          company_db: string
+          created_at: string
+          error_message: string | null
+          expense_id: string | null
+          id: string
+          invoice_doc_entry: number | null
+          nfse_number: string | null
+          project_code: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_emails: string[]
+        }
+        Insert: {
+          attachment_path?: string | null
+          cc_emails?: string[]
+          company_db: string
+          created_at?: string
+          error_message?: string | null
+          expense_id?: string | null
+          id?: string
+          invoice_doc_entry?: number | null
+          nfse_number?: string | null
+          project_code?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string | null
+          to_emails?: string[]
+        }
+        Update: {
+          attachment_path?: string | null
+          cc_emails?: string[]
+          company_db?: string
+          created_at?: string
+          error_message?: string | null
+          expense_id?: string | null
+          id?: string
+          invoice_doc_entry?: number | null
+          nfse_number?: string | null
+          project_code?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string | null
+          to_emails?: string[]
+        }
+        Relationships: []
+      }
+      nfse_email_recipients: {
+        Row: {
+          brand: string | null
+          cc_emails: string[]
+          company_db: string
+          created_at: string
+          id: string
+          is_active: boolean
+          project_code: string
+          source: string
+          to_emails: string[]
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          cc_emails?: string[]
+          company_db: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          project_code?: string
+          source?: string
+          to_emails?: string[]
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          cc_emails?: string[]
+          company_db?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          project_code?: string
+          source?: string
+          to_emails?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      nfse_email_settings: {
+        Row: {
+          company_db: string
+          created_at: string
+          from_email: string
+          from_name: string
+          id: string
+          is_active: boolean
+          reply_to: string | null
+          smtp_host: string
+          smtp_password_secret: string
+          smtp_port: number
+          smtp_user: string
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          from_email: string
+          from_name: string
+          id?: string
+          is_active?: boolean
+          reply_to?: string | null
+          smtp_host?: string
+          smtp_password_secret: string
+          smtp_port?: number
+          smtp_user: string
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          from_email?: string
+          from_name?: string
+          id?: string
+          is_active?: boolean
+          reply_to?: string | null
+          smtp_host?: string
+          smtp_password_secret?: string
+          smtp_port?: number
+          smtp_user?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           category: string
