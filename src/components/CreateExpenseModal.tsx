@@ -94,6 +94,7 @@ import {
 } from "@/lib/attachment-validation";
 import { useCurrentUserCostCenter, isItemAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
+import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
@@ -188,6 +189,7 @@ export function CreateExpenseModal({
   const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
   const [headerProject, setHeaderProject] = useState<SapSearchOption | null>(null);
   const [rateioType, setRateioType] = useState<RateioType>("padrao");
+  const [nfseSplitMode, setNfseSplitMode] = useState<"unified" | "per_brand">("unified");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
 
@@ -238,12 +240,24 @@ export function CreateExpenseModal({
   );
 
   const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
-  const { options: projectOptions, isLoading: projectsLoading } = useSapCachedList({
+  const { options: rawProjectOptions, isLoading: projectsLoading } = useSapCachedList({
     cacheKey: "projects",
     endpoint: "Projects",
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: projectMapRow,
   });
+
+  // Vendas: cada cliente libera apenas as marcas vinculadas (até 3) ou o
+  // projeto homônimo ao cliente. Sem mapeamento, mantém a lista integral.
+  const { brandsForCustomer } = useCustomerBrandMap();
+  const projectOptions = useMemo(() => {
+    if (!isSales) return rawProjectOptions;
+    return filterProjectsForCustomer(
+      rawProjectOptions,
+      supplier ? { code: supplier.code, name: supplier.name } : null,
+      brandsForCustomer(supplier?.code),
+    );
+  }, [isSales, rawProjectOptions, supplier, brandsForCustomer]);
 
   // ---- Alerta de casamento Centro de Custo × Projeto (auditável) ----
   const ccAlertEnabled = !isSales && projectOptions.length > 1;
@@ -1946,6 +1960,7 @@ export function CreateExpenseModal({
         doc_date: docDate || undefined,
         due_date: dueDate || undefined,
         rateio_type: !isSales ? rateioType : undefined,
+        nfse_split_mode: isSales ? nfseSplitMode : undefined,
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });
@@ -2918,6 +2933,27 @@ export function CreateExpenseModal({
                   {rateioType === "viagens" && " Viagens seguem o fluxo de Reembolso."}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Vendas — define se a NFS-e sai unificada ou uma por marca/projeto */}
+          {isSales && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Emissão da NFS-e</label>
+              <Select value={nfseSplitMode} onValueChange={(v) => setNfseSplitMode(v as "unified" | "per_brand")}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unified">Unificada (uma nota para o pedido)</SelectItem>
+                  <SelectItem value="per_brand">Separada por marca/projeto</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {nfseSplitMode === "per_brand"
+                  ? "Cada marca gera uma NFS-e e recebe apenas os destinatários mapeados para ela."
+                  : "Nota única enviada para a união dos destinatários das marcas do cliente."}
+              </p>
             </div>
           )}
 

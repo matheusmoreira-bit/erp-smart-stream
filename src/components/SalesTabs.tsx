@@ -1,11 +1,12 @@
 import { NavLink } from "react-router-dom";
-import { ClipboardList, FileText, Wallet } from "lucide-react";
+import { ClipboardList, FileText, Users, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { to: "/vendas/pedidos", label: "Pedidos de Venda", icon: ClipboardList },
   { to: "/vendas/nfse", label: "NFS-e", icon: FileText },
   { to: "/vendas/recebimentos", label: "Contas a Receber", icon: Wallet },
+  { to: "/vendas/destinatarios", label: "Destinatários", icon: Users },
 ];
 
 /** Navegação entre os submódulos do ciclo de vendas. */

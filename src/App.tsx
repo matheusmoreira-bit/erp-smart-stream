@@ -89,6 +89,7 @@ const App = () => (
               <Route path="/vendas/pedidos" element={<SalesHub tab="orders" />} />
               <Route path="/vendas/nfse" element={<SalesHub tab="nfse" />} />
               <Route path="/vendas/recebimentos" element={<SalesHub tab="receivables" />} />
+              <Route path="/vendas/destinatarios" element={<SalesHub tab="recipients" />} />
               <Route path="/vendas/historico" element={<BaixasHistory />} />
 
               {/* Aprovações */}

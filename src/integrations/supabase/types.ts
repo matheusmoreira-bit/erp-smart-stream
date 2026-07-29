@@ -2549,6 +2549,7 @@ export type Database = {
           doc_type: string
           due_date: string | null
           id: string
+          nfse_split_mode: string
           origin: string
           original_approver: string | null
           project: string | null
@@ -2589,6 +2590,7 @@ export type Database = {
           doc_type?: string
           due_date?: string | null
           id?: string
+          nfse_split_mode?: string
           origin?: string
           original_approver?: string | null
           project?: string | null
@@ -2629,6 +2631,7 @@ export type Database = {
           doc_type?: string
           due_date?: string | null
           id?: string
+          nfse_split_mode?: string
           origin?: string
           original_approver?: string | null
           project?: string | null
@@ -3532,6 +3535,8 @@ export type Database = {
           cc_emails: string[]
           company_db: string
           created_at: string
+          customer_code: string
+          customer_name: string | null
           id: string
           is_active: boolean
           project_code: string
@@ -3544,6 +3549,8 @@ export type Database = {
           cc_emails?: string[]
           company_db: string
           created_at?: string
+          customer_code?: string
+          customer_name?: string | null
           id?: string
           is_active?: boolean
           project_code?: string
@@ -3556,6 +3563,8 @@ export type Database = {
           cc_emails?: string[]
           company_db?: string
           created_at?: string
+          customer_code?: string
+          customer_name?: string | null
           id?: string
           is_active?: boolean
           project_code?: string
@@ -6052,6 +6061,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      can_manage_nfse_recipients: { Args: never; Returns: boolean }
       check_and_increment_rate_limit: {
         Args: { _key: string; _max: number; _window_seconds: number }
         Returns: {
