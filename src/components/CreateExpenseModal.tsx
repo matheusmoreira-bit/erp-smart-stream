@@ -1891,7 +1891,14 @@ export function CreateExpenseModal({
         }
         return;
       }
+
+      // Alçada de CC: usuário do 1.6.1.2 só lança em 1.6.% (salvo grupos com visão total).
+      if (!isSales && !isCostCenterAllowedForUser(it.cost_center, userCostCenter, bypassCcItemRules)) {
+        toast.error(`Item ${n}: centro de custo fora da sua alçada (${ccBranch}.%)`);
+        return;
+      }
     }
+
     // Centro de custo padrão é opcional — se o usuário tiver CC via IdP,
     // já é pré-preenchido; caso contrário, cada linha pode ter seu próprio CC.
 
