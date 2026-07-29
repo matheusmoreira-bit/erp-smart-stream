@@ -74,7 +74,7 @@ function buildHtml(req: Req, overdue: boolean, deltaLabel: string): string {
           .join("")}
       </table>
       <div style="margin-top:22px">
-        <a href="${APP_URL}/registration-requests" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px">Abrir fila de chamados</a>
+        <a href="${APP_URL}/cadastros/solicitacoes" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px">Abrir fila de chamados</a>
       </div>
     </div>
     <div style="padding:14px 24px;background:#fafafa;color:#71717a;font-size:12px;border-top:1px solid #e4e4e7">
@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
             to,
             subject,
             html: buildHtml(item.req, item.overdue, item.label),
-            text: `${subject}\nPrazo: ${fmtDateTime(item.req.due_at)}\nSolicitante: ${item.req.requester_email}\n${APP_URL}/registration-requests`,
+            text: `${subject}\nPrazo: ${fmtDateTime(item.req.due_at)}\nSolicitante: ${item.req.requester_email}\n${APP_URL}/cadastros/solicitacoes`,
           },
         });
         if (mailErr) throw mailErr;
