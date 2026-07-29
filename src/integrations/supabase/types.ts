@@ -2202,6 +2202,45 @@ export type Database = {
           },
         ]
       }
+      empresa_kyp_config: {
+        Row: {
+          ativo: boolean
+          company_id: string
+          config: Json
+          kyp_provider_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          company_id: string
+          config?: Json
+          kyp_provider_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          company_id?: string
+          config?: Json
+          kyp_provider_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "empresa_kyp_config_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "empresa_kyp_config_kyp_provider_id_fkey"
+            columns: ["kyp_provider_id"]
+            isOneToOne: false
+            referencedRelation: "kyp_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enabled_erp_types: {
         Row: {
           created_at: string
@@ -3188,6 +3227,209 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      kyp_avaliacoes: {
+        Row: {
+          acao: string
+          disparado_por: string | null
+          documento: string | null
+          empresas_afetadas: string[]
+          executado_em: string
+          id: string
+          kyp_fornecedor_id: string | null
+          kyp_provider_id: string | null
+          motivo: string | null
+          nome: string | null
+          provider_code: string | null
+          provider_ref_id: string | null
+          provider_response: Json | null
+          sucesso: boolean
+          tipo_pessoa: string | null
+        }
+        Insert: {
+          acao: string
+          disparado_por?: string | null
+          documento?: string | null
+          empresas_afetadas?: string[]
+          executado_em?: string
+          id?: string
+          kyp_fornecedor_id?: string | null
+          kyp_provider_id?: string | null
+          motivo?: string | null
+          nome?: string | null
+          provider_code?: string | null
+          provider_ref_id?: string | null
+          provider_response?: Json | null
+          sucesso?: boolean
+          tipo_pessoa?: string | null
+        }
+        Update: {
+          acao?: string
+          disparado_por?: string | null
+          documento?: string | null
+          empresas_afetadas?: string[]
+          executado_em?: string
+          id?: string
+          kyp_fornecedor_id?: string | null
+          kyp_provider_id?: string | null
+          motivo?: string | null
+          nome?: string | null
+          provider_code?: string | null
+          provider_ref_id?: string | null
+          provider_response?: Json | null
+          sucesso?: boolean
+          tipo_pessoa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kyp_avaliacoes_kyp_fornecedor_id_fkey"
+            columns: ["kyp_fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "kyp_fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kyp_avaliacoes_kyp_provider_id_fkey"
+            columns: ["kyp_provider_id"]
+            isOneToOne: false
+            referencedRelation: "kyp_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kyp_fornecedor_ocorrencias: {
+        Row: {
+          bloqueado_em: string | null
+          codigo_fornecedor_erp: string
+          company_db: string
+          company_id: string | null
+          created_at: string
+          detalhes: Json
+          erp: string
+          id: string
+          kyp_fornecedor_id: string
+          nome_erp: string | null
+          updated_at: string
+        }
+        Insert: {
+          bloqueado_em?: string | null
+          codigo_fornecedor_erp: string
+          company_db: string
+          company_id?: string | null
+          created_at?: string
+          detalhes?: Json
+          erp: string
+          id?: string
+          kyp_fornecedor_id: string
+          nome_erp?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bloqueado_em?: string | null
+          codigo_fornecedor_erp?: string
+          company_db?: string
+          company_id?: string | null
+          created_at?: string
+          detalhes?: Json
+          erp?: string
+          id?: string
+          kyp_fornecedor_id?: string
+          nome_erp?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kyp_fornecedor_ocorrencias_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kyp_fornecedor_ocorrencias_kyp_fornecedor_id_fkey"
+            columns: ["kyp_fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "kyp_fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kyp_fornecedores: {
+        Row: {
+          created_at: string
+          documento: string
+          id: string
+          kyp_provider_id: string | null
+          nome: string | null
+          provider_ref_id: string | null
+          provider_status: string | null
+          proxima_expiracao_em: string | null
+          status_atual: string
+          tipo_pessoa: string
+          ultima_avaliacao_em: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          documento: string
+          id?: string
+          kyp_provider_id?: string | null
+          nome?: string | null
+          provider_ref_id?: string | null
+          provider_status?: string | null
+          proxima_expiracao_em?: string | null
+          status_atual?: string
+          tipo_pessoa: string
+          ultima_avaliacao_em?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          documento?: string
+          id?: string
+          kyp_provider_id?: string | null
+          nome?: string | null
+          provider_ref_id?: string | null
+          provider_status?: string | null
+          proxima_expiracao_em?: string | null
+          status_atual?: string
+          tipo_pessoa?: string
+          ultima_avaliacao_em?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kyp_fornecedores_kyp_provider_id_fkey"
+            columns: ["kyp_provider_id"]
+            isOneToOne: false
+            referencedRelation: "kyp_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kyp_providers: {
+        Row: {
+          ativo: boolean
+          code: string
+          created_at: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          ativo?: boolean
+          code: string
+          created_at?: string
+          id?: string
+          nome: string
+        }
+        Update: {
+          ativo?: boolean
+          code?: string
+          created_at?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: []
       }
       license_idle_alerts: {
         Row: {

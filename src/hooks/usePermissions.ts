@@ -79,6 +79,8 @@ export const VIEW_ONLY_MODULES = [
   { key: "audit_log", label: "Auditoria — Logs do Sistema" },
   { key: "fiscal_audit", label: "Auditoria — Fiscal" },
   { key: "audit_console", label: "Auditoria — SAP" },
+  { key: "kyp", label: "Auditoria — KYP (Fornecedores)" },
+
 ] as const;
 
 /** Capabilities: flags explícitas, transversais às telas. */
