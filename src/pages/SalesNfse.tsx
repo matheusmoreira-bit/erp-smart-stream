@@ -20,6 +20,8 @@ import { sapFunctionFetch, authFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageHeader } from "@/components/PageHeader";
+import { NfseReconcilePanel } from "@/components/NfseReconcilePanel";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -424,6 +426,7 @@ export default function SalesNfse() {
         onLogout={logout}
         actions={
           <>
+            <NfseReconcilePanel companyDb={companyDb} />
             <Button variant="outline" size="sm" className="gap-2" onClick={() => void syncStatus()} disabled={syncing}>
               {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
               Atualizar status fiscal
@@ -434,6 +437,7 @@ export default function SalesNfse() {
             </Button>
           </>
         }
+
       />
 
       <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 space-y-4">
