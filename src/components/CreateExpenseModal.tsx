@@ -211,13 +211,17 @@ export function CreateExpenseModal({
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
   const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
-    cacheKey: isSales ? "items_sales_active_v3" : "items_purchase_active_v3",
+    cacheKey: isSales ? "items_sales_only_v1" : "items_purchase_active_v3",
     endpoint: "Items",
     params: {
-      // Apenas itens ativos no SAP (Valid='tYES' e Frozen='tNO')
-      $filter: "Valid eq 'tYES' and Frozen eq 'tNO'",
+      // Apenas itens ativos no SAP (Valid='tYES' e Frozen='tNO').
+      // Em vendas, restringe aos itens marcados como item de venda.
+      $filter: isSales
+        ? "Valid eq 'tYES' and Frozen eq 'tNO' and SalesItem eq 'tYES'"
+        : "Valid eq 'tYES' and Frozen eq 'tNO'",
       $select: "ItemCode,ItemName",
     },
+
     mapRow: itemMapRow,
   });
 
@@ -1838,14 +1842,18 @@ export function CreateExpenseModal({
         toast.error(`Item ${n}: preço unitário deve ser maior ou igual a R$ 0,01`);
         return;
       }
-      if (!it.cost_center || !String(it.cost_center).trim()) {
-        toast.error(`Item ${n}: centro de custo é obrigatório`);
-        return;
+      // Em vendas, centro de custo e projeto são opcionais.
+      if (!isSales) {
+        if (!it.cost_center || !String(it.cost_center).trim()) {
+          toast.error(`Item ${n}: centro de custo é obrigatório`);
+          return;
+        }
+        if (!it.project || !String(it.project).trim()) {
+          toast.error(`Item ${n}: projeto é obrigatório`);
+          return;
+        }
       }
-      if (!it.project || !String(it.project).trim()) {
-        toast.error(`Item ${n}: projeto é obrigatório`);
-        return;
-      }
+
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
       // CC vazio (sem vínculo no IdP) não bloqueia — evita falso negativo.
       if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
@@ -3046,8 +3054,9 @@ export function CreateExpenseModal({
                   </div>
                   <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                     <CachedSearchCombobox
-                      label="Centro de Custo (Dimensão) *"
-                      required
+                      label={`Centro de Custo (Dimensão)${isSales ? "" : " *"}`}
+                      required={!isSales}
+
                       options={costCenterOptions}
                       isLoading={costCentersLoading}
                       value={item.sapCostCenter || null}
@@ -3069,8 +3078,9 @@ export function CreateExpenseModal({
                       portalContainer={dialogContainer}
                     />
                     <CachedSearchCombobox
-                      label="Projeto (Dimensão) *"
-                      required
+                      label={`Projeto (Dimensão)${isSales ? "" : " *"}`}
+                      required={!isSales}
+
                       options={projectOptions}
                       isLoading={projectsLoading}
                       value={item.sapProject || null}
