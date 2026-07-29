@@ -198,6 +198,8 @@ function ExpenseDetailModal({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const statusLabel = useStatusLabel();
+  const isSalesDoc = mode === "sales";
   if (!expense) return null;
 
   const showSubmit = expense.status === "rascunho";
@@ -726,6 +728,7 @@ function ExpenseCard({
   erpLabel?: string;
   onRelationsMap?: () => void;
 }) {
+  const statusLabel = useStatusLabel();
   const erpLbl = erpLabel || "ERP";
   const originLabel = originBadge === "erp_flow" ? " · ERP Flow" : originBadge === "erp" ? ` · ${erpLbl}` : "";
   const projectCodes = Array.from(new Set(
