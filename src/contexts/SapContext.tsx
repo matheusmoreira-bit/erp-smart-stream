@@ -1,6 +1,17 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, ensureSapAuthToken, type SapSession, clearClientCache } from "@/lib/sap-client";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export type ErpType = "sap" | "omie" | "s4hana_cloud" | "s4hana_cloud_private" | "s4hana_onprem" | "totvs_protheus" | "totvs_rm" | "totvs_datasul" | "netsuite";
 
@@ -65,6 +76,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<ErpSession | null>(() => loadStoredSession());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const setSession = useCallback((next: ErpSession | null | ((prev: ErpSession | null) => ErpSession | null)) => {
     setSessionState((prev) => {
@@ -282,6 +295,37 @@ export function SapProvider({ children }: { children: ReactNode }) {
   return (
     <ErpContext.Provider value={{ session, isLoading, error, login, loginManaged, logout }}>
       {children}
+      <AlertDialog open={confirmLogoutOpen} onOpenChange={(open) => { if (!loggingOut) setConfirmLogoutOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encerrar sessão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {session?.userName
+                ? `Você será desconectado de ${session.userName} (${session.companyDB}) e voltará para a tela de login.`
+                : "Você será desconectado e voltará para a tela de login."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loggingOut}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={loggingOut}
+              onClick={async (e) => {
+                e.preventDefault();
+                setLoggingOut(true);
+                try {
+                  await performLogout();
+                } catch {
+                  setLoggingOut(false);
+                  setConfirmLogoutOpen(false);
+                  toast.error("Não foi possível encerrar a sessão. Tente novamente.");
+                }
+              }}
+            >
+              {loggingOut ? "Saindo…" : "Sair"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ErpContext.Provider>
   );
 }
