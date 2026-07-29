@@ -885,7 +885,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       milestone: "approved",
       companyDb: (exp as any).company_db,
       refId: expenseId,
-      link: "/sales",
+      link: "/vendas/pedidos",
       summary: "Um pedido de venda foi aprovado e está pronto para emissão de NFS-e.",
       details: [
         { label: "Cliente", value: (exp as any).supplier_name },

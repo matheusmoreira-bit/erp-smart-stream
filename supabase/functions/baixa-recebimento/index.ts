@@ -235,7 +235,7 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
     milestone: "nfse_settled",
     companyDb: headers.companyDB,
     refId: baixaId,
-    link: "/sales/receivables",
+    link: "/vendas/recebimentos",
     summary: "Uma baixa de recebimento foi registrada no ERP.",
     details: [
       { label: "Cliente", value: (b.card_name as string) || (b.card_code as string) },

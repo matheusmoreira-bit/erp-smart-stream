@@ -320,7 +320,7 @@ Deno.serve(async (req) => {
       milestone: "nfse_emailed",
       companyDb: companyDb,
       refId: `${companyDb}:${invoiceDocEntry ?? nfseNumber ?? expenseId ?? ""}`,
-      link: "/sales/nfse",
+      link: "/vendas/nfse",
       summary: "A NFS-e foi enviada por e-mail ao cliente.",
       details: [
         { label: "Cliente", value: customerName },
