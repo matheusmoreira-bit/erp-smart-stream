@@ -10,7 +10,7 @@ import Index from "./pages/Index.tsx";
 import AnalyticsPage from "./pages/Analytics.tsx";
 import ApprovalsHub from "./pages/ApprovalsHub.tsx";
 import Expenses from "./pages/Expenses.tsx";
-import Sales from "./pages/Sales.tsx";
+import SalesHub from "./pages/SalesHub.tsx";
 import BaixasHistory from "./pages/BaixasHistory.tsx";
 import ApprovalRules from "./pages/ApprovalRules.tsx";
 import PagCorp from "./pages/PagCorp.tsx";
@@ -84,7 +84,10 @@ const App = () => (
 
               {/* Operação */}
               <Route path="/compras" element={<Expenses />} />
-              <Route path="/vendas" element={<Sales />} />
+              <Route path="/vendas" element={<Navigate to="/vendas/pedidos" replace />} />
+              <Route path="/vendas/pedidos" element={<SalesHub tab="orders" />} />
+              <Route path="/vendas/nfse" element={<SalesHub tab="nfse" />} />
+              <Route path="/vendas/recebimentos" element={<SalesHub tab="receivables" />} />
               <Route path="/vendas/historico" element={<BaixasHistory />} />
 
               {/* Aprovações */}
