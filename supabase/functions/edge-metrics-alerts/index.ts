@@ -12,6 +12,9 @@ const DEFAULT_PHONES: string[] = []; // configure via EDGE_METRICS_ALERT_PHONES
 const P95_THRESHOLD_MS = 10_000;
 const ERROR_RATE_THRESHOLD = 5; // percentual
 const MIN_SAMPLE = 10; // ignora janelas com pouquíssimas execuções
+const DENIED_RATE_THRESHOLD = 20; // % de 401/403 na janela
+const DENIED_MIN_COUNT = 10; // mínimo absoluto de negações para alertar
+
 
 async function sendWhatsApp(to: string, message: string) {
   const body = new URLSearchParams({ to, message });
@@ -47,7 +50,7 @@ Deno.serve(withEdgeMetrics("edge-metrics-alerts", async (req) => {
 
   const { data: rows, error } = await sb
     .from("edge_function_metrics")
-    .select("function_name,duration_ms,ok")
+    .select("function_name,duration_ms,ok,status_code")
     .gte("started_at", windowStart.toISOString());
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
@@ -56,14 +59,16 @@ Deno.serve(withEdgeMetrics("edge-metrics-alerts", async (req) => {
     });
   }
 
-  const grouped = new Map<string, { total: number; errors: number; durations: number[] }>();
+  const grouped = new Map<string, { total: number; errors: number; denied: number; durations: number[] }>();
   for (const r of rows ?? []) {
-    const g = grouped.get(r.function_name) ?? { total: 0, errors: 0, durations: [] };
+    const g = grouped.get(r.function_name) ?? { total: 0, errors: 0, denied: 0, durations: [] };
     g.total += 1;
     if (!r.ok) g.errors += 1;
+    if (r.status_code === 401 || r.status_code === 403) g.denied += 1;
     if (typeof r.duration_ms === "number") g.durations.push(r.duration_ms);
     grouped.set(r.function_name, g);
   }
+
 
   const phonesEnv = (Deno.env.get("EDGE_METRICS_ALERT_PHONES") ?? "").trim();
   const phones = phonesEnv ? phonesEnv.split(",").map((p) => p.trim()).filter(Boolean) : DEFAULT_PHONES;
@@ -91,6 +96,17 @@ Deno.serve(withEdgeMetrics("edge-metrics-alerts", async (req) => {
         errorRate: errRate,
       });
     }
+    // Pico de negações (401/403): indicativo de credencial de integração
+    // expirada/rotacionada ou tentativa de abuso.
+    const deniedRate = (g.denied / g.total) * 100;
+    if (g.denied >= DENIED_MIN_COUNT && deniedRate > DENIED_RATE_THRESHOLD) {
+      problems.push({
+        kind: "auth_denied_spike",
+        message: `🔐 ERP Flow — pico de 401/403 em *${fn}*: ${g.denied}/${g.total} (${deniedRate.toFixed(1)}%) nos últimos 5min. Verifique chaves de integração e rotação de credenciais.`,
+        errorRate: deniedRate,
+      });
+    }
+
 
     for (const p of problems) {
       // Dedup: se já existe alerta desse (fn, kind, bucket), pula

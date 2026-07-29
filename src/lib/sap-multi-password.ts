@@ -65,9 +65,26 @@ export async function changePasswordInCompanies(
   const nameMap = new Map(companies.map((c) => [c.company_db, c.display_name]));
 
   try {
+    // Token anti-CSRF de uso único (defesa em profundidade contra replay).
+    let csrfToken = "";
+    try {
+      const tokenRes = await sapFunctionFetch("security-csrf-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose: "sap-change-password" }),
+      });
+      const tokenData = await tokenRes.json().catch(() => ({} as { token?: string }));
+      csrfToken = (tokenData as { token?: string }).token || "";
+    } catch {
+      csrfToken = "";
+    }
+
     const res = await sapFunctionFetch("sap-change-password", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+      },
       body: JSON.stringify({
         user_code: userCode,
         new_password: newPassword,
@@ -75,6 +92,7 @@ export async function changePasswordInCompanies(
         company_dbs: companyDbs,
       }),
     });
+
     const data = await res.json().catch(() => ({} as { results?: MultiCompanyPasswordResult[]; error?: string }));
     if (!res.ok) {
       const message = (data as { error?: string }).error || `HTTP ${res.status}`;

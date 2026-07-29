@@ -18,6 +18,9 @@ import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/ra
 import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
 import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { consumeCsrfToken, CSRF_HEADER } from "../_shared/csrf.ts";
+import { revokeErpSession } from "../_shared/session-revocation.ts";
+
 
 
 const corsHeaders = {
@@ -310,6 +313,21 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     const isSelfChange = !isAdmin
       || userCode.toLowerCase() === (callerUserCode || "").toLowerCase();
     if (isSelfChange) {
+      // Token anti-CSRF de uso único: derruba replay do HTML/requisição.
+      const csrfOk = await consumeCsrfToken(
+        adminSvc,
+        req.headers.get(CSRF_HEADER) || String(body.csrf_token || ""),
+        "sap-change-password",
+        callerUserCode || userCode,
+      );
+      if (!csrfOk) {
+        console.warn("[sap-change-password] csrf token inválido/reutilizado", { userCode });
+        return new Response(JSON.stringify({
+          error: "Sessão de segurança expirada. Recarregue a página e tente novamente.",
+          code: "csrf_invalid",
+        }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       const currentPassword = String(body.current_password || "");
       if (!currentPassword) {
         return new Response(JSON.stringify({ error: "Informe a senha atual para confirmar a alteração.", code: "current_password_required" }), {
@@ -329,6 +347,7 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         });
       }
     }
+
 
 
     const admin = service();
@@ -452,9 +471,26 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
       };
     });
 
-    return new Response(JSON.stringify({ results }), {
+    // Invalidação das sessões ERP ativas do usuário após a troca de senha.
+    // O B1SESSION apresentado na requisição é revogado no gateway (o Service
+    // Layer continuaria aceitando-o por até 30 min).
+    const changedAny = results.some((r) => r.status === "success");
+    if (changedAny) {
+      const sidHeader = req.headers.get("x-sap-session") || "";
+      if (sidHeader) {
+        await revokeErpSession(adminSvc, {
+          sapSession: sidHeader,
+          userKey: userCode,
+          companyDb: req.headers.get("x-company-db"),
+          reason: "password_change",
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ results, session_revoked: changedAny }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (err) {
     console.error("[sap-change-password] error:", err instanceof Error ? err.message : String(err));
     const authResp = authErrorResponse(err, corsHeaders);

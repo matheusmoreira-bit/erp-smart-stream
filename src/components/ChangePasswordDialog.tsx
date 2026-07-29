@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { checkPasswordPolicy } from "@/lib/password-policy";
 import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 import { saveUserSapCredential } from "@/lib/user-sap-credentials";
+import { clearErpLocalState } from "@/lib/clear-erp-local-state";
+
 
 interface CompanyOption {
   company_db: string;
@@ -159,6 +161,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
           `Senha alterada em ${successes} empresa(s)${skipped ? ` (${skipped} ignorada(s))` : ""}.`,
         );
       } else if (failures === 0 && successes === 0) {
+
         toast.info(`Nenhuma alteração aplicada (${skipped} ignorada(s)).`);
       } else if (successes > 0) {
         toast.warning(`Concluído com falhas: ${successes} sucesso(s), ${skipped} ignorada(s), ${failures} erro(s).`);
@@ -168,6 +171,17 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
           `Falhou em todas as empresas (${failures})${firstError ? `: ${firstError}` : ""}. Veja o resumo abaixo.`,
         );
       }
+
+      // Sessões ERP ativas são revogadas no servidor após a troca de senha:
+      // encerramos o estado local e pedimos novo login.
+      if (successes > 0) {
+        toast.info("Por segurança, sua sessão foi encerrada. Faça login novamente com a nova senha.");
+        setTimeout(() => {
+          clearErpLocalState();
+          window.location.replace("/");
+        }, 2500);
+      }
+
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao alterar senha";
       toast.error(msg);

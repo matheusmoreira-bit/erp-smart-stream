@@ -2262,6 +2262,30 @@ export type Database = {
         }
         Relationships: []
       }
+      erp_session_revocations: {
+        Row: {
+          company_db: string | null
+          reason: string | null
+          revoked_at: string
+          sid_hash: string
+          user_key: string
+        }
+        Insert: {
+          company_db?: string | null
+          reason?: string | null
+          revoked_at?: string
+          sid_hash: string
+          user_key: string
+        }
+        Update: {
+          company_db?: string | null
+          reason?: string | null
+          revoked_at?: string
+          sid_hash?: string
+          user_key?: string
+        }
+        Relationships: []
+      }
       expense_action_idempotency: {
         Row: {
           action: string
@@ -5699,6 +5723,33 @@ export type Database = {
         }
         Relationships: []
       }
+      security_csrf_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          purpose: string
+          subject: string
+          token_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          purpose: string
+          subject: string
+          token_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          purpose?: string
+          subject?: string
+          token_hash?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       submitted_document_hashes: {
         Row: {
           company_db: string | null
@@ -6393,6 +6444,10 @@ export type Database = {
           reason: string
         }[]
       }
+      consume_csrf_token: {
+        Args: { _purpose: string; _subject: string; _token_hash: string }
+        Returns: boolean
+      }
       copilot_read_query: { Args: { p_sql: string }; Returns: Json }
       create_item_variante: {
         Args: { p_descricao: string; p_item_base_id: string }
@@ -6506,6 +6561,7 @@ export type Database = {
         Args: { _company_db: string }
         Returns: boolean
       }
+      is_erp_session_revoked: { Args: { _sid_hash: string }; Returns: boolean }
       is_idp_linked: { Args: { _email: string }; Returns: boolean }
       is_registration_agent: { Args: never; Returns: boolean }
       is_sap_code_idp_linked: {

@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
+import { isErpSessionRevoked } from "./session-revocation.ts";
+
 
 export class AuthError extends Error {
   status: number;
@@ -412,9 +414,26 @@ export async function validateSapSession(req: Request) {
   if (!headers) return null;
   const { sapSession, routeId, sapUser, companyDB, sapAuthToken } = headers;
 
+  // Sessão revogada (ex.: troca de senha) morre imediatamente, mesmo que o
+  // Service Layer ainda a aceite.
+  try {
+    const revokeAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } },
+    );
+    if (await isErpSessionRevoked(revokeAdmin, sapSession)) {
+      sapSessionValidationCache.delete(
+        getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId),
+      );
+      return null;
+    }
+  } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
+
   const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
   const cached = sapSessionValidationCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
+
 
   try {
     const signed = await verifySapAuthToken(sapAuthToken, sapSession, sapUser, companyDB);
