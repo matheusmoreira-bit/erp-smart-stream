@@ -342,6 +342,8 @@ export function useIntercompany() {
     replicateAccount,
     replicateCostCenter,
     replicateProject,
+    toggleProject,
+
   };
 
 }
