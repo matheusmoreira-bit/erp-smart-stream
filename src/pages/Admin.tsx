@@ -55,6 +55,16 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { useAuth } from "@/hooks/useAuth";
@@ -612,13 +622,32 @@ export default function Admin() {
 
   const { signOut } = useAuth();
 
-  const handleLogout = async () => {
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+
+  const handleLogout = () => setConfirmLogoutOpen(true);
+
+  const confirmLogout = async () => {
     await signOut();
-    navigate("/backoffice/login");
+    toast.success("Sessão encerrada", { description: "Você saiu do Backoffice." });
+    navigate("/backoffice/login", { replace: true });
   };
 
   return (
     <div className="min-h-screen bg-background">
+      <AlertDialog open={confirmLogoutOpen} onOpenChange={setConfirmLogoutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encerrar sessão do Backoffice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você será desconectado e voltará para a tela de login do Backoffice.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmLogout}>Sair</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* Header — mobile first */}
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
