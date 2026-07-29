@@ -360,6 +360,13 @@ export default function Suppliers() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
+          <Button variant="outline" onClick={() => setRequestOpen(true)} className="gap-2">
+            <ClipboardList className="w-4 h-4" />
+            Solicitar cadastro
+          </Button>
+          <Button variant="ghost" onClick={() => navigate("/cadastros/solicitacoes")} className="gap-2">
+            Minhas solicitações
+          </Button>
           {canWrite && (
             <>
               <Button
