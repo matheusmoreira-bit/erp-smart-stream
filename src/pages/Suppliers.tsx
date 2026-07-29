@@ -12,7 +12,7 @@ import {
   XCircle,
   AlertCircle,
   LogOut,
-  
+  ClipboardList,
   Upload,
   CloudUpload,
   Loader2,
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -108,6 +109,7 @@ export default function Suppliers() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [creating, setCreating] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -518,6 +520,13 @@ export default function Suppliers() {
           void refresh();
           void loadFornecedores();
         }}
+      />
+
+      <RegistrationRequestModal
+        open={requestOpen}
+        onOpenChange={setRequestOpen}
+        type="supplier"
+        defaults={{ companyDb: session?.companyDB, context: "Cadastros — Fornecedores", requesterName: session?.userName }}
       />
 
       <SupplierFormModal
