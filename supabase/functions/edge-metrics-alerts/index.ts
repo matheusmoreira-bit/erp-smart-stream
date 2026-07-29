@@ -12,6 +12,9 @@ const DEFAULT_PHONES: string[] = []; // configure via EDGE_METRICS_ALERT_PHONES
 const P95_THRESHOLD_MS = 10_000;
 const ERROR_RATE_THRESHOLD = 5; // percentual
 const MIN_SAMPLE = 10; // ignora janelas com pouquíssimas execuções
+const DENIED_RATE_THRESHOLD = 20; // % de 401/403 na janela
+const DENIED_MIN_COUNT = 10; // mínimo absoluto de negações para alertar
+
 
 async function sendWhatsApp(to: string, message: string) {
   const body = new URLSearchParams({ to, message });
