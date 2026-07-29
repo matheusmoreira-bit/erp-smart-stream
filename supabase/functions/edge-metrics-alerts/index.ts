@@ -93,6 +93,17 @@ Deno.serve(withEdgeMetrics("edge-metrics-alerts", async (req) => {
         errorRate: errRate,
       });
     }
+    // Pico de negações (401/403): indicativo de credencial de integração
+    // expirada/rotacionada ou tentativa de abuso.
+    const deniedRate = (g.denied / g.total) * 100;
+    if (g.denied >= DENIED_MIN_COUNT && deniedRate > DENIED_RATE_THRESHOLD) {
+      problems.push({
+        kind: "auth_denied_spike",
+        message: `🔐 ERP Flow — pico de 401/403 em *${fn}*: ${g.denied}/${g.total} (${deniedRate.toFixed(1)}%) nos últimos 5min. Verifique chaves de integração e rotação de credenciais.`,
+        errorRate: deniedRate,
+      });
+    }
+
 
     for (const p of problems) {
       // Dedup: se já existe alerta desse (fn, kind, bucket), pula
