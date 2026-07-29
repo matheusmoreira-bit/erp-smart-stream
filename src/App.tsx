@@ -20,6 +20,7 @@ import IntegrationHistory from "./pages/IntegrationHistory.tsx";
 import UsersHub from "./pages/UsersHub.tsx";
 import Suppliers from "./pages/Suppliers.tsx";
 import Items from "./pages/Items.tsx";
+import RegistrationRequests from "./pages/RegistrationRequests.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import AdvancePayments from "./pages/AdvancePayments.tsx";
