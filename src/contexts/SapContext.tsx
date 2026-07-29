@@ -281,6 +281,49 @@ export function SapProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [session?.expiresAt]);
 
+  // Keep-alive: enquanto houver sessão SAP ativa, faz um ping leve periódico no
+  // Service Layer para impedir que o SessionTimeout derrube o usuário no meio
+  // do trabalho. Cada ping bem-sucedido renova a janela de 30 min (rolling).
+  useEffect(() => {
+    if (session?.erpType !== "sap" || !session.sessionId) return;
+    const snapshot = {
+      sessionId: session.sessionId,
+      routeId: session.routeId || "",
+      companyDB: session.companyDB,
+      userName: session.userName,
+      isSuperUser: !!session.isSuperUser,
+      erpType: "sap" as const,
+    };
+
+    let cancelled = false;
+    const ping = async () => {
+      if (cancelled || document.visibilityState === "hidden") return;
+      const alive = await sapKeepAlive(snapshot);
+      if (cancelled) return;
+      if (!alive) {
+        window.dispatchEvent(new CustomEvent("erp:session-expired"));
+        return;
+      }
+      setSession((prev) => (
+        prev?.erpType === "sap" && prev.sessionId === snapshot.sessionId
+          ? { ...prev, expiresAt: Date.now() + 30 * 60 * 1000 }
+          : prev
+      ));
+    };
+
+    // Ping a cada 5 minutos + ao voltar para a aba.
+    const interval = window.setInterval(() => { void ping(); }, 5 * 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === "visible") void ping(); };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [session?.erpType, session?.sessionId, session?.routeId, session?.companyDB, session?.userName, session?.isSuperUser, setSession]);
+
+
   useEffect(() => {
     if (session?.erpType !== "sap" || !session.sessionId || session.sapAuthToken) return;
     let cancelled = false;
