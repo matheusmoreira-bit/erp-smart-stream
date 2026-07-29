@@ -366,7 +366,7 @@ export default function Suppliers() {
             <ClipboardList className="w-4 h-4" />
             Solicitar cadastro
           </Button>
-          <Button variant="ghost" onClick={() => navigate("/cadastros/solicitacoes")} className="gap-2">
+          <Button variant="ghost" onClick={() => navigate("/solicitacoes")} className="gap-2">
             Minhas solicitações
           </Button>
           {canWrite && (

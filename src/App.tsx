@@ -129,8 +129,11 @@ const App = () => (
               <Route path="/cadastros/fornecedores" element={<Suppliers />} />
               
               <Route path="/cadastros/itens" element={<Items />} />
-              <Route path="/cadastros/solicitacoes" element={<RegistrationRequests />} />
+              <Route path="/cadastros/solicitacoes" element={<Navigate to="/solicitacoes" replace />} />
               <Route path="/cadastros/intercompany" element={<Intercompany />} />
+
+              {/* Solicitações de cadastro (módulo próprio) */}
+              <Route path="/solicitacoes" element={<RegistrationRequests />} />
 
               {/* Financeiro */}
               <Route path="/financeiro/adiantamentos" element={<AdvancePayments />} />
