@@ -365,6 +365,14 @@ export function CreateExpenseModal({
   }, [costCenterOptions, userCostCenter, ccBranch, bypassCcItemRules]);
 
 
+  // Se o usuário perder a alçada do tipo de rateio selecionado, volta ao padrão.
+  useEffect(() => {
+    if (isSales) return;
+    if (!isRateioTypeAllowedForCostCenter(rateioType, userCostCenter, bypassCcItemRules)) {
+      setRateioType("padrao");
+    }
+  }, [rateioType, userCostCenter, bypassCcItemRules, isSales]);
+
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
