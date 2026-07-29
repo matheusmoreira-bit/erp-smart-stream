@@ -177,8 +177,10 @@ export default function ApprovalHistory() {
       const r = await sync();
       toast.success(`Sincronizado: ${r.upserted} registros`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao sincronizar");
+      console.error("[ApprovalHistory] sync failed:", e);
+      toast.error("Não foi possível sincronizar com o SAP agora. Tente novamente em alguns minutos.");
     }
+
   };
 
   return (
