@@ -71,7 +71,7 @@ const groups: { title: string; items: Entry[] }[] = [
     title: "Análise",
     items: [
       { label: "Analytics", icon: BarChart3, path: "/analytics", color: "text-sky-400", moduleKey: "analytics" },
-      { label: "Auditoria", icon: Radar, path: "/auditoria", color: "text-sky-400", subModuleKeys: ["audit_console", "fiscal_audit", "audit_log"] },
+      { label: "Auditoria", icon: Radar, path: "/auditoria", color: "text-sky-400", subModuleKeys: ["audit_console", "fiscal_audit", "audit_log", "kyp"] },
     ],
   },
   {
