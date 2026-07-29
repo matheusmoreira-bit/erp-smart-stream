@@ -155,6 +155,7 @@ Deno.serve(async (req) => {
     stats.candidates = pending.length;
 
     for (const item of pending) {
+      if (dryRun) continue;
       // Deduplicação: insere o log primeiro (unique request_id+kind)
       const { error: logErr } = await supabase
         .from("registration_sla_reminder_log")
@@ -162,13 +163,13 @@ Deno.serve(async (req) => {
           request_id: item.req.id,
           kind: item.kind,
           recipients: to,
-          status: dryRun ? "dry_run" : "sending",
+          status: "sending",
         });
       if (logErr) {
         stats.skipped++;
         continue; // já enviado
       }
-      if (dryRun) continue;
+
 
       const subject = `${item.overdue ? "[ATRASADO]" : "[SLA]"} Chamado de cadastro ${item.req.id
         .slice(0, 8)
