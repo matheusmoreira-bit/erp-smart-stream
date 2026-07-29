@@ -1500,6 +1500,63 @@ export type Database = {
           },
         ]
       }
+      cc_project_alerts: {
+        Row: {
+          company_db: string | null
+          context: Json
+          cost_center_code: string
+          cost_center_name: string | null
+          created_at: string
+          decision: string
+          final_project_code: string | null
+          id: string
+          is_institutional_project: boolean
+          line_index: number | null
+          project_code_at_alert: string | null
+          project_name_at_alert: string | null
+          sap_user_name: string | null
+          updated_at: string
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          company_db?: string | null
+          context?: Json
+          cost_center_code: string
+          cost_center_name?: string | null
+          created_at?: string
+          decision?: string
+          final_project_code?: string | null
+          id?: string
+          is_institutional_project?: boolean
+          line_index?: number | null
+          project_code_at_alert?: string | null
+          project_name_at_alert?: string | null
+          sap_user_name?: string | null
+          updated_at?: string
+          user_email?: string | null
+          user_id?: string
+        }
+        Update: {
+          company_db?: string | null
+          context?: Json
+          cost_center_code?: string
+          cost_center_name?: string | null
+          created_at?: string
+          decision?: string
+          final_project_code?: string | null
+          id?: string
+          is_institutional_project?: boolean
+          line_index?: number | null
+          project_code_at_alert?: string | null
+          project_name_at_alert?: string | null
+          sap_user_name?: string | null
+          updated_at?: string
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       collaborator_profiles: {
         Row: {
           avatar_url: string | null
