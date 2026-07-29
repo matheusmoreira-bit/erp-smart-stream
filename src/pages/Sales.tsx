@@ -31,6 +31,7 @@ import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
+import { publicFunctionFetch } from "@/lib/auth-fetch";
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
 import { PageHeader } from "@/components/PageHeader";
