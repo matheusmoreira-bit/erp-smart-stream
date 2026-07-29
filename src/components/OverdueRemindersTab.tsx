@@ -12,6 +12,7 @@ import {
 import { AlertTriangle, Save, Send, Clock, RefreshCw, FlaskConical, ExternalLink, Copy, CheckCircle2, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { expenseRead } from "@/lib/expense-read";
 
 interface OverdueSettings {
   id?: string;
@@ -186,8 +187,7 @@ export function OverdueRemindersTab() {
     setTestLoading(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const { data: expRows } = await supabase
-        .from("expenses")
+      const { data: expRows } = awaitexpenseRead("expenses")
         .select("id, doc_type, supplier_name, requester_name, current_approver, total_amount, currency, due_date")
         .eq("status", "pendente_aprovacao")
         .lt("due_date", today)

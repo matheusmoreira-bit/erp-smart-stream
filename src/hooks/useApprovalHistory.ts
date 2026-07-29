@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { expenseRead } from "@/lib/expense-read";
 
 export interface ApprovalHistoryRow {
   id: string;
@@ -191,8 +192,7 @@ export function useApprovalHistory(
       );
       let expensesById = new Map<string, any>();
       if (expenseIds.length > 0) {
-        let expensesQ = supabase
-          .from("expenses")
+        let expensesQ =expenseRead("expenses")
           .select(
             "id, supplier_code, supplier_name, total_amount, currency, sap_doc_entry, sap_doc_num, doc_type, requester_name, requester_email, company_db, created_at",
           )

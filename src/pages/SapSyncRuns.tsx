@@ -18,6 +18,7 @@ import { EdgeFunctionMetricsCard } from "@/components/EdgeFunctionMetricsCard";
 import { SystemActivityCard } from "@/components/SystemActivityCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Inbox } from "lucide-react";
+import { expenseRead } from "@/lib/expense-read";
 
 interface SyncRun {
   id: string;
@@ -259,8 +260,7 @@ function RunDetailDialog({ run, onClose }: { run: SyncRun | null; onClose: () =>
     if (!run) return;
     const ids = (run.results as unknown as ResultItem[]).map((r) => r.id).filter(Boolean);
     if (ids.length === 0) { setSupplierMap({}); return; }
-    void supabase
-      .from("expenses")
+    voidexpenseRead("expenses")
       .select("id, supplier_name")
       .in("id", ids)
       .then(({ data }) => {

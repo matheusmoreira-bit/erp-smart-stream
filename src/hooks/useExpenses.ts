@@ -7,6 +7,7 @@ import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import { createNotification } from "@/lib/notifications";
+import { expenseRead } from "@/lib/expense-read";
 
 /* ───────────────── Item group enrichment ───────────────── */
 
@@ -492,8 +493,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         return;
       }
 
-      const { data, error: err } = await (supabase
-        .from("expenses") as any)
+      const { data, error: err } = await expenseRead("expenses") as any)
         .select("*")
         .eq("company_db", activeCompanyDb)
         .eq("doc_type", docType)
@@ -505,9 +505,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       let itemsMap: Record<string, ExpenseItem[]> = {};
       let attachmentsMap: Record<string, ExpenseAttachment[]> = {};
       if (expenseIds.length > 0) {
-        const [{ data: items }, { data: atts }] = await Promise.all([
-          supabase.from("expense_items").select("*").in("expense_id", expenseIds),
-          supabase.from("expense_attachments").select("*").in("expense_id", expenseIds),
+        const [{ data: items }, { data: atts }] = await Promise.all([expenseRead("expense_items").select("*").in("expense_id", expenseIds),expenseRead("expense_attachments").select("*").in("expense_id", expenseIds),
         ]);
         if (items) {
           for (const item of items as any[]) {
@@ -885,8 +883,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       let forcedApprover: string | null | undefined;
       let rateioChanged = false;
       if (input.rateio_type !== undefined) {
-        const { data: cur } = await supabase
-          .from("expenses")
+        const { data: cur } = awaitexpenseRead("expenses")
           .select("rateio_type")
           .eq("id", expenseId)
           .maybeSingle();
@@ -996,8 +993,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       let approverToNotify: string | null = null;
       let notifyPayload: any = null;
       try {
-        const { data: exp } = await supabase
-          .from("expenses")
+        const { data: exp } = awaitexpenseRead("expenses")
           .select("total_amount, cost_center, company_db, current_approver, supplier_name, currency")
           .eq("id", expenseId)
           .maybeSingle();
@@ -1105,7 +1101,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       // Server-side authorization: the edge function verifies that the caller
       // (SAP session or Cloud admin) is the designated approver for the
       // CURRENT level before flipping the status. This is the security
-      // boundary — do NOT bypass it with a direct supabase.from("expenses")
+      // boundary — do NOT bypass it with a directexpenseRead("expenses")
       // update, or any signed-in user could approve someone else's document.
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
@@ -1178,8 +1174,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           let alreadyInErp = false;
           let originFromErp = false;
           for (let attempt = 0; attempt < 5; attempt++) {
-            const { data: fresh } = await supabase
-              .from("expenses")
+            const { data: fresh } = awaitexpenseRead("expenses")
               .select("status,sap_doc_entry,origin")
               .eq("id", expenseId)
               .maybeSingle();

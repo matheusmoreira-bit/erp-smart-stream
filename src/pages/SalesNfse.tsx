@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+import { expenseRead } from "@/lib/expense-read";
   Dialog,
   DialogContent,
   DialogDescription,
@@ -142,9 +143,7 @@ export default function SalesNfse() {
     setLoading(true);
     setError(null);
     try {
-      const [{ data: exp, error: e1 }, { data: inv, error: e2 }] = await Promise.all([
-        supabase
-          .from("expenses")
+      const [{ data: exp, error: e1 }, { data: inv, error: e2 }] = await Promise.all([expenseRead("expenses")
           .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode")
           .eq("company_db", companyDb)
           .eq("doc_type", "sales")

@@ -7,6 +7,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { isTestCompanyDb } from "@/lib/test-company";
+import { expenseRead } from "@/lib/expense-read";
 
 interface Props {
   companyDb?: string;
@@ -130,8 +131,7 @@ export function DailyTimeSpentChart({ companyDb, consolidated, tempoLancarFlowMi
       const expAll: { company_db: string; sap_doc_entry: number }[] = [];
       let expOffset = 0;
       while (true) {
-        let eq = supabase
-          .from("expenses")
+        let eq =expenseRead("expenses")
           .select("company_db, sap_doc_entry")
           .not("sap_doc_entry", "is", null)
           .range(expOffset, expOffset + PAGE_SIZE - 1);

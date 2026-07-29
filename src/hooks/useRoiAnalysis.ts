@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isTestCompanyDb } from "@/lib/test-company";
+import { expenseRead } from "@/lib/expense-read";
 
 /** Data em que o ERP Flow entrou em produção. Antes disso: 0 documentos via Flow. */
 export const FLOW_LAUNCH_DATE_ISO = "2026-07-01";
@@ -203,8 +204,7 @@ export function useRoiAnalysis(opts: Options) {
       }
 
       const buildExpenses = () => {
-        let q = supabase
-          .from("expenses")
+        let q =expenseRead("expenses")
           .select("id, company_db, requester_email, created_at, doc_date, due_date, total_amount, sap_doc_entry, status")
           .order("created_at", { ascending: true });
         if (!consolidated && companyDb) q = q.eq("company_db", companyDb);

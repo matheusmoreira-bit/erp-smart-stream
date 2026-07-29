@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { RefreshCw, Play, AlertTriangle } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
+import { expenseRead } from "@/lib/expense-read";
 
 const DEFAULT_IDS = [
   "fe1df950-9751-4c33-86c9-1789251007ce",
@@ -64,8 +65,7 @@ export default function SapStatusSync() {
   const [failing, setFailing] = useState<FailingExpense[]>([]);
 
   const loadFailing = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("expenses")
+    const { data, error } = awaitexpenseRead("expenses")
       .select("id, supplier_name, sap_doc_entry, company_db, sap_sync_attempts, sap_sync_next_retry_at, sap_integration_error, sap_integration_last_attempt_at")
       .eq("sap_sync_state", "sync_error")
       .order("sap_sync_attempts", { ascending: false })
