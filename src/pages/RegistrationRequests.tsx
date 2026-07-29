@@ -38,6 +38,8 @@ import {
   type RegistrationStatus,
 } from "@/hooks/useRegistrationRequests";
 import { PAYMENT_METHOD_LABELS, REGISTRATION_MODE_LABELS } from "@/lib/supplier-request-email";
+import { RegistrationAttachmentList } from "@/components/RegistrationAttachmentList";
+import { RegistrationFilePicker } from "@/components/RegistrationFilePicker";
 
 const statusVariant: Record<RegistrationStatus, string> = {
   aberto: "bg-blue-500/10 text-blue-600 border-blue-500/20",
@@ -68,12 +70,13 @@ function DetailDialog({
     status: RegistrationStatus,
     extra?: { sapCardCode?: string | null; resolutionNote?: string | null },
   ) => Promise<void>;
-  onComment: (id: string, message: string) => Promise<void>;
+  onComment: (id: string, message: string, files?: File[]) => Promise<void>;
 }) {
   const { events, reload } = useRegistrationRequestEvents(request?.id ?? null);
   const [cardCode, setCardCode] = useState("");
   const [note, setNote] = useState("");
   const [comment, setComment] = useState("");
+  const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
 
   if (!request) return null;
@@ -97,11 +100,12 @@ function DetailDialog({
   };
 
   const sendComment = async () => {
-    if (!comment.trim()) return;
+    if (!comment.trim() && commentFiles.length === 0) return;
     setBusy(true);
     try {
-      await onComment(request.id, comment.trim());
+      await onComment(request.id, comment.trim(), commentFiles);
       setComment("");
+      setCommentFiles([]);
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao comentar");
@@ -203,6 +207,15 @@ function DetailDialog({
           )}
 
           <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Anexos</p>
+            {request.attachments?.length ? (
+              <RegistrationAttachmentList attachments={request.attachments} compact />
+            ) : (
+              <p className="text-sm text-muted-foreground">Nenhum documento anexado.</p>
+            )}
+          </div>
+
+          <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Histórico</p>
             <div className="space-y-2">
               {events.length === 0 && <p className="text-sm text-muted-foreground">Sem movimentações ainda.</p>}
@@ -212,11 +225,16 @@ function DetailDialog({
                     <span className="font-medium">
                       {ev.event_type === "status"
                         ? `Status: ${STATUS_LABELS[(ev.to_status as RegistrationStatus) ?? "aberto"] || ev.to_status}`
-                        : "Comentário"}
+                        : ev.event_type === "attachment"
+                          ? "Anexos"
+                          : "Comentário"}
                     </span>
                     <span className="text-xs text-muted-foreground">{fmt(ev.created_at)}</span>
                   </div>
                   {ev.message && <p className="text-muted-foreground mt-1">{ev.message}</p>}
+                  {ev.attachments?.length > 0 && (
+                    <RegistrationAttachmentList attachments={ev.attachments} compact />
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">{ev.author_email}</p>
                 </div>
               ))}
@@ -232,11 +250,22 @@ function DetailDialog({
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Escreva uma atualização…"
               />
-              <Button onClick={sendComment} disabled={busy || !comment.trim()} className="gap-2">
-                <Send className="w-4 h-4" />
+              <Button
+                onClick={sendComment}
+                disabled={busy || (!comment.trim() && commentFiles.length === 0)}
+                className="gap-2"
+              >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 Enviar
               </Button>
             </div>
+            <RegistrationFilePicker
+              files={commentFiles}
+              onChange={setCommentFiles}
+              disabled={busy}
+              label="Anexar documentos ao chamado"
+              hint="Ex.: comprovante bancário, ficha cadastral, cartão CNPJ (até 15MB cada)."
+            />
           </div>
 
           {isAgent && request.status !== "concluido" && request.status !== "cancelado" && (

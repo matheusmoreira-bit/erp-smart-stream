@@ -6,6 +6,10 @@ import type {
   RegistrationPaymentMethod,
 } from "@/lib/supplier-request-email";
 import { sendRegistrationStatusEmail } from "@/lib/supplier-request-email";
+import {
+  uploadRegistrationAttachments,
+  type RegistrationAttachment,
+} from "@/lib/registration-attachments";
 
 export type RegistrationStatus = "aberto" | "em_andamento" | "pendente_solicitante" | "concluido" | "cancelado";
 export type RegistrationType = "supplier" | "item";
@@ -29,7 +33,7 @@ export interface RegistrationRequest {
   bank_details: RegistrationBankDetails;
   registration_mode: RegistrationMode;
   notes: string | null;
-  attachments: { name?: string; url?: string }[];
+  attachments: RegistrationAttachment[];
   transaction: Record<string, unknown> | null;
   assignee_email: string | null;
   sap_card_code: string | null;
@@ -50,6 +54,7 @@ export interface RegistrationRequestEvent {
   message: string | null;
   author_email: string;
   author_name: string | null;
+  attachments: RegistrationAttachment[];
   created_at: string;
 }
 
@@ -149,6 +154,7 @@ export function useRegistrationRequests(options?: { onlyMine?: boolean }) {
         message: event.message ?? null,
         author_email: email.toLowerCase(),
         author_name: event.author_name ?? null,
+        attachments: (event.attachments ?? []) as never,
       });
       if (evErr) throw evErr;
     },
@@ -209,8 +215,28 @@ export function useRegistrationRequests(options?: { onlyMine?: boolean }) {
   );
 
   const addComment = useCallback(
-    async (requestId: string, message: string) => {
-      await addEvent(requestId, { event_type: "comment", message });
+    async (requestId: string, message: string, files?: File[]) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const email = userData.user?.email?.toLowerCase() ?? null;
+      let uploaded: RegistrationAttachment[] = [];
+      if (files?.length) {
+        uploaded = await uploadRegistrationAttachments(requestId, files, email);
+        const { data: current } = await supabase
+          .from("registration_requests")
+          .select("attachments")
+          .eq("id", requestId)
+          .maybeSingle();
+        const merged = [...(((current?.attachments as unknown as RegistrationAttachment[]) || [])), ...uploaded];
+        await supabase
+          .from("registration_requests")
+          .update({ attachments: merged as never })
+          .eq("id", requestId);
+      }
+      await addEvent(requestId, {
+        event_type: uploaded.length && !message ? "attachment" : "comment",
+        message: message || `${uploaded.length} anexo(s) adicionado(s)`,
+        attachments: uploaded,
+      });
     },
     [addEvent],
   );
