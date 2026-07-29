@@ -3,6 +3,8 @@
 // Exposes the minimum necessary: transaction id, status, ERP stage and doc numbers.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.23.8";
+import { openapiSpec } from "./openapi.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +63,11 @@ function shape(r: Row) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  // Documentação OpenAPI: pública (não expõe dados, apenas o contrato).
+  if (new URL(req.url).searchParams.get("spec") === "openapi") return json(openapiSpec);
+
+
 
   const expected = Deno.env.get("PAGCORP_STATUS_API_KEY");
   if (!expected) return json({ error: "API not configured" }, 503);
