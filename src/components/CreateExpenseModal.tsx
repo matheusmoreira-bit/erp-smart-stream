@@ -1838,14 +1838,18 @@ export function CreateExpenseModal({
         toast.error(`Item ${n}: preço unitário deve ser maior ou igual a R$ 0,01`);
         return;
       }
-      if (!it.cost_center || !String(it.cost_center).trim()) {
-        toast.error(`Item ${n}: centro de custo é obrigatório`);
-        return;
+      // Em vendas, centro de custo e projeto são opcionais.
+      if (!isSales) {
+        if (!it.cost_center || !String(it.cost_center).trim()) {
+          toast.error(`Item ${n}: centro de custo é obrigatório`);
+          return;
+        }
+        if (!it.project || !String(it.project).trim()) {
+          toast.error(`Item ${n}: projeto é obrigatório`);
+          return;
+        }
       }
-      if (!it.project || !String(it.project).trim()) {
-        toast.error(`Item ${n}: projeto é obrigatório`);
-        return;
-      }
+
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
       // CC vazio (sem vínculo no IdP) não bloqueia — evita falso negativo.
       if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
