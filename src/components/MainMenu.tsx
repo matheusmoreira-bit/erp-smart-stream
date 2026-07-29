@@ -130,9 +130,9 @@ const modules: Record<string, ModuleCard> = {
     title: "Solicitações de cadastro",
     description: "Chamados de cadastro de fornecedores e itens, com SLA de 48h úteis e acompanhamento por status.",
     icon: ClipboardList,
-    path: "/cadastros/solicitacoes",
-    color: "text-indigo-400",
-    bgGlow: "from-indigo-500/20 to-indigo-500/5",
+    path: "/solicitacoes",
+    color: "text-amber-400",
+    bgGlow: "from-amber-500/20 to-amber-500/5",
     moduleKey: "",
   },
   integracoes: {
@@ -211,6 +211,10 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     {
       title: "Cadastros",
       keys: ["suppliers", "items", "intercompany"],
+    },
+    {
+      title: "Solicitações",
+      keys: ["registration_requests"],
     },
     {
       title: "Financeiro & Fiscal",
