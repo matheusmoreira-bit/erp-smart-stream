@@ -17,6 +17,7 @@ import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
 import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 
 const corsHeaders = {
