@@ -25,6 +25,8 @@ import {
   type RegistrationPaymentMethod,
   type SupplierRequestPayload,
 } from "@/lib/supplier-request-email";
+import { RegistrationFilePicker } from "@/components/RegistrationFilePicker";
+import { uploadRegistrationAttachments } from "@/lib/registration-attachments";
 
 export interface RegistrationRequestModalProps {
   open: boolean;
@@ -54,6 +56,7 @@ export function RegistrationRequestModal({
   const [mode, setMode] = useState<RegistrationMode>("erpflow");
   const [bank, setBank] = useState<RegistrationBankDetails>({});
   const [notes, setNotes] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -66,6 +69,7 @@ export function RegistrationRequestModal({
     setPaymentMethod((defaults?.paymentMethod as RegistrationPaymentMethod) || "pix");
     setMode((defaults?.registrationMode as RegistrationMode) || "erpflow");
     setBank(defaults?.bankDetails || {});
+    setFiles([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -123,6 +127,30 @@ export function RegistrationRequestModal({
         .select("id, due_at")
         .single();
       if (error) throw error;
+
+      let uploaded: { name: string; path: string }[] = [];
+      if (files.length) {
+        try {
+          uploaded = await uploadRegistrationAttachments(inserted.id, files, requesterEmail);
+          const merged = [...(((defaults?.attachments as never[]) ?? []) as unknown[]), ...uploaded];
+          await supabase
+            .from("registration_requests")
+            .update({ attachments: merged as never })
+            .eq("id", inserted.id);
+          await supabase.from("registration_request_events").insert({
+            request_id: inserted.id,
+            event_type: "attachment",
+            message: `${uploaded.length} anexo(s) enviado(s) na abertura do chamado`,
+            author_email: requesterEmail,
+            author_name: session?.userName || null,
+            attachments: uploaded as never,
+          });
+        } catch (upErr) {
+          toast.warning(
+            upErr instanceof Error ? upErr.message : "Chamado aberto, mas houve falha ao anexar os documentos.",
+          );
+        }
+      }
 
       try {
         await requestSupplierRegistration({
@@ -317,6 +345,10 @@ export function RegistrationRequestModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Contexto da compra, urgência, contato do fornecedor…"
             />
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <RegistrationFilePicker files={files} onChange={setFiles} disabled={saving} />
           </div>
         </div>
 
