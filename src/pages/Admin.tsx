@@ -694,6 +694,7 @@ export default function Admin() {
                 { key: "companies", label: "Empresas", icon: Building2 },
                 { key: "permissions", label: "Permissões", icon: Users },
                 { key: "integrations", label: "Integrações", icon: Key },
+                { key: "nfse_email", label: "E-mail NFS-e", icon: Mail },
                 { key: "audit", label: "Logs", icon: ScrollText },
                 { key: "admin_users", label: "Admins", icon: ShieldCheck },
                 { key: "tools", label: "Ferramentas", icon: Wrench },
