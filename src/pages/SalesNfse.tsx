@@ -326,7 +326,7 @@ export default function SalesNfse() {
     } finally {
       setMailSending(false);
     }
-  }, [mailOrder, mailInvoice, companyDb, mailTo, mailCc, mailSubject, mailMessage, pdfFiles, pdfPathFor]);
+  }, [mailOrder, mailInvoice, companyDb, mailTo, mailCc, mailSubject, mailMessage, pdfFiles, pdfPathFor, xmlPaths, fetchXml]);
 
   const invoiceByExpense = useMemo(() => {
     const map = new Map<string, NfseRow>();
