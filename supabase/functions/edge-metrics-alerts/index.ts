@@ -47,7 +47,7 @@ Deno.serve(withEdgeMetrics("edge-metrics-alerts", async (req) => {
 
   const { data: rows, error } = await sb
     .from("edge_function_metrics")
-    .select("function_name,duration_ms,ok")
+    .select("function_name,duration_ms,ok,status_code")
     .gte("started_at", windowStart.toISOString());
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
@@ -56,14 +56,16 @@ Deno.serve(withEdgeMetrics("edge-metrics-alerts", async (req) => {
     });
   }
 
-  const grouped = new Map<string, { total: number; errors: number; durations: number[] }>();
+  const grouped = new Map<string, { total: number; errors: number; denied: number; durations: number[] }>();
   for (const r of rows ?? []) {
-    const g = grouped.get(r.function_name) ?? { total: 0, errors: 0, durations: [] };
+    const g = grouped.get(r.function_name) ?? { total: 0, errors: 0, denied: 0, durations: [] };
     g.total += 1;
     if (!r.ok) g.errors += 1;
+    if (r.status_code === 401 || r.status_code === 403) g.denied += 1;
     if (typeof r.duration_ms === "number") g.durations.push(r.duration_ms);
     grouped.set(r.function_name, g);
   }
+
 
   const phonesEnv = (Deno.env.get("EDGE_METRICS_ALERT_PHONES") ?? "").trim();
   const phones = phonesEnv ? phonesEnv.split(",").map((p) => p.trim()).filter(Boolean) : DEFAULT_PHONES;
