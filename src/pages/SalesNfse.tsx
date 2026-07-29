@@ -472,15 +472,62 @@ export default function SalesNfse() {
                           <span className="text-xs text-muted-foreground">Aguardando emissão</span>
                         )}
                       </td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          const path = pdfPathFor(o, inv ?? null);
+                          const hasPdf = pdfFiles.has(path);
+                          return (
+                            <div className="flex items-center gap-1">
+                              {hasPdf && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 gap-1 px-2 text-xs"
+                                  onClick={() => void viewPdf(o, inv ?? null)}
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  Ver
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 gap-1 px-2 text-xs"
+                                disabled={uploadingFor === o.id}
+                                onClick={() => pickPdf(o, inv ?? null)}
+                              >
+                                {uploadingFor === o.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Upload className="w-3.5 h-3.5" />
+                                )}
+                                {hasPdf ? "Substituir" : "Anexar"}
+                              </Button>
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-3 py-2 text-right">
-                        <Button
-                          size="sm"
-                          variant={emitted ? "ghost" : "default"}
-                          disabled={emitted || !o.sap_doc_entry}
-                          onClick={() => setConfirmOrder(o)}
-                        >
-                          {emitted ? "Emitida" : "Emitir NFS-e"}
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1"
+                            disabled={!emitted}
+                            onClick={() => void openMail(o, inv ?? null)}
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            Enviar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={emitted ? "ghost" : "default"}
+                            disabled={emitted || !o.sap_doc_entry}
+                            onClick={() => setConfirmOrder(o)}
+                          >
+                            {emitted ? "Emitida" : "Emitir NFS-e"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
