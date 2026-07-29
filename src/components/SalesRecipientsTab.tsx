@@ -206,7 +206,7 @@ export default function SalesRecipientsTab() {
         </div>
       ) : customers.length === 0 ? (
         <EmptyState
-          icon={Users}
+          icon={<Users className="h-5 w-5" aria-hidden="true" />}
           title="Nenhum mapeamento cadastrado"
           description="Cadastre o primeiro vínculo cliente × marca para direcionar o envio das notas."
         />
