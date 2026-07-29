@@ -80,6 +80,8 @@ interface InvoiceRow {
   /** Número da NFSE / folio fiscal, priorizando campos brasileiros do SAP. */
   folioNumber: number | null;
   nfseNumber: string | null;
+  /** Número do RPS (preenchido só quando temos a NFS-e autorizada separada). */
+  rpsNumber?: string | null;
   /** Prefixo/tipo da NFSE (SAP FolioPrefixString), ex.: NFSe_CAC. */
   folioPrefix: string | null;
   /** Série da NFSE (SAP SeriesString), ex.: 1. */
