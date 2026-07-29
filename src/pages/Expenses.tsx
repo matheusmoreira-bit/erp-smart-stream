@@ -901,7 +901,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { hasAccess: canViewAllExpenses } = useModuleAccess("expenses_view_all");
-  const isAdmin = isLovableAdmin || !!session?.isSuperUser || canViewAllExpenses;
+  const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
+  const isAdmin = isLovableAdmin || !!session?.isSuperUser || canViewAllExpenses || canViewAllByGroup;
   const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
   const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), isAdmin);
