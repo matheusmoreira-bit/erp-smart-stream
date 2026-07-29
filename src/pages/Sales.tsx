@@ -288,14 +288,20 @@ function SalesPageInner() {
           const closed = inv.DocumentStatus === "bost_Close";
           const folioNumber = inv.FolioNumber != null ? Number(inv.FolioNumber) : null;
           const sequenceSerial = cleanSapText(inv.SequenceSerial);
-          const nfseNumber = sequenceSerial || (folioNumber != null ? String(folioNumber) : null);
+          const fiscal = nfseMap[String(inv.DocEntry)];
+          // Prioridade: número autorizado pela prefeitura (addon fiscal) →
+          // RPS (SequenceSerial) → folio nativo do SAP.
+          const nfseNumber =
+            cleanSapText(fiscal?.nfse) || sequenceSerial || (folioNumber != null ? String(folioNumber) : null);
+          const rpsNumber = cleanSapText(fiscal?.rps) || sequenceSerial;
           return {
             docEntry: inv.DocEntry,
             docNum: inv.DocNum,
             folioNumber,
             nfseNumber,
+            rpsNumber: fiscal?.nfse ? rpsNumber : null,
             folioPrefix: cleanSapText(inv.FolioPrefixString),
-            folioSeries: cleanSapText(inv.SeriesString),
+            folioSeries: cleanSapText(fiscal?.serie) || cleanSapText(inv.SeriesString),
             cardCode: inv.CardCode || "—",
             cardName: inv.CardName || "—",
             docDate: inv.DocDate,
