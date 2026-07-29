@@ -918,6 +918,8 @@ export default function Admin() {
 
         {activeTab === "integrations" && <IntegrationsTab />}
 
+        {activeTab === "nfse_email" && <NfseEmailSettingsTab />}
+
         {activeTab === "permissions" && <PermissionManager />}
 
         {activeTab === "admin_users" && <AdminUsersManager />}
