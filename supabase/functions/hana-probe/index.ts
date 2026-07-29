@@ -68,6 +68,18 @@ Deno.serve(async (req) => {
     const defaultSchema = String(body?.schema || resolveHanaSchema(companyDb, dbName));
     const limit = Number(body?.limit ?? 1);
 
+    // Modo cru: bate num path arbitrário do HanaAPI (ex.: "/openapi.json").
+    if (body?.raw_path) {
+      const { generateDynamicToken } = await import("../_shared/sap-middleware-token.ts");
+      const token = await generateDynamicToken();
+      const base = (kv.hana_api_url || "http://201.48.79.205:8001").replace(/\/+$/, "");
+      const r = await fetch(`${base}${String(body.raw_path)}`, {
+        headers: { dynamictoken: token, sessionid: sessionId },
+      });
+      const text = await r.text();
+      return json({ status: r.status, body: text.slice(0, Number(body?.raw_limit ?? 6000)) });
+    }
+
     const results: Record<string, unknown> = {};
     for (const t of tables) {
       const [schema, table] = t.includes(".") ? [t.split(".")[0], t.split(".").slice(1).join(".")] : [defaultSchema, t];
