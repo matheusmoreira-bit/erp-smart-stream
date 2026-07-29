@@ -281,7 +281,13 @@ export default function SalesNfse() {
         const res = await authFetch("nfse-send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "resolve", company_db: companyDb, project_code: "" }),
+          body: JSON.stringify({
+            action: "resolve",
+            company_db: companyDb,
+            customer_code: order.supplier_code || "",
+            project_code: order.project || "",
+            split_mode: order.nfse_split_mode === "per_brand" ? "per_brand" : "unified",
+          }),
         });
         const b = await res.json().catch(() => ({}));
         if (res.ok && !b?.error) {
