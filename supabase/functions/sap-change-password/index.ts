@@ -207,10 +207,22 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     if (callerSource === "cloud_admin" || callerSource === "sap_admin") isAdmin = true;
 
     if (!isAdmin && callerUserCode && userCode.toLowerCase() !== callerUserCode.toLowerCase()) {
-      return new Response(JSON.stringify({ error: "Só é permitido alterar a própria senha" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Identidade flexível: e-mail pode mudar ao longo do tempo, enquanto o
+      // UserCode do SAP é imutável. Verifica aliases (IdP, credenciais
+      // gerenciadas, perfil de colaborador) antes de negar.
+      const owns = await callerOwnsUserCode(
+        adminSvc,
+        { id: callerId, email: (caller as { email?: string }).email, userName: (caller as { userName?: string }).userName },
+        userCode,
+      );
+      if (!owns) {
+        console.warn("[sap-change-password] identity mismatch", { callerUserCode, userCode });
+        return new Response(JSON.stringify({ error: "Só é permitido alterar a própria senha" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
+
     if (!newPassword || newPassword.length < 4) {
       return new Response(JSON.stringify({ error: "new_password inválido (mínimo 4 caracteres)" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
