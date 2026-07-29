@@ -226,8 +226,11 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
       }
     }
 
-    if (!newPassword || newPassword.length < 4) {
-      return new Response(JSON.stringify({ error: "new_password inválido (mínimo 4 caracteres)" }), {
+    // Política de senha (pentest 3.3): mínimo 12 caracteres e bloqueio de
+    // senhas triviais/previsíveis.
+    const weak = isWeakPassword(newPassword, userCode);
+    if (weak) {
+      return new Response(JSON.stringify({ error: weak }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -236,6 +239,33 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Anti-CSRF / anti-replay (pentest 3.3): troca da própria senha exige a
+    // senha atual, validada no Service Layer. Admin redefinindo a senha de
+    // terceiros continua isento (não conhece a senha do usuário).
+    const isSelfChange = !isAdmin
+      || userCode.toLowerCase() === (callerUserCode || "").toLowerCase();
+    if (isSelfChange) {
+      const currentPassword = String(body.current_password || "");
+      if (!currentPassword) {
+        return new Response(JSON.stringify({ error: "Informe a senha atual para confirmar a alteração.", code: "current_password_required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (currentPassword === newPassword) {
+        return new Response(JSON.stringify({ error: "A nova senha deve ser diferente da senha atual." }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const verified = await verifyCurrentPassword(service(), targets, userCode, currentPassword);
+      if (!verified.ok) {
+        console.warn("[sap-change-password] current password check failed", { userCode, reason: verified.reason });
+        return new Response(JSON.stringify({ error: verified.reason || "Senha atual incorreta." }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
 
     const admin = service();
     const { data: companiesData } = await admin
