@@ -310,6 +310,21 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     const isSelfChange = !isAdmin
       || userCode.toLowerCase() === (callerUserCode || "").toLowerCase();
     if (isSelfChange) {
+      // Token anti-CSRF de uso único: derruba replay do HTML/requisição.
+      const csrfOk = await consumeCsrfToken(
+        adminSvc,
+        req.headers.get(CSRF_HEADER) || String(body.csrf_token || ""),
+        "sap-change-password",
+        callerUserCode || userCode,
+      );
+      if (!csrfOk) {
+        console.warn("[sap-change-password] csrf token inválido/reutilizado", { userCode });
+        return new Response(JSON.stringify({
+          error: "Sessão de segurança expirada. Recarregue a página e tente novamente.",
+          code: "csrf_invalid",
+        }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       const currentPassword = String(body.current_password || "");
       if (!currentPassword) {
         return new Response(JSON.stringify({ error: "Informe a senha atual para confirmar a alteração.", code: "current_password_required" }), {
@@ -329,6 +344,7 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         });
       }
     }
+
 
 
     const admin = service();
