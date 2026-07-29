@@ -13,6 +13,7 @@ import { PageTitle } from "@/components/PageTitle";
 
 export default function BackofficeLogin() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,11 +22,20 @@ export default function BackofficeLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [existingEmail, setExistingEmail] = useState<string | null>(null);
 
+  // Allowlist: só aceitamos retornar para rotas internas do backoffice,
+  // evitando open redirect via state de navegação.
+  const rawFrom = (location.state as { from?: string } | null)?.from;
+  const redirectTo =
+    typeof rawFrom === "string" && /^\/backoffice(\/|$)/.test(rawFrom) && !rawFrom.startsWith("/backoffice/login")
+      ? rawFrom
+      : "/backoffice";
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setExistingEmail(session?.user?.email ?? null);
     });
   }, []);
+
 
 
   const handleSubmit = async (e: React.FormEvent) => {
