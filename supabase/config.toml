@@ -73,3 +73,6 @@ verify_jwt = false
 
 [functions.sap-approvals-hana]
 verify_jwt = false
+
+[functions.registration-sla-reminders]
+verify_jwt = false
