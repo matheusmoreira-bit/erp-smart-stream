@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { parse as parseXml } from "https://deno.land/x/xml@2.1.3/mod.ts";
+import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -314,6 +315,21 @@ Deno.serve(async (req) => {
     });
 
     if (status === "failed") return json({ error: errorMessage }, 502);
+
+    await notifySalesMilestone(admin, {
+      milestone: "nfse_emailed",
+      companyDb: companyDb,
+      refId: `${companyDb}:${invoiceDocEntry ?? nfseNumber ?? expenseId ?? ""}`,
+      link: "/sales/nfse",
+      summary: "A NFS-e foi enviada por e-mail ao cliente.",
+      details: [
+        { label: "Cliente", value: customerName },
+        { label: "NFS-e", value: nfseNumber },
+        { label: "Destinatários", value: to.join(", ") },
+        { label: "Empresa", value: companyDb },
+      ],
+    });
+
     return json({ ok: true, to, cc, attachments: attachments.length });
   } catch (e) {
     console.error("nfse-send-email error:", e);

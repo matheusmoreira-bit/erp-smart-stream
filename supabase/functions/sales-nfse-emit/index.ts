@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireUserOrSapSession } from "../_shared/auth.ts";
+import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -247,6 +248,21 @@ Deno.serve(async (req) => {
       .select("id")
       .single();
     if (insErr) console.error("sales-nfse-emit insert error", insErr.message);
+
+    await notifySalesMilestone(supabase, {
+      milestone: "nfse_issued",
+      companyDb: expense.company_db,
+      refId: `${expense.company_db}:${Number(invoice.DocEntry)}`,
+      link: "/sales/nfse",
+      summary: "Uma NFS-e foi emitida a partir de um pedido de venda.",
+      details: [
+        { label: "Cliente", value: expense.supplier_name },
+        { label: "Documento SAP", value: Number(invoice.DocNum) },
+        { label: "RPS/Série", value: invoice.SequenceSerial ? String(invoice.SequenceSerial) : null },
+        { label: "Valor", value: `${invoice.DocCurrency || expense.currency || "BRL"} ${Number(invoice.DocTotal ?? expense.total_amount ?? 0).toFixed(2)}` },
+        { label: "Empresa", value: expense.company_db },
+      ],
+    });
 
     return json({
       success: true,
