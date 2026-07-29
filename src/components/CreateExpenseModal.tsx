@@ -1851,6 +1851,17 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
+    // Alçada por CC no tipo de rateio: "imposto" só para 1.2.2.%; "folha" só para 1.5.1.3.
+    if (!isSales && !isRateioTypeAllowedForCostCenter(rateioType, userCostCenter, bypassCcItemRules)) {
+      toast.error(
+        rateioType === "imposto"
+          ? "Rateio de Imposto é restrito a usuários do CC 1.2.2.%"
+          : "Rateio de Folha é restrito a usuários de Pessoas e Cultura (CC 1.5.1.3)",
+      );
+      return;
+    }
+
+
     for (let idx = 0; idx < items.length; idx++) {
       const it = items[idx];
       const n = idx + 1;
