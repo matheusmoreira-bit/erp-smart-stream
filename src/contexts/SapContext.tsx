@@ -352,11 +352,11 @@ export function SapProvider({ children }: { children: ReactNode }) {
       <AlertDialog open={confirmLogoutOpen} onOpenChange={(open) => { if (!loggingOut) setConfirmLogoutOpen(open); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Encerrar sessão?</AlertDialogTitle>
+            <AlertDialogTitle>Sair da empresa?</AlertDialogTitle>
             <AlertDialogDescription>
               {session?.userName
-                ? `Você será desconectado de ${session.userName} (${session.companyDB}) e voltará para a tela de login.`
-                : "Você será desconectado e voltará para a tela de login."}
+                ? `Você será desconectado de ${session.userName} (${session.companyDB}). Sua conta Google continua conectada para escolher outra empresa.`
+                : "Você será desconectado da empresa. Sua conta Google continua conectada."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
