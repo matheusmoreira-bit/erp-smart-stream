@@ -47,6 +47,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
+import { expenseRead } from "@/lib/expense-read";
 
 /* ───────────────── Types ───────────────── */
 
@@ -185,8 +186,7 @@ export default function IntegrationsMonitor() {
         const companyDb = session?.companyDB || null;
 
         // Expenses with any sign of integration activity
-        let expenseQuery = supabase
-          .from("expenses")
+        let expenseQuery = expenseRead("expenses").viewAll()
           .select(
             "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_last_attempt_at, sap_status_last_check_at, origin",
           )

@@ -8,6 +8,7 @@ import { PeriodFilter, DEFAULT_PERIOD, type PeriodFilterValue } from "@/componen
 import { useSap } from "@/contexts/SapContext";
 import { useApprovals } from "@/hooks/useApprovals";
 import { supabase } from "@/integrations/supabase/client";
+import { expenseRead } from "@/lib/expense-read";
 
 type Origem = "all" | "sap" | "sistema";
 
@@ -62,9 +63,7 @@ export function PendingApprovalsReport() {
     if (!session?.companyDB) return;
     setSysLoading(true);
     try {
-      const [{ data: exp }, { data: adv }] = await Promise.all([
-        supabase
-          .from("expenses")
+      const [{ data: exp }, { data: adv }] = await Promise.all([expenseRead("expenses")
           .select("id,supplier_code,supplier_name,total_amount,currency,requester_name,current_approver,doc_type,sap_doc_num,doc_date,created_at")
           .eq("company_db", session.companyDB)
           .eq("status", "pendente_aprovacao"),

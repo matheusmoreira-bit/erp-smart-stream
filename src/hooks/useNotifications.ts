@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
+import { expenseRead } from "@/lib/expense-read";
 
 export interface Notification {
   id: string;
@@ -94,8 +95,7 @@ export function useNotifications() {
         if (variants.length === 0) return { data: [] as Array<Record<string, unknown>> };
         // ilike sem wildcards = igualdade case-insensitive.
         const orClauses = variants.map((v) => `current_approver.ilike.${v.replace(/,/g, "")}`).join(",");
-        let q = supabase
-          .from("expenses")
+        let q = expenseRead("expenses")
           .select("id, doc_type, supplier_name, requester_name, total_amount, currency, created_at, current_approver, company_db, cost_center")
           .eq("status", "pendente_aprovacao")
           .or(orClauses)
@@ -114,8 +114,7 @@ export function useNotifications() {
           clauses.push(`created_by_email.ilike.${emailLower.replace(/,/g, "")}`);
           clauses.push(`requester_email.ilike.${emailLower.replace(/,/g, "")}`);
         }
-        let q = supabase
-          .from("expenses")
+        let q = expenseRead("expenses")
           .select("id, doc_type, supplier_name, requester_name, total_amount, currency, created_at, updated_at, company_db, cost_center")
           .eq("status", "aprovado")
           .or(clauses.join(","))

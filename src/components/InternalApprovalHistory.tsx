@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { expenseRead } from "@/lib/expense-read";
 
 type DelegationStatus = "ativa" | "revogada" | "substituida" | "consumida" | "expirada";
 type SubstituteStatus = "ativa" | "expirada" | "agendada" | "revogada";
@@ -132,9 +133,7 @@ export function InternalApprovalHistory({ expenseId }: Props) {
             "id, level_order, approver_name, approver_email, decision, remarks, decided_at, created_at, substituted_for_email, substituted_for_name, action_role",
           )
           .eq("expense_id", expenseId)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("expenses")
+          .order("created_at", { ascending: true }), expenseRead("expenses")
           .select("status")
           .eq("id", expenseId)
           .maybeSingle(),

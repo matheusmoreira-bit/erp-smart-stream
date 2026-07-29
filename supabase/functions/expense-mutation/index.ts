@@ -21,6 +21,8 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { enforceRateLimit } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -734,10 +736,94 @@ async function actionLogDecision(admin: SupabaseClient, caller: Caller, body: an
   return json(200, { ok: true });
 }
 
+/* ─────────────── Idempotência da criação (pentest 3.4) ───────────────
+ * Duas requisições "create" simultâneas (duplo clique, replay, corrida)
+ * criavam dois pedidos. Aqui uma chave única — enviada pelo cliente em
+ * `x-idempotency-key` ou derivada do conteúdo do pedido — é reservada de
+ * forma atômica (PK do Postgres). A segunda chamada não executa a criação:
+ * devolve a resposta da primeira ou 409 enquanto ela ainda está em curso.
+ */
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function createFingerprint(caller: Caller, body: any): Promise<string> {
+  const input = body?.input ?? {};
+  const items = Array.isArray(input.items) ? input.items : [];
+  return await sha256Hex(JSON.stringify({
+    who: normalize(caller.identity),
+    db: normalize(input.company_db || caller.companyDB),
+    supplier: normalize(input.supplier_code || input.supplier_name),
+    doc: normalize(input.doc_date),
+    due: normalize(input.due_date),
+    total: items.reduce((s: number, it: any) => s + Number(it.line_total || 0), 0),
+    items: items.map((it: any) => [it.item_code, it.quantity, it.unit_price, it.cost_center, it.project]),
+  }));
+}
+
+async function runCreateOnce(admin: SupabaseClient, caller: Caller, body: any, req: Request) {
+  const fingerprint = await createFingerprint(caller, body);
+  const headerKey = (req.headers.get("x-idempotency-key") || "").trim().slice(0, 200);
+  const key = headerKey || `fp:${fingerprint}`;
+
+  const { error: claimErr } = await admin.from("expense_create_idempotency").insert({
+    idempotency_key: key,
+    caller_identity: normalize(caller.identity),
+    company_db: String(body?.input?.company_db || caller.companyDB || "") || null,
+    fingerprint,
+  } as any);
+
+  if (claimErr) {
+    // 23505 = chave já reservada → requisição repetida.
+    const { data: prev } = await admin
+      .from("expense_create_idempotency")
+      .select("expense_id, response, status_code, completed_at")
+      .eq("idempotency_key", key)
+      .maybeSingle();
+    const row = prev as any;
+    if (row?.completed_at && row?.response) {
+      return json(Number(row.status_code) || 200, row.response);
+    }
+    return json(409, {
+      error: "Este pedido já está sendo criado. Aguarde a confirmação antes de tentar novamente.",
+    });
+  }
+
+  let res: Response;
+  try {
+    res = await actionCreate(admin, caller, body);
+  } catch (e) {
+    await admin.from("expense_create_idempotency").delete().eq("idempotency_key", key);
+    throw e;
+  }
+
+  const clone = res.clone();
+  let payload: unknown = null;
+  try { payload = await clone.json(); } catch { /* ignore */ }
+  if (res.status >= 400) {
+    // Falha: libera a chave para permitir nova tentativa legítima.
+    await admin.from("expense_create_idempotency").delete().eq("idempotency_key", key);
+    return res;
+  }
+  await admin
+    .from("expense_create_idempotency")
+    .update({
+      expense_id: (payload as any)?.expense?.id ?? (payload as any)?.id ?? null,
+      response: payload as any,
+      status_code: res.status,
+      completed_at: new Date().toISOString(),
+    } as any)
+    .eq("idempotency_key", key);
+  return res;
+}
+
 /* ───────────────────────── HTTP entry ───────────────────────── */
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const foreign = rejectForeignOrigin(req);
+  if (foreign) return foreign;
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
 
   let body: any = {};
@@ -760,9 +846,23 @@ Deno.serve(async (req) => {
     return json(401, { error: "Não autenticado (SAP session ou Cloud admin necessário)" });
   }
 
+  // Limite por usuário nas ações de escrita (pentest 3.4).
+  const rl = await enforceRateLimit(admin, {
+    scope: `expense-mutation:${action || "unknown"}`,
+    identifier: normalize(caller.identity) || "cloud-admin",
+    max: action === "create" ? 20 : 60,
+    windowSeconds: 60,
+  });
+  if (!rl.allowed) {
+    return json(429, {
+      error: "Muitas requisições. Aguarde alguns instantes antes de tentar novamente.",
+      retry_after: rl.retryAfter,
+    });
+  }
+
   try {
     switch (action) {
-      case "create":          return await actionCreate(admin, caller, body);
+      case "create":          return await runCreateOnce(admin, caller, body, req);
       case "update":          return await actionUpdate(admin, caller, body);
       case "submit":          return await actionSubmit(admin, caller, body);
       case "cancel":          return await actionCancel(admin, caller, body);

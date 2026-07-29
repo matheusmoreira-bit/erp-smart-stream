@@ -1,6 +1,6 @@
 // Validação da política de senha do SAP B1 (OUSR.PASSWORD) no cliente.
 // Regras baseadas na configuração padrão de "Password Administration" das bases:
-// - Mínimo 8 caracteres
+// - Mínimo 12 caracteres (endurecido após pentest 2026-07)
 // - Ao menos 1 letra maiúscula
 // - Ao menos 1 letra minúscula
 // - Ao menos 1 dígito
@@ -25,7 +25,7 @@ const TRIVIAL = new Set([
 ]);
 
 export const PASSWORD_RULES: PasswordRule[] = [
-  { id: "length", label: "Mínimo de 8 caracteres", test: (p) => p.length >= 8 },
+  { id: "length", label: "Mínimo de 12 caracteres", test: (p) => p.length >= 12 },
   { id: "upper", label: "Ao menos 1 letra maiúscula (A-Z)", test: (p) => /[A-Z]/.test(p) },
   { id: "lower", label: "Ao menos 1 letra minúscula (a-z)", test: (p) => /[a-z]/.test(p) },
   { id: "digit", label: "Ao menos 1 número (0-9)", test: (p) => /\d/.test(p) },
