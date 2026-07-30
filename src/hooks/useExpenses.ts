@@ -1025,6 +1025,15 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     [fetchExpenses, session]
   );
 
+  /** Reativa um documento cancelado (volta para rascunho). Autor ou admin. */
+  const reactivateExpense = useCallback(
+    async (expenseId: string) => {
+      await invokeExpenseMutation({ action: "reactivate", expense_id: expenseId });
+      await fetchExpenses();
+    },
+    [fetchExpenses]
+  );
+
   const cancelExpense = useCallback(
     async (expenseId: string) => {
       await invokeExpenseMutation({ action: "cancel", expense_id: expenseId });
@@ -1290,6 +1299,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     updateExpense,
     submitForApproval,
     cancelExpense,
+    reactivateExpense,
     approveExpense,
     rejectExpense,
     retrySapIntegration,
