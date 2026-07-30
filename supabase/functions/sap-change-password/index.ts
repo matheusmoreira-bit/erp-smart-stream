@@ -17,18 +17,11 @@ import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
 import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
-import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { consumeCsrfToken, CSRF_HEADER } from "../_shared/csrf.ts";
 import { revokeErpSession } from "../_shared/session-revocation.ts";
 
 
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 function service() {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -219,6 +212,7 @@ async function verifyCurrentPassword(
 }
 
 Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
+  const corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
