@@ -869,6 +869,22 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       } as any);
     }
 
+    // Notifica o próximo aprovador nos canais ativos (in-app, e-mail, Slack).
+    await notifyApprovalPending(admin, {
+      expenseId,
+      companyDb: (exp as any).company_db,
+      approverEmail: nextApproverEmail,
+      approverName: nextApproverName,
+      levelOrder: nextLevelOrder,
+      requesterName: (exp as any).requester_name,
+      supplierName: (exp as any).supplier_name,
+      totalAmount: Number((exp as any).total_amount || 0),
+      currency: (exp as any).currency,
+      docType: String((exp as any).doc_type || "purchase"),
+    });
+
+
+
     return await respond(200, {
       ok: true,
       action: "approve",
