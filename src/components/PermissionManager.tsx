@@ -487,15 +487,17 @@ function UsersView({
       ) : (
         <IosList>
           {filtered.map((u) => {
-            const email = u.eMail || u.UserCode;
-            const g = getUserGroup(email);
+            const g = getUserGroup(u);
             return (
-              <IosRow key={email.toLowerCase()} onClick={() => setSheetUser(u)}>
+              <IosRow key={u.user_key} onClick={() => setSheetUser(u)}>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
-                    {u.UserName || u.UserCode}
+                    {directoryDisplayName(u)}
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">{email}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {u.sap_user_code || u.user_key}
+                    {u.emails.length > 0 ? ` · ${u.emails.length} e-mail(s)` : ""}
+                  </p>
                 </div>
                 <Badge
                   variant="secondary"
@@ -515,18 +517,20 @@ function UsersView({
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="text-left">
-              {sheetUser?.UserName || sheetUser?.UserCode}
+              {sheetUser ? directoryDisplayName(sheetUser) : ""}
               <p className="text-xs font-normal text-muted-foreground mt-0.5">
-                {sheetUser?.eMail || sheetUser?.UserCode}
+                Usuário SAP: {sheetUser?.sap_user_code || sheetUser?.user_key}
               </p>
+              {sheetUser && sheetUser.emails.length > 0 && (
+                <p className="text-xs font-normal text-muted-foreground mt-0.5 break-all">
+                  {sheetUser.emails.join(", ")}
+                </p>
+              )}
             </SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-1">
             {groups.map((g) => {
-              const email = sheetUser ? (sheetUser.eMail || sheetUser.UserCode) : "";
-              const isCurrent =
-                assignments.find((a) => a.sap_email.toLowerCase() === email.toLowerCase())
-                  ?.group_id === g.id;
+              const isCurrent = assignmentOf(sheetUser)?.group_id === g.id;
               return (
                 <button
                   key={g.id}
@@ -549,11 +553,8 @@ function UsersView({
               );
             })}
           </div>
-          {assignments.find(
-            (a) =>
-              sheetUser &&
-              a.sap_email.toLowerCase() === (sheetUser.eMail || sheetUser.UserCode).toLowerCase(),
-          ) && (
+          {assignmentOf(sheetUser) && (
+
             <Button
               variant="ghost"
               className="w-full mt-3 text-destructive hover:text-destructive"
