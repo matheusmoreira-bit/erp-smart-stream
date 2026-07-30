@@ -29,7 +29,9 @@ export function SupplierEmptyState({
   onCreateNew,
   onRefresh,
   crossCompanyLookup,
+  canRegister = true,
 }: Props) {
+
   const [matches, setMatches] = useState<CrossCompanyMatch[]>([]);
   const [loading, setLoading] = useState(false);
 
