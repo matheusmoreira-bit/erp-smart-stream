@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { KeyRound, Loader2, CheckCircle2, AlertCircle, MinusCircle, ShieldAlert } from "lucide-react";
+import { KeyRound, Loader2, CheckCircle2, AlertCircle, MinusCircle, ShieldAlert, Wand2, Eye, EyeOff, Copy } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import {
   listSapTargetCompanies,
@@ -12,7 +12,7 @@ import {
   type MultiCompanyPasswordResult,
 } from "@/lib/sap-multi-password";
 import { toast } from "sonner";
-import { checkPasswordPolicy } from "@/lib/password-policy";
+import { checkPasswordPolicy, generateStrongPassword } from "@/lib/password-policy";
 import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 import { saveUserSapCredential } from "@/lib/user-sap-credentials";
 import { clearErpLocalState } from "@/lib/clear-erp-local-state";
@@ -47,6 +47,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customPick, setCustomPick] = useState(false);
   const [managed, setManaged] = useState(false);
+  const [showNew, setShowNew] = useState(false);
   const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
 
   const isTest = (db: string) => db.toUpperCase().startsWith("TST");
@@ -71,6 +72,7 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
     setSelected(new Set(otherCompanies.map((o) => o.company_db)));
     setCustomPick(false);
     setSummary(null);
+    setShowNew(false);
   };
 
   const toggleGroup = (group: "prod" | "test", checked: boolean) => {
@@ -253,14 +255,60 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-pw">Nova Senha</Label>
-              <Input
-                id="new-pw"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="new-pw"
+                    type={showNew ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNew((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showNew ? "Ocultar senha" : "Mostrar senha"}
+                  >
+                    {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Gerar senha segura"
+                  aria-label="Gerar senha segura"
+                  onClick={() => {
+                    const generated = generateStrongPassword(16, session.userName);
+                    setNewPassword(generated);
+                    setConfirmPassword(generated);
+                    setShowNew(true);
+                  }}
+                >
+                  <Wand2 className="w-4 h-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Copiar senha"
+                  aria-label="Copiar senha"
+                  disabled={!newPassword}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(newPassword);
+                      toast.success("Senha copiada");
+                    } catch {
+                      toast.error("Não foi possível copiar");
+                    }
+                  }}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
               <PasswordPolicyChecklist password={newPassword} userCode={session.userName} />
             </div>
             <div className="space-y-2">
