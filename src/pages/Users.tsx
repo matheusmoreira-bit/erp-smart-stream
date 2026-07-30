@@ -294,6 +294,8 @@ export default function UsersPage() {
                 const isLocked = user.Locked === "tYES";
                 const isActing = actionLoading === user.InternalKey;
                 const initials = getInitials(user.UserName || user.UserCode || "?");
+                const userGroup = groupOf(user.UserCode, user.eMail);
+
 
                 return (
                   <div
