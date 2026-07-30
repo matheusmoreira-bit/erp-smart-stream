@@ -558,6 +558,31 @@ function ApprovalDetailModal({
 
   const visibleLines = doc?.documentLines || [];
 
+  // Metadados/variáveis para o Raio-X da regra de aprovação (somente leitura).
+  const explainMeta = (doc as unknown as {
+    __explain?: { ruleId: string | null; currentLevel: number | null; docType: string; requesterName: string };
+  })?.__explain ?? { ruleId: null, currentLevel: null, docType: "purchase", requesterName: doc?.requester || "" };
+
+  const explainVars: ExplainVariables = useMemo(() => {
+    const lines = doc?.documentLines || [];
+    const info = getRateioInfo(lines);
+    const uniq = (arr: string[]) => Array.from(new Set(arr.map((s) => (s || "").trim()).filter(Boolean)));
+    return {
+      costCenters: uniq(lines.map((l) => l.CostingCode)),
+      projects: uniq(lines.map((l) => l.Project)),
+      totalAmount: Number(doc?.docTotal || 0),
+      currency: doc?.currency || "BRL",
+      itemCodes: uniq(lines.map((l) => l.ItemCode)),
+      itemNames: uniq(lines.map((l) => l.Description)),
+      supplierName: doc?.cardName || "",
+      supplierCode: doc?.cardCode || "",
+      requesterName: explainMeta.requesterName || doc?.requester || "",
+      docType: explainMeta.docType || "purchase",
+      rateioType: doc?.rateioType || "padrao",
+      rateioByCC: info.byCC,
+    };
+  }, [doc, explainMeta.docType, explainMeta.requesterName]);
+
   // Mapeia CostingCode → segmento (para saber a qual aprovador cada linha
   // pertence quando exibimos com blur).
   const segmentByCC = useMemo(() => {
