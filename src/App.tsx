@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { SapProvider } from "@/contexts/SapContext";
 import { PermissionsV2Provider } from "@/contexts/PermissionsV2Context";
 import Index from "./pages/Index.tsx";
+import ApprovalLink from "./pages/ApprovalLink.tsx";
 import AnalyticsPage from "./pages/Analytics.tsx";
 import ApprovalsHub from "./pages/ApprovalsHub.tsx";
 import Expenses from "./pages/Expenses.tsx";
