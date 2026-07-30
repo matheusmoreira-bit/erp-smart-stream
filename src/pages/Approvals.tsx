@@ -2271,7 +2271,7 @@ export default function ApprovalsPage() {
   const dueFromD = dueFrom ? new Date(dueFrom).getTime() : null;
   const dueToD = dueTo ? new Date(dueTo).getTime() + 86399999 : null;
 
-  const filtered = userApprovals.filter((a) => {
+  const preFiltered = userApprovals.filter((a) => {
     // Type filter (purchase vs sales) — based on docTypeName keyword
     if (typeFilter !== "all") {
       const name = (a.docTypeName || "").toLowerCase();
