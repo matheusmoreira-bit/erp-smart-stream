@@ -335,6 +335,8 @@ export default function ApprovalMatrix() {
           <ApprovalMatrixMindMap
             rows={rows}
             rootLabel={companyLabel}
+            storageKey={session?.companyDB || "default"}
+
             onOpenList={(f) => {
               if (f.flow) setFlow(f.flow === "both" ? "all" : f.flow);
               if (f.category) setCategory(f.category);
