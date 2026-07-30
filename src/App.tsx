@@ -42,6 +42,7 @@ import SapSyncRuns from "./pages/SapSyncRuns.tsx";
 import BackofficeCopilot from "./pages/BackofficeCopilot.tsx";
 import InfraHealth from "./pages/InfraHealth.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
+import PagCorpSettlementAudit from "./pages/PagCorpSettlementAudit.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { WhatsNewWizard } from "./components/WhatsNewWizard.tsx";
@@ -81,6 +82,7 @@ const App = () => (
               <Route path="/backoffice/copiloto" element={<AdminRoute><BackofficeCopilot /></AdminRoute>} />
               <Route path="/backoffice/infra-health" element={<AdminRoute><InfraHealth /></AdminRoute>} />
               <Route path="/backoffice/retry-queue" element={<AdminRoute><BackofficeRetryQueue /></AdminRoute>} />
+              <Route path="/backoffice/baixas-pagcorp" element={<AdminRoute><PagCorpSettlementAudit /></AdminRoute>} />
 
 
 
