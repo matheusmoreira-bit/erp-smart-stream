@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { SubmenuBar } from "@/components/SubmenuBar";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { useModuleAccess } from "@/hooks/usePermissions";
 
 export interface HubTabDef<K extends string> {
@@ -33,6 +34,10 @@ export function TabsHub<K extends string>({ tabs, active, moduleLabel }: TabsHub
 
   return (
     <div>
+      <BackofficePageHeader
+        title={activeTab?.label ?? moduleLabel ?? ""}
+        description={moduleLabel}
+      />
       <SubmenuBar
         moduleLabel={moduleLabel}
         items={list.map((t) => ({ key: t.path, label: t.label }))}
