@@ -299,18 +299,15 @@ function ModuleCardItem({
   mod,
   index,
   hasAccess,
-  expanded,
-  onToggle,
+  targetPath,
 }: {
   mod: ModuleCard;
   index: number;
   hasAccess: boolean;
-  expanded?: boolean;
-  onToggle?: () => void;
+  targetPath: string;
 }) {
   const navigate = useNavigate();
   const Icon = mod.icon;
-  const hasSub = !!mod.subItems?.length;
 
   return (
     <motion.button
@@ -319,19 +316,17 @@ function ModuleCardItem({
       transition={{ delay: Math.min(index * 0.05, 0.3) }}
       onClick={() => {
         if (!hasAccess) return;
-        if (hasSub && onToggle) onToggle();
-        else navigate(mod.path);
+        navigate(targetPath);
       }}
       disabled={!hasAccess}
-      aria-expanded={hasSub ? !!expanded : undefined}
       className={`glass-card p-4 sm:p-6 text-left transition-all group relative overflow-hidden active:scale-[0.98] ${
         hasAccess
           ? "hover:border-primary/40 cursor-pointer hover:scale-[1.02]"
           : "opacity-50 cursor-not-allowed"
-      } ${expanded ? "border-primary/50" : ""}`}
+      }`}
     >
       {/* Glow background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} ${expanded ? "opacity-100" : "opacity-0"} group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
 
       <div className="relative z-10">
         <div className="flex items-start justify-between mb-3 sm:mb-4">
@@ -340,10 +335,6 @@ function ModuleCardItem({
           </div>
           {!hasAccess ? (
             <Lock className="w-4 h-4 text-muted-foreground" />
-          ) : hasSub ? (
-            <ChevronDown
-              className={`w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-transform ${expanded ? "rotate-180 text-primary" : ""}`}
-            />
           ) : (
             <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           )}
@@ -354,6 +345,23 @@ function ModuleCardItem({
     </motion.button>
   );
 }
+
+/** Primeira opção acessível do módulo (ou a rota principal). */
+function firstAccessiblePath(
+  mod: ModuleCard,
+  userModules: string[],
+  permLoading: boolean,
+): string {
+  const items = (mod.subItems ?? []).filter(
+    (s) =>
+      permLoading ||
+      !s.moduleKey ||
+      userModules.length === 0 ||
+      userModules.includes(s.moduleKey),
+  );
+  return items[0]?.path ?? mod.path;
+}
+
 
 function SubmenuModal({
   mod,
