@@ -2301,6 +2301,16 @@ export default function ApprovalsPage() {
       if (dueToD !== null && t > dueToD) return false;
     }
 
+    // Centro de custo / Projeto (multi-seleção)
+    if (ccFilter.length > 0) {
+      const codes = docCostCenters(a);
+      if (!codes.some((c) => ccFilter.includes(c))) return false;
+    }
+    if (projectFilter.length > 0) {
+      const projs = docProjects(a);
+      if (!projs.some((p) => projectFilter.includes(p))) return false;
+    }
+
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -2313,14 +2323,77 @@ export default function ApprovalsPage() {
     );
   });
 
+  // Opções disponíveis para os filtros — derivadas apenas dos documentos
+  // visíveis ao usuário (antes dos filtros de CC/Projeto, para não zerar a lista).
+  const ccOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of userApprovals) for (const c of docCostCenters(a)) set.add(c);
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b))
+      .map((v) => ({ value: v, label: formatCostCenter(v) || v }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userApprovals, formatCostCenter]);
+
+  const projectOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of userApprovals) for (const p of docProjects(a)) set.add(p);
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b))
+      .map((v) => ({ value: v, label: v }));
+  }, [userApprovals]);
+
+  const overdueCount = preFiltered.filter((a) => isOverdue(a.dueDate)).length;
+
+  const filtered = useMemo(() => {
+    const base = onlyOverdue ? preFiltered.filter((a) => isOverdue(a.dueDate)) : preFiltered;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const ts = (d?: string | null) => {
+      const t = d ? new Date(d).getTime() : NaN;
+      // Documentos sem data ficam sempre no fim, independente da direção.
+      return Number.isFinite(t) ? t : null;
+    };
+    return [...base].sort((a, b) => {
+      switch (sortKey) {
+        case "docNum":
+          return (Number(a.docNum) - Number(b.docNum)) * dir;
+        case "docTotal":
+          return (a.docTotal - b.docTotal) * dir;
+        case "docTypeName":
+          return a.docTypeName.localeCompare(b.docTypeName, "pt-BR") * dir;
+        case "cardName":
+          return a.cardName.localeCompare(b.cardName, "pt-BR") * dir;
+        case "currentApprover":
+          return a.currentApprover.localeCompare(b.currentApprover, "pt-BR") * dir;
+        case "requester":
+          return a.requester.localeCompare(b.requester, "pt-BR") * dir;
+        case "docDate": {
+          const ta = ts(a.docDate);
+          const tb = ts(b.docDate);
+          if (ta === null && tb === null) return 0;
+          if (ta === null) return 1;
+          if (tb === null) return -1;
+          return (ta - tb) * dir;
+        }
+        case "dueDate":
+        default: {
+          const ta = ts(a.dueDate);
+          const tb = ts(b.dueDate);
+          if (ta === null && tb === null) return 0;
+          if (ta === null) return 1;
+          if (tb === null) return -1;
+          return (ta - tb) * dir;
+        }
+      }
+    });
+  }, [preFiltered, onlyOverdue, sortKey, sortDir]);
+
   const totalValue = filtered.reduce((sum, a) => sum + a.docTotal, 0);
-  const overdueCount = filtered.filter((a) => isOverdue(a.dueDate)).length;
 
   const { visibleItems: visibleApprovals, hasMore: apprHasMore, loadMore: apprLoadMore, sentinelRef: apprSentinelRef, total: apprTotal, initial: apprInitial } =
     useLazyList(filtered, {
       initial: 30,
       step: 10,
-      resetDeps: [search, typeFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode],
+      resetDeps: [search, typeFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(",")],
     });
 
   const handleApprovalAction = async (
