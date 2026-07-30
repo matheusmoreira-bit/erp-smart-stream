@@ -62,6 +62,8 @@ import { segmentDocByRules, segmentsForApprover, isTrulySegmented, type Approval
 import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
+import SubstituteApproversTab from "@/components/SubstituteApproversTab";
+
 
 import {
   Dialog,
