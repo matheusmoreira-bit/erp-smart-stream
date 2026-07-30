@@ -41,6 +41,78 @@ export interface DirectoryUser {
   display_name: string | null;
   is_active: boolean;
   emails: string[];
+  /** Todas as chaves canônicas equivalentes a esta pessoa (inclui variações/typos). */
+  aliasKeys?: string[];
+}
+
+/** Distância de edição (Levenshtein) limitada — usada para detectar typos. */
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 2) return 99;
+  const prev = new Array(b.length + 1).fill(0).map((_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = prev[j];
+      prev[j] = Math.min(
+        prev[j] + 1,
+        prev[j - 1] + 1,
+        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      diagonal = temp;
+    }
+  }
+  return prev[b.length];
+}
+
+/**
+ * Mesma pessoa mesmo com pequena variação de grafia no usuário SAP
+ * (ex.: `amanda.teixeira` x `amanda.texeira`).
+ */
+export function nearDuplicateKeys(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length < 8 || b.length < 8) return false;
+  return editDistance(a, b) <= 1;
+}
+
+/**
+ * Unifica entradas que representam a mesma pessoa (chave canônica igual ou
+ * quase igual, ou mesmo nome de exibição). Mantém a entrada mais completa e
+ * registra todas as chaves equivalentes em `aliasKeys`.
+ */
+export function unifyPeople(users: DirectoryUser[]): DirectoryUser[] {
+  const result: DirectoryUser[] = [];
+  const normName = (u: DirectoryUser) =>
+    (u.display_name || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+
+  for (const user of users) {
+    const keys = new Set([user.user_key, ...(user.aliasKeys || [])]);
+    const name = normName(user);
+    const match = result.find((r) => {
+      const rKeys = [r.user_key, ...(r.aliasKeys || [])];
+      if (rKeys.some((rk) => Array.from(keys).some((k) => nearDuplicateKeys(rk, k)))) return true;
+      const rName = normName(r);
+      return !!name && name === rName;
+    });
+    if (!match) {
+      result.push({ ...user, emails: [...user.emails], aliasKeys: Array.from(keys) });
+      continue;
+    }
+    const merged = new Set([...(match.aliasKeys || [match.user_key]), ...keys]);
+    match.aliasKeys = Array.from(merged);
+    match.display_name = match.display_name || user.display_name;
+    match.sap_user_code = match.sap_user_code || user.sap_user_code;
+    match.is_active = match.is_active || user.is_active;
+    match.emails = Array.from(new Set([...match.emails, ...user.emails]));
+  }
+  return result;
 }
 
 /** Entrada bruta de usuário vinda do SAP (cache ou Service Layer). */
