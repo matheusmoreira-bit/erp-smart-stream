@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, Send, Loader2, Sparkles, ShieldAlert, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -195,7 +196,7 @@ export default function BackofficeCopilot() {
                         </div>
                       )}
                       <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:m-0 [&>p+p]:mt-2 [&>ul]:mt-1 [&>ol]:mt-1 [&_table]:my-2 [&_code]:text-xs">
-                        <ReactMarkdown>{m.content || (m.steps?.length ? "" : "…")}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content || (m.steps?.length ? "" : "…")}</ReactMarkdown>
                       </div>
                       </>
                     ) : (
