@@ -352,16 +352,22 @@ function ModuleCardItem({
   );
 }
 
-function SubmenuPanel({
+function SubmenuModal({
   mod,
   userModules,
   permLoading,
+  open,
+  onOpenChange,
 }: {
-  mod: ModuleCard;
+  mod: ModuleCard | null;
   userModules: string[];
   permLoading: boolean;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
 }) {
   const navigate = useNavigate();
+  if (!mod) return null;
+  const Icon = mod.icon;
   const items = (mod.subItems ?? []).filter(
     (s) =>
       permLoading ||
@@ -369,36 +375,41 @@ function SubmenuPanel({
       userModules.length === 0 ||
       userModules.includes(s.moduleKey),
   );
-  if (items.length === 0) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: "auto" }}
-      exit={{ opacity: 0, height: 0 }}
-      transition={{ duration: 0.2 }}
-      className="col-span-2 md:col-span-3 overflow-hidden"
-    >
-      <div className="glass-card p-3 sm:p-4 mt-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
-          {mod.title} — submódulos
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-xl bg-card border border-border ${mod.color}`}>
+              <Icon className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <DialogTitle>{mod.title}</DialogTitle>
+              <DialogDescription>Selecione um submódulo</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+        <div className="grid gap-2">
           {items.map((s) => (
             <button
               key={s.path}
-              onClick={() => navigate(s.path)}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card/50 px-3 py-2.5 text-left text-sm text-foreground hover:border-primary/40 hover:bg-muted/50 active:scale-[0.99] transition-all min-h-11"
+              onClick={() => {
+                onOpenChange(false);
+                navigate(s.path);
+              }}
+              className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card/50 px-3 py-3 text-left text-sm text-foreground hover:border-primary/40 hover:bg-muted/50 active:scale-[0.99] transition-all min-h-11"
             >
               <span className="truncate">{s.label}</span>
               <ArrowRight className={`w-4 h-4 flex-shrink-0 ${mod.color}`} />
             </button>
           ))}
         </div>
-      </div>
-    </motion.div>
+      </DialogContent>
+    </Dialog>
   );
 }
+
 
 
 export function MainMenu() {
