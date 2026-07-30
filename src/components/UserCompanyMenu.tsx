@@ -30,7 +30,7 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   const { session, logout, login, loginManaged } = useSap();
   const { companies, getLabel } = useCompanies(true);
   const [open, setOpen] = useState(false);
-  const [switchOpen, setSwitchOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [managed, setManaged] = useState<Set<string>>(new Set());
   const [loadingCreds, setLoadingCreds] = useState(false);
   const [busyDb, setBusyDb] = useState<string | null>(null);
@@ -54,13 +54,12 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   }, []);
 
   useEffect(() => {
-    if (switchOpen) {
-      loadManaged();
-      setFormDb(null);
-      setUserName("");
-      setPassword("");
-    }
-  }, [switchOpen, loadManaged]);
+    if (expanded) loadManaged();
+  }, [expanded, loadManaged]);
+
+  useEffect(() => {
+    if (!open) setExpanded(false);
+  }, [open]);
 
   const list = useMemo(
     () => companies.filter((c) => c.is_active).sort((a, b) => a.display_name.localeCompare(b.display_name, "pt-BR")),
@@ -68,19 +67,21 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   );
 
   const finish = () => {
-    setSwitchOpen(false);
+    setOpen(false);
+    setFormDb(null);
     window.setTimeout(() => window.location.replace("/"), 300);
   };
 
   const handleSelect = async (companyDb: string, erpType: string) => {
     if (companyDb === session?.companyDB) {
-      setSwitchOpen(false);
+      setOpen(false);
       return;
     }
     if (erpType === "sap" && !managed.has(companyDb)) {
-      setFormDb(companyDb);
       setUserName("");
       setPassword("");
+      setFormDb(companyDb);
+      setOpen(false);
       return;
     }
     setBusyDb(companyDb);
@@ -143,68 +144,30 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
             <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56 bg-popover z-50">
+        <DropdownMenuContent align="end" className="w-64 bg-popover z-50">
           <div className="px-2 py-1.5 sm:hidden">
             <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
             <p className="text-xs text-muted-foreground truncate">{session.userName}</p>
           </div>
-          <DropdownMenuItem onSelect={() => setSwitchOpen(true)}>
-            <Building2 className="w-4 h-4 mr-2" /> Trocar de empresa
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => logout()}>
-            <LogOut className="w-4 h-4 mr-2" /> Sair
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
 
-      <Dialog open={switchOpen} onOpenChange={setSwitchOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{formDb ? `Entrar em ${getLabel(formDb)}` : "Trocar de empresa"}</DialogTitle>
-            <DialogDescription>
-              {formDb
-                ? "Esta empresa não possui senha provisionada. Informe suas credenciais do ERP."
-                : "Empresas com escudo têm senha provisionada e entram direto."}
-            </DialogDescription>
-          </DialogHeader>
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              setExpanded((v) => !v);
+            }}
+          >
+            <Building2 className="w-4 h-4 mr-2" />
+            <span className="flex-1">Trocar de empresa</span>
+            <ChevronDown
+              className={`w-4 h-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </DropdownMenuItem>
 
-          {formDb ? (
-            <form onSubmit={handleFormLogin} className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="switch-user">Usuário</Label>
-                <Input
-                  id="switch-user"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  autoComplete="username"
-                  autoFocus
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="switch-pass">Senha</Label>
-                <Input
-                  id="switch-pass"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-1">
-                <Button type="button" variant="ghost" onClick={() => setFormDb(null)}>
-                  Voltar
-                </Button>
-                <Button type="submit" disabled={busyDb === formDb}>
-                  {busyDb === formDb ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Entrar
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <div className="max-h-[55vh] overflow-y-auto space-y-1">
+          {expanded && (
+            <div className="max-h-64 overflow-y-auto py-1">
               {loadingCreds && (
-                <p className="text-xs text-muted-foreground px-1 pb-1">Verificando senhas provisionadas…</p>
+                <p className="text-[11px] text-muted-foreground px-3 pb-1">Verificando senhas provisionadas…</p>
               )}
               {list.map((c) => {
                 const isCurrent = c.company_db === session.companyDB;
@@ -214,32 +177,76 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
                     key={c.company_db}
                     onClick={() => handleSelect(c.company_db, c.erp_type)}
                     disabled={busyDb !== null}
-                    className="w-full flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5 text-left hover:border-primary/40 hover:bg-muted/50 transition-colors disabled:opacity-60"
+                    className="w-full flex items-center gap-2 rounded-sm pl-8 pr-2 py-1.5 text-left text-sm hover:bg-muted/60 transition-colors disabled:opacity-60"
                   >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{c.display_name}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">{c.company_db}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {busyDb === c.company_db ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                      ) : hasManaged ? (
-                        <ShieldCheck className="w-4 h-4 text-primary" aria-label="Senha provisionada" />
-                      ) : (
-                        <KeyRound className="w-4 h-4 text-muted-foreground" aria-label="Requer login" />
-                      )}
-                      {isCurrent && <Check className="w-4 h-4 text-success" aria-label="Empresa atual" />}
-                    </div>
+                    <span className="flex-1 truncate text-foreground">{c.display_name}</span>
+                    {busyDb === c.company_db ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0" />
+                    ) : hasManaged ? (
+                      <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" aria-label="Senha provisionada" />
+                    ) : (
+                      <KeyRound className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-label="Requer login" />
+                    )}
+                    {isCurrent && <Check className="w-3.5 h-3.5 text-success shrink-0" aria-label="Empresa atual" />}
                   </button>
                 );
               })}
               {list.length === 0 && (
-                <p className="text-sm text-muted-foreground px-1 py-4">Nenhuma empresa disponível.</p>
+                <p className="text-sm text-muted-foreground px-3 py-2">Nenhuma empresa disponível.</p>
               )}
             </div>
           )}
+
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => logout()}>
+            <LogOut className="w-4 h-4 mr-2" /> Sair
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={formDb !== null} onOpenChange={(o) => !o && setFormDb(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Entrar em {formDb ? getLabel(formDb) : ""}</DialogTitle>
+            <DialogDescription>
+              Esta empresa não possui senha provisionada. Informe suas credenciais do ERP.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleFormLogin} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="switch-user">Usuário</Label>
+              <Input
+                id="switch-user"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                autoComplete="username"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="switch-pass">Senha</Label>
+              <Input
+                id="switch-pass"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="ghost" onClick={() => setFormDb(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={busyDb === formDb}>
+                {busyDb === formDb ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Entrar
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </>
   );
 }
+
