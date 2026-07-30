@@ -12,7 +12,9 @@ import { useSap } from "@/contexts/SapContext";
 
 /** Versão do tour. Incremente para exibir novamente a todos os usuários. */
 const TOUR_VERSION = "2026-07-30-company-switch";
-const storageKey = (user: string) => `erp-whatsnew:${TOUR_VERSION}:${user.toLowerCase()}`;
+export const whatsNewStorageKey = (user: string) =>
+  `erp-whatsnew:${TOUR_VERSION}:${user.toLowerCase()}`;
+const storageKey = whatsNewStorageKey;
 
 const steps = [
   {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronDown, Loader2, LogOut, ShieldCheck, KeyRound, Check } from "lucide-react";
+import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check } from "lucide-react";
+import { ONBOARDING_REPLAY_EVENT } from "@/components/OnboardingTour";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -270,6 +271,14 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
             </div>
           )}
 
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() =>
+              window.dispatchEvent(new CustomEvent(ONBOARDING_REPLAY_EVENT))
+            }
+          >
+            <Compass className="w-4 h-4 mr-2" /> Rever tour de boas-vindas
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => logout()}>
             <LogOut className="w-4 h-4 mr-2" /> Sair da empresa
