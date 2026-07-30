@@ -565,55 +565,72 @@ export default function BackofficeRoadmap() {
           <Badge variant="secondary" className="h-7">
             {shown} de {total} entregas
           </Badge>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setOrder((o) => (o === "desc" ? "asc" : "desc"))}
+          >
+            <ArrowUpDown className="mr-1 h-3.5 w-3.5" />
+            {order === "desc" ? "Mais recentes" : "Mais antigas"}
+          </Button>
         </div>
 
-        {/* Timeline vertical */}
-        <section aria-label="Linha do tempo de entregas">
-          {phases.length === 0 && (
+        {/* Changelog cronológico */}
+        <section aria-label="Changelog de entregas">
+          {entries.length === 0 && (
             <p className="py-12 text-center text-sm text-muted-foreground">
               Nenhuma entrega corresponde aos filtros.
             </p>
           )}
 
           <ol className="relative ml-3 border-l border-border pl-6">
-            {phases.map((phase) => (
-              <li key={phase.period} className="mb-10">
-                <span className="absolute -left-[9px] mt-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-primary/40 bg-primary/20">
-                  <CircleDot className="h-3 w-3 text-primary" />
-                </span>
-                <h2 className="text-base font-semibold text-foreground">{phase.period}</h2>
-                <p className="mb-3 text-xs text-muted-foreground">{phase.headline}</p>
-
-                <div className="space-y-3">
-                  {phase.items.map((item) => {
-                    const meta = KIND_META[item.kind];
-                    const Icon = meta.icon;
-                    return (
-                      <Card key={item.title} className="border-border/70">
-                        <CardContent className="flex gap-3 p-4">
-                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                            <Icon className="h-4 w-4 text-muted-foreground" />
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-sm font-medium text-foreground">{item.title}</h3>
-                              <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
-                                {meta.label}
-                              </Badge>
-                            </div>
-                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                              {item.description}
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </li>
-            ))}
+            {entries.map((item, i) => {
+              const meta = KIND_META[item.kind];
+              const Icon = meta.icon;
+              const newMonth = i === 0 || monthKey(entries[i - 1].date) !== monthKey(item.date);
+              return (
+                <li key={`${item.date}-${item.title}`} className="mb-4">
+                  {newMonth && (
+                    <h2 className="-ml-6 mb-3 mt-6 border-b border-border/60 pb-1 pl-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground first:mt-0">
+                      {formatMonth(item.date)}
+                    </h2>
+                  )}
+                  <span className="absolute -left-[9px] mt-4 flex h-4 w-4 items-center justify-center rounded-full border border-primary/40 bg-primary/20">
+                    <CircleDot className="h-3 w-3 text-primary" />
+                  </span>
+                  <Card className="border-border/70">
+                    <CardContent className="flex gap-3 p-4">
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <time
+                            dateTime={item.date}
+                            className="font-mono text-xs text-muted-foreground"
+                          >
+                            {formatDate(item.date)}
+                          </time>
+                          <h3 className="text-sm font-medium text-foreground">{item.title}</h3>
+                          <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
+                            {meta.label}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            {item.track}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          {item.description}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </li>
+              );
+            })}
           </ol>
         </section>
+
 
         {/* Backlog */}
         <section aria-label="Sugestões de backlog" className="mt-10">
