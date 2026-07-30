@@ -64,39 +64,68 @@ export function NotificationBell() {
       {notifications.length === 0 ? (
         <div className="px-4 py-10 text-center text-sm text-muted-foreground">Nenhuma notificação</div>
       ) : (
-        notifications.slice(0, 20).map((notif) => (
-          <button
-            key={notif.id}
-            className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 active:bg-muted transition-colors ${
-              !notif.is_read ? "bg-primary/5" : ""
-            }`}
-            onClick={() => {
-              if (!notif.is_read) markAsRead(notif.id);
-              setOpen(false);
-              if (notif.link) navigate(notif.link);
-            }}
-          >
-            <div className="flex gap-3">
-              <span className="text-base mt-0.5">
-                {(notif.metadata as { kind?: string } | null)?.kind === "approved"
-                  ? "✅"
-                  : categoryIcon[notif.category] || "🔔"}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className={`text-sm truncate ${!notif.is_read ? "font-semibold text-foreground" : "text-foreground/80"}`}>
-                    {notif.title}
+        notifications.slice(0, 20).map((notif) => {
+          const expenseId = (notif.metadata as { expense_id?: string } | null)?.expense_id;
+          return (
+            <div
+              key={notif.id}
+              role="button"
+              tabIndex={0}
+              className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 active:bg-muted transition-colors cursor-pointer ${
+                !notif.is_read ? "bg-primary/5" : ""
+              }`}
+              onClick={() => {
+                if (!notif.is_read) markAsRead(notif.id);
+                setOpen(false);
+                if (notif.link) navigate(notif.link);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  if (!notif.is_read) markAsRead(notif.id);
+                  setOpen(false);
+                  if (notif.link) navigate(notif.link);
+                }
+              }}
+            >
+              <div className="flex gap-3">
+                <span className="text-base mt-0.5">
+                  {(notif.metadata as { kind?: string } | null)?.kind === "approved"
+                    ? "✅"
+                    : categoryIcon[notif.category] || "🔔"}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className={`text-sm truncate ${!notif.is_read ? "font-semibold text-foreground" : "text-foreground/80"}`}>
+                      {notif.title}
+                    </p>
+                    {!notif.is_read && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
+                  </div>
+                  {notif.body && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notif.body}</p>}
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true, locale: ptBR })}
                   </p>
-                  {!notif.is_read && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
                 </div>
-                {notif.body && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notif.body}</p>}
-                <p className="text-xs text-muted-foreground/70 mt-1">
-                  {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true, locale: ptBR })}
-                </p>
+                {expenseId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 self-center shrink-0"
+                    title="Ver marcos do documento"
+                    aria-label="Ver marcos do documento"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMilestonesId(expenseId);
+                    }}
+                  >
+                    <History className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                )}
               </div>
             </div>
-          </button>
-        ))
+          );
+        })
+
       )}
     </>
   );
