@@ -59,9 +59,10 @@ export default function ApprovalLink() {
       if (error) {
         let detail = "";
         try {
-          // @ts-expect-error context existe em FunctionsHttpError
-          detail = await error.context?.text?.();
+          const ctx = (error as unknown as { context?: { text?: () => Promise<string> } }).context;
+          detail = (await ctx?.text?.()) ?? "";
         } catch { /* ignore */ }
+
         let msg = "Não foi possível concluir a operação.";
         try { msg = JSON.parse(detail)?.error || msg; } catch { /* ignore */ }
         throw new Error(msg);
