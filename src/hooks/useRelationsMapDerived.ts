@@ -461,7 +461,7 @@ export function useContasPagarLinks({
   // v4: consulta VendorPayments diretamente por PaymentInvoices/DocEntry da NF.
   const cacheKey =
     erpType === "sap" && sapDocEntry
-      ? `relmap:ap:sap:v4:${sapDocEntry}`
+      ? `relmap:ap:sap:v5:${sapDocEntry}`
       : erpType === "omie" && (sapDocNum || supplierCode)
         ? `relmap:ap:omie:v2:${sapDocNum || ""}:${supplierCode || ""}`
         : null;
