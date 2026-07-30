@@ -28,6 +28,8 @@ import {
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
 import { RulesHealthMonitor } from "@/components/RulesHealthMonitor";
 import { RuleConflictsPanel, RuleConflictsDialog } from "@/components/RuleConflictsPanel";
+import { detectRuleConflicts } from "@/lib/approval-rule-conflicts";
+
 
 import { useAuth } from "@/hooks/useAuth";
 import { RuleSimulator, DRAFT_RULE_ID } from "@/components/RuleSimulator";
