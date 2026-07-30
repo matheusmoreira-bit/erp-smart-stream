@@ -221,25 +221,15 @@ export function useAdvancePayments() {
       if (input.files?.length) {
         const advId = row.id;
         const rows: any[] = [];
-        const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+        const { uploadExpenseAttachment } = await import("@/lib/attachment-upload");
         for (const file of input.files) {
-          const fd = new FormData();
-          fd.append("advance_id", advId);
-          fd.append("file", file, file.name);
-          const res = await sapFunctionFetch("expense-attachment-storage", {
-            method: "POST",
-            body: fd,
-          });
-          const data = await res.json().catch(() => null);
-          if (!res.ok || !data?.ok) {
-            throw new Error(data?.error || `Falha ao enviar anexo ${file.name}: ${res.status}`);
-          }
+          const up = await uploadExpenseAttachment({ advanceId: advId }, file);
           rows.push({
             advance_id: advId,
-            file_path: data.file_path,
-            file_name: data.file_name,
-            file_size: data.file_size,
-            mime_type: data.mime_type,
+            file_path: up.file_path,
+            file_name: up.file_name,
+            file_size: up.file_size,
+            mime_type: up.mime_type,
             uploaded_by: uid,
           });
         }
