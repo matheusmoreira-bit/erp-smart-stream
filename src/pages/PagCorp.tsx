@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { motion } from "framer-motion";
 import {
   CreditCard,
