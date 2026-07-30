@@ -38,8 +38,56 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   const [formDb, setFormDb] = useState<string | null>(null);
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
+  const [google, setGoogle] = useState<{ name: string; email: string; avatar: string } | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   const companyLabel = getLabel(session?.companyDB || "");
+
+  // Conta Google (Lovable Cloud) — foto, nome e e-mail, padrão Google.
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!alive) return;
+      const u = data.user;
+      if (!u) { setGoogle(null); return; }
+      const meta = (u.user_metadata || {}) as Record<string, unknown>;
+      setGoogle({
+        name: String(meta.full_name || meta.name || "").trim(),
+        email: u.email || "",
+        avatar: String(meta.avatar_url || meta.picture || "").trim(),
+      });
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const initials = useMemo(() => {
+    const base = google?.name || google?.email || displayUserName(session?.userName || "");
+    return base
+      .replace(/@.*/, "")
+      .split(/[\s._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() || "")
+      .join("");
+  }, [google, session?.userName]);
+
+  const handleGoogleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      const { clearErpLocalState } = await import("@/lib/clear-erp-local-state");
+      clearErpLocalState();
+      await supabase.auth.signOut();
+      toast.success("Você saiu da conta Google");
+    } catch (e) {
+      toast.error("Falha ao encerrar a sessão Google", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setSigningOut(false);
+      window.setTimeout(() => window.location.replace("/"), 300);
+    }
+  };
+
 
   const loadManaged = useCallback(async () => {
     setLoadingCreds(true);
