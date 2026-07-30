@@ -105,9 +105,21 @@ export default function ApprovalMatrix() {
   const [category, setCategory] = useState<"all" | MatrixCategory>("all");
   const [search, setSearch] = useState("");
   const [onlyActive, setOnlyActive] = useState(true);
-  const [view, setView] = useState<"list" | "map">("list");
+  const [view, setView] = useState<"list" | "map">(() => {
+    if (typeof window === "undefined") return "list";
+    return window.localStorage.getItem(VIEW_STORAGE_KEY) === "map" ? "map" : "list";
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+    } catch {
+      /* ignore */
+    }
+  }, [view]);
 
   const companyLabel = getLabel(session?.companyDB || "") || session?.companyDB || "—";
+
 
   const rows = useMemo(() => {
     const all = rules.map(toMatrixRow);
