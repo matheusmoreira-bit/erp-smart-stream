@@ -509,18 +509,6 @@ export function MainMenu() {
                         }
                       />
                     ))}
-                    <AnimatePresence initial={false}>
-                      {visible
-                        .filter((m) => m.path === expandedKey && m.subItems?.length)
-                        .map((m) => (
-                          <SubmenuPanel
-                            key={`sub-${m.path}`}
-                            mod={m}
-                            userModules={userModules}
-                            permLoading={permLoading}
-                          />
-                        ))}
-                    </AnimatePresence>
                   </div>
                 </section>
               );
