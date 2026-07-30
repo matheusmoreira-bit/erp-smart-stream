@@ -629,6 +629,8 @@ function RuleFormModal({
   const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
   const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
   const [showPreSimulator, setShowPreSimulator] = useState(false);
+  const [showConflicts, setShowConflicts] = useState(false);
+
 
   /** Snapshot da regra em edição (ainda não salva) para o simulador. */
   const draftRule = useMemo<ApprovalRule>(
