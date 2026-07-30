@@ -526,6 +526,51 @@ export type Database = {
         }
         Relationships: []
       }
+      approval_matrix_versions: {
+        Row: {
+          company_db: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          label: string | null
+          levels_count: number
+          restored_from_version: number | null
+          rules_count: number
+          snapshot: Json
+          updated_at: string
+          version_no: number
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          label?: string | null
+          levels_count?: number
+          restored_from_version?: number | null
+          rules_count?: number
+          snapshot?: Json
+          updated_at?: string
+          version_no: number
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          label?: string | null
+          levels_count?: number
+          restored_from_version?: number | null
+          rules_count?: number
+          snapshot?: Json
+          updated_at?: string
+          version_no?: number
+        }
+        Relationships: []
+      }
       approval_rule_levels: {
         Row: {
           approver_email: string | null
