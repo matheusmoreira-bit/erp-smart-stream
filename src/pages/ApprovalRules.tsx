@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
 import { RulesHealthMonitor } from "@/components/RulesHealthMonitor";
+import { RuleConflictsPanel, RuleConflictsDialog } from "@/components/RuleConflictsPanel";
+
 import { useAuth } from "@/hooks/useAuth";
 import { RuleSimulator, DRAFT_RULE_ID } from "@/components/RuleSimulator";
 import { Button } from "@/components/ui/button";
