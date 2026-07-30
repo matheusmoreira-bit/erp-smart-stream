@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Plus,
   Trash2,
@@ -32,6 +32,7 @@ import {
   directoryDisplayName,
   mergeSapUsers,
   syncDirectoryFromSapUsers,
+  unifyPeople,
   useUserDirectory,
   type DirectoryUser,
   type RawSapUser,
@@ -453,13 +454,38 @@ function UsersView({
         emails: Array.from(new Set([...current.emails, ...user.emails])),
       });
     }
-    return Array.from(merged.values());
+    // Mesma pessoa com variação de grafia no usuário SAP vira uma única entrada.
+    return unifyPeople(Array.from(merged.values()));
   }, [directoryUsers, cachedPeople]);
 
   const defaultGroup = groups.find((g) => g.name === "Usuário");
 
-  const assignmentOf = (person: DirectoryUser | null) =>
-    person ? assignments.find((a) => canonicalUserKey(a.sap_email) === person.user_key) : undefined;
+  /** Força do grupo = quantidade de permissões efetivas. */
+  const groupStrength = useCallback(
+    (groupId: string) => {
+      const g = groups.find((x) => x.id === groupId);
+      if (!g) return -1;
+      return Object.values(g.modulePerms || {}).reduce(
+        (acc, p) => acc + Object.values(p).filter(Boolean).length,
+        0,
+      );
+    },
+    [groups],
+  );
+
+  const aliasesOf = (person: DirectoryUser) =>
+    Array.from(new Set([person.user_key, ...(person.aliasKeys || [])]));
+
+  /** Vínculo vigente: entre entradas duplicadas vence o grupo de maior permissão. */
+  const assignmentOf = (person: DirectoryUser | null) => {
+    if (!person) return undefined;
+    const keys = aliasesOf(person);
+    const matches = assignments.filter((a) => keys.includes(canonicalUserKey(a.sap_email)));
+    if (matches.length === 0) return undefined;
+    return matches.reduce((best, cur) =>
+      groupStrength(cur.group_id) > groupStrength(best.group_id) ? cur : best,
+    );
+  };
 
   const getUserGroup = (person: DirectoryUser) =>
     groups.find((g) => g.id === assignmentOf(person)?.group_id);
@@ -484,18 +510,22 @@ function UsersView({
 
   const handlePick = async (groupId: string) => {
     if (!sheetUser) return;
-    await assign(sheetUser.user_key, groupId);
+    // Grava para todas as chaves equivalentes — vale para todas as bases.
+    for (const key of aliasesOf(sheetUser)) {
+      await assign(key, groupId);
+    }
     toast.success("Permissão atualizada");
     setSheetUser(null);
   };
 
   const handleReset = async () => {
     if (!sheetUser) return;
-    const a = assignmentOf(sheetUser);
-    if (a) {
+    const keys = aliasesOf(sheetUser);
+    const stale = assignments.filter((a) => keys.includes(canonicalUserKey(a.sap_email)));
+    for (const a of stale) {
       await remove(a.id);
-      toast.success("Voltou ao padrão");
     }
+    if (stale.length > 0) toast.success("Voltou ao padrão");
     setSheetUser(null);
   };
 
