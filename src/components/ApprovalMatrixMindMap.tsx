@@ -446,94 +446,35 @@ export function ApprovalMatrixMindMap({
         className="h-[70vh] w-full"
         role="img"
         aria-label="Mapa mental das regras de aprovação"
+        shapeRendering="optimizeSpeed"
       >
-        {edges.map((e, i) => {
-          const mr = (Math.hypot(e.from.x, e.from.y) + Math.hypot(e.to.x, e.to.y)) / 2;
-          const c1x = Math.cos(e.from.angle) * mr;
-          const c1y = Math.sin(e.from.angle) * mr;
-          const c2x = Math.cos(e.to.angle) * mr;
-          const c2y = Math.sin(e.to.angle) * mr;
-          return (
+        <g pointerEvents="none">
+          {edgePaths.map((e) => (
             <path
-              key={i}
-              d={`M ${e.from.x} ${e.from.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.to.x} ${e.to.y}`}
+              key={e.key}
+              d={e.d}
               fill="none"
-              strokeWidth={Math.max(1, 3 - e.from.depth * 0.6)}
-              className={DEPTH_STROKE[Math.min(e.from.depth, DEPTH_STROKE.length - 1)]}
+              strokeWidth={e.width}
+              className={e.className}
               opacity={0.5}
             />
-          );
-        })}
+          ))}
+        </g>
 
-        {nodes.map((n) => {
-          const left = Math.cos(n.angle) < 0 && n.depth > 0;
-          const anchor = n.depth === 0 ? "middle" : left ? "end" : "start";
-          const dx = n.depth === 0 ? 0 : left ? -12 : 12;
-          const hidden = collapsed.has(n.id);
-          const isSelected = selectedId === n.id;
-          return (
-            <g
-              key={n.id}
-              className="cursor-pointer"
-              role="button"
-              tabIndex={0}
-              aria-label={`${KIND_LABEL[n.meta.kind]}: ${n.label}`}
-              onClick={() => setSelectedId(n.id)}
-              onDoubleClick={() => n.children.length > 0 || hidden ? toggle(n.id) : undefined}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setSelectedId(n.id);
-                }
-              }}
-            >
-              {isSelected && (
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={n.depth === 0 ? 18 : 14}
-                  className="fill-primary/15 stroke-primary"
-                  strokeWidth={1.5}
-                />
-              )}
-              <circle
-                cx={n.x}
-                cy={n.y}
-                r={n.depth === 0 ? 10 : Math.max(3.5, 8 - n.depth * 1.2)}
-                className={`${DEPTH_FILL[Math.min(n.depth, DEPTH_FILL.length - 1)]} ${
-                  DEPTH_STROKE[Math.min(n.depth, DEPTH_STROKE.length - 1)]
-                }`}
-                strokeWidth={hidden ? 3 : 1.5}
-              />
-              <text
-                x={n.x + dx}
-                y={n.y}
-                textAnchor={anchor}
-                dominantBaseline="middle"
-                className="fill-foreground"
-                style={{
-                  fontSize: n.depth <= 1 ? 15 : n.depth === 2 ? 13 : 11,
-                  fontWeight: n.depth <= 2 || isSelected ? 600 : 400,
-                }}
-              >
-                {truncate(n.label, n.depth >= 3 ? 34 : 26)}
-              </text>
-              {n.sub && (
-                <text
-                  x={n.x + dx}
-                  y={n.y + (n.depth <= 1 ? 15 : 12)}
-                  textAnchor={anchor}
-                  dominantBaseline="middle"
-                  className="fill-muted-foreground"
-                  style={{ fontSize: 9.5 }}
-                >
-                  {truncate(n.sub, 34)}
-                </text>
-              )}
-            </g>
-          );
-        })}
+        {nodes.map((n) => (
+          <MindMapNode
+            key={n.id}
+            node={n}
+            hidden={collapsed.has(n.id)}
+            selected={selectedId === n.id}
+            showLabel={n.depth <= labelDepthLimit}
+            showSub={showSubLabels && n.depth <= labelDepthLimit}
+            onSelect={handleSelect}
+            onToggle={toggle}
+          />
+        ))}
       </svg>
+
 
       <Sheet open={!!selected} onOpenChange={(open) => !open && setSelectedId(null)}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 sm:max-w-md">
