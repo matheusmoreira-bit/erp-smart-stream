@@ -170,12 +170,12 @@ export default function NotificationsPage() {
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="audit">
-            <NotificationAuditTab />
+          <TabsContent value="deliveries">
+            <NotificationDeliveriesTab />
           </TabsContent>
 
-          <TabsContent value="history">
-            <NotificationSendHistoryTab />
+          <TabsContent value="settings">
+            <NotificationSettingsTab />
           </TabsContent>
 
           <TabsContent value="overdue">
