@@ -5663,6 +5663,68 @@ export type Database = {
         }
         Relationships: []
       }
+      sap_user_directory: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          is_active: boolean
+          sap_user_code: string | null
+          updated_at: string
+          user_key: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          is_active?: boolean
+          sap_user_code?: string | null
+          updated_at?: string
+          user_key: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          is_active?: boolean
+          sap_user_code?: string | null
+          updated_at?: string
+          user_key?: string
+        }
+        Relationships: []
+      }
+      sap_user_emails: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_primary: boolean
+          updated_at: string
+          user_key: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_primary?: boolean
+          updated_at?: string
+          user_key: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_primary?: boolean
+          updated_at?: string
+          user_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sap_user_emails_user_key_fkey"
+            columns: ["user_key"]
+            isOneToOne: false
+            referencedRelation: "sap_user_directory"
+            referencedColumns: ["user_key"]
+          },
+        ]
+      }
       sap_vendor_payment_cache: {
         Row: {
           cancelled: string | null
@@ -6109,6 +6171,27 @@ export type Database = {
           },
         ]
       }
+      user_identity_migration_backup: {
+        Row: {
+          created_at: string
+          id: string
+          payload: Json
+          source_table: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payload: Json
+          source_table: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payload?: Json
+          source_table?: string
+        }
+        Relationships: []
+      }
       user_licenses: {
         Row: {
           company_db: string
@@ -6439,6 +6522,7 @@ export type Database = {
         Returns: boolean
       }
       can_manage_nfse_recipients: { Args: never; Returns: boolean }
+      canonical_user_key: { Args: { _value: string }; Returns: string }
       check_and_increment_rate_limit: {
         Args: { _key: string; _max: number; _window_seconds: number }
         Returns: {
