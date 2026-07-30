@@ -182,6 +182,7 @@ const App = () => (
           <TestCompanyBanner />
           <DefaultPasswordWarning />
           <WhatsNewWizard />
+          <OnboardingTour />
           <GlobalAiChat />
 
           </PermissionsV2Provider>
