@@ -161,9 +161,24 @@ const readTools = [
   {
     type: "function",
     function: {
+      name: "describe_schema",
+      description:
+        "Descobre o schema real do banco: lista tabelas e colunas (nome + tipo). Use SEMPRE antes de escrever um run_sql_read sobre tabelas que você não conhece, ou quando um SELECT falhar por coluna inexistente.",
+      parameters: {
+        type: "object",
+        properties: {
+          table: { type: "string", description: "Nome (ou parte) da tabela. Omita para listar todas as tabelas do schema public." },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "run_sql_read",
       description:
-        "Executa SELECT ad-hoc (somente leitura) via RPC pública. Use para cruzamentos que outras tools não cobrem. Uma única sentença SELECT.",
+        "Executa SELECT ad-hoc (somente leitura) via RPC pública. Use para cruzamentos, agregações e contagens que outras tools não cobrem. Uma única sentença SELECT, sempre com LIMIT.",
       parameters: {
         type: "object",
         properties: { sql: { type: "string" } },
@@ -173,6 +188,7 @@ const readTools = [
     },
   },
 ];
+
 
 // Ferramentas de ESCRITA: exigem `confirmed: true`. Sem isso, retornam um preview + pedem confirmação.
 const writeTools = [
