@@ -1,9 +1,11 @@
 import { ReactNode } from "react";
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PageTitle } from "@/components/PageTitle";
+import { UserCompanyMenu } from "@/components/UserCompanyMenu";
+
 
 interface PageHeaderProps {
   /** Ícone à esquerda do título (ex.: Receipt, CreditCard) */
