@@ -1,10 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useApproverSubstitutes,
   statusOf,
   type ApproverSubstitute,
 } from "@/hooks/useApproverSubstitutes";
 import { useSapUsers } from "@/hooks/useSapUsers";
+import { useSap } from "@/contexts/SapContext";
+import { supabase } from "@/integrations/supabase/client";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
