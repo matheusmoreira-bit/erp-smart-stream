@@ -1722,6 +1722,8 @@ export default function ApprovalRulesPage() {
         sapUsers={sapUsers}
         sapUsersLoading={sapUsersLoading}
         editing={editingRule}
+        allRules={rules}
+
       />
 
       <RuleSimulator
