@@ -1,6 +1,4 @@
-import { useNavigate } from "react-router-dom";
 import { useModuleAccess } from "@/hooks/usePermissions";
-import { HubTabs } from "@/components/HubTabs";
 
 export interface HubTabDef<K extends string> {
   key: K;
@@ -21,7 +19,6 @@ interface TabsHubProps<K extends string> {
  * Filters tabs by module access, renders the submenu dropdown and the active body.
  */
 export function TabsHub<K extends string>({ tabs, active, moduleLabel }: TabsHubProps<K>) {
-  const navigate = useNavigate();
   const { userModules } = useModuleAccess();
 
   const visible = tabs.filter(
@@ -33,15 +30,6 @@ export function TabsHub<K extends string>({ tabs, active, moduleLabel }: TabsHub
 
   return (
     <div>
-      <HubTabs
-        moduleLabel={moduleLabel}
-        tabs={visible.map((t) => ({ key: t.key, label: t.label }))}
-        active={active}
-        onChange={(key) => {
-          const target = tabs.find((t) => t.key === key);
-          if (target) navigate(target.path);
-        }}
-      />
       {Body}
     </div>
   );

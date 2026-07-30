@@ -31,7 +31,6 @@ interface SubmenuBarProps {
  */
 export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarProps) {
   const navigate = useNavigate();
-  if (items.length <= 1) return null;
   const current = items.find((i) => i.key === active) ?? items[0];
 
   return (
@@ -55,6 +54,11 @@ export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarP
           </>
         ) : null}
 
+        {items.length <= 1 ? (
+          <span className="text-sm font-semibold text-foreground truncate">
+            {current?.label}
+          </span>
+        ) : (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -91,6 +95,7 @@ export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarP
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </div>
     </div>
   );
