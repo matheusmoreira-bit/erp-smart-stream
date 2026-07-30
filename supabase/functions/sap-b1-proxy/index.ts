@@ -823,11 +823,22 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (isAbortError(e)) {
+      metricsCtx.errorCode = "SAP_TIMEOUT";
+      console.warn("sap-b1-proxy timeout:", e instanceof Error ? e.message : e);
+      return new Response(JSON.stringify({
+        error: "O SAP demorou demais para responder. Tente novamente em instantes.",
+        code: "SAP_TIMEOUT",
+      }), {
+        status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     metricsCtx.errorCode = e instanceof Error ? e.name : "unknown";
     console.error("sap-b1-proxy error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   }
 }));
 // schema fix: SBO_OPENGAMING 1784592109
