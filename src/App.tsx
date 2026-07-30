@@ -48,6 +48,7 @@ import InfraHealth from "./pages/InfraHealth.tsx";
 import IntegrationHealth from "./pages/IntegrationHealth.tsx";
 import AuditTimeline from "./pages/AuditTimeline.tsx";
 import AccessReview from "./pages/AccessReview.tsx";
+import SlaEscalation from "./pages/SlaEscalation.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
 import BackofficeRoadmap from "./pages/BackofficeRoadmap.tsx";
 
@@ -102,6 +103,7 @@ const App = () => (
               <Route path="/backoffice/saude-integracoes" element={<AdminRoute><IntegrationHealth /></AdminRoute>} />
               <Route path="/backoffice/retry-queue" element={<AdminRoute><BackofficeRetryQueue /></AdminRoute>} />
               <Route path="/backoffice/revisao-acessos" element={<AdminRoute><AccessReview /></AdminRoute>} />
+              <Route path="/backoffice/sla-escalonamento" element={<AdminRoute><SlaEscalation /></AdminRoute>} />
               <Route path="/backoffice/roadmap" element={<AdminRoute><BackofficeRoadmap /></AdminRoute>} />
 
               <Route path="/backoffice/baixas-pagcorp" element={<AdminRoute><PagCorpSettlementAudit /></AdminRoute>} />

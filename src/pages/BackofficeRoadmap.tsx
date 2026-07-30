@@ -50,6 +50,14 @@ const CHANGELOG: RoadmapItem[] = [
   // ---- Fase 6 — Experiência e inteligência (jul/2026)
   {
     date: "2026-07-30",
+    title: "Escalonamento automático por SLA",
+    kind: "funcao",
+    track: "Aprovações",
+    description:
+      "Documento parado além do prazo (horas úteis, configurável por empresa) sobe automaticamente para o substituto vigente ou para o nível superior da matriz, com e-mail de contingência, notificação ao novo aprovador, limite de escalonamentos e registro em audit log.",
+  },
+  {
+    date: "2026-07-30",
     title: "Versionamento e rollback da matriz de alçadas",
     kind: "funcao",
     track: "Governança e segurança",

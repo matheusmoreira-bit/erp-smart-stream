@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles, Mail, Rocket, Activity, History as HistoryIcon } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles, Mail, Rocket, Activity, AlarmClock, History as HistoryIcon } from "lucide-react";
 import { RoiAnalysis } from "@/components/RoiAnalysis";
 import {
   Building2,
@@ -748,6 +748,7 @@ export default function Admin() {
                     { label: "Retries SAP", icon: RefreshCw, to: "/backoffice/retry-queue" },
                     { label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
                     { label: "Revisão de acessos", icon: ShieldCheck, to: "/backoffice/revisao-acessos" },
+                    { label: "Escalonamento por SLA", icon: AlarmClock, to: "/backoffice/sla-escalonamento" },
                     { label: "Roadmap", icon: Rocket, to: "/backoffice/roadmap" },
                   ].map((it) => {
                     const Icon = it.icon;

@@ -6081,6 +6081,120 @@ export type Database = {
         }
         Relationships: []
       }
+      sla_escalation_settings: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          enabled: boolean
+          escalate_to_next_level: boolean
+          fallback_email: string | null
+          id: string
+          max_escalations: number
+          notify_email: boolean
+          notify_in_app: boolean
+          prefer_substitute: boolean
+          repeat_business_hours: number
+          sla_business_hours: number
+          updated_at: string
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          enabled?: boolean
+          escalate_to_next_level?: boolean
+          fallback_email?: string | null
+          id?: string
+          max_escalations?: number
+          notify_email?: boolean
+          notify_in_app?: boolean
+          prefer_substitute?: boolean
+          repeat_business_hours?: number
+          sla_business_hours?: number
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          enabled?: boolean
+          escalate_to_next_level?: boolean
+          fallback_email?: string | null
+          id?: string
+          max_escalations?: number
+          notify_email?: boolean
+          notify_in_app?: boolean
+          prefer_substitute?: boolean
+          repeat_business_hours?: number
+          sla_business_hours?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sla_escalations: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          currency: string | null
+          doc_num: string | null
+          doc_type: string | null
+          escalation_index: number
+          expense_id: string
+          from_approver: string | null
+          id: string
+          level_from: number | null
+          level_to: number | null
+          notes: string | null
+          pending_since: string | null
+          sla_deadline: string | null
+          substitution_id: string | null
+          supplier_name: string | null
+          target_kind: string
+          to_approver: string | null
+          total_amount: number | null
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          currency?: string | null
+          doc_num?: string | null
+          doc_type?: string | null
+          escalation_index?: number
+          expense_id: string
+          from_approver?: string | null
+          id?: string
+          level_from?: number | null
+          level_to?: number | null
+          notes?: string | null
+          pending_since?: string | null
+          sla_deadline?: string | null
+          substitution_id?: string | null
+          supplier_name?: string | null
+          target_kind: string
+          to_approver?: string | null
+          total_amount?: number | null
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          currency?: string | null
+          doc_num?: string | null
+          doc_type?: string | null
+          escalation_index?: number
+          expense_id?: string
+          from_approver?: string | null
+          id?: string
+          level_from?: number | null
+          level_to?: number | null
+          notes?: string | null
+          pending_since?: string | null
+          sla_deadline?: string | null
+          substitution_id?: string | null
+          supplier_name?: string | null
+          target_kind?: string
+          to_approver?: string | null
+          total_amount?: number | null
+        }
+        Relationships: []
+      }
       submitted_document_hashes: {
         Row: {
           company_db: string | null
