@@ -317,8 +317,19 @@ export default function ApprovalMatrix() {
         )}
 
         {view === "map" && rows.length > 0 && (
-          <ApprovalMatrixMindMap rows={rows} rootLabel={companyLabel} />
+          <ApprovalMatrixMindMap
+            rows={rows}
+            rootLabel={companyLabel}
+            onOpenList={(f) => {
+              if (f.flow) setFlow(f.flow === "both" ? "all" : f.flow);
+              if (f.category) setCategory(f.category);
+              setSearch(f.search ?? "");
+              setView("list");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
         )}
+
 
         <div className={view === "map" ? "hidden" : "space-y-8"}>
 
