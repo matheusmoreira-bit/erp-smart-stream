@@ -758,6 +758,15 @@ function ApprovalDetailModal({
               variant="ghost"
               size="sm"
               className="gap-1.5 text-xs"
+              onClick={() => setShowExplain(true)}
+              title="Entenda qual regra da matriz foi aplicada e por quê"
+            >
+              <ScanSearch className="w-3.5 h-3.5" /> Raio-X da regra
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
               onClick={() => {
                 const internalId = (doc as unknown as { __internalId?: string }).__internalId;
                 const key = internalId ? `internal:${internalId}` : `sap:${doc.approvalRequestId}`;
