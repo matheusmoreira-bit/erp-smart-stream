@@ -369,15 +369,17 @@ export default function UsersPage() {
                           >
                             <KeyRound className="w-4 h-4 text-warning" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            title="Provisionar acesso (senha aleatória ou definida)"
-                            onClick={() => setProvisionUser(user)}
-                          >
-                            <ShieldCheck className="w-4 h-4 text-primary" />
-                          </Button>
+                          {user.eMail && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Provisionar acesso (senha aleatória ou definida)"
+                              onClick={() => setProvisionUser(user)}
+                            >
+                              <ShieldCheck className="w-4 h-4 text-primary" />
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>
@@ -451,11 +453,11 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      {provisionUser && (
+      {provisionUser?.eMail && (
         <ProvisionSapAccessDialog
           open={!!provisionUser}
           onOpenChange={(o) => { if (!o) setProvisionUser(null); }}
-          targetEmail={provisionUser.eMail || `${provisionUser.UserCode}@`}
+          targetEmail={provisionUser.eMail}
           initialSapUser={provisionUser.UserCode}
           initialCompanyDbs={session ? [session.companyDB] : []}
         />
