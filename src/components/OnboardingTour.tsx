@@ -62,7 +62,7 @@ const MODULE_STEPS: Array<{ module: string; step: TourStep }> = [
       title: "Lance seus pedidos de compra",
       description:
         "Em “Compras” você cria pedidos, anexa a nota e acompanha o status até a integração com o ERP. Dá para salvar rascunho e duplicar um pedido já lançado.",
-      route: "/despesas",
+      route: "/compras",
     },
   },
   {
@@ -95,7 +95,7 @@ const MODULE_STEPS: Array<{ module: string; step: TourStep }> = [
       title: "NF de Entrada",
       description:
         "Concilie as notas capturadas com os pedidos de compra e lance o esboço da NF de entrada no ERP em um clique.",
-      route: "/nf-entrada",
+      route: "/financeiro/nf-entrada",
     },
   },
   {
@@ -106,7 +106,7 @@ const MODULE_STEPS: Array<{ module: string; step: TourStep }> = [
       title: "Cartões corporativos",
       description:
         "As transações do cartão chegam automaticamente. Você complementa o rateio, anexa o comprovante e envia para prestação de contas.",
-      route: "/pagcorp",
+      route: "/cartoes",
     },
   },
   {
