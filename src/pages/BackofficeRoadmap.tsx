@@ -50,6 +50,14 @@ const CHANGELOG: RoadmapItem[] = [
   // ---- Fase 6 — Experiência e inteligência (jul/2026)
   {
     date: "2026-07-30",
+    title: "Captura de nota por foto/OCR (celular)",
+    kind: "modulo",
+    track: "Experiência e inteligência",
+    description:
+      "No celular, o usuário fotografa a nota/boleto e a IA (server-side) pré-preenche fornecedor, CNPJ, valor, nº do documento e vencimento para conferência antes de abrir o lançamento com o arquivo já anexado.",
+  },
+  {
+    date: "2026-07-30",
     title: "App mobile-first para aprovações (PWA)",
     kind: "modulo",
     track: "Experiência e inteligência",
