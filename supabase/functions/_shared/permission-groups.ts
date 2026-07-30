@@ -63,6 +63,20 @@ export function personMatches(a: unknown, b: unknown): boolean {
   const ta = personTokens(a);
   const tb = personTokens(b);
   if (!ta.length || !tb.length) return false;
+
+  // Um dos lados pode chegar já "colapsado" (alias normalizado sem separadores:
+  // "andresacarvalho"), enquanto o outro é o nome completo ("Andresa De
+  // Carvalho"). Comparar as concatenações resolve esse caso.
+  const ja = ta.join("");
+  const jb = tb.join("");
+  if (ja === jb) return true;
+  if (stripSuffix(ja) === stripSuffix(jb)) return true;
+
+  // Lado colapsado contendo os tokens do outro (mínimo 2 tokens para evitar
+  // falsos positivos com nomes curtos).
+  if (ta.length === 1 && tb.length >= 2 && ja.includes(jb)) return true;
+  if (tb.length === 1 && ta.length >= 2 && jb.includes(ja)) return true;
+
   const subset = (x: string[], y: string[]) => x.every((t) => y.includes(t));
   if (ta.length >= 2 && subset(ta, tb)) return true;
   if (tb.length >= 2 && subset(tb, ta)) return true;
