@@ -324,6 +324,12 @@ export default function NfEntrada() {
                 const isOpen = expandedId === it.id;
                 const toggle = () => setExpandedId(isOpen ? null : it.id);
                 const hasPoLink = !!it.sap_matched_po_doc_entry;
+                // PC efetivo (não esboço) vinculado e sem NF de entrada lançada no ERP.
+                const canCreateInvoiceDraft =
+                  hasPoLink &&
+                  it.sap_matched_po_is_draft === false &&
+                  !it.sap_invoice_draft_id &&
+                  it.status !== "cancelled";
                 const rowClass = hasPoLink
                   ? "cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border-l-4 border-l-emerald-500"
                   : "cursor-pointer hover:bg-muted/40 border-l-4 border-l-transparent";
