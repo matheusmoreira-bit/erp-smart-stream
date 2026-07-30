@@ -58,12 +58,29 @@ function StatusBadge({ row }: { row: ApproverSubstitute }) {
   return <Badge variant="outline" className={cfg.cls}>{cfg.label}</Badge>;
 }
 
-export default function SubstituteApproversTab({ isAdmin }: { isAdmin: boolean }) {
-  const { rows, isLoading, create, revoke, refresh } = useApproverSubstitutes();
+function localPart(v: string): string {
+  const n = (v || "").toLowerCase().trim();
+  const i = n.indexOf("@");
+  return i > 0 ? n.slice(0, i) : n;
+}
+
+export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: boolean }) {
+  const { rows, isLoading, create, revoke, refresh, canManageAll } = useApproverSubstitutes();
   const { users } = useSapUsers();
+  const { session } = useSap();
+  const [authEmail, setAuthEmail] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingRevoke, setPendingRevoke] = useState<ApproverSubstitute | null>(null);
+  const [selfMode, setSelfMode] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (alive) setAuthEmail((data.user?.email || "").toLowerCase());
+    });
+    return () => { alive = false; };
+  }, []);
 
   // form state
   const [officialEmail, setOfficialEmail] = useState("");
@@ -93,15 +110,49 @@ export default function SubstituteApproversTab({ isAdmin }: { isAdmin: boolean }
     [users],
   );
 
+  const canManage = isAdmin || canManageAll;
+
+  /** Identificadores do usuário logado (e-mail Cloud e usuário SAP). */
+  const myIdentities = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of [authEmail, session?.userName || ""]) {
+      const n = (v || "").toLowerCase().trim();
+      if (!n) continue;
+      set.add(n);
+      set.add(localPart(n));
+    }
+    return set;
+  }, [authEmail, session?.userName]);
+
+  const isMine = (value: string | null | undefined) => {
+    const v = (value || "").toLowerCase().trim();
+    if (!v) return false;
+    return myIdentities.has(v) || myIdentities.has(localPart(v));
+  };
+
+  /** Meu registro na lista de usuários do ERP (para preencher o formulário). */
+  const me = useMemo(
+    () => eligible.find((u) => isMine(u.email) || isMine(u.name) || isMine(u.code)) || null,
+    [eligible, myIdentities], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const active = useMemo(() => rows.filter((r) => statusOf(r) === "active" || statusOf(r) === "scheduled"), [rows]);
   const history = useMemo(() => rows.filter((r) => statusOf(r) === "expired" || statusOf(r) === "revoked"), [rows]);
 
-  const openCreate = () => {
-    setOfficialEmail(""); setOfficialName("");
+  const openCreate = (self: boolean) => {
+    setSelfMode(self);
+    if (self) {
+      const email = me?.email || authEmail || session?.userName || "";
+      setOfficialEmail(email);
+      setOfficialName(me?.name || "");
+    } else {
+      setOfficialEmail(""); setOfficialName("");
+    }
     setSubstituteEmail(""); setSubstituteName("");
     setReason("");
     setShowForm(true);
   };
+
 
   const submit = async () => {
     if (!officialEmail || !substituteEmail) { toast.error("Selecione oficial e substituto"); return; }
