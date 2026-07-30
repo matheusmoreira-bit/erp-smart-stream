@@ -85,6 +85,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { InternalApprovalHistory } from "@/components/InternalApprovalHistory";
 import { AttachmentViewer } from "@/components/AttachmentViewer";
 import { displayUserName } from "@/lib/user-display";
+import { isDesignatedApprover } from "@/lib/approval-authz";
 
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -1610,29 +1611,7 @@ function escapeSapString(value: string): string {
 }
 
 function approverMatches(approver: string, userName: string): boolean {
-  if (!approver || !userName) return false;
-  const a = normalizeIdentity(approver);
-  const u = normalizeIdentity(userName);
-  if (a === u) return true;
-  if (a.includes("@") || u.includes("@")) {
-    const ap = identityPrefix(a);
-    const up = identityPrefix(u);
-    if (ap && up && ap === up) return true;
-  }
-  // try matching by first name / partial: "matheus.moreira" vs "Matheus Moreira"
-  const nameConnectors = new Set(["de", "da", "do", "das", "dos", "e"]);
-  const toPersonTokens = (value: string) => value
-    .replace(/@[^\s]*/g, " ")
-    .replace(/[._@-]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token && !nameConnectors.has(token));
-  const aTokens = toPersonTokens(a);
-  const uTokens = toPersonTokens(u);
-  if (aTokens.length === 0 || uTokens.length === 0) return false;
-  // match if all user tokens have a fuzzy-matching counterpart in approver tokens (or vice-versa)
-  const allIn = (src: string[], tgt: string[]) =>
-    src.every((t) => tgt.some((x) => tokensMatch(t, x)));
-  return allIn(uTokens, aTokens) || allIn(aTokens, uTokens);
+  return isDesignatedApprover(userName, approver, null);
 }
 
 interface SapApprovalDecisionRow {
