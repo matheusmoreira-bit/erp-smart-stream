@@ -73,7 +73,6 @@ import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import AuditLogTable from "@/components/AuditLogTable";
 import IntegrationsTab from "@/components/IntegrationsTab";
 import NfseEmailSettingsTab from "@/components/NfseEmailSettingsTab";
-import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import TransferApprovalsTool from "@/components/TransferApprovalsTool";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
@@ -966,7 +965,7 @@ export default function Admin() {
         className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur-lg border-t border-border pb-[max(env(safe-area-inset-bottom),0.25rem)]"
         aria-label="Navegação backoffice"
       >
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-3">
           {[
             { key: "companies", label: "Empresas", icon: Building2, action: () => setActiveTab("companies") },
             { key: "users_hub", label: "Usuários", icon: Users, action: () => navigate("/usuarios/lista") },

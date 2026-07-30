@@ -88,7 +88,7 @@ const App = () => (
               {/* Backoffice */}
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
-              <Route path="/backoffice/sap-users" element={<AdminRoute><SapUsersAdmin /></AdminRoute>} />
+              <Route path="/backoffice/sap-users" element={<Navigate to="/usuarios/sap" replace />} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
               <Route path="/backoffice/audit-trail" element={<AdminRoute><AuditTrail /></AdminRoute>} />
               <Route path="/backoffice/trilha-documento" element={<AdminRoute><AuditTimeline /></AdminRoute>} />
