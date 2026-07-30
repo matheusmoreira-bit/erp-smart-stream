@@ -59,11 +59,11 @@ export default function NotificationsPage() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="audit" className="gap-2">
-              <History className="w-4 h-4" /> Auditoria
+            <TabsTrigger value="deliveries" className="gap-2">
+              <Send className="w-4 h-4" /> Todos os envios
             </TabsTrigger>
-            <TabsTrigger value="history" className="gap-2">
-              <Send className="w-4 h-4" /> Histórico de envios
+            <TabsTrigger value="settings" className="gap-2">
+              <SlidersHorizontal className="w-4 h-4" /> Configurações
             </TabsTrigger>
             <TabsTrigger value="overdue" className="gap-2">
               <AlertTriangle className="w-4 h-4" /> Vencidos
