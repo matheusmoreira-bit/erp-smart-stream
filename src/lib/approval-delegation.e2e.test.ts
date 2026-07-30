@@ -83,6 +83,22 @@ describe("internal approval delegation — end-to-end", () => {
     expect(canCallerApproveInternal(DELEGATE, exp)).toBe(false);
   });
 
+  it("matches SAP UserCode to a full name containing Portuguese connectors", () => {
+    const exp = makeInternalExpense({
+      current_approver: "Andresa De Carvalho",
+      rule_levels: [
+        {
+          level_order: 1,
+          approver_name: "Andresa De Carvalho",
+          approver_email: "andresa.carvalho@anagaming.com.br",
+        },
+      ],
+    });
+    expect(canCallerApproveInternal("andresa.carvalho", exp)).toBe(true);
+    expect(canCallerApproveInternal("andresa.carvalho@anagaming.com.br", exp)).toBe(true);
+    expect(canCallerApproveInternal("andressa.carvalho", exp)).toBe(false);
+  });
+
   it("after delegation the delegate can approve and the original cannot", () => {
     let exp = makeInternalExpense();
 

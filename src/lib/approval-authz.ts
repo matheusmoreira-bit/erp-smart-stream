@@ -28,7 +28,12 @@ export function emailPrefix(email: string): string {
 }
 
 export function tokenize(s: string): string[] {
-  return normalize(s).replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
+  const connectors = new Set(["de", "da", "do", "das", "dos", "e"]);
+  return normalize(s)
+    .replace(/@[^\s]*/g, " ")
+    .replace(/[._\-@]+/g, " ")
+    .split(/\s+/)
+    .filter((token) => token && !connectors.has(token));
 }
 
 /**
