@@ -87,22 +87,24 @@ export function AttachmentViewer({
                     <Download className="w-4 h-4" />
                     <span className="hidden sm:inline">Baixar</span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1.5"
-                    asChild
-                  >
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Abrir em nova aba"
+                  {canOpenNewTab && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 gap-1.5"
+                      asChild
                     >
-                      <ExternalLink className="w-4 h-4" />
-                      <span className="hidden sm:inline">Abrir</span>
-                    </a>
-                  </Button>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Abrir em nova aba"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        <span className="hidden sm:inline">Abrir</span>
+                      </a>
+                    </Button>
+                  )}
                 </>
               )}
             </div>
@@ -121,7 +123,7 @@ export function AttachmentViewer({
               alt={name}
               className="max-w-full max-h-full object-contain"
             />
-          ) : kind === "pdf" && !iframeError ? (
+          ) : kind === "pdf" && showPdfInline && !iframeError ? (
             <iframe
               src={url}
               title={name}
@@ -132,14 +134,18 @@ export function AttachmentViewer({
             <div className="flex flex-col items-center gap-3 text-center px-6 py-10 text-muted-foreground max-w-md">
               <FileWarning className="w-10 h-10" />
               <p className="text-sm">
-                Este tipo de arquivo não pode ser exibido no navegador. Use o botão abaixo para baixar ou abrir em uma nova aba.
+                {kind === "pdf"
+                  ? "Seu navegador não exibe PDFs dentro do app. Baixe o arquivo para visualizá-lo."
+                  : "Este tipo de arquivo não pode ser exibido no navegador. Use o botão abaixo para baixar o arquivo."}
               </p>
               <div className="flex gap-2">
-                <Button asChild variant="secondary" size="sm">
-                  <a href={url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="w-4 h-4 mr-1.5" /> Abrir em nova aba
-                  </a>
-                </Button>
+                {canOpenNewTab && (
+                  <Button asChild variant="secondary" size="sm">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-4 h-4 mr-1.5" /> Abrir em nova aba
+                    </a>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   onClick={() => {
