@@ -123,17 +123,19 @@ function ownsExpense(
     row.requester_name,
     row.created_by_email,
     row.current_approver,
-    row.current_approver_email,
     row.original_approver,
   ];
   for (const c of candidates) {
     if (!c) continue;
     for (const alias of aliases) {
-      if (identityMatches(c, alias)) return true;
+      // `personMatches` cobre o caso em que a coluna guarda o NOME completo
+      // ("Andresa De Carvalho") e o caller é o UserCode ("andresa.carvalho").
+      if (identityMatches(c, alias) || personMatches(c, alias)) return true;
     }
   }
   return false;
 }
+
 
 /**
  * Ids (dentre os informados) cujas LINHAS pertencem à diretoria — cobre os
