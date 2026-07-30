@@ -128,17 +128,30 @@ interface Match {
   allMatched: boolean;
 }
 
+export const DRAFT_RULE_ID = "__draft__";
+
 export function RuleSimulator({
   open,
   onClose,
   rules,
+  draftRule = null,
 }: {
   open: boolean;
   onClose: () => void;
   rules: ApprovalRule[];
+  /** Regra em edição ainda não salva — avaliada junto com a matriz publicada. */
+  draftRule?: ApprovalRule | null;
 }) {
   const [input, setInput] = useState<SimulationInput>(EMPTY);
   const [ran, setRan] = useState(false);
+
+  /** Matriz efetiva: substitui a versão publicada pela versão em edição. */
+  const effectiveRules = useMemo<ApprovalRule[]>(() => {
+    if (!draftRule) return rules;
+    const exists = rules.some((r) => r.id === draftRule.id);
+    return exists ? rules.map((r) => (r.id === draftRule.id ? draftRule : r)) : [...rules, draftRule];
+  }, [rules, draftRule]);
+
 
   const setField = <K extends keyof SimulationInput>(k: K, v: SimulationInput[K]) =>
     setInput((prev) => ({ ...prev, [k]: v }));
