@@ -317,11 +317,13 @@ export function SapLoginForm() {
         const gate = await assertSapLoginIdpBinding({ sapUserCode: sapUser });
         if (!gate.ok) {
           toast.error("Vínculo de identidade obrigatório", { description: gate.reason });
-          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          // Não encerrar a sessão Google aqui: isso derruba o gate de acesso e
+          // devolve o usuário ao "Entrar com Google" em loop. Basta limpar o ERP.
           try { sessionStorage.removeItem("erp_session_v1"); } catch { /* ignore */ }
           window.dispatchEvent(new CustomEvent("erp:session-expired"));
           return;
         }
+
       }
 
       // Alerta sempre que o usuário logar com a senha padrão, em qualquer empresa.

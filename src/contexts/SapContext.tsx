@@ -95,18 +95,23 @@ export function SapProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
-      // Se sobrou uma sessão Supabase Auth de um login anterior (ex.: super-admin
-      // que fechou a aba sem logout), e o novo usuário SAP é diferente, encerra
-      // a sessão antiga antes de prosseguir. Isso impede herdar isAdmin/roles
-      // ("Ver todas as aprovações", etc.) do usuário anterior.
+      // Se sobrou uma sessão Supabase Auth de um login LOCAL (email/senha) de outro
+      // usuário, encerra antes de prosseguir para não herdar isAdmin/roles.
+      // IMPORTANTE: nunca encerrar uma sessão Google — ela é o gate de acesso ao app.
+      // O usuário SAP pode legitimamente diferir do e-mail Google (aliases, .ext,
+      // nome civil vs. usuário SAP); deslogar aqui causava loop entre o formulário
+      // de login e o "Entrar com Google".
       try {
         const { data: { session: prev } } = await supabase.auth.getSession();
+        const provider = (prev?.user?.app_metadata?.provider || "").toLowerCase();
+        const isOAuth = provider && provider !== "email";
         const prevLocal = (prev?.user?.email || "").split("@")[0].trim().toLowerCase();
         const newLocal = (userName || "").split("@")[0].trim().toLowerCase();
-        if (prev && prevLocal && newLocal && prevLocal !== newLocal) {
+        if (prev && !isOAuth && prevLocal && newLocal && prevLocal !== newLocal) {
           await supabase.auth.signOut();
         }
       } catch { /* ignore */ }
+
       if (erpType === "sap") {
         const sapSess = await sapLogin(userName, password, companyDB);
         setSession({
