@@ -24,9 +24,11 @@ import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import {
   canViewAllDocuments,
   identityMatches,
+  personMatches,
   resolveDirectorateBranch,
   costCenterInBranch,
 } from "../_shared/permission-groups.ts";
+
 import { resolveCallerAliases } from "../_shared/user-aliases.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
