@@ -317,14 +317,50 @@ export function ApprovalMatrixMindMap({
   rows,
   rootLabel,
   onOpenList,
+  storageKey,
 }: {
   rows: MatrixRow[];
   rootLabel: string;
   onOpenList?: (filter: MindMapListFilter) => void;
+  /** Chave para persistir zoom/recolhimento entre navegações (prefixo "erp:"). */
+  storageKey?: string;
 }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [zoom, setZoom] = useState(1);
+  const persistKey = storageKey ? `erp:approval-matrix:mindmap:${storageKey}` : null;
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    if (!persistKey || typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem(persistKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return new Set<string>(Array.isArray(parsed?.collapsed) ? parsed.collapsed : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const [zoom, setZoom] = useState(() => {
+    if (!persistKey || typeof window === "undefined") return 1;
+    try {
+      const raw = window.localStorage.getItem(persistKey);
+      const z = raw ? JSON.parse(raw)?.zoom : null;
+      return typeof z === "number" && z >= 0.4 && z <= 3 ? z : 1;
+    } catch {
+      return 1;
+    }
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!persistKey) return;
+    try {
+      window.localStorage.setItem(
+        persistKey,
+        JSON.stringify({ zoom, collapsed: [...collapsed] }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [persistKey, zoom, collapsed]);
+
 
   const tree = useMemo(() => buildTree(rows, rootLabel), [rows, rootLabel]);
   const positioned = useMemo(
