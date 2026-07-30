@@ -6646,6 +6646,12 @@ export type Database = {
         Args: { _company_db: string; _user_code: string }
         Returns: undefined
       }
+      release_cancelled_document_hashes: {
+        Args: { _hashes: string[] }
+        Returns: {
+          file_hash: string
+        }[]
+      }
       release_watcher_lock: {
         Args: { _message?: string; _name: string; _status?: string }
         Returns: undefined
