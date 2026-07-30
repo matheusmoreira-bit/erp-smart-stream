@@ -6,12 +6,14 @@ import LicenseAnalysis from "./LicenseAnalysis";
 import LicenseImport from "./LicenseImport";
 import UsersPermissions from "./UsersPermissions";
 import UsersAdmins from "./UsersAdmins";
+import SapUsersAdmin from "./SapUsersAdmin";
 import { TabsHub, type HubTabDef } from "@/components/TabsHub";
 
 type TabKey =
   | "list"
   | "permissions"
   | "admins"
+  | "sap"
   | "activity"
   | "productivity"
   | "licenses"
@@ -22,6 +24,7 @@ const TABS: readonly HubTabDef<TabKey>[] = [
   { key: "list", label: "Usuários", module: "users", path: "/usuarios/lista", render: () => <Users /> },
   { key: "permissions", label: "Permissões e Grupos", module: "users", path: "/usuarios/permissoes", render: () => <UsersPermissions /> },
   { key: "admins", label: "Administradores", module: "users", path: "/usuarios/administradores", render: () => <UsersAdmins /> },
+  { key: "sap", label: "Usuários SAP", module: "users", path: "/usuarios/sap", render: () => <SapUsersAdmin /> },
   { key: "idp", label: "Sincronização IdP", module: "users", path: "/usuarios/sincronizacao-idp", render: () => <IdpSync /> },
   { key: "activity", label: "Atividade", module: "users", path: "/usuarios/atividade", render: () => <UserActivity /> },
   { key: "productivity", label: "Produtividade", module: "users_productivity", path: "/usuarios/produtividade", render: () => <UserProductivity /> },
