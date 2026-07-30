@@ -451,14 +451,38 @@ export function ApprovalMatrixMindMap({
     }
   }, [persistKey, zoom, collapsed]);
 
-
   const tree = useMemo(() => buildTree(rows, rootLabel), [rows, rootLabel]);
+
+  // Grafos grandes: o recálculo do layout roda em prioridade baixa para não
+  // travar cliques/zoom enquanto a árvore é reposicionada.
+  const deferredCollapsed = useDeferredValue(collapsed);
   const positioned = useMemo(
-    () => layout(tree, collapsed, -Math.PI / 2, (3 * Math.PI) / 2),
-    [tree, collapsed],
+    () => layout(tree, deferredCollapsed, -Math.PI / 2, (3 * Math.PI) / 2),
+    [tree, deferredCollapsed],
   );
   const nodes = useMemo(() => flatten(positioned), [positioned]);
-  const edges = useMemo(() => links(positioned), [positioned]);
+  const edgePaths = useMemo(
+    () =>
+      links(positioned).map((e, i) => {
+        const mr = (Math.hypot(e.from.x, e.from.y) + Math.hypot(e.to.x, e.to.y)) / 2;
+        const c1x = Math.cos(e.from.angle) * mr;
+        const c1y = Math.sin(e.from.angle) * mr;
+        const c2x = Math.cos(e.to.angle) * mr;
+        const c2y = Math.sin(e.to.angle) * mr;
+        return {
+          key: `${e.from.id}->${e.to.id}-${i}`,
+          d: `M ${e.from.x.toFixed(1)} ${e.from.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${e.to.x.toFixed(1)} ${e.to.y.toFixed(1)}`,
+          width: Math.max(1, 3 - e.from.depth * 0.6),
+          className: DEPTH_STROKE[Math.min(e.from.depth, DEPTH_STROKE.length - 1)],
+        };
+      }),
+    [positioned],
+  );
+
+  // Culling de rótulos: em teias densas os textos são o maior custo de layout
+  // do SVG, então limitamos a profundidade rotulada conforme o volume de nós.
+  const labelDepthLimit = nodes.length > 1200 ? 2 : nodes.length > 500 ? 3 : 4;
+  const showSubLabels = nodes.length <= 500;
 
   const selected = useMemo(
     () => (selectedId ? nodes.find((n) => n.id === selectedId) ?? null : null),
@@ -474,12 +498,18 @@ export function ApprovalMatrixMindMap({
   const size = (extent * 2) / zoom;
   const viewBox = `${-size / 2} ${-size / 2} ${size} ${size}`;
 
-  const toggle = (id: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const toggle = useCallback(
+    (id: string) =>
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      }),
+    [],
+  );
+
+  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+
 
   if (rows.length === 0) return null;
 
