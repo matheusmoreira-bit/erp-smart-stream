@@ -227,10 +227,11 @@ export function useApprovalHistory(
             decision: l.decision === "approved" ? "Y" : "N",
             decision_date: l.decided_at || l.created_at,
             approver_code: l.approver_email || l.approver_name || null,
-            approver_name: l.approver_name || null,
+            approver_name: displayUserNameOrEmpty(l.approver_name || l.approver_email) || null,
             approver_email: l.approver_email || null,
             requester_code: e.requester_email || null,
-            requester_name: e.requester_name || null,
+            requester_name: displayUserNameOrEmpty(e.requester_name || e.requester_email) || null,
+
             doc_object_type: null,
             doc_type_name:
               e.doc_type === "sales"
