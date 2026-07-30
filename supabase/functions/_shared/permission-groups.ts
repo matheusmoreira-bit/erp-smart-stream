@@ -38,6 +38,39 @@ export function identityMatches(a: unknown, b: unknown): boolean {
   return stripSuffix(ca) === stripSuffix(cb);
 }
 
+function personTokens(value: unknown): string[] {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/@[^\s]*/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    // conectivos de nomes próprios não identificam ninguém
+    .filter((t) => !["de", "da", "do", "das", "dos", "e"].includes(t));
+}
+
+/**
+ * Comparação de PESSOAS tolerante ao formato: `expenses.current_approver`
+ * ora guarda o UserCode SAP (`andresa.carvalho`), ora o e-mail, ora o nome
+ * completo ("Andresa De Carvalho"). Além do match canônico, aceita quando
+ * todos os tokens de um lado estão contidos no outro (mínimo 2 tokens, ou
+ * 1 token quando o outro lado também tem só 1).
+ */
+export function personMatches(a: unknown, b: unknown): boolean {
+  if (identityMatches(a, b)) return true;
+  const ta = personTokens(a);
+  const tb = personTokens(b);
+  if (!ta.length || !tb.length) return false;
+  const subset = (x: string[], y: string[]) => x.every((t) => y.includes(t));
+  if (ta.length >= 2 && subset(ta, tb)) return true;
+  if (tb.length >= 2 && subset(tb, ta)) return true;
+  if (ta.length === 1 && tb.length === 1) return ta[0] === tb[0];
+  return false;
+}
+
+
 /** Nomes dos grupos de permissão associados a uma identidade. */
 export async function getPermissionGroups(
   admin: SupabaseClient,
