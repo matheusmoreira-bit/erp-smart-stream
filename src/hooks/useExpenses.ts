@@ -9,6 +9,12 @@ import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import { createNotification } from "@/lib/notifications";
 import { expenseRead } from "@/lib/expense-read";
+import {
+  enqueueOutbox,
+  isErpUnavailable,
+  isOfflineError,
+  registerOutboxSender,
+} from "@/lib/offline-outbox";
 
 /* ───────────────── Item group enrichment ───────────────── */
 
@@ -550,7 +556,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     }
   }, [session?.companyDB, docType]);
 
-  const createExpense = useCallback(
+  const createExpenseCore = useCallback(
     async (input: CreateExpenseInput) => {
       if (!session) throw new Error("Sessão SAP não encontrada");
 
