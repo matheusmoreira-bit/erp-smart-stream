@@ -39,6 +39,29 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Erros do provedor voltam na URL (query ou hash). Sem exibi-los o usuário
+  // fica em loop: clica em entrar, volta para a mesma tela sem explicação.
+  useEffect(() => {
+    const parse = (raw: string) => new URLSearchParams(raw.replace(/^[?#]/, ""));
+    const params = parse(window.location.search);
+    const hash = parse(window.location.hash);
+    const code = params.get("error_code") || hash.get("error_code");
+    const desc =
+      params.get("error_description") || hash.get("error_description") ||
+      params.get("error") || hash.get("error");
+    if (!code && !desc) return;
+    const friendly =
+      code === "signup_disabled"
+        ? "Sua conta ainda não está liberada no sistema. Peça ao administrador para criar seu acesso."
+        : decodeURIComponent(desc || code || "Falha na autenticação");
+    setAuthError(friendly);
+    toast.error("Não foi possível entrar", { description: friendly });
+    // Limpa a URL para não repetir o erro em recarregamentos.
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +178,14 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
             <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
             <span>Acesso restrito a e-mails corporativos autorizados.</span>
           </div>
+
+          {authError && (
+            <div className="text-xs rounded-md border border-destructive/40 bg-destructive/10 text-destructive p-3">
+              {authError}
+            </div>
+          )}
+
+
 
           <Button
             type="button"
