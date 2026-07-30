@@ -76,3 +76,6 @@ verify_jwt = false
 
 [functions.registration-sla-reminders]
 verify_jwt = false
+
+[functions.approval-link]
+verify_jwt = false
