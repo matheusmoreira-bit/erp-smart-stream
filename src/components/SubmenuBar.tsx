@@ -34,7 +34,7 @@ export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarP
   const current = items.find((i) => i.key === active) ?? items[0];
 
   return (
-    <div className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+    <div className="sticky top-[var(--app-header-h,72px)] z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-12 flex items-center gap-2">
         <button
           type="button"
