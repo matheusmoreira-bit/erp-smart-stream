@@ -292,18 +292,23 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
                       <div className="text-red-600 mt-0.5">Revog.: {r.revoked_reason}</div>
                     )}
                   </TableCell>
-                  {isAdmin && !showHistory && (
+                  {!showHistory && (
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700"
-                        onClick={() => setPendingRevoke(r)}
-                      >
-                        <XCircle className="w-4 h-4 mr-1" /> Revogar
-                      </Button>
+                      {(canManage || isMine(r.official_email) || isMine(r.granted_by_email)) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => setPendingRevoke(r)}
+                        >
+                          <XCircle className="w-4 h-4 mr-1" /> Revogar
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                   )}
+
                 </TableRow>
               ))}
             </TableBody>
