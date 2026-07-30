@@ -45,6 +45,7 @@ import SapSyncRuns from "./pages/SapSyncRuns.tsx";
 import BackofficeCopilot from "./pages/BackofficeCopilot.tsx";
 import InfraHealth from "./pages/InfraHealth.tsx";
 import IntegrationHealth from "./pages/IntegrationHealth.tsx";
+import AuditTimeline from "./pages/AuditTimeline.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
 import BackofficeRoadmap from "./pages/BackofficeRoadmap.tsx";
 
