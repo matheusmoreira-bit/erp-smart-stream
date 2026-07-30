@@ -313,7 +313,97 @@ function NodeDetails({ node }: { node: Node }) {
   );
 }
 
+/** Nó individual memoizado — evita recriar milhares de elementos SVG a cada render. */
+const MindMapNode = memo(function MindMapNode({
+  node,
+  hidden,
+  selected,
+  showLabel,
+  showSub,
+  onSelect,
+  onToggle,
+}: {
+  node: Positioned;
+  hidden: boolean;
+  selected: boolean;
+  showLabel: boolean;
+  showSub: boolean;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const left = Math.cos(node.angle) < 0 && node.depth > 0;
+  const anchor = node.depth === 0 ? "middle" : left ? "end" : "start";
+  const dx = node.depth === 0 ? 0 : left ? -12 : 12;
+  const collapsible = node.children.length > 0 || hidden;
+
+  return (
+    <g
+      className="cursor-pointer"
+      role="button"
+      tabIndex={0}
+      aria-label={`${KIND_LABEL[node.meta.kind]}: ${node.label}`}
+      onClick={() => onSelect(node.id)}
+      onDoubleClick={() => collapsible && onToggle(node.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(node.id);
+        }
+      }}
+    >
+      {selected && (
+        <circle
+          cx={node.x}
+          cy={node.y}
+          r={node.depth === 0 ? 18 : 14}
+          className="fill-primary/15 stroke-primary"
+          strokeWidth={1.5}
+        />
+      )}
+      <circle
+        cx={node.x}
+        cy={node.y}
+        r={node.depth === 0 ? 10 : Math.max(3.5, 8 - node.depth * 1.2)}
+        className={`${DEPTH_FILL[Math.min(node.depth, DEPTH_FILL.length - 1)]} ${
+          DEPTH_STROKE[Math.min(node.depth, DEPTH_STROKE.length - 1)]
+        }`}
+        strokeWidth={hidden ? 3 : 1.5}
+      />
+      {showLabel && (
+        <text
+          x={node.x + dx}
+          y={node.y}
+          textAnchor={anchor}
+          dominantBaseline="middle"
+          className="fill-foreground"
+          pointerEvents="none"
+          style={{
+            fontSize: node.depth <= 1 ? 15 : node.depth === 2 ? 13 : 11,
+            fontWeight: node.depth <= 2 || selected ? 600 : 400,
+          }}
+        >
+          {truncate(node.label, node.depth >= 3 ? 34 : 26)}
+        </text>
+      )}
+      {showSub && node.sub && (
+        <text
+          x={node.x + dx}
+          y={node.y + (node.depth <= 1 ? 15 : 12)}
+          textAnchor={anchor}
+          dominantBaseline="middle"
+          className="fill-muted-foreground"
+          pointerEvents="none"
+          style={{ fontSize: 9.5 }}
+        >
+          {truncate(node.sub, 34)}
+        </text>
+      )}
+    </g>
+  );
+});
+
 export function ApprovalMatrixMindMap({
+
   rows,
   rootLabel,
   onOpenList,
