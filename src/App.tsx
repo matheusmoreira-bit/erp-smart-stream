@@ -53,6 +53,7 @@ import PagCorpSettlementAudit from "./pages/PagCorpSettlementAudit.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { WhatsNewWizard } from "./components/WhatsNewWizard.tsx";
+import { OnboardingTour } from "./components/OnboardingTour.tsx";
 
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
 import { ModuleSubmenu } from "./components/ModuleSubmenu.tsx";
