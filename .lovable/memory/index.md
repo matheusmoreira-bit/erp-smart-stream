@@ -5,6 +5,7 @@
 - Reuse first: antes de criar helper/componente/hook, procurar similar existente em `src/hooks/`, `src/components/ui/`, `src/lib/`, `supabase/functions/`.
 - Trace-before-fix: em bug de "valor não chega em X", mapear origem→sink (página → hook → edge function → modal) antes de editar qualquer arquivo.
 - Documentos de compra/venda: usuário vê só o que criou/aprova. Toggle "Ver todos"/"Ver todas as aprovações" começa DESMARCADO por padrão para todos, inclusive admins/super-usuários — quem tem permissão liga manualmente.
+- Segregação de função só via CAPACIDADE do grupo (permission_group_modules) — nunca por nome de grupo nem flag no usuário.
 - Identidade = usuário SAP (1 nome, N e-mails). Permissões/alçadas gravam a chave canônica (`canonicalUserKey`), nunca e-mail cru.
 
 ## Memories
@@ -17,5 +18,4 @@
 - [Exibir usuários pelo nome](mem://preferences/user-display-name.md) — Nas telas, sempre Nome via `displayUserName` (src/lib/user-display.ts), nunca e-mail/login.
 - [Delegação de alçada](mem://features/approver-substitutes.md) — Substituto com vigência, autoatendimento de férias, audit log e notificações via approver-substitute-manage.
 - [Identidade única de usuário](mem://features/user-identity.md) — Usuário SAP como chave (1 nome, N e-mails), tabelas sap_user_directory/sap_user_emails e chave canônica em permissões.
-
-
+- [Grupos e capacidades](mem://features/permission-groups-capabilities.md) — Catálogo de capacidades GRUPO > USER, hooks useMyCapabilities e helpers server-side.
