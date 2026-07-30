@@ -1,0 +1,2 @@
+ALTER TABLE public.expense_approval_log DROP CONSTRAINT IF EXISTS expense_approval_log_decision_check;
+ALTER TABLE public.expense_approval_log ADD CONSTRAINT expense_approval_log_decision_check CHECK (decision = ANY (ARRAY['approved'::text,'rejected'::text,'submitted'::text,'created'::text,'cancelled'::text,'reactivated'::text,'integrated'::text,'integration_failed'::text]));
