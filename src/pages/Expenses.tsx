@@ -43,10 +43,12 @@ import {
   LayoutGrid,
   List,
   Briefcase,
+  Copy,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { isPendingApproval } from "@/lib/approval-authz";
+import { buildDuplicateDraftPayload } from "@/lib/expense-duplicate";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -726,12 +728,14 @@ function ExpenseCard({
   originBadge,
   erpLabel,
   onRelationsMap,
+  onDuplicate,
 }: {
   expense: Expense;
   onOpen: () => void;
   originBadge?: "erp_flow" | "erp";
   erpLabel?: string;
   onRelationsMap?: () => void;
+  onDuplicate?: () => void;
 }) {
   const statusLabel = useStatusLabel();
   const erpLbl = erpLabel || "ERP";
@@ -783,6 +787,18 @@ function ExpenseCard({
               onClick={(ev) => { ev.stopPropagation(); onRelationsMap(); }}
             >
               <Network className="w-4 h-4" />
+            </Button>
+          )}
+          {onDuplicate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Duplicar em novo pedido"
+              aria-label={`Duplicar lançamento de ${expense.supplier_name}`}
+              onClick={(ev) => { ev.stopPropagation(); onDuplicate(); }}
+            >
+              <Copy className="w-4 h-4" />
             </Button>
           )}
           <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
@@ -936,6 +952,21 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
   const [sapHasMore, setSapHasMore] = useState(false);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
+
+  /** Cria um novo pedido a partir de um lançamento existente (sem anexos/ERP). */
+  const duplicateExpense = useCallback((exp: Expense) => {
+    try {
+      const payload = buildDuplicateDraftPayload(exp);
+      // id vazio => o modal trata como novo esboço (não sobrescreve o original)
+      setPendingDraft({ id: "", payload });
+      setShowCreate(true);
+      toast.info("Novo pedido criado a partir do lançamento selecionado. Revise datas e anexos.");
+    } catch (e) {
+      console.error("Falha ao duplicar lançamento:", e);
+      toast.error("Não foi possível duplicar este lançamento.");
+    }
+  }, []);
+
   const showSourceToggle = session?.erpType === "sap";
   const SAP_PAGE_STEP = 100;
   const SAP_CACHE_KEY = isSales ? "sales_orders_sl_v1" : "purchase_orders_hana_v1";
@@ -1934,6 +1965,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   erpLabel={erpLabel}
                   onOpen={() => openExpense(exp, origin)}
                   onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
+                  onDuplicate={() => duplicateExpense(exp)}
                 />
               ))}
             </div>
@@ -1946,6 +1978,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   erpLabel={erpLabel}
                   onOpen={openExpense}
                   onRelations={(exp) => setRelationsMapExpense(exp)}
+                  onDuplicate={(exp) => duplicateExpense(exp)}
                   header={
                     <>
                       <SortableCell label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -2033,6 +2066,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                                 <Network className="w-4 h-4" aria-hidden="true" />
                               </Button>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-primary"
+                              aria-label={`Duplicar lançamento de ${exp.supplier_name}`}
+                              title="Duplicar em novo pedido"
+                              onClick={(ev) => { ev.stopPropagation(); duplicateExpense(exp); }}
+                            >
+                              <Copy className="w-4 h-4" aria-hidden="true" />
+                            </Button>
                           </div>
                         </td>
                       </tr>
