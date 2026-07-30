@@ -101,7 +101,24 @@ export function useNfEntrada() {
     await fetchAll();
   }, [fetchAll]);
 
-  return { items, loading, error, refresh: fetchAll, reprocess, rematchSap, cancel, pullNow };
+  /** Cria manualmente o esboço de NF de Entrada no SAP a partir do PC vinculado. */
+  const createInvoiceDraft = useCallback(async (id: string) => {
+    const { data, error: err } = await supabase.functions.invoke("nf-entrada-invoice-draft", {
+      body: { import_id: id },
+    });
+    if (err) {
+      const detail = (data as { error?: string } | null)?.error;
+      throw new Error(detail || err.message);
+    }
+    if ((data as { error?: string } | null)?.error) {
+      throw new Error((data as { error: string }).error);
+    }
+    await fetchAll();
+    return data as { ok: boolean; draftId?: string; poEntry?: number; alreadyExists?: boolean };
+  }, [fetchAll]);
+
+  return { items, loading, error, refresh: fetchAll, reprocess, rematchSap, cancel, pullNow, createInvoiceDraft };
+
 }
 
 export async function fetchNfEntradaLogs(importId: string): Promise<NfEntradaLog[]> {
