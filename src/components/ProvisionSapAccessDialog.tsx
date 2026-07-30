@@ -119,9 +119,9 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
             <ShieldCheck className="w-5 h-5 text-primary" /> Provisionar acesso SAP
           </DialogTitle>
           <DialogDescription>
-            O sistema irá gerar uma senha aleatória forte, alterá-la no SAP e armazená-la
-            criptografada para <strong>{targetEmail}</strong>. O usuário não conhecerá a senha —
-            o login ficará transparente (após autenticação Cloud → seleciona empresa → entra).
+            A senha será aplicada no SAP e armazenada criptografada para <strong>{targetEmail}</strong>,
+            deixando o login transparente (autenticação Cloud → seleciona empresa → entra).
+            Escolha entre uma senha aleatória (que ninguém conhece) ou uma senha definida por você.
           </DialogDescription>
         </DialogHeader>
 
@@ -139,6 +139,97 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
               Por padrão, é o prefixo do email (antes do @), limitado a 20 caracteres.
             </p>
           </div>
+
+          <div className="space-y-2 rounded-lg border border-border p-3">
+            <span className="text-xs font-medium text-foreground">Senha</span>
+            <RadioGroup
+              value={mode}
+              onValueChange={(v) => setMode(v as "random" | "custom")}
+              className="space-y-1.5"
+              disabled={busy}
+            >
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="random" id="pwd-random" className="mt-0.5" />
+                <Label htmlFor="pwd-random" className="font-normal cursor-pointer">
+                  <span className="text-sm text-foreground">Senha aleatória (recomendado)</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Gerada com 24 caracteres e nunca exibida — login somente pelo ERP Flow.
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="custom" id="pwd-custom" className="mt-0.5" />
+                <Label htmlFor="pwd-custom" className="font-normal cursor-pointer">
+                  <span className="text-sm text-foreground">Definir uma senha conhecida</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    O usuário poderá usá-la também para entrar diretamente no SAP.
+                  </span>
+                </Label>
+              </div>
+            </RadioGroup>
+
+            {mode === "custom" && (
+              <div className="space-y-2 pt-1">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Senha do SAP"
+                      autoComplete="new-password"
+                      maxLength={32}
+                      disabled={busy}
+                      className="pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    title="Gerar senha segura"
+                    aria-label="Gerar senha segura"
+                    disabled={busy}
+                    onClick={() => {
+                      const generated = generateStrongPassword(16, sapUser);
+                      setPassword(generated);
+                      setShowPassword(true);
+                    }}
+                  >
+                    <Wand2 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    title="Copiar senha"
+                    aria-label="Copiar senha"
+                    disabled={busy || !password}
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(password);
+                        toast.success("Senha copiada");
+                      } catch {
+                        toast.error("Não foi possível copiar");
+                      }
+                    }}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+                <PasswordPolicyChecklist password={password} userCode={sapUser} />
+              </div>
+            )}
+          </div>
+
 
           <div>
             <div className="flex items-center justify-between mb-2">
