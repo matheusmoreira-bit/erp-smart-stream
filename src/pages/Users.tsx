@@ -328,7 +328,7 @@ export default function UsersPage() {
                       </span>
                     </div>
 
-                    <div className="w-32 flex items-center justify-end gap-1">
+                    <div className="w-40 flex items-center justify-end gap-1">
                       {isActing ? (
                         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                       ) : (
