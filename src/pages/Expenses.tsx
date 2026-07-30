@@ -1978,6 +1978,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   erpLabel={erpLabel}
                   onOpen={openExpense}
                   onRelations={(exp) => setRelationsMapExpense(exp)}
+                  onDuplicate={(exp) => duplicateExpense(exp)}
                   header={
                     <>
                       <SortableCell label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
