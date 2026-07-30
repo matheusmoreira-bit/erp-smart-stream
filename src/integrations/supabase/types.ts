@@ -1446,6 +1446,9 @@ export type Database = {
       }
       auditoria_cruzamento_config: {
         Row: {
+          auto_conciliar: boolean
+          auto_exigir_lancamento_erp: boolean
+          auto_score_min: number
           empresa_id: string
           janela_dias: number
           source_company_dbs: string[]
@@ -1456,6 +1459,9 @@ export type Database = {
           usar_raiz_cnpj_fallback: boolean
         }
         Insert: {
+          auto_conciliar?: boolean
+          auto_exigir_lancamento_erp?: boolean
+          auto_score_min?: number
           empresa_id: string
           janela_dias?: number
           source_company_dbs?: string[]
@@ -1466,6 +1472,9 @@ export type Database = {
           usar_raiz_cnpj_fallback?: boolean
         }
         Update: {
+          auto_conciliar?: boolean
+          auto_exigir_lancamento_erp?: boolean
+          auto_score_min?: number
           empresa_id?: string
           janela_dias?: number
           source_company_dbs?: string[]
@@ -1488,6 +1497,9 @@ export type Database = {
       auditoria_cruzamento_fiscal: {
         Row: {
           atualizado_em: string
+          auto_conciliado: boolean
+          auto_conciliado_em: string | null
+          auto_regra: string | null
           candidatos_ambiguos: Json | null
           cenario: string
           cnpj_fornecedor: string
@@ -1503,6 +1515,8 @@ export type Database = {
           empresa_id: string
           erp_origem: string | null
           id: string
+          lancamento_erp_id: string | null
+          lancamento_erp_status: string | null
           nota_chave_acesso: string | null
           nota_data_emissao: string | null
           nota_mastertax_id: string | null
@@ -1519,6 +1533,9 @@ export type Database = {
         }
         Insert: {
           atualizado_em?: string
+          auto_conciliado?: boolean
+          auto_conciliado_em?: string | null
+          auto_regra?: string | null
           candidatos_ambiguos?: Json | null
           cenario: string
           cnpj_fornecedor: string
@@ -1534,6 +1551,8 @@ export type Database = {
           empresa_id: string
           erp_origem?: string | null
           id?: string
+          lancamento_erp_id?: string | null
+          lancamento_erp_status?: string | null
           nota_chave_acesso?: string | null
           nota_data_emissao?: string | null
           nota_mastertax_id?: string | null
@@ -1550,6 +1569,9 @@ export type Database = {
         }
         Update: {
           atualizado_em?: string
+          auto_conciliado?: boolean
+          auto_conciliado_em?: string | null
+          auto_regra?: string | null
           candidatos_ambiguos?: Json | null
           cenario?: string
           cnpj_fornecedor?: string
@@ -1565,6 +1587,8 @@ export type Database = {
           empresa_id?: string
           erp_origem?: string | null
           id?: string
+          lancamento_erp_id?: string | null
+          lancamento_erp_status?: string | null
           nota_chave_acesso?: string | null
           nota_data_emissao?: string | null
           nota_mastertax_id?: string | null

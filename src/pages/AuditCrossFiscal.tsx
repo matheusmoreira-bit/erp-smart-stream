@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Loader2, PlayCircle, Download, Search, RefreshCw } from "lucide-react";
+import { Loader2, PlayCircle, Download, Search, RefreshCw, Sparkles } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +29,7 @@ function toCsv(rows: CruzamentoRow[]): string {
   const head = [
     "Cenário", "ERP", "CNPJ", "Fornecedor", "NF Número", "NF Valor", "NF Emissão",
     "Conta ID", "Conta Valor", "Data Baixa", "Diferença R$", "Diferença dias",
-    "Status", "Observação",
+    "Status", "Auto-conciliado", "Regra automática", "Lançamento ERP", "Observação",
   ];
   const body = rows.map((r) => [
     CENARIO_LABEL[r.cenario], r.erp_origem || "",
@@ -36,7 +37,8 @@ function toCsv(rows: CruzamentoRow[]): string {
     r.nota_numero ?? "", r.nota_valor ?? "", r.nota_data_emissao ?? "",
     r.conta_paga_id_externo ?? "", r.conta_paga_valor ?? "", r.conta_paga_data_baixa ?? "",
     r.diferenca_valor ?? "", r.diferenca_dias ?? "",
-    r.status_match, r.observacao_usuario ?? "",
+    r.status_match, r.auto_conciliado ? "Sim" : "Não", r.auto_regra ?? "",
+    r.lancamento_erp_status ?? "", r.observacao_usuario ?? "",
   ]);
   return [head, ...body]
     .map((cols) => cols.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
@@ -66,6 +68,7 @@ export default function AuditCrossFiscal() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusMatch | "all">("all");
   const [detailRow, setDetailRow] = useState<CruzamentoRow | null>(null);
+  const [onlyExceptions, setOnlyExceptions] = useState(true);
 
   const { rows, loading, refresh, runCross, updateRow } = useAuditCrossFiscal({
     empresa_id: empresaId || undefined,
@@ -77,6 +80,7 @@ export default function AuditCrossFiscal() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
+      if (onlyExceptions && r.auto_conciliado && r.status_match === "automatico") return false;
       if (statusFilter !== "all" && r.status_match !== statusFilter) return false;
       if (!q) return true;
       return (
@@ -86,7 +90,12 @@ export default function AuditCrossFiscal() {
         (r.conta_paga_id_externo || "").toLowerCase().includes(q)
       );
     });
-  }, [rows, search, statusFilter]);
+  }, [rows, search, statusFilter, onlyExceptions]);
+
+  const autoCount = useMemo(
+    () => rows.filter((r) => r.auto_conciliado && r.status_match === "automatico").length,
+    [rows],
+  );
 
   const grouped = useMemo(() => {
     const g: Record<CenarioCruzamento, CruzamentoRow[]> = {
@@ -111,7 +120,7 @@ export default function AuditCrossFiscal() {
       const res = await runCross(empresaId, inicio, fim);
       toast({
         title: "Cruzamento executado",
-        description: `${res.notas_analisadas} notas · ${res.contas_analisadas} contas · ${res.linhas_geradas} linhas`,
+        description: `${res.notas_analisadas} notas · ${res.contas_analisadas} contas · ${res.auto_conciliados ?? 0} conciliadas automaticamente · ${res.excecoes ?? res.linhas_geradas} exceções`,
       });
     } catch (e) {
       toast({ title: "Falha no cruzamento", description: (e as Error).message, variant: "destructive" });
@@ -153,7 +162,8 @@ export default function AuditCrossFiscal() {
       <div>
         <h2 className="text-xl font-bold">Cruzamento Fiscal × Pagamentos</h2>
         <p className="text-sm text-muted-foreground">
-          Kanban com 3 raias: pagamentos no ERP, conciliados com MasterTax, notas sem pagamento localizado.
+          Conciliação automática de NFS-e × pagamento × lançamento no ERP. O Kanban mostra apenas as exceções;
+          o que casa com alta confiança é conciliado sozinho.
         </p>
       </div>
 
@@ -204,6 +214,16 @@ export default function AuditCrossFiscal() {
           />
         </div>
         <div className="flex items-center gap-1 flex-wrap">
+          <label className="flex items-center gap-2 text-xs mr-2 cursor-pointer">
+            <Switch checked={onlyExceptions} onCheckedChange={setOnlyExceptions} aria-label="Somente exceções" />
+            <span className="flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-emerald-600" />
+              Somente exceções
+              {autoCount > 0 && (
+                <span className="text-muted-foreground">({autoCount} auto-conciliadas)</span>
+              )}
+            </span>
+          </label>
           {(["all", "automatico", "ambiguo", "confirmado_manual", "ignorado"] as const).map((s) => (
             <Button
               key={s}

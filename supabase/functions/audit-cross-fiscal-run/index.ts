@@ -30,6 +30,8 @@ interface NotaRow {
   chave_acesso: string | null;
   valor_total: number | null;
   data_emissao: string | null;
+  lancamento_status: string | null;
+  lancamento_id: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -74,6 +76,12 @@ Deno.serve(async (req) => {
       usarRaizCnpjFallback: Boolean(cfg?.usar_raiz_cnpj_fallback ?? DEFAULT_TOLERANCE.usarRaizCnpjFallback),
     };
 
+    // 2b) conciliação automática (3 pernas: NF × pagamento × lançamento no ERP)
+    const autoConciliar = cfg?.auto_conciliar ?? true;
+    const autoScoreMin = Number(cfg?.auto_score_min ?? 0.9);
+    const autoExigirLancamento = Boolean(cfg?.auto_exigir_lancamento_erp ?? false);
+    const LANC_OK = new Set(["completed", "awaiting_invoice", "nf_entrada", "pagamento", "finalizado"]);
+
     // Bases-fonte para leitura de notas MasterTax:
     // sempre inclui a própria company_db + as configuradas em source_company_dbs.
     const cfgSources: string[] = Array.isArray(cfg?.source_company_dbs) ? cfg!.source_company_dbs : [];
@@ -87,7 +95,7 @@ Deno.serve(async (req) => {
     const notaFim = body.periodo_fim;
     const { data: notasRaw, error: notasErr } = await supabase
       .from("nf_entrada_imports")
-      .select("id, cnpj_fornecedor, nome_fornecedor, numero_nf, chave_acesso, valor_total, data_emissao, sap_company_db")
+      .select("id, cnpj_fornecedor, nome_fornecedor, numero_nf, chave_acesso, valor_total, data_emissao, sap_company_db, status, sap_invoice_draft_id, expense_id")
       .gte("data_emissao", notaInicio)
       .lte("data_emissao", notaFim)
       .in("sap_company_db", sourceCompanyDbs);
@@ -100,6 +108,8 @@ Deno.serve(async (req) => {
       chave_acesso: n.chave_acesso,
       valor_total: n.valor_total,
       data_emissao: n.data_emissao,
+      lancamento_status: n.status ?? null,
+      lancamento_id: n.sap_invoice_draft_id ?? n.expense_id ?? null,
     }));
 
     // 4) contas pagas via adapter
@@ -144,17 +154,26 @@ Deno.serve(async (req) => {
         nota_data_emissao: dataN,
         periodo_inicio: body.periodo_inicio,
         periodo_fim: body.periodo_fim,
+        lancamento_erp_status: nota.lancamento_status,
+        lancamento_erp_id: nota.lancamento_id,
       };
+      const lancamentoOk = !!nota.lancamento_status && LANC_OK.has(String(nota.lancamento_status));
 
       if (candidatos.length === 0) {
         rowsToUpsert.push({ ...base, cenario: "nota_sem_pagamento", status_match: "automatico", erp_origem: null });
       } else if (candidatos.length === 1) {
         const m = candidatos[0];
         contasConsumidas.add(m.c.id_externo);
+        const auto = Boolean(autoConciliar) && m.score >= autoScoreMin && (!autoExigirLancamento || lancamentoOk);
         rowsToUpsert.push({
           ...base,
           cenario: "conciliado",
           status_match: "automatico",
+          auto_conciliado: auto,
+          auto_conciliado_em: auto ? new Date().toISOString() : null,
+          auto_regra: auto
+            ? `score>=${autoScoreMin} · candidato único${autoExigirLancamento ? " · lançamento ERP confirmado" : ""}`
+            : null,
           erp_origem: m.c.erp_origem,
           conta_paga_id_externo: m.c.id_externo,
           conta_paga_valor: m.c.valor_pago,
@@ -240,6 +259,8 @@ Deno.serve(async (req) => {
       notas_analisadas: notas.length,
       contas_analisadas: contas.length,
       linhas_geradas: inseridos,
+      auto_conciliados: rowsToUpsert.filter((r) => r.auto_conciliado).length,
+      excecoes: rowsToUpsert.filter((r) => !r.auto_conciliado).length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
