@@ -26,6 +26,11 @@ export interface CruzamentoRow {
   diferenca_dias: number | null;
   score_confianca: number | null;
   status_match: StatusMatch;
+  auto_conciliado: boolean;
+  auto_conciliado_em: string | null;
+  auto_regra: string | null;
+  lancamento_erp_status: string | null;
+  lancamento_erp_id: string | null;
   observacao_usuario: string | null;
   periodo_inicio: string;
   periodo_fim: string;
@@ -72,7 +77,10 @@ export function useAuditCrossFiscal(filters: Filters) {
     });
     if (err) throw err;
     await fetchRows();
-    return data as { ok: boolean; notas_analisadas: number; contas_analisadas: number; linhas_geradas: number };
+    return data as {
+      ok: boolean; notas_analisadas: number; contas_analisadas: number; linhas_geradas: number;
+      auto_conciliados?: number; excecoes?: number;
+    };
   }, [fetchRows]);
 
   const updateRow = useCallback(async (id: string, patch: Partial<CruzamentoRow>) => {
