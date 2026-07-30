@@ -1502,6 +1502,12 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     })),
     rateioType: (e.rateio_type as string | null) || "padrao",
     __internalId: e.id,
+    __explain: {
+      ruleId: e.approval_rule_id || null,
+      currentLevel: e.current_level_order ?? null,
+      docType: ((e as unknown as { doc_type?: string }).doc_type || "purchase"),
+      requesterName: e.requester_name || "",
+    },
   } as ApprovalDoc & { __internalId?: string };
 }
 
