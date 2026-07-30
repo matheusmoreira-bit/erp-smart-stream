@@ -1,9 +1,28 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ZoomIn, ZoomOut, Maximize2, List, ChevronsUpDown, Users, ArrowRight } from "lucide-react";
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  List,
+  ChevronsUpDown,
+  Users,
+  ArrowRight,
+  Search,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+
 import {
   Sheet,
   SheetContent,
