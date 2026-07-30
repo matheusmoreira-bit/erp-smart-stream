@@ -453,10 +453,7 @@ export function MainMenu() {
                         mod={mod}
                         index={i}
                         hasAccess={true}
-                        expanded={expandedKey === mod.path}
-                        onToggle={() =>
-                          setExpandedKey((k) => (k === mod.path ? null : mod.path))
-                        }
+                        targetPath={firstAccessiblePath(mod, userModules, permLoading)}
                       />
                     ))}
                   </div>
@@ -467,13 +464,6 @@ export function MainMenu() {
         </div>
       </main>
 
-      <SubmenuModal
-        mod={Object.values(modules).find((m) => m.path === expandedKey) ?? null}
-        userModules={userModules}
-        permLoading={permLoading}
-        open={!!expandedKey}
-        onOpenChange={(v) => !v && setExpandedKey(null)}
-      />
     </div>
   );
 }
