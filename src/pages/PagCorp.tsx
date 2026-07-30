@@ -1146,18 +1146,9 @@ export default function PagCorp() {
             <Button variant="outline" size="sm" onClick={() => navigate("/cartoes/indedutiveis")} className="gap-2">
               <ShieldOff className="w-4 h-4" /> Indedutíveis
             </Button>
-            <div className="text-right">
-              <p className="text-sm font-medium text-foreground">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground">{session?.userName}</p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
-              Conectado
-            </div>
             <ThemeToggle />
-            <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-              <LogOut className="w-4 h-4" />
-            </button>
+            <UserCompanyMenu />
+
           </div>
         </div>
       </header>
