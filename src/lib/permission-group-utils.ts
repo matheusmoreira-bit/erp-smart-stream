@@ -39,6 +39,15 @@ export function isBasicGroup(name: unknown): boolean {
   return BASIC_GROUPS.has(normalizeGroupName(name));
 }
 
+/**
+ * Grupo "Usuário Administrativo": enxerga todos os documentos da própria
+ * diretoria (CC de 2º nível vindo do IdP) — não é visão total da base.
+ */
+export function isDirectorateGroup(name: unknown): boolean {
+  const n = normalizeGroupName(name);
+  return n === "usuario administrativo" || n === "usuarios administrativos";
+}
+
 /** Grupos que sempre veem/selecionam todos os centros de custo. */
 export function isFullCostCenterGroup(name: unknown): boolean {
   const n = normalizeGroupName(name);
