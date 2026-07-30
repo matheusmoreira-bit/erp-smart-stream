@@ -6,12 +6,14 @@ import {
   RefreshCw,
   ShieldCheck,
   ShieldAlert,
+  ScrollText,
   Search,
   CalendarIcon,
   X,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
