@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useCompanies } from "@/hooks/useCompanies";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { PageTitle } from "@/components/PageTitle";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
@@ -22,6 +23,7 @@ import {
   Radar,
   UserCog,
   ClipboardList,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -397,6 +399,7 @@ export function MainMenu() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
   const { userModules, loading: permLoading } = useModuleAccess();
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const { getLabel } = useCompanies(true);
   const companyLabel = getLabel(session?.companyDB || "");
@@ -483,8 +486,24 @@ export function MainMenu() {
                         mod={mod}
                         index={i}
                         hasAccess={true}
+                        expanded={expandedKey === mod.path}
+                        onToggle={() =>
+                          setExpandedKey((k) => (k === mod.path ? null : mod.path))
+                        }
                       />
                     ))}
+                    <AnimatePresence initial={false}>
+                      {visible
+                        .filter((m) => m.path === expandedKey && m.subItems?.length)
+                        .map((m) => (
+                          <SubmenuPanel
+                            key={`sub-${m.path}`}
+                            mod={m}
+                            userModules={userModules}
+                            permLoading={permLoading}
+                          />
+                        ))}
+                    </AnimatePresence>
                   </div>
                 </section>
               );
