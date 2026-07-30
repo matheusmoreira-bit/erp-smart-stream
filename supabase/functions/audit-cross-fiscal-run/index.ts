@@ -259,6 +259,8 @@ Deno.serve(async (req) => {
       notas_analisadas: notas.length,
       contas_analisadas: contas.length,
       linhas_geradas: inseridos,
+      auto_conciliados: rowsToUpsert.filter((r) => r.auto_conciliado).length,
+      excecoes: rowsToUpsert.filter((r) => !r.auto_conciliado).length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
