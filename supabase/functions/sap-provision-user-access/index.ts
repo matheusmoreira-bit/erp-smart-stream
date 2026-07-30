@@ -313,7 +313,7 @@ Deno.serve(async (req) => {
             entity_type: "user_sap_credentials",
             entity_id: targetUserId,
             company_db: companyDb,
-            details: { target_email: targetEmail, sap_user: sapUser },
+            details: { target_email: targetEmail, sap_user: sapUser, password_source: customPassword ? "custom" : "random" },
           });
         } catch { /* audit best-effort */ }
         results.push({ companyDB: companyDb, displayName, status: "success", message: `Acesso provisionado para '${sapUser}'` });
