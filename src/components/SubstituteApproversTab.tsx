@@ -37,7 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { UserPlus, XCircle, Users, Loader2, ShieldCheck } from "lucide-react";
+import { UserPlus, XCircle, Users, Loader2, ShieldCheck, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
 function fmtDate(iso: string): string {
