@@ -499,7 +499,7 @@ export default function BackofficeRoadmap() {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<"all" | ItemKind>("all");
 
-  const [order, setOrder] = useState<"desc" | "asc">("desc");
+  const [order, setOrder] = useState<"desc" | "asc">("asc");
 
   const entries = useMemo(() => {
     const term = search.trim().toLowerCase();
