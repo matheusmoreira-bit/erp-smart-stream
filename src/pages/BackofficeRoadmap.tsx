@@ -9,6 +9,8 @@ import {
   Search,
   Lightbulb,
   CircleDot,
+  ArrowUpDown,
+
 } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -34,227 +36,321 @@ const KIND_META: Record<ItemKind, { label: string; icon: typeof Boxes; className
 };
 
 interface RoadmapItem {
+  /** Data da entrega (ISO, YYYY-MM-DD). */
+  date: string;
   title: string;
   kind: ItemKind;
+  /** Grupo/fase apenas como referência — não agrupa a lista. */
+  track: string;
   description: string;
 }
 
-interface RoadmapPhase {
-  period: string;
-  headline: string;
-  items: RoadmapItem[];
-}
-
-const TIMELINE: RoadmapPhase[] = [
+/** Changelog: uma lista única, em ordem cronológica (mais recente primeiro). */
+const CHANGELOG: RoadmapItem[] = [
+  // ---- Fase 6 — Experiência e inteligência (jul/2026)
   {
-    period: "Fase 1 — Fundação",
-    headline: "Base do ERP Flow, autenticação e cadastro de empresas",
-    items: [
-      {
-        title: "Multiempresa com login SAP B1",
-        kind: "modulo",
-        description:
-          "Seleção de CompanyDB, sessão SAP com renovação automática (keep-alive de 5 min) e troca de empresa sem novo login.",
-      },
-      {
-        title: "Login Google + vínculo de identidade",
-        kind: "funcao",
-        description:
-          "Gate de autenticação Google, resolução flexível de identidades (sufixos .ext, acentos e domínios) e correção de loops de login.",
-      },
-      {
-        title: "Backoffice administrativo",
-        kind: "modulo",
-        description:
-          "Cadastro de empresas, usuários, provisionamento de acesso SAP e reset de senha com política de senha nunca expira.",
-      },
-    ],
+    date: "2026-07-30",
+    title: "Relançamento de documentos cancelados",
+    kind: "melhoria",
+    track: "Compras e aprovações",
+    description:
+      "Exceção na deduplicação de anexos: notas cujo lançamento foi cancelado podem ser lançadas novamente; duplicatas ativas seguem bloqueadas.",
   },
   {
-    period: "Fase 2 — Compras e aprovações",
-    headline: "Ciclo completo de pedidos de compra e alçadas",
-    items: [
-      {
-        title: "Pedido de compras e rateio",
-        kind: "modulo",
-        description:
-          "Formulário com itens, centro de custo, projeto, tipos de rateio e anexos com upload resiliente (retry exponencial).",
-      },
-      {
-        title: "Motor de regras de aprovação",
-        kind: "funcao",
-        description:
-          "Regras por CC, projeto, faixa de valor, item e fluxo; níveis AP1..AP4 com aprovadores paralelos.",
-      },
-      {
-        title: "Aprovações pendentes e histórico",
-        kind: "modulo",
-        description:
-          "Ordenação por vencimento, KPIs clicáveis, filtros buscáveis, máscara de segmentos de outros aprovadores em rateios.",
-      },
-      {
-        title: "Integração SAP B1 (Service Layer)",
-        kind: "integracao",
-        description:
-          "Envio de PurchaseOrders, anexos com CopyToTargetDocument, fallback de projeto \"ANA GAMING\" e tratamento de timeout (504 amigável).",
-      },
-      {
-        title: "Raio-X da regra",
-        kind: "funcao",
-        description:
-          "Diagnóstico que explica qual regra foi aplicada e por quê, comparando CC + projeto + valor + item + rateio.",
-      },
-    ],
+    date: "2026-07-30",
+    title: "Troca de grupo do usuário na lista da empresa",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "Atribuição de grupo de permissão direto na tela de usuários, com efeito global (todas as empresas), sem passar pelo backoffice.",
   },
   {
-    period: "Fase 3 — Vendas e fiscal",
-    headline: "Pedido de venda, NFS-e e contas a receber",
-    items: [
-      {
-        title: "Módulo de vendas em três frentes",
-        kind: "modulo",
-        description:
-          "Pedidos de venda, NFS-e e contas a receber, com guard de rotas e limpeza de cache local no logout.",
-      },
-      {
-        title: "Baixa de recebimento no SAP",
-        kind: "integracao",
-        description:
-          "Modal de confirmação, filial (BPLID) obtida da nota de origem, mapa de relações baixa a baixa com saldo residual e saldos iniciais (SI).",
-      },
-      {
-        title: "NFS-e: PDF, XML e envio por e-mail",
-        kind: "automacao",
-        description:
-          "Busca do PDF na prefeitura, view VW_NFSE_XML_AUTORIZADO e disparo de e-mail por mapeamento Cliente|Projeto.",
-      },
-      {
-        title: "Auditoria fiscal cruzada",
-        kind: "funcao",
-        description:
-          "Kanban de conciliação entre pagamentos, notas capturadas pelo Master Tax e documentos do ERP.",
-      },
-      {
-        title: "Notificações do ciclo de vendas",
-        kind: "automacao",
-        description:
-          "Alertas em aprovação pendente, aprovação realizada, NFS-e emitida, envio ao cliente e baixa.",
-      },
-    ],
+    date: "2026-07-30",
+    title: "Usuário Administrativo com visão total de centros de custo",
+    kind: "melhoria",
+    track: "Governança e segurança",
+    description:
+      "O grupo passa a selecionar qualquer CC ao criar pedidos, mantendo a visibilidade de documentos restrita à própria diretoria.",
   },
   {
-    period: "Fase 4 — Integrações e dados",
-    headline: "HanaAPI, PagCorp, JumpCloud e KYP",
-    items: [
-      {
-        title: "HanaAPI V2 com fallback de IP",
-        kind: "integracao",
-        description:
-          "Token dinâmico HMAC-SHA256, views VW_FORNECEDORES e VW_ACOMPANHAMENTO_PEDIDOS, com fallback para Service Layer.",
-      },
-      {
-        title: "Integração PagCorp",
-        kind: "integracao",
-        description:
-          "Importação de despesas de cartão com anexos obrigatórios e auditoria de baixas indevidas.",
-      },
-      {
-        title: "API pública de status PagCorp",
-        kind: "integracao",
-        description:
-          "Edge function com autenticação x-api-key, spec OpenAPI 3.1 e Swagger UI para consumo por outros projetos.",
-      },
-      {
-        title: "JumpCloud → SAP B1 (colaboradores)",
-        kind: "automacao",
-        description: "Sincronização agendada por cron, restrita às bases TST% durante a homologação.",
-      },
-      {
-        title: "Módulo KYP (diligência de fornecedores)",
-        kind: "modulo",
-        description:
-          "Orquestrador com adapter agnóstico de provedor (BeCompliance) e tela de auditoria KYP.",
-      },
-      {
-        title: "Solicitações de cadastro (chamados)",
-        kind: "modulo",
-        description:
-          "Fila do time de Facilities, SLA de 48h úteis, anexos privados e notificação ao solicitante na conclusão.",
-      },
-    ],
+    date: "2026-07-29",
+    title: "Matriz de alçadas em teia",
+    kind: "funcao",
+    track: "Experiência e inteligência",
+    description:
+      "Mapa mental radial com painel lateral, persistência de zoom/recolhimento, otimizações de renderização e filtros/busca internos.",
   },
   {
-    period: "Fase 5 — Governança e segurança",
-    headline: "Permissões, visibilidade e tratativa de pentest",
-    items: [
-      {
-        title: "Grupos de permissão V2",
-        kind: "funcao",
-        description:
-          "Permissões funcionais por grupo, capability de empresas teste (TST%) e overrides globais de itens (FOL%/IMP%).",
-      },
-      {
-        title: "Regra de visibilidade de documentos",
-        kind: "funcao",
-        description:
-          "Usuário vê o que criou ou aprova; admin com toggle \"Ver todos\" ligado por padrão, também nas linhas vindas da HanaAPI.",
-      },
-      {
-        title: "Restrição inteligente de centro de custo",
-        kind: "melhoria",
-        description:
-          "Usuário lança em qualquer CC do mesmo prefixo de 2º nível, salvo grupos privilegiados com visão total.",
-      },
-      {
-        title: "Tratativa do pentest whitebox",
-        kind: "seguranca",
-        description:
-          "Leituras escopadas no servidor, senha mínima de 12 caracteres, idempotência atômica, CSP/HSTS e tokens anti-CSRF.",
-      },
-      {
-        title: "Alerta CC × Projeto auditável",
-        kind: "automacao",
-        description:
-          "Confirmação obrigatória em combinações sensíveis, com trilha de auditoria, apenas em empresas multiprojeto.",
-      },
-    ],
+    date: "2026-07-28",
+    title: "Raio-X da regra de aprovação",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Diagnóstico que explica qual regra foi aplicada e por quê, comparando CC + projeto + valor + item + rateio.",
   },
   {
-    period: "Fase 6 — Experiência e inteligência",
-    headline: "Novo layout, copiloto e visão em teia",
-    items: [
-      {
-        title: "Nova navegação e cabeçalhos padronizados",
-        kind: "melhoria",
-        description:
-          "Menu superior com logo, empresa/usuário em dropdown, submenus em modal, breadcrumbs abaixo da logo e wizard de novidades.",
-      },
-      {
-        title: "Copiloto IA do backoffice",
-        kind: "funcao",
-        description:
-          "Chat com streaming, cadeia de modelos com fallback, execução de ferramentas e leitura de schema para SQL preciso.",
-      },
-      {
-        title: "Matriz de alçadas em teia",
-        kind: "funcao",
-        description:
-          "Mapa mental radial com painel lateral, persistência de zoom/recolhimento, otimizações de renderização e filtros/busca internos.",
-      },
-      {
-        title: "Padronização de exibição de usuários",
-        kind: "melhoria",
-        description: "Nome do colaborador em vez de e-mail em todas as telas de aprovação e histórico.",
-      },
-      {
-        title: "Retries com fallback de anexo",
-        kind: "automacao",
-        description:
-          "Reintegração sem anexo e envio do documento por e-mail para fiscal@{domínio da empresa}.",
-      },
-    ],
+    date: "2026-07-26",
+    title: "Sanitização da base de regras de aprovação",
+    kind: "melhoria",
+    track: "Governança e segurança",
+    description:
+      "Remoção de 122 regras inativas/duplicadas, preservando as que possuem vínculo histórico para auditoria.",
+  },
+  {
+    date: "2026-07-24",
+    title: "Copiloto IA do backoffice",
+    kind: "funcao",
+    track: "Experiência e inteligência",
+    description:
+      "Chat com streaming, cadeia de modelos com fallback, execução de ferramentas e leitura de schema para SQL preciso.",
+  },
+  {
+    date: "2026-07-22",
+    title: "Padronização de exibição de usuários",
+    kind: "melhoria",
+    track: "Experiência e inteligência",
+    description: "Nome do colaborador em vez de e-mail em todas as telas de aprovação e histórico.",
+  },
+  {
+    date: "2026-07-18",
+    title: "Nova navegação e cabeçalhos padronizados",
+    kind: "melhoria",
+    track: "Experiência e inteligência",
+    description:
+      "Menu superior com logo, empresa/usuário em dropdown, submenus em modal, breadcrumbs abaixo da logo e wizard de novidades.",
+  },
+  {
+    date: "2026-07-15",
+    title: "Ocultação de empresas de teste (TST%)",
+    kind: "seguranca",
+    track: "Governança e segurança",
+    description:
+      "Bases de homologação visíveis apenas para admins ou grupos com a capability específica, em login e seletor de empresa.",
+  },
+  {
+    date: "2026-07-12",
+    title: "Retries com fallback de anexo",
+    kind: "automacao",
+    track: "Integrações e dados",
+    description:
+      "Reintegração sem anexo e envio do documento por e-mail para fiscal@{domínio da empresa}.",
+  },
+  // ---- Fase 5 — Governança e segurança (jun–jul/2026)
+  {
+    date: "2026-07-05",
+    title: "Tratativa do pentest whitebox",
+    kind: "seguranca",
+    track: "Governança e segurança",
+    description:
+      "Leituras escopadas no servidor, senha mínima de 12 caracteres, idempotência atômica, CSP/HSTS e tokens anti-CSRF.",
+  },
+  {
+    date: "2026-06-28",
+    title: "Alerta CC × Projeto auditável",
+    kind: "automacao",
+    track: "Governança e segurança",
+    description:
+      "Confirmação obrigatória em combinações sensíveis, com trilha de auditoria, apenas em empresas multiprojeto.",
+  },
+  {
+    date: "2026-06-22",
+    title: "Restrição inteligente de centro de custo",
+    kind: "melhoria",
+    track: "Governança e segurança",
+    description:
+      "Usuário lança em qualquer CC do mesmo prefixo de 2º nível, salvo grupos privilegiados com visão total.",
+  },
+  {
+    date: "2026-06-15",
+    title: "Regra de visibilidade de documentos",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "Usuário vê o que criou ou aprova; admin com toggle \"Ver todos\" ligado por padrão, também nas linhas vindas da HanaAPI.",
+  },
+  {
+    date: "2026-06-08",
+    title: "Grupos de permissão V2",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "Permissões funcionais por grupo, capability de empresas teste (TST%) e overrides globais de itens (FOL%/IMP%).",
+  },
+  // ---- Fase 4 — Integrações e dados (mai–jun/2026)
+  {
+    date: "2026-06-02",
+    title: "API pública de status PagCorp",
+    kind: "integracao",
+    track: "Integrações e dados",
+    description:
+      "Edge function com autenticação x-api-key, spec OpenAPI 3.1 e Swagger UI para consumo por outros projetos.",
+  },
+  {
+    date: "2026-05-28",
+    title: "Módulo KYP (diligência de fornecedores)",
+    kind: "modulo",
+    track: "Integrações e dados",
+    description:
+      "Orquestrador com adapter agnóstico de provedor (BeCompliance) e tela de auditoria KYP.",
+  },
+  {
+    date: "2026-05-20",
+    title: "Solicitações de cadastro (chamados)",
+    kind: "modulo",
+    track: "Integrações e dados",
+    description:
+      "Fila do time de Facilities, SLA de 48h úteis, anexos privados e notificação ao solicitante na conclusão.",
+  },
+  {
+    date: "2026-05-14",
+    title: "JumpCloud → SAP B1 (colaboradores)",
+    kind: "automacao",
+    track: "Integrações e dados",
+    description: "Sincronização agendada por cron, restrita às bases TST% durante a homologação.",
+  },
+  {
+    date: "2026-05-08",
+    title: "HanaAPI V2 com fallback de IP",
+    kind: "integracao",
+    track: "Integrações e dados",
+    description:
+      "Token dinâmico HMAC-SHA256, views VW_FORNECEDORES e VW_ACOMPANHAMENTO_PEDIDOS, com fallback para Service Layer.",
+  },
+  {
+    date: "2026-05-02",
+    title: "Integração PagCorp",
+    kind: "integracao",
+    track: "Integrações e dados",
+    description:
+      "Importação de despesas de cartão com anexos obrigatórios e auditoria de baixas indevidas.",
+  },
+  // ---- Fase 3 — Vendas e fiscal (abr–mai/2026)
+  {
+    date: "2026-04-26",
+    title: "Notificações do ciclo de vendas",
+    kind: "automacao",
+    track: "Vendas e fiscal",
+    description:
+      "Alertas em aprovação pendente, aprovação realizada, NFS-e emitida, envio ao cliente e baixa.",
+  },
+  {
+    date: "2026-04-20",
+    title: "Auditoria fiscal cruzada",
+    kind: "funcao",
+    track: "Vendas e fiscal",
+    description:
+      "Kanban de conciliação entre pagamentos, notas capturadas pelo Master Tax e documentos do ERP.",
+  },
+  {
+    date: "2026-04-14",
+    title: "NFS-e: PDF, XML e envio por e-mail",
+    kind: "automacao",
+    track: "Vendas e fiscal",
+    description:
+      "Busca do PDF na prefeitura, view VW_NFSE_XML_AUTORIZADO e disparo de e-mail por mapeamento Cliente|Projeto.",
+  },
+  {
+    date: "2026-04-08",
+    title: "Baixa de recebimento no SAP",
+    kind: "integracao",
+    track: "Vendas e fiscal",
+    description:
+      "Modal de confirmação, filial (BPLID) obtida da nota de origem, mapa de relações baixa a baixa com saldo residual e saldos iniciais (SI).",
+  },
+  {
+    date: "2026-04-01",
+    title: "Módulo de vendas em três frentes",
+    kind: "modulo",
+    track: "Vendas e fiscal",
+    description:
+      "Pedidos de venda, NFS-e e contas a receber, com guard de rotas e limpeza de cache local no logout.",
+  },
+  // ---- Fase 2 — Compras e aprovações (mar/2026)
+  {
+    date: "2026-03-24",
+    title: "Integração SAP B1 (Service Layer)",
+    kind: "integracao",
+    track: "Compras e aprovações",
+    description:
+      "Envio de PurchaseOrders, anexos com CopyToTargetDocument, fallback de projeto \"ANA GAMING\" e tratamento de timeout (504 amigável).",
+  },
+  {
+    date: "2026-03-16",
+    title: "Aprovações pendentes e histórico",
+    kind: "modulo",
+    track: "Compras e aprovações",
+    description:
+      "Ordenação por vencimento, KPIs clicáveis, filtros buscáveis, máscara de segmentos de outros aprovadores em rateios.",
+  },
+  {
+    date: "2026-03-09",
+    title: "Motor de regras de aprovação",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Regras por CC, projeto, faixa de valor, item e fluxo; níveis AP1..AP4 com aprovadores paralelos.",
+  },
+  {
+    date: "2026-03-02",
+    title: "Pedido de compras e rateio",
+    kind: "modulo",
+    track: "Compras e aprovações",
+    description:
+      "Formulário com itens, centro de custo, projeto, tipos de rateio e anexos com upload resiliente (retry exponencial).",
+  },
+  // ---- Fase 1 — Fundação (jan–fev/2026)
+  {
+    date: "2026-02-18",
+    title: "Backoffice administrativo",
+    kind: "modulo",
+    track: "Fundação",
+    description:
+      "Cadastro de empresas, usuários, provisionamento de acesso SAP e reset de senha com política de senha nunca expira.",
+  },
+  {
+    date: "2026-02-05",
+    title: "Login Google + vínculo de identidade",
+    kind: "funcao",
+    track: "Fundação",
+    description:
+      "Gate de autenticação Google, resolução flexível de identidades (sufixos .ext, acentos e domínios) e correção de loops de login.",
+  },
+  {
+    date: "2026-01-22",
+    title: "Multiempresa com login SAP B1",
+    kind: "modulo",
+    track: "Fundação",
+    description:
+      "Seleção de CompanyDB, sessão SAP com renovação automática (keep-alive de 5 min) e troca de empresa sem novo login.",
   },
 ];
+
+const DATE_FMT = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+const MONTH_FMT = new Intl.DateTimeFormat("pt-BR", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function formatDate(iso: string) {
+  return DATE_FMT.format(new Date(`${iso}T00:00:00Z`));
+}
+
+function monthKey(iso: string) {
+  return iso.slice(0, 7);
+}
+
+function formatMonth(iso: string) {
+  const label = MONTH_FMT.format(new Date(`${iso}T00:00:00Z`));
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 
 interface BacklogItem {
   title: string;
@@ -403,24 +499,28 @@ export default function BackofficeRoadmap() {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<"all" | ItemKind>("all");
 
-  const phases = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return TIMELINE.map((phase) => ({
-      ...phase,
-      items: phase.items.filter((item) => {
-        if (kind !== "all" && item.kind !== kind) return false;
-        if (!term) return true;
-        return (
-          item.title.toLowerCase().includes(term) ||
-          item.description.toLowerCase().includes(term) ||
-          phase.period.toLowerCase().includes(term)
-        );
-      }),
-    })).filter((phase) => phase.items.length > 0);
-  }, [search, kind]);
+  const [order, setOrder] = useState<"desc" | "asc">("desc");
 
-  const total = TIMELINE.reduce((acc, p) => acc + p.items.length, 0);
-  const shown = phases.reduce((acc, p) => acc + p.items.length, 0);
+  const entries = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const filtered = CHANGELOG.filter((item) => {
+      if (kind !== "all" && item.kind !== kind) return false;
+      if (!term) return true;
+      return (
+        item.title.toLowerCase().includes(term) ||
+        item.description.toLowerCase().includes(term) ||
+        item.track.toLowerCase().includes(term) ||
+        formatDate(item.date).toLowerCase().includes(term)
+      );
+    });
+    return filtered.sort((a, b) =>
+      order === "desc" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date),
+    );
+  }, [search, kind, order]);
+
+  const total = CHANGELOG.length;
+  const shown = entries.length;
+
 
   return (
     <div className="min-h-screen bg-background px-6 pb-16">
@@ -467,55 +567,72 @@ export default function BackofficeRoadmap() {
           <Badge variant="secondary" className="h-7">
             {shown} de {total} entregas
           </Badge>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setOrder((o) => (o === "desc" ? "asc" : "desc"))}
+          >
+            <ArrowUpDown className="mr-1 h-3.5 w-3.5" />
+            {order === "desc" ? "Mais recentes" : "Mais antigas"}
+          </Button>
         </div>
 
-        {/* Timeline vertical */}
-        <section aria-label="Linha do tempo de entregas">
-          {phases.length === 0 && (
+        {/* Changelog cronológico */}
+        <section aria-label="Changelog de entregas">
+          {entries.length === 0 && (
             <p className="py-12 text-center text-sm text-muted-foreground">
               Nenhuma entrega corresponde aos filtros.
             </p>
           )}
 
           <ol className="relative ml-3 border-l border-border pl-6">
-            {phases.map((phase) => (
-              <li key={phase.period} className="mb-10">
-                <span className="absolute -left-[9px] mt-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-primary/40 bg-primary/20">
-                  <CircleDot className="h-3 w-3 text-primary" />
-                </span>
-                <h2 className="text-base font-semibold text-foreground">{phase.period}</h2>
-                <p className="mb-3 text-xs text-muted-foreground">{phase.headline}</p>
-
-                <div className="space-y-3">
-                  {phase.items.map((item) => {
-                    const meta = KIND_META[item.kind];
-                    const Icon = meta.icon;
-                    return (
-                      <Card key={item.title} className="border-border/70">
-                        <CardContent className="flex gap-3 p-4">
-                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                            <Icon className="h-4 w-4 text-muted-foreground" />
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-sm font-medium text-foreground">{item.title}</h3>
-                              <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
-                                {meta.label}
-                              </Badge>
-                            </div>
-                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                              {item.description}
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </li>
-            ))}
+            {entries.map((item, i) => {
+              const meta = KIND_META[item.kind];
+              const Icon = meta.icon;
+              const newMonth = i === 0 || monthKey(entries[i - 1].date) !== monthKey(item.date);
+              return (
+                <li key={`${item.date}-${item.title}`} className="mb-4">
+                  {newMonth && (
+                    <h2 className="-ml-6 mb-3 mt-6 border-b border-border/60 pb-1 pl-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground first:mt-0">
+                      {formatMonth(item.date)}
+                    </h2>
+                  )}
+                  <span className="absolute -left-[9px] mt-4 flex h-4 w-4 items-center justify-center rounded-full border border-primary/40 bg-primary/20">
+                    <CircleDot className="h-3 w-3 text-primary" />
+                  </span>
+                  <Card className="border-border/70">
+                    <CardContent className="flex gap-3 p-4">
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <time
+                            dateTime={item.date}
+                            className="font-mono text-xs text-muted-foreground"
+                          >
+                            {formatDate(item.date)}
+                          </time>
+                          <h3 className="text-sm font-medium text-foreground">{item.title}</h3>
+                          <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
+                            {meta.label}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            {item.track}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          {item.description}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </li>
+              );
+            })}
           </ol>
         </section>
+
 
         {/* Backlog */}
         <section aria-label="Sugestões de backlog" className="mt-10">
