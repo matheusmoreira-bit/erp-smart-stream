@@ -301,21 +301,29 @@ export function useContasPagarLinks({
             const it = String(li?.InvoiceType || "");
             // it_PurchaseInvoice quita faturas de compra
             if (it === "it_PurchaseInvoice" && invoiceEntrySet.has(de)) {
-              invEntries.push(de);
-              applied[de] = (applied[de] || 0) + (Number(li?.SumApplied) || 0);
+              // O Service Layer pode devolver SumApplied ou AppliedFC/AppliedSys.
+              const sum = Number(li?.SumApplied ?? li?.AppliedFC ?? li?.AppliedSys ?? 0) || 0;
+              if (!invEntries.includes(de)) invEntries.push(de);
+              applied[de] = (applied[de] || 0) + sum;
             }
           }
           if (invEntries.length === 0) continue;
           seenPaymentEntries.add(paymentDocEntry);
+          // Total do lote no SAP (pode cobrir dezenas de NFs de vários pedidos).
+          const paymentDocTotal =
+            Number(r?.BillOfExchangeAmount) ||
+            Number(r?.CashSum) ||
+            Number(r?.TransferSum) ||
+            Number(r?.DocTotal) ||
+            0;
+          // Valor que interessa a ESTE pedido: somente o aplicado às NFs dele.
+          const appliedToThisPo = Object.values(applied).reduce((a, b) => a + b, 0);
           const payment: VendorPaymentLink = {
             DocEntry: paymentDocEntry,
             DocNum: Number(r?.DocNum),
             DocDate: String(r?.DocDate || ""),
-            DocTotal:
-              Number(r?.BillOfExchangeAmount) ||
-              Number(r?.CashSum) ||
-              Number(r?.TransferSum) ||
-              Object.values(applied).reduce((a, b) => a + b, 0),
+            DocTotal: appliedToThisPo || paymentDocTotal,
+            PaymentDocTotal: paymentDocTotal || appliedToThisPo,
             CardCode: String(r?.CardCode || ""),
             CardName: String(r?.CardName || ""),
             Remarks: r?.Remarks ?? null,
@@ -328,6 +336,7 @@ export function useContasPagarLinks({
           }
         }
       };
+
       if (invoiceEntrySet.size > 0) {
         // Primeiro tenta o vínculo exato: VendorPayments -> PaymentInvoices -> DocEntry da NF.
         // Esse é o modelo observado no SAP (ex.: AP DocEntry 3100 paga NF DocEntry 6370).
