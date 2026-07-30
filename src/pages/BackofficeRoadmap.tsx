@@ -497,24 +497,28 @@ export default function BackofficeRoadmap() {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<"all" | ItemKind>("all");
 
-  const phases = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return TIMELINE.map((phase) => ({
-      ...phase,
-      items: phase.items.filter((item) => {
-        if (kind !== "all" && item.kind !== kind) return false;
-        if (!term) return true;
-        return (
-          item.title.toLowerCase().includes(term) ||
-          item.description.toLowerCase().includes(term) ||
-          phase.period.toLowerCase().includes(term)
-        );
-      }),
-    })).filter((phase) => phase.items.length > 0);
-  }, [search, kind]);
+  const [order, setOrder] = useState<"desc" | "asc">("desc");
 
-  const total = TIMELINE.reduce((acc, p) => acc + p.items.length, 0);
-  const shown = phases.reduce((acc, p) => acc + p.items.length, 0);
+  const entries = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const filtered = CHANGELOG.filter((item) => {
+      if (kind !== "all" && item.kind !== kind) return false;
+      if (!term) return true;
+      return (
+        item.title.toLowerCase().includes(term) ||
+        item.description.toLowerCase().includes(term) ||
+        item.track.toLowerCase().includes(term) ||
+        formatDate(item.date).toLowerCase().includes(term)
+      );
+    });
+    return filtered.sort((a, b) =>
+      order === "desc" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date),
+    );
+  }, [search, kind, order]);
+
+  const total = CHANGELOG.length;
+  const shown = entries.length;
+
 
   return (
     <div className="min-h-screen bg-background px-6 pb-16">
