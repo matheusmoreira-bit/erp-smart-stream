@@ -524,6 +524,13 @@ export function MainMenu() {
         </div>
       </main>
 
+      <SubmenuModal
+        mod={Object.values(modules).find((m) => m.path === expandedKey) ?? null}
+        userModules={userModules}
+        permLoading={permLoading}
+        open={!!expandedKey}
+        onOpenChange={(v) => !v && setExpandedKey(null)}
+      />
     </div>
   );
 }
