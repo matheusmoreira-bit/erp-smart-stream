@@ -44,6 +44,8 @@ import InfraHealth from "./pages/InfraHealth.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
+import { WhatsNewWizard } from "./components/WhatsNewWizard.tsx";
+
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
 import { ModuleSubmenu } from "./components/ModuleSubmenu.tsx";
 import { TestCompanyBanner } from "./components/TestCompanyBanner.tsx";
@@ -157,7 +159,9 @@ const App = () => (
           </BrowserRouter>
           <TestCompanyBanner />
           <DefaultPasswordWarning />
+          <WhatsNewWizard />
           <GlobalAiChat />
+
           </PermissionsV2Provider>
         </SapProvider>
       </TooltipProvider>
