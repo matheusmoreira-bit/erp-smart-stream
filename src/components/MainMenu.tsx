@@ -30,6 +30,8 @@ import { useModuleAccess } from "@/hooks/usePermissions";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { NotificationBell } from "@/components/NotificationBell";
+import { UserCompanyMenu } from "@/components/UserCompanyMenu";
+
 
 interface ModuleCard {
   title: string;
