@@ -46,7 +46,10 @@ import {
   type MatrixRow,
 } from "@/lib/approval-matrix";
 
+const VIEW_STORAGE_KEY = "erp:approval-matrix:view";
+
 const FLOW_TABS: { key: "all" | MatrixFlow; label: string }[] = [
+
   { key: "all", label: "Todos os fluxos" },
   { key: "purchase", label: "Compras" },
   { key: "sales", label: "Vendas" },
