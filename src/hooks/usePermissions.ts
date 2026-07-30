@@ -450,7 +450,18 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
         };
       }
 
+      // Coerência: quem pode "ver todas as aprovações" precisa, no mínimo, de
+      // acesso de leitura à tela de Aprovações (e ao histórico). Sem isso o
+      // grupo enxerga o toggle mas o módulo fica escondido/bloqueado.
+      if (merged["approvals_view_all"]?.view) {
+        for (const dep of ["approvals", "approval_history"]) {
+          const prev = merged[dep];
+          merged[dep] = prev ? { ...prev, view: true } : { ...NONE_PERMS, view: true };
+        }
+      }
+
       const keys = Object.keys(merged).filter((k) => merged[k].view);
+
       setPerms(merged);
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
       setLoading(false);
