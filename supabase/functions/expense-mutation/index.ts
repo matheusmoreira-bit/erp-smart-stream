@@ -252,23 +252,21 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     } as any);
   }
 
-  if (String(insertPayload.doc_type) === "sales" && status === "pendente_aprovacao") {
-    await notifySalesMilestone(admin, {
-      milestone: "approval_pending",
-      companyDb: companyDb,
-      refId: expenseId,
-      recipients: [resolvedApproverEmail, resolvedApprover],
-      recipientsOnly: true,
-      link: "/aprovacoes",
-      summary: `Um pedido de venda de ${requesterName || "um solicitante"} aguarda sua aprovação.`,
-      details: [
-        { label: "Cliente", value: input.supplier_name || input.supplier_code },
-        { label: "Valor", value: `${input.currency || "BRL"} ${totalAmount.toFixed(2)}` },
-        { label: "Empresa", value: companyDb },
-        { label: "Solicitante", value: requesterName },
-      ],
+  if (status === "pendente_aprovacao") {
+    await notifyApprovalPending(admin, {
+      expenseId,
+      companyDb,
+      approverEmail: resolvedApproverEmail,
+      approverName: resolvedApprover,
+      levelOrder: resolvedLevel,
+      requesterName,
+      supplierName: input.supplier_name || input.supplier_code,
+      totalAmount,
+      currency: input.currency || "BRL",
+      docType: String(insertPayload.doc_type || "purchase"),
     });
   }
+
 
   return json(200, { ok: true, expense });
 }
