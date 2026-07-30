@@ -46,6 +46,13 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
   const [sapUser, setSapUser] = useState<string>(initialSapUser || defaultSapUser(targetEmail));
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<ProvisionResult[] | null>(null);
+  const [mode, setMode] = useState<"random" | "custom">("random");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  const policy = checkPasswordPolicy(password, sapUser);
+  const passwordReady = mode === "random" || policy.valid;
+
 
   const toggle = (db: string) => {
     setSelected((prev) => {
