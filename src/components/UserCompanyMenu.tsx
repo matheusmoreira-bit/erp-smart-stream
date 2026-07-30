@@ -182,22 +182,44 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <button
-            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/60 transition-colors max-w-[240px] ${className}`}
+            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/60 transition-colors max-w-[260px] ${className}`}
             aria-label="Menu da conta e empresa"
           >
+            <Avatar className="w-8 h-8 shrink-0">
+              {google?.avatar && <AvatarImage src={google.avatar} alt={google.name || google.email || "Conta Google"} referrerPolicy="no-referrer" />}
+              <AvatarFallback className="text-xs">{initials || "?"}</AvatarFallback>
+            </Avatar>
             <div className="min-w-0 hidden sm:block">
               <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground truncate">{displayUserName(session.userName)}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                {google?.name || displayUserName(session.userName)}
+              </p>
             </div>
-            <Building2 className="w-4 h-4 text-muted-foreground sm:hidden" aria-hidden="true" />
             <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64 bg-popover z-50">
-          <div className="px-2 py-1.5 sm:hidden">
-            <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
-            <p className="text-xs text-muted-foreground truncate">{displayUserName(session.userName)}</p>
+        <DropdownMenuContent align="end" className="w-72 bg-popover z-50">
+          {/* Cartão da conta Google — foto, nome e e-mail */}
+          <div className="flex items-center gap-3 px-2 py-3">
+            <Avatar className="w-10 h-10 shrink-0">
+              {google?.avatar && <AvatarImage src={google.avatar} alt={google.name || google.email || "Conta Google"} referrerPolicy="no-referrer" />}
+              <AvatarFallback className="text-sm">{initials || "?"}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {google?.name || displayUserName(session.userName)}
+              </p>
+              {google?.email && (
+                <p className="text-xs text-muted-foreground truncate">{google.email}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground truncate">
+                <Building2 className="w-3 h-3 inline mr-1 -mt-0.5" aria-hidden="true" />
+                {companyLabel}
+              </p>
+            </div>
           </div>
+          <DropdownMenuSeparator />
+
 
           <DropdownMenuItem
             onSelect={(e) => {
