@@ -96,7 +96,7 @@ function LevelChain({ row }: { row: MatrixRow }) {
 export default function ApprovalMatrix() {
   const { session, logout } = useSap();
   const { getLabel } = useCompanies();
-  const { rules, isLoading, error, fetchRules } = useApprovalRules();
+  const { rules, isLoading, error, refresh } = useApprovalRules();
 
   const [flow, setFlow] = useState<"all" | MatrixFlow>("all");
   const [category, setCategory] = useState<"all" | MatrixCategory>("all");
@@ -172,7 +172,7 @@ export default function ApprovalMatrix() {
           onLogout={logout}
           actions={
             <>
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => void fetchRules()} disabled={isLoading}>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => void refresh()} disabled={isLoading}>
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 Atualizar
               </Button>
