@@ -107,7 +107,7 @@ export default function IntegrationHealth() {
       ]);
       if (health.error) throw health.error;
       if (fails.error) throw fails.error;
-      setRows(((health.data ?? []) as unknown as HealthRow[]) ?? []);
+      setRows((health.data ?? []) as unknown as HealthRow[]);
       setFailures((fails.data ?? []) as FailureRow[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
