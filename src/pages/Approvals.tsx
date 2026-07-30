@@ -1946,6 +1946,20 @@ export default function ApprovalsPage() {
   const [createdTo, setCreatedTo] = useState<string>("");
   const [dueFrom, setDueFrom] = useState<string>("");
   const [dueTo, setDueTo] = useState<string>("");
+  const [ccFilter, setCcFilter] = useState<string[]>([]);
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [onlyOverdue, setOnlyOverdue] = useState(false);
+  // Ordenação da tabela — por padrão, vencimento mais antigo primeiro.
+  const [sortKey, setSortKey] = useState<SortKey>("dueDate");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "docTotal" ? "desc" : "asc");
+    }
+  };
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
