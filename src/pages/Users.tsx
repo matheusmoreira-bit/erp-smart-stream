@@ -503,6 +503,22 @@ export default function UsersPage() {
           onSave={(phone, source) => upsertPhone(phoneUser.UserCode, phone, source)}
         />
       )}
+
+      {groupUser && (
+        <UserGroupDialog
+          open={!!groupUser}
+          onClose={() => setGroupUser(null)}
+          userName={groupUser.UserName || groupUser.UserCode}
+          userCode={groupUser.UserCode}
+          email={groupUser.eMail}
+          groups={permissionGroups}
+          currentGroupId={groupOf(groupUser.UserCode, groupUser.eMail)?.id ?? null}
+          onSave={(groupId) =>
+            setGroup({ userCode: groupUser.UserCode, email: groupUser.eMail, groupId })
+          }
+        />
+      )}
+
     </div>
   );
 }
