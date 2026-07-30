@@ -398,7 +398,19 @@ export default function UsersPage() {
                               <ShieldCheck className="w-4 h-4 text-primary" />
                             </Button>
                           )}
+                          {isPrivileged && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Definir grupo de permissão (global)"
+                              onClick={() => setGroupUser(user)}
+                            >
+                              <UsersRound className="w-4 h-4 text-primary" />
+                            </Button>
+                          )}
                         </>
+
                       )}
                     </div>
                   </div>
