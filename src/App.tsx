@@ -44,6 +44,8 @@ import SapSyncRuns from "./pages/SapSyncRuns.tsx";
 import BackofficeCopilot from "./pages/BackofficeCopilot.tsx";
 import InfraHealth from "./pages/InfraHealth.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
+import BackofficeRoadmap from "./pages/BackofficeRoadmap.tsx";
+
 import PagCorpSettlementAudit from "./pages/PagCorpSettlementAudit.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
