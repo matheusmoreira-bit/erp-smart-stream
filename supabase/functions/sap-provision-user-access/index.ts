@@ -171,9 +171,12 @@ Deno.serve(async (req) => {
     const targetEmailInput = typeof body.target_email === "string" ? body.target_email.trim().toLowerCase() : "";
     const sapUserOverride = typeof body.sap_user === "string" ? body.sap_user.trim() : "";
     const targets: string[] = Array.isArray(body.company_dbs) ? body.company_dbs : [];
+    // Senha definida pelo admin (opcional). Quando ausente, é gerada aleatoriamente.
+    const customPassword = typeof body.password === "string" ? body.password : "";
 
     if (!targetUserId && !targetEmailInput) return json({ error: "target_user_id ou target_email obrigatório" }, 400);
     if (targets.length === 0 || targets.length > 50) return json({ error: "company_dbs deve ter entre 1 e 50 empresas" }, 400);
+
 
     const admin = service();
 
