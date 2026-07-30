@@ -50,7 +50,10 @@ import { useSapUsers } from "@/hooks/useSapUsers";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Split } from "lucide-react";
+import { Split, ScanSearch } from "lucide-react";
+import { ApprovalRuleExplainDialog } from "@/components/ApprovalRuleExplainDialog";
+import { getRateioInfo } from "@/lib/rateio";
+import type { ExplainVariables } from "@/lib/approval-rule-explain";
 import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
 import { useActiveOfficialsForMe, useSubstituteGrantsForMe } from "@/hooks/useApproverSubstitutes";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
@@ -527,6 +530,7 @@ function ApprovalDetailModal({
   const [errorKind, setErrorKind] = useState<"mutation" | "refresh" | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
   const [showAllLines, setShowAllLines] = useState(false);
+  const [showExplain, setShowExplain] = useState(false);
   const confirmInFlightRef = useRef(false);
   const { session } = useSap();
 
@@ -553,6 +557,31 @@ function ApprovalDetailModal({
     segmented && !specialRateio && mySegments.length > 0 && !showAllLines;
 
   const visibleLines = doc?.documentLines || [];
+
+  // Metadados/variáveis para o Raio-X da regra de aprovação (somente leitura).
+  const explainMeta = (doc as unknown as {
+    __explain?: { ruleId: string | null; currentLevel: number | null; docType: string; requesterName: string };
+  })?.__explain ?? { ruleId: null, currentLevel: null, docType: "purchase", requesterName: doc?.requester || "" };
+
+  const explainVars: ExplainVariables = useMemo(() => {
+    const lines = doc?.documentLines || [];
+    const info = getRateioInfo(lines);
+    const uniq = (arr: string[]) => Array.from(new Set(arr.map((s) => (s || "").trim()).filter(Boolean)));
+    return {
+      costCenters: uniq(lines.map((l) => l.CostingCode)),
+      projects: uniq(lines.map((l) => l.Project)),
+      totalAmount: Number(doc?.docTotal || 0),
+      currency: doc?.currency || "BRL",
+      itemCodes: uniq(lines.map((l) => l.ItemCode)),
+      itemNames: uniq(lines.map((l) => l.Description)),
+      supplierName: doc?.cardName || "",
+      supplierCode: doc?.cardCode || "",
+      requesterName: explainMeta.requesterName || doc?.requester || "",
+      docType: explainMeta.docType || "purchase",
+      rateioType: doc?.rateioType || "padrao",
+      rateioByCC: info.byCC,
+    };
+  }, [doc, explainMeta.docType, explainMeta.requesterName]);
 
   // Mapeia CostingCode → segmento (para saber a qual aprovador cada linha
   // pertence quando exibimos com blur).
@@ -754,6 +783,15 @@ function ApprovalDetailModal({
 
 
           <div className="shrink-0 flex flex-wrap justify-end gap-2 px-4 sm:px-6 mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setShowExplain(true)}
+              title="Entenda qual regra da matriz foi aplicada e por quê"
+            >
+              <ScanSearch className="w-3.5 h-3.5" /> Raio-X da regra
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -1291,6 +1329,21 @@ function ApprovalDetailModal({
         </DialogContent>
       </Dialog>
 
+      {/* Raio-X: valida e explica a regra de aprovação aplicada ao documento */}
+      {showExplain && (
+        <ApprovalRuleExplainDialog
+          open={showExplain}
+          onClose={() => setShowExplain(false)}
+          docTitle={`${doc.docTypeName} #${doc.docNum || "—"} · ${doc.cardName}`}
+          appliedRuleId={explainMeta.ruleId}
+          currentLevel={explainMeta.currentLevel}
+          currentApprover={doc.currentApprover || ""}
+          vars={explainVars}
+        />
+      )}
+
+
+
       {/* Confirmação de aprovação / rejeição — sempre exibida com resumo */}
       <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v && !isActioning) { setRiskConfirm(null); setActionError(null); } }}>
         <AlertDialogContent
@@ -1502,6 +1555,12 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     })),
     rateioType: (e.rateio_type as string | null) || "padrao",
     __internalId: e.id,
+    __explain: {
+      ruleId: e.approval_rule_id || null,
+      currentLevel: e.current_level_order ?? null,
+      docType: ((e as unknown as { doc_type?: string }).doc_type || "purchase"),
+      requesterName: e.requester_name || "",
+    },
   } as ApprovalDoc & { __internalId?: string };
 }
 
