@@ -26,7 +26,7 @@ import {
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
 import { RulesHealthMonitor } from "@/components/RulesHealthMonitor";
 import { useAuth } from "@/hooks/useAuth";
-import { RuleSimulator } from "@/components/RuleSimulator";
+import { RuleSimulator, DRAFT_RULE_ID } from "@/components/RuleSimulator";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -606,6 +606,7 @@ function RuleFormModal({
   sapUsers,
   sapUsersLoading,
   editing,
+  allRules = [],
 }: {
   open: boolean;
   onClose: () => void;
@@ -613,6 +614,8 @@ function RuleFormModal({
   sapUsers: SapUser[];
   sapUsersLoading: boolean;
   editing?: ApprovalRule | null;
+  /** Matriz publicada, usada pelo simulador pré-publicação. */
+  allRules?: ApprovalRule[];
 }) {
   const { session } = useSap();
   const [isSaving, setIsSaving] = useState(false);
@@ -621,6 +624,26 @@ function RuleFormModal({
   const [docType, setDocType] = useState<RuleDocType>("both");
   const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
   const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
+  const [showPreSimulator, setShowPreSimulator] = useState(false);
+
+  /** Snapshot da regra em edição (ainda não salva) para o simulador. */
+  const draftRule = useMemo<ApprovalRule>(
+    () => ({
+      id: editing?.id || DRAFT_RULE_ID,
+      name: name || "(nova regra)",
+      is_active: editing ? editing.is_active : true,
+      priority,
+      criteria,
+      doc_type: docType,
+      created_by: editing?.created_by || session?.userName || "",
+      created_at: editing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      company_db: editing?.company_db ?? session?.companyDB ?? null,
+      levels: levels.map((l) => ({ ...l })),
+    }),
+    [editing, name, priority, criteria, docType, levels, session],
+  );
+
 
   // ── Catálogos SAP (busca no campo Valor) ───────────────────────────────
   const ccMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
@@ -1193,13 +1216,30 @@ function RuleFormModal({
           </div>
 
 
-          <div className="border-t border-border pt-4 flex justify-end gap-3">
+          <div className="border-t border-border pt-4 flex flex-wrap justify-end gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setShowPreSimulator(true)}
+              disabled={isSaving}
+              className="gap-1.5 mr-auto"
+              title="Rodar um documento fictício contra a matriz usando estas alterações, antes de salvar"
+            >
+              <PlayCircle className="w-4 h-4" /> Simular antes de salvar
+            </Button>
             <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isSaving} className="gap-1.5">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               {editing ? "Salvar Alterações" : "Criar Regra"}
             </Button>
           </div>
+
+          <RuleSimulator
+            open={showPreSimulator}
+            onClose={() => setShowPreSimulator(false)}
+            rules={allRules}
+            draftRule={draftRule}
+          />
+
         </div>
       </DialogContent>
     </Dialog>
@@ -1682,6 +1722,8 @@ export default function ApprovalRulesPage() {
         sapUsers={sapUsers}
         sapUsersLoading={sapUsersLoading}
         editing={editingRule}
+        allRules={rules}
+
       />
 
       <RuleSimulator

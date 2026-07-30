@@ -128,17 +128,30 @@ interface Match {
   allMatched: boolean;
 }
 
+export const DRAFT_RULE_ID = "__draft__";
+
 export function RuleSimulator({
   open,
   onClose,
   rules,
+  draftRule = null,
 }: {
   open: boolean;
   onClose: () => void;
   rules: ApprovalRule[];
+  /** Regra em edição ainda não salva — avaliada junto com a matriz publicada. */
+  draftRule?: ApprovalRule | null;
 }) {
   const [input, setInput] = useState<SimulationInput>(EMPTY);
   const [ran, setRan] = useState(false);
+
+  /** Matriz efetiva: substitui a versão publicada pela versão em edição. */
+  const effectiveRules = useMemo<ApprovalRule[]>(() => {
+    if (!draftRule) return rules;
+    const exists = rules.some((r) => r.id === draftRule.id);
+    return exists ? rules.map((r) => (r.id === draftRule.id ? draftRule : r)) : [...rules, draftRule];
+  }, [rules, draftRule]);
+
 
   const setField = <K extends keyof SimulationInput>(k: K, v: SimulationInput[K]) =>
     setInput((prev) => ({ ...prev, [k]: v }));
@@ -221,7 +234,7 @@ export function RuleSimulator({
   const results = useMemo<Match[]>(() => {
     if (!ran) return [];
     const ctx = buildContext(input);
-    const scoped = rules
+    const scoped = effectiveRules
       .filter((r) => r.is_active)
       .filter((r) => {
         const rdt = r.doc_type;
@@ -243,7 +256,7 @@ export function RuleSimulator({
       const allMatched = criteria.length > 0 && evaluateCriteria(criteria, ctx);
       return { rule: r, groups, allMatched };
     });
-  }, [ran, input, rules]);
+  }, [ran, input, effectiveRules]);
 
   const matched = results.filter((r) => r.allMatched);
   const winner = matched[0];
@@ -284,12 +297,27 @@ export function RuleSimulator({
           <DialogTitle className="flex items-center gap-2">
             <PlayCircle className="w-5 h-5 text-primary" />
             Simulador de Regras de Aprovação
+            {draftRule && (
+              <Badge variant="outline" className="text-[10px] border-warning/50 text-warning">
+                Pré-publicação
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 mt-2">
+          {draftRule && (
+            <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+              <p className="text-xs text-foreground">
+                Simulando com as alterações <span className="font-semibold">ainda não salvas</span> da regra{" "}
+                <span className="font-semibold">{draftRule.name || "(sem nome)"}</span>. A matriz publicada é
+                usada para as demais regras.
+              </p>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             Preencha as características de um pedido hipotético para ver quais regras (e cadeia de aprovadores)
+
             seriam aplicadas. A avaliação usa exatamente a mesma lógica da criação de despesas.
           </p>
 
@@ -484,7 +512,15 @@ export function RuleSimulator({
                       Prioridade {winner.rule.priority}
                     </Badge>
                   </div>
-                  <p className="text-sm font-semibold text-foreground">{winner.rule.name}</p>
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    {winner.rule.name}
+                    {draftRule && winner.rule.id === draftRule.id && (
+                      <Badge variant="outline" className="text-[9px] border-warning/50 text-warning">
+                        não salva
+                      </Badge>
+                    )}
+                  </p>
+
                   {(() => {
                     const connectors = [
                       ...winner.groups.slice(1).map((g) => g.connector),
@@ -605,6 +641,12 @@ export function RuleSimulator({
                             <XCircle className="w-3.5 h-3.5 text-muted-foreground" />
                           )}
                           <span className="font-medium text-foreground">{m.rule.name}</span>
+                          {draftRule && m.rule.id === draftRule.id && (
+                            <Badge variant="outline" className="text-[9px] border-warning/50 text-warning">
+                              não salva
+                            </Badge>
+                          )}
+
                           <Badge variant="outline" className="text-[9px] ml-auto">
                             P{m.rule.priority}
                           </Badge>
