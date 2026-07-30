@@ -691,22 +691,22 @@ export default function Admin() {
         <div className="hidden md:block max-w-7xl mx-auto px-6 pb-3">
           <div className="flex items-center gap-3">
             <nav className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/60">
-              {[
+              {([
                 { key: "companies", label: "Empresas", icon: Building2 },
-                { key: "permissions", label: "Permissões", icon: Users },
+                { key: "permissions", label: "Permissões", icon: Users, to: "/usuarios/permissoes" },
                 { key: "integrations", label: "Integrações", icon: Key },
                 { key: "nfse_email", label: "E-mail NFS-e", icon: Mail },
                 { key: "audit", label: "Logs", icon: ScrollText },
-                { key: "admin_users", label: "Admins", icon: ShieldCheck },
+                { key: "admin_users", label: "Admins", icon: ShieldCheck, to: "/usuarios/administradores" },
                 { key: "tools", label: "Ferramentas", icon: Wrench },
                 { key: "roi", label: "ROI", icon: TrendingUp },
-              ].map((t) => {
+              ] as { key: string; label: string; icon: typeof Building2; to?: string }[]).map((t) => {
                 const Icon = t.icon;
                 const isActive = activeTab === t.key;
                 return (
                   <button
                     key={t.key}
-                    onClick={() => setActiveTab(t.key as typeof activeTab)}
+                    onClick={() => (t.to ? navigate(t.to) : setActiveTab(t.key as typeof activeTab))}
                     className={cn(
                       "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5",
                       isActive
