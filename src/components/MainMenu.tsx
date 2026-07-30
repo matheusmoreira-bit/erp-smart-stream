@@ -30,6 +30,7 @@ import { useModuleAccess } from "@/hooks/usePermissions";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { NotificationBell } from "@/components/NotificationBell";
+import { OfflineQueueIndicator } from "@/components/OfflineQueueIndicator";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 
 
@@ -388,6 +389,7 @@ export function MainMenu() {
 
           {/* Desktop actions */}
           <div className="hidden md:flex items-center gap-2">
+            <OfflineQueueIndicator />
             <NotificationBell />
             <button
               onClick={() => navigate("/perfil")}
@@ -404,6 +406,7 @@ export function MainMenu() {
 
           {/* Mobile actions: notificações + conta/empresa (mesmo menu do desktop) */}
           <div className="flex md:hidden items-center gap-1">
+            <OfflineQueueIndicator />
             <NotificationBell />
             <ThemeToggle />
             <UserCompanyMenu />

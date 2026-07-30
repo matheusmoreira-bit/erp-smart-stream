@@ -1532,6 +1532,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const handleCreate = async (input: any) => {
     const result = await createExpense(input) as any;
+    if (result?.queued) {
+      // Modo offline: já avisamos via toast no hook; nada mais a fazer aqui.
+      return result;
+    }
     if (result?.status === "pendente_aprovacao") {
       toast.info("Despesa enviada para aprovação automaticamente.");
     } else if (result?.status === "aprovado") {
