@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
 import { PageTitle } from "@/components/PageTitle";
+import { displayUserName } from "@/lib/user-display";
 import { ChevronDown } from "lucide-react";
 
 
@@ -217,8 +218,8 @@ export default function ApprovalHistory() {
                   { header: "Doc #", cell: (r: typeof filtered[number]) => String(r.doc_num ?? "—") },
                   { header: "Tipo", cell: (r: typeof filtered[number]) => r.doc_type_name || "—" },
                   { header: "Parceiro", cell: (r: typeof filtered[number]) => r.card_name || "—" },
-                  { header: "Solicitante", cell: (r: typeof filtered[number]) => r.requester_name || "—" },
-                  { header: "Aprovador", cell: (r: typeof filtered[number]) => r.approver_name || "—" },
+                  { header: "Solicitante", cell: (r: typeof filtered[number]) => displayUserName(r.requester_name || r.requester_code) },
+                  { header: "Aprovador", cell: (r: typeof filtered[number]) => displayUserName(r.approver_name || r.approver_code) },
                   { header: "Em nome de", cell: (r: typeof filtered[number]) => r.substituted_for_name || r.substituted_for_email || "—" },
                   { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => formatCurrency(r.doc_total, r.currency) },
                   { header: "Observações", cell: (r: typeof filtered[number]) => r.remarks || "—" },
@@ -506,17 +507,17 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
 
       <div className="text-sm text-muted-foreground space-y-1">
         <div className="flex items-center gap-2 truncate"><Building2 className="w-3.5 h-3.5 text-primary/70" />{row.card_name || row.card_code || "—"}</div>
-        <div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-primary/70" />Aprovador: <span className="text-foreground font-medium">{row.approver_name || row.approver_code || "—"}</span></div>
+        <div className="flex items-center gap-2"><User className="w-3.5 h-3.5 text-primary/70" />Aprovador: <span className="text-foreground font-medium">{displayUserName(row.approver_name || row.approver_code)}</span></div>
         {(row.substituted_for_name || row.substituted_for_email) && (
           <div
             className="flex items-center gap-2 text-amber-700 dark:text-amber-400"
-            title={`Aprovação executada por ${row.approver_name || row.approver_code || "—"} atuando como substituto autorizado de ${row.substituted_for_name || row.substituted_for_email}`}
+            title={`Aprovação executada por ${displayUserName(row.approver_name || row.approver_code)} atuando como substituto autorizado de ${displayUserName(row.substituted_for_name || row.substituted_for_email)}`}
           >
             <UserCog className="w-3.5 h-3.5" />
             Em nome de: <span className="font-medium">{row.substituted_for_name || row.substituted_for_email}</span>
           </div>
         )}
-        <div className="flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-primary/70" />Solicitante: <span className="text-foreground font-medium">{row.requester_name || row.requester_code || "—"}</span></div>
+        <div className="flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-primary/70" />Solicitante: <span className="text-foreground font-medium">{displayUserName(row.requester_name || row.requester_code)}</span></div>
         <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-primary/70" />{formatDate(row.decision_date)}</div>
       </div>
 

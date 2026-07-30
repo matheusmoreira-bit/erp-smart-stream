@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { expenseRead } from "@/lib/expense-read";
+import { displayUserNameOrEmpty } from "@/lib/user-display";
+
 
 export interface ApprovalHistoryRow {
   id: string;
@@ -227,10 +229,11 @@ export function useApprovalHistory(
             decision: l.decision === "approved" ? "Y" : "N",
             decision_date: l.decided_at || l.created_at,
             approver_code: l.approver_email || l.approver_name || null,
-            approver_name: l.approver_name || null,
+            approver_name: displayUserNameOrEmpty(l.approver_name || l.approver_email) || null,
             approver_email: l.approver_email || null,
             requester_code: e.requester_email || null,
-            requester_name: e.requester_name || null,
+            requester_name: displayUserNameOrEmpty(e.requester_name || e.requester_email) || null,
+
             doc_object_type: null,
             doc_type_name:
               e.doc_type === "sales"
@@ -249,7 +252,7 @@ export function useApprovalHistory(
             source: "erp_flow" as const,
             expense_id: l.expense_id,
             substituted_for_email: l.substituted_for_email || null,
-            substituted_for_name: l.substituted_for_name || null,
+            substituted_for_name: displayUserNameOrEmpty(l.substituted_for_name || l.substituted_for_email) || null,
             substitution_id: l.substitution_id || null,
           } as ApprovalHistoryRow;
         })
@@ -282,7 +285,7 @@ export function useApprovalHistory(
             decision: a.action === "approve" ? "Y" : "N",
             decision_date: a.created_at,
             approver_code: actor || details.approver || null,
-            approver_name: details.approver || actor || null,
+            approver_name: displayUserNameOrEmpty(details.approver || actor) || null,
             approver_email: actor || null,
             requester_code: null,
             requester_name: null,
@@ -300,7 +303,7 @@ export function useApprovalHistory(
             synced_at: a.created_at,
             source: "audit_log" as const,
             substituted_for_email: substitutedForEmail,
-            substituted_for_name: substitutedForName,
+            substituted_for_name: displayUserNameOrEmpty(substitutedForName || substitutedForEmail) || null,
           } as ApprovalHistoryRow;
         });
 

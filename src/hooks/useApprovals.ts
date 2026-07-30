@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { sapQuery, sapQueryView, sapReadApprovalsCache, sapWriteApprovalsCache, type SapSession } from "@/lib/sap-client";
 import { supabase } from "@/integrations/supabase/client";
+import { displayUserName } from "@/lib/user-display";
+
 
 
 export interface ApprovalDoc {
@@ -110,8 +112,9 @@ function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
     currency,
     cardCode: row["Código PN/Fornecedor"] || "",
     cardName: row["Fornecedor / Parceiro"] || "—",
-    requester: row.Solicitante || "—",
-    currentApprover: row.Aprovador || "—",
+    requester: displayUserName(row.Solicitante),
+    currentApprover: displayUserName(row.Aprovador),
+
     approverEmail: row["Email do aprovador"] || "",
     currentStage: row["Modelo de aprovação"] || "—",
     status: "pending",
@@ -511,9 +514,10 @@ async function fetchApprovalsViaServiceLayer(
       currency,
       cardCode: draft.CardCode || "",
       cardName: draft.CardName || "—",
-      requester: originator?.UserName || originator?.UserCode || "—",
+      requester: displayUserName(originator?.UserName || originator?.UserCode),
       requesterCode: originator?.UserCode || "",
-      currentApprover: approver?.UserName || approver?.UserCode || "—",
+      currentApprover: displayUserName(approver?.UserName || approver?.UserCode),
+
       approverCode: approver?.UserCode || "",
       approverEmail: approver?.eMail || "",
       currentStage: stageName !== "—" ? stageName : templateName,
