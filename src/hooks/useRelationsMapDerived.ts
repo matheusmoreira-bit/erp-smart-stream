@@ -387,6 +387,8 @@ export function useContasPagarLinks({
         source: "sap",
       }));
 
+      // Baixas: exibimos SEMPRE o valor aplicado às NFs deste pedido. O total do
+      // lote (p.PaymentDocTotal) pode somar milhões e não pertence a este PC.
       const paymentPayables: ContaPagarLink[] = payments.map((p) => ({
         id: `sap-vp:${p.DocEntry}`,
         fornecedor: p.CardName || p.CardCode,
@@ -398,6 +400,7 @@ export function useContasPagarLinks({
         data_pagamento: p.DocDate || null,
         status: "Pago",
         numero_pedido: sapDocNum ? String(sapDocNum) : null,
+
         source: "sap",
       }));
 
