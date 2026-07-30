@@ -133,8 +133,17 @@ export function NotificationBell() {
     </>
   );
 
+  const milestones = (
+    <DocumentMilestonesDialog
+      expenseId={milestonesId}
+      open={!!milestonesId}
+      onOpenChange={(o) => { if (!o) setMilestonesId(null); }}
+    />
+  );
+
   if (isMobile) {
     return (
+      <>
       <Sheet open={open} onOpenChange={setOpen}>
         <button
           onClick={() => setOpen(true)}
@@ -156,10 +165,13 @@ export function NotificationBell() {
           <div className="flex-1 overflow-y-auto pb-[max(env(safe-area-inset-bottom),0.5rem)]">{list}</div>
         </SheetContent>
       </Sheet>
+      {milestones}
+      </>
     );
   }
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="end" className="w-96 p-0">
@@ -167,5 +179,8 @@ export function NotificationBell() {
         <ScrollArea className="max-h-80">{list}</ScrollArea>
       </PopoverContent>
     </Popover>
+    {milestones}
+    </>
   );
 }
+
