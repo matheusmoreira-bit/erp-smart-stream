@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { SubmenuBar } from "@/components/SubmenuBar";
 import { findNavModule } from "@/lib/nav-map";
@@ -13,6 +15,41 @@ export function ModuleSubmenu() {
   const navigate = useNavigate();
   const { session } = useSap();
   const { userModules } = useModuleAccess();
+  const [host, setHost] = useState<HTMLElement | null>(null);
+
+  // Monta um container logo abaixo do <header> sticky da página atual,
+  // para que o breadcrumb apareça sob a logo (e não acima dela).
+  useEffect(() => {
+    let cancelled = false;
+    const attach = () => {
+      if (cancelled) return true;
+      const header = document.querySelector<HTMLElement>("header.border-b");
+      if (!header || !header.parentElement) return false;
+      let el = document.getElementById("module-submenu-host");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "module-submenu-host";
+      }
+      if (header.nextSibling !== el) {
+        header.parentElement.insertBefore(el, header.nextSibling);
+      }
+      setHost(el);
+      return true;
+    };
+    if (!attach()) {
+      const t = window.setInterval(() => {
+        if (attach()) window.clearInterval(t);
+      }, 50);
+      window.setTimeout(() => window.clearInterval(t), 3000);
+      return () => {
+        cancelled = true;
+        window.clearInterval(t);
+      };
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   if (!session?.userName) return null;
   if (pathname === "/" || pathname.startsWith("/backoffice")) return null;
@@ -32,7 +69,7 @@ export function ModuleSubmenu() {
     items.find((i) => pathname.startsWith(i.path.split("?")[0]))?.path ??
     items[0].path;
 
-  return (
+  const bar = (
     <SubmenuBar
       moduleLabel={mod.label}
       items={items.map((i) => ({ key: i.path, label: i.label }))}
@@ -40,4 +77,6 @@ export function ModuleSubmenu() {
       onSelect={(key) => navigate(key)}
     />
   );
+
+  return host ? createPortal(bar, host) : null;
 }
