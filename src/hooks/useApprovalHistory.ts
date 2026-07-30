@@ -252,7 +252,7 @@ export function useApprovalHistory(
             source: "erp_flow" as const,
             expense_id: l.expense_id,
             substituted_for_email: l.substituted_for_email || null,
-            substituted_for_name: l.substituted_for_name || null,
+            substituted_for_name: displayUserNameOrEmpty(l.substituted_for_name || l.substituted_for_email) || null,
             substitution_id: l.substitution_id || null,
           } as ApprovalHistoryRow;
         })
@@ -285,7 +285,7 @@ export function useApprovalHistory(
             decision: a.action === "approve" ? "Y" : "N",
             decision_date: a.created_at,
             approver_code: actor || details.approver || null,
-            approver_name: details.approver || actor || null,
+            approver_name: displayUserNameOrEmpty(details.approver || actor) || null,
             approver_email: actor || null,
             requester_code: null,
             requester_name: null,
@@ -303,7 +303,7 @@ export function useApprovalHistory(
             synced_at: a.created_at,
             source: "audit_log" as const,
             substituted_for_email: substitutedForEmail,
-            substituted_for_name: substitutedForName,
+            substituted_for_name: displayUserNameOrEmpty(substitutedForName || substitutedForEmail) || null,
           } as ApprovalHistoryRow;
         });
 
