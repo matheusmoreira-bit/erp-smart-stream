@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTitle } from "@/components/PageTitle";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -110,19 +111,11 @@ export default function TransferApprovalsHistory() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTitle title="Histórico de transferências de aprovação" />
+      <BackofficePageHeader
+        title="Histórico de transferências de aprovação"
+        icon={<ArrowRightLeft className="w-5 h-5 text-primary" />}
+      />
       <div className="max-w-7xl mx-auto p-6 space-y-5">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/backoffice")}>
-            <ArrowLeft className="w-4 h-4 mr-1.5" /> Backoffice
-          </Button>
-          <div className="flex items-center gap-2">
-            <ArrowRightLeft className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-semibold text-foreground">
-              Histórico de transferências de aprovação
-            </h1>
-          </div>
-        </div>
 
         <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1.5">

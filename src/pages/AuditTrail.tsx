@@ -6,12 +6,14 @@ import {
   RefreshCw,
   ShieldCheck,
   ShieldAlert,
+  ScrollText,
   Search,
   CalendarIcon,
   X,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -227,22 +229,12 @@ export default function AuditTrailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTitle title="Audit Trail" />
-      <header className="border-b border-border px-6 py-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/backoffice")}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-foreground">Audit Trail</h1>
-              <p className="text-sm text-muted-foreground">
-                Registro imutável (append-only + hash chain) de todas as operações do banco
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
+      <BackofficePageHeader
+        title="Audit Trail"
+        description="Registro imutável (append-only + hash chain) de todas as operações do banco"
+        icon={<ScrollText className="w-5 h-5 text-primary" />}
+        actions={
+          <>
             <Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
               Atualizar
@@ -255,9 +247,10 @@ export default function AuditTrailPage() {
               )}
               {verifying ? "Verificando..." : "Verificar integridade"}
             </Button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
+
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         {verifyResult && (

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
 import { PageTitle } from "@/components/PageTitle";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 interface SourceUser {
   code: string;
@@ -197,18 +198,12 @@ export default function SapUsersReplicate() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTitle title="Replicar Usuários SAP" />
-      <header className="sticky top-0 z-30 bg-card/80 backdrop-blur border-b border-border">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/backoffice/sap-users")}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Usuários SAP
-          </Button>
-          <div className="flex items-center gap-2">
-            <Copy className="w-5 h-5 text-muted-foreground" />
-            <h1 className="text-xl font-bold text-foreground">Replicar usuários entre bases</h1>
-          </div>
-        </div>
-      </header>
+      <BackofficePageHeader
+        title="Replicar usuários entre bases"
+        description="Copie usuários SAP de uma ou mais bases de origem para as bases de destino."
+        icon={<Copy className="w-5 h-5 text-primary" />}
+        backTo="/usuarios/sap"
+      />
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
         <div className="glass-card p-5 space-y-5">

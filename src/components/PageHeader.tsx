@@ -66,7 +66,7 @@ export function PageHeader({
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div className="p-2 rounded-lg bg-primary/10">{icon}</div>
+            {icon ? <div className="p-2 rounded-lg bg-primary/10">{icon}</div> : null}
             <div>
               <h1 className="text-xl font-bold text-foreground">
                 {title}
