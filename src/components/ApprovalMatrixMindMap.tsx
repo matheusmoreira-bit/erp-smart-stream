@@ -418,15 +418,19 @@ export function ApprovalMatrixMindMap({
   const persistKey = storageKey ? `erp:approval-matrix:mindmap:${storageKey}` : null;
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    if (!persistKey || typeof window === "undefined") return new Set();
+    // Teias muito grandes começam com os níveis de aprovação recolhidos.
+    const fallback = () => (rows.length > 60 ? new Set(rows.map((r) => r.id)) : new Set<string>());
+    if (!persistKey || typeof window === "undefined") return fallback();
     try {
       const raw = window.localStorage.getItem(persistKey);
-      const parsed = raw ? JSON.parse(raw) : null;
+      if (!raw) return fallback();
+      const parsed = JSON.parse(raw);
       return new Set<string>(Array.isArray(parsed?.collapsed) ? parsed.collapsed : []);
     } catch {
-      return new Set();
+      return fallback();
     }
   });
+
   const [zoom, setZoom] = useState(() => {
     if (!persistKey || typeof window === "undefined") return 1;
     try {
