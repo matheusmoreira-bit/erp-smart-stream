@@ -5,7 +5,7 @@
 // or the new error is not retryable, marks the row as exhausted and notifies
 // admins via email + WhatsApp.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { backoffMinutes, classifySapError, type SapRetryDocType } from "../_shared/sap-retry.ts";
+import { backoffMinutes, classifySapError, nextAttemptAt, type SapRetryDocType } from "../_shared/sap-retry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +13,7 @@ const corsHeaders = {
 };
 
 const MAX_ROWS_PER_RUN = 20;
+const STALE_IN_FLIGHT_MINUTES = 10;
 const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
 const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
 const ADMIN_USER_CODES = ["matheus.moreira"];
