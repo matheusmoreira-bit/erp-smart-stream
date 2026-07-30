@@ -175,6 +175,22 @@ function extractSapError(payload: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Detecta a recusa EXPLÍCITA do SAP B1 quando a nova senha é igual à anterior
+ * (histórico de senhas). Nesse caso a senha enviada já é a senha vigente do
+ * usuário no SAP, então o provisionamento pode ser considerado válido e a
+ * credencial deve ser salva normalmente.
+ */
+function isSamePasswordError(message: string): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes("same as") || m.includes("same password") || m.includes("previous password") ||
+    m.includes("igual") || m.includes("já utilizada") || m.includes("ja utilizada") ||
+    m.includes("password history") || m.includes("cannot be reused") || m.includes("must differ")
+  );
+}
+
 interface ResultRow { companyDB: string; displayName: string; status: "success" | "error" | "skipped"; message?: string }
 
 Deno.serve(async (req) => {
