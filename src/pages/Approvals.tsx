@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
+import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 import { useDirectorateScope } from "@/hooks/useDirectorateScope";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { motion } from "framer-motion";
@@ -2001,7 +2002,17 @@ export default function ApprovalsPage() {
   // inclusive super-usuários/admins. Quem tem permissão pode ligar manualmente.
   // Apenas o grupo "Usuário" não enxerga a opção.
   const canToggleShowAll = isAdmin || canViewAllApprovals || canViewAllByGroup;
+  const { has: hasCapability } = useMyCapabilities();
   const [showAll, setShowAll] = useState<boolean>(false);
+  // O grupo pode optar por já abrir a tela com "Ver todas" ligado.
+  const appliedShowAllDefault = useRef(false);
+  useEffect(() => {
+    if (appliedShowAllDefault.current) return;
+    if (canToggleShowAll && hasCapability("view_all_default_on")) {
+      appliedShowAllDefault.current = true;
+      setShowAll(true);
+    }
+  }, [canToggleShowAll, hasCapability]);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
   const [showSubstitutes, setShowSubstitutes] = useState(false);
 
