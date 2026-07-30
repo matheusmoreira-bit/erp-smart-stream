@@ -6545,6 +6545,22 @@ export type Database = {
           total: number
         }[]
       }
+      get_integration_health: {
+        Args: { _hours?: number }
+        Returns: {
+          avg_ms: number
+          error_rate: number
+          errors: number
+          function_name: string
+          last_at: string
+          last_error_at: string
+          last_error_code: string
+          p50_ms: number
+          p95_ms: number
+          provider: string
+          total: number
+        }[]
+      }
       get_my_idp_cost_center: {
         Args: { _sap_user_name?: string }
         Returns: string
