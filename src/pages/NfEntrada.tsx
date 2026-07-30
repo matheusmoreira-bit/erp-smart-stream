@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, ShoppingCart } from "lucide-react";
+import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, ShoppingCart, FilePlus2 } from "lucide-react";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +55,7 @@ function DetailField({ label, value, mono }: { label: string; value: string | nu
 export default function NfEntrada() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { items, loading, error, refresh, reprocess, rematchSap, cancel, pullNow } = useNfEntrada();
+  const { items, loading, error, refresh, reprocess, rematchSap, cancel, pullNow, createInvoiceDraft } = useNfEntrada();
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -150,7 +150,30 @@ export default function NfEntrada() {
     }
   }
 
+  async function handleCreateInvoiceDraft(it: NfEntradaImport) {
+    if (!confirm(
+      `Lançar esboço de NF de Entrada no SAP vinculado ao PC ${it.sap_matched_po_doc_entry}?`,
+    )) return;
+    setBusyId(it.id);
+    try {
+      const res = await createInvoiceDraft(it.id);
+      if (res?.alreadyExists) {
+        toast({ title: "Esboço já existente", description: `Draft ${res.draftId} já criado no SAP.` });
+      } else {
+        toast({
+          title: "Esboço de NF de Entrada criado",
+          description: `Draft ${res?.draftId} vinculado ao PC ${res?.poEntry}.`,
+        });
+      }
+    } catch (e) {
+      toast({ title: "Falha ao lançar esboço", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleCancel(id: string) {
+
     if (!confirm("Cancelar este fluxo? Esta ação registra cancelamento mas não desfaz documentos já criados no SAP.")) return;
     setBusyId(id);
     try {
@@ -301,6 +324,12 @@ export default function NfEntrada() {
                 const isOpen = expandedId === it.id;
                 const toggle = () => setExpandedId(isOpen ? null : it.id);
                 const hasPoLink = !!it.sap_matched_po_doc_entry;
+                // PC efetivo (não esboço) vinculado e sem NF de entrada lançada no ERP.
+                const canCreateInvoiceDraft =
+                  hasPoLink &&
+                  it.sap_matched_po_is_draft === false &&
+                  !it.sap_invoice_draft_id &&
+                  it.status !== "cancelled";
                 const rowClass = hasPoLink
                   ? "cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border-l-4 border-l-emerald-500"
                   : "cursor-pointer hover:bg-muted/40 border-l-4 border-l-transparent";
@@ -355,6 +384,10 @@ export default function NfEntrada() {
                                 separatorBefore: true,
                                 hidden: hasPoLink || !!it.expense_id || it.status === "cancelled" || it.status === "completed",
                                 onSelect: () => handleCreatePurchaseOrder(it),
+                                disabled: busyId === it.id },
+                              { key: "create-invoice-draft", label: "Lançar esboço de NF de Entrada no ERP", icon: FilePlus2,
+                                hidden: !canCreateInvoiceDraft,
+                                onSelect: () => handleCreateInvoiceDraft(it),
                                 disabled: busyId === it.id },
                               { key: "rematch",
                                 label: hasPoLink ? "Refazer vínculo com PC" : "Vincular ao Pedido de Compra",
@@ -453,14 +486,29 @@ export default function NfEntrada() {
               <div className="rounded-md border border-border p-3 text-xs space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold">Vínculo SAP</span>
-                  <Button
-                    variant="outline" size="sm"
-                    disabled={busyId === detail.id || !!detail.sap_invoice_draft_id}
-                    onClick={() => handleRematch(detail.id)}
-                  >
-                    <Link2 className="w-3.5 h-3.5" /> Refazer vínculo SAP
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {detail.sap_matched_po_doc_entry &&
+                      detail.sap_matched_po_is_draft === false &&
+                      !detail.sap_invoice_draft_id &&
+                      detail.status !== "cancelled" && (
+                        <Button
+                          size="sm"
+                          disabled={busyId === detail.id}
+                          onClick={() => handleCreateInvoiceDraft(detail)}
+                        >
+                          <FilePlus2 className="w-3.5 h-3.5" /> Lançar esboço de NF de Entrada
+                        </Button>
+                      )}
+                    <Button
+                      variant="outline" size="sm"
+                      disabled={busyId === detail.id || !!detail.sap_invoice_draft_id}
+                      onClick={() => handleRematch(detail.id)}
+                    >
+                      <Link2 className="w-3.5 h-3.5" /> Refazer vínculo SAP
+                    </Button>
+                  </div>
                 </div>
+
                 <div>
                   Fornecedor (NF): <span className="font-mono">{detail.cnpj_fornecedor || "—"}</span>
                   {detail.nome_fornecedor ? ` · ${detail.nome_fornecedor}` : ""}
