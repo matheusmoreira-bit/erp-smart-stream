@@ -21,7 +21,9 @@ import {
   ShoppingCart,
   Tag,
   PlayCircle,
+  GitCompareArrows,
   UserCog,
+
 } from "lucide-react";
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
 import { RulesHealthMonitor } from "@/components/RulesHealthMonitor";
