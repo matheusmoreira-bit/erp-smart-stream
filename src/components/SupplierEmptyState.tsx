@@ -11,7 +11,10 @@ interface Props {
   onCreateNew: () => void;
   onRefresh: () => void;
   crossCompanyLookup: (query: string) => Promise<CrossCompanyMatch[]>;
+  /** Quando false, o usuário só pode solicitar o cadastro (chamado ao time responsável). */
+  canRegister?: boolean;
 }
+
 
 /**
  * Empty state acionável do combobox de Fornecedor:
