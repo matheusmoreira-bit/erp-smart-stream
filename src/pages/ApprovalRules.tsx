@@ -650,6 +650,26 @@ function RuleFormModal({
     [editing, name, priority, criteria, docType, levels, session],
   );
 
+  /** Resumo ao vivo de conflitos da regra em edição contra a matriz publicada. */
+  const draftConflicts = useMemo(() => {
+    if (!open) return { total: 0, criticals: 0, shadowed: false };
+    if (!draftRule.criteria.length) return { total: 0, criticals: 0, shadowed: false };
+    try {
+      const report = detectRuleConflicts(allRules, draftRule);
+      const mine = report.conflicts.filter(
+        (c) => c.winner.id === draftRule.id || c.loser.id === draftRule.id,
+      );
+      return {
+        total: mine.length,
+        criticals: mine.filter((c) => c.severity === "critical").length,
+        shadowed: report.shadowed.some((s) => s.rule.id === draftRule.id),
+      };
+    } catch {
+      return { total: 0, criticals: 0, shadowed: false };
+    }
+  }, [open, allRules, draftRule]);
+
+
 
   // ── Catálogos SAP (busca no campo Valor) ───────────────────────────────
   const ccMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
