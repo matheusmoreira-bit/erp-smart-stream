@@ -95,7 +95,8 @@ function GroupBlock({ g, index }: { g: GroupTrace; index: number }) {
 export function ApprovalRuleExplainDialog({
   open,
   onClose,
-  vars,
+  vars: rawVars,
+
   appliedRuleId,
   currentLevel,
   currentApprover,
@@ -103,15 +104,48 @@ export function ApprovalRuleExplainDialog({
 }: Props) {
   const { rules, isLoading: loading } = useApprovalRules();
 
-  const result = useMemo(
-    () => explainApproval(rules || [], vars, appliedRuleId),
-    [rules, vars, appliedRuleId],
+  // Normaliza as variáveis: qualquer campo ausente vira valor seguro para não
+  // quebrar a renderização (um throw aqui derrubava a tela inteira).
+  const vars: ExplainVariables = useMemo(
+    () => ({
+      costCenters: rawVars?.costCenters ?? [],
+      projects: rawVars?.projects ?? [],
+      totalAmount: Number(rawVars?.totalAmount || 0),
+      currency: rawVars?.currency || "BRL",
+      itemCodes: rawVars?.itemCodes ?? [],
+      itemNames: rawVars?.itemNames ?? [],
+      supplierName: rawVars?.supplierName || "",
+      supplierCode: rawVars?.supplierCode || "",
+      requesterName: rawVars?.requesterName || "",
+      docType: rawVars?.docType || "purchase",
+      rateioType: rawVars?.rateioType || "padrao",
+      rateioByCC: rawVars?.rateioByCC ?? [],
+    }),
+    [rawVars],
   );
 
-  const summary = useMemo(
-    () => summarizeExplanation(result, vars, currentLevel, currentApprover),
-    [result, vars, currentLevel, currentApprover],
-  );
+  const result = useMemo(() => {
+    try {
+      return explainApproval(rules || [], vars, appliedRuleId);
+    } catch {
+      return {
+        evaluated: [],
+        simulatedMatch: null,
+        appliedRule: null,
+        appliedTrace: null,
+        divergent: false,
+      };
+    }
+  }, [rules, vars, appliedRuleId]);
+
+  const summary = useMemo(() => {
+    try {
+      return summarizeExplanation(result, vars, currentLevel, currentApprover);
+    } catch {
+      return "Não foi possível montar a explicação desta regra.";
+    }
+  }, [result, vars, currentLevel, currentApprover]);
+
 
   const skipped = result.evaluated.filter(
     (t) => !t.matched && (!result.appliedRule || t.rule.id !== result.appliedRule.id),
