@@ -179,6 +179,14 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
             <span>Acesso restrito a e-mails corporativos autorizados.</span>
           </div>
 
+          {authError && (
+            <div className="text-xs rounded-md border border-destructive/40 bg-destructive/10 text-destructive p-3">
+              {authError}
+            </div>
+          )}
+
+
+
           <Button
             type="button"
             variant="outline"
