@@ -128,6 +128,37 @@ function isOverdue(dueDate: string): boolean {
   return dt < today;
 }
 
+/** Colunas ordenáveis da tabela de aprovações pendentes. */
+type SortKey =
+  | "docTypeName"
+  | "docNum"
+  | "docTotal"
+  | "cardName"
+  | "currentApprover"
+  | "requester"
+  | "docDate"
+  | "dueDate";
+
+/** Centros de custo distintos presentes nas linhas do documento. */
+function docCostCenters(doc: ApprovalDoc): string[] {
+  const set = new Set<string>();
+  for (const l of doc.documentLines || []) {
+    const c = (l.CostingCode || "").trim();
+    if (c) set.add(c);
+  }
+  return Array.from(set);
+}
+
+/** Projetos distintos presentes nas linhas do documento. */
+function docProjects(doc: ApprovalDoc): string[] {
+  const set = new Set<string>();
+  for (const l of doc.documentLines || []) {
+    const p = (l.Project || "").trim();
+    if (p) set.add(p);
+  }
+  return Array.from(set);
+}
+
 function ApprovalCard({
   doc,
   onOpen,
