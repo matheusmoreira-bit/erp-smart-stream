@@ -112,11 +112,13 @@ export const NAV_MODULES: NavModule[] = [
     match: ["/usuarios"],
     items: [
       { label: "Usuários", path: "/usuarios/lista", moduleKey: "users" },
+      { label: "Permissões e Grupos", path: "/usuarios/permissoes", moduleKey: "users" },
+      { label: "Administradores", path: "/usuarios/administradores", moduleKey: "users" },
+      { label: "Sincronização IdP", path: "/usuarios/sincronizacao-idp", moduleKey: "users" },
       { label: "Atividade", path: "/usuarios/atividade", moduleKey: "users" },
       { label: "Produtividade", path: "/usuarios/produtividade", moduleKey: "users_productivity" },
       { label: "Licenças", path: "/usuarios/licencas", moduleKey: "users" },
       { label: "Importar Licenças", path: "/usuarios/importar-licencas", moduleKey: "users" },
-      { label: "Sincronização IdP", path: "/usuarios/sincronizacao-idp", moduleKey: "users" },
     ],
   },
   {

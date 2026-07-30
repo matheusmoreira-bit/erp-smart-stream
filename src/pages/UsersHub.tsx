@@ -4,10 +4,14 @@ import UserProductivity from "./UserProductivity";
 import IdpSync from "./IdpSync";
 import LicenseAnalysis from "./LicenseAnalysis";
 import LicenseImport from "./LicenseImport";
+import UsersPermissions from "./UsersPermissions";
+import UsersAdmins from "./UsersAdmins";
 import { TabsHub, type HubTabDef } from "@/components/TabsHub";
 
 type TabKey =
   | "list"
+  | "permissions"
+  | "admins"
   | "activity"
   | "productivity"
   | "licenses"
@@ -16,11 +20,13 @@ type TabKey =
 
 const TABS: readonly HubTabDef<TabKey>[] = [
   { key: "list", label: "Usuários", module: "users", path: "/usuarios/lista", render: () => <Users /> },
+  { key: "permissions", label: "Permissões e Grupos", module: "users", path: "/usuarios/permissoes", render: () => <UsersPermissions /> },
+  { key: "admins", label: "Administradores", module: "users", path: "/usuarios/administradores", render: () => <UsersAdmins /> },
+  { key: "idp", label: "Sincronização IdP", module: "users", path: "/usuarios/sincronizacao-idp", render: () => <IdpSync /> },
   { key: "activity", label: "Atividade", module: "users", path: "/usuarios/atividade", render: () => <UserActivity /> },
   { key: "productivity", label: "Produtividade", module: "users_productivity", path: "/usuarios/produtividade", render: () => <UserProductivity /> },
   { key: "licenses", label: "Licenças", module: "users", path: "/usuarios/licencas", render: () => <LicenseAnalysis /> },
   { key: "licenses-import", label: "Importar Licenças", module: "users", path: "/usuarios/importar-licencas", render: () => <LicenseImport /> },
-  { key: "idp", label: "Sincronização IdP", module: "users", path: "/usuarios/sincronizacao-idp", render: () => <IdpSync /> },
 ];
 
 export default function UsersHub({ tab }: { tab: TabKey }) {
