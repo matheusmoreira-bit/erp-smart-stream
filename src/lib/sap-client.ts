@@ -1,8 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
 import { publicFunctionFetch } from "@/lib/auth-fetch";
 import { toast } from "sonner";
+import {
+  assertCircuitClosed,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+  resetCircuit,
+  SapCircuitOpenError,
+} from "@/lib/sap-circuit-breaker";
+
+export { SapCircuitOpenError, getCircuitState, listCircuits, resetCircuit } from "@/lib/sap-circuit-breaker";
 
 const FUNCTION_URL = "sap-b1-proxy";
+
 
 // Timeout & retry configuration for SAP calls.
 const REQUEST_TIMEOUT_MS = 45_000; // hard cap per attempt
@@ -120,6 +130,16 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   const action = typeof body?.action === "string" ? body.action : "";
   const canRetry = RETRIABLE_ACTIONS.has(action);
   const maxAttempts = canRetry ? MAX_RETRIES + 1 : 1;
+  const companyDB =
+    (typeof body?.companyDB === "string" && body.companyDB) ||
+    (typeof body?.database === "string" && body.database) ||
+    "";
+
+  // Circuit breaker por empresa: se a base está em cooldown, falha rápido
+  // para não travar filas e telas que dependem de outras bases.
+  // O login é sempre permitido (é a forma do usuário sondar a base manualmente).
+  if (action !== "login") assertCircuitClosed(companyDB);
+
 
   let slowToastId: string | number | undefined;
   const scheduleSlowToast = () => {
@@ -159,6 +179,8 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
         await sleep(wait);
         continue;
       }
+      // Timeout / rede = falha de infraestrutura → alimenta o breaker.
+      recordCircuitFailure(companyDB, aborted ? "timeout" : "network");
       if (aborted) throw lastError;
       throw err instanceof Error ? err : new Error(String(err));
     }
@@ -175,6 +197,8 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
 
     // Skip expiry detection on the login action itself — wrong creds shouldn't trigger a global logout
     if (action !== "login" && looksLikeSessionExpired(data)) {
+      // Sessão expirada não é indisponibilidade da base: não abre o circuito.
+      recordCircuitSuccess(companyDB);
       if (!opts.silentSessionExpired) notifySessionExpired();
       throw new SapSessionExpiredError();
     }
@@ -193,14 +217,23 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
         await sleep(wait);
         continue;
       }
+      if (transient) {
+        recordCircuitFailure(companyDB, message);
+      } else {
+        // Erro de negócio: a base respondeu, então o circuito segue fechado.
+        recordCircuitSuccess(companyDB);
+      }
       throw lastError;
     }
 
+    recordCircuitSuccess(companyDB);
     return data;
   }
 
+  recordCircuitFailure(companyDB, "falhas repetidas");
   throw lastError instanceof Error ? lastError : new Error("Falha ao chamar o SAP após múltiplas tentativas.");
 }
+
 
 
 async function hasLovableSession(): Promise<boolean> {
@@ -214,6 +247,11 @@ export async function sapLogin(userName: string, password: string, companyDB: st
     companyDB,
     credentials: { UserName: userName, Password: password, CompanyDB: companyDB },
   });
+
+  // Login bem-sucedido = base respondendo: fecha qualquer circuito aberto.
+  resetCircuit(companyDB);
+
+
 
   // SAP Service Layer SessionTimeout is in minutes (default 30).
   const timeoutMin = Number.isFinite(result.sessionTimeout) && result.sessionTimeout > 0
