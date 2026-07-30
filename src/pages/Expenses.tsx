@@ -43,10 +43,12 @@ import {
   LayoutGrid,
   List,
   Briefcase,
+  Copy,
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { isPendingApproval } from "@/lib/approval-authz";
+import { buildDuplicateDraftPayload } from "@/lib/expense-duplicate";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -726,12 +728,14 @@ function ExpenseCard({
   originBadge,
   erpLabel,
   onRelationsMap,
+  onDuplicate,
 }: {
   expense: Expense;
   onOpen: () => void;
   originBadge?: "erp_flow" | "erp";
   erpLabel?: string;
   onRelationsMap?: () => void;
+  onDuplicate?: () => void;
 }) {
   const statusLabel = useStatusLabel();
   const erpLbl = erpLabel || "ERP";
@@ -783,6 +787,18 @@ function ExpenseCard({
               onClick={(ev) => { ev.stopPropagation(); onRelationsMap(); }}
             >
               <Network className="w-4 h-4" />
+            </Button>
+          )}
+          {onDuplicate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Duplicar em novo pedido"
+              aria-label={`Duplicar lançamento de ${expense.supplier_name}`}
+              onClick={(ev) => { ev.stopPropagation(); onDuplicate(); }}
+            >
+              <Copy className="w-4 h-4" />
             </Button>
           )}
           <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
@@ -1934,6 +1950,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   erpLabel={erpLabel}
                   onOpen={() => openExpense(exp, origin)}
                   onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
+                  onDuplicate={() => duplicateExpense(exp)}
                 />
               ))}
             </div>
@@ -2033,6 +2050,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                                 <Network className="w-4 h-4" aria-hidden="true" />
                               </Button>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-primary"
+                              aria-label={`Duplicar lançamento de ${exp.supplier_name}`}
+                              title="Duplicar em novo pedido"
+                              onClick={(ev) => { ev.stopPropagation(); duplicateExpense(exp); }}
+                            >
+                              <Copy className="w-4 h-4" aria-hidden="true" />
+                            </Button>
                           </div>
                         </td>
                       </tr>
