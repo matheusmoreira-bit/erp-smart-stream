@@ -16,5 +16,6 @@
 - [Sales module access](mem://features/sales-module-access.md) — Módulo Vendas restrito ao grupo Contas a Receber; fora dos DEFAULT_MODULES; guardas em Sales.tsx e BaixasHistory.tsx.
 - [Exibir usuários pelo nome](mem://preferences/user-display-name.md) — Nas telas, sempre Nome via `displayUserName` (src/lib/user-display.ts), nunca e-mail/login.
 - [Delegação de alçada](mem://features/approver-substitutes.md) — Substituto com vigência, autoatendimento de férias, audit log e notificações via approver-substitute-manage.
+- [Identidade única de usuário](mem://features/user-identity.md) — Usuário SAP como chave (1 nome, N e-mails), tabelas sap_user_directory/sap_user_emails e chave canônica em permissões.
 
 
