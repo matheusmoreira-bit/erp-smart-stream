@@ -1218,6 +1218,32 @@ function RuleFormModal({
           </div>
 
 
+          {draftConflicts.total > 0 && (
+            <div className="glass-card border-l-2 border-l-warning p-3 flex items-start gap-2">
+              <GitCompareArrows className="w-4 h-4 mt-0.5 text-warning shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-foreground">
+                  Esta regra compete com {draftConflicts.total} regra(s) ativa(s) da matriz
+                  {draftConflicts.criticals > 0 && (
+                    <span className="text-destructive font-medium"> — {draftConflicts.criticals} com empate de prioridade</span>
+                  )}
+                  {draftConflicts.shadowed && (
+                    <span className="text-warning font-medium"> — e nunca seria aplicada (sombreada)</span>
+                  )}
+                  .
+                </p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[11px] mt-1"
+                  onClick={() => setShowConflicts(true)}
+                >
+                  Ver detalhes dos conflitos
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="border-t border-border pt-4 flex flex-wrap justify-end gap-3">
             <Button
               variant="secondary"
@@ -1227,6 +1253,15 @@ function RuleFormModal({
               title="Rodar um documento fictício contra a matriz usando estas alterações, antes de salvar"
             >
               <PlayCircle className="w-4 h-4" /> Simular antes de salvar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowConflicts(true)}
+              disabled={isSaving}
+              className="gap-1.5"
+              title="Verificar se esta regra conflita ou se sobrepõe a outras regras ativas"
+            >
+              <GitCompareArrows className="w-4 h-4" /> Verificar conflitos
             </Button>
             <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isSaving} className="gap-1.5">
@@ -1241,6 +1276,14 @@ function RuleFormModal({
             rules={allRules}
             draftRule={draftRule}
           />
+
+          <RuleConflictsDialog
+            open={showConflicts}
+            onClose={() => setShowConflicts(false)}
+            rules={allRules}
+            draftRule={draftRule}
+          />
+
 
         </div>
       </DialogContent>
