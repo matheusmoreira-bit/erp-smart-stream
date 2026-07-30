@@ -103,15 +103,26 @@ export default function NotificationsPage() {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {filtered.map((notif) => (
-                    <button
+                  {filtered.map((notif) => {
+                    const expenseId = (notif.metadata as { expense_id?: string } | null)?.expense_id;
+                    return (
+                    <div
                       key={notif.id}
-                      className={`w-full text-left px-4 py-3 rounded-lg hover:bg-muted/50 transition-colors flex gap-3 ${
+                      role="button"
+                      tabIndex={0}
+                      className={`w-full text-left px-4 py-3 rounded-lg hover:bg-muted/50 transition-colors flex gap-3 cursor-pointer ${
                         !notif.is_read ? "bg-primary/5 border border-primary/10" : ""
                       }`}
                       onClick={() => {
                         if (!notif.is_read) markAsRead(notif.id);
                         if (notif.link) navigate(notif.link);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (!notif.is_read) markAsRead(notif.id);
+                          if (notif.link) navigate(notif.link);
+                        }
                       }}
                     >
                       <span className="text-lg mt-0.5">{categoryIcon[notif.category] || "🔔"}</span>
@@ -127,6 +138,16 @@ export default function NotificationsPage() {
                           {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true, locale: ptBR })}
                         </p>
                       </div>
+                      {expenseId && (
+                        <button
+                          className="p-1.5 rounded hover:bg-muted self-center"
+                          onClick={(e) => { e.stopPropagation(); setMilestonesId(expenseId); }}
+                          title="Ver marcos do documento"
+                          aria-label="Ver marcos do documento"
+                        >
+                          <History className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                      )}
                       {!notif.is_read && (
                         <button
                           className="p-1.5 rounded hover:bg-muted self-center"
@@ -136,8 +157,10 @@ export default function NotificationsPage() {
                           <Check className="w-4 h-4 text-muted-foreground" />
                         </button>
                       )}
-                    </button>
-                  ))}
+                    </div>
+                    );
+                  })}
+
                 </div>
               )}
             </ScrollArea>
