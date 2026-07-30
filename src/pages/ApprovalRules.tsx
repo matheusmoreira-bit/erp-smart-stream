@@ -1672,12 +1672,16 @@ export default function ApprovalRulesPage() {
         ) : null}
 
         {activeTab === "health" ? (
-          <RulesHealthMonitor
-            rules={rules}
-            isLoading={isLoading}
-            onOpenRule={(r) => openEdit(r)}
-          />
+          <div className="space-y-4">
+            <RuleConflictsPanel rules={rules} onOpenRule={(r) => openEdit(r)} />
+            <RulesHealthMonitor
+              rules={rules}
+              isLoading={isLoading}
+              onOpenRule={(r) => openEdit(r)}
+            />
+          </div>
         ) : null}
+
 
         {activeTab !== "substitutes" && activeTab === "custom" && (
           <div className="glass-card p-4 border-l-2 border-l-primary/40">
