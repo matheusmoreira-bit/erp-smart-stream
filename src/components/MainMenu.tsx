@@ -23,7 +23,6 @@ import {
   Radar,
   UserCog,
   ClipboardList,
-  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
