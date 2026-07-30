@@ -746,6 +746,8 @@ export default function Admin() {
                     { label: "Infra & Backups", icon: Server, to: "/backoffice/infra-health" },
                     { label: "Retries SAP", icon: RefreshCw, to: "/backoffice/retry-queue" },
                     { label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
+                    { label: "Roadmap", icon: Rocket, to: "/backoffice/roadmap" },
+
 
                     { label: "Usuários SAP", icon: Users, to: "/backoffice/sap-users" },
                   ].map((it) => {
