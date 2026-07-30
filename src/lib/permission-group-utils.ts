@@ -67,3 +67,28 @@ export function isFullCostCenterGroup(name: unknown): boolean {
   );
 }
 
+/**
+ * Grupos que podem CADASTRAR fornecedor/cliente diretamente no ERP.
+ * Os demais (inclusive "Usuário Administrativo") só podem SOLICITAR o cadastro.
+ */
+export function isSupplierRegistrarGroup(name: unknown): boolean {
+  const n = normalizeGroupName(name);
+  return (
+    n === "admin" ||
+    n.includes("facilities") ||
+    n.includes("cadastro") ||
+    n.includes("suprimentos") ||
+    n.includes("compras")
+  );
+}
+
+/** True quando o usuário pode cadastrar fornecedor direto (admin/privilegiado ou grupo registrador). */
+export function canRegisterSupplierDirectly(
+  groups: unknown[],
+  isPrivileged?: boolean,
+): boolean {
+  if (isPrivileged) return true;
+  return (groups || []).some((g) => isSupplierRegistrarGroup(g));
+}
+
+
