@@ -1045,12 +1045,19 @@ export default function PagCorp() {
     if (!t || !session?.companyDB) return;
     setIntegrating(t.id);
     try {
-      const { expense } = await createExpense({
+      const created = await createExpense({
         ...input,
         origin: "pagcorp",
         skipRules: true,
         initialStatus: "aprovado",
-      });
+      }) as any;
+      // Modo offline: o lançamento foi para a fila local e será enviado
+      // quando a base voltar — não há documento para integrar agora.
+      if (created?.queued || !created?.expense) {
+        setAccountabilityModal({ open: false, tx: null });
+        return;
+      }
+      const expense = created.expense;
 
       // Trigger SAP integration immediately
       let sapDocEntry: number | undefined;

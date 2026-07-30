@@ -297,6 +297,14 @@ const CHANGELOG: RoadmapItem[] = [
     description:
       "Reintegração sem anexo e envio do documento por e-mail para fiscal@{domínio da empresa}.",
   },
+  {
+    date: "2026-07-30",
+    title: "Modo offline com fila de envio",
+    kind: "funcao",
+    track: "Integrações e dados",
+    description:
+      "Pedidos e despesas podem ser lançados com a base do ERP fora do ar: o envio fica em fila local e é reprocessado quando o circuit breaker fecha.",
+  },
   // ---- Fase 5 — Governança e segurança (jun–jul/2026)
   {
     date: "2026-07-29",
@@ -531,13 +539,6 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         effort: "baixo",
         description:
           "Disparar aviso (e-mail/Slack) quando o painel de saúde detectar latência ou taxa de erro acima do limite, sem depender de alguém abrir a tela.",
-      },
-      {
-        title: "Modo offline com fila de envio",
-        impact: "médio",
-        effort: "alto",
-        description:
-          "Permitir criar pedidos e despesas com a base SAP fora do ar, enfileirando o envio para quando o circuit breaker fechar.",
       },
       {
         title: "Contrato de dados das views HanaAPI",
