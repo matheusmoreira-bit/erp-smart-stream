@@ -28,6 +28,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  canonicalUserKey,
+  directoryDisplayName,
+  mergeSapUsers,
+  syncDirectoryFromSapUsers,
+  type DirectoryUser,
+  type RawSapUser,
+} from "@/lib/user-identity";
+import {
   usePermissionGroups,
   useUserAssignments,
   MODULES,
