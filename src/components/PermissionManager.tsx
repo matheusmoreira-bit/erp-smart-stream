@@ -32,6 +32,7 @@ import {
   directoryDisplayName,
   mergeSapUsers,
   syncDirectoryFromSapUsers,
+  useUserDirectory,
   type DirectoryUser,
   type RawSapUser,
 } from "@/lib/user-identity";
@@ -404,7 +405,8 @@ function UsersView({
   groups: PermissionGroup[];
 }) {
   const { assignments, loading, assign, remove } = useUserAssignments();
-  const [people, setPeople] = useState<DirectoryUser[]>([]);
+  const { users: directoryUsers, loading: directoryLoading } = useUserDirectory();
+  const [cachedPeople, setCachedPeople] = useState<DirectoryUser[]>([]);
   const [sapLoading, setSapLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [sheetUser, setSheetUser] = useState<DirectoryUser | null>(null);
@@ -429,11 +431,30 @@ function UsersView({
           }
         }
         // Uma pessoa = um usuário SAP (1 nome, N e-mails).
-        setPeople(mergeSapUsers(raw));
+        setCachedPeople(mergeSapUsers(raw));
         setSapLoading(false);
         void syncDirectoryFromSapUsers(raw);
       });
   }, []);
+
+  const people = useMemo(() => {
+    const merged = new Map<string, DirectoryUser>();
+    for (const user of [...directoryUsers, ...cachedPeople]) {
+      const current = merged.get(user.user_key);
+      if (!current) {
+        merged.set(user.user_key, { ...user, emails: [...user.emails] });
+        continue;
+      }
+      merged.set(user.user_key, {
+        ...current,
+        sap_user_code: current.sap_user_code || user.sap_user_code,
+        display_name: current.display_name || user.display_name,
+        is_active: current.is_active || user.is_active,
+        emails: Array.from(new Set([...current.emails, ...user.emails])),
+      });
+    }
+    return Array.from(merged.values());
+  }, [directoryUsers, cachedPeople]);
 
   const defaultGroup = groups.find((g) => g.name === "Usuário");
 
@@ -505,7 +526,7 @@ function UsersView({
         </p>
       </div>
 
-      {sapLoading || loading ? (
+      {sapLoading || directoryLoading || loading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
         </div>

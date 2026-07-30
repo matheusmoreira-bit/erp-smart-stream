@@ -148,7 +148,7 @@ const App = () => (
               {/* Usuários */}
               <Route path="/usuarios" element={<Navigate to="/usuarios/lista" replace />} />
               <Route path="/usuarios/lista" element={<UsersHub tab="list" />} />
-              <Route path="/usuarios/permissoes" element={<UsersHub tab="permissions" />} />
+              <Route path="/usuarios/permissoes" element={<Navigate to="/usuarios/lista" replace />} />
               <Route path="/usuarios/administradores" element={<UsersHub tab="admins" />} />
               <Route path="/usuarios/sap" element={<UsersHub tab="sap" />} />
               <Route path="/usuarios/atividade" element={<UsersHub tab="activity" />} />
