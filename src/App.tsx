@@ -101,6 +101,8 @@ const App = () => (
               {/* Aprovações */}
               <Route path="/aprovacoes" element={<ApprovalsHub />} />
               <Route path="/aprovacoes/regras" element={<ApprovalRules />} />
+              <Route path="/aprovacoes/matriz" element={<ApprovalMatrix />} />
+
 
               {/* Cartões Corporativos */}
               <Route path="/cartoes" element={<Navigate to="/cartoes/transacoes" replace />} />
