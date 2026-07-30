@@ -13,13 +13,14 @@ export interface HubTabDef<K extends string> {
 interface TabsHubProps<K extends string> {
   tabs: readonly HubTabDef<K>[];
   active: K;
+  moduleLabel?: string;
 }
 
 /**
  * Shared layout for hub pages (Auditoria, Integrações, Usuários).
- * Filters tabs by module access, renders the sticky tab strip and the active body.
+ * Filters tabs by module access, renders the submenu dropdown and the active body.
  */
-export function TabsHub<K extends string>({ tabs, active }: TabsHubProps<K>) {
+export function TabsHub<K extends string>({ tabs, active, moduleLabel }: TabsHubProps<K>) {
   const navigate = useNavigate();
   const { userModules } = useModuleAccess();
 
@@ -33,6 +34,7 @@ export function TabsHub<K extends string>({ tabs, active }: TabsHubProps<K>) {
   return (
     <div>
       <HubTabs
+        moduleLabel={moduleLabel}
         tabs={visible.map((t) => ({ key: t.key, label: t.label }))}
         active={active}
         onChange={(key) => {
