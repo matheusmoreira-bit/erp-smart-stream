@@ -164,7 +164,7 @@ export default function MobileApprovals() {
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold">Aprovações</h1>
             <p className="truncate text-xs text-muted-foreground">
-              {session.userName} · {session.companyName || session.companyDb}
+              {session.userName} · {session.companyDB}
             </p>
           </div>
           <Button
