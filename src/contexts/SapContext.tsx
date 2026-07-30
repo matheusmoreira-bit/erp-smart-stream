@@ -267,6 +267,28 @@ export function SapProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("erp:session-expired", handler);
   }, [setSession, queryClient]);
 
+  // Circuit breaker por empresa: avisa o usuário quando uma base entra em
+  // cooldown (e quando volta), sem derrubar a sessão nem outras rotinas.
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail as
+        | { companyDB?: string; state?: string; retryAfterMs?: number }
+        | undefined;
+      if (!detail) return;
+      if (detail.state === "open") {
+        const mins = Math.max(1, Math.round((detail.retryAfterMs || 0) / 60000));
+        toast.warning(
+          `Base ${detail.companyDB} indisponível. Pausando chamadas por ~${mins} min para não afetar as demais rotinas.`,
+        );
+      } else if (detail.state === "closed") {
+        toast.success(`Base ${detail.companyDB} voltou a responder.`);
+      }
+    };
+    window.addEventListener("erp:circuit-breaker", handler);
+    return () => window.removeEventListener("erp:circuit-breaker", handler);
+  }, []);
+
+
   // Hard cap: any user session expires after at most 30 minutes (matching SAP
   // Service Layer's SessionTimeout). Once that window elapses, dispatch the
   // expiry event so the user is returned to the login screen. After login the
