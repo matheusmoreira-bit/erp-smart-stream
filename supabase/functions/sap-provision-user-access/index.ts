@@ -208,6 +208,12 @@ Deno.serve(async (req) => {
     const sapUser = (sapUserOverride || defaultSapUserFromEmail(targetEmail)).toLowerCase();
     if (!sapUser) return json({ error: "Não foi possível determinar o UserCode do SAP" }, 400);
 
+    if (customPassword) {
+      const policyError = validatePasswordPolicy(customPassword, sapUser);
+      if (policyError) return json({ error: policyError }, 400);
+    }
+
+
     const { data: companiesData } = await admin
       .from("companies")
       .select("company_db, display_name")
