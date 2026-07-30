@@ -137,7 +137,9 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
 
   // Circuit breaker por empresa: se a base está em cooldown, falha rápido
   // para não travar filas e telas que dependem de outras bases.
-  assertCircuitClosed(companyDB);
+  // O login é sempre permitido (é a forma do usuário sondar a base manualmente).
+  if (action !== "login") assertCircuitClosed(companyDB);
+
 
   let slowToastId: string | number | undefined;
   const scheduleSlowToast = () => {
