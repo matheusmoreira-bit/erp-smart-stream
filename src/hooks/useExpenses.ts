@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { uploadExpenseAttachment } from "@/lib/attachment-upload";
 import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import { createNotification } from "@/lib/notifications";
@@ -776,25 +777,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         // 2) Upload de anexos em PARALELO (era serial → gargalo principal)
         if (input.files && input.files.length > 0) {
           const results = await Promise.allSettled(
-            input.files.map(async (file) => {
-              const fd = new FormData();
-              fd.append("expense_id", createdId);
-              fd.append("file", file, file.name);
-              const res = await sapFunctionFetch("expense-attachment-storage", {
-                method: "POST",
-                body: fd,
-              });
-              const data = await res.json().catch(() => null);
-              if (!res.ok || !data?.ok) {
-                throw new Error(data?.error || `upload retornou ${res.status}`);
-              }
-              return {
-                file_path: data.file_path as string,
-                file_name: data.file_name as string,
-                file_size: data.file_size as number,
-                mime_type: data.mime_type as string,
-              };
-            }),
+            input.files.map((file) => uploadExpenseAttachment({ expenseId: createdId }, file)),
           );
 
           const uploaded = results
@@ -951,18 +934,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       const uploadFailures: string[] = [];
       for (const file of newFiles) {
         try {
-          const fd = new FormData();
-          fd.append("expense_id", expenseId);
-          fd.append("file", file, file.name);
-          const res = await sapFunctionFetch("expense-attachment-storage", { method: "POST", body: fd });
-          const data = await res.json().catch(() => null);
-          if (!res.ok || !data?.ok) throw new Error(data?.error || `upload retornou ${res.status}`);
-          uploadedAttachments.push({
-            file_path: data.file_path,
-            file_name: data.file_name,
-            file_size: data.file_size,
-            mime_type: data.mime_type,
-          });
+          uploadedAttachments.push(await uploadExpenseAttachment({ expenseId }, file));
         } catch (err) {
           uploadFailures.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -1073,18 +1045,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
       const failed: string[] = [];
       for (const file of files) {
         try {
-          const fd = new FormData();
-          fd.append("expense_id", expenseId);
-          fd.append("file", file, file.name);
-          const res = await sapFunctionFetch("expense-attachment-storage", { method: "POST", body: fd });
-          const data = await res.json().catch(() => null);
-          if (!res.ok || !data?.ok) throw new Error(data?.error || `upload retornou ${res.status}`);
-          rows.push({
-            file_path: data.file_path,
-            file_name: data.file_name,
-            file_size: data.file_size,
-            mime_type: data.mime_type,
-          });
+          rows.push(await uploadExpenseAttachment({ expenseId }, file));
         } catch (err) {
           failed.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
         }

@@ -26,6 +26,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { canViewAllDocuments } from "../_shared/permission-groups.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
 
 const BUCKET = "expense-attachments";
 const SIGN_TTL_SECONDS = 300;
@@ -74,10 +75,21 @@ function callerMatches(caller: string, candidate: unknown): boolean {
 
 interface Caller {
   identity: string | null;
+  /** Todas as identidades do caller (e-mail Google, UserCode SAP, aliases IdP). */
+  aliases: Set<string>;
   cloudUserId: string | null;
   email: string | null;
+  sapUserName: string | null;
   isCloudAdmin: boolean;
   isSuperUser: boolean;
+}
+
+/** true quando `candidate` corresponde a qualquer identidade do caller. */
+function callerOwns(caller: Caller, candidate: unknown): boolean {
+  if (callerMatches(caller.identity || "", candidate)) return true;
+  if (caller.sapUserName && callerMatches(caller.sapUserName, candidate)) return true;
+  const n = normalizeIdentity(String(candidate ?? ""));
+  return !!n && caller.aliases.has(n);
 }
 
 async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Caller> {
@@ -86,6 +98,7 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   let email: string | null = null;
   let isCloudAdmin = false;
   let isSuperUser = false;
+  let sapUserName: string | null = null;
 
   try {
     const u = await requireUser(req);
@@ -100,6 +113,7 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
 
   const sap = await validateSapSession(req);
   if (sap) {
+    sapUserName = sap.userName;
     if (!identity) identity = sap.userName;
     try {
       const { data: mapped } = await admin.rpc("is_sap_user_admin", {
@@ -110,7 +124,25 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
     if (!isSuperUser && sap.userName.toLowerCase() === "manager") isSuperUser = true;
   }
 
-  return { identity, cloudUserId, email, isCloudAdmin, isSuperUser };
+  // Identidades equivalentes (e-mail corporativo x UserCode SAP x aliases IdP).
+  // Sem isso, um usuário logado com Google cujo e-mail difere do UserCode SAP
+  // (ex.: sufixo .ext, nome alterado) recebia 403 ao anexar o próprio documento.
+  let aliases = new Set<string>();
+  try {
+    aliases = await resolveCallerAliases(admin, {
+      id: cloudUserId ?? undefined,
+      email: email ?? undefined,
+      userName: sapUserName ?? undefined,
+    });
+  } catch (e) {
+    console.warn("[expense-attachment-storage] resolveCallerAliases falhou", e);
+    for (const v of [email, sapUserName, identity]) {
+      const n = normalizeIdentity(v || "");
+      if (n) aliases.add(n);
+    }
+  }
+
+  return { identity, aliases, cloudUserId, email, sapUserName, isCloudAdmin, isSuperUser };
 }
 
 /* ─────────────── Ownership resolution from path ─────────────── */
@@ -151,16 +183,16 @@ function canWriteOwned(caller: Caller, owned: Owned): boolean {
   const row = owned.row;
   if (owned.kind === "expense") {
     return (
-      callerMatches(caller.identity || "", row.requester_email) ||
-      callerMatches(caller.identity || "", row.requester_name) ||
-      callerMatches(caller.identity || "", row.created_by_email)
+      callerOwns(caller, row.requester_email) ||
+      callerOwns(caller, row.requester_name) ||
+      callerOwns(caller, row.created_by_email)
     );
   }
   // advance
   if (caller.cloudUserId && row.requester_id === caller.cloudUserId) return true;
   return (
-    callerMatches(caller.identity || "", row.requester_email) ||
-    callerMatches(caller.identity || "", row.requester_name)
+    callerOwns(caller, row.requester_email) ||
+    callerOwns(caller, row.requester_name)
   );
 }
 
@@ -169,7 +201,7 @@ async function canReadOwned(admin: SupabaseClient, caller: Caller, owned: Owned)
   const row = owned.row;
   if (owned.kind === "expense") {
     // Approvers of the current level should also be able to open attachments.
-    if (callerMatches(caller.identity || "", row.current_approver)) return true;
+    if (callerOwns(caller, row.current_approver)) return true;
   }
   // Grupos de permissão que veem todos os documentos (todos menos "Usuário")
   // também podem abrir todos os anexos.
