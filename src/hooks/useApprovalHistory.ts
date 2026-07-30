@@ -125,20 +125,29 @@ export function useApprovalHistory(
       // ============================================================
       // 1) SAP (approval_history) — substituição fica em `remarks`.
       // ============================================================
+      // A leitura do SAP é COMPLEMENTAR: se falhar (sessão SAP expirada,
+      // indisponibilidade do Service Layer), o histórico do ERP Flow ainda
+      // precisa aparecer. Antes, qualquer erro aqui zerava a tela inteira.
       let sapRows: ApprovalHistoryRow[] = [];
       let backendSyncState: ApprovalHistorySyncState | null = null;
+      let sapWarning: string | null = null;
       if (companyDb) {
-        const res = await sapFunctionFetch("approval-history-sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "list", companyDb, decision, limit: fetchCap }),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok || body?.success === false) {
-          throw new Error(body?.error || `HTTP ${res.status}`);
+        try {
+          const res = await sapFunctionFetch("approval-history-sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "list", companyDb, decision, limit: fetchCap }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || body?.success === false) {
+            throw new Error(body?.error || `HTTP ${res.status}`);
+          }
+          sapRows = (body?.rows || []) as ApprovalHistoryRow[];
+          backendSyncState = (body?.syncState || null) as ApprovalHistorySyncState | null;
+        } catch (sapErr) {
+          sapWarning = sapErr instanceof Error ? sapErr.message : String(sapErr);
+          console.warn("[useApprovalHistory] leitura do histórico SAP falhou:", sapWarning);
         }
-        sapRows = (body?.rows || []) as ApprovalHistoryRow[];
-        backendSyncState = (body?.syncState || null) as ApprovalHistorySyncState | null;
       }
 
       if (mode === "any" || mode === "specific") {
@@ -361,6 +370,9 @@ export function useApprovalHistory(
       setHasMore(merged.length > window);
 
       setSyncState(backendSyncState);
+      // Só sinaliza erro quando NADA pôde ser carregado; caso contrário o aviso
+      // fica implícito (a lista do ERP Flow é exibida normalmente).
+      setError(sapWarning && pageRows.length === 0 ? sapWarning : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar histórico");
     } finally {
