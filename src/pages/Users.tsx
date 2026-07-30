@@ -18,6 +18,10 @@ import EditPhoneDialog from "@/components/EditPhoneDialog";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog";
+import UserGroupDialog from "@/components/UserGroupDialog";
+import { useUserGroupAdmin } from "@/hooks/useUserGroupAdmin";
+import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+
 
 type ConfirmAction = {
   type: "lock" | "unlock" | "password";
