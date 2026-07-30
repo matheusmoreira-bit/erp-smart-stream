@@ -16,7 +16,10 @@ import {
   List,
   Network,
 } from "lucide-react";
-import { ApprovalMatrixMindMap } from "@/components/ApprovalMatrixMindMap";
+const ApprovalMatrixMindMap = lazy(() =>
+  import("@/components/ApprovalMatrixMindMap").then((m) => ({ default: m.ApprovalMatrixMindMap })),
+);
+
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
