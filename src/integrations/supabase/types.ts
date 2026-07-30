@@ -3345,6 +3345,108 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_health_alert_settings: {
+        Row: {
+          cooldown_minutes: number
+          created_at: string
+          enabled: boolean
+          error_rate_threshold: number
+          id: string
+          min_samples: number
+          notify_email: boolean
+          notify_slack: boolean
+          p95_threshold_ms: number
+          provider: string
+          recipient_emails: string[]
+          slack_channel: string | null
+          updated_at: string
+          window_minutes: number
+        }
+        Insert: {
+          cooldown_minutes?: number
+          created_at?: string
+          enabled?: boolean
+          error_rate_threshold?: number
+          id?: string
+          min_samples?: number
+          notify_email?: boolean
+          notify_slack?: boolean
+          p95_threshold_ms?: number
+          provider: string
+          recipient_emails?: string[]
+          slack_channel?: string | null
+          updated_at?: string
+          window_minutes?: number
+        }
+        Update: {
+          cooldown_minutes?: number
+          created_at?: string
+          enabled?: boolean
+          error_rate_threshold?: number
+          id?: string
+          min_samples?: number
+          notify_email?: boolean
+          notify_slack?: boolean
+          p95_threshold_ms?: number
+          provider?: string
+          recipient_emails?: string[]
+          slack_channel?: string | null
+          updated_at?: string
+          window_minutes?: number
+        }
+        Relationships: []
+      }
+      integration_health_alerts: {
+        Row: {
+          channels: string[]
+          created_at: string
+          delivery_detail: string | null
+          delivery_ok: boolean | null
+          error_rate: number | null
+          errors: number | null
+          id: string
+          kind: string
+          message: string
+          p95_ms: number | null
+          provider: string
+          severity: string
+          total: number | null
+          window_minutes: number | null
+        }
+        Insert: {
+          channels?: string[]
+          created_at?: string
+          delivery_detail?: string | null
+          delivery_ok?: boolean | null
+          error_rate?: number | null
+          errors?: number | null
+          id?: string
+          kind: string
+          message: string
+          p95_ms?: number | null
+          provider: string
+          severity?: string
+          total?: number | null
+          window_minutes?: number | null
+        }
+        Update: {
+          channels?: string[]
+          created_at?: string
+          delivery_detail?: string | null
+          delivery_ok?: boolean | null
+          error_rate?: number | null
+          errors?: number | null
+          id?: string
+          kind?: string
+          message?: string
+          p95_ms?: number | null
+          provider?: string
+          severity?: string
+          total?: number | null
+          window_minutes?: number | null
+        }
+        Relationships: []
+      }
       integration_log: {
         Row: {
           action: string
@@ -6992,6 +7094,18 @@ export type Database = {
           last_error_at: string
           last_error_code: string
           p50_ms: number
+          p95_ms: number
+          provider: string
+          total: number
+        }[]
+      }
+      get_integration_health_snapshot: {
+        Args: { _minutes?: number }
+        Returns: {
+          error_rate: number
+          errors: number
+          last_at: string
+          last_error_code: string
           p95_ms: number
           provider: string
           total: number
