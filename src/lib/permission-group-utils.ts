@@ -48,11 +48,16 @@ export function isDirectorateGroup(name: unknown): boolean {
   return n === "usuario administrativo" || n === "usuarios administrativos";
 }
 
-/** Grupos que sempre veem/selecionam todos os centros de custo. */
+/**
+ * Grupos que sempre veem/selecionam todos os centros de custo.
+ * "Usuário Administrativo" continua com visibilidade de documentos restrita à
+ * própria diretoria, mas pode LANÇAR em qualquer centro de custo.
+ */
 export function isFullCostCenterGroup(name: unknown): boolean {
   const n = normalizeGroupName(name);
   return (
     n === "admin" ||
+    isDirectorateGroup(n) ||
     n.includes("facilities") ||
     n.includes("contabil") ||
     n.includes("fiscal") ||
@@ -61,3 +66,4 @@ export function isFullCostCenterGroup(name: unknown): boolean {
     n === "cfo"
   );
 }
+
