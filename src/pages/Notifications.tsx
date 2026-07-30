@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, Settings, Check, CheckCheck, History, Send, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Bell, Settings, Check, CheckCheck, History, Send, AlertTriangle, SlidersHorizontal } from "lucide-react";
 import { useNotifications, useNotificationPreferences, NOTIFICATION_CATEGORIES } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -8,8 +8,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { NotificationAuditTab } from "@/components/NotificationAuditTab";
-import { NotificationSendHistoryTab } from "@/components/NotificationSendHistoryTab";
+import { NotificationDeliveriesTab } from "@/components/NotificationDeliveriesTab";
+import { NotificationSettingsTab } from "@/components/NotificationSettingsTab";
 import { OverdueRemindersTab } from "@/components/OverdueRemindersTab";
 import { PageTitle } from "@/components/PageTitle";
 import { DocumentMilestonesDialog } from "@/components/DocumentMilestonesDialog";
@@ -59,11 +59,11 @@ export default function NotificationsPage() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="audit" className="gap-2">
-              <History className="w-4 h-4" /> Auditoria
+            <TabsTrigger value="deliveries" className="gap-2">
+              <Send className="w-4 h-4" /> Todos os envios
             </TabsTrigger>
-            <TabsTrigger value="history" className="gap-2">
-              <Send className="w-4 h-4" /> Histórico de envios
+            <TabsTrigger value="settings" className="gap-2">
+              <SlidersHorizontal className="w-4 h-4" /> Configurações
             </TabsTrigger>
             <TabsTrigger value="overdue" className="gap-2">
               <AlertTriangle className="w-4 h-4" /> Vencidos
@@ -170,12 +170,12 @@ export default function NotificationsPage() {
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="audit">
-            <NotificationAuditTab />
+          <TabsContent value="deliveries">
+            <NotificationDeliveriesTab />
           </TabsContent>
 
-          <TabsContent value="history">
-            <NotificationSendHistoryTab />
+          <TabsContent value="settings">
+            <NotificationSettingsTab />
           </TabsContent>
 
           <TabsContent value="overdue">
