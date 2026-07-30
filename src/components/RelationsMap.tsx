@@ -488,6 +488,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         nfLinks={nfLinksWithPayments}
         nfLoading={nfLinks.isLoading}
         apPayables={apLinks.data?.payables || []}
+        apPayments={apLinks.data?.payments || []}
         apLoading={apLinks.isLoading}
         onClose={() => setDetailStage(null)}
       />
@@ -503,11 +504,12 @@ interface StageDetailProps {
   nfLinks: NfEntradaLink[];
   nfLoading: boolean;
   apPayables: ContaPagarLink[];
+  apPayments: VendorPaymentLink[];
   apLoading: boolean;
   onClose: () => void;
 }
 
-function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoading, apPayables, apLoading, onClose }: StageDetailProps) {
+function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoading, apPayables, apPayments, apLoading, onClose }: StageDetailProps) {
   if (!stage) return null;
   const def = STAGE_DEFS.find((s) => s.key === stage);
   if (!def) return null;
@@ -652,7 +654,7 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
               <ul className="space-y-2">
                 {apPayables.map((ap) => {
                   const vp = String(ap.id).startsWith("sap-vp:")
-                    ? (apLinks.data?.payments || []).find((p) => `sap-vp:${p.DocEntry}` === String(ap.id))
+                    ? apPayments.find((p) => `sap-vp:${p.DocEntry}` === String(ap.id))
                     : undefined;
                   const isBatch =
                     !!vp && Math.abs((vp.PaymentDocTotal || 0) - (vp.DocTotal || 0)) > 0.01;
