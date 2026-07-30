@@ -65,6 +65,11 @@ const modules: Record<string, ModuleCard> = {
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "expenses",
+    subItems: [
+      { label: "Pedidos de Compra", path: "/compras", moduleKey: "expenses" },
+      { label: "Adiantamentos", path: "/financeiro/adiantamentos", moduleKey: "expenses" },
+      { label: "NF de Entrada", path: "/financeiro/nf-entrada", moduleKey: "nf_entrada" },
+    ],
   },
   sales: {
     title: "Vendas",
@@ -94,6 +99,7 @@ const modules: Record<string, ModuleCard> = {
     subItems: [
       { label: "Pendentes", path: "/aprovacoes?tab=pending", moduleKey: "approvals" },
       { label: "Histórico", path: "/aprovacoes?tab=history", moduleKey: "approval_history" },
+      { label: "Regras de Aprovação", path: "/aprovacoes/regras", moduleKey: "approval_rules" },
     ],
   },
   approval_rules: {
