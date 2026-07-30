@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign, TrendingUp, ShieldCheck } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign, TrendingUp, ShieldCheck, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,10 @@ import EditPhoneDialog from "@/components/EditPhoneDialog";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog";
+import UserGroupDialog from "@/components/UserGroupDialog";
+import { useUserGroupAdmin } from "@/hooks/useUserGroupAdmin";
+import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+
 
 type ConfirmAction = {
   type: "lock" | "unlock" | "password";
@@ -56,6 +60,10 @@ export default function UsersPage() {
   const { phones, upsertPhone } = useUserPhones();
   const [phoneUser, setPhoneUser] = useState<SapUser | null>(null);
   const [provisionUser, setProvisionUser] = useState<SapUser | null>(null);
+  const [groupUser, setGroupUser] = useState<SapUser | null>(null);
+  const { isPrivileged } = useMyPermissionGroups();
+  const { groups: permissionGroups, groupOf, setGroup } = useUserGroupAdmin();
+
 
   // Multi-company password reset state
   const [pwdUser, setPwdUser] = useState<SapUser | null>(null);
@@ -286,6 +294,8 @@ export default function UsersPage() {
                 const isLocked = user.Locked === "tYES";
                 const isActing = actionLoading === user.InternalKey;
                 const initials = getInitials(user.UserName || user.UserCode || "?");
+                const userGroup = groupOf(user.UserCode, user.eMail);
+
 
                 return (
                   <div
@@ -308,8 +318,16 @@ export default function UsersPage() {
                           <Phone className="w-3 h-3" />
                           {phones[user.UserCode]?.phone || <span className="italic">Sem telefone</span>}
                         </p>
+                        <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
+                          <UsersRound className="w-3 h-3" />
+                          Grupo:{" "}
+                          <span className="font-medium text-foreground/80">
+                            {userGroup?.name || "Sem grupo"}
+                          </span>
+                        </p>
                       </div>
                     </div>
+
 
                     <div className="w-48 flex flex-col items-center gap-1">
                       <Badge
@@ -380,7 +398,19 @@ export default function UsersPage() {
                               <ShieldCheck className="w-4 h-4 text-primary" />
                             </Button>
                           )}
+                          {isPrivileged && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Definir grupo de permissão (global)"
+                              onClick={() => setGroupUser(user)}
+                            >
+                              <UsersRound className="w-4 h-4 text-primary" />
+                            </Button>
+                          )}
                         </>
+
                       )}
                     </div>
                   </div>
@@ -473,6 +503,22 @@ export default function UsersPage() {
           onSave={(phone, source) => upsertPhone(phoneUser.UserCode, phone, source)}
         />
       )}
+
+      {groupUser && (
+        <UserGroupDialog
+          open={!!groupUser}
+          onClose={() => setGroupUser(null)}
+          userName={groupUser.UserName || groupUser.UserCode}
+          userCode={groupUser.UserCode}
+          email={groupUser.eMail}
+          groups={permissionGroups}
+          currentGroupId={groupOf(groupUser.UserCode, groupUser.eMail)?.id ?? null}
+          onSave={(groupId) =>
+            setGroup({ userCode: groupUser.UserCode, email: groupUser.eMail, groupId })
+          }
+        />
+      )}
+
     </div>
   );
 }
