@@ -21,10 +21,16 @@ import {
   ShoppingCart,
   Tag,
   PlayCircle,
+  GitCompareArrows,
   UserCog,
+
 } from "lucide-react";
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
 import { RulesHealthMonitor } from "@/components/RulesHealthMonitor";
+import { RuleConflictsPanel, RuleConflictsDialog } from "@/components/RuleConflictsPanel";
+import { detectRuleConflicts } from "@/lib/approval-rule-conflicts";
+
+
 import { useAuth } from "@/hooks/useAuth";
 import { RuleSimulator, DRAFT_RULE_ID } from "@/components/RuleSimulator";
 import { Button } from "@/components/ui/button";
@@ -625,6 +631,8 @@ function RuleFormModal({
   const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
   const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
   const [showPreSimulator, setShowPreSimulator] = useState(false);
+  const [showConflicts, setShowConflicts] = useState(false);
+
 
   /** Snapshot da regra em edição (ainda não salva) para o simulador. */
   const draftRule = useMemo<ApprovalRule>(
@@ -643,6 +651,26 @@ function RuleFormModal({
     }),
     [editing, name, priority, criteria, docType, levels, session],
   );
+
+  /** Resumo ao vivo de conflitos da regra em edição contra a matriz publicada. */
+  const draftConflicts = useMemo(() => {
+    if (!open) return { total: 0, criticals: 0, shadowed: false };
+    if (!draftRule.criteria.length) return { total: 0, criticals: 0, shadowed: false };
+    try {
+      const report = detectRuleConflicts(allRules, draftRule);
+      const mine = report.conflicts.filter(
+        (c) => c.winner.id === draftRule.id || c.loser.id === draftRule.id,
+      );
+      return {
+        total: mine.length,
+        criticals: mine.filter((c) => c.severity === "critical").length,
+        shadowed: report.shadowed.some((s) => s.rule.id === draftRule.id),
+      };
+    } catch {
+      return { total: 0, criticals: 0, shadowed: false };
+    }
+  }, [open, allRules, draftRule]);
+
 
 
   // ── Catálogos SAP (busca no campo Valor) ───────────────────────────────
@@ -1216,6 +1244,32 @@ function RuleFormModal({
           </div>
 
 
+          {draftConflicts.total > 0 && (
+            <div className="glass-card border-l-2 border-l-warning p-3 flex items-start gap-2">
+              <GitCompareArrows className="w-4 h-4 mt-0.5 text-warning shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-foreground">
+                  Esta regra compete com {draftConflicts.total} regra(s) ativa(s) da matriz
+                  {draftConflicts.criticals > 0 && (
+                    <span className="text-destructive font-medium"> — {draftConflicts.criticals} com empate de prioridade</span>
+                  )}
+                  {draftConflicts.shadowed && (
+                    <span className="text-warning font-medium"> — e nunca seria aplicada (sombreada)</span>
+                  )}
+                  .
+                </p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[11px] mt-1"
+                  onClick={() => setShowConflicts(true)}
+                >
+                  Ver detalhes dos conflitos
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="border-t border-border pt-4 flex flex-wrap justify-end gap-3">
             <Button
               variant="secondary"
@@ -1225,6 +1279,15 @@ function RuleFormModal({
               title="Rodar um documento fictício contra a matriz usando estas alterações, antes de salvar"
             >
               <PlayCircle className="w-4 h-4" /> Simular antes de salvar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowConflicts(true)}
+              disabled={isSaving}
+              className="gap-1.5"
+              title="Verificar se esta regra conflita ou se sobrepõe a outras regras ativas"
+            >
+              <GitCompareArrows className="w-4 h-4" /> Verificar conflitos
             </Button>
             <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isSaving} className="gap-1.5">
@@ -1239,6 +1302,14 @@ function RuleFormModal({
             rules={allRules}
             draftRule={draftRule}
           />
+
+          <RuleConflictsDialog
+            open={showConflicts}
+            onClose={() => setShowConflicts(false)}
+            rules={allRules}
+            draftRule={draftRule}
+          />
+
 
         </div>
       </DialogContent>
@@ -1601,12 +1672,16 @@ export default function ApprovalRulesPage() {
         ) : null}
 
         {activeTab === "health" ? (
-          <RulesHealthMonitor
-            rules={rules}
-            isLoading={isLoading}
-            onOpenRule={(r) => openEdit(r)}
-          />
+          <div className="space-y-4">
+            <RuleConflictsPanel rules={rules} onOpenRule={(r) => openEdit(r)} />
+            <RulesHealthMonitor
+              rules={rules}
+              isLoading={isLoading}
+              onOpenRule={(r) => openEdit(r)}
+            />
+          </div>
         ) : null}
+
 
         {activeTab !== "substitutes" && activeTab === "custom" && (
           <div className="glass-card p-4 border-l-2 border-l-primary/40">
