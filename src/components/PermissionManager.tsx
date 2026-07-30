@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Plus,
   Trash2,
@@ -32,6 +32,7 @@ import {
   directoryDisplayName,
   mergeSapUsers,
   syncDirectoryFromSapUsers,
+  unifyPeople,
   useUserDirectory,
   type DirectoryUser,
   type RawSapUser,
