@@ -50,6 +50,15 @@ const CHANGELOG: RoadmapItem[] = [
   // ---- Fase 6 — Experiência e inteligência (jul/2026)
   {
     date: "2026-07-30",
+    title: "Versionamento e rollback da matriz de alçadas",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "Cada publicação da matriz é congelada em uma versão (regras, critérios e aprovadores), com comparação lado a lado entre versões (ou contra o estado atual) e rollback para um estado anterior, gerando backup automático e registro em audit log.",
+  },
+  {
+
+    date: "2026-07-30",
     title: "Captura de nota por foto/OCR (celular)",
     kind: "modulo",
     track: "Experiência e inteligência",
