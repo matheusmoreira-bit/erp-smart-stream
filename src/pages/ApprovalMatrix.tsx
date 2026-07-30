@@ -316,7 +316,12 @@ export default function ApprovalMatrix() {
           </Card>
         )}
 
-        <div className="space-y-8">
+        {view === "map" && rows.length > 0 && (
+          <ApprovalMatrixMindMap rows={rows} rootLabel={companyLabel} />
+        )}
+
+        <div className={view === "map" ? "hidden" : "space-y-8"}>
+
           {grouped.map((group) => {
             const Icon = FLOW_ICON[group.flow];
             return (
