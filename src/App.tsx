@@ -52,6 +52,7 @@ import { WhatsNewWizard } from "./components/WhatsNewWizard.tsx";
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
 import { ModuleSubmenu } from "./components/ModuleSubmenu.tsx";
 import { TestCompanyBanner } from "./components/TestCompanyBanner.tsx";
+import { TestCompanyVisibilityGate } from "./components/TestCompanyVisibilityGate.tsx";
 import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx";
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
 
@@ -66,6 +67,7 @@ const App = () => (
         <Sonner />
         <SapProvider>
           <PermissionsV2Provider>
+          <TestCompanyVisibilityGate />
           <BrowserRouter>
             <StickyHeaderMeasure />
             <ModuleSubmenu />
