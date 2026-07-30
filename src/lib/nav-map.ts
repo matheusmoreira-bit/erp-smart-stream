@@ -47,6 +47,8 @@ export const NAV_MODULES: NavModule[] = [
       { label: "Pendentes", path: "/aprovacoes?tab=pending", moduleKey: "approvals" },
       { label: "Histórico", path: "/aprovacoes?tab=history", moduleKey: "approval_history" },
       { label: "Regras de Aprovação", path: "/aprovacoes/regras", moduleKey: "approval_rules" },
+      { label: "Matriz de Alçadas", path: "/aprovacoes/matriz", moduleKey: "approval_rules" },
+
     ],
   },
   {

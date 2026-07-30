@@ -13,6 +13,8 @@ import Expenses from "./pages/Expenses.tsx";
 import SalesHub from "./pages/SalesHub.tsx";
 import BaixasHistory from "./pages/BaixasHistory.tsx";
 import ApprovalRules from "./pages/ApprovalRules.tsx";
+import ApprovalMatrix from "./pages/ApprovalMatrix.tsx";
+
 import PagCorp from "./pages/PagCorp.tsx";
 import PagCorpMapping from "./pages/PagCorpMapping.tsx";
 import PagCorpNondeductible from "./pages/PagCorpNondeductible.tsx";
@@ -101,6 +103,8 @@ const App = () => (
               {/* Aprovações */}
               <Route path="/aprovacoes" element={<ApprovalsHub />} />
               <Route path="/aprovacoes/regras" element={<ApprovalRules />} />
+              <Route path="/aprovacoes/matriz" element={<ApprovalMatrix />} />
+
 
               {/* Cartões Corporativos */}
               <Route path="/cartoes" element={<Navigate to="/cartoes/transacoes" replace />} />
