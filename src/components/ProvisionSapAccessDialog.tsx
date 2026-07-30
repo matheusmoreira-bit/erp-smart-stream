@@ -311,7 +311,7 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
           <Button variant="outline" onClick={close} disabled={busy}>
             {results ? "Fechar" : "Cancelar"}
           </Button>
-          <Button onClick={submit} disabled={busy || selected.size === 0}>
+          <Button onClick={submit} disabled={busy || selected.size === 0 || !passwordReady}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <KeyRound className="w-4 h-4 mr-1" />}
             Provisionar {selected.size > 0 ? `(${selected.size})` : ""}
           </Button>
