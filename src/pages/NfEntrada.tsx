@@ -486,14 +486,29 @@ export default function NfEntrada() {
               <div className="rounded-md border border-border p-3 text-xs space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold">Vínculo SAP</span>
-                  <Button
-                    variant="outline" size="sm"
-                    disabled={busyId === detail.id || !!detail.sap_invoice_draft_id}
-                    onClick={() => handleRematch(detail.id)}
-                  >
-                    <Link2 className="w-3.5 h-3.5" /> Refazer vínculo SAP
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {detail.sap_matched_po_doc_entry &&
+                      detail.sap_matched_po_is_draft === false &&
+                      !detail.sap_invoice_draft_id &&
+                      detail.status !== "cancelled" && (
+                        <Button
+                          size="sm"
+                          disabled={busyId === detail.id}
+                          onClick={() => handleCreateInvoiceDraft(detail)}
+                        >
+                          <FilePlus2 className="w-3.5 h-3.5" /> Lançar esboço de NF de Entrada
+                        </Button>
+                      )}
+                    <Button
+                      variant="outline" size="sm"
+                      disabled={busyId === detail.id || !!detail.sap_invoice_draft_id}
+                      onClick={() => handleRematch(detail.id)}
+                    >
+                      <Link2 className="w-3.5 h-3.5" /> Refazer vínculo SAP
+                    </Button>
+                  </div>
                 </div>
+
                 <div>
                   Fornecedor (NF): <span className="font-mono">{detail.cnpj_fornecedor || "—"}</span>
                   {detail.nome_fornecedor ? ` · ${detail.nome_fornecedor}` : ""}
