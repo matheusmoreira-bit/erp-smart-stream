@@ -512,7 +512,15 @@ export function RuleSimulator({
                       Prioridade {winner.rule.priority}
                     </Badge>
                   </div>
-                  <p className="text-sm font-semibold text-foreground">{winner.rule.name}</p>
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    {winner.rule.name}
+                    {draftRule && winner.rule.id === draftRule.id && (
+                      <Badge variant="outline" className="text-[9px] border-warning/50 text-warning">
+                        não salva
+                      </Badge>
+                    )}
+                  </p>
+
                   {(() => {
                     const connectors = [
                       ...winner.groups.slice(1).map((g) => g.connector),
@@ -633,6 +641,12 @@ export function RuleSimulator({
                             <XCircle className="w-3.5 h-3.5 text-muted-foreground" />
                           )}
                           <span className="font-medium text-foreground">{m.rule.name}</span>
+                          {draftRule && m.rule.id === draftRule.id && (
+                            <Badge variant="outline" className="text-[9px] border-warning/50 text-warning">
+                              não salva
+                            </Badge>
+                          )}
+
                           <Badge variant="outline" className="text-[9px] ml-auto">
                             P{m.rule.priority}
                           </Badge>
