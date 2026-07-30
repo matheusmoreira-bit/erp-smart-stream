@@ -1568,30 +1568,6 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
   } as ApprovalDoc & { __internalId?: string };
 }
 
-function editDistance(a: string, b: string): number {
-  if (a === b) return 0;
-  const m = a.length, n = b.length;
-  if (!m) return n; if (!n) return m;
-  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
-    dp[i][j] = a[i-1] === b[j-1]
-      ? dp[i-1][j-1]
-      : 1 + Math.min(dp[i-1][j-1], dp[i-1][j], dp[i][j-1]);
-  }
-  return dp[m][n];
-}
-
-function tokensMatch(aTok: string, uTok: string): boolean {
-  // Strict equality only. Fuzzy edit-distance matching was removed after a
-  // false positive: an unrelated user (e.g. "samuel.ramos") was accepted as
-  // an approver because their token differed by <=2 chars from a legitimate
-  // approver token. Server-side authorization is the real gate, but keeping
-  // the UI strict prevents surfacing an Approve button to non-approvers.
-  return aTok === uTok;
-}
-
-
 function stripDiacritics(value: string): string {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
