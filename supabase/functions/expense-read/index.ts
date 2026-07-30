@@ -133,6 +133,27 @@ function ownsExpense(
   return false;
 }
 
+/**
+ * Ids (dentre os informados) cujas LINHAS pertencem à diretoria — cobre os
+ * rateios, em que o CC fica nos itens e não no cabeçalho.
+ */
+async function directorateItemIds(
+  admin: SupabaseClient,
+  ids: string[],
+  branch: string | null,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!branch || ids.length === 0) return out;
+  const { data } = await admin
+    .from("expense_items")
+    .select("expense_id, cost_center")
+    .in("expense_id", ids.slice(0, 5000));
+  for (const r of (data || []) as any[]) {
+    if (costCenterInBranch(r.cost_center, branch)) out.add(String(r.expense_id));
+  }
+  return out;
+}
+
 const OWNER_COLUMNS =
   "id, cost_center, requester_email, requester_name, created_by_email, current_approver, current_approver_email, original_approver";
 
@@ -206,8 +227,15 @@ Deno.serve(async (req) => {
         .select(OWNER_COLUMNS)
         .in("id", ids.slice(0, 5000));
       if (perr) return json(500, { error: perr.message }, cors);
+      const byItems = await directorateItemIds(
+        admin,
+        (parents || []).map((r: any) => String(r.id)),
+        caller.directorateBranch,
+      );
       allowedExpenseIds = (parents || [])
-        .filter((r: any) => ownsExpense(r, aliases, caller.directorateBranch))
+        .filter((r: any) =>
+          ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+        )
         .map((r: any) => String(r.id));
       if (allowedExpenseIds.length === 0) return json(200, { data: [] }, cors);
     }
@@ -261,7 +289,14 @@ Deno.serve(async (req) => {
         (select.includes("requester_email") &&
           (!caller.directorateBranch || select.includes("cost_center")));
       if (hasOwnerCols) {
-        rows = rows.filter((r) => ownsExpense(r, aliases, caller.directorateBranch));
+        const byItems = await directorateItemIds(
+          admin,
+          rows.map((r) => String(r.id)).filter(Boolean),
+          caller.directorateBranch,
+        );
+        rows = rows.filter(
+          (r) => ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+        );
       } else {
         const ids = rows.map((r) => r.id).filter(Boolean);
         if (ids.length === 0) return json(200, { data: [] }, cors);
@@ -269,8 +304,13 @@ Deno.serve(async (req) => {
           .from("expenses")
           .select(OWNER_COLUMNS)
           .in("id", ids);
+        const byItems = await directorateItemIds(admin, ids, caller.directorateBranch);
         const allowed = new Set(
-          (owners || []).filter((r: any) => ownsExpense(r, aliases, caller.directorateBranch)).map((r: any) => String(r.id)),
+          (owners || [])
+            .filter((r: any) =>
+              ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+            )
+            .map((r: any) => String(r.id)),
         );
         rows = rows.filter((r) => allowed.has(String(r.id)));
       }
