@@ -25,6 +25,8 @@ import {
   useContasPagarLinks,
   type NfEntradaLink,
   type ContaPagarLink,
+  type VendorPaymentLink,
+
 } from "@/hooks/useRelationsMapDerived";
 import { Loader2 } from "lucide-react";
 import { RelationsMapFlow } from "./RelationsMapFlow";
