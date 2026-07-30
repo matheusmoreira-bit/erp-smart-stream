@@ -531,6 +531,10 @@ export default function BackofficeRoadmap() {
       />
 
       <main className="mx-auto max-w-5xl py-6">
+        <p className="mb-4 text-xs text-muted-foreground">
+          Datas confirmadas nas entregas recentes; entregas mais antigas usam data
+          aproximada do período de implantação.
+        </p>
         {/* Filtros */}
         <div className="mb-6 flex flex-wrap items-center gap-2">
           <div className="relative min-w-[220px] flex-1">
