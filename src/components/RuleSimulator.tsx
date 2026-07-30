@@ -234,7 +234,7 @@ export function RuleSimulator({
   const results = useMemo<Match[]>(() => {
     if (!ran) return [];
     const ctx = buildContext(input);
-    const scoped = rules
+    const scoped = effectiveRules
       .filter((r) => r.is_active)
       .filter((r) => {
         const rdt = r.doc_type;
@@ -256,7 +256,7 @@ export function RuleSimulator({
       const allMatched = criteria.length > 0 && evaluateCriteria(criteria, ctx);
       return { rule: r, groups, allMatched };
     });
-  }, [ran, input, rules]);
+  }, [ran, input, effectiveRules]);
 
   const matched = results.filter((r) => r.allMatched);
   const winner = matched[0];
@@ -297,12 +297,27 @@ export function RuleSimulator({
           <DialogTitle className="flex items-center gap-2">
             <PlayCircle className="w-5 h-5 text-primary" />
             Simulador de Regras de Aprovação
+            {draftRule && (
+              <Badge variant="outline" className="text-[10px] border-warning/50 text-warning">
+                Pré-publicação
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 mt-2">
+          {draftRule && (
+            <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+              <p className="text-xs text-foreground">
+                Simulando com as alterações <span className="font-semibold">ainda não salvas</span> da regra{" "}
+                <span className="font-semibold">{draftRule.name || "(sem nome)"}</span>. A matriz publicada é
+                usada para as demais regras.
+              </p>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             Preencha as características de um pedido hipotético para ver quais regras (e cadeia de aprovadores)
+
             seriam aplicadas. A avaliação usa exatamente a mesma lógica da criação de despesas.
           </p>
 
