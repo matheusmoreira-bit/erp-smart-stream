@@ -1326,8 +1326,23 @@ function ApprovalDetailModal({
                 )}
               </div>
             </div>
+            {/* Raio-X: renderizado DENTRO do modal de detalhes para que o Radix
+                aninhe corretamente os focus scopes (dois diálogos irmãos abertos
+                ao mesmo tempo disputavam o foco e derrubavam a tela). */}
+            {showExplain && (
+              <ApprovalRuleExplainDialog
+                open={showExplain}
+                onClose={() => setShowExplain(false)}
+                docTitle={`${doc.docTypeName} #${doc.docNum || "—"} · ${doc.cardName}`}
+                appliedRuleId={explainMeta.ruleId}
+                currentLevel={explainMeta.currentLevel}
+                currentApprover={doc.currentApprover || ""}
+                vars={explainVars}
+              />
+            )}
         </DialogContent>
       </Dialog>
+
 
 
 
