@@ -13,6 +13,9 @@ import {
   RefreshCw,
   Loader2,
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
   LayoutGrid,
   List,
   Search,
@@ -27,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
+import { FilterMultiSelect } from "@/components/FilterMultiSelect";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
@@ -126,6 +130,37 @@ function isOverdue(dueDate: string): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return dt < today;
+}
+
+/** Colunas ordenáveis da tabela de aprovações pendentes. */
+type SortKey =
+  | "docTypeName"
+  | "docNum"
+  | "docTotal"
+  | "cardName"
+  | "currentApprover"
+  | "requester"
+  | "docDate"
+  | "dueDate";
+
+/** Centros de custo distintos presentes nas linhas do documento. */
+function docCostCenters(doc: ApprovalDoc): string[] {
+  const set = new Set<string>();
+  for (const l of doc.documentLines || []) {
+    const c = (l.CostingCode || "").trim();
+    if (c) set.add(c);
+  }
+  return Array.from(set);
+}
+
+/** Projetos distintos presentes nas linhas do documento. */
+function docProjects(doc: ApprovalDoc): string[] {
+  const set = new Set<string>();
+  for (const l of doc.documentLines || []) {
+    const p = (l.Project || "").trim();
+    if (p) set.add(p);
+  }
+  return Array.from(set);
 }
 
 function ApprovalCard({
@@ -1946,6 +1981,20 @@ export default function ApprovalsPage() {
   const [createdTo, setCreatedTo] = useState<string>("");
   const [dueFrom, setDueFrom] = useState<string>("");
   const [dueTo, setDueTo] = useState<string>("");
+  const [ccFilter, setCcFilter] = useState<string[]>([]);
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [onlyOverdue, setOnlyOverdue] = useState(false);
+  // Ordenação da tabela — por padrão, vencimento mais antigo primeiro.
+  const [sortKey, setSortKey] = useState<SortKey>("dueDate");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "docTotal" ? "desc" : "asc");
+    }
+  };
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
@@ -2257,7 +2306,7 @@ export default function ApprovalsPage() {
   const dueFromD = dueFrom ? new Date(dueFrom).getTime() : null;
   const dueToD = dueTo ? new Date(dueTo).getTime() + 86399999 : null;
 
-  const filtered = userApprovals.filter((a) => {
+  const preFiltered = userApprovals.filter((a) => {
     // Type filter (purchase vs sales) — based on docTypeName keyword
     if (typeFilter !== "all") {
       const name = (a.docTypeName || "").toLowerCase();
@@ -2287,6 +2336,16 @@ export default function ApprovalsPage() {
       if (dueToD !== null && t > dueToD) return false;
     }
 
+    // Centro de custo / Projeto (multi-seleção)
+    if (ccFilter.length > 0) {
+      const codes = docCostCenters(a);
+      if (!codes.some((c) => ccFilter.includes(c))) return false;
+    }
+    if (projectFilter.length > 0) {
+      const projs = docProjects(a);
+      if (!projs.some((p) => projectFilter.includes(p))) return false;
+    }
+
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -2299,14 +2358,77 @@ export default function ApprovalsPage() {
     );
   });
 
+  // Opções disponíveis para os filtros — derivadas apenas dos documentos
+  // visíveis ao usuário (antes dos filtros de CC/Projeto, para não zerar a lista).
+  const ccOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of userApprovals) for (const c of docCostCenters(a)) set.add(c);
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b))
+      .map((v) => ({ value: v, label: formatCostCenter(v) || v }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userApprovals, formatCostCenter]);
+
+  const projectOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of userApprovals) for (const p of docProjects(a)) set.add(p);
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b))
+      .map((v) => ({ value: v, label: v }));
+  }, [userApprovals]);
+
+  const overdueCount = preFiltered.filter((a) => isOverdue(a.dueDate)).length;
+
+  const filtered = useMemo(() => {
+    const base = onlyOverdue ? preFiltered.filter((a) => isOverdue(a.dueDate)) : preFiltered;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const ts = (d?: string | null) => {
+      const t = d ? new Date(d).getTime() : NaN;
+      // Documentos sem data ficam sempre no fim, independente da direção.
+      return Number.isFinite(t) ? t : null;
+    };
+    return [...base].sort((a, b) => {
+      switch (sortKey) {
+        case "docNum":
+          return (Number(a.docNum) - Number(b.docNum)) * dir;
+        case "docTotal":
+          return (a.docTotal - b.docTotal) * dir;
+        case "docTypeName":
+          return a.docTypeName.localeCompare(b.docTypeName, "pt-BR") * dir;
+        case "cardName":
+          return a.cardName.localeCompare(b.cardName, "pt-BR") * dir;
+        case "currentApprover":
+          return a.currentApprover.localeCompare(b.currentApprover, "pt-BR") * dir;
+        case "requester":
+          return a.requester.localeCompare(b.requester, "pt-BR") * dir;
+        case "docDate": {
+          const ta = ts(a.docDate);
+          const tb = ts(b.docDate);
+          if (ta === null && tb === null) return 0;
+          if (ta === null) return 1;
+          if (tb === null) return -1;
+          return (ta - tb) * dir;
+        }
+        case "dueDate":
+        default: {
+          const ta = ts(a.dueDate);
+          const tb = ts(b.dueDate);
+          if (ta === null && tb === null) return 0;
+          if (ta === null) return 1;
+          if (tb === null) return -1;
+          return (ta - tb) * dir;
+        }
+      }
+    });
+  }, [preFiltered, onlyOverdue, sortKey, sortDir]);
+
   const totalValue = filtered.reduce((sum, a) => sum + a.docTotal, 0);
-  const overdueCount = filtered.filter((a) => isOverdue(a.dueDate)).length;
 
   const { visibleItems: visibleApprovals, hasMore: apprHasMore, loadMore: apprLoadMore, sentinelRef: apprSentinelRef, total: apprTotal, initial: apprInitial } =
     useLazyList(filtered, {
       initial: 30,
       step: 10,
-      resetDeps: [search, typeFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode],
+      resetDeps: [search, typeFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(",")],
     });
 
   const handleApprovalAction = async (
@@ -2877,13 +2999,26 @@ export default function ApprovalsPage() {
             </div>
           </div>
           {overdueCount > 0 && (
-            <div className="glass-card px-4 py-3 flex items-center gap-3 border-destructive/30">
-              <Calendar className="w-4 h-4 text-destructive" />
+            <button
+              type="button"
+              onClick={() => setOnlyOverdue((v) => !v)}
+              aria-pressed={onlyOverdue}
+              title={onlyOverdue ? "Mostrar todas as pendentes" : "Mostrar apenas as vencidas"}
+              className={`glass-card px-4 py-3 flex items-center gap-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                onlyOverdue
+                  ? "border-destructive bg-destructive/10 ring-1 ring-destructive/40"
+                  : "border-destructive/30 hover:bg-destructive/5"
+              }`}
+            >
+              <Calendar className="w-4 h-4 text-destructive" aria-hidden="true" />
               <div>
-                <p className="text-xs text-muted-foreground">Vencidos</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  Vencidos
+                  {onlyOverdue && <X className="w-3 h-3" aria-hidden="true" />}
+                </p>
                 <p className="text-lg font-bold font-mono text-destructive">{overdueCount}</p>
               </div>
-            </div>
+            </button>
           )}
         </div>
 
@@ -2922,6 +3057,8 @@ export default function ApprovalsPage() {
                     !!createdTo,
                     !!dueFrom,
                     !!dueTo,
+                    ccFilter.length > 0,
+                    projectFilter.length > 0,
                   ].filter(Boolean).length;
                   return active > 0 ? (
                     <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{active}</Badge>
@@ -2932,7 +3069,7 @@ export default function ApprovalsPage() {
             <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">Filtros</p>
-                {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo) && (
+                {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -2944,6 +3081,8 @@ export default function ApprovalsPage() {
                       setCreatedTo("");
                       setDueFrom("");
                       setDueTo("");
+                      setCcFilter([]);
+                      setProjectFilter([]);
                     }}
                     className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1"
                   >
@@ -2952,6 +3091,34 @@ export default function ApprovalsPage() {
                   </Button>
                 )}
               </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Centro de custo</Label>
+                  <FilterMultiSelect
+                    options={ccOptions}
+                    selected={ccFilter}
+                    onChange={setCcFilter}
+                    placeholder="Todos os centros de custo"
+                    searchPlaceholder="Buscar centro de custo..."
+                    emptyText="Sem centros de custo nos documentos"
+                    ariaLabel="Filtrar por centro de custo"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Projeto</Label>
+                  <FilterMultiSelect
+                    options={projectOptions}
+                    selected={projectFilter}
+                    onChange={setProjectFilter}
+                    placeholder="Todos os projetos"
+                    searchPlaceholder="Buscar projeto..."
+                    emptyText="Sem projetos nos documentos"
+                    ariaLabel="Filtrar por projeto"
+                  />
+                </div>
+              </div>
+
 
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Tipo</Label>
@@ -3132,13 +3299,43 @@ export default function ApprovalsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Tipo</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Nº Doc</th>
-                  <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Fornecedor</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Aprovador</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Solicitante</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vencimento</th>
+                  {([
+                    ["docTypeName", "Tipo", "left"],
+                    ["docNum", "Nº Doc", "left"],
+                    ["docTotal", "Valor", "right"],
+                    ["cardName", "Fornecedor", "left"],
+                    ["currentApprover", "Aprovador", "left"],
+                    ["requester", "Solicitante", "left"],
+                    ["dueDate", "Vencimento", "left"],
+                  ] as [SortKey, string, "left" | "right"][]).map(([key, label, align]) => {
+                    const isActive = sortKey === key;
+                    return (
+                      <th
+                        key={key}
+                        scope="col"
+                        aria-sort={isActive ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                        className={`py-1 px-1 text-xs font-medium text-muted-foreground uppercase tracking-wider ${align === "right" ? "text-right" : "text-left"}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(key)}
+                          title={`Ordenar por ${label}`}
+                          className={`inline-flex items-center gap-1 rounded px-2 py-2 uppercase tracking-wider transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${isActive ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+                        >
+                          {label}
+                          {isActive ? (
+                            sortDir === "asc" ? (
+                              <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                            ) : (
+                              <ArrowDown className="w-3 h-3" aria-hidden="true" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-40" aria-hidden="true" />
+                          )}
+                        </button>
+                      </th>
+                    );
+                  })}
                   <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
