@@ -47,14 +47,43 @@ export async function hashFileContent(file: Blob): Promise<string> {
     .join("");
 }
 
+/**
+ * Libera hashes cujo lançamento anterior foi CANCELADO (ou cuja despesa não
+ * existe mais). Documentos cancelados podem ser lançados novamente.
+ * Falhas aqui não são fatais: seguimos com a checagem normal.
+ */
+export async function releaseCancelledClaims(
+  supabase: SupabaseClient,
+  hashes: string[],
+): Promise<string[]> {
+  if (!hashes || hashes.length === 0) return [];
+  try {
+    const { data, error } = await supabase.rpc("release_cancelled_document_hashes", {
+      _hashes: Array.from(new Set(hashes)),
+    });
+    if (error) {
+      console.warn(LOG_PREFIX, "releaseCancelledClaims falhou:", error);
+      return [];
+    }
+    const released = ((data as { file_hash: string }[]) ?? []).map((r) => r.file_hash);
+    if (released.length) console.info(LOG_PREFIX, "hashes liberadas (cancelados)", released.length);
+    return released;
+  } catch (e) {
+    console.warn(LOG_PREFIX, "releaseCancelledClaims exceção:", e);
+    return [];
+  }
+}
+
 /** Consulta a tabela para saber quais hashes já foram lançados (por qualquer
- *  usuário). Retorna as linhas existentes. */
+ *  usuário). Documentos de lançamentos cancelados são liberados antes e
+ *  portanto não bloqueiam. */
 export async function findExistingClaims(
   supabase: SupabaseClient,
   hashes: string[],
 ): Promise<ExistingClaim[]> {
   if (!hashes || hashes.length === 0) return [];
   const uniq = Array.from(new Set(hashes));
+  await releaseCancelledClaims(supabase, uniq);
   const { data, error } = await supabase
     .from("submitted_document_hashes")
     .select("file_hash, submitted_by, supplier_label, doc_type, file_name, created_at")
@@ -65,6 +94,7 @@ export async function findExistingClaims(
   }
   return (data as ExistingClaim[]) ?? [];
 }
+
 
 /** Insere as reivindicações. Se alguma bater com UNIQUE, o insert falha em
  *  bloco; o caller deve re-consultar via `findExistingClaims` para reportar. */
@@ -89,12 +119,29 @@ export async function claimDocumentHashes(
     .insert(rows)
     .select("file_hash");
   if (error) {
-    // 23505 = unique_violation. Sinaliza corrida com outro usuário.
+    // 23505 = unique_violation. Pode ser corrida OU resquício de lançamento cancelado.
     const code = (error as { code?: string }).code;
     const conflict = code === "23505";
+    if (conflict) {
+      const released = await releaseCancelledClaims(
+        supabase,
+        rows.map((r) => r.file_hash),
+      );
+      if (released.length > 0) {
+        const retry = await supabase
+          .from("submitted_document_hashes")
+          .insert(rows)
+          .select("file_hash");
+        if (!retry.error) {
+          console.info(LOG_PREFIX, "claimed após liberar cancelados", retry.data?.length ?? 0);
+          return { inserted: retry.data?.length ?? 0, conflict: false };
+        }
+      }
+    }
     console.warn(LOG_PREFIX, "claimDocumentHashes falhou", { code, conflict });
     return { inserted: 0, conflict, error };
   }
+
   console.info(LOG_PREFIX, "claimed", { inserted: data?.length ?? 0 });
   return { inserted: data?.length ?? 0, conflict: false };
 }
