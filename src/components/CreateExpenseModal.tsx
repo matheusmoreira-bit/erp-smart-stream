@@ -165,6 +165,9 @@ export function CreateExpenseModal({
 }) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
+  const { groups: myGroups, isPrivileged: isPrivilegedUser } = useMyPermissionGroups();
+  const canRegisterSupplier = canRegisterSupplierDirectly(myGroups, isPrivilegedUser);
+
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isGeneratingFlowReport, setIsGeneratingFlowReport] = useState(false);
