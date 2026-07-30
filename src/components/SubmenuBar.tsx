@@ -59,6 +59,29 @@ export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarP
             {current?.label}
           </span>
         ) : (
+        <>
+          {/* Desktop: pílulas horizontais */}
+          <nav className="hidden md:flex items-center gap-1 overflow-x-auto rounded-full bg-muted/50 p-1">
+            {items.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onSelect(item.key)}
+                aria-current={item.key === current?.key ? "page" : undefined}
+                className={cn(
+                  "whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors",
+                  item.key === current?.key
+                    ? "bg-background text-foreground font-semibold shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/60",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Mobile: dropdown compacto */}
+          <div className="md:hidden">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -95,7 +118,10 @@ export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarP
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+          </div>
+        </>
         )}
+
       </div>
     </div>
   );
