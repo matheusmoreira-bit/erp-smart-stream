@@ -5,6 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
+import { useDirectorateScope } from "@/hooks/useDirectorateScope";
 import { identityMatches } from "@/lib/permission-group-utils";
 
 import { motion } from "framer-motion";
@@ -906,6 +907,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const companyLabel = getLabel(session?.companyDB || "");
   const { hasAccess: canViewAllExpenses } = useModuleAccess("expenses_view_all");
   const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
+  const { matches: inMyDirectorate } = useDirectorateScope();
   const isAdmin = isLovableAdmin || !!session?.isSuperUser || canViewAllExpenses || canViewAllByGroup;
   const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
@@ -1150,6 +1152,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const isMine = (e: Expense) => {
     const owner = (e.created_by_email || e.requester_email || e.requester_name || "").toLowerCase();
     const approver = (e.current_approver || "").toLowerCase();
+    // Grupo "Usuário Administrativo": tudo da própria diretoria (CC 1.6.% para
+    // quem o IdP marca como 1.6.1.2).
+    if (inMyDirectorate(e.cost_center)) return true;
+    if ((e.items || []).some((i) => inMyDirectorate(i?.cost_center))) return true;
     if (!userIdentifier) return false;
     return (
       owner === userIdentifier ||

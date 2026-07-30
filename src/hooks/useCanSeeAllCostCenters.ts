@@ -1,5 +1,5 @@
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
-import { isBasicGroup, isFullCostCenterGroup } from "@/lib/permission-group-utils";
+import { isBasicGroup, isDirectorateGroup, isFullCostCenterGroup } from "@/lib/permission-group-utils";
 
 /**
  * Indica se o usuário logado pode enxergar/selecionar TODOS os centros de custo
@@ -14,7 +14,7 @@ export function useCanSeeAllCostCenters(): { canSeeAll: boolean; loading: boolea
   const { groups, isPrivileged, loading } = useMyPermissionGroups();
   const canSeeAll =
     isPrivileged ||
-    groups.some((g) => isFullCostCenterGroup(g) || !isBasicGroup(g));
+    groups.some((g) => isFullCostCenterGroup(g) || (!isBasicGroup(g) && !isDirectorateGroup(g)));
   return { canSeeAll, loading };
 }
 

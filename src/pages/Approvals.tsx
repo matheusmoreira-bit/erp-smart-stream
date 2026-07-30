@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
+import { useDirectorateScope } from "@/hooks/useDirectorateScope";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { motion } from "framer-motion";
 import {
@@ -1966,6 +1967,8 @@ export default function ApprovalsPage() {
   const isAdmin = isLovableAdmin || isSuperUser;
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
   const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
+  // Grupo "Usuário Administrativo": vê todos os documentos da própria diretoria.
+  const { matches: inMyDirectorate } = useDirectorateScope();
   // "Ver todas as aprovações" começa DESMARCADO por padrão para todos —
   // inclusive super-usuários/admins. Quem tem permissão pode ligar manualmente.
   // Apenas o grupo "Usuário" não enxerga a opção.
@@ -2295,7 +2298,9 @@ export default function ApprovalsPage() {
           matchesSubstitutedOfficial(a.currentApprover) ||
           (a.approverEmail && officialIdentifiers.includes(a.approverEmail.toLowerCase())) ||
           // Aprovador original ainda vê o documento que delegou (mesmo sem "Ver todas").
-          (a.delegatedFrom && approverMatches(a.delegatedFrom, session.userName)),
+          (a.delegatedFrom && approverMatches(a.delegatedFrom, session.userName)) ||
+          // Diretoria do usuário administrativo (CC 1.6.% para quem é 1.6.1.2).
+          docCostCenters(a).some((c) => inMyDirectorate(c)),
       );
 
 

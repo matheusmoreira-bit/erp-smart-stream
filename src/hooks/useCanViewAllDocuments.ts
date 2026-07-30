@@ -1,5 +1,5 @@
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
-import { isBasicGroup } from "@/lib/permission-group-utils";
+import { isBasicGroup, isDirectorateGroup } from "@/lib/permission-group-utils";
 
 /**
  * Quem pode ver a opção "Ver todos" (documentos, aprovações, anexos):
@@ -9,6 +9,9 @@ import { isBasicGroup } from "@/lib/permission-group-utils";
  */
 export function useCanViewAllDocuments(): { canViewAll: boolean; loading: boolean } {
   const { groups, isPrivileged, loading } = useMyPermissionGroups();
-  const canViewAll = isPrivileged || groups.some((g) => !isBasicGroup(g));
+  // "Usuário Administrativo" não recebe visão total: seu recorte é por
+  // diretoria (ver useDirectorateScope).
+  const canViewAll =
+    isPrivileged || groups.some((g) => !isBasicGroup(g) && !isDirectorateGroup(g));
   return { canViewAll, loading };
 }

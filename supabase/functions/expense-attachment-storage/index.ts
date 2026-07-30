@@ -24,7 +24,11 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
-import { canViewAllDocuments } from "../_shared/permission-groups.ts";
+import {
+  canViewAllDocuments,
+  resolveDirectorateBranch,
+  costCenterInBranch,
+} from "../_shared/permission-groups.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
 
@@ -205,7 +209,21 @@ async function canReadOwned(admin: SupabaseClient, caller: Caller, owned: Owned)
   }
   // Grupos de permissão que veem todos os documentos (todos menos "Usuário")
   // também podem abrir todos os anexos.
-  return await canViewAllDocuments(admin, [caller.identity, caller.email]);
+  if (await canViewAllDocuments(admin, [caller.identity, caller.email])) return true;
+
+  // "Usuário Administrativo": anexos dos documentos da própria diretoria.
+  if (owned.kind === "expense") {
+    const branch = await resolveDirectorateBranch(admin, [caller.identity, caller.email]);
+    if (branch) {
+      if (costCenterInBranch(row.cost_center, branch)) return true;
+      const { data: items } = await admin
+        .from("expense_items")
+        .select("cost_center")
+        .eq("expense_id", row.id as string);
+      if ((items || []).some((i: any) => costCenterInBranch(i.cost_center, branch))) return true;
+    }
+  }
+  return false;
 }
 
 /* ─────────────── Actions ─────────────── */
