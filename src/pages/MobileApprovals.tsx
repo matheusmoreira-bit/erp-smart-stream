@@ -170,6 +170,14 @@ export default function MobileApprovals() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Capturar nota por foto"
+            onClick={() => navigate("/captura/nota")}
+          >
+            <ScanLine className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="Atualizar"
             onClick={() => refresh()}
             disabled={isLoading}
