@@ -11,6 +11,7 @@ import ApprovalLink from "./pages/ApprovalLink.tsx";
 import AnalyticsPage from "./pages/Analytics.tsx";
 import ApprovalsHub from "./pages/ApprovalsHub.tsx";
 import MobileApprovals from "./pages/MobileApprovals.tsx";
+import MobileInvoiceCapture from "./pages/MobileInvoiceCapture.tsx";
 import Expenses from "./pages/Expenses.tsx";
 import SalesHub from "./pages/SalesHub.tsx";
 import BaixasHistory from "./pages/BaixasHistory.tsx";
@@ -122,6 +123,7 @@ const App = () => (
               {/* Aprovações */}
               <Route path="/aprovacoes" element={<ApprovalsHub />} />
               <Route path="/aprovacoes/mobile" element={<MobileApprovals />} />
+              <Route path="/captura/nota" element={<MobileInvoiceCapture />} />
               <Route path="/aprovacoes/regras" element={<ApprovalRules />} />
               <Route path="/aprovacoes/matriz" element={<ApprovalMatrix />} />
 
