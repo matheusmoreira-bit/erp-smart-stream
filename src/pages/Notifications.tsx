@@ -26,6 +26,8 @@ export default function NotificationsPage() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, loading } = useNotifications();
   const { getPreference, updatePreference, loading: prefLoading } = useNotificationPreferences();
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [milestonesId, setMilestonesId] = useState<string | null>(null);
+
 
   const filtered = filter === "unread" ? notifications.filter((n) => !n.is_read) : notifications;
 
