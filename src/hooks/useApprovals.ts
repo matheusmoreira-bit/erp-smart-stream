@@ -110,8 +110,9 @@ function mapHanaApproval(row: HanaApprovalViewRow): ApprovalDoc {
     currency,
     cardCode: row["Código PN/Fornecedor"] || "",
     cardName: row["Fornecedor / Parceiro"] || "—",
-    requester: row.Solicitante || "—",
-    currentApprover: row.Aprovador || "—",
+    requester: displayUserName(row.Solicitante),
+    currentApprover: displayUserName(row.Aprovador),
+
     approverEmail: row["Email do aprovador"] || "",
     currentStage: row["Modelo de aprovação"] || "—",
     status: "pending",
