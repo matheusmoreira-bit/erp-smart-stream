@@ -1329,18 +1329,6 @@ function ApprovalDetailModal({
         </DialogContent>
       </Dialog>
 
-      {/* Raio-X: valida e explica a regra de aprovação aplicada ao documento */}
-      {showExplain && (
-        <ApprovalRuleExplainDialog
-          open={showExplain}
-          onClose={() => setShowExplain(false)}
-          docTitle={`${doc.docTypeName} #${doc.docNum || "—"} · ${doc.cardName}`}
-          appliedRuleId={explainMeta.ruleId}
-          currentLevel={explainMeta.currentLevel}
-          currentApprover={doc.currentApprover || ""}
-          vars={explainVars}
-        />
-      )}
 
 
 
