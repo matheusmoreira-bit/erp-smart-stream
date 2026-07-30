@@ -50,6 +50,14 @@ const CHANGELOG: RoadmapItem[] = [
   // ---- Fase 6 — Experiência e inteligência (jul/2026)
   {
     date: "2026-07-30",
+    title: "App mobile-first para aprovações (PWA)",
+    kind: "modulo",
+    track: "Experiência e inteligência",
+    description:
+      "Aplicativo instalável no celular (Adicionar à tela de início) com tela dedicada de aprovações: aprovar/reprovar com justificativa, consultar status e anexar comprovante direto pela câmera.",
+  },
+  {
+    date: "2026-07-30",
     title: "Revisão periódica de acessos",
     kind: "seguranca",
     track: "Governança e segurança",
@@ -608,11 +616,11 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
     group: "Experiência do usuário",
     items: [
       {
-        title: "App mobile-first para aprovações",
+        title: "Push nativo nas aprovações (Web Push/FCM)",
         impact: "médio",
         effort: "médio",
         description:
-          "PWA instalável com push, focado em aprovar, consultar status e anexar comprovantes pelo celular.",
+          "Complemento do PWA: notificação push no celular ao surgir uma aprovação pendente (requer credenciais de mensageria).",
       },
       {
         title: "Busca global (documentos, fornecedores, pessoas)",
