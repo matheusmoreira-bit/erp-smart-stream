@@ -299,9 +299,19 @@ Deno.serve(async (req) => {
         const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", {
           UserPassword: newPassword, Locked: "tNO",
         });
+        let alreadyCurrent = false;
         if (!patch.ok) {
-          results.push({ companyDB: companyDb, displayName, status: "error", message: extractSapError(patch.data, `HTTP ${patch.status}`) });
-          continue;
+          const patchMsg = extractSapError(patch.data, `HTTP ${patch.status}`);
+          if (isSamePasswordError(patchMsg)) {
+            // O SAP recusou porque a senha enviada é igual à atual/anterior:
+            // ela já é válida para login, então seguimos e salvamos a credencial.
+            alreadyCurrent = true;
+            // Garante ao menos o desbloqueio do usuário (best-effort).
+            await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { Locked: "tNO" }).catch(() => null);
+          } else {
+            results.push({ companyDB: companyDb, displayName, status: "error", message: patchMsg });
+            continue;
+          }
         }
         // Senha de serviço não pode expirar — ativa o flag no SAP (best-effort).
         await ensurePasswordNeverExpires(
