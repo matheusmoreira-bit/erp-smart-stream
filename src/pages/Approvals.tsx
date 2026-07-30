@@ -527,6 +527,7 @@ function ApprovalDetailModal({
   const [errorKind, setErrorKind] = useState<"mutation" | "refresh" | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
   const [showAllLines, setShowAllLines] = useState(false);
+  const [showExplain, setShowExplain] = useState(false);
   const confirmInFlightRef = useRef(false);
   const { session } = useSap();
 
