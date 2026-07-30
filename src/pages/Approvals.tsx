@@ -1304,6 +1304,21 @@ function ApprovalDetailModal({
         </DialogContent>
       </Dialog>
 
+      {/* Raio-X: valida e explica a regra de aprovação aplicada ao documento */}
+      {showExplain && (
+        <ApprovalRuleExplainDialog
+          open={showExplain}
+          onClose={() => setShowExplain(false)}
+          docTitle={`${doc.docTypeName} #${doc.docNum || "—"} · ${doc.cardName}`}
+          appliedRuleId={explainMeta.ruleId}
+          currentLevel={explainMeta.currentLevel}
+          currentApprover={doc.currentApprover || ""}
+          vars={explainVars}
+        />
+      )}
+
+
+
       {/* Confirmação de aprovação / rejeição — sempre exibida com resumo */}
       <AlertDialog open={!!riskConfirm} onOpenChange={(v) => { if (!v && !isActioning) { setRiskConfirm(null); setActionError(null); } }}>
         <AlertDialogContent
