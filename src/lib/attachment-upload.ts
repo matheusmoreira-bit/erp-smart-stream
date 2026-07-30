@@ -26,6 +26,7 @@ export async function uploadExpenseAttachment(
   let lastError: Error = new Error("Falha desconhecida no upload");
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    let fatal = false;
     try {
       const fd = new FormData();
       if (target.expenseId) fd.append("expense_id", target.expenseId);
@@ -35,11 +36,7 @@ export async function uploadExpenseAttachment(
       const res = await sapFunctionFetch("expense-attachment-storage", { method: "POST", body: fd });
       const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data?.ok) {
-        const err = new Error(data?.error || `upload retornou ${res.status}`);
-        if (NON_RETRYABLE.has(res.status)) throw err;
-        lastError = err;
-      } else {
+      if (res.ok && data?.ok) {
         return {
           file_path: data.file_path as string,
           file_name: data.file_name as string,
@@ -47,13 +44,13 @@ export async function uploadExpenseAttachment(
           mime_type: data.mime_type as string,
         };
       }
+      fatal = NON_RETRYABLE.has(res.status);
+      lastError = new Error(data?.error || `upload retornou ${res.status}`);
     } catch (err) {
-      const e = err instanceof Error ? err : new Error(String(err));
-      // Erro lançado explicitamente como não-retentável acima.
-      if (/\b(400|401|403|404|413)\b/.test(e.message) && attempt > 1) throw e;
-      lastError = e;
+      lastError = err instanceof Error ? err : new Error(String(err));
     }
 
+    if (fatal) throw lastError;
     if (attempt < attempts) await sleep(600 * attempt);
   }
 
