@@ -53,7 +53,10 @@ export interface VendorPaymentLink {
   DocEntry: number;
   DocNum: number;
   DocDate: string;
+  /** Valor efetivamente aplicado às NFs DESTE pedido (nunca o total do lote) */
   DocTotal: number;
+  /** Total do pagamento no SAP (pode ser um lote de milhões cobrindo várias NFs) */
+  PaymentDocTotal: number;
   CardCode: string;
   CardName: string;
   Remarks: string | null;
@@ -62,6 +65,7 @@ export interface VendorPaymentLink {
   /** valor aplicado a cada InvoiceDocEntry */
   appliedByInvoice: Record<number, number>;
 }
+
 
 export interface ContaPagarLink {
   id: string | number;
