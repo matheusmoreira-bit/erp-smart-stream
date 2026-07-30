@@ -5,6 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
+import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 import { useDirectorateScope } from "@/hooks/useDirectorateScope";
 import { identityMatches } from "@/lib/permission-group-utils";
 
@@ -952,7 +953,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const isAdmin = isLovableAdmin || !!session?.isSuperUser || canViewAllExpenses || canViewAllByGroup;
   const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
-  const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), isAdmin);
+  // Padrão do filtro "Ver todos" é uma opção DO GRUPO (view_all_default_on).
+  const { has: hasCapability } = useMyCapabilities();
+  const showAllDefault = hasCapability("view_all_default_on");
+  const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), showAllDefault);
   useEffect(() => { if (!isAdmin) setShowAll(false); }, [isAdmin, setShowAll]);
 
   // Preserva a posição de rolagem ao aplicar mudanças de filtro/paginação que
@@ -1776,7 +1780,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             {(() => {
               const activeFilters =
                 (statusFilter !== "all" ? 1 : 0) +
-                (showAll !== isAdmin ? 1 : 0);
+                (showAll !== showAllDefault ? 1 : 0);
               return (
                 <Button
                   ref={filtersToggleRef}
@@ -1894,7 +1898,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <Switch id="show-all-expenses" checked={showAll} onCheckedChange={(v) => preserveScroll(() => setShowAll(v))} />
               </div>
             )}
-            {(search || statusFilter !== "all" || showAll !== isAdmin) && (
+            {(search || statusFilter !== "all" || showAll !== showAllDefault) && (
               <Button
                 variant="ghost"
                 size="sm"

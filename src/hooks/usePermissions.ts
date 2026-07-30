@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { canonicalUserKey } from "@/lib/user-identity";
+import {
+  CAPABILITY_CATALOG,
+  CAPABILITY_CATEGORIES,
+  type CapabilityDef,
+  type CapabilityCategory,
+} from "@/lib/permission-capabilities";
 
 /* ────────────────────────────────────────────────────────────────────
  * Types
@@ -84,17 +90,9 @@ export const VIEW_ONLY_MODULES = [
 
 ] as const;
 
-/** Capabilities: flags explícitas, transversais às telas. */
-export const CAPABILITIES = [
-  { key: "expenses_view_all", label: "Ver todas as Compras/Vendas", hint: "Não fica limitado ao que o próprio usuário criou." },
-  { key: "approvals_view_all", label: "Ver todas as Aprovações", hint: "Enxerga pendências e histórico de todos, somente leitura." },
-  { key: "approvals_delegate", label: "Delegar aprovações", hint: "Pode delegar uma aprovação a outro usuário." },
-  { key: "approvals_transfer", label: "Transferir aprovações em massa", hint: "Ferramenta administrativa de transferência entre aprovadores." },
-  { key: "approvals_override", label: "Aprovar fora do fluxo", hint: "Aprova documentos mesmo sem ser o aprovador designado." },
-  { key: "suppliers_reactivate", label: "Reativar fornecedores inativos", hint: "Permite reativar fornecedor bloqueado no ERP." },
-  { key: "test_companies_view", label: "Ver empresas de teste", hint: "Exibe bases TST%/SBO_TESTE% na seleção de empresa. Admins já enxergam." },
-  { key: "expenses_cancel", label: "Cancelar documentos", hint: "Cancela pedidos/lançamentos próprios ou de terceiros." },
-] as const;
+/** Capabilities: flags explícitas, transversais às telas (catálogo único). */
+export const CAPABILITIES = CAPABILITY_CATALOG;
+export { CAPABILITY_CATEGORIES, type CapabilityDef, type CapabilityCategory };
 
 /** Unified list for legacy callers that iterate through all keys. */
 export const ALL_MODULES = [

@@ -1,13 +1,10 @@
 // Avaliação de grupos de permissão no servidor (Edge Functions).
 //
-// Regra do produto: apenas membros do grupo "Usuário" ficam restritos aos
-// próprios documentos. Qualquer outro grupo (Facilities, Fiscal, Financeiro,
-// Contas a Pagar/Receber, CFO, Contábil, PagCorp, Admin...) pode ver todos os
-// documentos — e, por consequência, todos os anexos.
+// Arquitetura GRUPO > USUÁRIO: nenhuma regra depende do NOME do grupo. Toda
+// segregação é uma capacidade configurada no grupo e persistida em
+// `permission_group_modules` (can_view = liga/desliga).
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-
-const BASIC_GROUPS = new Set(["usuario", "usuarios", "user", "users"]);
 
 export function normalizeGroupName(value: unknown): string {
   return String(value ?? "")
@@ -85,7 +82,7 @@ export function personMatches(a: unknown, b: unknown): boolean {
 }
 
 
-/** Nomes dos grupos de permissão associados a uma identidade. */
+/** Nomes dos grupos de permissão associados a uma identidade (exibição/diagnóstico). */
 export async function getPermissionGroups(
   admin: SupabaseClient,
   identities: Array<string | null | undefined>,
@@ -102,25 +99,51 @@ export async function getPermissionGroups(
     .filter(Boolean);
 }
 
-/** True quando a identidade pertence a algum grupo que não seja "Usuário". */
+/** Capacidades ligadas em algum grupo da identidade. */
+export async function getCapabilities(
+  admin: SupabaseClient,
+  identities: Array<string | null | undefined>,
+): Promise<Set<string>> {
+  const wanted = identities.map(canonicalIdentity).filter(Boolean);
+  if (!wanted.length) return new Set();
+  const { data } = await admin
+    .from("user_group_assignments")
+    .select("sap_email, group_id");
+  const groupIds = Array.from(
+    new Set(
+      (data as any[] | null || [])
+        .filter((row) => wanted.some((w) => identityMatches(row.sap_email, w)))
+        .map((row) => row.group_id)
+        .filter(Boolean),
+    ),
+  );
+  if (!groupIds.length) return new Set();
+  const { data: rows } = await admin
+    .from("permission_group_modules")
+    .select("module_key, can_view")
+    .in("group_id", groupIds);
+  return new Set(
+    ((rows as any[] | null) || [])
+      .filter((r) => r.can_view !== false)
+      .map((r) => String(r.module_key)),
+  );
+}
+
+export async function hasCapability(
+  admin: SupabaseClient,
+  identities: Array<string | null | undefined>,
+  capability: string,
+): Promise<boolean> {
+  return (await getCapabilities(admin, identities)).has(capability);
+}
+
+/** Visão total de documentos — capacidade do grupo, nunca o nome dele. */
 export async function canViewAllDocuments(
   admin: SupabaseClient,
   identities: Array<string | null | undefined>,
 ): Promise<boolean> {
-  const groups = await getPermissionGroups(admin, identities);
-  // "Usuário Administrativo" não é visão total: é escopo por diretoria.
-  return groups.some(
-    (g) => !BASIC_GROUPS.has(normalizeGroupName(g)) && !isDirectorateGroup(g),
-  );
-}
-
-/**
- * Grupo "Usuário Administrativo": vê todos os documentos da própria diretoria
- * (centro de custo de 2º nível informado pelo IdP), e não a base inteira.
- */
-export function isDirectorateGroup(name: unknown): boolean {
-  const n = normalizeGroupName(name);
-  return n === "usuario administrativo" || n === "usuarios administrativos";
+  const caps = await getCapabilities(admin, identities);
+  return caps.has("expenses_view_all") || caps.has("approvals_view_all");
 }
 
 /** Ramo (diretoria) de um centro de custo: "1.6.1.2" → "1.6". */
@@ -140,16 +163,17 @@ export function costCenterInBranch(costCenter: unknown, branch: string | null): 
 }
 
 /**
- * Diretoria visível para o caller quando ele pertence ao grupo
- * "Usuário Administrativo". Retorna null quando não é do grupo ou quando o IdP
- * não define o centro de custo (nesse caso ele continua vendo só os próprios).
+ * Diretoria visível para o caller — capacidade `documents_view_directorate`.
+ * Retorna null quando o grupo não tem a capacidade ou quando o IdP não define
+ * o centro de custo (nesse caso ele continua vendo só os próprios).
  */
 export async function resolveDirectorateBranch(
   admin: SupabaseClient,
   identities: Array<string | null | undefined>,
 ): Promise<string | null> {
-  const groups = await getPermissionGroups(admin, identities);
-  if (!groups.some((g) => isDirectorateGroup(g))) return null;
+  const caps = await getCapabilities(admin, identities);
+  if (!caps.has("documents_view_directorate")) return null;
+  if (caps.has("expenses_view_all") || caps.has("approvals_view_all")) return null;
 
   const wanted = identities.map(canonicalIdentity).filter(Boolean);
   if (!wanted.length) return null;

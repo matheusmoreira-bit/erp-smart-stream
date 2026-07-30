@@ -1,11 +1,10 @@
-import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 import { useCurrentUserCostCenter, costCenterBranch } from "@/hooks/useCurrentUserCostCenter";
-import { isDirectorateGroup } from "@/lib/permission-group-utils";
 
 export interface DirectorateScope {
   /** Diretoria visível (CC de 2º nível, ex.: "1.6") ou null. */
   branch: string | null;
-  /** True quando o usuário pertence ao grupo "Usuário Administrativo". */
+  /** True quando o grupo tem a capacidade "ver documentos da própria diretoria". */
   isDirectorateUser: boolean;
   loading: boolean;
   /** Um centro de custo pertence à diretoria do usuário? */
@@ -13,18 +12,21 @@ export interface DirectorateScope {
 }
 
 /**
- * Escopo do grupo "Usuário Administrativo": vê todos os documentos (compras e
- * aprovações) da própria diretoria — o centro de custo de 2º nível informado
- * pelo IdP (1.6.1.2 → 1.6.%).
- *
- * Sem centro de custo no IdP, `branch` fica null e o usuário continua vendo
- * apenas os próprios documentos (mesmo comportamento do grupo "Usuário").
+ * Escopo por diretoria — capacidade do grupo `documents_view_directorate`.
+ * O recorte é o centro de custo de 2º nível informado pelo IdP (1.6.1.2 → 1.6.%).
+ * Sem CC no IdP, `branch` fica null e o usuário continua vendo só os próprios.
  */
 export function useDirectorateScope(): DirectorateScope {
-  const { groups, isPrivileged, loading: loadingGroups } = useMyPermissionGroups();
+  const { has, isPrivileged, capabilities, loading: loadingGroups } = useMyCapabilities();
   const { costCenter, loading: loadingCc } = useCurrentUserCostCenter();
 
-  const isDirectorateUser = !isPrivileged && groups.some((g) => isDirectorateGroup(g));
+  // Visão total prevalece sobre o recorte por diretoria.
+  const isDirectorateUser =
+    !isPrivileged &&
+    capabilities.has("documents_view_directorate") &&
+    !capabilities.has("expenses_view_all") &&
+    !capabilities.has("approvals_view_all");
+  void has;
   const branch = isDirectorateUser ? costCenterBranch(costCenter) : null;
 
   const matches = (cc: string | null | undefined) => {

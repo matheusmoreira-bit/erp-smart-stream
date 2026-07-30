@@ -1,5 +1,9 @@
 /**
- * Utilitários compartilhados para avaliar grupos de permissão no client.
+ * Utilitários compartilhados de IDENTIDADE para avaliar grupos no client.
+ *
+ * Regras de negócio (visibilidade, centros de custo, cadastros) NÃO moram aqui:
+ * são capacidades configuradas no grupo — ver `src/lib/permission-capabilities.ts`
+ * e `src/hooks/useMyCapabilities.ts`.
  */
 
 /** Normaliza um identificador (email/usuário SAP) removendo acentos e símbolos. */
@@ -23,7 +27,7 @@ export function identityMatches(a: unknown, b: unknown): boolean {
   return strip(ca) === strip(cb);
 }
 
-/** Normaliza o nome de um grupo de permissão. */
+/** Normaliza o nome de um grupo de permissão (uso apenas para exibição/ordenação). */
 export function normalizeGroupName(value: unknown): string {
   return String(value ?? "")
     .normalize("NFD")
@@ -31,64 +35,3 @@ export function normalizeGroupName(value: unknown): string {
     .toLowerCase()
     .trim();
 }
-
-/** Grupos "básicos": só enxergam os próprios documentos. */
-const BASIC_GROUPS = new Set(["usuario", "usuarios", "user", "users"]);
-
-export function isBasicGroup(name: unknown): boolean {
-  return BASIC_GROUPS.has(normalizeGroupName(name));
-}
-
-/**
- * Grupo "Usuário Administrativo": enxerga todos os documentos da própria
- * diretoria (CC de 2º nível vindo do IdP) — não é visão total da base.
- */
-export function isDirectorateGroup(name: unknown): boolean {
-  const n = normalizeGroupName(name);
-  return n === "usuario administrativo" || n === "usuarios administrativos";
-}
-
-/**
- * Grupos que sempre veem/selecionam todos os centros de custo.
- * "Usuário Administrativo" continua com visibilidade de documentos restrita à
- * própria diretoria, mas pode LANÇAR em qualquer centro de custo.
- */
-export function isFullCostCenterGroup(name: unknown): boolean {
-  const n = normalizeGroupName(name);
-  return (
-    n === "admin" ||
-    isDirectorateGroup(n) ||
-    n.includes("facilities") ||
-    n.includes("contabil") ||
-    n.includes("fiscal") ||
-    n.includes("financeiro") ||
-    n.includes("contas a pagar") ||
-    n === "cfo"
-  );
-}
-
-/**
- * Grupos que podem CADASTRAR fornecedor/cliente diretamente no ERP.
- * Os demais (inclusive "Usuário Administrativo") só podem SOLICITAR o cadastro.
- */
-export function isSupplierRegistrarGroup(name: unknown): boolean {
-  const n = normalizeGroupName(name);
-  return (
-    n === "admin" ||
-    n.includes("facilities") ||
-    n.includes("cadastro") ||
-    n.includes("suprimentos") ||
-    n.includes("compras")
-  );
-}
-
-/** True quando o usuário pode cadastrar fornecedor direto (admin/privilegiado ou grupo registrador). */
-export function canRegisterSupplierDirectly(
-  groups: unknown[],
-  isPrivileged?: boolean,
-): boolean {
-  if (isPrivileged) return true;
-  return (groups || []).some((g) => isSupplierRegistrarGroup(g));
-}
-
-

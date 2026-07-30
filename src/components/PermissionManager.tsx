@@ -41,6 +41,7 @@ import {
   MODULES,
   VIEW_ONLY_MODULES,
   CAPABILITIES,
+  CAPABILITY_CATEGORIES,
   type PermissionGroup,
   type ModulePerms,
 } from "@/hooks/usePermissions";
@@ -212,31 +213,51 @@ function GroupDetail({
         </div>
       </IosList>
 
-      {/* Capabilities */}
+      {/* Capabilities — todas as segregações de função do sistema */}
       <div>
-        <SectionTitle>Capacidades</SectionTitle>
+        <SectionTitle>Capacidades do grupo</SectionTitle>
         <p className="text-xs text-muted-foreground px-4 pb-2 flex gap-1.5">
           <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-          Flags transversais que liberam ações específicas dentro das telas.
+          Toda segregação de função (visibilidade, filtros e ações especiais) é
+          definida aqui, no grupo — nunca por usuário.
         </p>
-        <IosList>
-          {CAPABILITIES.map((c) => {
-            const p = perms[c.key] || NONE;
+        <div className="space-y-4">
+          {CAPABILITY_CATEGORIES.map((cat) => {
+            const items = CAPABILITIES.filter((c) => c.category === cat.key);
+            if (!items.length) return null;
+            const onCount = items.filter((c) => (perms[c.key] || NONE).view).length;
             return (
-              <div key={c.key} className="px-4 py-3 flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">{c.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{c.hint}</p>
+              <div key={cat.key}>
+                <div className="flex items-center justify-between px-4 pb-1.5">
+                  <p className="text-xs font-semibold text-foreground">{cat.label}</p>
+                  <Badge variant={onCount ? "secondary" : "outline"} className="text-[10px]">
+                    {onCount}/{items.length}
+                  </Badge>
                 </div>
-                <Switch
-                  checked={p.view}
-                  onCheckedChange={(v) => setAccess(c.key, v, true)}
-                />
+                <p className="text-[11px] text-muted-foreground px-4 pb-2">{cat.hint}</p>
+                <IosList>
+                  {items.map((c) => {
+                    const p = perms[c.key] || NONE;
+                    return (
+                      <div key={c.key} className="px-4 py-3 flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground">{c.label}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{c.hint}</p>
+                        </div>
+                        <Switch
+                          checked={p.view}
+                          onCheckedChange={(v) => setAccess(c.key, v, true)}
+                        />
+                      </div>
+                    );
+                  })}
+                </IosList>
               </div>
             );
           })}
-        </IosList>
+        </div>
       </div>
+
 
       {/* Modules with CRUD */}
       <div>
@@ -592,6 +613,17 @@ function GroupsView({
   onOpen: (g: PermissionGroup) => void;
   onNew: () => void;
 }) {
+  const { assignments } = useUserAssignments();
+  const memberCount = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const a of assignments || []) {
+      if (!map.has(a.group_id)) map.set(a.group_id, new Set());
+      map.get(a.group_id)!.add(canonicalUserKey(a.sap_email) || a.sap_email);
+    }
+    return map;
+  }, [assignments]);
+  const capKeys = useMemo(() => new Set(CAPABILITIES.map((c) => c.key)), []);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -610,21 +642,29 @@ function GroupsView({
       ) : (
         <IosList>
           {groups.map((g) => {
-            const moduleCount = Object.values(g.modulePerms).filter((p) => p.view).length;
+            const enabled = Object.entries(g.modulePerms).filter(([, p]) => p.view);
+            const moduleCount = enabled.filter(([k]) => !capKeys.has(k)).length;
+            const capCount = enabled.filter(([k]) => capKeys.has(k)).length;
+            const members = memberCount.get(g.id)?.size ?? 0;
             return (
               <IosRow key={g.id} onClick={() => onOpen(g)}>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
                     {g.name === "Usuário" && (
                       <Badge variant="secondary" className="text-[10px]">Padrão</Badge>
+                    )}
+                    {members === 0 && (
+                      <Badge variant="outline" className="text-[10px]">Sem usuários</Badge>
                     )}
                   </div>
                   {g.description && (
                     <p className="text-xs text-muted-foreground truncate mt-0.5">{g.description}</p>
                   )}
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    {moduleCount} {moduleCount === 1 ? "acesso" : "acessos"}
+                    {members} {members === 1 ? "usuário" : "usuários"} · {moduleCount}{" "}
+                    {moduleCount === 1 ? "tela" : "telas"} · {capCount}{" "}
+                    {capCount === 1 ? "capacidade" : "capacidades"}
                   </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -636,6 +676,7 @@ function GroupsView({
     </div>
   );
 }
+
 
 /* ── Main Component ────────────────────────────────────────── */
 

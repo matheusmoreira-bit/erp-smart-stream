@@ -56,8 +56,7 @@ import {
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
-import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
-import { canRegisterSupplierDirectly } from "@/lib/permission-group-utils";
+import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { UserPlus, RefreshCw, Building2 } from "lucide-react";
@@ -168,8 +167,9 @@ export function CreateExpenseModal({
 }) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
-  const { groups: myGroups, isPrivileged: isPrivilegedUser } = useMyPermissionGroups();
-  const canRegisterSupplier = canRegisterSupplierDirectly(myGroups, isPrivilegedUser);
+  // Capacidade do GRUPO: cadastrar direto no ERP ou apenas solicitar cadastro.
+  const { has: hasCapability, isPrivileged: isPrivilegedUser } = useMyCapabilities();
+  const canRegisterSupplier = hasCapability("suppliers_register_direct");
 
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -351,11 +351,15 @@ export function CreateExpenseModal({
   // pré-preencher o CC padrão em compras e restringir itens IMP%/FOL%.
   const { costCenter: userCostCenter } = useCurrentUserCostCenter();
 
-  // Filtro de alçada: itens IMP% só para CC 1.2.2.%; itens FOL% só para CC 1.6.%.
-  // Vale só no fluxo de compras — vendas mantém a lista integral.
-  // Facilities e admins veem/selecionam todos os centros de custo e itens.
+  // Filtro de alçada de itens (IMP%, FOL%): liberado pela capacidade do grupo
+  // "Liberar itens restritos por centro de custo" ou por quem seleciona todos
+  // os centros de custo. Vendas mantém a lista integral.
   const { canSeeAll: canSeeAllCostCenters, loading: canSeeAllLoading } = useCanSeeAllCostCenters();
-  const bypassCcItemRules = !!sapSession?.isSuperUser || canSeeAllCostCenters;
+  const bypassCcItemRules =
+    !!sapSession?.isSuperUser ||
+    isPrivilegedUser ||
+    hasCapability("items_restricted_all") ||
+    canSeeAllCostCenters;
   const filteredItemOptions = useMemo(() => {
     if (isSales) return itemOptions;
     return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
