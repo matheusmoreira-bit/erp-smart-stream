@@ -50,6 +50,127 @@ const CHANGELOG: RoadmapItem[] = [
   // ---- Fase 6 — Experiência e inteligência (jul/2026)
   {
     date: "2026-07-30",
+    title: "Identidade canônica do usuário SAP",
+    kind: "melhoria",
+    track: "Governança e segurança",
+    description:
+      "Usuário SAP como chave única (1:N e-mails, 1:1 nome), unificação de duplicidades por similaridade de grafia e consolidação mantendo o grupo de maior permissão em todas as bases.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Central de notificações configurável",
+    kind: "funcao",
+    track: "Experiência e inteligência",
+    description:
+      "Histórico único de todos os envios (in-app, e-mail, WhatsApp e rotinas) e edição de gatilhos, frequência, canais e templates pelos administradores.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Módulo de usuários unificado",
+    kind: "modulo",
+    track: "Governança e segurança",
+    description:
+      "Hub único com lista de pessoas, grupos, capabilities e sincronização de IdP, substituindo as telas separadas de permissões e usuários SAP.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Permissões por capability (GRUPO > USER)",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "Catálogo central de flags por grupo (ver todos, cadastro direto de fornecedor, empresas teste etc.), sem exceções escondidas no usuário.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Onboarding guiado por perfil",
+    kind: "melhoria",
+    track: "Experiência e inteligência",
+    description:
+      "Tour curto no primeiro acesso, adaptado ao grupo de permissão, com opção de reexibir pelo menu do usuário.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Trilha de auditoria unificada por documento",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "Linha do tempo pesquisável reunindo eventos de ERP, aprovações, retries do SAP e notificações.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Painel único de saúde das integrações",
+    kind: "funcao",
+    track: "Integrações e dados",
+    description:
+      "SAP Service Layer, HanaAPI V2, PagCorp e Master Tax em um só painel, com latência, taxa de erro e última execução.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Fila de retentativa automática com backoff",
+    kind: "automacao",
+    track: "Integrações e dados",
+    description:
+      "Reprocessamento de falhas transitórias com backoff progressivo, jitter, recuperação de itens travados e contingência sem anexo na última tentativa.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Circuit breaker por empresa",
+    kind: "automacao",
+    track: "Integrações e dados",
+    description:
+      "Base indisponível deixa de ser chamada por alguns minutos após falhas seguidas, sem travar as demais rotinas.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Detecção de conflitos entre regras de aprovação",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Alerta de empates de prioridade, sobreposição e regras sombreadas, aproveitando a lógica do Raio-X.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Simulador de regras antes de publicar",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Documento fictício rodado contra a matriz mostra a cadeia de aprovação resultante antes de salvar alterações.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Delegação temporária de alçada (férias)",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Substituto com vigência definida e registro em audit log, evitando documentos parados.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Aprovação por e-mail, mobile e Slack",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Link assinado de uso único em /aprovar/:token, com orquestração multicanal preparada para Slack.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Rascunhos, duplicação e reativação de pedidos",
+    kind: "melhoria",
+    track: "Compras e aprovações",
+    description:
+      "Salvar em andamento, criar pedido a partir de outro já lançado e reativar documentos cancelados pelo autor.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Esboço de NF de entrada no ERP",
+    kind: "integracao",
+    track: "Integrações e dados",
+    description:
+      "Lançamento de rascunho no SAP B1 quando o documento capturado pelo Master Tax tem pedido vinculado sem NF de entrada.",
+  },
+
+  {
+    date: "2026-07-30",
     title: "Relançamento de documentos cancelados",
     kind: "melhoria",
     track: "Compras e aprovações",
