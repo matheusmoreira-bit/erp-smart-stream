@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign, TrendingUp } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign, TrendingUp, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { useUserPhones } from "@/hooks/useUserPhones";
 import EditPhoneDialog from "@/components/EditPhoneDialog";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
+import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog";
 
 type ConfirmAction = {
   type: "lock" | "unlock" | "password";
@@ -54,6 +55,7 @@ export default function UsersPage() {
   const [viewMode, setViewMode] = useState<string>("recorrentes");
   const { phones, upsertPhone } = useUserPhones();
   const [phoneUser, setPhoneUser] = useState<SapUser | null>(null);
+  const [provisionUser, setProvisionUser] = useState<SapUser | null>(null);
 
   // Multi-company password reset state
   const [pwdUser, setPwdUser] = useState<SapUser | null>(null);
@@ -326,7 +328,7 @@ export default function UsersPage() {
                       </span>
                     </div>
 
-                    <div className="w-32 flex items-center justify-end gap-1">
+                    <div className="w-40 flex items-center justify-end gap-1">
                       {isActing ? (
                         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                       ) : (
@@ -367,6 +369,17 @@ export default function UsersPage() {
                           >
                             <KeyRound className="w-4 h-4 text-warning" />
                           </Button>
+                          {user.eMail && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Provisionar acesso (senha aleatória ou definida)"
+                              onClick={() => setProvisionUser(user)}
+                            >
+                              <ShieldCheck className="w-4 h-4 text-primary" />
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>
@@ -439,6 +452,16 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {provisionUser?.eMail && (
+        <ProvisionSapAccessDialog
+          open={!!provisionUser}
+          onOpenChange={(o) => { if (!o) setProvisionUser(null); }}
+          targetEmail={provisionUser.eMail}
+          initialSapUser={provisionUser.UserCode}
+          initialCompanyDbs={session ? [session.companyDB] : []}
+        />
+      )}
 
       {phoneUser && (
         <EditPhoneDialog

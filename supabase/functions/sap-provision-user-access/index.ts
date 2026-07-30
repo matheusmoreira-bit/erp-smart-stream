@@ -53,6 +53,25 @@ function generatePassword(len = 24): string {
   return chars.join("");
 }
 
+const TRIVIAL_PASSWORDS = new Set([
+  "sap@2025", "sap@2024", "sap@2023",
+  "password", "senha123", "12345678", "manager", "administrator",
+]);
+
+/** Valida a senha informada pelo admin contra a mesma política aplicada no cliente. */
+function validatePasswordPolicy(password: string, userCode: string): string | null {
+  if (password.length < 12) return "A senha deve ter no mínimo 12 caracteres";
+  if (password.length > 32) return "A senha deve ter no máximo 32 caracteres";
+  if (!/[A-Z]/.test(password)) return "A senha deve conter ao menos 1 letra maiúscula";
+  if (!/[a-z]/.test(password)) return "A senha deve conter ao menos 1 letra minúscula";
+  if (!/\d/.test(password)) return "A senha deve conter ao menos 1 número";
+  if (!/[^A-Za-z0-9]/.test(password)) return "A senha deve conter ao menos 1 caractere especial";
+  const u = (userCode || "").trim().toLowerCase();
+  if (u.length >= 3 && password.toLowerCase().includes(u)) return "A senha não pode conter o código de usuário";
+  if (TRIVIAL_PASSWORDS.has(password.trim().toLowerCase())) return "A senha não pode ser uma senha trivial/padrão";
+  return null;
+}
+
 async function getBaseUrl(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "";
   const { data } = await admin
@@ -171,9 +190,12 @@ Deno.serve(async (req) => {
     const targetEmailInput = typeof body.target_email === "string" ? body.target_email.trim().toLowerCase() : "";
     const sapUserOverride = typeof body.sap_user === "string" ? body.sap_user.trim() : "";
     const targets: string[] = Array.isArray(body.company_dbs) ? body.company_dbs : [];
+    // Senha definida pelo admin (opcional). Quando ausente, é gerada aleatoriamente.
+    const customPassword = typeof body.password === "string" ? body.password : "";
 
     if (!targetUserId && !targetEmailInput) return json({ error: "target_user_id ou target_email obrigatório" }, 400);
     if (targets.length === 0 || targets.length > 50) return json({ error: "company_dbs deve ter entre 1 e 50 empresas" }, 400);
+
 
     const admin = service();
 
@@ -204,6 +226,12 @@ Deno.serve(async (req) => {
 
     const sapUser = (sapUserOverride || defaultSapUserFromEmail(targetEmail)).toLowerCase();
     if (!sapUser) return json({ error: "Não foi possível determinar o UserCode do SAP" }, 400);
+
+    if (customPassword) {
+      const policyError = validatePasswordPolicy(customPassword, sapUser);
+      if (policyError) return json({ error: policyError }, 400);
+    }
+
 
     const { data: companiesData } = await admin
       .from("companies")
@@ -251,7 +279,7 @@ Deno.serve(async (req) => {
           results.push({ companyDB: companyDb, displayName, status: "skipped", message: `Usuário '${sapUser}' não existe nesta empresa` });
           continue;
         }
-        const newPassword = generatePassword(24);
+        const newPassword = customPassword || generatePassword(24);
         const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", {
           UserPassword: newPassword, Locked: "tNO",
         });
@@ -285,7 +313,7 @@ Deno.serve(async (req) => {
             entity_type: "user_sap_credentials",
             entity_id: targetUserId,
             company_db: companyDb,
-            details: { target_email: targetEmail, sap_user: sapUser },
+            details: { target_email: targetEmail, sap_user: sapUser, password_source: customPassword ? "custom" : "random" },
           });
         } catch { /* audit best-effort */ }
         results.push({ companyDB: companyDb, displayName, status: "success", message: `Acesso provisionado para '${sapUser}'` });
