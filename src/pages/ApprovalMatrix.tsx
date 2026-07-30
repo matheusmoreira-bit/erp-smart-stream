@@ -13,7 +13,10 @@ import {
   ShoppingCart,
   Receipt,
   Wallet,
+  List,
+  Network,
 } from "lucide-react";
+import { ApprovalMatrixMindMap } from "@/components/ApprovalMatrixMindMap";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
