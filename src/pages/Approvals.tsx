@@ -3512,6 +3512,19 @@ export default function ApprovalsPage() {
         onConfirm={handleDelegate}
         isSubmitting={isDelegating}
       />
+
+      <Dialog open={showSubstitutes} onOpenChange={(o) => {
+        setShowSubstitutes(o);
+        if (!o) refreshSubstituteGrants();
+      }}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Delegação temporária de alçada</DialogTitle>
+          </DialogHeader>
+          <SubstituteApproversTab isAdmin={isAdmin} />
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
