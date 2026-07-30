@@ -1,4 +1,4 @@
-import { Bell } from "lucide-react";
+import { Bell, History } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -9,12 +9,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { DocumentMilestonesDialog } from "@/components/DocumentMilestonesDialog";
 
 export function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const [milestonesId, setMilestonesId] = useState<string | null>(null);
+
 
   const categoryIcon: Record<string, string> = {
     approval: "📋",
