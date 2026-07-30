@@ -229,8 +229,8 @@ export default function MobileInvoiceCapture() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreate={async (input) => {
-          const result = await createExpense(input as any);
-          toast.success("Lançamento criado a partir da foto.");
+          const result = await createExpense(input as any) as any;
+          if (!result?.queued) toast.success("Lançamento criado a partir da foto.");
           setShowCreate(false);
           reset();
           navigate("/aprovacoes/mobile");
