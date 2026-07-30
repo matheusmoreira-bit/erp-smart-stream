@@ -1193,13 +1193,30 @@ function RuleFormModal({
           </div>
 
 
-          <div className="border-t border-border pt-4 flex justify-end gap-3">
+          <div className="border-t border-border pt-4 flex flex-wrap justify-end gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setShowPreSimulator(true)}
+              disabled={isSaving}
+              className="gap-1.5 mr-auto"
+              title="Rodar um documento fictício contra a matriz usando estas alterações, antes de salvar"
+            >
+              <PlayCircle className="w-4 h-4" /> Simular antes de salvar
+            </Button>
             <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={isSaving} className="gap-1.5">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               {editing ? "Salvar Alterações" : "Criar Regra"}
             </Button>
           </div>
+
+          <RuleSimulator
+            open={showPreSimulator}
+            onClose={() => setShowPreSimulator(false)}
+            rules={allRules}
+            draftRule={draftRule}
+          />
+
         </div>
       </DialogContent>
     </Dialog>
