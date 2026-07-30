@@ -3053,6 +3053,8 @@ export default function ApprovalsPage() {
                     !!createdTo,
                     !!dueFrom,
                     !!dueTo,
+                    ccFilter.length > 0,
+                    projectFilter.length > 0,
                   ].filter(Boolean).length;
                   return active > 0 ? (
                     <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{active}</Badge>
@@ -3063,7 +3065,7 @@ export default function ApprovalsPage() {
             <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">Filtros</p>
-                {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo) && (
+                {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -3075,6 +3077,8 @@ export default function ApprovalsPage() {
                       setCreatedTo("");
                       setDueFrom("");
                       setDueTo("");
+                      setCcFilter([]);
+                      setProjectFilter([]);
                     }}
                     className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1"
                   >
@@ -3083,6 +3087,34 @@ export default function ApprovalsPage() {
                   </Button>
                 )}
               </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Centro de custo</Label>
+                  <FilterMultiSelect
+                    options={ccOptions}
+                    selected={ccFilter}
+                    onChange={setCcFilter}
+                    placeholder="Todos os centros de custo"
+                    searchPlaceholder="Buscar centro de custo..."
+                    emptyText="Sem centros de custo nos documentos"
+                    ariaLabel="Filtrar por centro de custo"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Projeto</Label>
+                  <FilterMultiSelect
+                    options={projectOptions}
+                    selected={projectFilter}
+                    onChange={setProjectFilter}
+                    placeholder="Todos os projetos"
+                    searchPlaceholder="Buscar projeto..."
+                    emptyText="Sem projetos nos documentos"
+                    ariaLabel="Filtrar por projeto"
+                  />
+                </div>
+              </div>
+
 
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Tipo</Label>
