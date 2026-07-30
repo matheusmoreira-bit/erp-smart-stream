@@ -1,40 +1,26 @@
-import { NavLink } from "react-router-dom";
-import { ClipboardList, FileText, Users, Wallet } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { SubmenuBar } from "@/components/SubmenuBar";
+import { useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 const TABS = [
-  { to: "/vendas/pedidos", label: "Pedidos de Venda", icon: ClipboardList },
-  { to: "/vendas/nfse", label: "NFS-e", icon: FileText },
-  { to: "/vendas/recebimentos", label: "Contas a Receber", icon: Wallet },
-  { to: "/vendas/destinatarios", label: "Destinatários", icon: Users },
+  { to: "/vendas/pedidos", label: "Pedidos de Venda" },
+  { to: "/vendas/nfse", label: "NFS-e" },
+  { to: "/vendas/recebimentos", label: "Contas a Receber" },
+  { to: "/vendas/destinatarios", label: "Destinatários" },
 ];
 
-/** Navegação entre os submódulos do ciclo de vendas. */
+/** Submenu do ciclo de vendas. */
 export function SalesTabs() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const active = TABS.find((t) => pathname.startsWith(t.to))?.to ?? TABS[0].to;
+
   return (
-    <nav
-      aria-label="Submódulos de vendas"
-      className="border-b border-border bg-muted/20 px-4 sm:px-6"
-    >
-      <div className="max-w-7xl mx-auto flex gap-1 overflow-x-auto">
-        {TABS.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-2 whitespace-nowrap px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors",
-                isActive
-                  ? "border-primary text-foreground font-medium"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )
-            }
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </NavLink>
-        ))}
-      </div>
-    </nav>
+    <SubmenuBar
+      moduleLabel="Vendas"
+      items={TABS.map((t) => ({ key: t.to, label: t.label }))}
+      active={active}
+      onSelect={(key) => navigate(key)}
+    />
   );
 }

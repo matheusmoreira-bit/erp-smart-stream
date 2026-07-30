@@ -24,5 +24,5 @@ const TABS: readonly HubTabDef<TabKey>[] = [
 ];
 
 export default function UsersHub({ tab }: { tab: TabKey }) {
-  return <TabsHub tabs={TABS} active={tab} />;
+  return <TabsHub tabs={TABS} active={tab} moduleLabel="Usuários" />;
 }

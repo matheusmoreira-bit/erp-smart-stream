@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useCompanies } from "@/hooks/useCompanies";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { PageTitle } from "@/components/PageTitle";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
@@ -22,6 +23,7 @@ import {
   Radar,
   UserCog,
   ClipboardList,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -41,6 +43,8 @@ interface ModuleCard {
   moduleKey: string;
   /** If set, the card is visible when the user has access to ANY of these modules. */
   subModuleKeys?: string[];
+  /** Submenu options shown when the card is clicked. */
+  subItems?: { label: string; path: string; moduleKey?: string }[];
 }
 
 const modules: Record<string, ModuleCard> = {
@@ -70,6 +74,13 @@ const modules: Record<string, ModuleCard> = {
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "sales",
+    subItems: [
+      { label: "Pedidos de Venda", path: "/vendas/pedidos" },
+      { label: "NFS-e", path: "/vendas/nfse" },
+      { label: "Contas a Receber", path: "/vendas/recebimentos" },
+      { label: "Destinatários", path: "/vendas/destinatarios" },
+      { label: "Histórico de Baixas", path: "/vendas/historico" },
+    ],
   },
   approvals: {
     title: "Aprovações",
@@ -80,6 +91,10 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "",
     subModuleKeys: ["approvals", "approval_history"],
+    subItems: [
+      { label: "Pendentes", path: "/aprovacoes?tab=pending", moduleKey: "approvals" },
+      { label: "Histórico", path: "/aprovacoes?tab=history", moduleKey: "approval_history" },
+    ],
   },
   approval_rules: {
     title: "Regras de Aprovação",
@@ -98,6 +113,12 @@ const modules: Record<string, ModuleCard> = {
     color: "text-cyan-400",
     bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "pagcorp",
+    subItems: [
+      { label: "Transações", path: "/cartoes/transacoes" },
+      { label: "Mapeamento de Cartões", path: "/cartoes/mapeamento" },
+      { label: "Indedutíveis", path: "/cartoes/indedutiveis" },
+      { label: "Histórico de Integrações", path: "/cartoes/historico" },
+    ],
   },
   users: {
     title: "Usuários",
@@ -107,6 +128,14 @@ const modules: Record<string, ModuleCard> = {
     color: "text-violet-400",
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "users",
+    subItems: [
+      { label: "Usuários", path: "/usuarios/lista", moduleKey: "users" },
+      { label: "Atividade", path: "/usuarios/atividade", moduleKey: "users" },
+      { label: "Produtividade", path: "/usuarios/produtividade", moduleKey: "users_productivity" },
+      { label: "Licenças", path: "/usuarios/licencas", moduleKey: "users" },
+      { label: "Importar Licenças", path: "/usuarios/importar-licencas", moduleKey: "users" },
+      { label: "Sincronização IdP", path: "/usuarios/sincronizacao-idp", moduleKey: "users" },
+    ],
   },
   suppliers: {
     title: "Fornecedores",
@@ -144,6 +173,12 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "",
     subModuleKeys: ["synapse", "integration_history", "credentials"],
+    subItems: [
+      { label: "Automações", path: "/integracoes/automacoes", moduleKey: "synapse" },
+      { label: "Monitor de Integrações", path: "/integracoes/monitor", moduleKey: "integration_history" },
+      { label: "Colaboradores", path: "/integracoes/colaboradores", moduleKey: "employee_integration" },
+      { label: "Credenciais", path: "/integracoes/credenciais", moduleKey: "credentials" },
+    ],
   },
   intercompany: {
     title: "Plano de Contas & CC",
@@ -199,6 +234,13 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-sky-500/20 to-sky-500/5",
     moduleKey: "",
     subModuleKeys: ["audit_console", "fiscal_audit", "audit_log", "kyp"],
+    subItems: [
+      { label: "Auditoria SAP", path: "/auditoria/sap", moduleKey: "audit_console" },
+      { label: "Auditoria Fiscal", path: "/auditoria/fiscal", moduleKey: "fiscal_audit" },
+      { label: "Cruzamento Fiscal × Pagamentos", path: "/auditoria/cruzamento", moduleKey: "fiscal_audit" },
+      { label: "KYP — Fornecedores", path: "/auditoria/kyp", moduleKey: "kyp" },
+      { label: "Logs do Sistema", path: "/auditoria/logs", moduleKey: "audit_log" },
+    ],
   },
 };
 
@@ -244,35 +286,57 @@ function moduleHasAccess(mod: ModuleCard, userModules: string[]): boolean {
   return userModules.includes(mod.moduleKey);
 }
 
-function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: number; hasAccess: boolean }) {
+function ModuleCardItem({
+  mod,
+  index,
+  hasAccess,
+  expanded,
+  onToggle,
+}: {
+  mod: ModuleCard;
+  index: number;
+  hasAccess: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+}) {
   const navigate = useNavigate();
   const Icon = mod.icon;
+  const hasSub = !!mod.subItems?.length;
 
   return (
     <motion.button
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.05, 0.3) }}
-      onClick={() => hasAccess && navigate(mod.path)}
+      onClick={() => {
+        if (!hasAccess) return;
+        if (hasSub && onToggle) onToggle();
+        else navigate(mod.path);
+      }}
       disabled={!hasAccess}
+      aria-expanded={hasSub ? !!expanded : undefined}
       className={`glass-card p-4 sm:p-6 text-left transition-all group relative overflow-hidden active:scale-[0.98] ${
         hasAccess
           ? "hover:border-primary/40 cursor-pointer hover:scale-[1.02]"
           : "opacity-50 cursor-not-allowed"
-      }`}
+      } ${expanded ? "border-primary/50" : ""}`}
     >
       {/* Glow background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} ${expanded ? "opacity-100" : "opacity-0"} group-hover:opacity-100 transition-opacity`} />
 
       <div className="relative z-10">
         <div className="flex items-start justify-between mb-3 sm:mb-4">
           <div className={`p-2.5 sm:p-3 rounded-xl bg-card border border-border ${mod.color}`}>
             <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          {hasAccess ? (
-            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-          ) : (
+          {!hasAccess ? (
             <Lock className="w-4 h-4 text-muted-foreground" />
+          ) : hasSub ? (
+            <ChevronDown
+              className={`w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-transform ${expanded ? "rotate-180 text-primary" : ""}`}
+            />
+          ) : (
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           )}
         </div>
         <h3 className="text-base sm:text-lg font-bold text-foreground mb-1 sm:mb-2">{mod.title}</h3>
@@ -282,10 +346,60 @@ function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: num
   );
 }
 
+function SubmenuPanel({
+  mod,
+  userModules,
+  permLoading,
+}: {
+  mod: ModuleCard;
+  userModules: string[];
+  permLoading: boolean;
+}) {
+  const navigate = useNavigate();
+  const items = (mod.subItems ?? []).filter(
+    (s) =>
+      permLoading ||
+      !s.moduleKey ||
+      userModules.length === 0 ||
+      userModules.includes(s.moduleKey),
+  );
+  if (items.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.2 }}
+      className="col-span-2 md:col-span-3 overflow-hidden"
+    >
+      <div className="glass-card p-3 sm:p-4 mt-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+          {mod.title} — submódulos
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          {items.map((s) => (
+            <button
+              key={s.path}
+              onClick={() => navigate(s.path)}
+              className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card/50 px-3 py-2.5 text-left text-sm text-foreground hover:border-primary/40 hover:bg-muted/50 active:scale-[0.99] transition-all min-h-11"
+            >
+              <span className="truncate">{s.label}</span>
+              <ArrowRight className={`w-4 h-4 flex-shrink-0 ${mod.color}`} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+
 export function MainMenu() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
   const { userModules, loading: permLoading } = useModuleAccess();
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const { getLabel } = useCompanies(true);
   const companyLabel = getLabel(session?.companyDB || "");
@@ -372,8 +486,24 @@ export function MainMenu() {
                         mod={mod}
                         index={i}
                         hasAccess={true}
+                        expanded={expandedKey === mod.path}
+                        onToggle={() =>
+                          setExpandedKey((k) => (k === mod.path ? null : mod.path))
+                        }
                       />
                     ))}
+                    <AnimatePresence initial={false}>
+                      {visible
+                        .filter((m) => m.path === expandedKey && m.subItems?.length)
+                        .map((m) => (
+                          <SubmenuPanel
+                            key={`sub-${m.path}`}
+                            mod={m}
+                            userModules={userModules}
+                            permLoading={permLoading}
+                          />
+                        ))}
+                    </AnimatePresence>
                   </div>
                 </section>
               );
