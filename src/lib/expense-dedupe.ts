@@ -119,12 +119,29 @@ export async function claimDocumentHashes(
     .insert(rows)
     .select("file_hash");
   if (error) {
-    // 23505 = unique_violation. Sinaliza corrida com outro usuário.
+    // 23505 = unique_violation. Pode ser corrida OU resquício de lançamento cancelado.
     const code = (error as { code?: string }).code;
     const conflict = code === "23505";
+    if (conflict) {
+      const released = await releaseCancelledClaims(
+        supabase,
+        rows.map((r) => r.file_hash),
+      );
+      if (released.length > 0) {
+        const retry = await supabase
+          .from("submitted_document_hashes")
+          .insert(rows)
+          .select("file_hash");
+        if (!retry.error) {
+          console.info(LOG_PREFIX, "claimed após liberar cancelados", retry.data?.length ?? 0);
+          return { inserted: retry.data?.length ?? 0, conflict: false };
+        }
+      }
+    }
     console.warn(LOG_PREFIX, "claimDocumentHashes falhou", { code, conflict });
     return { inserted: 0, conflict, error };
   }
+
   console.info(LOG_PREFIX, "claimed", { inserted: data?.length ?? 0 });
   return { inserted: data?.length ?? 0, conflict: false };
 }
