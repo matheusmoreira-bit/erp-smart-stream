@@ -154,7 +154,7 @@ export default function SlaEscalation() {
       <BackofficePageHeader
         title="Escalonamento por SLA"
         description="Documentos parados além do prazo sobem automaticamente para o substituto vigente ou para o nível superior, com registro em auditoria."
-        icon={AlarmClock}
+        icon={<AlarmClock className="w-5 h-5" />}
       />
 
       <div className="container mx-auto px-4 py-6 space-y-6">
