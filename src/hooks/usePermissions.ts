@@ -415,10 +415,10 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
         .from("user_group_assignments")
         .select("group_id, sap_email");
 
-      const mine = (allAssignments || []).filter((a: any) => {
-        const sapEmail = a.sap_email.toLowerCase();
-        return sapEmail === identifier || sapEmail.startsWith(identifier + "@");
-      });
+      const myKey = canonicalUserKey(identifier);
+      const mine = (allAssignments || []).filter(
+        (a: any) => canonicalUserKey(a.sap_email) === myKey,
+      );
 
       if (cancelled) return;
 

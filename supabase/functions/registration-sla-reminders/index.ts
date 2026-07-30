@@ -115,9 +115,23 @@ Deno.serve(async (req) => {
         .from("user_group_assignments")
         .select("sap_email")
         .in("group_id", facilitiesIds);
-      for (const a of assignments || []) {
-        const email = String(a.sap_email || "").trim().toLowerCase();
-        if (email.includes("@")) recipients.add(email);
+      // As atribuições guardam a chave canônica do usuário SAP; os e-mails
+      // ficam no diretório (1 usuário SAP : N e-mails).
+      const keys = (assignments || [])
+        .map((a) => String(a.sap_email || "").trim().toLowerCase())
+        .filter(Boolean);
+      for (const key of keys) {
+        if (key.includes("@")) recipients.add(key);
+      }
+      if (keys.length) {
+        const { data: mails } = await supabase
+          .from("sap_user_emails")
+          .select("email")
+          .in("user_key", keys);
+        for (const m of mails || []) {
+          const email = String(m.email || "").trim().toLowerCase();
+          if (email.includes("@")) recipients.add(email);
+        }
       }
     }
     const to = Array.from(recipients);

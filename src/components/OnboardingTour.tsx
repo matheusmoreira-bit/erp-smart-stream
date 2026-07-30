@@ -24,6 +24,7 @@ import {
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
+import { canonicalUserKey } from "@/lib/user-identity";
 import { whatsNewStorageKey } from "@/components/WhatsNewWizard";
 
 /**
@@ -170,11 +171,10 @@ export function OnboardingTour() {
         .from("user_group_assignments")
         .select("sap_email, permission_groups(name)");
       if (cancelled) return;
-      const id = user.toLowerCase();
-      const mine = (data || []).find((a: any) => {
-        const email = String(a.sap_email || "").toLowerCase();
-        return email === id || email.startsWith(id + "@");
-      }) as any;
+      const id = canonicalUserKey(user);
+      const mine = (data || []).find(
+        (a: any) => canonicalUserKey(a.sap_email) === id,
+      ) as any;
       setGroupName(mine?.permission_groups?.name ?? null);
     })();
     return () => {
