@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   XCircle,
   Ban,
+  RotateCw,
   Cable,
   AlertTriangle,
   History,
@@ -30,6 +31,7 @@ type LogDecision =
   | "approved"
   | "rejected"
   | "cancelled"
+  | "reactivated"
   | "integrated"
   | "integration_failed";
 
@@ -60,6 +62,7 @@ const DECISION_META: Record<LogDecision, { label: string; icon: React.ComponentT
   approved: { label: "Aprovado", icon: CheckCircle2, color: "text-success" },
   rejected: { label: "Rejeitado", icon: XCircle, color: "text-destructive" },
   cancelled: { label: "Cancelado", icon: Ban, color: "text-muted-foreground" },
+  reactivated: { label: "Reativado pelo autor", icon: RotateCw, color: "text-primary" },
   integrated: { label: "Integrado ao ERP", icon: Cable, color: "text-success" },
   integration_failed: { label: "Falha na integração", icon: AlertTriangle, color: "text-destructive" },
 };
