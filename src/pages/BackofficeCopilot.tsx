@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Send, Loader2, Sparkles, ShieldAlert } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, ShieldAlert, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type ToolStep = { name: string; label: string; status: "running" | "done" | "error" };
+type Msg = { role: "user" | "assistant"; content: string; steps?: ToolStep[] };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/copilot-chat`;
 
@@ -44,15 +46,26 @@ export default function BackofficeCopilot() {
     setLoading(true);
 
     let acc = "";
-    const upsert = (chunk: string) => {
-      acc += chunk;
+    let steps: ToolStep[] = [];
+    const patchLast = (patch: Partial<Msg>) => {
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         if (last?.role === "assistant") {
-          return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: acc } : m));
+          return prev.map((m, i) => (i === prev.length - 1 ? { ...m, ...patch } : m));
         }
-        return [...prev, { role: "assistant", content: acc }];
+        return [...prev, { role: "assistant", content: "", ...patch }];
       });
+    };
+    const upsert = (chunk: string) => {
+      acc += chunk;
+      patchLast({ content: acc });
+    };
+    const upsertTool = (t: ToolStep) => {
+      const idx = steps.findIndex((s) => s.name === t.name && s.status === "running");
+      steps = idx >= 0 && t.status !== "running"
+        ? steps.map((s, i) => (i === idx ? t : s))
+        : [...steps, t];
+      patchLast({ steps: [...steps] });
     };
 
     try {
@@ -67,7 +80,7 @@ export default function BackofficeCopilot() {
           Authorization: `Bearer ${token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
         },
-        body: JSON.stringify({ messages: nextMsgs }),
+        body: JSON.stringify({ messages: nextMsgs.map((m) => ({ role: m.role, content: m.content })) }),
       });
 
       if (!resp.ok || !resp.body) {
@@ -92,6 +105,7 @@ export default function BackofficeCopilot() {
           if (payload === "[DONE]") break;
           try {
             const parsed = JSON.parse(payload);
+            if (parsed.tool) upsertTool(parsed.tool as ToolStep);
             const c = parsed.choices?.[0]?.delta?.content;
             if (c) upsert(c);
           } catch {
@@ -164,9 +178,27 @@ export default function BackofficeCopilot() {
                     }`}
                   >
                     {m.role === "assistant" ? (
+                      <>
+                      {!!m.steps?.length && (
+                        <div className="mb-2 space-y-1">
+                          {m.steps.map((s, si) => (
+                            <div key={si} className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {s.status === "running" ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : s.status === "error" ? (
+                                <ShieldAlert className="w-3 h-3 text-destructive" />
+                              ) : (
+                                <Check className="w-3 h-3 text-primary" />
+                              )}
+                              <span>{s.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:m-0 [&>p+p]:mt-2 [&>ul]:mt-1 [&>ol]:mt-1 [&_table]:my-2 [&_code]:text-xs">
-                        <ReactMarkdown>{m.content || "…"}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content || (m.steps?.length ? "" : "…")}</ReactMarkdown>
                       </div>
+                      </>
                     ) : (
                       <div className="whitespace-pre-wrap">{m.content}</div>
                     )}

@@ -161,9 +161,24 @@ const readTools = [
   {
     type: "function",
     function: {
+      name: "describe_schema",
+      description:
+        "Descobre o schema real do banco: lista tabelas e colunas (nome + tipo). Use SEMPRE antes de escrever um run_sql_read sobre tabelas que você não conhece, ou quando um SELECT falhar por coluna inexistente.",
+      parameters: {
+        type: "object",
+        properties: {
+          table: { type: "string", description: "Nome (ou parte) da tabela. Omita para listar todas as tabelas do schema public." },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "run_sql_read",
       description:
-        "Executa SELECT ad-hoc (somente leitura) via RPC pública. Use para cruzamentos que outras tools não cobrem. Uma única sentença SELECT.",
+        "Executa SELECT ad-hoc (somente leitura) via RPC pública. Use para cruzamentos, agregações e contagens que outras tools não cobrem. Uma única sentença SELECT, sempre com LIMIT.",
       parameters: {
         type: "object",
         properties: { sql: { type: "string" } },
@@ -173,6 +188,7 @@ const readTools = [
     },
   },
 ];
+
 
 // Ferramentas de ESCRITA: exigem `confirmed: true`. Sem isso, retornam um preview + pedem confirmação.
 const writeTools = [
@@ -472,7 +488,17 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
       ]);
       return { user_licenses: ul.data || [], collaborators: cp.data || [] };
     }
+    case "describe_schema": {
+      const t = String(args.table || "").trim().replace(/[^a-zA-Z0-9_%]/g, "");
+      const sql = t
+        ? `select table_name, column_name, data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name ilike '%${t}%' order by table_name, ordinal_position limit 400`
+        : `select table_name, count(*)::int as columns from information_schema.columns where table_schema = 'public' group by table_name order by table_name limit 400`;
+      const { data, error } = await sb.rpc("copilot_read_query", { p_sql: sql });
+      if (error) return { error: error.message };
+      return data;
+    }
     case "run_sql_read": {
+
       const sql = String(args.sql || "").trim();
       if (!/^select\b/i.test(sql) || /;\s*\S/.test(sql)) {
         return { error: "Somente uma sentença SELECT é permitida." };
@@ -603,25 +629,132 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
 // ============================================================
 // System prompt
 // ============================================================
-const SYSTEM_PROMPT = `Você é o Copiloto Operacional do ERP Flow (Backoffice), assistindo administradores.
-Você tem acesso ao banco via ferramentas e pode EXECUTAR AÇÕES (redirecionar aprovação, reprocessar integração, criar regras).
+function buildSystemPrompt(actorEmail: string) {
+  const now = new Date();
+  const today = now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  return `Você é o Copiloto Operacional do ERP Flow (Backoffice). Você atende administradores do sistema e age como um engenheiro de suporte sênior: investiga de verdade, cruza dados e resolve.
 
-Regras críticas:
-1. SEMPRE consulte dados reais via ferramentas. Nunca invente números, IDs, e-mails.
-2. Antes de EXECUTAR qualquer ação de escrita (redirect_approval, reprocess_*, revert_*, send_notification, toggle_approval_rule, upsert_approval_rule):
-   a) Primeiro pesquise os dados relevantes com tools de leitura.
-   b) Depois apresente ao usuário um resumo claro do que será feito.
-   c) Peça confirmação explícita ("posso executar?").
-   d) SOMENTE após o usuário confirmar em texto ("sim", "confirma", "pode", etc), chame a tool de escrita com \`confirmed: true\`.
-3. Se chamar uma tool de escrita SEM \`confirmed: true\`, ela retornará um preview — apresente esse preview ao usuário e aguarde confirmação.
-4. Responda em português do Brasil, use markdown (tabelas, listas), formate moeda em BRL e datas DD/MM/YYYY.
-5. Para consultas complexas não cobertas por tools específicas, use \`run_sql_read\` com um SELECT bem escrito (uma única sentença).
-6. Toda ação de escrita é auditada (audit_log). Cite o motivo quando o usuário fornecer.
-7. Se algo falhar, mostre a mensagem de erro exata e proponha próximo passo.
-8. Nomes de empresa: o usuário costuma dizer "OpenGaming", "Cactus", etc. O \`company_db\` real é como \`open_gaming_sa\`, \`SBO_CACTUS\`. As tools já resolvem por similaridade, mas se a busca vier vazia, chame \`list_companies\` e reveja.
-9. Centros de custo: regras podem estar como wildcard (ex: \`1.8.%\`) ou exatas. As tools já expandem wildcards — se \`matched_count\` = 0, tente sem \`cost_center\` e filtre manualmente.
+CONTEXTO
+- Data/hora atual (America/Sao_Paulo): ${today}
+- Administrador logado: ${actorEmail}
+- Banco: PostgreSQL (Supabase). Você tem leitura ampla via tools e SQL (SELECT) e um conjunto de ações de escrita auditadas.
 
-Ferramentas de leitura são livres. Ferramentas de escrita mudam o sistema — trate-as com cuidado.`;
+MÉTODO DE TRABALHO (obrigatório)
+1. Entenda o pedido. Se for ambíguo em UM ponto crítico, faça UMA pergunta objetiva — caso contrário assuma o cenário mais provável, diga a suposição e siga.
+2. NUNCA responda "não consigo" ou "não tenho acesso" antes de tentar. Você tem \`describe_schema\` + \`run_sql_read\`: quase toda pergunta sobre dados é respondível.
+3. Investigue em profundidade: encadeie várias tools na mesma resposta. Consultou e veio vazio? Mude a hipótese (nome parcial, período maior, outra tabela, sem filtro de empresa) e tente de novo antes de concluir "não há registros".
+4. Ao usar \`run_sql_read\`: se não tiver certeza das colunas, chame \`describe_schema\` primeiro. Se o SELECT falhar, LEIA a mensagem de erro, corrija e refaça — até 3 tentativas antes de reportar.
+5. Não invente números, IDs, e-mails, nomes de tabela ou status. Tudo vem de tool.
+
+QUALIDADE DA RESPOSTA
+- Português do Brasil, markdown. Tabelas para listas, moeda em BRL (R$ 1.234,56), datas DD/MM/YYYY HH:mm.
+- Comece pela conclusão (1-3 linhas), depois a evidência (tabela/dados), depois próximos passos quando fizer sentido.
+- Cite identificadores úteis (expense_id, doc_entry, company_db) para o admin conseguir agir.
+- Nada de encher linguiça: sem repetir o enunciado, sem disclaimers genéricos.
+- Referencie pessoas pelo NOME quando disponível, não pelo e-mail cru.
+
+MAPA DO DOMÍNIO
+- \`expenses\` = pedidos de compra/venda do ERP Flow (status: draft, submitted, in_approval, approved, rejected, integrated, integration_failed); itens em \`expense_items\`; histórico em \`expense_approval_log\`; anexos em \`expense_attachments\`.
+- Alçadas: \`approval_rules\` (+ \`approval_rule_levels\`, AP1..APn por \`level_order\`). \`cost_center\` pode ser wildcard SQL LIKE (ex: \`1.8.%\`) ou NULL (= curinga).
+- Integrações: \`integration_log\` (SAP genérico), \`nf_entrada_logs\`, \`pagcorp_integration_log\` (cartão corporativo), \`synapse_execution_log\`.
+- Pessoas: \`collaborator_profiles\` (e-mail, nome, CC, depto), \`user_licenses\` (usuários SAP).
+- Empresas: \`companies\` — o usuário fala "OpenGaming", "Cactus", "Instituto"; o \`company_db\` real é tipo \`open_gaming_sa\`, \`SBO_CACTUS\`. Em dúvida, chame \`list_companies\`.
+
+AÇÕES DE ESCRITA (redirect_approval, reprocess_*, revert_*, send_notification, toggle_approval_rule, upsert_approval_rule)
+a) Levante os dados reais antes.
+b) Chame a tool SEM \`confirmed\` para gerar o preview e apresente-o ao usuário pedindo confirmação explícita.
+c) Só execute com \`confirmed: true\` depois de o usuário confirmar em texto.
+d) Toda escrita é auditada em \`audit_log\`; registre o motivo informado.
+Se uma ação falhar, mostre o erro exato e proponha o próximo passo concreto.`;
+}
+
+// Modelos: primário forte + fallbacks se o gateway recusar/falhar.
+const MODEL_CHAIN = ["openai/gpt-5.5", "google/gemini-3.1-pro-preview", "google/gemini-3.6-flash"];
+
+type GatewayStep = {
+  content: string;
+  toolCalls: { id: string; type: "function"; function: { name: string; arguments: string } }[];
+};
+
+// Chama o gateway com stream:true, repassa os deltas de texto ao cliente
+// e acumula tool_calls. Faz fallback de modelo em erro de gateway.
+async function gatewayStep(
+  conv: any[],
+  emitText: (t: string) => void,
+): Promise<GatewayStep> {
+  let lastErr = "";
+  for (const model of MODEL_CHAIN) {
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages: conv, tools, tool_choice: "auto", stream: true }),
+    });
+
+    if (!resp.ok || !resp.body) {
+      lastErr = `${resp.status} ${await resp.text().catch(() => "")}`.slice(0, 500);
+      console.error("gateway error", model, lastErr);
+      if (resp.status === 402) throw new Error("Créditos da IA esgotados. Adicione créditos no workspace.");
+      if (resp.status === 429) throw new Error("Limite de requisições da IA excedido. Aguarde alguns instantes.");
+      continue; // tenta próximo modelo
+    }
+
+    const content: string[] = [];
+    const calls: Record<number, { id: string; name: string; args: string }> = {};
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, nl).replace(/\r$/, "");
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith("data: ")) continue;
+        const payload = line.slice(6).trim();
+        if (!payload || payload === "[DONE]") continue;
+        let parsed: any;
+        try { parsed = JSON.parse(payload); } catch { continue; }
+        const delta = parsed.choices?.[0]?.delta;
+        if (!delta) continue;
+        if (typeof delta.content === "string" && delta.content) {
+          content.push(delta.content);
+          emitText(delta.content);
+        }
+        for (const tc of delta.tool_calls || []) {
+          const idx = tc.index ?? 0;
+          const slot = calls[idx] ||= { id: tc.id || `call_${idx}`, name: "", args: "" };
+          if (tc.id) slot.id = tc.id;
+          if (tc.function?.name) slot.name += tc.function.name;
+          if (tc.function?.arguments) slot.args += tc.function.arguments;
+        }
+      }
+    }
+
+    return {
+      content: content.join(""),
+      toolCalls: Object.values(calls)
+        .filter((c) => c.name)
+        .map((c) => ({ id: c.id, type: "function" as const, function: { name: c.name, arguments: c.args || "{}" } })),
+    };
+  }
+  throw new Error(`Gateway de IA indisponível (${lastErr || "sem detalhes"}).`);
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  list_companies: "Listando empresas",
+  query_expenses: "Consultando pedidos/despesas",
+  expense_detail: "Abrindo detalhe do documento",
+  query_approval_rules: "Analisando regras de aprovação",
+  query_pagcorp: "Consultando PagCorp",
+  query_integration_logs: "Lendo logs de integração",
+  query_audit_log: "Lendo trilha de auditoria",
+  query_notifications: "Consultando notificações",
+  search_users: "Procurando usuários",
+  describe_schema: "Inspecionando o schema do banco",
+  run_sql_read: "Executando consulta SQL",
+};
 
 // ============================================================
 // Server
@@ -639,11 +772,9 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
     if (userErr || !userData?.user) return json({ error: "Unauthorized" }, 401);
 
     const sbAdmin = createClient(SUPABASE_URL, SERVICE_KEY);
-    // Gate admin
     const { data: isAdmin } = await sbAdmin.rpc("has_role", { _user_id: userData.user.id, _role: "admin" });
     if (!isAdmin) return json({ error: "Acesso restrito a administradores." }, 403);
 
-    // Rate limit: IA é cara — 20 requisições/min por admin.
     const rl = await enforceRateLimit(sbAdmin, {
       scope: "copilot-chat",
       identifier: userData.user.id,
@@ -653,61 +784,70 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
     if (!rl.allowed) return rateLimitResponse(rl, { ...corsHeaders, "Content-Type": "application/json" });
 
     const actor: Actor = { userId: userData.user.id, email: userData.user.email || "" };
-
     const { messages } = await req.json() as { messages: any[] };
 
-    const conv: any[] = [{ role: "system", content: SYSTEM_PROMPT }, ...messages];
+    // Mantém a janela de contexto sob controle (últimas 24 mensagens do usuário/assistente).
+    const history = (messages || []).slice(-24);
+    const conv: any[] = [{ role: "system", content: buildSystemPrompt(actor.email) }, ...history];
 
-    // Tool-calling loop (até 12 passos)
-    for (let step = 0; step < 12; step++) {
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: conv,
-          tools,
-          tool_choice: "auto",
-        }),
-      });
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(ctrl) {
+        const sse = (obj: unknown) => ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        const emitText = (t: string) => sse({ choices: [{ delta: { content: t } }] });
+        const emitTool = (name: string, status: "running" | "done" | "error") =>
+          sse({ tool: { name, label: TOOL_LABELS[name] || name, status } });
 
-      if (!aiResp.ok) {
-        const t = await aiResp.text();
-        console.error("gateway error", aiResp.status, t);
-        if (aiResp.status === 429) return json({ error: "Limite de requisições excedido. Aguarde alguns instantes." }, 429);
-        if (aiResp.status === 402) return json({ error: "Créditos da IA esgotados. Adicione créditos no workspace." }, 402);
-        return json({ error: "Erro no gateway de IA." }, 500);
-      }
-
-      const data = await aiResp.json();
-      const msg = data.choices?.[0]?.message;
-      if (!msg) break;
-
-      const toolCalls = msg.tool_calls || [];
-      if (toolCalls.length === 0) {
-        // Resposta final — devolve como stream SSE simples (compatível com o cliente atual)
-        return streamText(msg.content || "");
-      }
-
-      conv.push(msg);
-      for (const tc of toolCalls) {
-        let args: any = {};
-        try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* */ }
-        let result: unknown;
         try {
-          result = await runTool(tc.function.name, args, sbAdmin, actor);
-        } catch (e) {
-          result = { error: e instanceof Error ? e.message : String(e) };
-        }
-        conv.push({
-          role: "tool",
-          tool_call_id: tc.id,
-          content: JSON.stringify(result).slice(0, 15000),
-        });
-      }
-    }
+          for (let step = 0; step < 20; step++) {
+            const { content, toolCalls } = await gatewayStep(conv, emitText);
 
-    return streamText("_Limite de etapas atingido — refine a pergunta._");
+            if (toolCalls.length === 0) {
+              if (!content.trim() && step === 0) emitText("Não consegui gerar uma resposta. Reformule a pergunta.");
+              break;
+            }
+
+            conv.push({
+              role: "assistant",
+              content: content || null,
+              tool_calls: toolCalls,
+            });
+
+            for (const tc of toolCalls) {
+              emitTool(tc.function.name, "running");
+              let args: any = {};
+              try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* ignore */ }
+              let result: unknown;
+              let ok = true;
+              try {
+                result = await runTool(tc.function.name, args, sbAdmin, actor);
+              } catch (e) {
+                ok = false;
+                result = { error: e instanceof Error ? e.message : String(e) };
+              }
+              emitTool(tc.function.name, ok ? "done" : "error");
+              conv.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: JSON.stringify(result ?? null).slice(0, 30000),
+              });
+            }
+
+            if (step === 19) emitText("\n\n_Limite de etapas de investigação atingido — refine a pergunta._");
+          }
+        } catch (e) {
+          console.error("copilot-chat stream error:", e);
+          emitText(`\n\n⚠️ ${e instanceof Error ? e.message : "Erro inesperado no copiloto."}`);
+        } finally {
+          ctrl.enqueue(encoder.encode("data: [DONE]\n\n"));
+          ctrl.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+    });
   } catch (e) {
     console.error("copilot-chat error:", e);
     return json({ error: e instanceof Error ? e.message : "Erro" }, 500);
@@ -717,22 +857,5 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
 function json(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
     status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
-// Stream SSE compatível com o parser do ReportAiChat (choices[0].delta.content).
-function streamText(text: string): Response {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    start(ctrl) {
-      // Chunk único para simplicidade (o loop pode terminar rápido).
-      const payload = { choices: [{ delta: { content: text } }] };
-      ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
-      ctrl.enqueue(encoder.encode(`data: [DONE]\n\n`));
-      ctrl.close();
-    },
-  });
-  return new Response(stream, {
-    headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
   });
 }
