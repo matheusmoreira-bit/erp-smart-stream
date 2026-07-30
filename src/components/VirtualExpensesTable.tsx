@@ -1,7 +1,7 @@
 import { List, type RowComponentProps } from "react-window";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Eye, Network } from "lucide-react";
+import { Building2, Eye, Copy, Network } from "lucide-react";
 import { type Expense, STATUS_COLORS, useStatusLabel } from "@/hooks/useExpenses";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -31,6 +31,7 @@ type RowProps = {
   erpLabel: string;
   onOpen: (exp: Expense, origin?: "erp_flow" | "erp") => void;
   onRelations: (exp: Expense) => void;
+  onDuplicate?: (exp: Expense) => void;
 };
 
 function VirtualRowComponent({
@@ -40,6 +41,7 @@ function VirtualRowComponent({
   erpLabel,
   onOpen,
   onRelations,
+  onDuplicate,
 }: RowComponentProps<RowProps>) {
   const statusLabel = useStatusLabel();
   const row = items[index];
@@ -110,6 +112,18 @@ function VirtualRowComponent({
               <Network className="w-4 h-4" aria-hidden="true" />
             </Button>
           )}
+          {onDuplicate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              aria-label={`Duplicar lançamento de ${exp.supplier_name}`}
+              title="Duplicar em novo pedido"
+              onClick={(ev) => { ev.stopPropagation(); onDuplicate(exp); }}
+            >
+              <Copy className="w-4 h-4" aria-hidden="true" />
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -122,6 +136,7 @@ export function VirtualExpensesTable({
   erpLabel = "ERP",
   onOpen,
   onRelations,
+  onDuplicate,
   maxHeight = 640,
 }: {
   items: VirtualRow[];
@@ -129,6 +144,7 @@ export function VirtualExpensesTable({
   erpLabel?: string;
   onOpen: (exp: Expense, origin?: "erp_flow" | "erp") => void;
   onRelations: (exp: Expense) => void;
+  onDuplicate?: (exp: Expense) => void;
   maxHeight?: number;
 }) {
   const visibleHeight = Math.min(maxHeight, items.length * ROW_HEIGHT + 8);
@@ -147,7 +163,7 @@ export function VirtualExpensesTable({
           rowComponent={VirtualRowComponent}
           rowCount={items.length}
           rowHeight={ROW_HEIGHT}
-          rowProps={{ items, erpLabel, onOpen, onRelations }}
+          rowProps={{ items, erpLabel, onOpen, onRelations, onDuplicate }}
           overscanCount={6}
           style={{ height: "100%", width: "100%" }}
         />
