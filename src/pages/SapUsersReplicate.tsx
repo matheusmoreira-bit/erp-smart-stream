@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
 import { PageTitle } from "@/components/PageTitle";
+import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 interface SourceUser {
   code: string;
