@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
+import { FilterMultiSelect } from "@/components/FilterMultiSelect";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
