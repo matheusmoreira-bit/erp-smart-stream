@@ -14,6 +14,8 @@ import {
 import { Activity, RefreshCw, Loader2, AlertTriangle, Database, Server, CreditCard, Receipt } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { cn } from "@/lib/utils";
+import { IntegrationHealthAlerts } from "@/components/IntegrationHealthAlerts";
+
 
 type ProviderKey = "sap_sl" | "hana" | "pagcorp" | "mastertax";
 
