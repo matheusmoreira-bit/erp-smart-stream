@@ -650,7 +650,13 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
               </p>
             ) : (
               <ul className="space-y-2">
-                {apPayables.map((ap) => (
+                {apPayables.map((ap) => {
+                  const vp = String(ap.id).startsWith("sap-vp:")
+                    ? (apLinks.data?.payments || []).find((p) => `sap-vp:${p.DocEntry}` === String(ap.id))
+                    : undefined;
+                  const isBatch =
+                    !!vp && Math.abs((vp.PaymentDocTotal || 0) - (vp.DocTotal || 0)) > 0.01;
+                  return (
                   <li key={ap.id} className="border border-border/60 rounded-lg p-2.5 text-xs bg-muted/10">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="font-medium">Doc {ap.numero_documento || "—"}</span>
@@ -669,9 +675,18 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
                         Pago: <span className="font-mono">{formatCurrency(ap.valor_pago, expense.currency)}</span>
                       </div>
                     )}
+                    {isBatch && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        Pagamento em lote — total do documento no ERP:{" "}
+                        <span className="font-mono">{formatCurrency(vp!.PaymentDocTotal, expense.currency)}</span>{" "}
+                        (aplicado a este pedido: <span className="font-mono">{formatCurrency(vp!.DocTotal, expense.currency)}</span>)
+                      </div>
+                    )}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
+
             )}
           </div>
         );
