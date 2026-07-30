@@ -295,6 +295,9 @@ export default function IntegrationHealth() {
           </Table>
         </CardContent>
       </Card>
+
+      <IntegrationHealthAlerts />
     </div>
+
   );
 }
