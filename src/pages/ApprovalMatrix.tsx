@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ShieldCheck,
@@ -16,7 +16,10 @@ import {
   List,
   Network,
 } from "lucide-react";
-import { ApprovalMatrixMindMap } from "@/components/ApprovalMatrixMindMap";
+const ApprovalMatrixMindMap = lazy(() =>
+  import("@/components/ApprovalMatrixMindMap").then((m) => ({ default: m.ApprovalMatrixMindMap })),
+);
+
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -332,20 +335,28 @@ export default function ApprovalMatrix() {
         )}
 
         {view === "map" && rows.length > 0 && (
-          <ApprovalMatrixMindMap
-            rows={rows}
-            rootLabel={companyLabel}
-            storageKey={session?.companyDB || "default"}
-
-            onOpenList={(f) => {
-              if (f.flow) setFlow(f.flow === "both" ? "all" : f.flow);
-              if (f.category) setCategory(f.category);
-              setSearch(f.search ?? "");
-              setView("list");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          />
+          <Suspense
+            fallback={
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-12 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Montando a teia de aprovações…
+              </div>
+            }
+          >
+            <ApprovalMatrixMindMap
+              rows={rows}
+              rootLabel={companyLabel}
+              storageKey={session?.companyDB || "default"}
+              onOpenList={(f) => {
+                if (f.flow) setFlow(f.flow === "both" ? "all" : f.flow);
+                if (f.category) setCategory(f.category);
+                setSearch(f.search ?? "");
+                setView("list");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          </Suspense>
         )}
+
 
 
         <div className={view === "map" ? "hidden" : "space-y-8"}>

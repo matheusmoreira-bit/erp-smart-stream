@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { ZoomIn, ZoomOut, Maximize2, List, ChevronsUpDown, Users, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -313,7 +313,97 @@ function NodeDetails({ node }: { node: Node }) {
   );
 }
 
+/** Nó individual memoizado — evita recriar milhares de elementos SVG a cada render. */
+const MindMapNode = memo(function MindMapNode({
+  node,
+  hidden,
+  selected,
+  showLabel,
+  showSub,
+  onSelect,
+  onToggle,
+}: {
+  node: Positioned;
+  hidden: boolean;
+  selected: boolean;
+  showLabel: boolean;
+  showSub: boolean;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const left = Math.cos(node.angle) < 0 && node.depth > 0;
+  const anchor = node.depth === 0 ? "middle" : left ? "end" : "start";
+  const dx = node.depth === 0 ? 0 : left ? -12 : 12;
+  const collapsible = node.children.length > 0 || hidden;
+
+  return (
+    <g
+      className="cursor-pointer"
+      role="button"
+      tabIndex={0}
+      aria-label={`${KIND_LABEL[node.meta.kind]}: ${node.label}`}
+      onClick={() => onSelect(node.id)}
+      onDoubleClick={() => collapsible && onToggle(node.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(node.id);
+        }
+      }}
+    >
+      {selected && (
+        <circle
+          cx={node.x}
+          cy={node.y}
+          r={node.depth === 0 ? 18 : 14}
+          className="fill-primary/15 stroke-primary"
+          strokeWidth={1.5}
+        />
+      )}
+      <circle
+        cx={node.x}
+        cy={node.y}
+        r={node.depth === 0 ? 10 : Math.max(3.5, 8 - node.depth * 1.2)}
+        className={`${DEPTH_FILL[Math.min(node.depth, DEPTH_FILL.length - 1)]} ${
+          DEPTH_STROKE[Math.min(node.depth, DEPTH_STROKE.length - 1)]
+        }`}
+        strokeWidth={hidden ? 3 : 1.5}
+      />
+      {showLabel && (
+        <text
+          x={node.x + dx}
+          y={node.y}
+          textAnchor={anchor}
+          dominantBaseline="middle"
+          className="fill-foreground"
+          pointerEvents="none"
+          style={{
+            fontSize: node.depth <= 1 ? 15 : node.depth === 2 ? 13 : 11,
+            fontWeight: node.depth <= 2 || selected ? 600 : 400,
+          }}
+        >
+          {truncate(node.label, node.depth >= 3 ? 34 : 26)}
+        </text>
+      )}
+      {showSub && node.sub && (
+        <text
+          x={node.x + dx}
+          y={node.y + (node.depth <= 1 ? 15 : 12)}
+          textAnchor={anchor}
+          dominantBaseline="middle"
+          className="fill-muted-foreground"
+          pointerEvents="none"
+          style={{ fontSize: 9.5 }}
+        >
+          {truncate(node.sub, 34)}
+        </text>
+      )}
+    </g>
+  );
+});
+
 export function ApprovalMatrixMindMap({
+
   rows,
   rootLabel,
   onOpenList,
@@ -328,15 +418,19 @@ export function ApprovalMatrixMindMap({
   const persistKey = storageKey ? `erp:approval-matrix:mindmap:${storageKey}` : null;
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    if (!persistKey || typeof window === "undefined") return new Set();
+    // Teias muito grandes começam com os níveis de aprovação recolhidos.
+    const fallback = () => (rows.length > 60 ? new Set(rows.map((r) => r.id)) : new Set<string>());
+    if (!persistKey || typeof window === "undefined") return fallback();
     try {
       const raw = window.localStorage.getItem(persistKey);
-      const parsed = raw ? JSON.parse(raw) : null;
+      if (!raw) return fallback();
+      const parsed = JSON.parse(raw);
       return new Set<string>(Array.isArray(parsed?.collapsed) ? parsed.collapsed : []);
     } catch {
-      return new Set();
+      return fallback();
     }
   });
+
   const [zoom, setZoom] = useState(() => {
     if (!persistKey || typeof window === "undefined") return 1;
     try {
@@ -361,14 +455,38 @@ export function ApprovalMatrixMindMap({
     }
   }, [persistKey, zoom, collapsed]);
 
-
   const tree = useMemo(() => buildTree(rows, rootLabel), [rows, rootLabel]);
+
+  // Grafos grandes: o recálculo do layout roda em prioridade baixa para não
+  // travar cliques/zoom enquanto a árvore é reposicionada.
+  const deferredCollapsed = useDeferredValue(collapsed);
   const positioned = useMemo(
-    () => layout(tree, collapsed, -Math.PI / 2, (3 * Math.PI) / 2),
-    [tree, collapsed],
+    () => layout(tree, deferredCollapsed, -Math.PI / 2, (3 * Math.PI) / 2),
+    [tree, deferredCollapsed],
   );
   const nodes = useMemo(() => flatten(positioned), [positioned]);
-  const edges = useMemo(() => links(positioned), [positioned]);
+  const edgePaths = useMemo(
+    () =>
+      links(positioned).map((e, i) => {
+        const mr = (Math.hypot(e.from.x, e.from.y) + Math.hypot(e.to.x, e.to.y)) / 2;
+        const c1x = Math.cos(e.from.angle) * mr;
+        const c1y = Math.sin(e.from.angle) * mr;
+        const c2x = Math.cos(e.to.angle) * mr;
+        const c2y = Math.sin(e.to.angle) * mr;
+        return {
+          key: `${e.from.id}->${e.to.id}-${i}`,
+          d: `M ${e.from.x.toFixed(1)} ${e.from.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${e.to.x.toFixed(1)} ${e.to.y.toFixed(1)}`,
+          width: Math.max(1, 3 - e.from.depth * 0.6),
+          className: DEPTH_STROKE[Math.min(e.from.depth, DEPTH_STROKE.length - 1)],
+        };
+      }),
+    [positioned],
+  );
+
+  // Culling de rótulos: em teias densas os textos são o maior custo de layout
+  // do SVG, então limitamos a profundidade rotulada conforme o volume de nós.
+  const labelDepthLimit = nodes.length > 1200 ? 2 : nodes.length > 500 ? 3 : 4;
+  const showSubLabels = nodes.length <= 500;
 
   const selected = useMemo(
     () => (selectedId ? nodes.find((n) => n.id === selectedId) ?? null : null),
@@ -384,12 +502,18 @@ export function ApprovalMatrixMindMap({
   const size = (extent * 2) / zoom;
   const viewBox = `${-size / 2} ${-size / 2} ${size} ${size}`;
 
-  const toggle = (id: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const toggle = useCallback(
+    (id: string) =>
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      }),
+    [],
+  );
+
+  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+
 
   if (rows.length === 0) return null;
 
@@ -446,94 +570,35 @@ export function ApprovalMatrixMindMap({
         className="h-[70vh] w-full"
         role="img"
         aria-label="Mapa mental das regras de aprovação"
+        shapeRendering="optimizeSpeed"
       >
-        {edges.map((e, i) => {
-          const mr = (Math.hypot(e.from.x, e.from.y) + Math.hypot(e.to.x, e.to.y)) / 2;
-          const c1x = Math.cos(e.from.angle) * mr;
-          const c1y = Math.sin(e.from.angle) * mr;
-          const c2x = Math.cos(e.to.angle) * mr;
-          const c2y = Math.sin(e.to.angle) * mr;
-          return (
+        <g pointerEvents="none">
+          {edgePaths.map((e) => (
             <path
-              key={i}
-              d={`M ${e.from.x} ${e.from.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.to.x} ${e.to.y}`}
+              key={e.key}
+              d={e.d}
               fill="none"
-              strokeWidth={Math.max(1, 3 - e.from.depth * 0.6)}
-              className={DEPTH_STROKE[Math.min(e.from.depth, DEPTH_STROKE.length - 1)]}
+              strokeWidth={e.width}
+              className={e.className}
               opacity={0.5}
             />
-          );
-        })}
+          ))}
+        </g>
 
-        {nodes.map((n) => {
-          const left = Math.cos(n.angle) < 0 && n.depth > 0;
-          const anchor = n.depth === 0 ? "middle" : left ? "end" : "start";
-          const dx = n.depth === 0 ? 0 : left ? -12 : 12;
-          const hidden = collapsed.has(n.id);
-          const isSelected = selectedId === n.id;
-          return (
-            <g
-              key={n.id}
-              className="cursor-pointer"
-              role="button"
-              tabIndex={0}
-              aria-label={`${KIND_LABEL[n.meta.kind]}: ${n.label}`}
-              onClick={() => setSelectedId(n.id)}
-              onDoubleClick={() => n.children.length > 0 || hidden ? toggle(n.id) : undefined}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setSelectedId(n.id);
-                }
-              }}
-            >
-              {isSelected && (
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={n.depth === 0 ? 18 : 14}
-                  className="fill-primary/15 stroke-primary"
-                  strokeWidth={1.5}
-                />
-              )}
-              <circle
-                cx={n.x}
-                cy={n.y}
-                r={n.depth === 0 ? 10 : Math.max(3.5, 8 - n.depth * 1.2)}
-                className={`${DEPTH_FILL[Math.min(n.depth, DEPTH_FILL.length - 1)]} ${
-                  DEPTH_STROKE[Math.min(n.depth, DEPTH_STROKE.length - 1)]
-                }`}
-                strokeWidth={hidden ? 3 : 1.5}
-              />
-              <text
-                x={n.x + dx}
-                y={n.y}
-                textAnchor={anchor}
-                dominantBaseline="middle"
-                className="fill-foreground"
-                style={{
-                  fontSize: n.depth <= 1 ? 15 : n.depth === 2 ? 13 : 11,
-                  fontWeight: n.depth <= 2 || isSelected ? 600 : 400,
-                }}
-              >
-                {truncate(n.label, n.depth >= 3 ? 34 : 26)}
-              </text>
-              {n.sub && (
-                <text
-                  x={n.x + dx}
-                  y={n.y + (n.depth <= 1 ? 15 : 12)}
-                  textAnchor={anchor}
-                  dominantBaseline="middle"
-                  className="fill-muted-foreground"
-                  style={{ fontSize: 9.5 }}
-                >
-                  {truncate(n.sub, 34)}
-                </text>
-              )}
-            </g>
-          );
-        })}
+        {nodes.map((n) => (
+          <MindMapNode
+            key={n.id}
+            node={n}
+            hidden={collapsed.has(n.id)}
+            selected={selectedId === n.id}
+            showLabel={n.depth <= labelDepthLimit}
+            showSub={showSubLabels && n.depth <= labelDepthLimit}
+            onSelect={handleSelect}
+            onToggle={toggle}
+          />
+        ))}
       </svg>
+
 
       <Sheet open={!!selected} onOpenChange={(open) => !open && setSelectedId(null)}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 sm:max-w-md">
