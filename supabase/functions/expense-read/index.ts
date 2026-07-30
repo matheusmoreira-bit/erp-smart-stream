@@ -21,7 +21,12 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
-import { canViewAllDocuments, identityMatches } from "../_shared/permission-groups.ts";
+import {
+  canViewAllDocuments,
+  identityMatches,
+  resolveDirectorateBranch,
+  costCenterInBranch,
+} from "../_shared/permission-groups.ts";
 import { resolveCallerAliases } from "../_shared/user-aliases.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
@@ -51,6 +56,8 @@ interface Caller {
   userName: string | null;
   id?: string;
   privileged: boolean;
+  /** Diretoria (CC de 2º nível) visível ao grupo "Usuário Administrativo". */
+  directorateBranch: string | null;
   companyDB: string | null;
 }
 
@@ -89,15 +96,26 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
     }
   }
 
+  let directorateBranch: string | null = null;
   if (!privileged && (identity || email || userName)) {
     privileged = await canViewAllDocuments(admin, [identity, email, userName]);
+    if (!privileged) {
+      directorateBranch = await resolveDirectorateBranch(admin, [identity, email, userName]);
+    }
   }
 
-  return { identity, email, userName, id, privileged, companyDB };
+  return { identity, email, userName, id, privileged, directorateBranch, companyDB };
 }
 
 /** Uma despesa pertence ao caller quando ele é solicitante, criador ou aprovador. */
-function ownsExpense(row: Record<string, unknown>, aliases: Set<string>): boolean {
+function ownsExpense(
+  row: Record<string, unknown>,
+  aliases: Set<string>,
+  directorateBranch: string | null = null,
+): boolean {
+  // Grupo "Usuário Administrativo": tudo da própria diretoria (1.6.x quando o
+  // IdP informa 1.6.1.2). Sem CC no IdP, cai na regra de dono abaixo.
+  if (costCenterInBranch(row.cost_center, directorateBranch)) return true;
   const candidates = [
     row.requester_email,
     row.requester_name,
@@ -116,7 +134,7 @@ function ownsExpense(row: Record<string, unknown>, aliases: Set<string>): boolea
 }
 
 const OWNER_COLUMNS =
-  "id, requester_email, requester_name, created_by_email, current_approver, current_approver_email, original_approver";
+  "id, cost_center, requester_email, requester_name, created_by_email, current_approver, current_approver_email, original_approver";
 
 function applyFilters(query: any, filters: any[]): { query: any; error?: string } {
   for (const f of filters) {
@@ -189,7 +207,7 @@ Deno.serve(async (req) => {
         .in("id", ids.slice(0, 5000));
       if (perr) return json(500, { error: perr.message }, cors);
       allowedExpenseIds = (parents || [])
-        .filter((r: any) => ownsExpense(r, aliases))
+        .filter((r: any) => ownsExpense(r, aliases, caller.directorateBranch))
         .map((r: any) => String(r.id));
       if (allowedExpenseIds.length === 0) return json(200, { data: [] }, cors);
     }
@@ -238,9 +256,12 @@ Deno.serve(async (req) => {
     if (scoped && table === "expenses") {
       // Se o select do cliente não trouxe as colunas de dono, resolvemos os
       // donos em uma segunda consulta para não vazar linhas alheias.
-      const hasOwnerCols = select === "*" || select.includes("requester_email");
+      const hasOwnerCols =
+        select === "*" ||
+        (select.includes("requester_email") &&
+          (!caller.directorateBranch || select.includes("cost_center")));
       if (hasOwnerCols) {
-        rows = rows.filter((r) => ownsExpense(r, aliases));
+        rows = rows.filter((r) => ownsExpense(r, aliases, caller.directorateBranch));
       } else {
         const ids = rows.map((r) => r.id).filter(Boolean);
         if (ids.length === 0) return json(200, { data: [] }, cors);
@@ -249,14 +270,18 @@ Deno.serve(async (req) => {
           .select(OWNER_COLUMNS)
           .in("id", ids);
         const allowed = new Set(
-          (owners || []).filter((r: any) => ownsExpense(r, aliases)).map((r: any) => String(r.id)),
+          (owners || []).filter((r: any) => ownsExpense(r, aliases, caller.directorateBranch)).map((r: any) => String(r.id)),
         );
         rows = rows.filter((r) => allowed.has(String(r.id)));
       }
       rows = rows.slice(0, limit);
     }
 
-    return json(200, { data: rows, scoped, privileged: caller.privileged }, cors);
+    return json(
+      200,
+      { data: rows, scoped, privileged: caller.privileged, directorate: caller.directorateBranch },
+      cors,
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[expense-read] erro", msg);
