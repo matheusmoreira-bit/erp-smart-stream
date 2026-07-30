@@ -1155,7 +1155,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     // Grupo "Usuário Administrativo": tudo da própria diretoria (CC 1.6.% para
     // quem o IdP marca como 1.6.1.2).
     if (inMyDirectorate(e.cost_center)) return true;
-    if ((e.expense_items || []).some((i: any) => inMyDirectorate(i?.cost_center))) return true;
+    if ((e.items || []).some((i) => inMyDirectorate(i?.cost_center))) return true;
     if (!userIdentifier) return false;
     return (
       owner === userIdentifier ||
