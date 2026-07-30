@@ -175,6 +175,22 @@ function extractSapError(payload: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Detecta a recusa EXPLÍCITA do SAP B1 quando a nova senha é igual à anterior
+ * (histórico de senhas). Nesse caso a senha enviada já é a senha vigente do
+ * usuário no SAP, então o provisionamento pode ser considerado válido e a
+ * credencial deve ser salva normalmente.
+ */
+function isSamePasswordError(message: string): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes("same as") || m.includes("same password") || m.includes("previous password") ||
+    m.includes("igual") || m.includes("já utilizada") || m.includes("ja utilizada") ||
+    m.includes("password history") || m.includes("cannot be reused") || m.includes("must differ")
+  );
+}
+
 interface ResultRow { companyDB: string; displayName: string; status: "success" | "error" | "skipped"; message?: string }
 
 Deno.serve(async (req) => {
@@ -283,9 +299,19 @@ Deno.serve(async (req) => {
         const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", {
           UserPassword: newPassword, Locked: "tNO",
         });
+        let alreadyCurrent = false;
         if (!patch.ok) {
-          results.push({ companyDB: companyDb, displayName, status: "error", message: extractSapError(patch.data, `HTTP ${patch.status}`) });
-          continue;
+          const patchMsg = extractSapError(patch.data, `HTTP ${patch.status}`);
+          if (isSamePasswordError(patchMsg)) {
+            // O SAP recusou porque a senha enviada é igual à atual/anterior:
+            // ela já é válida para login, então seguimos e salvamos a credencial.
+            alreadyCurrent = true;
+            // Garante ao menos o desbloqueio do usuário (best-effort).
+            await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { Locked: "tNO" }).catch(() => null);
+          } else {
+            results.push({ companyDB: companyDb, displayName, status: "error", message: patchMsg });
+            continue;
+          }
         }
         // Senha de serviço não pode expirar — ativa o flag no SAP (best-effort).
         await ensurePasswordNeverExpires(
@@ -313,10 +339,17 @@ Deno.serve(async (req) => {
             entity_type: "user_sap_credentials",
             entity_id: targetUserId,
             company_db: companyDb,
-            details: { target_email: targetEmail, sap_user: sapUser, password_source: customPassword ? "custom" : "random" },
+            details: { target_email: targetEmail, sap_user: sapUser, password_source: customPassword ? "custom" : "random", already_current: alreadyCurrent },
           });
         } catch { /* audit best-effort */ }
-        results.push({ companyDB: companyDb, displayName, status: "success", message: `Acesso provisionado para '${sapUser}'` });
+        results.push({
+          companyDB: companyDb,
+          displayName,
+          status: "success",
+          message: alreadyCurrent
+            ? `Senha já era a atual no SAP — credencial salva para '${sapUser}'`
+            : `Acesso provisionado para '${sapUser}'`,
+        });
       } catch (e) {
         results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro" });
       } finally {
