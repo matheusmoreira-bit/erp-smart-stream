@@ -105,6 +105,7 @@ export default function ApprovalMatrix() {
   const [category, setCategory] = useState<"all" | MatrixCategory>("all");
   const [search, setSearch] = useState("");
   const [onlyActive, setOnlyActive] = useState(true);
+  const [view, setView] = useState<"list" | "map">("list");
 
   const companyLabel = getLabel(session?.companyDB || "") || session?.companyDB || "—";
 
