@@ -282,7 +282,10 @@ export default function ApprovalMatrix() {
 
         {!isLoading && rows.length === 0 && (
           <Card className="p-10 text-center text-sm text-muted-foreground">
-            Nenhuma regra encontrada com os filtros atuais.
+            {!session?.companyDB
+              ? "Conecte-se a uma empresa para visualizar a matriz de alçadas."
+              : "Nenhuma regra encontrada com os filtros atuais."}
+
           </Card>
         )}
 
