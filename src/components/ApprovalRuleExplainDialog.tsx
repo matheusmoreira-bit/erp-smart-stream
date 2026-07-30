@@ -95,7 +95,8 @@ function GroupBlock({ g, index }: { g: GroupTrace; index: number }) {
 export function ApprovalRuleExplainDialog({
   open,
   onClose,
-  vars,
+  vars: rawVars,
+
   appliedRuleId,
   currentLevel,
   currentApprover,
