@@ -272,8 +272,23 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
 
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => logout()}>
-            <LogOut className="w-4 h-4 mr-2" /> Sair
+            <LogOut className="w-4 h-4 mr-2" /> Sair da empresa
           </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={signingOut}
+            onSelect={(e) => {
+              e.preventDefault();
+              void handleGoogleSignOut();
+            }}
+          >
+            {signingOut ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4 mr-2" />
+            )}
+            Sair da conta Google
+          </DropdownMenuItem>
+
         </DropdownMenuContent>
       </DropdownMenu>
 
