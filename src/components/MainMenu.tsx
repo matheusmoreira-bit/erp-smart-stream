@@ -98,16 +98,12 @@ const modules: Record<string, ModuleCard> = {
     title: "Aprovações",
     description: "Pendentes e histórico em um só lugar — valor, fornecedor, aprovador e vencimento.",
     icon: ClipboardCheck,
-    path: "/aprovacoes",
+    path: "/aprovacoes?tab=pending",
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "",
     subModuleKeys: ["approvals", "approval_history"],
-    subItems: [
-      { label: "Pendentes", path: "/aprovacoes?tab=pending", moduleKey: "approvals" },
-      { label: "Histórico", path: "/aprovacoes?tab=history", moduleKey: "approval_history" },
-      { label: "Regras de Aprovação", path: "/aprovacoes/regras", moduleKey: "approval_rules" },
-    ],
+
   },
   approval_rules: {
     title: "Regras de Aprovação",
