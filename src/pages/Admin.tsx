@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles, Mail, Rocket, Activity, History as HistoryIcon } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles, Mail, Rocket, Activity, AlarmClock, History as HistoryIcon } from "lucide-react";
 import { RoiAnalysis } from "@/components/RoiAnalysis";
 import {
   Building2,
