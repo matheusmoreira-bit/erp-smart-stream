@@ -1,15 +1,20 @@
 import { useState } from "react";
-import { Loader2, KeyRound, ShieldCheck, Check, X, AlertCircle } from "lucide-react";
+import { Loader2, KeyRound, ShieldCheck, Check, X, AlertCircle, Eye, EyeOff, Wand2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompanies } from "@/hooks/useCompanies";
+import { checkPasswordPolicy, generateStrongPassword } from "@/lib/password-policy";
+import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
+
 
 interface ProvisionResult {
   companyDB: string;
