@@ -743,6 +743,7 @@ export default function Admin() {
                   <DropdownMenuSeparator />
                   {[
                     { label: "Audit Trail", icon: FileCheck2, to: "/backoffice/audit-trail" },
+                    { label: "Trilha por documento", icon: History, to: "/backoffice/trilha-documento" },
                     { label: "Saúde das Integrações", icon: Activity, to: "/backoffice/saude-integracoes" },
                     { label: "Infra & Backups", icon: Server, to: "/backoffice/infra-health" },
                     { label: "Retries SAP", icon: RefreshCw, to: "/backoffice/retry-queue" },
