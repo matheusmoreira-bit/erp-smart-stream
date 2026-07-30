@@ -469,10 +469,22 @@ async function listApprovalHistory(
       canReadAll = true;
     } catch { /* usuário ERP comum: restringe ao próprio histórico */ }
     if (!canReadAll) {
-      const user = caller.userName.toLowerCase();
-      q = q.or(
-        `approver_email.ilike.${user},approver_code.ilike.${user},approver_name.ilike.${user},requester_code.ilike.${user},requester_name.ilike.${user}`,
-      );
+      // O UserCode SAP ("jose.victor") raramente é igual ao e-mail gravado
+      // ("jose.victor@empresa.com"). Sem os padrões abaixo o usuário comum
+      // via o histórico vazio mesmo tendo decisões registradas.
+      const user = caller.userName.toLowerCase().replace(/[,()*%]/g, "");
+      const local = user.includes("@") ? user.split("@")[0] : user;
+      const patterns = Array.from(new Set([user, local, `${local}@%`]));
+      const fields = [
+        "approver_email",
+        "approver_code",
+        "approver_name",
+        "requester_code",
+        "requester_name",
+      ];
+      const orParts: string[] = [];
+      for (const f of fields) for (const p of patterns) orParts.push(`${f}.ilike.${p}`);
+      q = q.or(orParts.join(","));
     }
   }
 
