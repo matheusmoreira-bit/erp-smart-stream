@@ -1,8 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
 import { publicFunctionFetch } from "@/lib/auth-fetch";
 import { toast } from "sonner";
+import {
+  assertCircuitClosed,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+  resetCircuit,
+  SapCircuitOpenError,
+} from "@/lib/sap-circuit-breaker";
+
+export { SapCircuitOpenError, getCircuitState, listCircuits, resetCircuit } from "@/lib/sap-circuit-breaker";
 
 const FUNCTION_URL = "sap-b1-proxy";
+
 
 // Timeout & retry configuration for SAP calls.
 const REQUEST_TIMEOUT_MS = 45_000; // hard cap per attempt
