@@ -11,7 +11,10 @@ interface Props {
   onCreateNew: () => void;
   onRefresh: () => void;
   crossCompanyLookup: (query: string) => Promise<CrossCompanyMatch[]>;
+  /** Quando false, o usuário só pode solicitar o cadastro (chamado ao time responsável). */
+  canRegister?: boolean;
 }
+
 
 /**
  * Empty state acionável do combobox de Fornecedor:
@@ -26,7 +29,9 @@ export function SupplierEmptyState({
   onCreateNew,
   onRefresh,
   crossCompanyLookup,
+  canRegister = true,
 }: Props) {
+
   const [matches, setMatches] = useState<CrossCompanyMatch[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -81,12 +86,19 @@ export function SupplierEmptyState({
         <UserPlus className="mt-0.5 h-4 w-4 text-primary shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-foreground">
-            Cadastrar novo {bpLabel.toLowerCase()}
+            {canRegister
+              ? `Cadastrar novo ${bpLabel.toLowerCase()}`
+              : `Solicitar cadastro de ${bpLabel.toLowerCase()}`}
           </div>
           <div className="truncate text-xs text-muted-foreground">
-            {displayQuery ? `"${displayQuery}"` : "Preencher dados manualmente"}
+            {displayQuery
+              ? `"${displayQuery}"`
+              : canRegister
+                ? "Preencher dados manualmente"
+                : "Abrir chamado para o time responsável"}
           </div>
         </div>
+
       </button>
 
       {(loading || matches.length > 0) && (

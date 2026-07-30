@@ -56,6 +56,9 @@ import {
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
+import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { canRegisterSupplierDirectly } from "@/lib/permission-group-utils";
+
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { UserPlus, RefreshCw, Building2 } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
@@ -165,6 +168,9 @@ export function CreateExpenseModal({
 }) {
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
+  const { groups: myGroups, isPrivileged: isPrivilegedUser } = useMyPermissionGroups();
+  const canRegisterSupplier = canRegisterSupplierDirectly(myGroups, isPrivilegedUser);
+
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isGeneratingFlowReport, setIsGeneratingFlowReport] = useState(false);
@@ -2732,16 +2738,19 @@ export function CreateExpenseModal({
                   query={query}
                   bpLabel={bpLabel}
                   currentCompanyLabel={currentCompanyLabel}
+                  canRegister={canRegisterSupplier}
                   onCreateNew={() => {
-                    // Pré-preenche o SupplierFormModal com o texto digitado.
+                    // Pré-preenche com o texto digitado.
                     const digits = onlyDigits(query);
                     const looksLikeCnpj = digits.length >= 11;
                     setAiSupplierData({
                       card_name: looksLikeCnpj ? undefined : query,
                       federal_tax_id: looksLikeCnpj ? digits : undefined,
                     } as SupplierFormPrefill);
-                    setShowSupplierForm(true);
+                    if (canRegisterSupplier) setShowSupplierForm(true);
+                    else setSupplierRequestOpen(true);
                   }}
+
                   onRefresh={() => {
                     reloadSuppliers();
                     toast.success("Lista atualizada");
