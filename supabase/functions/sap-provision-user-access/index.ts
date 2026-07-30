@@ -53,6 +53,25 @@ function generatePassword(len = 24): string {
   return chars.join("");
 }
 
+const TRIVIAL_PASSWORDS = new Set([
+  "sap@2025", "sap@2024", "sap@2023",
+  "password", "senha123", "12345678", "manager", "administrator",
+]);
+
+/** Valida a senha informada pelo admin contra a mesma política aplicada no cliente. */
+function validatePasswordPolicy(password: string, userCode: string): string | null {
+  if (password.length < 12) return "A senha deve ter no mínimo 12 caracteres";
+  if (password.length > 32) return "A senha deve ter no máximo 32 caracteres";
+  if (!/[A-Z]/.test(password)) return "A senha deve conter ao menos 1 letra maiúscula";
+  if (!/[a-z]/.test(password)) return "A senha deve conter ao menos 1 letra minúscula";
+  if (!/\d/.test(password)) return "A senha deve conter ao menos 1 número";
+  if (!/[^A-Za-z0-9]/.test(password)) return "A senha deve conter ao menos 1 caractere especial";
+  const u = (userCode || "").trim().toLowerCase();
+  if (u.length >= 3 && password.toLowerCase().includes(u)) return "A senha não pode conter o código de usuário";
+  if (TRIVIAL_PASSWORDS.has(password.trim().toLowerCase())) return "A senha não pode ser uma senha trivial/padrão";
+  return null;
+}
+
 async function getBaseUrl(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "";
   const { data } = await admin
@@ -260,7 +279,7 @@ Deno.serve(async (req) => {
           results.push({ companyDB: companyDb, displayName, status: "skipped", message: `Usuário '${sapUser}' não existe nesta empresa` });
           continue;
         }
-        const newPassword = generatePassword(24);
+        const newPassword = customPassword || generatePassword(24);
         const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", {
           UserPassword: newPassword, Locked: "tNO",
         });
