@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
+import { displayUserName } from "@/lib/user-display";
 
 /**
  * Bloco padrão do canto direito do cabeçalho: empresa + usuário como dropdown,
@@ -138,7 +139,7 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
           >
             <div className="min-w-0 hidden sm:block">
               <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground truncate">{session.userName}</p>
+              <p className="text-xs text-muted-foreground truncate">{displayUserName(session.userName)}</p>
             </div>
             <Building2 className="w-4 h-4 text-muted-foreground sm:hidden" aria-hidden="true" />
             <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
@@ -147,7 +148,7 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
         <DropdownMenuContent align="end" className="w-64 bg-popover z-50">
           <div className="px-2 py-1.5 sm:hidden">
             <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
-            <p className="text-xs text-muted-foreground truncate">{session.userName}</p>
+            <p className="text-xs text-muted-foreground truncate">{displayUserName(session.userName)}</p>
           </div>
 
           <DropdownMenuItem
