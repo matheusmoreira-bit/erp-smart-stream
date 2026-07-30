@@ -73,7 +73,6 @@ import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import AuditLogTable from "@/components/AuditLogTable";
 import IntegrationsTab from "@/components/IntegrationsTab";
 import NfseEmailSettingsTab from "@/components/NfseEmailSettingsTab";
-import PermissionManager from "@/components/PermissionManager";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import TransferApprovalsTool from "@/components/TransferApprovalsTool";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
@@ -693,7 +692,7 @@ export default function Admin() {
             <nav className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/60">
               {([
                 { key: "companies", label: "Empresas", icon: Building2 },
-                { key: "permissions", label: "Permissões", icon: Users, to: "/usuarios/permissoes" },
+                { key: "users_hub", label: "Usuários", icon: Users, to: "/usuarios/lista" },
                 { key: "integrations", label: "Integrações", icon: Key },
                 { key: "nfse_email", label: "E-mail NFS-e", icon: Mail },
                 { key: "audit", label: "Logs", icon: ScrollText },
@@ -749,9 +748,6 @@ export default function Admin() {
                     { label: "Retries SAP", icon: RefreshCw, to: "/backoffice/retry-queue" },
                     { label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
                     { label: "Roadmap", icon: Rocket, to: "/backoffice/roadmap" },
-
-
-                    { label: "Usuários SAP", icon: Users, to: "/backoffice/sap-users" },
                   ].map((it) => {
                     const Icon = it.icon;
                     return (
@@ -927,7 +923,7 @@ export default function Admin() {
 
         {activeTab === "nfse_email" && <NfseEmailSettingsTab />}
 
-        {activeTab === "permissions" && <PermissionManager />}
+        
 
         {activeTab === "admin_users" && <AdminUsersManager />}
 
@@ -969,11 +965,10 @@ export default function Admin() {
         className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur-lg border-t border-border pb-[max(env(safe-area-inset-bottom),0.25rem)]"
         aria-label="Navegação backoffice"
       >
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-3">
           {[
             { key: "companies", label: "Empresas", icon: Building2, action: () => setActiveTab("companies") },
-            { key: "permissions", label: "Permissões", icon: Users, action: () => navigate("/usuarios/permissoes") },
-            { key: "sap_users", label: "Usuários SAP", icon: ShieldCheck, action: () => navigate("/backoffice/sap-users") },
+            { key: "users_hub", label: "Usuários", icon: Users, action: () => navigate("/usuarios/lista") },
             { key: "audit", label: "Logs", icon: ScrollText, action: () => setActiveTab("audit") },
           ].map((t) => {
             const Icon = t.icon;

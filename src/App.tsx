@@ -36,7 +36,6 @@ import Profile from "./pages/Profile.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
-import SapUsersAdmin from "./pages/SapUsersAdmin.tsx";
 import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
 import AuditTrail from "./pages/AuditTrail.tsx";
 import TransferApprovalsHistory from "./pages/TransferApprovalsHistory.tsx";
@@ -88,7 +87,7 @@ const App = () => (
               {/* Backoffice */}
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
-              <Route path="/backoffice/sap-users" element={<AdminRoute><SapUsersAdmin /></AdminRoute>} />
+              <Route path="/backoffice/sap-users" element={<Navigate to="/usuarios/sap" replace />} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
               <Route path="/backoffice/audit-trail" element={<AdminRoute><AuditTrail /></AdminRoute>} />
               <Route path="/backoffice/trilha-documento" element={<AdminRoute><AuditTimeline /></AdminRoute>} />
@@ -151,6 +150,7 @@ const App = () => (
               <Route path="/usuarios/lista" element={<UsersHub tab="list" />} />
               <Route path="/usuarios/permissoes" element={<UsersHub tab="permissions" />} />
               <Route path="/usuarios/administradores" element={<UsersHub tab="admins" />} />
+              <Route path="/usuarios/sap" element={<UsersHub tab="sap" />} />
               <Route path="/usuarios/atividade" element={<UsersHub tab="activity" />} />
               <Route path="/usuarios/produtividade" element={<UsersHub tab="productivity" />} />
               <Route path="/usuarios/sincronizacao-idp" element={<UsersHub tab="idp" />} />
