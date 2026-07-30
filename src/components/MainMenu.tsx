@@ -402,9 +402,11 @@ export function MainMenu() {
           </div>
 
 
-          {/* Mobile actions: only notification bell (menu is on bottom nav) */}
+          {/* Mobile actions: notificações + conta/empresa (mesmo menu do desktop) */}
           <div className="flex md:hidden items-center gap-1">
             <NotificationBell />
+            <ThemeToggle />
+            <UserCompanyMenu />
           </div>
         </div>
       </header>
