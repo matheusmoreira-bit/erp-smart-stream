@@ -1,7 +1,3 @@
-import { useNavigate } from "react-router-dom";
-import { useModuleAccess } from "@/hooks/usePermissions";
-import { HubTabs } from "@/components/HubTabs";
-
 export interface HubTabDef<K extends string> {
   key: K;
   label: string;
@@ -13,36 +9,15 @@ export interface HubTabDef<K extends string> {
 interface TabsHubProps<K extends string> {
   tabs: readonly HubTabDef<K>[];
   active: K;
+  /** Mantido por compatibilidade — o submenu agora é global (ModuleSubmenu). */
   moduleLabel?: string;
 }
 
 /**
  * Shared layout for hub pages (Auditoria, Integrações, Usuários).
- * Filters tabs by module access, renders the submenu dropdown and the active body.
+ * A navegação entre submódulos vive na barra global de submenu.
  */
-export function TabsHub<K extends string>({ tabs, active, moduleLabel }: TabsHubProps<K>) {
-  const navigate = useNavigate();
-  const { userModules } = useModuleAccess();
-
-  const visible = tabs.filter(
-    (t) => userModules.length === 0 || userModules.includes(t.module),
-  );
-
+export function TabsHub<K extends string>({ tabs, active }: TabsHubProps<K>) {
   const activeTab = tabs.find((t) => t.key === active) ?? tabs[0];
-  const Body = activeTab?.render() ?? null;
-
-  return (
-    <div>
-      <HubTabs
-        moduleLabel={moduleLabel}
-        tabs={visible.map((t) => ({ key: t.key, label: t.label }))}
-        active={active}
-        onChange={(key) => {
-          const target = tabs.find((t) => t.key === key);
-          if (target) navigate(target.path);
-        }}
-      />
-      {Body}
-    </div>
-  );
+  return <div>{activeTab?.render() ?? null}</div>;
 }

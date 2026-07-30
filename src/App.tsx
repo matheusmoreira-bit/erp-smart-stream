@@ -45,6 +45,7 @@ import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { StickyHeaderMeasure } from "./components/StickyHeaderMeasure.tsx";
+import { ModuleSubmenu } from "./components/ModuleSubmenu.tsx";
 import { TestCompanyBanner } from "./components/TestCompanyBanner.tsx";
 import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx";
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
@@ -62,6 +63,7 @@ const App = () => (
           <PermissionsV2Provider>
           <BrowserRouter>
             <StickyHeaderMeasure />
+            <ModuleSubmenu />
             <Routes>
               <Route path="/" element={<Index />} />
 
