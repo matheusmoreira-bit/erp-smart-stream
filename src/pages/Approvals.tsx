@@ -62,6 +62,8 @@ import { segmentDocByRules, segmentsForApprover, isTrulySegmented, type Approval
 import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
+import SubstituteApproversTab from "@/components/SubstituteApproversTab";
+
 
 import {
   Dialog,
@@ -2001,6 +2003,8 @@ export default function ApprovalsPage() {
   const canToggleShowAll = isAdmin || canViewAllApprovals || canViewAllByGroup;
   const [showAll, setShowAll] = useState<boolean>(false);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
+  const [showSubstitutes, setShowSubstitutes] = useState(false);
+
   const [isDelegating, setIsDelegating] = useState(false);
   const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
@@ -2929,6 +2933,17 @@ export default function ApprovalsPage() {
               <History className="w-4 h-4" />
               Histórico
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSubstitutes(true)}
+              className="gap-2"
+              title="Definir substituto de alçada durante férias/ausências"
+            >
+              <UserCog className="w-4 h-4" />
+              Substituto
+            </Button>
+
             {(() => {
               const reportOptions = {
                 title: "Relatório de Aprovações Pendentes",
@@ -3497,6 +3512,19 @@ export default function ApprovalsPage() {
         onConfirm={handleDelegate}
         isSubmitting={isDelegating}
       />
+
+      <Dialog open={showSubstitutes} onOpenChange={(o) => {
+        setShowSubstitutes(o);
+        if (!o) refreshSubstituteGrants();
+      }}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Delegação temporária de alçada</DialogTitle>
+          </DialogHeader>
+          <SubstituteApproversTab isAdmin={isAdmin} />
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

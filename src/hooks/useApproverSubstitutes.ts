@@ -1,6 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
+
+async function callSubstituteFn<T>(payload: Record<string, unknown>): Promise<T> {
+  const resp = await sapFunctionFetch("approver-substitute-manage", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const text = await resp.text();
+  let parsed: unknown = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { /* noop */ }
+  if (!resp.ok) {
+    const msg = (parsed as { error?: string } | null)?.error || `Falha na operação (${resp.status})`;
+    throw new Error(msg);
+  }
+  return parsed as T;
+}
+
 
 export interface ApproverSubstitute {
   id: string;
@@ -46,17 +64,17 @@ export function useApproverSubstitutes() {
   const [rows, setRows] = useState<ApproverSubstitute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [canManageAll, setCanManageAll] = useState(false);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase
-        .from("approver_substitutes" as never)
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      setRows((data as ApproverSubstitute[]) || []);
+      const res = await callSubstituteFn<{ rows: ApproverSubstitute[]; is_admin: boolean }>({
+        action: "list",
+      });
+      setRows(res?.rows || []);
+      setCanManageAll(!!res?.is_admin);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao carregar substituições");
     } finally {
@@ -67,38 +85,18 @@ export function useApproverSubstitutes() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const create = useCallback(async (input: CreateSubstituteInput) => {
-    const { data: userData } = await supabase.auth.getUser();
-    const grantedById = userData.user?.id ?? null;
-    const grantedByEmail = userData.user?.email ?? "";
-    if (!grantedByEmail) throw new Error("Sessão de administrador ausente");
-    const { error } = await supabase.from("approver_substitutes" as never).insert({
-      ...input,
-      granted_by_id: grantedById,
-      granted_by_email: grantedByEmail,
-    } as never);
-    if (error) throw error;
+    await callSubstituteFn({ action: "create", ...input });
     await refresh();
   }, [refresh]);
 
   const revoke = useCallback(async (id: string, reason?: string) => {
-    const { data: userData } = await supabase.auth.getUser();
-    const revokedById = userData.user?.id ?? null;
-    const revokedByEmail = userData.user?.email ?? "";
-    const { error } = await supabase
-      .from("approver_substitutes" as never)
-      .update({
-        revoked_at: new Date().toISOString(),
-        revoked_by_id: revokedById,
-        revoked_by_email: revokedByEmail,
-        revoked_reason: reason || null,
-      } as never)
-      .eq("id", id);
-    if (error) throw error;
+    await callSubstituteFn({ action: "revoke", id, reason: reason || null });
     await refresh();
   }, [refresh]);
 
-  return { rows, isLoading, error, refresh, create, revoke };
+  return { rows, isLoading, error, refresh, create, revoke, canManageAll };
 }
+
 
 /** Lista officials cujas substituições ativas apontam para o usuário logado. */
 export function useActiveOfficialsForMe() {

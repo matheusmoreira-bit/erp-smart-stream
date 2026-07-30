@@ -79,3 +79,6 @@ verify_jwt = false
 
 [functions.approval-link]
 verify_jwt = false
+
+[functions.approver-substitute-manage]
+verify_jwt = false

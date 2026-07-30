@@ -1,10 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useApproverSubstitutes,
   statusOf,
   type ApproverSubstitute,
 } from "@/hooks/useApproverSubstitutes";
 import { useSapUsers } from "@/hooks/useSapUsers";
+import { useSap } from "@/contexts/SapContext";
+import { supabase } from "@/integrations/supabase/client";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { UserPlus, XCircle, Users, Loader2, ShieldCheck } from "lucide-react";
+import { UserPlus, XCircle, Users, Loader2, ShieldCheck, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
 function fmtDate(iso: string): string {
@@ -55,12 +58,29 @@ function StatusBadge({ row }: { row: ApproverSubstitute }) {
   return <Badge variant="outline" className={cfg.cls}>{cfg.label}</Badge>;
 }
 
-export default function SubstituteApproversTab({ isAdmin }: { isAdmin: boolean }) {
-  const { rows, isLoading, create, revoke, refresh } = useApproverSubstitutes();
+function localPart(v: string): string {
+  const n = (v || "").toLowerCase().trim();
+  const i = n.indexOf("@");
+  return i > 0 ? n.slice(0, i) : n;
+}
+
+export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: boolean }) {
+  const { rows, isLoading, create, revoke, refresh, canManageAll } = useApproverSubstitutes();
   const { users } = useSapUsers();
+  const { session } = useSap();
+  const [authEmail, setAuthEmail] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingRevoke, setPendingRevoke] = useState<ApproverSubstitute | null>(null);
+  const [selfMode, setSelfMode] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (alive) setAuthEmail((data.user?.email || "").toLowerCase());
+    });
+    return () => { alive = false; };
+  }, []);
 
   // form state
   const [officialEmail, setOfficialEmail] = useState("");
@@ -90,15 +110,49 @@ export default function SubstituteApproversTab({ isAdmin }: { isAdmin: boolean }
     [users],
   );
 
+  const canManage = isAdmin || canManageAll;
+
+  /** Identificadores do usuário logado (e-mail Cloud e usuário SAP). */
+  const myIdentities = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of [authEmail, session?.userName || ""]) {
+      const n = (v || "").toLowerCase().trim();
+      if (!n) continue;
+      set.add(n);
+      set.add(localPart(n));
+    }
+    return set;
+  }, [authEmail, session?.userName]);
+
+  const isMine = (value: string | null | undefined) => {
+    const v = (value || "").toLowerCase().trim();
+    if (!v) return false;
+    return myIdentities.has(v) || myIdentities.has(localPart(v));
+  };
+
+  /** Meu registro na lista de usuários do ERP (para preencher o formulário). */
+  const me = useMemo(
+    () => eligible.find((u) => isMine(u.email) || isMine(u.name) || isMine(u.code)) || null,
+    [eligible, myIdentities], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const active = useMemo(() => rows.filter((r) => statusOf(r) === "active" || statusOf(r) === "scheduled"), [rows]);
   const history = useMemo(() => rows.filter((r) => statusOf(r) === "expired" || statusOf(r) === "revoked"), [rows]);
 
-  const openCreate = () => {
-    setOfficialEmail(""); setOfficialName("");
+  const openCreate = (self: boolean) => {
+    setSelfMode(self);
+    if (self) {
+      const email = me?.email || authEmail || session?.userName || "";
+      setOfficialEmail(email);
+      setOfficialName(me?.name || "");
+    } else {
+      setOfficialEmail(""); setOfficialName("");
+    }
     setSubstituteEmail(""); setSubstituteName("");
     setReason("");
     setShowForm(true);
   };
+
 
   const submit = async () => {
     if (!officialEmail || !substituteEmail) { toast.error("Selecione oficial e substituto"); return; }
@@ -173,11 +227,17 @@ export default function SubstituteApproversTab({ isAdmin }: { isAdmin: boolean }
             <span className="ml-1.5 text-[10px] font-mono bg-background/40 px-1.5 py-0.5 rounded">{history.length}</span>
           </Button>
         </div>
-        {isAdmin && (
-          <Button size="sm" onClick={openCreate} className="gap-1.5">
-            <UserPlus className="w-4 h-4" /> Nova substituição
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant={canManage ? "outline" : "default"} onClick={() => openCreate(true)} className="gap-1.5">
+            <CalendarClock className="w-4 h-4" /> Definir meu substituto (férias)
           </Button>
-        )}
+          {canManage && (
+            <Button size="sm" onClick={() => openCreate(false)} className="gap-1.5">
+              <UserPlus className="w-4 h-4" /> Nova substituição
+            </Button>
+          )}
+        </div>
+
       </div>
 
       <div className="glass-card overflow-hidden">
@@ -200,7 +260,7 @@ export default function SubstituteApproversTab({ isAdmin }: { isAdmin: boolean }
                 <TableHead>Período (BRT)</TableHead>
                 <TableHead>Concedida por</TableHead>
                 <TableHead>Motivo</TableHead>
-                {isAdmin && !showHistory && <TableHead className="text-right">Ações</TableHead>}
+                {!showHistory && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -232,18 +292,23 @@ export default function SubstituteApproversTab({ isAdmin }: { isAdmin: boolean }
                       <div className="text-red-600 mt-0.5">Revog.: {r.revoked_reason}</div>
                     )}
                   </TableCell>
-                  {isAdmin && !showHistory && (
+                  {!showHistory && (
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700"
-                        onClick={() => setPendingRevoke(r)}
-                      >
-                        <XCircle className="w-4 h-4 mr-1" /> Revogar
-                      </Button>
+                      {(canManage || isMine(r.official_email) || isMine(r.granted_by_email)) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => setPendingRevoke(r)}
+                        >
+                          <XCircle className="w-4 h-4 mr-1" /> Revogar
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                   )}
+
                 </TableRow>
               ))}
             </TableBody>
@@ -255,34 +320,41 @@ export default function SubstituteApproversTab({ isAdmin }: { isAdmin: boolean }
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Nova substituição de aprovador</DialogTitle>
+            <DialogTitle>
+              {selfMode ? "Definir meu substituto (ausência/férias)" : "Nova substituição de aprovador"}
+            </DialogTitle>
             <DialogDescription>
               Enquanto a janela estiver ativa, o substituto poderá visualizar e aprovar todos os
-              documentos pendentes do aprovador oficial.
+              documentos pendentes do aprovador oficial. A concessão fica registrada no audit log.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Aprovador oficial</Label>
-              <Select
-                value={officialEmail}
-                onValueChange={(v) => {
-                  setOfficialEmail(v);
-                  const u = eligible.find((x) => x.email === v);
-                  setOfficialName(u?.name || "");
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecione o oficial" /></SelectTrigger>
-                <SelectContent>
-                  {eligible.filter((u) => u.email).map((u) => (
-                    <SelectItem key={`off-${u.email}`} value={u.email}>
-                      {u.name} <span className="opacity-60">({u.email})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {selfMode ? (
+                <Input value={officialName ? `${officialName} (${officialEmail})` : officialEmail} disabled />
+              ) : (
+                <Select
+                  value={officialEmail}
+                  onValueChange={(v) => {
+                    setOfficialEmail(v);
+                    const u = eligible.find((x) => x.email === v);
+                    setOfficialName(u?.name || "");
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione o oficial" /></SelectTrigger>
+                  <SelectContent>
+                    {eligible.filter((u) => u.email).map((u) => (
+                      <SelectItem key={`off-${u.email}`} value={u.email}>
+                        {u.name} <span className="opacity-60">({u.email})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+
 
             <div className="space-y-1.5">
               <Label className="text-xs">Substituto</Label>
