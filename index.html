@@ -8,6 +8,15 @@
     <meta name="author" content="Cactus Corporation" />
     <link rel="icon" href="/favicon.png" type="image/png" />
 
+    <!-- PWA instalável (mobile-first para aprovações) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ERP Flow" />
+    <link rel="apple-touch-icon" href="/app-icon-512.png" />
+
     <!-- Security headers (Fase 4 do plano de pentest). HSTS e frame-ancestors
          dependem de header HTTP no hosting; aqui ficam as travas que o browser
          respeita via <meta http-equiv>. -->
