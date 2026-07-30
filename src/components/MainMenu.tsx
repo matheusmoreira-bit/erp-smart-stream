@@ -284,35 +284,57 @@ function moduleHasAccess(mod: ModuleCard, userModules: string[]): boolean {
   return userModules.includes(mod.moduleKey);
 }
 
-function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: number; hasAccess: boolean }) {
+function ModuleCardItem({
+  mod,
+  index,
+  hasAccess,
+  expanded,
+  onToggle,
+}: {
+  mod: ModuleCard;
+  index: number;
+  hasAccess: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+}) {
   const navigate = useNavigate();
   const Icon = mod.icon;
+  const hasSub = !!mod.subItems?.length;
 
   return (
     <motion.button
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.05, 0.3) }}
-      onClick={() => hasAccess && navigate(mod.path)}
+      onClick={() => {
+        if (!hasAccess) return;
+        if (hasSub && onToggle) onToggle();
+        else navigate(mod.path);
+      }}
       disabled={!hasAccess}
+      aria-expanded={hasSub ? !!expanded : undefined}
       className={`glass-card p-4 sm:p-6 text-left transition-all group relative overflow-hidden active:scale-[0.98] ${
         hasAccess
           ? "hover:border-primary/40 cursor-pointer hover:scale-[1.02]"
           : "opacity-50 cursor-not-allowed"
-      }`}
+      } ${expanded ? "border-primary/50" : ""}`}
     >
       {/* Glow background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} ${expanded ? "opacity-100" : "opacity-0"} group-hover:opacity-100 transition-opacity`} />
 
       <div className="relative z-10">
         <div className="flex items-start justify-between mb-3 sm:mb-4">
           <div className={`p-2.5 sm:p-3 rounded-xl bg-card border border-border ${mod.color}`}>
             <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          {hasAccess ? (
-            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-          ) : (
+          {!hasAccess ? (
             <Lock className="w-4 h-4 text-muted-foreground" />
+          ) : hasSub ? (
+            <ChevronDown
+              className={`w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-transform ${expanded ? "rotate-180 text-primary" : ""}`}
+            />
+          ) : (
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           )}
         </div>
         <h3 className="text-base sm:text-lg font-bold text-foreground mb-1 sm:mb-2">{mod.title}</h3>
@@ -321,6 +343,55 @@ function ModuleCardItem({ mod, index, hasAccess }: { mod: ModuleCard; index: num
     </motion.button>
   );
 }
+
+function SubmenuPanel({
+  mod,
+  userModules,
+  permLoading,
+}: {
+  mod: ModuleCard;
+  userModules: string[];
+  permLoading: boolean;
+}) {
+  const navigate = useNavigate();
+  const items = (mod.subItems ?? []).filter(
+    (s) =>
+      permLoading ||
+      !s.moduleKey ||
+      userModules.length === 0 ||
+      userModules.includes(s.moduleKey),
+  );
+  if (items.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.2 }}
+      className="col-span-2 md:col-span-3 overflow-hidden"
+    >
+      <div className="glass-card p-3 sm:p-4 mt-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+          {mod.title} — submódulos
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          {items.map((s) => (
+            <button
+              key={s.path}
+              onClick={() => navigate(s.path)}
+              className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card/50 px-3 py-2.5 text-left text-sm text-foreground hover:border-primary/40 hover:bg-muted/50 active:scale-[0.99] transition-all min-h-11"
+            >
+              <span className="truncate">{s.label}</span>
+              <ArrowRight className={`w-4 h-4 flex-shrink-0 ${mod.color}`} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 
 export function MainMenu() {
   const navigate = useNavigate();
