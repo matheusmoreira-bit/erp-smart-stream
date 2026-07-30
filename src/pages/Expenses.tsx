@@ -952,6 +952,21 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
   const [sapHasMore, setSapHasMore] = useState(false);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
+
+  /** Cria um novo pedido a partir de um lançamento existente (sem anexos/ERP). */
+  const duplicateExpense = useCallback((exp: Expense) => {
+    try {
+      const payload = buildDuplicateDraftPayload(exp);
+      // id vazio => o modal trata como novo esboço (não sobrescreve o original)
+      setPendingDraft({ id: "", payload });
+      setShowCreate(true);
+      toast.info("Novo pedido criado a partir do lançamento selecionado. Revise datas e anexos.");
+    } catch (e) {
+      console.error("Falha ao duplicar lançamento:", e);
+      toast.error("Não foi possível duplicar este lançamento.");
+    }
+  }, []);
+
   const showSourceToggle = session?.erpType === "sap";
   const SAP_PAGE_STEP = 100;
   const SAP_CACHE_KEY = isSales ? "sales_orders_sl_v1" : "purchase_orders_hana_v1";
