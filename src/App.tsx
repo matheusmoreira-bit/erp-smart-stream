@@ -76,6 +76,11 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
 
+              {/* Aprovação por link assinado (e-mail / Slack) — público */}
+              <Route path="/aprovar/:token" element={<ApprovalLink />} />
+
+
+
               {/* Backoffice */}
               <Route path="/backoffice/login" element={<BackofficeLogin />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
