@@ -76,6 +76,10 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
       toast.error("UserCode do SAP obrigatório");
       return;
     }
+    if (mode === "custom" && !policy.valid) {
+      toast.error(`Senha não atende à política: ${policy.failed[0].label}`);
+      return;
+    }
     setBusy(true);
     setResults(null);
     const { data, error } = await supabase.functions.invoke("sap-provision-user-access", {
@@ -84,8 +88,10 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
         target_email: targetUserId ? undefined : targetEmail,
         sap_user: sapUser.trim(),
         company_dbs: Array.from(selected),
+        password: mode === "custom" ? password : undefined,
       },
     });
+
     setBusy(false);
     if (error || (data as { error?: string })?.error) {
       toast.error((data as { error?: string })?.error || error?.message || "Falha ao provisionar acesso");
