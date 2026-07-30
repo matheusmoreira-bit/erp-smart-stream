@@ -13,7 +13,10 @@ import {
   ShoppingCart,
   Receipt,
   Wallet,
+  List,
+  Network,
 } from "lucide-react";
+import { ApprovalMatrixMindMap } from "@/components/ApprovalMatrixMindMap";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,6 +105,7 @@ export default function ApprovalMatrix() {
   const [category, setCategory] = useState<"all" | MatrixCategory>("all");
   const [search, setSearch] = useState("");
   const [onlyActive, setOnlyActive] = useState(true);
+  const [view, setView] = useState<"list" | "map">("list");
 
   const companyLabel = getLabel(session?.companyDB || "") || session?.companyDB || "—";
 
@@ -234,8 +238,31 @@ export default function ApprovalMatrix() {
                 Somente ativas
               </Label>
             </div>
+            <div className="flex items-center gap-1 rounded-md border border-border p-1">
+              <Button
+                variant={view === "list" ? "secondary" : "ghost"}
+                size="sm"
+                className="gap-2"
+                aria-pressed={view === "list"}
+                onClick={() => setView("list")}
+              >
+                <List className="h-4 w-4" />
+                Lista
+              </Button>
+              <Button
+                variant={view === "map" ? "secondary" : "ghost"}
+                size="sm"
+                className="gap-2"
+                aria-pressed={view === "map"}
+                onClick={() => setView("map")}
+              >
+                <Network className="h-4 w-4" />
+                Teia
+              </Button>
+            </div>
           </div>
         </Card>
+
 
         {/* Capa do relatório */}
         <Card className="mb-6 border-l-4 border-l-primary p-6 print:border print:shadow-none">
@@ -289,7 +316,12 @@ export default function ApprovalMatrix() {
           </Card>
         )}
 
-        <div className="space-y-8">
+        {view === "map" && rows.length > 0 && (
+          <ApprovalMatrixMindMap rows={rows} rootLabel={companyLabel} />
+        )}
+
+        <div className={view === "map" ? "hidden" : "space-y-8"}>
+
           {grouped.map((group) => {
             const Icon = FLOW_ICON[group.flow];
             return (
