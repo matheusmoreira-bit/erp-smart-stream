@@ -362,72 +362,11 @@ function firstAccessiblePath(
   return items[0]?.path ?? mod.path;
 }
 
-
-function SubmenuModal({
-  mod,
-  userModules,
-  permLoading,
-  open,
-  onOpenChange,
-}: {
-  mod: ModuleCard | null;
-  userModules: string[];
-  permLoading: boolean;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const navigate = useNavigate();
-  if (!mod) return null;
-  const Icon = mod.icon;
-  const items = (mod.subItems ?? []).filter(
-    (s) =>
-      permLoading ||
-      !s.moduleKey ||
-      userModules.length === 0 ||
-      userModules.includes(s.moduleKey),
-  );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl bg-card border border-border ${mod.color}`}>
-              <Icon className="w-5 h-5" />
-            </div>
-            <div className="text-left">
-              <DialogTitle>{mod.title}</DialogTitle>
-              <DialogDescription>Selecione um submódulo</DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-        <div className="grid gap-2">
-          {items.map((s) => (
-            <button
-              key={s.path}
-              onClick={() => {
-                onOpenChange(false);
-                navigate(s.path);
-              }}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card/50 px-3 py-3 text-left text-sm text-foreground hover:border-primary/40 hover:bg-muted/50 active:scale-[0.99] transition-all min-h-11"
-            >
-              <span className="truncate">{s.label}</span>
-              <ArrowRight className={`w-4 h-4 flex-shrink-0 ${mod.color}`} />
-            </button>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-
-
 export function MainMenu() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
   const { userModules, loading: permLoading } = useModuleAccess();
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
 
   const { getLabel } = useCompanies(true);
   const companyLabel = getLabel(session?.companyDB || "");
