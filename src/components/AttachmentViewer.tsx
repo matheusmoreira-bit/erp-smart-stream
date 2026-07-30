@@ -48,6 +48,12 @@ export function AttachmentViewer({
       ? "image"
       : "other";
 
+  const isMobile = useIsMobile();
+  const isBlob = !!url && url.startsWith("blob:");
+  // Android/iOS não renderizam PDF em iframe e não abrem blob: em nova aba.
+  const canOpenNewTab = !!url && !(isMobile && isBlob);
+  const showPdfInline = !isMobile;
+
   const [iframeError, setIframeError] = useState(false);
   useEffect(() => {
     if (open) setIframeError(false);
