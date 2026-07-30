@@ -41,6 +41,8 @@ interface ModuleCard {
   moduleKey: string;
   /** If set, the card is visible when the user has access to ANY of these modules. */
   subModuleKeys?: string[];
+  /** Submenu options shown when the card is clicked. */
+  subItems?: { label: string; path: string; moduleKey?: string }[];
 }
 
 const modules: Record<string, ModuleCard> = {
@@ -70,6 +72,13 @@ const modules: Record<string, ModuleCard> = {
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "sales",
+    subItems: [
+      { label: "Pedidos de Venda", path: "/vendas/pedidos" },
+      { label: "NFS-e", path: "/vendas/nfse" },
+      { label: "Contas a Receber", path: "/vendas/recebimentos" },
+      { label: "Destinatários", path: "/vendas/destinatarios" },
+      { label: "Histórico de Baixas", path: "/vendas/historico" },
+    ],
   },
   approvals: {
     title: "Aprovações",
@@ -80,6 +89,10 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "",
     subModuleKeys: ["approvals", "approval_history"],
+    subItems: [
+      { label: "Pendentes", path: "/aprovacoes?tab=pending", moduleKey: "approvals" },
+      { label: "Histórico", path: "/aprovacoes?tab=history", moduleKey: "approval_history" },
+    ],
   },
   approval_rules: {
     title: "Regras de Aprovação",
@@ -98,6 +111,12 @@ const modules: Record<string, ModuleCard> = {
     color: "text-cyan-400",
     bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "pagcorp",
+    subItems: [
+      { label: "Transações", path: "/cartoes/transacoes" },
+      { label: "Mapeamento de Cartões", path: "/cartoes/mapeamento" },
+      { label: "Indedutíveis", path: "/cartoes/indedutiveis" },
+      { label: "Histórico de Integrações", path: "/cartoes/historico" },
+    ],
   },
   users: {
     title: "Usuários",
@@ -107,6 +126,14 @@ const modules: Record<string, ModuleCard> = {
     color: "text-violet-400",
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "users",
+    subItems: [
+      { label: "Usuários", path: "/usuarios/lista", moduleKey: "users" },
+      { label: "Atividade", path: "/usuarios/atividade", moduleKey: "users" },
+      { label: "Produtividade", path: "/usuarios/produtividade", moduleKey: "users_productivity" },
+      { label: "Licenças", path: "/usuarios/licencas", moduleKey: "users" },
+      { label: "Importar Licenças", path: "/usuarios/importar-licencas", moduleKey: "users" },
+      { label: "Sincronização IdP", path: "/usuarios/sincronizacao-idp", moduleKey: "users" },
+    ],
   },
   suppliers: {
     title: "Fornecedores",
@@ -144,6 +171,12 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-violet-500/20 to-violet-500/5",
     moduleKey: "",
     subModuleKeys: ["synapse", "integration_history", "credentials"],
+    subItems: [
+      { label: "Automações", path: "/integracoes/automacoes", moduleKey: "synapse" },
+      { label: "Monitor de Integrações", path: "/integracoes/monitor", moduleKey: "integration_history" },
+      { label: "Colaboradores", path: "/integracoes/colaboradores", moduleKey: "employee_integration" },
+      { label: "Credenciais", path: "/integracoes/credenciais", moduleKey: "credentials" },
+    ],
   },
   intercompany: {
     title: "Plano de Contas & CC",
@@ -199,6 +232,13 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-sky-500/20 to-sky-500/5",
     moduleKey: "",
     subModuleKeys: ["audit_console", "fiscal_audit", "audit_log", "kyp"],
+    subItems: [
+      { label: "Auditoria SAP", path: "/auditoria/sap", moduleKey: "audit_console" },
+      { label: "Auditoria Fiscal", path: "/auditoria/fiscal", moduleKey: "fiscal_audit" },
+      { label: "Cruzamento Fiscal × Pagamentos", path: "/auditoria/cruzamento", moduleKey: "fiscal_audit" },
+      { label: "KYP — Fornecedores", path: "/auditoria/kyp", moduleKey: "kyp" },
+      { label: "Logs do Sistema", path: "/auditoria/logs", moduleKey: "audit_log" },
+    ],
   },
 };
 
