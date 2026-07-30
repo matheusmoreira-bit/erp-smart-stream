@@ -1467,11 +1467,12 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     currency: e.currency || "BRL",
     cardCode: e.supplier_code || "",
     cardName: e.supplier_name || "—",
-    requester: e.requester_name || "—",
-    currentApprover: e.current_approver && e.current_approver.trim() ? e.current_approver : "Administrador",
+    requester: displayUserName(e.requester_name),
+    currentApprover: e.current_approver && e.current_approver.trim() ? displayUserName(e.current_approver) : "Administrador",
     delegatedFrom: (e.original_approver || "").trim() && (e.original_approver || "").trim().toLowerCase() !== (e.current_approver || "").trim().toLowerCase()
-      ? (e.original_approver || "").trim()
+      ? displayUserName(e.original_approver)
       : undefined,
+
     approverEmail: "",
     currentStage: "Aprovação Interna",
     status: "pending",
