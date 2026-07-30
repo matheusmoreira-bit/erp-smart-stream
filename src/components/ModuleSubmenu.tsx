@@ -53,6 +53,8 @@ export function ModuleSubmenu() {
 
   if (!session?.userName) return null;
   if (pathname === "/" || pathname.startsWith("/backoffice")) return null;
+  // Hubs com régua própria (TabsHub) — evita barra duplicada.
+  if (/^\/(usuarios|auditoria|integracoes|vendas)\b/.test(pathname)) return null;
 
   const mod = findNavModule(pathname);
   if (!mod) return null;
