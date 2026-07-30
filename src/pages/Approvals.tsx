@@ -3296,13 +3296,43 @@ export default function ApprovalsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Tipo</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Nº Doc</th>
-                  <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Fornecedor</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Aprovador</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Solicitante</th>
-                  <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vencimento</th>
+                  {([
+                    ["docTypeName", "Tipo", "left"],
+                    ["docNum", "Nº Doc", "left"],
+                    ["docTotal", "Valor", "right"],
+                    ["cardName", "Fornecedor", "left"],
+                    ["currentApprover", "Aprovador", "left"],
+                    ["requester", "Solicitante", "left"],
+                    ["dueDate", "Vencimento", "left"],
+                  ] as [SortKey, string, "left" | "right"][]).map(([key, label, align]) => {
+                    const isActive = sortKey === key;
+                    return (
+                      <th
+                        key={key}
+                        scope="col"
+                        aria-sort={isActive ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                        className={`py-1 px-1 text-xs font-medium text-muted-foreground uppercase tracking-wider ${align === "right" ? "text-right" : "text-left"}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(key)}
+                          title={`Ordenar por ${label}`}
+                          className={`inline-flex items-center gap-1 rounded px-2 py-2 uppercase tracking-wider transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background ${isActive ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+                        >
+                          {label}
+                          {isActive ? (
+                            sortDir === "asc" ? (
+                              <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                            ) : (
+                              <ArrowDown className="w-3 h-3" aria-hidden="true" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-40" aria-hidden="true" />
+                          )}
+                        </button>
+                      </th>
+                    );
+                  })}
                   <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
