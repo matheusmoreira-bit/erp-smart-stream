@@ -64,6 +64,28 @@ export async function resolveCallerAliases(
     }
   } catch { /* mapeamento opcional */ }
 
+  // Diretório canônico: usuário SAP 1:N e-mails.
+  try {
+    const keys = Array.from(aliases);
+    if (keys.length) {
+      const { data: dirEmails } = await admin
+        .from("sap_user_emails")
+        .select("user_key, email")
+        .in("user_key", keys);
+      (dirEmails || []).forEach((r: { user_key: string; email: string }) => {
+        add(r.user_key);
+        add(r.email);
+      });
+    }
+    if (emails.length) {
+      const { data: byEmail } = await admin
+        .from("sap_user_emails")
+        .select("user_key")
+        .in("email", emails.map((e) => e.toLowerCase()));
+      (byEmail || []).forEach((r: { user_key: string }) => add(r.user_key));
+    }
+  } catch { /* diretório é complementar */ }
+
   try {
     if (caller.id && !caller.id.startsWith("sap:")) {
       const { data } = await admin

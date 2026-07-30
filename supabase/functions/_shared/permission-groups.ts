@@ -27,7 +27,7 @@ export function canonicalIdentity(value: unknown): string {
 }
 
 function stripSuffix(v: string): string {
-  return v.replace(/(ext|externo|terceiro)$/, "");
+  return v.replace(/(ext|externo|terceiro|adm|admin)$/, "");
 }
 
 export function identityMatches(a: unknown, b: unknown): boolean {
