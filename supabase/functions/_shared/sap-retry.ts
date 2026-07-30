@@ -80,12 +80,21 @@ export function classifySapError(status: number | undefined, body: unknown): Cla
   return { retryable: false, category: "other", reason: text.slice(0, 300) };
 }
 
-// Backoff schedule: 2m → 4m → 8m → 16m → 32m (attempts is the NEW count after failure).
+// Backoff schedule: 2m → 5m → 12m → 30m → 60m → 120m (attempts is the NEW count after failure).
 export function backoffMinutes(attempts: number): number {
-  const schedule = [2, 4, 8, 16, 32];
+  const schedule = [2, 5, 12, 30, 60, 120];
   const idx = Math.min(Math.max(attempts - 1, 0), schedule.length - 1);
   return schedule[idx];
 }
+
+// Same schedule with ±20% jitter, to avoid a thundering herd when dezenas de
+// documentos falham no mesmo minuto (ex.: base SAP fora do ar).
+export function nextAttemptAt(attempts: number, from: number = Date.now()): string {
+  const base = backoffMinutes(attempts) * 60_000;
+  const jitter = base * (Math.random() * 0.4 - 0.2);
+  return new Date(from + Math.max(30_000, base + jitter)).toISOString();
+}
+
 
 export interface EnqueueRetryParams {
   doc_type: SapRetryDocType;
