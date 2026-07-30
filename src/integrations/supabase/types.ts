@@ -14,6 +14,116 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_review_campaigns: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          due_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          opened_at: string
+          opened_by: string | null
+          period_label: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          period_label: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          period_label?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      access_review_items: {
+        Row: {
+          access_label: string
+          access_ref_id: string | null
+          access_type: string
+          campaign_id: string
+          company_db: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          display_name: string | null
+          evidence: Json
+          id: string
+          justification: string | null
+          sap_email: string | null
+          updated_at: string
+          user_key: string
+        }
+        Insert: {
+          access_label: string
+          access_ref_id?: string | null
+          access_type: string
+          campaign_id: string
+          company_db?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          display_name?: string | null
+          evidence?: Json
+          id?: string
+          justification?: string | null
+          sap_email?: string | null
+          updated_at?: string
+          user_key: string
+        }
+        Update: {
+          access_label?: string
+          access_ref_id?: string | null
+          access_type?: string
+          campaign_id?: string
+          company_db?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          display_name?: string | null
+          evidence?: Json
+          id?: string
+          justification?: string | null
+          sap_email?: string | null
+          updated_at?: string
+          user_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_review_items_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "access_review_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advance_payment_attachments: {
         Row: {
           advance_id: string
@@ -6642,6 +6752,10 @@ export type Database = {
           reason: string
         }[]
       }
+      close_access_review_campaign: {
+        Args: { _campaign_id: string }
+        Returns: undefined
+      }
       consume_csrf_token: {
         Args: { _purpose: string; _subject: string; _token_hash: string }
         Returns: boolean
@@ -6852,6 +6966,15 @@ export type Database = {
           source_queue: string
         }
         Returns: number
+      }
+      open_access_review_campaign: {
+        Args: {
+          _due_at?: string
+          _name: string
+          _notes?: string
+          _period_label: string
+        }
+        Returns: string
       }
       permissions_enforcement_mode: {
         Args: { _company_db?: string }
