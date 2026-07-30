@@ -130,6 +130,14 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   const action = typeof body?.action === "string" ? body.action : "";
   const canRetry = RETRIABLE_ACTIONS.has(action);
   const maxAttempts = canRetry ? MAX_RETRIES + 1 : 1;
+  const companyDB =
+    (typeof body?.companyDB === "string" && body.companyDB) ||
+    (typeof body?.database === "string" && body.database) ||
+    "";
+
+  // Circuit breaker por empresa: se a base está em cooldown, falha rápido
+  // para não travar filas e telas que dependem de outras bases.
+  assertCircuitClosed(companyDB);
 
   let slowToastId: string | number | undefined;
   const scheduleSlowToast = () => {
@@ -169,6 +177,8 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
         await sleep(wait);
         continue;
       }
+      // Timeout / rede = falha de infraestrutura → alimenta o breaker.
+      recordCircuitFailure(companyDB, aborted ? "timeout" : "network");
       if (aborted) throw lastError;
       throw err instanceof Error ? err : new Error(String(err));
     }
@@ -185,6 +195,8 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
 
     // Skip expiry detection on the login action itself — wrong creds shouldn't trigger a global logout
     if (action !== "login" && looksLikeSessionExpired(data)) {
+      // Sessão expirada não é indisponibilidade da base: não abre o circuito.
+      recordCircuitSuccess(companyDB);
       if (!opts.silentSessionExpired) notifySessionExpired();
       throw new SapSessionExpiredError();
     }
@@ -203,14 +215,23 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
         await sleep(wait);
         continue;
       }
+      if (transient) {
+        recordCircuitFailure(companyDB, message);
+      } else {
+        // Erro de negócio: a base respondeu, então o circuito segue fechado.
+        recordCircuitSuccess(companyDB);
+      }
       throw lastError;
     }
 
+    recordCircuitSuccess(companyDB);
     return data;
   }
 
+  recordCircuitFailure(companyDB, "falhas repetidas");
   throw lastError instanceof Error ? lastError : new Error("Falha ao chamar o SAP após múltiplas tentativas.");
 }
+
 
 
 async function hasLovableSession(): Promise<boolean> {
