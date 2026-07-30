@@ -11,6 +11,7 @@
 //   - update             { expense_id, input }   → owner/admin updates fields + items
 //   - submit             { expense_id }          → owner/admin marks pendente_aprovacao
 //   - cancel             { expense_id }          → owner/admin marks cancelado
+//   - reactivate         { expense_id }          → author/admin: cancelado → rascunho
 //   - attachments_add    { expense_id, attachments[] } → after client uploads to storage
 //   - log_decision       { expense_id, decision, remarks?, levelOrder? }
 //
@@ -111,7 +112,7 @@ const ALLOWED_CREATE_STATUS = new Set(["rascunho", "pendente_aprovacao"]);
 // PagCorp = gastos de cartão corporativo — vão direto para integração SAP.
 const AUTO_APPROVED_ORIGINS = new Set(["pagcorp"]);
 const ALLOWED_LOG_DECISIONS = new Set([
-  "created", "submitted", "cancelled", "integrated", "integration_failed",
+  "created", "submitted", "cancelled", "reactivated", "integrated", "integration_failed",
 ]);
 
 async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
@@ -668,6 +669,53 @@ async function actionCancel(admin: SupabaseClient, caller: Caller, body: any) {
   return json(200, { ok: true });
 }
 
+/**
+ * Reativa um documento cancelado, devolvendo-o para rascunho.
+ * Permitido ao autor do documento (ou admin/super-usuário) e apenas quando o
+ * documento nunca foi integrado ao ERP.
+ */
+async function actionReactivate(admin: SupabaseClient, caller: Caller, body: any) {
+  if (!caller.identity && !caller.isCloudAdmin) return json(401, { error: "Não autenticado" });
+  const expenseId = String(body?.expense_id || "");
+  if (!expenseId) return json(400, { error: "expense_id é obrigatório" });
+
+  const res = await loadExpenseForOwner(admin, expenseId);
+  if ("error" in res) return json(res.error === "Despesa não encontrada" ? 404 : 500, { error: res.error });
+  const current = res.data as any;
+
+  const isPrivileged = caller.isCloudAdmin || caller.isSuperUser;
+  if (!isPrivileged && !isOwner(caller.identity || "", current)) {
+    return json(403, { error: "Apenas o autor do documento pode reativá-lo" });
+  }
+  if (current.status !== "cancelado") {
+    return json(409, { error: `Despesa em status ${current.status} não pode ser reativada.` });
+  }
+  if (current.sap_doc_entry || current.sap_doc_num) {
+    return json(409, { error: "Documento já integrado ao ERP não pode ser reativado." });
+  }
+
+  const { error } = await admin
+    .from("expenses")
+    .update({
+      status: "rascunho",
+      current_approver: null,
+      current_level_order: null,
+      sap_integration_error: null,
+    })
+    .eq("id", expenseId);
+  if (error) return json(500, { error: `Falha ao reativar: ${error.message}` });
+
+  await admin.from("expense_approval_log").insert({
+    expense_id: expenseId,
+    decision: "reactivated",
+    approver_name: caller.identity,
+    approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
+    remarks: "Documento cancelado reativado pelo autor — retornou para rascunho.",
+  } as any);
+
+  return json(200, { ok: true });
+}
+
 async function actionAttachmentsAdd(admin: SupabaseClient, caller: Caller, body: any) {
   if (!caller.identity && !caller.isCloudAdmin) return json(401, { error: "Não autenticado" });
   const expenseId = String(body?.expense_id || "");
@@ -864,6 +912,7 @@ Deno.serve(async (req) => {
       case "update":          return await actionUpdate(admin, caller, body);
       case "submit":          return await actionSubmit(admin, caller, body);
       case "cancel":          return await actionCancel(admin, caller, body);
+      case "reactivate":      return await actionReactivate(admin, caller, body);
       case "attachments_add": return await actionAttachmentsAdd(admin, caller, body);
       case "log_decision":    return await actionLogDecision(admin, caller, body);
       default: return json(400, { error: `Ação desconhecida: ${action}` });
