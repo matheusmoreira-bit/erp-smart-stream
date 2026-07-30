@@ -5,6 +5,7 @@
 - Reuse first: antes de criar helper/componente/hook, procurar similar existente em `src/hooks/`, `src/components/ui/`, `src/lib/`, `supabase/functions/`.
 - Trace-before-fix: em bug de "valor não chega em X", mapear origem→sink (página → hook → edge function → modal) antes de editar qualquer arquivo.
 - Documentos de compra/venda: usuário vê só o que criou/aprova. Toggle "Ver todos"/"Ver todas as aprovações" começa DESMARCADO por padrão para todos, inclusive admins/super-usuários — quem tem permissão liga manualmente.
+- Identidade = usuário SAP (1 nome, N e-mails). Permissões/alçadas gravam a chave canônica (`canonicalUserKey`), nunca e-mail cru.
 
 ## Memories
 - [Debug discipline](skill://lovable-debug-discipline) — Checklist root-cause / reuse / trace-before-fix para evitar loops de fix em sintoma.
@@ -15,5 +16,6 @@
 - [Sales module access](mem://features/sales-module-access.md) — Módulo Vendas restrito ao grupo Contas a Receber; fora dos DEFAULT_MODULES; guardas em Sales.tsx e BaixasHistory.tsx.
 - [Exibir usuários pelo nome](mem://preferences/user-display-name.md) — Nas telas, sempre Nome via `displayUserName` (src/lib/user-display.ts), nunca e-mail/login.
 - [Delegação de alçada](mem://features/approver-substitutes.md) — Substituto com vigência, autoatendimento de férias, audit log e notificações via approver-substitute-manage.
+- [Identidade única de usuário](mem://features/user-identity.md) — Usuário SAP como chave (1 nome, N e-mails), tabelas sap_user_directory/sap_user_emails e chave canônica em permissões.
 
 

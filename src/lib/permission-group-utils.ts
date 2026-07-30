@@ -19,7 +19,7 @@ export function identityMatches(a: unknown, b: unknown): boolean {
   if (!ca || !cb) return false;
   if (ca === cb) return true;
   // tolera sufixos de conta externa/serviço (ex.: blenda.pinheiro.ext)
-  const strip = (v: string) => v.replace(/(ext|externo|terceiro)$/, "");
+  const strip = (v: string) => v.replace(/(ext|externo|terceiro|adm|admin)$/, "");
   return strip(ca) === strip(cb);
 }
 

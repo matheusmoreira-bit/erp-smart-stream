@@ -28,6 +28,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  canonicalUserKey,
+  directoryDisplayName,
+  mergeSapUsers,
+  syncDirectoryFromSapUsers,
+  type DirectoryUser,
+  type RawSapUser,
+} from "@/lib/user-identity";
+import {
   usePermissionGroups,
   useUserAssignments,
   MODULES,
@@ -375,10 +383,10 @@ function UsersView({
   groups: PermissionGroup[];
 }) {
   const { assignments, loading, assign, remove } = useUserAssignments();
-  const [sapUsers, setSapUsers] = useState<SapCacheUser[]>([]);
+  const [people, setPeople] = useState<DirectoryUser[]>([]);
   const [sapLoading, setSapLoading] = useState(true);
   const [filter, setFilter] = useState("");
-  const [sheetUser, setSheetUser] = useState<SapCacheUser | null>(null);
+  const [sheetUser, setSheetUser] = useState<DirectoryUser | null>(null);
 
   useEffect(() => {
     setSapLoading(true);
@@ -388,70 +396,67 @@ function UsersView({
       .eq("cache_key", "users")
       .order("updated_at", { ascending: false })
       .then(({ data }) => {
-        const byKey = new Map<string, SapCacheUser>();
+        const raw: RawSapUser[] = [];
         for (const row of data || []) {
           if (!Array.isArray((row as any).data)) continue;
           for (const u of (row as any).data as any[]) {
-            const user: SapCacheUser = {
+            raw.push({
               UserCode: u.UserCode || u.user_code || "",
               UserName: u.UserName || u.u_name || "",
               eMail: u.eMail || u.E_Mail || u.EMAIL || "",
-            };
-            const key = (user.eMail || user.UserCode || "").toLowerCase();
-            if (!key) continue;
-            if (!byKey.has(key)) byKey.set(key, user);
+            });
           }
         }
-        setSapUsers(Array.from(byKey.values()));
+        // Uma pessoa = um usuário SAP (1 nome, N e-mails).
+        setPeople(mergeSapUsers(raw));
         setSapLoading(false);
+        void syncDirectoryFromSapUsers(raw);
       });
   }, []);
 
   const defaultGroup = groups.find((g) => g.name === "Usuário");
 
-  const getUserGroup = (email: string) =>
-    groups.find(
-      (g) =>
-        g.id ===
-        assignments.find((a) => a.sap_email.toLowerCase() === email.toLowerCase())?.group_id,
-    );
+  const assignmentOf = (person: DirectoryUser | null) =>
+    person ? assignments.find((a) => canonicalUserKey(a.sap_email) === person.user_key) : undefined;
+
+  const getUserGroup = (person: DirectoryUser) =>
+    groups.find((g) => g.id === assignmentOf(person)?.group_id);
 
   const filtered = useMemo(() => {
-    return sapUsers
+    return people
       .filter((u) => {
         if (!filter) return true;
         const q = filter.toLowerCase();
         return (
-          (u.UserName || "").toLowerCase().includes(q) ||
-          (u.UserCode || "").toLowerCase().includes(q) ||
-          (u.eMail || "").toLowerCase().includes(q)
+          directoryDisplayName(u).toLowerCase().includes(q) ||
+          (u.sap_user_code || "").toLowerCase().includes(q) ||
+          u.emails.some((e) => e.includes(q))
         );
       })
       .sort((a, b) =>
-        (a.UserName || a.UserCode).localeCompare(b.UserName || b.UserCode, "pt-BR", {
+        directoryDisplayName(a).localeCompare(directoryDisplayName(b), "pt-BR", {
           sensitivity: "base",
         }),
       );
-  }, [sapUsers, filter]);
+  }, [people, filter]);
 
   const handlePick = async (groupId: string) => {
     if (!sheetUser) return;
-    const email = sheetUser.eMail || sheetUser.UserCode;
-    await assign(email, groupId);
+    await assign(sheetUser.user_key, groupId);
     toast.success("Permissão atualizada");
     setSheetUser(null);
   };
 
   const handleReset = async () => {
     if (!sheetUser) return;
-    const email = sheetUser.eMail || sheetUser.UserCode;
-    const a = assignments.find((x) => x.sap_email.toLowerCase() === email.toLowerCase());
+    const a = assignmentOf(sheetUser);
     if (a) {
       await remove(a.id);
       toast.success("Voltou ao padrão");
     }
     setSheetUser(null);
   };
+
 
   return (
     <div className="space-y-4">
@@ -490,15 +495,17 @@ function UsersView({
       ) : (
         <IosList>
           {filtered.map((u) => {
-            const email = u.eMail || u.UserCode;
-            const g = getUserGroup(email);
+            const g = getUserGroup(u);
             return (
-              <IosRow key={email.toLowerCase()} onClick={() => setSheetUser(u)}>
+              <IosRow key={u.user_key} onClick={() => setSheetUser(u)}>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
-                    {u.UserName || u.UserCode}
+                    {directoryDisplayName(u)}
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">{email}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {u.sap_user_code || u.user_key}
+                    {u.emails.length > 0 ? ` · ${u.emails.length} e-mail(s)` : ""}
+                  </p>
                 </div>
                 <Badge
                   variant="secondary"
@@ -518,18 +525,20 @@ function UsersView({
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="text-left">
-              {sheetUser?.UserName || sheetUser?.UserCode}
+              {sheetUser ? directoryDisplayName(sheetUser) : ""}
               <p className="text-xs font-normal text-muted-foreground mt-0.5">
-                {sheetUser?.eMail || sheetUser?.UserCode}
+                Usuário SAP: {sheetUser?.sap_user_code || sheetUser?.user_key}
               </p>
+              {sheetUser && sheetUser.emails.length > 0 && (
+                <p className="text-xs font-normal text-muted-foreground mt-0.5 break-all">
+                  {sheetUser.emails.join(", ")}
+                </p>
+              )}
             </SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-1">
             {groups.map((g) => {
-              const email = sheetUser ? (sheetUser.eMail || sheetUser.UserCode) : "";
-              const isCurrent =
-                assignments.find((a) => a.sap_email.toLowerCase() === email.toLowerCase())
-                  ?.group_id === g.id;
+              const isCurrent = assignmentOf(sheetUser)?.group_id === g.id;
               return (
                 <button
                   key={g.id}
@@ -552,11 +561,8 @@ function UsersView({
               );
             })}
           </div>
-          {assignments.find(
-            (a) =>
-              sheetUser &&
-              a.sap_email.toLowerCase() === (sheetUser.eMail || sheetUser.UserCode).toLowerCase(),
-          ) && (
+          {assignmentOf(sheetUser) && (
+
             <Button
               variant="ghost"
               className="w-full mt-3 text-destructive hover:text-destructive"

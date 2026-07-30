@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { canonicalUserKey } from "@/lib/user-identity";
 
 export interface ApproverCostCenter {
   id: string;
@@ -41,11 +42,11 @@ export function useApproverCostCenters(companyDB: string | undefined) {
   /** Set de cost centers cadastrados para um determinado email (lowercase) */
   const getCostCentersForEmail = useCallback(
     (email: string | undefined | null): Set<string> => {
-      const e = (email || "").toLowerCase().trim();
-      if (!e) return new Set();
+      const key = canonicalUserKey(email);
+      if (!key) return new Set();
       return new Set(
         rows
-          .filter((r) => (r.sap_email || "").toLowerCase().trim() === e)
+          .filter((r) => canonicalUserKey(r.sap_email) === key)
           .map((r) => r.cost_center),
       );
     },

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { identityMatches } from "@/lib/permission-group-utils";
+import { canonicalUserKey } from "@/lib/user-identity";
 
 export type PermissionGroupOption = { id: string; name: string; company_db: string | null };
 type Assignment = { id: string; sap_email: string; group_id: string };
@@ -61,11 +62,11 @@ export function useUserGroupAdmin() {
       }
 
       if (opts.groupId) {
-        const keys = Array.from(
-          new Set(identities.map((i) => i.toLowerCase().trim()).filter(Boolean)),
-        );
+        // Uma pessoa = um usuário SAP: grava SEMPRE a chave canônica única.
+        const key = canonicalUserKey(opts.userCode || opts.email);
+        if (!key) throw new Error("Usuário SAP inválido");
         const { error } = await supabase.from("user_group_assignments").upsert(
-          keys.map((sap_email) => ({ sap_email, group_id: opts.groupId!, company_db: null })),
+          [{ sap_email: key, group_id: opts.groupId, company_db: null }],
           { onConflict: "sap_email,group_id" },
         );
         if (error) throw new Error(error.message);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
+import { canonicalUserKey } from "@/lib/user-identity";
 
 /* ────────────────────────────────────────────────────────────────────
  * Types
@@ -316,7 +317,8 @@ export function useUserAssignments(_companyDb?: string) {
   useEffect(() => { fetch(); }, [fetch]);
 
   const assign = async (sap_email: string, group_id: string) => {
-    const email = sap_email.toLowerCase();
+    // Identidade canônica do usuário SAP (nunca e-mail cru).
+    const email = canonicalUserKey(sap_email) || sap_email.toLowerCase();
     // Global assignment — remove other groups for this user first.
     await supabase
       .from("user_group_assignments")
@@ -413,10 +415,10 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
         .from("user_group_assignments")
         .select("group_id, sap_email");
 
-      const mine = (allAssignments || []).filter((a: any) => {
-        const sapEmail = a.sap_email.toLowerCase();
-        return sapEmail === identifier || sapEmail.startsWith(identifier + "@");
-      });
+      const myKey = canonicalUserKey(identifier);
+      const mine = (allAssignments || []).filter(
+        (a: any) => canonicalUserKey(a.sap_email) === myKey,
+      );
 
       if (cancelled) return;
 
