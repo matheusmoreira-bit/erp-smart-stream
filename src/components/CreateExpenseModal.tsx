@@ -2732,16 +2732,19 @@ export function CreateExpenseModal({
                   query={query}
                   bpLabel={bpLabel}
                   currentCompanyLabel={currentCompanyLabel}
+                  canRegister={canRegisterSupplier}
                   onCreateNew={() => {
-                    // Pré-preenche o SupplierFormModal com o texto digitado.
+                    // Pré-preenche com o texto digitado.
                     const digits = onlyDigits(query);
                     const looksLikeCnpj = digits.length >= 11;
                     setAiSupplierData({
                       card_name: looksLikeCnpj ? undefined : query,
                       federal_tax_id: looksLikeCnpj ? digits : undefined,
                     } as SupplierFormPrefill);
-                    setShowSupplierForm(true);
+                    if (canRegisterSupplier) setShowSupplierForm(true);
+                    else setSupplierRequestOpen(true);
                   }}
+
                   onRefresh={() => {
                     reloadSuppliers();
                     toast.success("Lista atualizada");
