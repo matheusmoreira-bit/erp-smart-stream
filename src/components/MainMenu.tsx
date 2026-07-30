@@ -30,6 +30,8 @@ import { useModuleAccess } from "@/hooks/usePermissions";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { NotificationBell } from "@/components/NotificationBell";
+import { UserCompanyMenu } from "@/components/UserCompanyMenu";
+
 
 interface ModuleCard {
   title: string;
@@ -385,15 +387,7 @@ export function MainMenu() {
           </div>
 
           {/* Desktop actions */}
-          <div className="hidden md:flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-foreground">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground">{session?.userName}</p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
-              Conectado
-            </div>
+          <div className="hidden md:flex items-center gap-2">
             <NotificationBell />
             <button
               onClick={() => navigate("/perfil")}
@@ -404,10 +398,9 @@ export function MainMenu() {
             </button>
             <ChangePasswordDialog />
             <ThemeToggle />
-            <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-              Sair
-            </button>
+            <UserCompanyMenu />
           </div>
+
 
           {/* Mobile actions: only notification bell (menu is on bottom nav) */}
           <div className="flex md:hidden items-center gap-1">

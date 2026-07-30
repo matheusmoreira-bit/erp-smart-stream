@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { motion } from "framer-motion";
 import {
@@ -1484,21 +1485,12 @@ export default function ApprovalRulesPage() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-foreground">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground">{session?.userName}</p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
-              Conectado
-            </div>
             <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={logout}>
-              <LogOut className="w-4 h-4" />
-            </Button>
+            <UserCompanyMenu />
+
           </div>
         </div>
       </header>

@@ -1,9 +1,11 @@
 import { ReactNode } from "react";
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PageTitle } from "@/components/PageTitle";
+import { UserCompanyMenu } from "@/components/UserCompanyMenu";
+
 
 interface PageHeaderProps {
   /** Ícone à esquerda do título (ex.: Receipt, CreditCard) */
@@ -77,35 +79,12 @@ export function PageHeader({
               ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {actions}
-            {(companyLabel || userName) && (
-              <div className="text-right">
-                {companyLabel ? (
-                  <p className="text-sm font-medium text-foreground">{companyLabel}</p>
-                ) : null}
-                {userName ? (
-                  <p className="text-xs text-muted-foreground">{userName}</p>
-                ) : null}
-              </div>
-            )}
-            {connected ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
-                Conectado
-              </div>
-            ) : null}
             <ThemeToggle />
-            {onLogout ? (
-              <button
-                onClick={onLogout}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Sair"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            ) : null}
+            <UserCompanyMenu />
           </div>
+
         </div>
       </header>
     </>
