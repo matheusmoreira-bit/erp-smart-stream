@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isTestCompanyDb } from "@/lib/test-company";
+import { canViewTestCompanies, subscribeTestCompanyVisibility } from "@/lib/test-company-visibility";
 
 export interface CompanyTargets {
   requisicao: number;
@@ -80,16 +82,23 @@ async function ensureLoaded() {
   await inflight;
 }
 
+/** Remove empresas de teste quando o usuário não tem permissão para vê-las. */
+function visible(list: Company[] | null): Company[] {
+  if (!list) return [];
+  if (canViewTestCompanies()) return list;
+  return list.filter((c) => !c.is_test && !isTestCompanyDb(c.company_db));
+}
+
 export function useCompanies(onlyActive = false) {
   const [companies, setCompanies] = useState<Company[]>(
-    () => (onlyActive ? cache.active : cache.all) || [],
+    () => visible(onlyActive ? cache.active : cache.all),
   );
   const [loading, setLoading] = useState<boolean>(!cache.all);
   const onlyActiveRef = useRef(onlyActive);
   onlyActiveRef.current = onlyActive;
 
   const sync = useCallback(() => {
-    setCompanies((onlyActiveRef.current ? cache.active : cache.all) || []);
+    setCompanies(visible(onlyActiveRef.current ? cache.active : cache.all));
     if (cache.all) setLoading(false);
   }, []);
 
@@ -102,8 +111,9 @@ export function useCompanies(onlyActive = false) {
   useEffect(() => {
     ensureRealtime();
     listeners.add(sync);
+    const unsub = subscribeTestCompanyVisibility(sync);
     ensureLoaded().then(sync);
-    return () => { listeners.delete(sync); };
+    return () => { listeners.delete(sync); unsub(); };
   }, [sync]);
 
   const getLabel = useCallback(

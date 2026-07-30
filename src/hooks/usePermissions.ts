@@ -91,6 +91,7 @@ export const CAPABILITIES = [
   { key: "approvals_transfer", label: "Transferir aprovações em massa", hint: "Ferramenta administrativa de transferência entre aprovadores." },
   { key: "approvals_override", label: "Aprovar fora do fluxo", hint: "Aprova documentos mesmo sem ser o aprovador designado." },
   { key: "suppliers_reactivate", label: "Reativar fornecedores inativos", hint: "Permite reativar fornecedor bloqueado no ERP." },
+  { key: "test_companies_view", label: "Ver empresas de teste", hint: "Exibe bases TST%/SBO_TESTE% na seleção de empresa. Admins já enxergam." },
   { key: "expenses_cancel", label: "Cancelar documentos", hint: "Cancela pedidos/lançamentos próprios ou de terceiros." },
 ] as const;
 
