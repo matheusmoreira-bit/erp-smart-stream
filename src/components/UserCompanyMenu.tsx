@@ -16,7 +16,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+
 import { Label } from "@/components/ui/label";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -38,8 +40,56 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   const [formDb, setFormDb] = useState<string | null>(null);
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
+  const [google, setGoogle] = useState<{ name: string; email: string; avatar: string } | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   const companyLabel = getLabel(session?.companyDB || "");
+
+  // Conta Google (Lovable Cloud) — foto, nome e e-mail, padrão Google.
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!alive) return;
+      const u = data.user;
+      if (!u) { setGoogle(null); return; }
+      const meta = (u.user_metadata || {}) as Record<string, unknown>;
+      setGoogle({
+        name: String(meta.full_name || meta.name || "").trim(),
+        email: u.email || "",
+        avatar: String(meta.avatar_url || meta.picture || "").trim(),
+      });
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const initials = useMemo(() => {
+    const base = google?.name || google?.email || displayUserName(session?.userName || "");
+    return base
+      .replace(/@.*/, "")
+      .split(/[\s._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() || "")
+      .join("");
+  }, [google, session?.userName]);
+
+  const handleGoogleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      const { clearErpLocalState } = await import("@/lib/clear-erp-local-state");
+      clearErpLocalState();
+      await supabase.auth.signOut();
+      toast.success("Você saiu da conta Google");
+    } catch (e) {
+      toast.error("Falha ao encerrar a sessão Google", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setSigningOut(false);
+      window.setTimeout(() => window.location.replace("/"), 300);
+    }
+  };
+
 
   const loadManaged = useCallback(async () => {
     setLoadingCreds(true);
@@ -134,22 +184,44 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <button
-            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/60 transition-colors max-w-[240px] ${className}`}
+            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/60 transition-colors max-w-[260px] ${className}`}
             aria-label="Menu da conta e empresa"
           >
+            <Avatar className="w-8 h-8 shrink-0">
+              {google?.avatar && <AvatarImage src={google.avatar} alt={google.name || google.email || "Conta Google"} referrerPolicy="no-referrer" />}
+              <AvatarFallback className="text-xs">{initials || "?"}</AvatarFallback>
+            </Avatar>
             <div className="min-w-0 hidden sm:block">
               <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
-              <p className="text-xs text-muted-foreground truncate">{displayUserName(session.userName)}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                {google?.name || displayUserName(session.userName)}
+              </p>
             </div>
-            <Building2 className="w-4 h-4 text-muted-foreground sm:hidden" aria-hidden="true" />
             <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64 bg-popover z-50">
-          <div className="px-2 py-1.5 sm:hidden">
-            <p className="text-sm font-medium text-foreground truncate">{companyLabel}</p>
-            <p className="text-xs text-muted-foreground truncate">{displayUserName(session.userName)}</p>
+        <DropdownMenuContent align="end" className="w-72 bg-popover z-50">
+          {/* Cartão da conta Google — foto, nome e e-mail */}
+          <div className="flex items-center gap-3 px-2 py-3">
+            <Avatar className="w-10 h-10 shrink-0">
+              {google?.avatar && <AvatarImage src={google.avatar} alt={google.name || google.email || "Conta Google"} referrerPolicy="no-referrer" />}
+              <AvatarFallback className="text-sm">{initials || "?"}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {google?.name || displayUserName(session.userName)}
+              </p>
+              {google?.email && (
+                <p className="text-xs text-muted-foreground truncate">{google.email}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground truncate">
+                <Building2 className="w-3 h-3 inline mr-1 -mt-0.5" aria-hidden="true" />
+                {companyLabel}
+              </p>
+            </div>
           </div>
+          <DropdownMenuSeparator />
+
 
           <DropdownMenuItem
             onSelect={(e) => {
@@ -200,8 +272,23 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
 
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => logout()}>
-            <LogOut className="w-4 h-4 mr-2" /> Sair
+            <LogOut className="w-4 h-4 mr-2" /> Sair da empresa
           </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={signingOut}
+            onSelect={(e) => {
+              e.preventDefault();
+              void handleGoogleSignOut();
+            }}
+          >
+            {signingOut ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4 mr-2" />
+            )}
+            Sair da conta Google
+          </DropdownMenuItem>
+
         </DropdownMenuContent>
       </DropdownMenu>
 
