@@ -408,8 +408,21 @@ async function findMatchingRule(
   if (!companyDb) return null;
   q = q.eq("company_db", companyDb);
 
-  const { data: rules } = await q;
-  if (!rules || rules.length === 0) return null;
+  const { data: rules, error: rulesErr } = await q;
+  // Se a matriz não pôde ser lida (sessão expirada / RLS negando), NÃO trate
+  // como "sem regra" — isso mandava o documento para um admin qualquer via
+  // fallback. Melhor abortar a criação com erro claro.
+  if (rulesErr) {
+    throw new Error(
+      "Não foi possível ler a matriz de aprovação (sessão expirada). Recarregue a página e faça login novamente antes de criar o documento.",
+    );
+  }
+  if (!rules || rules.length === 0) {
+    throw new Error(
+      "Matriz de aprovação indisponível para esta empresa (nenhuma regra retornada). Recarregue a página e tente novamente.",
+    );
+  }
+
 
   // Filter by doc_type: rule applies when matching type, "both", or null (legacy)
   const filtered = (rules as any[]).filter((r) => {
