@@ -162,6 +162,11 @@ export function useApprovalHistory(
       // ============================================================
       // 2) Interno (expense_approval_log) — colunas dedicadas.
       // ============================================================
+      // O log não tem coluna de empresa: o recorte por company_db acontece
+      // depois, ao cruzar com `expenses`. Por isso buscamos uma janela maior —
+      // com o limite exato da página, empresas com menos movimento ficavam sem
+      // nenhuma linha após o filtro.
+      const logFetchCap = Math.min(Math.max(fetchCap * 6, 300), 1000);
       let logQ = supabase
         .from("expense_approval_log")
         .select("*")
@@ -170,7 +175,7 @@ export function useApprovalHistory(
           decision === "Y" ? ["approved"] : decision === "N" ? ["rejected"] : ["approved", "rejected"],
         )
         .order("decided_at", { ascending: false, nullsFirst: false })
-        .limit(fetchCap);
+        .limit(logFetchCap);
       if (mode === "any") {
         logQ = logQ.or(
           "substituted_for_email.not.is.null,substituted_for_name.not.is.null",
