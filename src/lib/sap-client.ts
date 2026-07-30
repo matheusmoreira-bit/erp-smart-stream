@@ -248,6 +248,11 @@ export async function sapLogin(userName: string, password: string, companyDB: st
     credentials: { UserName: userName, Password: password, CompanyDB: companyDB },
   });
 
+  // Login bem-sucedido = base respondendo: fecha qualquer circuito aberto.
+  resetCircuit(companyDB);
+
+
+
   // SAP Service Layer SessionTimeout is in minutes (default 30).
   const timeoutMin = Number.isFinite(result.sessionTimeout) && result.sessionTimeout > 0
     ? Math.min(Number(result.sessionTimeout), 30)
