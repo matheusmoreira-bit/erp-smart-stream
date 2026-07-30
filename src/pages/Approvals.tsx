@@ -2003,6 +2003,8 @@ export default function ApprovalsPage() {
   const canToggleShowAll = isAdmin || canViewAllApprovals || canViewAllByGroup;
   const [showAll, setShowAll] = useState<boolean>(false);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
+  const [showSubstitutes, setShowSubstitutes] = useState(false);
+
   const [isDelegating, setIsDelegating] = useState(false);
   const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
