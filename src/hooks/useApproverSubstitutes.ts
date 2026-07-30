@@ -1,6 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
+
+async function callSubstituteFn<T>(payload: Record<string, unknown>): Promise<T> {
+  const resp = await sapFunctionFetch("approver-substitute-manage", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const text = await resp.text();
+  let parsed: unknown = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { /* noop */ }
+  if (!resp.ok) {
+    const msg = (parsed as { error?: string } | null)?.error || `Falha na operação (${resp.status})`;
+    throw new Error(msg);
+  }
+  return parsed as T;
+}
+
 
 export interface ApproverSubstitute {
   id: string;
