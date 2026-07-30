@@ -137,7 +137,7 @@ const CHANGELOG: RoadmapItem[] = [
   },
   // ---- Fase 5 — Governança e segurança (jun–jul/2026)
   {
-    date: "2026-07-05",
+    date: "2026-07-29",
     title: "Tratativa do pentest whitebox",
     kind: "seguranca",
     track: "Governança e segurança",
@@ -145,7 +145,7 @@ const CHANGELOG: RoadmapItem[] = [
       "Leituras escopadas no servidor, senha mínima de 12 caracteres, idempotência atômica, CSP/HSTS e tokens anti-CSRF.",
   },
   {
-    date: "2026-06-28",
+    date: "2026-07-29",
     title: "Alerta CC × Projeto auditável",
     kind: "automacao",
     track: "Governança e segurança",
