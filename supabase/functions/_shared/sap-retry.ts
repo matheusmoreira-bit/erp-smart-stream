@@ -140,14 +140,14 @@ export async function enqueueRetry(admin: any, params: EnqueueRetryParams): Prom
         patch.max_attempts = params.max_attempts ?? 5;
         patch.company_db = params.company_db ?? null;
         patch.payload = params.payload ?? {};
-        patch.next_attempt_at = new Date(Date.now() + backoffMinutes(1) * 60_000).toISOString();
+        patch.next_attempt_at = nextAttemptAt(1);
       }
       await admin.from("sap_retry_queue").update(patch).eq("id", existing.id);
       return { enqueued: !isActive, id: existing.id };
     }
 
 
-    const nextAt = new Date(Date.now() + backoffMinutes(1) * 60_000).toISOString();
+    const nextAt = nextAttemptAt(1);
     const { data: inserted, error: iErr } = await admin
       .from("sap_retry_queue")
       .insert({
