@@ -488,7 +488,17 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
       ]);
       return { user_licenses: ul.data || [], collaborators: cp.data || [] };
     }
+    case "describe_schema": {
+      const t = String(args.table || "").trim().replace(/[^a-zA-Z0-9_%]/g, "");
+      const sql = t
+        ? `select table_name, column_name, data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name ilike '%${t}%' order by table_name, ordinal_position limit 400`
+        : `select table_name, count(*)::int as columns from information_schema.columns where table_schema = 'public' group by table_name order by table_name limit 400`;
+      const { data, error } = await sb.rpc("copilot_read_query", { p_sql: sql });
+      if (error) return { error: error.message };
+      return data;
+    }
     case "run_sql_read": {
+
       const sql = String(args.sql || "").trim();
       if (!/^select\b/i.test(sql) || /;\s*\S/.test(sql)) {
         return { error: "Somente uma sentença SELECT é permitida." };
