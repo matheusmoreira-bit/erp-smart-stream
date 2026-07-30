@@ -50,6 +50,127 @@ const CHANGELOG: RoadmapItem[] = [
   // ---- Fase 6 — Experiência e inteligência (jul/2026)
   {
     date: "2026-07-30",
+    title: "Identidade canônica do usuário SAP",
+    kind: "melhoria",
+    track: "Governança e segurança",
+    description:
+      "Usuário SAP como chave única (1:N e-mails, 1:1 nome), unificação de duplicidades por similaridade de grafia e consolidação mantendo o grupo de maior permissão em todas as bases.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Central de notificações configurável",
+    kind: "funcao",
+    track: "Experiência e inteligência",
+    description:
+      "Histórico único de todos os envios (in-app, e-mail, WhatsApp e rotinas) e edição de gatilhos, frequência, canais e templates pelos administradores.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Módulo de usuários unificado",
+    kind: "modulo",
+    track: "Governança e segurança",
+    description:
+      "Hub único com lista de pessoas, grupos, capabilities e sincronização de IdP, substituindo as telas separadas de permissões e usuários SAP.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Permissões por capability (GRUPO > USER)",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "Catálogo central de flags por grupo (ver todos, cadastro direto de fornecedor, empresas teste etc.), sem exceções escondidas no usuário.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Onboarding guiado por perfil",
+    kind: "melhoria",
+    track: "Experiência e inteligência",
+    description:
+      "Tour curto no primeiro acesso, adaptado ao grupo de permissão, com opção de reexibir pelo menu do usuário.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Trilha de auditoria unificada por documento",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "Linha do tempo pesquisável reunindo eventos de ERP, aprovações, retries do SAP e notificações.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Painel único de saúde das integrações",
+    kind: "funcao",
+    track: "Integrações e dados",
+    description:
+      "SAP Service Layer, HanaAPI V2, PagCorp e Master Tax em um só painel, com latência, taxa de erro e última execução.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Fila de retentativa automática com backoff",
+    kind: "automacao",
+    track: "Integrações e dados",
+    description:
+      "Reprocessamento de falhas transitórias com backoff progressivo, jitter, recuperação de itens travados e contingência sem anexo na última tentativa.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Circuit breaker por empresa",
+    kind: "automacao",
+    track: "Integrações e dados",
+    description:
+      "Base indisponível deixa de ser chamada por alguns minutos após falhas seguidas, sem travar as demais rotinas.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Detecção de conflitos entre regras de aprovação",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Alerta de empates de prioridade, sobreposição e regras sombreadas, aproveitando a lógica do Raio-X.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Simulador de regras antes de publicar",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Documento fictício rodado contra a matriz mostra a cadeia de aprovação resultante antes de salvar alterações.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Delegação temporária de alçada (férias)",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Substituto com vigência definida e registro em audit log, evitando documentos parados.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Aprovação por e-mail, mobile e Slack",
+    kind: "funcao",
+    track: "Compras e aprovações",
+    description:
+      "Link assinado de uso único em /aprovar/:token, com orquestração multicanal preparada para Slack.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Rascunhos, duplicação e reativação de pedidos",
+    kind: "melhoria",
+    track: "Compras e aprovações",
+    description:
+      "Salvar em andamento, criar pedido a partir de outro já lançado e reativar documentos cancelados pelo autor.",
+  },
+  {
+    date: "2026-07-30",
+    title: "Esboço de NF de entrada no ERP",
+    kind: "integracao",
+    track: "Integrações e dados",
+    description:
+      "Lançamento de rascunho no SAP B1 quando o documento capturado pelo Master Tax tem pedido vinculado sem NF de entrada.",
+  },
+
+  {
+    date: "2026-07-30",
     title: "Relançamento de documentos cancelados",
     kind: "melhoria",
     track: "Compras e aprovações",
@@ -364,61 +485,30 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
     group: "Confiabilidade das integrações",
     items: [
       {
-        title: "Painel único de saúde das integrações",
+        title: "Alertas proativos de degradação",
         impact: "alto",
-        effort: "médio",
-        description:
-          "Consolidar SAP Service Layer, HanaAPI V2, PagCorp e Master Tax em um só painel com latência, taxa de erro e última execução.",
-      },
-      {
-        title: "Fila de retentativa automática com backoff",
-        impact: "alto",
-        effort: "médio",
-        description:
-          "Reprocessar automaticamente falhas transitórias (timeout/sessão) sem intervenção manual, com limite e alerta ao falhar de vez.",
-      },
-      {
-        title: "Circuit breaker por empresa",
-        impact: "médio",
         effort: "baixo",
         description:
-          "Interromper chamadas a uma base indisponível por alguns minutos para não travar as demais rotinas.",
+          "Disparar aviso (e-mail/Slack) quando o painel de saúde detectar latência ou taxa de erro acima do limite, sem depender de alguém abrir a tela.",
+      },
+      {
+        title: "Modo offline com fila de envio",
+        impact: "médio",
+        effort: "alto",
+        description:
+          "Permitir criar pedidos e despesas com a base SAP fora do ar, enfileirando o envio para quando o circuit breaker fechar.",
+      },
+      {
+        title: "Contrato de dados das views HanaAPI",
+        impact: "médio",
+        effort: "médio",
+        description:
+          "Validar schema das views (VW_FORNECEDORES, VW_ACOMPANHAMENTO_PEDIDOS) a cada execução e alertar mudanças antes de quebrar telas.",
       },
     ],
   },
   {
     group: "Aprovações e governança",
-    items: [
-      {
-        title: "Simulador de regras antes de publicar",
-        impact: "alto",
-        effort: "médio",
-        description:
-          "Rodar um documento fictício contra a matriz e mostrar a cadeia resultante antes de salvar alterações.",
-      },
-      {
-        title: "Detecção de conflitos e sobreposição de regras",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Alertar quando duas regras ativas competirem pelo mesmo cenário, aproveitando a lógica do Raio-X.",
-      },
-      {
-        title: "Delegação temporária de alçada (férias)",
-        impact: "alto",
-        effort: "médio",
-        description: "Substituto com vigência definida e registro em audit log, evitando documentos parados.",
-      },
-      {
-        title: "Aprovação por e-mail e mobile-first",
-        impact: "médio",
-        effort: "alto",
-        description: "Aprovar/reprovar com link assinado de uso único, sem abrir o sistema.",
-      },
-    ],
-  },
-  {
-    group: "Dados e analytics",
     items: [
       {
         title: "Dashboard de SLA de aprovação",
@@ -427,17 +517,57 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         description: "Tempo médio por aprovador, gargalos por CC/projeto e ranking de atrasos.",
       },
       {
-        title: "Exportações agendadas",
-        impact: "baixo",
-        effort: "baixo",
-        description: "Envio recorrente de relatórios (compras, vendas, fiscal) por e-mail em CSV/XLSX.",
+        title: "Escalonamento automático por SLA",
+        impact: "alto",
+        effort: "médio",
+        description:
+          "Documento parado além do prazo sobe automaticamente para o superior ou para o substituto vigente, com registro em auditoria.",
       },
+      {
+        title: "Versionamento e rollback da matriz de alçadas",
+        impact: "médio",
+        effort: "médio",
+        description:
+          "Guardar cada publicação da matriz, comparar versões e permitir voltar a um estado anterior.",
+      },
+      {
+        title: "Aprovação em lote com filtros salvos",
+        impact: "médio",
+        effort: "baixo",
+        description:
+          "Selecionar vários documentos do mesmo CC/projeto e aprovar de uma vez, respeitando o mascaramento de rateios.",
+      },
+    ],
+  },
+  {
+    group: "Dados e analytics",
+    items: [
       {
         title: "Conciliação fiscal automática",
         impact: "alto",
         effort: "alto",
         description:
           "Casar automaticamente NFS-e, pagamento e lançamento no ERP, deixando no Kanban só as exceções.",
+      },
+      {
+        title: "Exportações agendadas",
+        impact: "baixo",
+        effort: "baixo",
+        description: "Envio recorrente de relatórios (compras, vendas, fiscal) por e-mail em CSV/XLSX.",
+      },
+      {
+        title: "Previsão de caixa por vencimento",
+        impact: "médio",
+        effort: "médio",
+        description:
+          "Consolidar contas a pagar e a receber com projeções por CC/projeto e comparação com o realizado.",
+      },
+      {
+        title: "Copiloto com relatórios salvos",
+        impact: "médio",
+        effort: "baixo",
+        description:
+          "Permitir salvar e reexecutar consultas do copiloto do backoffice como relatórios nomeados, com controle por grupo.",
       },
     ],
   },
@@ -457,10 +587,18 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         description: "Campanha trimestral de recertificação de grupos e alçadas, com evidência para auditoria.",
       },
       {
-        title: "Trilha de auditoria unificada e pesquisável",
+        title: "Desprovisionamento automático via IdP",
+        impact: "alto",
+        effort: "médio",
+        description:
+          "Desligamento no JumpCloud/Okta revoga acessos, alçadas e substituições vigentes na mesma sincronização.",
+      },
+      {
+        title: "Retenção e mascaramento de dados sensíveis",
         impact: "médio",
         effort: "médio",
-        description: "Uma única linha do tempo por documento, reunindo eventos de ERP, SAP e integrações.",
+        description:
+          "Política de expurgo de anexos e mascaramento de dados bancários/PII fora do grupo responsável.",
       },
     ],
   },
@@ -468,26 +606,30 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
     group: "Experiência do usuário",
     items: [
       {
-        title: "Notificações in-app com central de avisos",
+        title: "App mobile-first para aprovações",
         impact: "médio",
         effort: "médio",
-        description: "Complementar o e-mail com um sino de notificações e histórico dos marcos do documento.",
+        description:
+          "PWA instalável com push, focado em aprovar, consultar status e anexar comprovantes pelo celular.",
       },
       {
-        title: "Rascunhos e duplicação de pedidos",
+        title: "Busca global (documentos, fornecedores, pessoas)",
         impact: "médio",
-        effort: "baixo",
-        description: "Salvar em andamento e criar um novo pedido a partir de outro já lançado.",
+        effort: "médio",
+        description:
+          "Campo único com atalho de teclado, retornando documentos, fornecedores e usuários respeitando as capabilities do grupo.",
       },
       {
-        title: "Onboarding guiado por perfil",
-        impact: "baixo",
-        effort: "baixo",
-        description: "Tour curto no primeiro acesso, adaptado ao grupo de permissão do usuário.",
+        title: "Captura de nota por foto/OCR",
+        impact: "médio",
+        effort: "alto",
+        description:
+          "Tirar foto do documento e pré-preencher fornecedor, valor e vencimento antes do lançamento.",
       },
     ],
   },
 ];
+
 
 const IMPACT_CLASS: Record<BacklogItem["impact"], string> = {
   alto: "border-primary/40 text-primary",
