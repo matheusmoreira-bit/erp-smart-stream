@@ -60,6 +60,10 @@ export default function UsersPage() {
   const { phones, upsertPhone } = useUserPhones();
   const [phoneUser, setPhoneUser] = useState<SapUser | null>(null);
   const [provisionUser, setProvisionUser] = useState<SapUser | null>(null);
+  const [groupUser, setGroupUser] = useState<SapUser | null>(null);
+  const { isPrivileged } = useMyPermissionGroups();
+  const { groups: permissionGroups, groupOf, setGroup } = useUserGroupAdmin();
+
 
   // Multi-company password reset state
   const [pwdUser, setPwdUser] = useState<SapUser | null>(null);
