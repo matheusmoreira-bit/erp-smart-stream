@@ -972,7 +972,7 @@ export default function Admin() {
         <ul className="grid grid-cols-5">
           {[
             { key: "companies", label: "Empresas", icon: Building2, action: () => setActiveTab("companies") },
-            { key: "permissions", label: "Permissões", icon: Users, action: () => setActiveTab("permissions") },
+            { key: "permissions", label: "Permissões", icon: Users, action: () => navigate("/usuarios/permissoes") },
             { key: "sap_users", label: "Usuários SAP", icon: ShieldCheck, action: () => navigate("/backoffice/sap-users") },
             { key: "audit", label: "Logs", icon: ScrollText, action: () => setActiveTab("audit") },
           ].map((t) => {
