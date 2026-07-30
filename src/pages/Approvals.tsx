@@ -2995,13 +2995,26 @@ export default function ApprovalsPage() {
             </div>
           </div>
           {overdueCount > 0 && (
-            <div className="glass-card px-4 py-3 flex items-center gap-3 border-destructive/30">
-              <Calendar className="w-4 h-4 text-destructive" />
+            <button
+              type="button"
+              onClick={() => setOnlyOverdue((v) => !v)}
+              aria-pressed={onlyOverdue}
+              title={onlyOverdue ? "Mostrar todas as pendentes" : "Mostrar apenas as vencidas"}
+              className={`glass-card px-4 py-3 flex items-center gap-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                onlyOverdue
+                  ? "border-destructive bg-destructive/10 ring-1 ring-destructive/40"
+                  : "border-destructive/30 hover:bg-destructive/5"
+              }`}
+            >
+              <Calendar className="w-4 h-4 text-destructive" aria-hidden="true" />
               <div>
-                <p className="text-xs text-muted-foreground">Vencidos</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  Vencidos
+                  {onlyOverdue && <X className="w-3 h-3" aria-hidden="true" />}
+                </p>
                 <p className="text-lg font-bold font-mono text-destructive">{overdueCount}</p>
               </div>
-            </div>
+            </button>
           )}
         </div>
 
