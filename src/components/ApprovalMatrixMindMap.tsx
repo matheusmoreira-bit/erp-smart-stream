@@ -455,7 +455,61 @@ export function ApprovalMatrixMindMap({
     }
   }, [persistKey, zoom, collapsed]);
 
-  const tree = useMemo(() => buildTree(rows, rootLabel), [rows, rootLabel]);
+  // ---- Filtros locais da teia -------------------------------------------
+  const [mapSearch, setMapSearch] = useState("");
+  const [mapFlow, setMapFlow] = useState<"all" | MatrixFlow>("all");
+  const [mapCategory, setMapCategory] = useState<"all" | MatrixCategory>("all");
+  const [mapApprover, setMapApprover] = useState<string>("all");
+
+  const flowOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.flow))].sort(),
+    [rows],
+  );
+  const categoryOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.category))].sort(),
+    [rows],
+  );
+  const approverOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) for (const l of r.levels) for (const a of l.approvers) set.add(a.name);
+    return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [rows]);
+
+  const deferredSearch = useDeferredValue(mapSearch);
+
+  const visibleRows = useMemo(() => {
+    const term = deferredSearch.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (mapFlow !== "all" && r.flow !== mapFlow && r.flow !== "both") return false;
+      if (mapCategory !== "all" && r.category !== mapCategory) return false;
+      if (
+        mapApprover !== "all" &&
+        !r.levels.some((l) => l.approvers.some((a) => a.name === mapApprover))
+      ) {
+        return false;
+      }
+      if (!term) return true;
+      return (
+        r.name.toLowerCase().includes(term) ||
+        r.conditions.some((c) => c.toLowerCase().includes(term)) ||
+        r.costCenters.some((c) => c.toLowerCase().includes(term)) ||
+        r.levels.some((l) => l.approvers.some((a) => a.name.toLowerCase().includes(term)))
+      );
+    });
+  }, [rows, deferredSearch, mapFlow, mapCategory, mapApprover]);
+
+  const filtersActive =
+    mapSearch.trim() !== "" || mapFlow !== "all" || mapCategory !== "all" || mapApprover !== "all";
+
+  const clearFilters = () => {
+    setMapSearch("");
+    setMapFlow("all");
+    setMapCategory("all");
+    setMapApprover("all");
+  };
+
+  const tree = useMemo(() => buildTree(visibleRows, rootLabel), [visibleRows, rootLabel]);
+
 
   // Grafos grandes: o recálculo do layout roda em prioridade baixa para não
   // travar cliques/zoom enquanto a árvore é reposicionada.
