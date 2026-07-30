@@ -374,7 +374,13 @@ function ccMatches(pattern: string | null | undefined, input: string): boolean {
   return rx.test(input);
 }
 
-async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor): Promise<unknown> {
+async function runTool(
+  name: string,
+  args: any,
+  sb: SupabaseClient,
+  actor: Actor,
+  scopedSb: SupabaseClient = sb,
+): Promise<unknown> {
   switch (name) {
     // ============ READ ============
     case "list_companies": {
@@ -493,7 +499,9 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
       const sql = t
         ? `select table_name, column_name, data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name ilike '%${t}%' order by table_name, ordinal_position limit 400`
         : `select table_name, count(*)::int as columns from information_schema.columns where table_schema = 'public' group by table_name order by table_name limit 400`;
-      const { data, error } = await sb.rpc("copilot_read_query", { p_sql: sql });
+      // This RPC deliberately validates auth.uid(). Calling it with the service-role
+      // client erases the operator identity and incorrectly returns "admin role required".
+      const { data, error } = await scopedSb.rpc("copilot_read_query", { p_sql: sql });
       if (error) return { error: error.message };
       return data;
     }
@@ -504,7 +512,7 @@ async function runTool(name: string, args: any, sb: SupabaseClient, actor: Actor
         return { error: "Somente uma sentença SELECT é permitida." };
       }
       // Depende de RPC 'copilot_read_query' criada por migration (SECURITY DEFINER, apenas admins).
-      const { data, error } = await sb.rpc("copilot_read_query", { p_sql: sql });
+      const { data, error } = await scopedSb.rpc("copilot_read_query", { p_sql: sql });
       if (error) return { error: error.message };
       return data;
     }
@@ -820,7 +828,7 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
               let result: unknown;
               let ok = true;
               try {
-                result = await runTool(tc.function.name, args, sbAdmin, actor);
+                result = await runTool(tc.function.name, args, sbAdmin, actor, sbUser);
               } catch (e) {
                 ok = false;
                 result = { error: e instanceof Error ? e.message : String(e) };
