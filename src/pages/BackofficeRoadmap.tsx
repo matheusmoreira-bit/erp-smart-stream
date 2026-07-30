@@ -485,61 +485,30 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
     group: "Confiabilidade das integrações",
     items: [
       {
-        title: "Painel único de saúde das integrações",
+        title: "Alertas proativos de degradação",
         impact: "alto",
-        effort: "médio",
-        description:
-          "Consolidar SAP Service Layer, HanaAPI V2, PagCorp e Master Tax em um só painel com latência, taxa de erro e última execução.",
-      },
-      {
-        title: "Fila de retentativa automática com backoff",
-        impact: "alto",
-        effort: "médio",
-        description:
-          "Reprocessar automaticamente falhas transitórias (timeout/sessão) sem intervenção manual, com limite e alerta ao falhar de vez.",
-      },
-      {
-        title: "Circuit breaker por empresa",
-        impact: "médio",
         effort: "baixo",
         description:
-          "Interromper chamadas a uma base indisponível por alguns minutos para não travar as demais rotinas.",
+          "Disparar aviso (e-mail/Slack) quando o painel de saúde detectar latência ou taxa de erro acima do limite, sem depender de alguém abrir a tela.",
+      },
+      {
+        title: "Modo offline com fila de envio",
+        impact: "médio",
+        effort: "alto",
+        description:
+          "Permitir criar pedidos e despesas com a base SAP fora do ar, enfileirando o envio para quando o circuit breaker fechar.",
+      },
+      {
+        title: "Contrato de dados das views HanaAPI",
+        impact: "médio",
+        effort: "médio",
+        description:
+          "Validar schema das views (VW_FORNECEDORES, VW_ACOMPANHAMENTO_PEDIDOS) a cada execução e alertar mudanças antes de quebrar telas.",
       },
     ],
   },
   {
     group: "Aprovações e governança",
-    items: [
-      {
-        title: "Simulador de regras antes de publicar",
-        impact: "alto",
-        effort: "médio",
-        description:
-          "Rodar um documento fictício contra a matriz e mostrar a cadeia resultante antes de salvar alterações.",
-      },
-      {
-        title: "Detecção de conflitos e sobreposição de regras",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Alertar quando duas regras ativas competirem pelo mesmo cenário, aproveitando a lógica do Raio-X.",
-      },
-      {
-        title: "Delegação temporária de alçada (férias)",
-        impact: "alto",
-        effort: "médio",
-        description: "Substituto com vigência definida e registro em audit log, evitando documentos parados.",
-      },
-      {
-        title: "Aprovação por e-mail e mobile-first",
-        impact: "médio",
-        effort: "alto",
-        description: "Aprovar/reprovar com link assinado de uso único, sem abrir o sistema.",
-      },
-    ],
-  },
-  {
-    group: "Dados e analytics",
     items: [
       {
         title: "Dashboard de SLA de aprovação",
@@ -548,17 +517,57 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         description: "Tempo médio por aprovador, gargalos por CC/projeto e ranking de atrasos.",
       },
       {
-        title: "Exportações agendadas",
-        impact: "baixo",
-        effort: "baixo",
-        description: "Envio recorrente de relatórios (compras, vendas, fiscal) por e-mail em CSV/XLSX.",
+        title: "Escalonamento automático por SLA",
+        impact: "alto",
+        effort: "médio",
+        description:
+          "Documento parado além do prazo sobe automaticamente para o superior ou para o substituto vigente, com registro em auditoria.",
       },
+      {
+        title: "Versionamento e rollback da matriz de alçadas",
+        impact: "médio",
+        effort: "médio",
+        description:
+          "Guardar cada publicação da matriz, comparar versões e permitir voltar a um estado anterior.",
+      },
+      {
+        title: "Aprovação em lote com filtros salvos",
+        impact: "médio",
+        effort: "baixo",
+        description:
+          "Selecionar vários documentos do mesmo CC/projeto e aprovar de uma vez, respeitando o mascaramento de rateios.",
+      },
+    ],
+  },
+  {
+    group: "Dados e analytics",
+    items: [
       {
         title: "Conciliação fiscal automática",
         impact: "alto",
         effort: "alto",
         description:
           "Casar automaticamente NFS-e, pagamento e lançamento no ERP, deixando no Kanban só as exceções.",
+      },
+      {
+        title: "Exportações agendadas",
+        impact: "baixo",
+        effort: "baixo",
+        description: "Envio recorrente de relatórios (compras, vendas, fiscal) por e-mail em CSV/XLSX.",
+      },
+      {
+        title: "Previsão de caixa por vencimento",
+        impact: "médio",
+        effort: "médio",
+        description:
+          "Consolidar contas a pagar e a receber com projeções por CC/projeto e comparação com o realizado.",
+      },
+      {
+        title: "Copiloto com relatórios salvos",
+        impact: "médio",
+        effort: "baixo",
+        description:
+          "Permitir salvar e reexecutar consultas do copiloto do backoffice como relatórios nomeados, com controle por grupo.",
       },
     ],
   },
@@ -578,10 +587,18 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         description: "Campanha trimestral de recertificação de grupos e alçadas, com evidência para auditoria.",
       },
       {
-        title: "Trilha de auditoria unificada e pesquisável",
+        title: "Desprovisionamento automático via IdP",
+        impact: "alto",
+        effort: "médio",
+        description:
+          "Desligamento no JumpCloud/Okta revoga acessos, alçadas e substituições vigentes na mesma sincronização.",
+      },
+      {
+        title: "Retenção e mascaramento de dados sensíveis",
         impact: "médio",
         effort: "médio",
-        description: "Uma única linha do tempo por documento, reunindo eventos de ERP, SAP e integrações.",
+        description:
+          "Política de expurgo de anexos e mascaramento de dados bancários/PII fora do grupo responsável.",
       },
     ],
   },
@@ -589,26 +606,30 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
     group: "Experiência do usuário",
     items: [
       {
-        title: "Notificações in-app com central de avisos",
+        title: "App mobile-first para aprovações",
         impact: "médio",
         effort: "médio",
-        description: "Complementar o e-mail com um sino de notificações e histórico dos marcos do documento.",
+        description:
+          "PWA instalável com push, focado em aprovar, consultar status e anexar comprovantes pelo celular.",
       },
       {
-        title: "Rascunhos e duplicação de pedidos",
+        title: "Busca global (documentos, fornecedores, pessoas)",
         impact: "médio",
-        effort: "baixo",
-        description: "Salvar em andamento e criar um novo pedido a partir de outro já lançado.",
+        effort: "médio",
+        description:
+          "Campo único com atalho de teclado, retornando documentos, fornecedores e usuários respeitando as capabilities do grupo.",
       },
       {
-        title: "Onboarding guiado por perfil",
-        impact: "baixo",
-        effort: "baixo",
-        description: "Tour curto no primeiro acesso, adaptado ao grupo de permissão do usuário.",
+        title: "Captura de nota por foto/OCR",
+        impact: "médio",
+        effort: "alto",
+        description:
+          "Tirar foto do documento e pré-preencher fornecedor, valor e vencimento antes do lançamento.",
       },
     ],
   },
 ];
+
 
 const IMPACT_CLASS: Record<BacklogItem["impact"], string> = {
   alto: "border-primary/40 text-primary",
