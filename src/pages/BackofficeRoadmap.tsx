@@ -137,7 +137,7 @@ const CHANGELOG: RoadmapItem[] = [
   },
   // ---- Fase 5 — Governança e segurança (jun–jul/2026)
   {
-    date: "2026-07-05",
+    date: "2026-07-29",
     title: "Tratativa do pentest whitebox",
     kind: "seguranca",
     track: "Governança e segurança",
@@ -145,7 +145,7 @@ const CHANGELOG: RoadmapItem[] = [
       "Leituras escopadas no servidor, senha mínima de 12 caracteres, idempotência atômica, CSP/HSTS e tokens anti-CSRF.",
   },
   {
-    date: "2026-06-28",
+    date: "2026-07-29",
     title: "Alerta CC × Projeto auditável",
     kind: "automacao",
     track: "Governança e segurança",
@@ -531,6 +531,10 @@ export default function BackofficeRoadmap() {
       />
 
       <main className="mx-auto max-w-5xl py-6">
+        <p className="mb-4 text-xs text-muted-foreground">
+          Datas confirmadas nas entregas recentes; entregas mais antigas usam data
+          aproximada do período de implantação.
+        </p>
         {/* Filtros */}
         <div className="mb-6 flex flex-wrap items-center gap-2">
           <div className="relative min-w-[220px] flex-1">
