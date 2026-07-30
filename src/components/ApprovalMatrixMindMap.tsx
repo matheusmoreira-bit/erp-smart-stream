@@ -614,10 +614,83 @@ export function ApprovalMatrixMindMap({
         </Button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3 pr-32 print:hidden">
+        <div className="relative min-w-[200px] flex-1">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={mapSearch}
+            onChange={(e) => setMapSearch(e.target.value)}
+            placeholder="Buscar regra, condição, CC ou aprovador..."
+            className="h-9 pl-8"
+            aria-label="Buscar na teia"
+          />
+        </div>
+
+        <Select value={mapFlow} onValueChange={(v) => setMapFlow(v as typeof mapFlow)}>
+          <SelectTrigger className="h-9 w-[170px]" aria-label="Filtrar por fluxo">
+            <SelectValue placeholder="Fluxo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os fluxos</SelectItem>
+            {flowOptions.map((f) => (
+              <SelectItem key={f} value={f}>
+                {FLOW_LABELS[f]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={mapCategory} onValueChange={(v) => setMapCategory(v as typeof mapCategory)}>
+          <SelectTrigger className="h-9 w-[190px]" aria-label="Filtrar por categoria">
+            <SelectValue placeholder="Categoria" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as categorias</SelectItem>
+            {categoryOptions.map((c) => (
+              <SelectItem key={c} value={c}>
+                {CATEGORY_LABELS[c]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={mapApprover} onValueChange={setMapApprover}>
+          <SelectTrigger className="h-9 w-[200px]" aria-label="Filtrar por aprovador">
+            <SelectValue placeholder="Aprovador" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            <SelectItem value="all">Todos os aprovadores</SelectItem>
+            {approverOptions.map((a) => (
+              <SelectItem key={a} value={a}>
+                {a}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Badge variant="secondary" className="h-7">
+          {visibleRows.length} de {rows.length} regras
+        </Badge>
+
+        {filtersActive && (
+          <Button variant="ghost" size="sm" className="h-8" onClick={clearFilters}>
+            <X className="mr-1 h-3.5 w-3.5" />
+            Limpar
+          </Button>
+        )}
+      </div>
+
       <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground print:hidden">
         Clique em um nó para ver os detalhes no painel lateral. Duplo clique recolhe ou expande o
         ramo. Empresa → fluxo → categoria → regra → níveis de aprovação.
       </p>
+
+      {visibleRows.length === 0 && (
+        <div className="px-4 py-16 text-center text-sm text-muted-foreground">
+          Nenhuma regra corresponde aos filtros selecionados.
+        </div>
+      )}
+
 
       <svg
         viewBox={viewBox}
