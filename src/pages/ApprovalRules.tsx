@@ -22,6 +22,7 @@ import {
   Tag,
   PlayCircle,
   GitCompareArrows,
+  History,
   UserCog,
 
 } from "lucide-react";
@@ -33,6 +34,7 @@ import { detectRuleConflicts } from "@/lib/approval-rule-conflicts";
 
 import { useAuth } from "@/hooks/useAuth";
 import { RuleSimulator, DRAFT_RULE_ID } from "@/components/RuleSimulator";
+import { ApprovalMatrixVersionsDialog } from "@/components/ApprovalMatrixVersionsDialog";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -1490,6 +1492,7 @@ export default function ApprovalRulesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingRule, setEditingRule] = useState<ApprovalRule | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
   const [search, setSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -1612,6 +1615,9 @@ export default function ApprovalRulesPage() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
           </Button>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setShowVersions(true)} className="gap-1.5">
+              <History className="w-4 h-4" /> Versões
+            </Button>
             <Button variant="outline" onClick={() => setShowSimulator(true)} className="gap-1.5">
               <PlayCircle className="w-4 h-4" /> Simular pedido
             </Button>
@@ -1799,6 +1805,14 @@ export default function ApprovalRulesPage() {
         editing={editingRule}
         allRules={rules}
 
+      />
+
+      <ApprovalMatrixVersionsDialog
+        open={showVersions}
+        onClose={() => setShowVersions(false)}
+        rules={rules}
+        isAdmin={isAdmin}
+        onRestored={refresh}
       />
 
       <RuleSimulator
