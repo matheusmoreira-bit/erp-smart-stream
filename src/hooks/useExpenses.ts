@@ -834,6 +834,72 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
     [session, fetchExpenses, docType]
   );
 
+  /* ─────────────── Modo offline: fila de envio ───────────────
+   * Se a base do ERP estiver fora do ar (circuit breaker aberto) ou o
+   * navegador sem rede, o lançamento é guardado localmente e reenviado
+   * automaticamente quando o circuito fechar. */
+  const enqueueOffline = useCallback(
+    async (input: CreateExpenseInput, reason?: string) => {
+      const total = (input.items || []).reduce((s, i) => s + (i.line_total || 0), 0);
+      await enqueueOutbox({
+        kind: "expense",
+        companyDB: session?.companyDB || null,
+        docType: input.doc_type || docType,
+        lastError: reason,
+        summary: {
+          supplier_name: input.supplier_name || "",
+          total,
+          itemCount: (input.items || []).length,
+          attachmentCount: (input.files || []).length,
+        },
+        payload: input as unknown as Record<string, unknown>,
+      });
+      return { queued: true as const, status: "queued" as const, expense: null, origin: input.origin || "manual" };
+    },
+    [session?.companyDB, docType],
+  );
+
+  const createExpense = useCallback(
+    async (input: CreateExpenseInput) => {
+      if (!session) throw new Error("Sessão SAP não encontrada");
+
+      if (isErpUnavailable(session.companyDB)) {
+        const queued = await enqueueOffline(input, "Base do ERP indisponível no momento do lançamento");
+        toast.warning(
+          "Base do ERP indisponível. O lançamento entrou na fila offline e será enviado automaticamente quando a base voltar.",
+          { duration: 8000 },
+        );
+        return queued;
+      }
+
+      try {
+        return await createExpenseCore(input);
+      } catch (e) {
+        if (!isOfflineError(e)) throw e;
+        const queued = await enqueueOffline(input, e instanceof Error ? e.message : String(e));
+        toast.warning(
+          "Não foi possível falar com o ERP agora. O lançamento ficou na fila offline e será reenviado automaticamente.",
+          { duration: 8000 },
+        );
+        return queued;
+      }
+    },
+    [session, createExpenseCore, enqueueOffline],
+  );
+
+  // Registra quem sabe reenviar os itens da fila offline.
+  useEffect(() => {
+    if (!session) return;
+    return registerOutboxSender("expense", async (entry) => {
+      if (entry.companyDB && session.companyDB && entry.companyDB !== session.companyDB) {
+        throw new Error("Aguardando login na base de origem do lançamento");
+      }
+      await createExpenseCore(entry.payload as unknown as CreateExpenseInput);
+    });
+  }, [session, createExpenseCore]);
+
+
+
 
   const updateExpense = useCallback(
     async (
