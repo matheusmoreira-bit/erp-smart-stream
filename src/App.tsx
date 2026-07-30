@@ -157,7 +157,9 @@ const App = () => (
           </BrowserRouter>
           <TestCompanyBanner />
           <DefaultPasswordWarning />
+          <WhatsNewWizard />
           <GlobalAiChat />
+
           </PermissionsV2Provider>
         </SapProvider>
       </TooltipProvider>
