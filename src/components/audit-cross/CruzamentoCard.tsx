@@ -49,6 +49,12 @@ export function CruzamentoCard({ row, onOpen, onConfirm, onIgnore }: Props) {
           <div className="text-[11px] font-mono text-muted-foreground truncate">
             {row.cnpj_fornecedor}
           </div>
+          {row.auto_conciliado && (
+            <span className="mt-1 inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-600">
+              Conciliado automaticamente
+            </span>
+          )}
+
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
