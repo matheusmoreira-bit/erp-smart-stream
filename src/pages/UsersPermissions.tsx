@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
+import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { Loader2, ShieldAlert } from "lucide-react";
 import PermissionManager from "@/components/PermissionManager";
 import { PageTitle } from "@/components/PageTitle";
@@ -9,8 +10,9 @@ import { PageTitle } from "@/components/PageTitle";
  */
 export default function UsersPermissions() {
   const { isAdmin, loading } = useAuth();
+  const { isPrivileged, loading: permissionLoading } = useMyPermissionGroups();
 
-  if (loading) {
+  if (loading || permissionLoading) {
     return (
       <div className="flex justify-center py-16">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -18,7 +20,7 @@ export default function UsersPermissions() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !isPrivileged) {
     return (
       <div className="max-w-md mx-auto text-center py-16 space-y-2">
         <ShieldAlert className="w-8 h-8 mx-auto text-muted-foreground" />
