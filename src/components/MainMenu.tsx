@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { useCompanies } from "@/hooks/useCompanies";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { PageTitle } from "@/components/PageTitle";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
