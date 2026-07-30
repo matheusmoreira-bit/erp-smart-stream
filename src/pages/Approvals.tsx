@@ -2933,6 +2933,17 @@ export default function ApprovalsPage() {
               <History className="w-4 h-4" />
               Histórico
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSubstitutes(true)}
+              className="gap-2"
+              title="Definir substituto de alçada durante férias/ausências"
+            >
+              <UserCog className="w-4 h-4" />
+              Substituto
+            </Button>
+
             {(() => {
               const reportOptions = {
                 title: "Relatório de Aprovações Pendentes",
