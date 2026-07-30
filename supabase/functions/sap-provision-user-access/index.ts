@@ -339,10 +339,17 @@ Deno.serve(async (req) => {
             entity_type: "user_sap_credentials",
             entity_id: targetUserId,
             company_db: companyDb,
-            details: { target_email: targetEmail, sap_user: sapUser, password_source: customPassword ? "custom" : "random" },
+            details: { target_email: targetEmail, sap_user: sapUser, password_source: customPassword ? "custom" : "random", already_current: alreadyCurrent },
           });
         } catch { /* audit best-effort */ }
-        results.push({ companyDB: companyDb, displayName, status: "success", message: `Acesso provisionado para '${sapUser}'` });
+        results.push({
+          companyDB: companyDb,
+          displayName,
+          status: "success",
+          message: alreadyCurrent
+            ? `Senha já era a atual no SAP — credencial salva para '${sapUser}'`
+            : `Acesso provisionado para '${sapUser}'`,
+        });
       } catch (e) {
         results.push({ companyDB: companyDb, displayName, status: "error", message: e instanceof Error ? e.message : "Erro" });
       } finally {
