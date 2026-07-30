@@ -1,13 +1,6 @@
-import { useState } from "react";
 import { useCompanies } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+
 import { useNavigate } from "react-router-dom";
 import { PageTitle } from "@/components/PageTitle";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
@@ -30,7 +23,6 @@ import {
   Radar,
   UserCog,
   ClipboardList,
-  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -299,18 +291,15 @@ function ModuleCardItem({
   mod,
   index,
   hasAccess,
-  expanded,
-  onToggle,
+  targetPath,
 }: {
   mod: ModuleCard;
   index: number;
   hasAccess: boolean;
-  expanded?: boolean;
-  onToggle?: () => void;
+  targetPath: string;
 }) {
   const navigate = useNavigate();
   const Icon = mod.icon;
-  const hasSub = !!mod.subItems?.length;
 
   return (
     <motion.button
@@ -319,19 +308,17 @@ function ModuleCardItem({
       transition={{ delay: Math.min(index * 0.05, 0.3) }}
       onClick={() => {
         if (!hasAccess) return;
-        if (hasSub && onToggle) onToggle();
-        else navigate(mod.path);
+        navigate(targetPath);
       }}
       disabled={!hasAccess}
-      aria-expanded={hasSub ? !!expanded : undefined}
       className={`glass-card p-4 sm:p-6 text-left transition-all group relative overflow-hidden active:scale-[0.98] ${
         hasAccess
           ? "hover:border-primary/40 cursor-pointer hover:scale-[1.02]"
           : "opacity-50 cursor-not-allowed"
-      } ${expanded ? "border-primary/50" : ""}`}
+      }`}
     >
       {/* Glow background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} ${expanded ? "opacity-100" : "opacity-0"} group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
 
       <div className="relative z-10">
         <div className="flex items-start justify-between mb-3 sm:mb-4">
@@ -340,10 +327,6 @@ function ModuleCardItem({
           </div>
           {!hasAccess ? (
             <Lock className="w-4 h-4 text-muted-foreground" />
-          ) : hasSub ? (
-            <ChevronDown
-              className={`w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-transform ${expanded ? "rotate-180 text-primary" : ""}`}
-            />
           ) : (
             <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           )}
@@ -355,22 +338,12 @@ function ModuleCardItem({
   );
 }
 
-function SubmenuModal({
-  mod,
-  userModules,
-  permLoading,
-  open,
-  onOpenChange,
-}: {
-  mod: ModuleCard | null;
-  userModules: string[];
-  permLoading: boolean;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const navigate = useNavigate();
-  if (!mod) return null;
-  const Icon = mod.icon;
+/** Primeira opção acessível do módulo (ou a rota principal). */
+function firstAccessiblePath(
+  mod: ModuleCard,
+  userModules: string[],
+  permLoading: boolean,
+): string {
   const items = (mod.subItems ?? []).filter(
     (s) =>
       permLoading ||
@@ -378,48 +351,14 @@ function SubmenuModal({
       userModules.length === 0 ||
       userModules.includes(s.moduleKey),
   );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl bg-card border border-border ${mod.color}`}>
-              <Icon className="w-5 h-5" />
-            </div>
-            <div className="text-left">
-              <DialogTitle>{mod.title}</DialogTitle>
-              <DialogDescription>Selecione um submódulo</DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-        <div className="grid gap-2">
-          {items.map((s) => (
-            <button
-              key={s.path}
-              onClick={() => {
-                onOpenChange(false);
-                navigate(s.path);
-              }}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card/50 px-3 py-3 text-left text-sm text-foreground hover:border-primary/40 hover:bg-muted/50 active:scale-[0.99] transition-all min-h-11"
-            >
-              <span className="truncate">{s.label}</span>
-              <ArrowRight className={`w-4 h-4 flex-shrink-0 ${mod.color}`} />
-            </button>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+  return items[0]?.path ?? mod.path;
 }
-
-
 
 export function MainMenu() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
   const { userModules, loading: permLoading } = useModuleAccess();
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
 
   const { getLabel } = useCompanies(true);
   const companyLabel = getLabel(session?.companyDB || "");
@@ -506,10 +445,7 @@ export function MainMenu() {
                         mod={mod}
                         index={i}
                         hasAccess={true}
-                        expanded={expandedKey === mod.path}
-                        onToggle={() =>
-                          setExpandedKey((k) => (k === mod.path ? null : mod.path))
-                        }
+                        targetPath={firstAccessiblePath(mod, userModules, permLoading)}
                       />
                     ))}
                   </div>
@@ -520,13 +456,6 @@ export function MainMenu() {
         </div>
       </main>
 
-      <SubmenuModal
-        mod={Object.values(modules).find((m) => m.path === expandedKey) ?? null}
-        userModules={userModules}
-        permLoading={permLoading}
-        open={!!expandedKey}
-        onOpenChange={(v) => !v && setExpandedKey(null)}
-      />
     </div>
   );
 }
