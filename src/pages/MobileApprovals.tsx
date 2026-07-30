@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   Search,
   FileText,
+  ScanLine,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -167,6 +168,14 @@ export default function MobileApprovals() {
               {session.userName} · {session.companyDB}
             </p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Capturar nota por foto"
+            onClick={() => navigate("/captura/nota")}
+          >
+            <ScanLine className="h-5 w-5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
