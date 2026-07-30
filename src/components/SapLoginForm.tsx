@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSap } from "@/contexts/SapContext";
 import type { ErpType } from "@/contexts/SapContext";
 import { supabase } from "@/integrations/supabase/client";
+import { isTestCompanyDb } from "@/lib/test-company";
+import { resolveTestCompanyVisibility } from "@/lib/test-company-visibility";
 import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -105,12 +107,18 @@ export function SapLoginForm() {
         .eq("is_active", true)
         .order("display_name");
       if (error) throw error;
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const canSeeTest = await resolveTestCompanyVisibility({
+        identifier: authSession?.user?.email || null,
+      });
       setAllCompanies(
-        (data || []).map((c: any) => ({
-          label: c.display_name,
-          value: c.company_db,
-          erp_type: c.erp_type || "sap",
-        })),
+        (data || [])
+          .filter((c: any) => canSeeTest || !isTestCompanyDb(c.company_db))
+          .map((c: any) => ({
+            label: c.display_name,
+            value: c.company_db,
+            erp_type: c.erp_type || "sap",
+          })),
       );
     } catch (e) {
       setCompaniesError(e instanceof Error ? e.message : "Falha ao carregar empresas");
