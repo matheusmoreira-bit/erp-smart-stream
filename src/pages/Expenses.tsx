@@ -159,6 +159,7 @@ function ExpenseDetailModal({
   onClose,
   onSubmit,
   onCancel,
+  onReactivate,
   onRetrySap,
   onEdit,
   onApprove,
@@ -166,12 +167,14 @@ function ExpenseDetailModal({
   onViewIntegration,
   onAddAttachments,
   canCancel,
+  canReactivate,
   canEdit,
   canRetrySap,
   canApprove,
   canAddAttachments,
   isSubmitting,
   isCancelling,
+  isReactivating,
   isRetrying,
   isActioning,
   mode,
@@ -183,6 +186,7 @@ function ExpenseDetailModal({
   onClose: () => void;
   onSubmit: (id: string) => void;
   onCancel: (id: string) => void;
+  onReactivate: (id: string) => void;
   onRetrySap: (id: string) => void;
   onEdit: (expense: Expense) => void;
   onApprove: (expense: Expense) => void;
@@ -190,12 +194,14 @@ function ExpenseDetailModal({
   onViewIntegration: () => void;
   onAddAttachments: (id: string, files: File[]) => Promise<void>;
   canCancel: boolean;
+  canReactivate: boolean;
   canEdit: boolean;
   canRetrySap: boolean;
   canApprove: boolean;
   canAddAttachments: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
+  isReactivating: boolean;
   isRetrying: boolean;
   isActioning: boolean;
   mode?: "purchase" | "sales";
@@ -222,6 +228,12 @@ function ExpenseDetailModal({
   );
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
   const showApproval = canApprove && expense.status === "pendente_aprovacao";
+  // Reativação: apenas o autor (ou admin) e somente se nunca foi ao ERP.
+  const showReactivate =
+    canReactivate &&
+    expense.status === "cancelado" &&
+    !expense.sap_doc_entry &&
+    !expense.sap_doc_num;
   const hasIntegration = !!(expense.sap_doc_entry || expense.sap_doc_num || expense.sap_integration_error);
   // ERP-native document (fetched directly from the ERP, not created in ERP Flow).
   // For these, the ERP integration section already shows every field the monitor
@@ -551,7 +563,7 @@ function ExpenseDetailModal({
 
 
 
-            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval) && (
+            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate) && (
               <div className="border-t border-border pt-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:flex-wrap gap-2 sm:gap-3">
                 <Button variant="outline" onClick={onClose} className="w-full sm:w-auto justify-center">Fechar</Button>
                 {showApproval && (
@@ -599,6 +611,18 @@ function ExpenseDetailModal({
                   >
                     {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <XIcon className="w-4 h-4" aria-hidden="true" />}
                     Cancelar Despesa
+                  </Button>
+                )}
+                {showReactivate && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onReactivate(expense.id)}
+                    disabled={isReactivating}
+                    className="w-full sm:w-auto justify-center gap-1.5"
+                    title="Reabrir este documento cancelado como rascunho"
+                  >
+                    {isReactivating ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <RotateCw className="w-4 h-4" aria-hidden="true" />}
+                    Reativar pedido
                   </Button>
                 )}
                 {showRetrySap && (
@@ -852,7 +876,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const erpLabel = getErpShortLabel(session?.erpType);
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
+  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, reactivateExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
   const { getLabel } = useCompanies(true);
   // Filtros persistidos por modo (purchase/sales) para manter seleção ao trocar de tela.
   const filterKey = (name: string) => `expenses:${mode}:${name}`;
@@ -907,6 +931,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   }, [mode]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isReactivating, setIsReactivating] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isActioning, setIsActioning] = useState(false);
   const [statusFilter, setStatusFilter] = usePersistedState<string>(filterKey("status"), "all");
@@ -1470,6 +1495,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       toast.error(e instanceof Error ? e.message : "Erro ao cancelar");
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const handleReactivate = async (id: string) => {
+    setIsReactivating(true);
+    try {
+      await reactivateExpense(id);
+      toast.success("Pedido reativado como rascunho. Revise e envie novamente para aprovação.");
+      setSelectedExpense(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao reativar o pedido");
+    } finally {
+      setIsReactivating(false);
     }
   };
 
@@ -2184,6 +2222,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onClose={() => setSelectedExpense(null)}
         onSubmit={handleSubmitForApproval}
         onCancel={handleCancel}
+        onReactivate={handleReactivate}
         onRetrySap={handleRetrySap}
         onEdit={(exp) => { setSelectedExpense(null); setEditingExpense(exp); }}
         onApprove={handleApprove}
@@ -2191,6 +2230,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onViewIntegration={handleViewIntegration}
         onAddAttachments={async (id, files) => { await addAttachments(id, files); }}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
+        canReactivate={selectedExpense ? canCancel(selectedExpense) : false}
         canEdit={selectedExpense ? canCancel(selectedExpense) : false}
         canRetrySap={session.erpType === "sap" && !!session?.isSuperUser}
         canApprove={selectedExpense ? canApprove(selectedExpense) : false}
@@ -2201,6 +2241,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         }
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
+        isReactivating={isReactivating}
         isRetrying={isRetrying}
         isActioning={isActioning}
         mode={mode}
