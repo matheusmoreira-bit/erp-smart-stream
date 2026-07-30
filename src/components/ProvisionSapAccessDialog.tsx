@@ -108,6 +108,9 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
     if (busy) return;
     setResults(null);
     setSelected(new Set());
+    setPassword("");
+    setShowPassword(false);
+    setMode("random");
     onOpenChange(false);
   };
 
