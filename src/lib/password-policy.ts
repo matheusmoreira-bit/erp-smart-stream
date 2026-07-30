@@ -62,3 +62,37 @@ export function firstPasswordError(password: string, userCode?: string): string 
   const { failed } = checkPasswordPolicy(password, userCode);
   return failed.length ? failed[0].label : null;
 }
+
+/**
+ * Gera uma senha forte que satisfaz `PASSWORD_RULES` (usa Web Crypto).
+ * Evita caracteres ambíguos (O/0, l/1) para facilitar a comunicação da senha.
+ */
+export function generateStrongPassword(length = 16, userCode?: string): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digit = "23456789";
+  const special = "!@#$%&*+-=?";
+  const all = upper + lower + digit + special;
+  const len = Math.max(12, Math.min(length, 32));
+
+  const pick = (set: string) => {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return set[buf[0] % set.length];
+  };
+
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const chars = [pick(upper), pick(lower), pick(digit), pick(special)];
+    while (chars.length < len) chars.push(pick(all));
+    for (let i = chars.length - 1; i > 0; i--) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      const j = buf[0] % (i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    const candidate = chars.join("");
+    if (checkPasswordPolicy(candidate, userCode).valid) return candidate;
+  }
+  // Fallback determinístico (extremamente improvável de ser alcançado).
+  return `Ax9${pick(lower)}${pick(upper)}${pick(digit)}!${Date.now().toString(36)}`;
+}
