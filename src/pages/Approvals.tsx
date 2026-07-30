@@ -1620,8 +1620,14 @@ function approverMatches(approver: string, userName: string): boolean {
     if (ap && up && ap === up) return true;
   }
   // try matching by first name / partial: "matheus.moreira" vs "Matheus Moreira"
-  const aTokens = a.replace(/[._@-]/g, " ").split(/\s+/).filter(Boolean);
-  const uTokens = u.replace(/[._@-]/g, " ").split(/\s+/).filter(Boolean);
+  const nameConnectors = new Set(["de", "da", "do", "das", "dos", "e"]);
+  const toPersonTokens = (value: string) => value
+    .replace(/@[^\s]*/g, " ")
+    .replace(/[._@-]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token && !nameConnectors.has(token));
+  const aTokens = toPersonTokens(a);
+  const uTokens = toPersonTokens(u);
   if (aTokens.length === 0 || uTokens.length === 0) return false;
   // match if all user tokens have a fuzzy-matching counterpart in approver tokens (or vice-versa)
   const allIn = (src: string[], tgt: string[]) =>

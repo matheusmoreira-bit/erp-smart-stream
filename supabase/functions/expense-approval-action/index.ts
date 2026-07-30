@@ -96,7 +96,7 @@ function tokenize(s: string): string[] {
   return stripDiacritics(noDomain)
     .replace(/[._\-]+/g, " ")
     .split(/\s+/)
-    .filter(Boolean);
+    .filter((token) => token && !["de", "da", "do", "das", "dos", "e"].includes(token));
 }
 
 /**
