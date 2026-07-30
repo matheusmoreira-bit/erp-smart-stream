@@ -122,8 +122,19 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(supabaseUrl, serviceKey);
 
+  // Recupera linhas presas em `in_flight` (worker morto/timeout) devolvendo-as
+  // à fila — sem isso um documento ficava travado para sempre sem alerta.
+  const staleIso = new Date(Date.now() - STALE_IN_FLIGHT_MINUTES * 60_000).toISOString();
+  const { data: reclaimed } = await admin
+    .from("sap_retry_queue")
+    .update({ status: "pending" })
+    .eq("status", "in_flight")
+    .lt("last_attempt_at", staleIso)
+    .select("id");
+
   // Atomically claim up to N due rows.
   const nowIso = new Date().toISOString();
+
   const { data: due, error: selErr } = await admin
     .from("sap_retry_queue")
     .select("*")
