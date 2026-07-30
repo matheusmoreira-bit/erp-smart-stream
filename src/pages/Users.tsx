@@ -318,8 +318,16 @@ export default function UsersPage() {
                           <Phone className="w-3 h-3" />
                           {phones[user.UserCode]?.phone || <span className="italic">Sem telefone</span>}
                         </p>
+                        <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
+                          <UsersRound className="w-3 h-3" />
+                          Grupo:{" "}
+                          <span className="font-medium text-foreground/80">
+                            {userGroup?.name || "Sem grupo"}
+                          </span>
+                        </p>
                       </div>
                     </div>
+
 
                     <div className="w-48 flex flex-col items-center gap-1">
                       <Badge
