@@ -197,3 +197,23 @@
 }
 
 
+
+/* ── Exportação em PDF (window.print) ─────────────────────────────────────
+   Usado pela Matriz de Alçadas: força tema claro, remove sombras e evita
+   quebra de cards no meio da página. */
+@media print {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    background: #fff;
+  }
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+}
