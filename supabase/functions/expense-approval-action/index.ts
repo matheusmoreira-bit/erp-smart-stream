@@ -25,6 +25,7 @@ import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
+import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
@@ -438,8 +439,27 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   let isCloudAdmin = false;
   let isSuperUser = false;
 
+  // Chamada interna server-to-server (link assinado de e-mail/Slack).
+  // Só é aceita quando o Authorization traz a service role key — nunca
+  // exposta ao browser — e informa em nome de quem a ação é executada.
+  const internalActorEmail = req.headers.get("x-internal-actor-email")?.trim().toLowerCase() || "";
+  let internalActor = false;
+  if (internalActorEmail) {
+    const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    if (serviceKey && bearer === serviceKey) {
+      internalActor = true;
+      callerEmail = internalActorEmail;
+      callerIdentity = internalActorEmail;
+      stageLog("auth_cloud", "info", { requestId, callerEmail, internalActor: true });
+    } else {
+      stageLog("auth_cloud", "warn", { requestId, note: "internal_actor_header_without_service_key" });
+      return await respond(401, { error: "Não autorizado.", stage: "auth_cloud" });
+    }
+  }
+
   // Try Cloud JWT first (admins may act on any document).
-  try {
+  if (!internalActor) try {
     const cloudUser = await requireUser(req);
     callerEmail = cloudUser.email || null;
     callerIdentity = cloudUser.email || null;
@@ -456,6 +476,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     // No Cloud JWT — fall back to SAP session.
     stageLog("auth_cloud", "info", { requestId, note: "no_cloud_jwt_fallback_sap" });
   }
+
 
   let sapValidated: Awaited<ReturnType<typeof validateSapSession>> = null;
   if (sapSessionHeader && sapUserHeader && sapCompanyHeader) {
@@ -848,6 +869,22 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
           : `Nível(is) pulado(s) automaticamente: solicitante era o aprovador designado.`,
       } as any);
     }
+
+    // Notifica o próximo aprovador nos canais ativos (in-app, e-mail, Slack).
+    await notifyApprovalPending(admin, {
+      expenseId,
+      companyDb: (exp as any).company_db,
+      approverEmail: nextApproverEmail,
+      approverName: nextApproverName,
+      levelOrder: nextLevelOrder,
+      requesterName: (exp as any).requester_name,
+      supplierName: (exp as any).supplier_name,
+      totalAmount: Number((exp as any).total_amount || 0),
+      currency: (exp as any).currency,
+      docType: String((exp as any).doc_type || "purchase"),
+    });
+
+
 
     return await respond(200, {
       ok: true,
