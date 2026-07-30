@@ -6531,6 +6531,19 @@ export type Database = {
         Args: { _company_db?: string }
         Returns: string
       }
+      get_document_timeline: {
+        Args: { _expense_id: string }
+        Returns: {
+          actor: string
+          category: string
+          detail: string
+          meta: Json
+          occurred_at: string
+          source: string
+          status: string
+          title: string
+        }[]
+      }
       get_edge_function_metrics: {
         Args: { _hours?: number }
         Returns: {
