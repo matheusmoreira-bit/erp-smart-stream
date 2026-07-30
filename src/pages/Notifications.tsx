@@ -12,6 +12,8 @@ import { NotificationAuditTab } from "@/components/NotificationAuditTab";
 import { NotificationSendHistoryTab } from "@/components/NotificationSendHistoryTab";
 import { OverdueRemindersTab } from "@/components/OverdueRemindersTab";
 import { PageTitle } from "@/components/PageTitle";
+import { DocumentMilestonesDialog } from "@/components/DocumentMilestonesDialog";
+
 
 const categoryIcon: Record<string, string> = {
   approval: "📋",
