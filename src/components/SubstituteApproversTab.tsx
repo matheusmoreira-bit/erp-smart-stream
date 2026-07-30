@@ -260,7 +260,7 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
                 <TableHead>Período (BRT)</TableHead>
                 <TableHead>Concedida por</TableHead>
                 <TableHead>Motivo</TableHead>
-                {isAdmin && !showHistory && <TableHead className="text-right">Ações</TableHead>}
+                {!showHistory && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
