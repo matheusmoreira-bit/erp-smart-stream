@@ -320,34 +320,41 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Nova substituição de aprovador</DialogTitle>
+            <DialogTitle>
+              {selfMode ? "Definir meu substituto (ausência/férias)" : "Nova substituição de aprovador"}
+            </DialogTitle>
             <DialogDescription>
               Enquanto a janela estiver ativa, o substituto poderá visualizar e aprovar todos os
-              documentos pendentes do aprovador oficial.
+              documentos pendentes do aprovador oficial. A concessão fica registrada no audit log.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Aprovador oficial</Label>
-              <Select
-                value={officialEmail}
-                onValueChange={(v) => {
-                  setOfficialEmail(v);
-                  const u = eligible.find((x) => x.email === v);
-                  setOfficialName(u?.name || "");
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecione o oficial" /></SelectTrigger>
-                <SelectContent>
-                  {eligible.filter((u) => u.email).map((u) => (
-                    <SelectItem key={`off-${u.email}`} value={u.email}>
-                      {u.name} <span className="opacity-60">({u.email})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {selfMode ? (
+                <Input value={officialName ? `${officialName} (${officialEmail})` : officialEmail} disabled />
+              ) : (
+                <Select
+                  value={officialEmail}
+                  onValueChange={(v) => {
+                    setOfficialEmail(v);
+                    const u = eligible.find((x) => x.email === v);
+                    setOfficialName(u?.name || "");
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione o oficial" /></SelectTrigger>
+                  <SelectContent>
+                    {eligible.filter((u) => u.email).map((u) => (
+                      <SelectItem key={`off-${u.email}`} value={u.email}>
+                        {u.name} <span className="opacity-60">({u.email})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+
 
             <div className="space-y-1.5">
               <Label className="text-xs">Substituto</Label>
