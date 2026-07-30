@@ -182,27 +182,34 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    let ok = false;
-    let errText = "";
-    let httpStatus: number | undefined = undefined;
-    try {
-      const resp = await fetch(`${supabaseUrl}/functions/v1/${dispatch.path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${serviceKey}`,
-          apikey: serviceKey,
-          "x-internal-retry": "1",
-        },
-        body: JSON.stringify(dispatch.body),
-      });
-      httpStatus = resp.status;
-      const body = await resp.json().catch(() => ({}));
-      ok = resp.ok && body?.success !== false;
-      if (!ok) errText = body?.error || JSON.stringify(body).slice(0, 500) || `HTTP ${resp.status}`;
-    } catch (e) {
-      errText = (e as Error).message || "erro desconhecido";
-    }
+    const invoke = async (body: Record<string, unknown>) => {
+      try {
+        const resp = await fetch(`${supabaseUrl}/functions/v1/${dispatch.path}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+            apikey: serviceKey,
+            "x-internal-retry": "1",
+          },
+          body: JSON.stringify(body),
+        });
+        const parsed = await resp.json().catch(() => ({}));
+        const good = resp.ok && parsed?.success !== false;
+        return {
+          ok: good,
+          status: resp.status as number | undefined,
+          error: good ? "" : (parsed?.error || JSON.stringify(parsed).slice(0, 500) || `HTTP ${resp.status}`),
+        };
+      } catch (e) {
+        return { ok: false, status: undefined as number | undefined, error: (e as Error).message || "erro desconhecido" };
+      }
+    };
+
+    const first = await invoke(dispatch.body);
+    let ok = first.ok;
+    let errText = first.error;
+    let httpStatus = first.status;
 
     if (ok) {
       await admin.from("sap_retry_queue").update({
@@ -212,9 +219,35 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    const cls = classifySapError(httpStatus, errText);
+    let cls = classifySapError(httpStatus, errText);
+    const isLastAttempt = !cls.retryable || attempts >= (row.max_attempts || 5);
+
+    // Contingência automática: falhas de anexo em despesas travavam a fila até
+    // esgotar e exigiam o botão manual "integrar sem anexo". Na última tentativa
+    // fazemos isso sozinhos — o anexo segue por e-mail ao fiscal da empresa.
+    if (
+      isLastAttempt &&
+      row.doc_type === "expense" &&
+      cls.category === "attachment" &&
+      !(row.payload || {}).__no_attachment_fallback
+    ) {
+      const fallback = await invoke({ ...dispatch.body, skip_attachments: true });
+      if (fallback.ok) {
+        await admin.from("sap_retry_queue").update({
+          status: "succeeded",
+          attempts,
+          last_error: "Integrado automaticamente sem anexo (anexo enviado por e-mail ao fiscal)",
+        }).eq("id", row.id);
+        results.push({ id: row.id, ok: true, action: "succeeded_without_attachment" });
+        continue;
+      }
+      errText = `${errText} | contingência sem anexo também falhou: ${fallback.error}`;
+      httpStatus = fallback.status;
+      cls = classifySapError(httpStatus, fallback.error);
+    }
+
     // Not retryable or attempts exhausted → mark exhausted + notify.
-    if (!cls.retryable || attempts >= (row.max_attempts || 5)) {
+    if (isLastAttempt) {
       const { data: exhausted } = await admin.from("sap_retry_queue").update({
         status: "exhausted",
         attempts,
@@ -231,16 +264,16 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    // Reschedule.
-    const next = new Date(Date.now() + backoffMinutes(attempts) * 60_000).toISOString();
+    // Reschedule com backoff exponencial + jitter.
     await admin.from("sap_retry_queue").update({
       status: "pending",
       attempts,
-      next_attempt_at: next,
+      next_attempt_at: nextAttemptAt(attempts),
       last_error: errText.slice(0, 2000),
       error_category: cls.category,
     }).eq("id", row.id);
-    results.push({ id: row.id, ok: false, action: `rescheduled(+${backoffMinutes(attempts)}m)`, error: errText.slice(0, 200) });
+    results.push({ id: row.id, ok: false, action: `rescheduled(+~${backoffMinutes(attempts)}m)`, error: errText.slice(0, 200) });
+
   }
 
   return new Response(
