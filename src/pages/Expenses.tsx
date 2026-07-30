@@ -1557,26 +1557,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             aria-label="Ações do cabeçalho"
             className="flex items-center gap-2 sm:gap-3 lg:justify-end flex-wrap"
           >
-            <div className="hidden sm:block text-right min-w-0 max-w-[220px]">
-              <p className="text-sm font-medium text-foreground truncate" aria-label={`Empresa: ${companyLabel}`}>{companyLabel}</p>
-              <p className="text-xs text-muted-foreground truncate" aria-label={`Usuário: ${session?.userName || ""}`}>{session?.userName}</p>
-            </div>
-            <div
-              className="hidden md:flex items-center gap-2 text-xs text-muted-foreground"
-              role="status"
-              aria-live="polite"
-              aria-label="Status da conexão: Conectado"
-            >
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" aria-hidden="true" />
-              <span>Conectado</span>
-            </div>
             <Button variant="ghost" size="sm" onClick={refresh} disabled={isLoading} aria-label={isLoading ? "Atualizando…" : "Atualizar lista"}>
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={logout} aria-label="Sair da conta">
-              <LogOut className="w-4 h-4" aria-hidden="true" />
-            </Button>
+            <UserCompanyMenu />
+
           </div>
         </div>
       </header>
